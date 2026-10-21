@@ -581,7 +581,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           ],
         ),
       );
-      if (confirmed == true) await _markIgnored(reason);
+      if (confirmed == true) await _markIgnored(reason!);
     } else if (reason != null) {
       await _markIgnored(reason);
     }

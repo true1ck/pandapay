@@ -128,6 +128,49 @@ void main() {
   );
 
   test(
+    'sender variants of one bank account collapse and keep the newest balance',
+    () {
+      final store = SmsImportStore(cache.financialStore);
+      store.capture(
+        'user:account-a',
+        QueuedSms(
+          sender: 'AX-HDFCBK',
+          body: 'Your account XX1797 available balance is INR 7000.',
+          receivedAt: DateTime(2026, 10, 20),
+        ),
+      );
+      store.capture(
+        'user:account-a',
+        QueuedSms(
+          sender: 'AD-HDFCBK-S',
+          body: 'Your account XX1797 available balance is INR 5000.',
+          receivedAt: DateTime(2026, 10, 18),
+        ),
+      );
+      store.capture(
+        'user:account-a',
+        QueuedSms(
+          sender: 'AD-HDFCBK',
+          body: 'Rs.200 debited from your account XX1797.',
+          receivedAt: DateTime(2026, 10, 21),
+        ),
+      );
+      final accounts = cache.financialStore
+          .bankAccounts('user:account-a');
+      expect(accounts, hasLength(1));
+      expect(accounts.single.accountLast4, '1797');
+      expect(accounts.single.issuerShortName, 'HDFC Bank');
+      expect(accounts.single.availableBalance?.rupees, 7000);
+      // received_at is stored and read back in UTC; IST-local turns midnight
+      // into the previous day's 18:30Z.
+      expect(
+        accounts.single.latestSmsAt?.toUtc(),
+        DateTime.parse('2026-10-20T18:30:00.000Z'),
+      );
+    },
+  );
+
+  test(
     'unsupported formats move into account-scoped review without becoming spending',
     () async {
       final client = AuthenticatedHttpClient(
@@ -320,6 +363,38 @@ void main() {
       expect(due, isEmpty);
       final cards = cache.financialStore.entities('user:account-a', 'cards');
       expect(UserCard.fromJson(cards.single).dueDay, isNull);
+    },
+  );
+
+  test(
+    'a UPI-platform sender quoting a counterpart account mints no account row',
+    () {
+      final store = SmsImportStore(cache.financialStore);
+      store.capture(
+        'user:account-a',
+        QueuedSms(
+          sender: 'SBIUPI',
+          body:
+              'Your A/c XX2626 received Rs.500 from PQR on 12-01-25. '
+              'Not you? Call 1800. SBIPU? Msg STOP.',
+          receivedAt: DateTime(2026, 10, 20),
+        ),
+      );
+      store.capture(
+        'user:account-a',
+        QueuedSms(
+          sender: 'KOTAKB',
+          body: 'Rs.900 debited from a/c XX2626 net banking. New Bal: Rs.45,120.',
+          receivedAt: DateTime(2026, 10, 21),
+        ),
+      );
+      final accounts = cache.financialStore.bankAccounts('user:account-a');
+      // One real account (Kotak 2626) with its balance; the SBIUPI notice
+      // quoted the same last4 but belongs to the counterparty's snapshot.
+      expect(accounts, hasLength(1));
+      expect(accounts.single.issuerSlug, 'kotak');
+      expect(accounts.single.accountLast4, '2626');
+      expect(accounts.single.availableBalance?.rupees, 45120);
     },
   );
 }

@@ -626,6 +626,29 @@ void main() {
     expect(result?.dueDate?.day, 20);
   });
 
+  test('prefers the printed period end over the SMS receive date', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-HDFCBK',
+      body:
+          'Your statement for HDFC Bank Credit Card ending XX8708 for the period 04-Sep-2026 to 03-Oct-2026 is ready.',
+      receivedAt: DateTime(2026, 10, 6),
+    );
+    expect(result?.statementDate, DateTime(2026, 10, 3));
+  });
+
+  test('does not learn the due date as the billing day', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-HDFCBK',
+      body:
+          'Your HDFC Bank MoneyBack+ Credit Card statement is ready. Total due Rs 900. Payment due date of your card is 16/10/2026.',
+      receivedAt: DateTime(2026, 10, 8),
+    );
+    expect(result?.statementDate?.day, 8);
+    expect(result?.dueDate?.day, 16);
+  });
+
   test('extracts the provider name and bill amount from a bill reminder', () {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',

@@ -126,7 +126,7 @@ function isBankAccountMessage(body, sender = '') {
 // first or last currency value would silently turn the spend into a balance.
 function extractAvailableBalance(body) {
   const match = String(body || '').match(
-    /\b(?:available|avail|avl)\s*(?:balance|bal)\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i,
+    /\b(?:available|avail|avl|clr|new)\s*(?:balance|bal)\s*(?:is|:|-)?\s*(?: ₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i,
   ) || String(body || '').match(
     /\b(?:current|closing)\s*balance\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i,
   ) || String(body || '').match(
@@ -304,7 +304,7 @@ function parseBuiltInAccountCredit(sms) {
   }
 
   // A balance announcement is not itself an incoming transaction.
-  if (/\b(?:available|closing|current|available\s+balance|bal(?:ance)?)\b[\s\S]{0,30}\b(?:is|:|of)\b/i.test(body)
+  if (/\b(?:available|closing|current|clr|new|available\s+balance|bal(?:ance)?)\b[\s\S]{0,30}\b(?:is|:|of)\b/i.test(body)
       && !/\b(?:credited|received|deposited|salary|cashback|refund|reversal)\b/i.test(body)) {
     return { ok: false, reason: 'balance_only_alert' };
   }

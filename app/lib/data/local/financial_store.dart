@@ -5,6 +5,105 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../user_cards_repository.dart';
 import 'app_database.dart';
 
+/// DLT SMS sender IDs split one bank's alerts across channel variants
+/// ("AD-" advertising, "AX-" activity, "VM-"/"PD-" operator packs, "-S"/"-T"
+/// channel suffixes). The account identity is the *bank code*, not the
+/// channel, so a real account must not show up as one row per sender ID.
+String canonicalBankSender(Object? sender) {
+  var text = (sender ?? '').toString().trim().toLowerCase();
+  if (text.isEmpty) return 'unknown';
+  text = text.replaceFirst(RegExp(r'^[a-z0-9]{2}-'), '');
+  while (text.contains('-') && RegExp(r'-[a-z]$').hasMatch(text)) {
+    text = text.replaceFirst(RegExp(r'-[a-z]$'), '');
+  }
+  text = text.replaceAll('-', '');
+  if (text.isEmpty) return 'unknown';
+  final alias = _bankTokenAliases[text];
+  if (alias != null) return alias;
+  for (final prefix in _bankCodePrefixes) {
+    if (text.startsWith(prefix)) return prefix;
+  }
+  return text;
+}
+
+/// Sender tokens that collapse to a shorter canonical bank code.
+const _bankTokenAliases = <String, String>{
+  'canbnk': 'canara',
+  'canbk': 'canara',
+  'hdfcbk': 'hdfc',
+  'kotakb': 'kotak',
+  'icicib': 'icici',
+  'unionb': 'union',
+  'sbibnk': 'sbi',
+  'sbibk': 'sbi',
+  'axisbnk': 'axis',
+  'axisb': 'axis',
+  'idbibk': 'idbi',
+  'yesbnk': 'yes',
+  'yesbank': 'yes',
+  'ucob': 'uco',
+  'eqt': 'equitas',
+  'pytm': 'paytm',
+};
+
+/// Longest-prefix matches for sender tokens that *start with* the bank name.
+const _bankCodePrefixes = [
+  'canara',
+  'hdfc',
+  'kotak',
+  'icici',
+  'union',
+  'sbi',
+  'axis',
+  'equitas',
+  'aubank',
+  'indus',
+  'idbi',
+  'federal',
+  'paytm',
+  'citi',
+  'hsbc',
+  'dbs',
+  'scb',
+  'rbl',
+  'uco',
+  'bob',
+  'boi',
+  'pnb',
+  'yes',
+];
+
+/// Human label per canonical bank code; unknown codes render capitalized.
+const _bankDisplayLabels = <String, String>{
+  'sbi': 'SBI',
+  'hdfc': 'HDFC Bank',
+  'icici': 'ICICI Bank',
+  'axis': 'Axis Bank',
+  'canara': 'Canara Bank',
+  'kotak': 'Kotak Bank',
+  'union': 'Union Bank',
+  'pnb': 'Punjab National Bank',
+  'bob': 'Bank of Baroda',
+  'boi': 'Bank of India',
+  'rbl': 'RBL Bank',
+  'yes': 'Yes Bank',
+  'idbi': 'IDBI Bank',
+  'indus': 'IndusInd Bank',
+  'aubank': 'AU Small Finance Bank',
+  'equitas': 'Equitas Bank',
+  'federal': 'Federal Bank',
+  'paytm': 'Paytm Bank',
+  'citi': 'Citi Bank',
+  'hsbc': 'HSBC Bank',
+  'dbs': 'DBS Bank',
+  'scb': 'Standard Chartered',
+  'uco': 'UCO Bank',
+  'eqt': 'Equitas Bank',
+};
+
+String bankDisplayLabel(String canonicalCode) =>
+    _bankDisplayLabels[canonicalCode] ?? canonicalCode.toUpperCase();
+
 /// One query contract for online fetches, local reads and coverage tracking.
 class TransactionQuery {
   final DateTime? from, to;
@@ -477,15 +576,19 @@ class FinancialStore {
               !RegExp(
                 r'(lic|licind|dhan|dhanhq|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel|paytm\s*money)',
               ).hasMatch(sender));
+      // UPI-platform senders (SBIUPI & friends) quote the counterparty's
+      // masked account, never the user's — they must not mint account rows.
+      // ponytail: gate here; full parser-side family fix when a corpus shows
+      // more UPI-tagged senders.
+      final upiServiceSender = RegExp(r'upi').hasMatch(sender);
       if (account != null &&
           RegExp(r'^\d{4}$').hasMatch(account) &&
           bankAccount &&
+          !upiServiceSender &&
           !cardSuffixes.contains(account)) {
+        final canonical = canonicalBankSender(row['sender_bank']);
         byAccount
-            .putIfAbsent(
-              '${row['sender_bank'] ?? 'unknown'}:$account',
-              () => [],
-            )
+            .putIfAbsent('$canonical:$account', () => [])
             .add(row);
       }
     }
@@ -501,8 +604,10 @@ class FinancialStore {
       for (final entry in byAccount.entries)
         BankAccountSummary(
           accountLast4: entry.value.first['account_last4'] as String,
-          issuerSlug: entry.value.first['sender_bank'] as String?,
-          issuerShortName: entry.value.first['sender_bank'] as String?,
+          issuerSlug: canonicalBankSender(entry.value.first['sender_bank']),
+          issuerShortName: bankDisplayLabel(
+            canonicalBankSender(entry.value.first['sender_bank']),
+          ),
           availableBalance:
               entry.value.where((o) => o['balance_paise'] != null).isEmpty
               ? null

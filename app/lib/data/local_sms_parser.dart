@@ -163,7 +163,7 @@ class LocalSmsParser {
           r'(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)',
         ).hasMatch(sender.toLowerCase());
     final balanceMarker = RegExp(
-      r'\b(?:available|avail|avl|current|closing)\s*(?:balance|bal)\b',
+      r'\b(?:available|avail|avl|current|closing|clr|new)\s*(?:balance|bal)\b',
     ).hasMatch(text);
     final movementMarker = RegExp(
       r'\b(?:debited|debit|credited|credit|paid|spent|sent|transferred|withdrawn|received|deposited)\b',
@@ -560,27 +560,76 @@ class LocalSmsParser {
         _re(
           r'\b(?:credit\s+card|card\b[\s\S]{0,45}\b(?:ending|last\s*4|no\.?|number|xx|x{2,}|\*{2,})\s*[:#.-]?\s*\d{4})\b',
         ).hasMatch(body) &&
-        _re(
-          r'\b(?:e[- ]?statement|statement|bill)\b[\s\S]{0,70}\b(?:generated|ready|available|issued|created|raised|prepared)\b',
-        ).hasMatch(body);
+        (_re(
+              r'\b(?:e[- ]?statement|statement|bill)\b[\s\S]{0,70}\b(?:generated|ready|available|issued|created|raised|prepared)\b',
+            ).hasMatch(body) ||
+            // A printed billing period is bill context on its own, even when
+            // the "ready" clause falls outside the window above. Its END date
+            // is the billing day.
+            _re(
+              r'\b(?:period|cycle)\b[\s\S]{0,25}?(' +
+                  dateToken +
+                  r')[\s\S]{0,15}?\b(?:to|till|until)\s*[:\-]?\s*(' +
+                  dateToken +
+                  r')',
+            ).hasMatch(body));
     if (statementAlert) {
-      for (final phrase in [
-        r'\b(?:statement|e[- ]?statement|bill)\b[\s\S]{0,45}?\b(?:generated|issued|created|raised|prepared|dated|date)\b\s*(?:on|is|:|-)?\s*',
-        r'\b(?:generated|issued|created|raised|prepared|dated)\s*(?:on|date|is|:|-)?\s*',
-        r'\b(?:statement|e[- ]?statement|bill)\s+date\s*(?:is|on|:|-)?\s*',
-      ]) {
-        final token = _re('$phrase($dateToken)').firstMatch(body)?.group(1);
-        if (token != null) {
-          statementDate = parseDate(token);
-          if (statementDate != null) break;
-        }
+      // The period pattern closes with the cycle-end date in group 2 (that
+      // printed date is the billing day); every other pattern captures the
+      // printed date in group 1.
+      final explicitPatterns = <(RegExp, int)>[
+        (
+          _re(
+            r'\b(?:period|cycle)\b[\s\S]{0,25}?(' +
+                dateToken +
+                r')[\s\S]{0,15}?\b(?:to|till|until)\s*[:\-]?\s*(' +
+                dateToken +
+                r')',
+          ),
+          2,
+        ),
+        (
+          _re(
+            r'\b(?:statement|e[- ]?statement|bill)\b[\s\S]{0,45}?\b(?:generated|issued|created|raised|prepared|dated)\b\s*(?:on|is|:|-)?\s*(' +
+                dateToken +
+                r')',
+          ),
+          1,
+        ),
+        (
+          _re(
+            r'\b(?:generated|issued|created|raised|prepared|dated)\s*(?:date\s+)?(?:on|is|:|-)?\s*(' +
+                dateToken +
+                r')',
+          ),
+          1,
+        ),
+        (
+          _re(
+            r'\b(?:statement|e[- ]?statement|bill)\s+date\s*(?:is|on|:|-)?\s*(' +
+                dateToken +
+                r')',
+          ),
+          1,
+        ),
+      ];
+      final dueClause = _re(r'\b(?:due|payable|pay\s+by)\b');
+      for (final (pattern, group) in explicitPatterns) {
+        final match = pattern.firstMatch(body);
+        if (match == null) continue;
+        // A due/payable clause inside the matched phrase means the captured
+        // date is the PAYMENT date printed in the same bill SMS, not the
+        // billing day.
+        if (dueClause.hasMatch(match.group(0)!)) continue;
+        statementDate = parseDate(match.group(group)!);
+        if (statementDate != null) break;
       }
       // Most issuers omit the generated date from the body. The SMS receive
       // date is then the best available statement-day observation.
       statementDate ??= receivedAt;
     }
     final balanceText = _re(
-      r'\b(?:available|avail|avl|current|closing)\s*(?:balance|bal)\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)',
+      r'\b(?:available|avail|avl|current|closing|clr|new)\s*(?:balance|bal)\s*(?:is|:|-)?\s*(?: ₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)',
     ).firstMatch(body)?.group(1);
     Money? money(String? text) {
       if (text == null) return null;
@@ -643,7 +692,7 @@ class LocalSmsParser {
       r'\b(?:declined|failed|failure|cancelled|canceled|pending|processing)\b',
     ).hasMatch(body);
     final balanceOnly = _re(
-      r'\b(?:available|avail|avl|current|closing)\s*(?:balance|bal)\b|\bcredit\s+limit\b',
+      r'\b(?:available|avail|avl|current|closing|clr|new)\s*(?:balance|bal)\b|\bcredit\s+limit\b',
     ).hasMatch(body);
     final hasBillMarker =
         due != null ||

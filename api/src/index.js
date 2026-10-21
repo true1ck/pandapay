@@ -32,10 +32,13 @@ const { buildAssistantSpendingSummary } = require('./assistant_spending');
 const {
   detectRecurringSeries,
   annualCost,
+  engineStatus,
+  nextExpectedAfter,
   merchantSeriesKey,
   isUsableSubscriptionName,
   isDisplayableSubscriptionRecord,
 } = require('./recurring');
+const { brandFor } = require('./brand_catalog');
 const { buildMonthlyReport } = require('./monthly_report');
 const { csvDocument } = require('./csv');
 const { startImapPoller, fetchRecentMessages } = require('./imap_poller');
@@ -3234,6 +3237,15 @@ app.patch('/user-cards/:id', requireAuth, async (req, res) => {
   if ('pointsBalance' in body) {
     sets.push(`points_balance_state = 'estimated'`);
   }
+  // A statement/due day typed here is user-owned: card_day_sources migration
+  // — never overwritten by a later SMS heal while set. Clearing the day
+  // clears its source with it (a NULL value is not owned by anyone).
+  if ('statementDay' in body) {
+    sets.push(body.statementDay === null ? `statement_day_source = NULL` : `statement_day_source = 'user'`);
+  }
+  if ('dueDay' in body) {
+    sets.push(body.dueDay === null ? `due_day_source = NULL` : `due_day_source = 'user'`);
+  }
   if (sets.length === 0) {
     return res.status(400).json({ error: 'no editable fields supplied' });
   }
@@ -5321,10 +5333,10 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
       let statementDaysUpdated = 0;
 
       // Spend uploads are intentionally current-month-first, but billing
-      // detection should prefer the previous statement cycle.  Otherwise an
-      // October alert can fill statement_day before the September history is
-      // examined.  Prefer September, then August, then the nearest older
-      // cycle; use the current month only when no history is present.
+      // detection should prefer printed statement dates. A printed
+      // generation or period-end date is self-dated and wins outright;
+      // arrival-date fallbacks rank by the same previous-cycle preference as
+      // before. use the current month only when no history is present.
       const now = new Date();
       const nowParts = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -5350,17 +5362,16 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           ? detected.date.getMonth() + 1
           : Number(parts.find((part) => part.type === 'month')?.value);
         const distance = nowMonthIndex - (year * 12 + month - 1);
-        if (distance === 1 || distance === 2 || (distance === 0 && detected.explicit)) {
+        if (detected.explicit ? distance >= 0 : (distance === 1 || distance === 2)) {
           statementCandidates.push({ index: i, distance, explicit: detected.explicit, receivedAt: occurred.getTime() });
         }
       }
       statementCandidates.sort((a, b) => {
-        const rank = (distance) => distance === 1 ? 0
-          : distance === 2 ? 1
-            : distance >= 3 ? 2
-              : distance === 0 ? 3 : 4;
-        return rank(a.distance) - rank(b.distance)
-          || a.distance - b.distance
+        const rank = (candidate) => candidate.explicit ? 0
+          : candidate.distance === 1 ? 1
+            : candidate.distance === 2 ? 2
+              : 3;
+        return rank(a) - rank(b)
           || Number(b.explicit) - Number(a.explicit)
           || a.receivedAt - b.receivedAt
           || a.index - b.index;
@@ -5610,10 +5621,20 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
         `WITH account_observations AS (
            SELECT o.metadata->>'accountLast4' AS account_last4,
                   o.metadata->>'patternIssuerId' AS issuer_id,
+                  -- DLT channel prefixes ("AD-"/"AX-") and suffixes ("-S")
+                  -- are transport metadata, not account identity. Fall back
+                  -- to the channel-stripped bank code so legacy rows without
+                  -- an issuer id still collapse into one account.
                   COALESCE(
                     o.metadata->>'accountIdentity',
                     o.metadata->>'patternIssuerId',
-                    NULLIF(lower(o.metadata->>'senderBank'), ''),
+                    NULLIF(regexp_replace(
+                             regexp_replace(
+                               lower(o.metadata->>'senderBank'),
+                               '^[a-z0-9]{2}-', ''
+                             ),
+                             '[-][a-z]$', ''
+                           ), ''),
                     'legacy:' || (o.metadata->>'accountLast4')
                   ) AS account_identity,
                   NULLIF(o.metadata->>'senderBank', '') AS sender_bank,
@@ -5730,7 +5751,17 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
                 r.sms_count,
                 i.slug AS issuer_slug,
                 i.name AS issuer_name,
-                COALESCE(i.short_name, r.sender_bank) AS issuer_short_name,
+                COALESCE(
+                  i.short_name,
+                  initcap(regexp_replace(
+                             regexp_replace(
+                               lower(r.sender_bank),
+                               '^[a-z0-9]{2}-', ''
+                             ),
+                             '[-][a-z]$', ''
+                           )),
+                  r.sender_bank
+                ) AS issuer_short_name,
                 i.logo_url AS issuer_logo_url
            FROM account_rollup r
            LEFT JOIN issuers i ON i.id::text = r.issuer_id
@@ -7337,6 +7368,10 @@ app.get('/recurring', requireAuth, async (req, res) => {
                ELSE COALESCE(recurring_series.autopay_status, 'unknown')
              END,
              is_active = CASE WHEN recurring_series.detection_source = 'mandate' AND recurring_series.is_active = false THEN false ELSE recurring_series.is_active END,
+             cadence_confirmed = CASE
+               WHEN recurring_series.user_edited THEN recurring_series.cadence_confirmed
+               ELSE TRUE
+             END,
              updated_at = now()`,
           [
             req.userId, s.merchantKey, s.displayName, s.categoryId, s.userCategoryId || null, s.userCardId,
@@ -7363,11 +7398,10 @@ app.get('/recurring', requireAuth, async (req, res) => {
            LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = rs.profile_id
            LEFT JOIN user_cards uc ON uc.id = rs.user_card_id
            LEFT JOIN card_products cp ON cp.id = uc.card_product_id
-          WHERE rs.profile_id = $1
-            AND rs.is_active
-            AND rs.dismissed_at IS NULL
-            AND rs.lifecycle_status = 'active'
-          ORDER BY (rs.typical_amount_inr * 365 / rs.cadence_days) DESC`,
+           WHERE rs.profile_id = $1
+             AND rs.is_active
+             AND rs.dismissed_at IS NULL
+             AND rs.lifecycle_status = 'active'`,
         [req.userId]
       );
 
@@ -7376,38 +7410,81 @@ app.get('/recurring', requireAuth, async (req, res) => {
       // boundary as well as fixing new ingestion, so an existing account is
       // corrected without a destructive migration.
       const validRows = stored.rows.filter(isDisplayableSubscriptionRecord);
-      const series = validRows.map((r) => ({
-        id: r.id,
-        displayName: r.display_name,
-        typicalAmountInr: Number(r.typical_amount_inr),
-        cadenceDays: r.cadence_days,
-        occurrenceCount: r.occurrence_count,
-        firstSeenOn: r.first_seen_on,
-        lastSeenOn: r.last_seen_on,
-        nextExpectedOn: r.next_expected_on,
-        categoryId: r.category_id,
-        userCategoryId: r.user_category_id,
-        categoryName: r.category_name,
-        subcategoryName: r.subcategory_name,
-        cardId: r.user_card_id,
-        paymentMethod: r.payment_method,
-        cardName: r.card_nickname || r.card_name,
-        detectionSource: r.detection_source || 'observed',
-        isMandate: r.detection_source === 'mandate',
-        isUserEdited: r.user_edited,
-        lifecycleStatus: r.lifecycle_status || 'active',
-        autopayStatus: r.autopay_status || (r.detection_source === 'mandate' ? 'active' : 'unknown'),
-        mandateReference: r.mandate_reference || null,
-        cadenceConfirmed: r.cadence_confirmed !== false,
-        annualCostInr: annualCost({
+      const now = new Date();
+      const series = validRows.map((r) => {
+        const cadenceDays = r.cadence_days;
+        // The renewal date is DERIVED at read, never trusted from storage:
+        // a stored next_expected_on is a write-time snapshot that silently
+        // expires the moment a charge fails to appear. Machine-detected
+        // rows project from their last observed charge on calendar-month
+        // semantics (a ₹1,999 charge on the 1st → the 1st of next month,
+        // not last+30). Rows the user shaped keep the date they saved —
+        // when that date lapses, engineStatus below flags it for review
+        // rather than quietly projecting a future their data never showed.
+        const derivedAnchor = r.last_seen_on || r.first_seen_on;
+        const derivedDate = derivedAnchor
+          ? nextExpectedAfter(new Date(`${derivedAnchor}T00:00:00Z`), cadenceDays, now)
+              .toISOString().slice(0, 10)
+          : null;
+        const nextExpectedOn = r.user_edited
+          ? (r.next_expected_on ?? derivedDate)
+          : (derivedDate ?? r.next_expected_on);
+        const status = engineStatus({
+          cadence_days: cadenceDays,
+          cadence_confirmed: r.cadence_confirmed,
+          detection_source: r.detection_source,
+          occurrence_count: r.occurrence_count,
+          first_seen_on: r.first_seen_on,
+          last_seen_on: r.last_seen_on,
+          next_expected_on: r.user_edited ? r.next_expected_on : null,
+        }, now);
+        // Known-brand display names apply where the user has not already
+        // fixed the string themselves ('OPENAILLC' → 'OpenAI').
+        const brand = brandFor(r.display_name);
+        return {
+          id: r.id,
+          displayName: !r.user_edited && brand ? brand.name : r.display_name,
           typicalAmountInr: Number(r.typical_amount_inr),
-          cadenceDays: r.cadence_days,
-        }),
-      }));
+          cadenceDays,
+          occurrenceCount: r.occurrence_count,
+          firstSeenOn: r.first_seen_on,
+          lastSeenOn: r.last_seen_on,
+          nextExpectedOn,
+          categoryId: r.category_id,
+          userCategoryId: r.user_category_id,
+          categoryName: r.category_name,
+          subcategoryName: r.subcategory_name,
+          cardId: r.user_card_id,
+          paymentMethod: r.payment_method,
+          cardName: r.card_nickname || r.card_name,
+          detectionSource: r.detection_source || 'observed',
+          isMandate: r.detection_source === 'mandate',
+          isUserEdited: r.user_edited,
+          lifecycleStatus: r.lifecycle_status || 'active',
+          autopayStatus: r.autopay_status || (r.detection_source === 'mandate' ? 'active' : 'unknown'),
+          mandateReference: r.mandate_reference || null,
+          cadenceConfirmed: r.cadence_confirmed !== false,
+          engineStatus: status,
+          annualCostInr: annualCost({
+            typicalAmountInr: Number(r.typical_amount_inr),
+            cadenceDays,
+          }),
+        };
+      });
+
+      // Biggest annual cost first — the order someone reviewing their
+      // subscriptions wants. Sorted here rather than in SQL so the same
+      // calendar-bucket annual estimate drives ordering and display.
+      series.sort((a, b) => b.annualCostInr - a.annualCostInr);
 
       return {
         series,
-        totalAnnualInr: series.reduce((sum, s) => sum + s.annualCostInr, 0),
+        // The headline counts subscriptions whose cycle is actually proven
+        // and still billing. Guesses (needs_cadence), unused mandates and
+        // possibly-stopped series don't belong in "your recurring spend".
+        totalAnnualInr: series
+          .filter((s) => s.engineStatus === 'confirmed')
+          .reduce((sum, s) => sum + s.annualCostInr, 0),
       };
     });
     res.json(payload);
@@ -7485,7 +7562,8 @@ app.patch('/recurring/:id', requireAuth, async (req, res) => {
     const result = await withUserClient(req.userId, (client) => client.query(
       `UPDATE recurring_series SET display_name = $1, typical_amount_inr = $2,
               cadence_days = $3, next_expected_on = $4,
-              autopay_status = COALESCE($5, autopay_status), user_edited = true
+              autopay_status = COALESCE($5, autopay_status), user_edited = true,
+              cadence_confirmed = true
         WHERE id = $6 AND profile_id = $7 AND dismissed_at IS NULL RETURNING id`,
       [displayName.trim(), Number(typicalAmountInr), Number(cadenceDays), nextExpectedOn, autopayStatus ?? null, req.params.id, req.userId]
     ));
@@ -9531,7 +9609,7 @@ app.post('/inbound-emails/webhook', async (req, res) => {
     const ownUserName = await profileDisplayName(pool, row.user_id);
     // Re-parse with the owner's profile name so self-transfer naming rules
     // see it. The first parse stays intake-only for the RPC signals.
-    const parsed = parseSmsAgainstPatterns(patternsResult.rows, {
+    const classified = parseSmsAgainstPatterns(patternsResult.rows, {
       sender: from,
       body,
       ownUserName,
@@ -9552,13 +9630,13 @@ app.post('/inbound-emails/webhook', async (req, res) => {
     // and the provider must get its 202 — returning 500 would make a mail
     // provider retry a message we already have, and the in-app
     // "create transaction" path still works as the fallback it always was.
-    if (parsed.ok) {
+    if (classified.ok) {
       try {
         await withUserClient(row.profile_id, async (client) => {
-          const patternRow = patternsResult.rows.find((p) => p.id === parsed.patternId);
-          const occurred = parseTransactionDate(parsed.fields.date) || new Date();
+          const patternRow = patternsResult.rows.find((p) => p.id === classified.patternId);
+          const occurred = parseTransactionDate(classified.fields.date) || new Date();
           const imported = await importParsedMessage(client, row.profile_id, {
-            parsed,
+            parsed: classified,
             patternIssuerId: patternRow ? patternRow.issuer_id : null,
             sender: from,
             rawText: body,
@@ -9591,7 +9669,7 @@ app.post('/inbound-emails/webhook', async (req, res) => {
       }
     }
 
-    res.status(202).json({ accepted: true, parsed: parsed.ok });
+    res.status(202).json({ accepted: true, parsed: classified.ok });
   } catch (err) {
     console.error('POST /inbound-emails/webhook error', err);
     res.status(500).json({ error: 'internal_error' });

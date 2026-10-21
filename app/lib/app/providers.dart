@@ -17,6 +17,7 @@ import '../data/app_status_repository.dart';
 import '../data/api_exception.dart';
 import '../data/auth_api.dart';
 import '../data/authenticated_http_client.dart';
+import '../data/card_bill_ledger.dart';
 import '../data/card_feedback_repository.dart';
 import '../data/card_overrides_repository.dart';
 import '../data/card_requests_api.dart';
@@ -2879,13 +2880,18 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
 
   bool sameAccount(BankAccountSummary a, BankAccountSummary b) {
     if (a.accountLast4 != b.accountLast4) return false;
-    final issuerA = (a.issuerSlug ?? a.issuerShortName ?? a.issuerName ?? '')
-        .trim()
-        .toLowerCase();
-    final issuerB = (b.issuerSlug ?? b.issuerShortName ?? b.issuerName ?? '')
-        .trim()
-        .toLowerCase();
-    return issuerA.isEmpty || issuerB.isEmpty || issuerA == issuerB;
+    // DLT sender IDs differ per channel (AD-HDFCBK-S vs AX-HDFCBK vs the
+    // canonical code the local store already uses); compare on the canonical
+    // bank code so one real account never splits across rows.
+    final issuerA = canonicalBankSender(
+      a.issuerSlug ?? a.issuerShortName ?? a.issuerName,
+    );
+    final issuerB = canonicalBankSender(
+      b.issuerSlug ?? b.issuerShortName ?? b.issuerName,
+    );
+    return issuerA.isEmpty ||
+        issuerB.isEmpty ||
+        issuerA == issuerB;
   }
 
   List<BankAccountSummary> mergeAccounts(
@@ -3001,6 +3007,88 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
     }
   }
 });
+
+/// Per-card credit-card bill state derived from imported bank SMS — the
+/// bill-generated message ("Total amount due ₹X, due date dd MMM") and the
+/// card-bill payment receipts. Reactive to both SMS capture and the
+/// transaction snapshot so a payment flips its bill to Paid on the next
+/// rebuild. Empty map when signed out.
+final cardBillLedgerProvider =
+    FutureProvider<Map<String, CardBillLedger>>((ref) async {
+  final markReady = _financialChanges(ref, 'observations');
+  final repo = ref.watch(userCardsRepositoryProvider);
+  List<UserCard> cards;
+  try {
+    cards = await ref.watch(myCardsProvider.future);
+  } catch (_) {
+    // No cards → no bill can attach; the ledger waits for the card list.
+    cards = const [];
+  }
+  final now = ref.watch(clockProvider).now();
+  final cache = await _cacheOrNull(ref);
+  final store = cache?.financialStore;
+  final namespace = ref.watch(cacheNamespaceProvider);
+  store?.migrateLegacy(namespace);
+
+  final evidence = <CardBillEvidence>[];
+  DateTime? earliestAnchor;
+  for (final obs in store?.entities(namespace, 'sms_observations') ?? const []) {
+    if (obs['event_type'] != 'bill') continue;
+    final explicit = DateTime.tryParse(obs['statement_date'] as String? ?? '');
+    final received = DateTime.tryParse(obs['received_at'] as String? ?? '');
+    final anchor = explicit ?? received;
+    if (anchor == null) continue;
+    earliestAnchor = earliestAnchor == null || anchor.isBefore(earliestAnchor)
+        ? anchor
+        : earliestAnchor;
+    evidence.add(
+      CardBillEvidence(
+        cardLast4: obs['card_last4'] as String?,
+        family: obs['sender_bank'] as String?,
+        statementDate: anchor,
+        statementDateExplicit: explicit != null,
+        dueDate: DateTime.tryParse(obs['due_date'] as String? ?? ''),
+        amountDue: _moneyFromPaise(obs['amount_due_paise']),
+        minimumDue: _moneyFromPaise(obs['minimum_due_paise']),
+        confidence: (obs['confidence'] as num?)?.toDouble() ?? 0.5,
+      ),
+    );
+  }
+
+  var payments = const <TransactionEntry>[];
+  if (repo != null && earliestAnchor != null) {
+    // Payments may precede their bill by most of a cycle (pre-paid) and a
+    // late payment may trail the due date; a quarter either way is the
+    // generous bound, tied to the oldest evidence so old history costs
+    // nothing on fresh installs.
+    final from = earliestAnchor
+        .subtract(const Duration(days: 92))
+        .toUtc();
+    payments = await loadTransactionsWithOfflineCache(
+      ref,
+      repo: repo,
+      cacheKey: 'transactions:bill_payments',
+      from: from,
+    );
+    if (ref.read(cacheNamespaceProvider) != namespace) return const {};
+  }
+
+  final usable = [for (final txn in payments) if (isCardBillPaymentTxn(txn)) txn];
+  if (evidence.isEmpty && usable.isEmpty) return const {};
+  markReady();
+  return deriveCardBills(
+    cards: cards,
+    evidence: evidence,
+    payments: usable,
+    now: now,
+  );
+});
+
+Money? _moneyFromPaise(Object? value) {
+  final paise = (value as num?)?.toInt();
+  if (paise == null || paise <= 0) return null;
+  return Money.fromPaise(paise);
+}
 
 /// Design 19's notification inbox. Empty (not an error) when signed out —
 /// the inbox lives server-side, so guest mode simply has none.
@@ -4073,6 +4161,20 @@ int _medianInt(List<int> values) {
   return sorted[sorted.length ~/ 2];
 }
 
+/// Charges per year implied by a cadence: calendar buckets (12 monthly
+/// payments, 4 quarterly, ...) matching the server engine's annual estimate,
+/// so a ₹1,499 monthly plan costs ₹17,988/year, not 365/30 blocks worth
+/// ₹18,244. Non-calendar cycles fall back to 365/days.
+double _chargesPerYear(int cadenceDays) {
+  if (cadenceDays >= 350) return 1;
+  if (cadenceDays >= 175) return 2;
+  if (cadenceDays >= 85) return 4;
+  if (cadenceDays >= 26 && cadenceDays <= 32) return 12;
+  if (cadenceDays >= 13 && cadenceDays <= 17) return 26;
+  if (cadenceDays >= 5 && cadenceDays <= 10) return 52;
+  return 365 / cadenceDays;
+}
+
 DateTime _nextRecurringDateAfter(
   DateTime lastSeen,
   int cadenceDays, {
@@ -4167,7 +4269,9 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
       continue;
     }
     final latest = items.last;
-    final annual = Money.fromPaise((typical.paise * 365 / cadence).round());
+    final annual = Money.fromPaise(
+      (typical.paise * _chargesPerYear(cadence)).round(),
+    );
     series.add(
       RecurringSeries(
         id: 'local-recurring:${entry.key}',
@@ -4189,10 +4293,14 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
   series.sort((a, b) => b.annualCost.paise.compareTo(a.annualCost.paise));
   return RecurringReport(
     series: series,
-    totalAnnual: series.fold(
-      const Money.zero(),
-      (total, item) => total + item.annualCost,
-    ),
+    // The headline counts series whose cycle is proven and still billing,
+    // matching the server engine's confirmed-only total.
+    totalAnnual: series
+        .where((item) => item.status == 'confirmed')
+        .fold(
+          const Money.zero(),
+          (total, item) => total + item.annualCost,
+        ),
   );
 }
 
@@ -5623,3 +5731,4 @@ extension _FirstWhereOrNull<T> on List<T> {
     return null;
   }
 }
+
