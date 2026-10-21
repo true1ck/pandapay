@@ -1412,6 +1412,121 @@ class UserCardsRepository {
     );
   }
 
+  /// SMS intelligence Phase 2: uploads one typed-facts envelope to
+  /// POST /sms/facts. The envelope carries NO raw body — source key, sender,
+  /// body hash and the validated fact set only. Returns true when the caller
+  /// should drop the envelope: accepted or idempotently replayed. A 404 means an older production
+  /// image is still being served during rollout; returning false keeps the
+  /// row queued for the next sync instead of failing SMS import.
+  Future<bool> logSmsFacts({required Map<String, dynamic> envelope}) async {
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/sms/facts'),
+          headers: _headers,
+          body: jsonEncode(envelope),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 404) return false;
+    // Preserve rejected facts for a future compatible build and diagnostics.
+    // A server contract change must not silently erase the only durable copy.
+    if (response.statusCode == 400) {
+      throw ApiException('POST /sms/facts rejected: ${response.body}');
+    }
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'POST /sms/facts failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    return true;
+  }
+
+  /// SMS intelligence Phase 4: uploads one structured correction for one
+  /// fact slot of one source. A 404 means facts have not arrived yet and is
+  /// retryable; a 400 is retained by the local outbox for repair/compatibility.
+  Future<bool> overrideSmsFact({
+    required String sourceKey,
+    required int factIndex,
+    required Map<String, dynamic> patch,
+    String? reason,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/sms/facts/overrides'),
+          headers: _headers,
+          body: jsonEncode({
+            'sourceKey': sourceKey,
+            'factIndex': factIndex,
+            'patch': patch,
+            'reason': ?reason,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 404) return false;
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'POST /sms/facts/overrides failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    return true;
+  }
+
+  /// SMS intelligence Phase 5: queues an unresolved SMS for server AI classification.
+  /// Server deduplicates on (profile_id, source_id); retrying returns the same
+  /// job ID and does not burn quota. A 404, 400, 429 or network drop returns null;
+  /// failures never block the local intake flow.
+  Future<String?> submitAiJob({
+    required String sourceKey,
+    required String sender,
+    required String body,
+    DateTime? occurredAt,
+  }) async {
+    try {
+      final response = await _client
+          .post(
+            Uri.parse('$apiBaseUrl/ai/jobs'),
+            headers: _headers,
+            body: jsonEncode({
+              'sourceKey': sourceKey,
+              'sender': sender,
+              'body': body,
+              if (occurredAt != null)
+                'occurredAt': occurredAt.toUtc().toIso8601String(),
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        return decoded['jobId'] as String?;
+      }
+    } catch (_) {
+      // Non-fatal by design
+    }
+    return null;
+  }
+
+  /// Returns redacted status for a previously queued SMS. The body and lease
+  /// token are never returned; callers use this only to refresh local review
+  /// state after the background worker finishes.
+  Future<Map<String, dynamic>?> fetchAiJobStatus(String sourceKey) async {
+    try {
+      final response = await _client
+          .get(
+            Uri.parse('$apiBaseUrl/ai/jobs/source/$sourceKey'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 404) return null;
+      if (response.statusCode != 200) {
+        throw ApiException(
+          'GET /ai/jobs/source failed: ${response.statusCode} ${response.body}',
+        );
+      }
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Task S-1a: the batched form of [logTransactionFromSms], for backup-file
   /// import.
   ///
@@ -1631,11 +1746,13 @@ class UserCardsRepository {
 
   /// Task D-2 (ui-spec D2 "mark ignored (refund/reversal/transfer)").
   Future<void> ignoreTransaction(String id, {required String reason}) async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/transactions/$id/ignore'),
-      headers: _headers,
-      body: jsonEncode({'reason': reason}),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/transactions/$id/ignore'),
+          headers: _headers,
+          body: jsonEncode({'reason': reason}),
+        )
+        .timeout(_transactionRequestTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'POST /transactions/:id/ignore failed: ${response.statusCode} ${response.body}',
@@ -1644,10 +1761,12 @@ class UserCardsRepository {
   }
 
   Future<void> restoreTransaction(String id) async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/transactions/$id/restore'),
-      headers: _headers,
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/transactions/$id/restore'),
+          headers: _headers,
+        )
+        .timeout(_transactionRequestTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'POST /transactions/:id/restore failed: ${response.statusCode} ${response.body}',
@@ -2238,6 +2357,42 @@ class TransactionEntry {
       'expected_value_inr': rewardValue?.rupees,
       'tags': tags.map((tag) => tag.toJson()).toList(),
     };
+  }
+
+  TransactionEntry copyWith({
+    String? status,
+    String? note,
+    bool clearNote = false,
+  }) {
+    return TransactionEntry(
+      sourceKey: sourceKey,
+      id: id,
+      amount: amount,
+      occurredAt: occurredAt,
+      merchantName: merchantName,
+      categoryId: categoryId,
+      parentCategoryId: parentCategoryId,
+      parentUserCategoryId: parentUserCategoryId,
+      userCategoryId: userCategoryId,
+      categoryName: categoryName,
+      subcategoryName: subcategoryName,
+      cardDisplayName: cardDisplayName,
+      cardLast4: cardLast4,
+      accountLast4: accountLast4,
+      userCardId: userCardId,
+      rail: rail,
+      instrument: instrument,
+      instrumentKnown: instrumentKnown,
+      entryKind: entryKind,
+      source: source,
+      smsReceivedAt: smsReceivedAt,
+      observations: observations,
+      status: status ?? this.status,
+      rewardState: rewardState,
+      note: clearNote ? null : (note ?? this.note),
+      tags: tags,
+      rewardValue: rewardValue,
+    );
   }
 
   static String _railToJson(TxnRail rail) {

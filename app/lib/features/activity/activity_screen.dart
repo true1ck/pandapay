@@ -332,7 +332,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                       title: _summaryTitle(filter),
                       totalIncoming: totalIncoming,
                       totalOutgoing: totalOutgoing,
-                      count: entries.length,
+                      count: entries.where((e) => e.status == 'active').length,
                     ),
                     const SizedBox(height: AppSpace.lg),
                     for (final group in grouped) ...[
@@ -1358,12 +1358,21 @@ class _TransactionTile extends StatelessWidget {
     final isMoneyOut =
         entry.entryKind == TxnEntryKind.spend ||
         entry.entryKind == TxnEntryKind.investment;
+    final isIgnored = entry.status == 'ignored';
+    final isRefund = entry.note?.contains('[ignored: refund]') == true;
+    final isReversal = entry.note?.contains('[ignored: reversal]') == true;
     final amountPrefix = isIncome
         ? '+'
         : isMoneyOut
         ? '−'
         : null;
-    final directionColor = isIncome
+    final directionColor = isRefund
+        ? BambooInk.jade
+        : isReversal
+        ? BambooInk.amber
+        : isIgnored
+        ? BambooInk.ink500
+        : isIncome
         ? BambooInk.jade
         : isMoneyOut
         ? BambooInk.clay
@@ -1389,6 +1398,7 @@ class _TransactionTile extends StatelessWidget {
         entry.accountLast4 == null
             ? 'Bank account · unmatched'
             : 'Bank account ending ${entry.accountLast4}',
+      if (isIgnored) 'Excluded from spend',
       if (entry.status == 'active' &&
           entry.rewardState == 'estimated' &&
           (entry.source == 'sms' || entry.source == 'sms_bulk'))
@@ -1411,11 +1421,17 @@ class _TransactionTile extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: directionColor.withValues(alpha: 0.12),
+                color: directionColor.withValues(alpha: isIgnored ? 0.12 : 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                isIncome
+                isRefund
+                    ? Icons.replay_rounded
+                    : isReversal
+                    ? Icons.undo_rounded
+                    : isIgnored
+                    ? Icons.block_rounded
+                    : isIncome
                     ? Icons.arrow_downward_rounded
                     : isMoneyOut
                     ? Icons.arrow_upward_rounded
@@ -1431,10 +1447,68 @@ class _TransactionTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    entry.merchantName ?? entryLabel,
-                    style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          entry.merchantName ?? entryLabel,
+                          style: BambooFonts.heading(
+                            14.5,
+                            color: isIgnored ? BambooInk.ink700 : BambooInk.ink900,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isRefund) ...[
+                        const SizedBox(width: AppSpace.xs),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: BambooInk.jade.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: BambooInk.jade.withValues(alpha: 0.3),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            'Refund',
+                            style: BambooFonts.ui(
+                              10.5,
+                              weight: FontWeight.w700,
+                              color: BambooInk.jade,
+                            ),
+                          ),
+                        ),
+                      ] else if (isReversal) ...[
+                        const SizedBox(width: AppSpace.xs),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: BambooInk.amber.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: BambooInk.amber.withValues(alpha: 0.35),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            'Reversal',
+                            style: BambooFonts.ui(
+                              10.5,
+                              weight: FontWeight.w700,
+                              color: BambooInk.amber,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   if (subtitleParts.isNotEmpty) ...[
                     const SizedBox(height: 2),
@@ -1456,11 +1530,44 @@ class _TransactionTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpace.sm),
-            MoneyText(
-              entry.amount,
-              prefix: amountPrefix,
-              confidence: Confidence.estimated,
-              style: BambooFonts.money(15, color: directionColor),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                MoneyText(
+                  entry.amount,
+                  prefix: amountPrefix,
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.money(
+                    15,
+                    color: isIgnored ? BambooInk.ink500 : directionColor,
+                  ).copyWith(
+                    decoration: isIgnored ? TextDecoration.lineThrough : null,
+                    decorationColor: BambooInk.ink500,
+                  ),
+                ),
+                if (isRefund) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Refunded',
+                    style: BambooFonts.ui(
+                      10.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.jade,
+                    ),
+                  ),
+                ] else if (isReversal) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Reversed',
+                    style: BambooFonts.ui(
+                      10.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.amber,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ],
         ),

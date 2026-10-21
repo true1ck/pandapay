@@ -4,6 +4,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../user_cards_repository.dart';
 import 'app_database.dart';
+import '../local_sms_parser.dart';
 
 /// DLT SMS sender IDs split one bank's alerts across channel variants
 /// ("AD-" advertising, "AX-" activity, "VM-"/"PD-" operator packs, "-S"/"-T"
@@ -357,6 +358,7 @@ class FinancialStore {
     TransactionQuery? query,
     String? id,
   }) {
+    repairAutoPayArtifacts(ns);
     final args = <Object?>[ns, entity];
     var range = '';
     if (id != null) {
@@ -416,6 +418,12 @@ class FinancialStore {
     return rows;
   }
 
+  static bool _isDisplayable(TransactionEntry r) =>
+      r.status == 'active' ||
+      (r.status == 'ignored' &&
+          (r.note?.contains('[ignored: refund]') == true ||
+              r.note?.contains('[ignored: reversal]') == true));
+
   LocalTransactionSnapshot? transactions(String ns, TransactionQuery query) {
     final coverage = database.db
         .select(
@@ -437,7 +445,7 @@ class FinancialStore {
     final rows =
         entities(ns, 'transactions', query: query)
             .map(TransactionEntry.fromJson)
-            .where((r) => r.status == 'active' && query.matches(r))
+            .where((r) => _isDisplayable(r) && query.matches(r))
             .toList()
           ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
     final latest = coverage.isNotEmpty
@@ -643,7 +651,7 @@ class FinancialStore {
     if (database.db.updatedRows > 0) _notify(ns);
   }
 
-  void markInactive(String ns, String id) {
+  void markInactive(String ns, String id, {String? reason}) {
     final rows = database.db.select(
       "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
       [ns, id],
@@ -651,11 +659,52 @@ class FinancialStore {
     if (rows.isEmpty) return;
     final body =
         jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>;
+    final existingNote = body['note'] as String?;
+    final cleanOldNote = existingNote
+        ?.replaceFirst(
+          RegExp(r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*', caseSensitive: false),
+          '',
+        )
+        .trim();
+    final noteTag = reason == null ? '[ignored]' : '[ignored: $reason]';
+    final newNote = cleanOldNote != null && cleanOldNote.isNotEmpty
+        ? '$noteTag $cleanOldNote'
+        : noteTag;
     _upsert(
       ns,
       'transactions',
       id,
-      {...body, 'status': 'ignored'},
+      {...body, 'status': 'ignored', 'note': newNote},
+      DateTime.now().millisecondsSinceEpoch,
+      sourceKey: body['source_key'] as String?,
+    );
+    _notify(ns);
+  }
+
+  void markActive(String ns, String id) {
+    final rows = database.db.select(
+      "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
+      [ns, id],
+    );
+    if (rows.isEmpty) return;
+    final body =
+        jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>;
+    final rawNote = body['note'] as String?;
+    final restoredNote = rawNote
+        ?.replaceFirst(
+          RegExp(r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*', caseSensitive: false),
+          '',
+        )
+        .trim();
+    _upsert(
+      ns,
+      'transactions',
+      id,
+      {
+        ...body,
+        'status': 'active',
+        'note': (restoredNote != null && restoredNote.isNotEmpty) ? restoredNote : null,
+      },
       DateTime.now().millisecondsSinceEpoch,
       sourceKey: body['source_key'] as String?,
     );
@@ -747,9 +796,191 @@ class FinancialStore {
     }
   }
 
+  void repairAutoPayArtifacts(String ns) {
+    try {
+      database.db.execute('''
+        CREATE TABLE IF NOT EXISTS local_repairs (
+          namespace TEXT NOT NULL,
+          repair_key TEXT NOT NULL,
+          PRIMARY KEY(namespace, repair_key)
+        );
+      ''');
+      final applied = database.db.select(
+        'SELECT 1 FROM local_repairs WHERE namespace=? AND repair_key=?',
+        [ns, 'autopay_repair_v1'],
+      );
+      if (applied.isNotEmpty) return;
+
+      var changed = false;
+      final messages = database.db.select(
+        'SELECT id, sender, body, received_at FROM sms_captured_messages WHERE namespace=?',
+        [ns],
+      );
+      for (final msg in messages) {
+        final sourceKey = msg['id'] as String;
+        final sender = msg['sender'] as String;
+        final body = msg['body'] as String;
+        final receivedAtMs = msg['received_at'];
+        final receivedAt = receivedAtMs is int
+            ? DateTime.fromMillisecondsSinceEpoch(receivedAtMs)
+            : DateTime.tryParse(receivedAtMs.toString());
+        if (receivedAt == null) continue;
+
+        if (RegExp(
+          r'\b(?:autopay\s+(?:alert|reminder)|will\s+be\s+(?:auto[- ]?)?(?:deducted|debited)|auto[- ]?(?:deducted|debited))\b',
+          caseSensitive: false,
+        ).hasMatch(body)) {
+          final obs = LocalSmsParser.parse(
+            namespace: ns,
+            sender: sender,
+            body: body,
+            receivedAt: receivedAt,
+          );
+          if (obs != null && obs.eventType == LocalSmsEventType.bill) {
+            database.db.execute(
+              "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' AND source_key=? AND pending=1",
+              [ns, sourceKey],
+            );
+            saveObservation(ns, sourceKey, {
+              'id': sourceKey,
+              'sender_bank': sender
+                  .toUpperCase()
+                  .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
+                  .replaceFirst(RegExp(r'-[A-Z]$'), ''),
+              'parser_version': LocalSmsParser.version,
+              'received_at': receivedAt.toUtc().toIso8601String(),
+              'account_last4': obs.accountLast4,
+              'is_bank_account': false,
+              'card_last4': obs.cardLast4,
+              'biller_name': obs.billerName,
+              'cadence_hint': obs.cadenceHint,
+              'balance_paise': obs.availableBalance?.paise,
+              'amount_due_paise': obs.amountDue?.paise,
+              'minimum_due_paise': obs.minimumDue?.paise,
+              'autopay_limit_paise': obs.autopayLimit?.paise,
+              'due_date': obs.dueDate?.toIso8601String(),
+              'statement_date': obs.statementDate?.toIso8601String(),
+              'event_type': obs.eventType.wireValue,
+              'disposition': obs.disposition.wireValue,
+              'reason_codes': obs.reasonCodes,
+              'confidence': obs.confidence,
+            });
+            if (obs.cardLast4 != null && obs.dueDate != null) {
+              final cardRows = database.db.select(
+                "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='cards'",
+                [ns],
+              );
+              for (final cardRow in cardRows) {
+                final cardBody =
+                    jsonDecode(cardRow['payload'] as String) as Map<String, dynamic>;
+                if (cardBody['last4'] == obs.cardLast4) {
+                  if (cardBody['due_day'] == null) {
+                    patchCard(ns, cardRow['id'] as String, {'due_day': obs.dueDate!.day});
+                  }
+                }
+              }
+            }
+            changed = true;
+          }
+        }
+      }
+      database.db.execute(
+        'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
+        [ns, 'autopay_repair_v1'],
+      );
+      if (changed) {
+        _notify(ns, entity: 'cards');
+        _notify(ns, entity: 'observations');
+        _notify(ns, entity: 'transactions');
+      }
+    } catch (_) {
+      // Best-effort local repair
+    }
+  }
+  void syncCardDatesFromObservations(String ns) {
+    try {
+      final cardRows = database.db.select(
+        "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='cards'",
+        [ns],
+      );
+      if (cardRows.isEmpty) return;
+      final obsRows = database.db.select(
+        "SELECT payload FROM financial_entities WHERE namespace=? AND entity='sms_observations'",
+        [ns],
+      );
+      var changed = false;
+      for (final cardRow in cardRows) {
+        final card = jsonDecode(cardRow['payload'] as String) as Map<String, dynamic>;
+        final currentDueDay = card['due_day'] as int?;
+        final currentStmtDay = card['statement_day'] as int?;
+
+        final cardLast4 = card['last4'] as String?;
+        final cardName = (card['card_name'] as String? ?? '').toLowerCase();
+
+        final matchingBills = <Map<String, dynamic>>[];
+        for (final obsRow in obsRows) {
+          final obs = jsonDecode(obsRow['payload'] as String) as Map<String, dynamic>;
+          if (obs['event_type'] != 'bill') continue;
+
+          final obsLast4 = obs['card_last4'] as String?;
+          final sender = (obs['sender_bank'] as String? ?? '').toLowerCase();
+          final biller = (obs['biller_name'] as String? ?? '').toLowerCase();
+
+          final matchesLast4 = obsLast4 != null && obsLast4 == cardLast4;
+          final matchesFamily = obsLast4 == null &&
+              ((sender.contains('tneu') || biller.contains('tata')) && cardName.contains('tata'));
+
+          if (!matchesLast4 && !matchesFamily) continue;
+          matchingBills.add(obs);
+        }
+
+        if (matchingBills.isEmpty) continue;
+
+        matchingBills.sort((a, b) {
+          final aDate = (a['received_at'] ?? a['statement_date'] ?? '') as String;
+          final bDate = (b['received_at'] ?? b['statement_date'] ?? '') as String;
+          return bDate.compareTo(aDate);
+        });
+
+        int? newDueDay;
+        int? newStmtDay;
+        for (final obs in matchingBills) {
+          if (newDueDay == null && obs['due_date'] != null) {
+            final dt = DateTime.tryParse(obs['due_date'] as String);
+            if (dt != null) newDueDay = dt.day;
+          }
+          if (newStmtDay == null && obs['statement_date'] != null) {
+            final dt = DateTime.tryParse(obs['statement_date'] as String);
+            if (dt != null) newStmtDay = dt.day;
+          }
+          if (newDueDay != null && newStmtDay != null) break;
+        }
+
+        final patch = <String, dynamic>{};
+        if (newDueDay != null && newDueDay != currentDueDay) {
+          patch['due_day'] = newDueDay;
+        }
+        if (newStmtDay != null && newStmtDay != currentStmtDay) {
+          patch['statement_day'] = newStmtDay;
+        }
+        if (patch.isNotEmpty) {
+          patchCard(ns, cardRow['id'] as String, patch);
+          changed = true;
+        }
+      }
+      if (changed) {
+        _notify(ns, entity: 'cards');
+      }
+    } catch (_) {
+      // Best-effort local heal
+    }
+  }
+
   /// Import old snapshots once, oldest first. Only the canonical unfiltered
   /// endpoint establishes full coverage; visiting a report does not.
   void migrateLegacy(String ns) {
+    repairAutoPayArtifacts(ns);
+    syncCardDatesFromObservations(ns);
     if (database.db.select(
       'SELECT 1 FROM financial_migrations WHERE namespace=?',
       [ns],

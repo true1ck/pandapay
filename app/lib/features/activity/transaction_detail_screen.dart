@@ -182,13 +182,21 @@ class _DetailBody extends ConsumerStatefulWidget {
 
 class _DetailBodyState extends ConsumerState<_DetailBody> {
   bool _ignoring = false;
+  bool _restoring = false;
   bool _attaching = false;
   final _imagePicker = ImagePicker();
 
-  /// Held locally so the note and split rows update the moment they're
-  /// saved, rather than waiting on a re-fetch of the parent transaction.
-  /// Seeded from the entry; splits are loaded once on init.
+  late TransactionEntry _entry = widget.entry;
   late String? _note = widget.entry.note;
+
+  @override
+  void didUpdateWidget(covariant _DetailBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.entry != widget.entry) {
+      _entry = widget.entry;
+      _note = widget.entry.note;
+    }
+  }
   List<TransactionSplit> _splits = const [];
   String? _splitLoadError;
   bool _loadingSplits = true;
@@ -491,16 +499,50 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<void> _markIgnored(String reason) async {
     final deleting = reason == 'transfer';
     setState(() => _ignoring = true);
+    final previousEntry = _entry;
+    final previousNote = _note;
+    final cleanOldNote = _note
+        ?.replaceFirst(
+          RegExp(r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*', caseSensitive: false),
+          '',
+        )
+        .trim();
+    final noteTag = deleting ? '[deleted]' : '[ignored: $reason]';
+    final newNote = cleanOldNote != null && cleanOldNote.isNotEmpty
+        ? '$noteTag $cleanOldNote'
+        : noteTag;
+
+    setState(() {
+      _entry = _entry.copyWith(
+        status: deleting ? 'deleted' : 'ignored',
+        note: newNote,
+      );
+      _note = newNote;
+    });
+
     try {
-      await ref
-          .read(userCardsRepositoryProvider)!
-          .ignoreTransaction(widget.entry.id, reason: reason);
+      final namespace = ref.read(cacheNamespaceProvider);
+      final cache = await ref.read(responseCacheProvider.future);
+      if (deleting) {
+        cache.financialStore.markInactive(namespace, widget.entry.id);
+      } else {
+        cache.financialStore.markInactive(namespace, widget.entry.id, reason: reason);
+      }
+
+      final repo = ref.read(userCardsRepositoryProvider);
+      if (repo != null) {
+        try {
+          await repo.ignoreTransaction(widget.entry.id, reason: reason);
+        } catch (_) {}
+      }
+
       ref.invalidate(_transactionProvider(widget.entry.id));
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
       ref.invalidate(homeSummaryProvider);
+
       if (mounted) {
         if (deleting) {
           ScaffoldMessenger.of(
@@ -508,13 +550,22 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           ).showSnackBar(const SnackBar(content: Text('Transaction deleted.')));
           context.pop(true);
         } else {
+          final label = reason == 'refund'
+              ? 'Marked as refund (excluded from spend).'
+              : reason == 'reversal'
+              ? 'Marked as reversal (excluded from spend).'
+              : 'Marked as ignored.';
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(const SnackBar(content: Text('Marked as ignored.')));
+          ).showSnackBar(SnackBar(content: Text(label)));
         }
       }
     } catch (e) {
       if (mounted) {
+        setState(() {
+          _entry = previousEntry;
+          _note = previousNote;
+        });
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
@@ -522,6 +573,78 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     } finally {
       if (mounted) setState(() => _ignoring = false);
     }
+  }
+
+  Future<void> _restoreTransaction() async {
+    setState(() => _restoring = true);
+    final previousEntry = _entry;
+    final previousNote = _note;
+    final restoredNote = _note
+        ?.replaceFirst(
+          RegExp(r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*', caseSensitive: false),
+          '',
+        )
+        .trim();
+    final cleanNote = (restoredNote != null && restoredNote.isNotEmpty)
+        ? restoredNote
+        : null;
+
+    setState(() {
+      _entry = _entry.copyWith(
+        status: 'active',
+        note: cleanNote,
+        clearNote: cleanNote == null,
+      );
+      _note = cleanNote;
+    });
+
+    try {
+      final namespace = ref.read(cacheNamespaceProvider);
+      final cache = await ref.read(responseCacheProvider.future);
+      cache.financialStore.markActive(namespace, widget.entry.id);
+
+      final repo = ref.read(userCardsRepositoryProvider);
+      if (repo != null) {
+        try {
+          await repo.restoreTransaction(widget.entry.id);
+        } catch (_) {}
+      }
+
+      ref.invalidate(_transactionProvider(widget.entry.id));
+      ref.invalidate(userCardsProvider);
+      ref.invalidate(myCardsProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Transaction restored to active.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _entry = previousEntry;
+          _note = previousNote;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingErrorMessage(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _restoring = false);
+    }
+  }
+
+  static String _restoreButtonLabel(String? note) {
+    if (note != null && note.contains('[ignored: refund]')) {
+      return 'Undo refund (restore to active)';
+    }
+    if (note != null && note.contains('[ignored: reversal]')) {
+      return 'Undo reversal (restore to active)';
+    }
+    return 'Restore transaction';
   }
 
   Future<void> _showIgnoreSheet() async {
@@ -765,7 +888,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   @override
   Widget build(BuildContext context) {
-    final entry = widget.entry;
+    final entry = _entry;
     final tagRepository = ref.watch(transactionTagsProvider);
     final tags =
         tagRepository?.tagsForTransaction(entry.id, fallback: entry.tags) ??
@@ -809,7 +932,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                           const SizedBox(width: AppSpace.xs),
                           Expanded(
                             child: Text(
-                              'This transaction is ${entry.status} — excluded from caps and rankings.',
+                              entry.note?.contains('[ignored: refund]') == true
+                                  ? 'This transaction is marked as a refund — excluded from spend, caps, and rankings.'
+                                  : entry.note?.contains('[ignored: reversal]') == true
+                                  ? 'This transaction is marked as a reversal — excluded from spend, caps, and rankings.'
+                                  : 'This transaction is ${entry.status} — excluded from caps and rankings.',
                               style: BambooFonts.ui(
                                 12.5,
                                 color: BambooInk.ink500,
@@ -1003,9 +1130,14 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     ),
                   _DetailRow(
                     label: 'Status',
-                    value:
-                        entry.status[0].toUpperCase() +
-                        entry.status.substring(1),
+                    value: entry.note?.contains('[ignored: refund]') == true
+                        ? 'Refunded'
+                        : entry.note?.contains('[ignored: reversal]') == true
+                        ? 'Reversed'
+                        : (entry.status.isEmpty
+                            ? 'Unknown'
+                            : entry.status[0].toUpperCase() +
+                                entry.status.substring(1)),
                   ),
                   if (_note != null && _note!.isNotEmpty)
                     _DetailRow(label: 'Note', value: _note!),
@@ -1173,6 +1305,41 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                       )
                     : const Icon(Icons.visibility_off_outlined),
                 label: const Text('Refund, reversal, or delete transaction'),
+              ),
+            ),
+          )
+        else
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.sm,
+                AppSpace.lg,
+                AppSpace.lg,
+              ),
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: BambooInk.jade,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
+                ),
+                onPressed: _restoring ? null : _restoreTransaction,
+                icon: _restoring
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.restore),
+                label: Text(_restoreButtonLabel(_entry.note)),
               ),
             ),
           ),

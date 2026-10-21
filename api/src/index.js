@@ -5913,7 +5913,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
   const canonicalCardId = 'COALESCE(replacement.active_card_id, t.user_card_id)';
   const statusCondition = status === 'deleted'
     ? `(t.status = 'deleted' OR (t.status = 'ignored' AND t.note LIKE '[ignored: transfer]%'))`
-    : `t.status = 'active'`;
+    : `(t.status = 'active' OR (t.status = 'ignored' AND (t.note LIKE '[ignored: refund]%' OR t.note LIKE '[ignored: reversal]%')))`;
   const conditions = [`t.profile_id = $1`, statusCondition];
   const params = [req.userId];
   // Task D-1's last missing filter: free-text search. activity_screen.dart
@@ -6245,7 +6245,7 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
         if (!transactionId || transactionId !== suppressedTxnId) return;
         const txn = byId.get(transactionId);
         if (!txn || txn.status !== 'ignored') return;
-        const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend';
+        const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend' && Boolean(txn.user_card_id);
         if (!txn.is_backfill && movesCardState && txn.state_applied !== true) {
           const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
           if (!card) throw new Error('cannot activate duplicate: user card is missing or archived');
@@ -6272,7 +6272,7 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
       const deactivateIfActive = async (transactionId, keptId) => {
         const txn = byId.get(transactionId);
         if (!txn || txn.status !== 'active') return;
-        const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend';
+        const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend' && Boolean(txn.user_card_id);
         // Null means a legacy active row written before the marker existed;
         // preserve the old safe assumption that its state was applied.
         if (movesCardState && txn.state_applied !== false) {
@@ -6609,7 +6609,7 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
         return { status: 409, error: `transaction is already '${txn.status}'` };
       }
 
-      const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend';
+      const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend' && Boolean(txn.user_card_id);
       if (movesCardState && txn.state_applied !== false) {
         const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
         if (!card) return { status: 404, error: 'user_card for this transaction not found or archived' };
@@ -6652,13 +6652,13 @@ app.post('/transactions/:id/restore', requireAuth, async (req, res) => {
                 state_applied, is_backfill
            FROM transactions
           WHERE id = $1 AND profile_id = $2
-            AND (status = 'deleted' OR (status = 'ignored' AND note LIKE '[ignored: transfer]%'))
+            AND (status = 'deleted' OR status = 'ignored')
           FOR UPDATE`,
         [req.params.id, req.userId]
       );
       if (existing.rows.length === 0) return { status: 404, error: 'deleted transaction not found' };
       const txn = existing.rows[0];
-      const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend';
+      const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend' && Boolean(txn.user_card_id);
       if (movesCardState && txn.state_applied !== true) {
         const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
         if (!card) return { status: 404, error: 'user_card for this transaction not found or archived' };
@@ -6675,7 +6675,7 @@ app.post('/transactions/:id/restore', requireAuth, async (req, res) => {
       }
 
       const restoredNote = String(txn.note || '')
-        .replace(/^\[(?:deleted|ignored: transfer)\]\s*/i, '')
+        .replace(/^\[(?:deleted|ignored(?::\s*[^\]]+)?)\]\s*/i, '')
         .trim() || null;
       const updated = await client.query(
         `UPDATE transactions
