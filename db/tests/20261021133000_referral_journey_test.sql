@@ -10,6 +10,7 @@ select gen_random_uuid()::text as inviter_id,
        'fixture-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 12) as campaign_version
 \gset
 select set_config('test.legacy_user_id', :'legacy_id', true);
+select set_config('test.campaign_version', :'campaign_version', true);
 
 insert into public.profiles (id, display_name, locale, currency, onboarding_completed_at)
 values (:'inviter_id'::uuid, 'Fixture inviter', 'en-IN', 'INR', now());
@@ -108,7 +109,8 @@ begin
   if (select count(*) from promotions.reward_entitlements) <> 2 then
     raise exception 'third eligible date did not create exactly two entitlements';
   end if;
-  if (select reserved_paise from promotions.campaign_state limit 1) <> 10000 then
+  if (select reserved_paise from promotions.campaign_state
+       where version_key = current_setting('test.campaign_version')) <> 10000 then
     raise exception 'pair maximum reward liability was not reserved';
   end if;
 end
@@ -157,8 +159,10 @@ begin
       where e.beneficiary_role = 'referee' limit 1) <> 0 then
     raise exception 'zero spin must complete without changing the referee balance';
   end if;
-  if (select issued_paise from promotions.campaign_state limit 1) <> 5000
-     or (select reserved_paise from promotions.campaign_state limit 1) <> 0 then
+  if (select issued_paise from promotions.campaign_state
+       where version_key = current_setting('test.campaign_version')) <> 5000
+     or (select reserved_paise from promotions.campaign_state
+          where version_key = current_setting('test.campaign_version')) <> 0 then
     raise exception 'budget settlement does not match the two committed awards';
   end if;
   if exists (select 1 from promotions.credit_redemptions) then
