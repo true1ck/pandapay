@@ -147,24 +147,28 @@ Map<String, CardBillLedger> deriveCardBills({
 }) {
   final ledgers = <String, CardBillLedger>{};
   for (final card in cards) {
-    final cycles = _mergeCycles(
-      evidence
-          .where((e) => e.cardLast4 != null && e.cardLast4 == card.last4)
-          .toList(),
-      now: now,
-    );
-    if (cycles.isEmpty) continue;
-    ledgers[card.id] = CardBillLedger(
-      current: cycles.first,
-      previous: cycles.length > 1 ? cycles[1] : null,
-    );
+    final own = evidence
+        .where((e) => e.cardLast4 != null && e.cardLast4 == card.last4)
+        .toList();
+    if (own.isNotEmpty) {
+      final cycles = _mergeCycles(own, now: now);
+      if (cycles.isNotEmpty) {
+        ledgers[card.id] = CardBillLedger(
+          current: cycles.first,
+          previous: cycles.length > 1 ? cycles[1] : null,
+        );
+      }
+    }
   }
 
   // Some issuer bill SMS never quote card digits (e.g. YY-MYTNEU-S for the
   // HDFC Tata Neu card). They carry a sender family instead; attach when
   // that family names exactly one registered card via its display name.
+  // Merge into the card's own last4 evidence rather than only filling
+  // gaps: HDFC statements arrive without amount or due date, and without
+  // merging the family-named bill (which carries both) the row would show
+  // a statement with nothing owed.
   for (final card in cards) {
-    if (ledgers.containsKey(card.id)) continue;
     final familyRows = evidence
         .where(
           (e) =>
@@ -177,7 +181,10 @@ Map<String, CardBillLedger> deriveCardBills({
         .where((other) => other.id != card.id)
         .any((other) => _familyNamesCard(familyRows.first.family, other));
     if (others) continue;
-    final cycles = _mergeCycles(familyRows, now: now);
+    final own = evidence
+        .where((e) => e.cardLast4 != null && e.cardLast4 == card.last4)
+        .toList();
+    final cycles = _mergeCycles([...own, ...familyRows], now: now);
     if (cycles.isEmpty) continue;
     ledgers[card.id] = CardBillLedger(
       current: cycles.first,

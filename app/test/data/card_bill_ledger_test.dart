@@ -442,4 +442,48 @@ void main() {
     expect(ledgers['card-t']!.current!.dueDate, DateTime(2026, 11, 8));
     expect(ledgers['card-t']!.current!.amountDue, Money.fromRupees(8331));
   });
+
+  test('family bill merges into the last4 statement of the card it names', () {
+    final tata = UserCard.fromJson({
+      'id': 'card-t',
+      'card_product_id': 'p',
+      'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
+      'last4': '1366',
+      'is_default': false,
+    });
+    // HDFC's statement template carries neither the amount nor the due
+    // date; the Tata Neu bill SMS a day later carries both without digits.
+    final ledgers = deriveCardBills(
+      cards: [card, tata],
+      evidence: [
+        CardBillEvidence(
+          cardLast4: '1366',
+          statementDate: DateTime(2026, 10, 20),
+          statementDateExplicit: false,
+          dueDate: null,
+          amountDue: null,
+          minimumDue: null,
+          confidence: 0.6,
+        ),
+        CardBillEvidence(
+          cardLast4: null,
+          family: 'MYTNEU',
+          statementDate: DateTime(2026, 10, 21),
+          statementDateExplicit: true,
+          dueDate: DateTime(2026, 11, 8),
+          amountDue: Money.fromRupees(8331),
+          minimumDue: null,
+          confidence: 0.95,
+        ),
+      ],
+      payments: const [],
+      now: now,
+    );
+    expect(ledgers['card-t'], isNotNull);
+    final bill = ledgers['card-t']!.current!;
+    expect(bill.statementDate, DateTime(2026, 10, 21));
+    expect(bill.statementDateVerified, isTrue);
+    expect(bill.dueDate, DateTime(2026, 11, 8));
+    expect(bill.amountDue, Money.fromRupees(8331));
+  });
 }

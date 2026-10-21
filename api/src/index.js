@@ -5651,13 +5651,17 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
               AND t.profile_id = o.profile_id
              LEFT JOIN issuers oi
                ON oi.id::text = o.metadata->>'patternIssuerId'
-            WHERE o.profile_id = $1
-              AND o.source IN ('sms', 'sms_bulk')
-              AND o.metadata->>'accountLast4' ~ '^[0-9]{4}$'
-              AND t.instrument = 'upi_bank'
-              AND t.entry_kind <> 'investment'
-              AND COALESCE(o.metadata->>'isBankAccount', 'legacy') <> 'false'
-              AND (
+             WHERE o.profile_id = $1
+               AND o.source IN ('sms', 'sms_bulk')
+               AND o.metadata->>'accountLast4' ~ '^[0-9]{4}$'
+               AND t.instrument = 'upi_bank'
+               AND t.entry_kind <> 'investment'
+               AND COALESCE(o.metadata->>'isBankAccount', 'legacy') <> 'false'
+               -- UPI-platform senders (SBIUPI & friends) quote the
+               -- counterparty's masked account, never the user's own; they
+               -- must not mint account rows regardless of parser verdict.
+               AND lower(coalesce(o.metadata->>'senderBank', '')) !~ 'upi'
+               AND (
                 o.metadata->>'isBankAccount' = 'true'
                 OR (
                   o.metadata->>'isBankAccount' IS NULL
@@ -5700,9 +5704,10 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
                  WHERE bo.profile_id = t.profile_id
                    AND bo.transaction_id = t.id
                    AND bo.source IN ('sms', 'sms_bulk')
-                   AND bo.metadata->>'accountLast4' = t.source_account_last4
-                   AND COALESCE(bo.metadata->>'isBankAccount', 'legacy') <> 'false'
-                   AND (
+                    AND bo.metadata->>'accountLast4' = t.source_account_last4
+                    AND COALESCE(bo.metadata->>'isBankAccount', 'legacy') <> 'false'
+                    AND lower(coalesce(bo.metadata->>'senderBank', '')) !~ 'upi'
+                    AND (
                      bo.metadata->>'isBankAccount' = 'true'
                      OR (
                        bo.metadata->>'isBankAccount' IS NULL
