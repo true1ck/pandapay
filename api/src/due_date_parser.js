@@ -28,13 +28,32 @@ const MONTHS = {
 // for a payment date.
 const DATE_TOKEN = String.raw`(?:\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}(?:st|nd|rd|th)?[\s./-]+[A-Za-z]{3,9}[,\s./-]+\d{2,4}|[A-Za-z]{3,9}[\s./-]+\d{1,2}(?:st|nd|rd|th)?[,]?[\s./-]+\d{2,4})`;
 
+// A printed Indian bank date names an India-calendar day. Pin it to midnight
+// IST so the stored instant is identical whether the server clock runs in
+// UTC (CI/prod) or IST (dev); `day` always comes from the IST calendar.
+const IST_OFFSET_MS = 5.5 * 3600 * 1000;
+
+const IST_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
+function istDayParts(value) {
+  const parts = IST_DAY.formatToParts(value);
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const day = Number(parts.find((part) => part.type === 'day')?.value);
+  return [year, month, day].every(Number.isInteger) ? { year, month, day } : null;
+}
+
 function validDate(year, month, day) {
   const normalizedYear = year < 100 ? year + 2000 : year;
-  const value = new Date(normalizedYear, month - 1, day);
+  const value = new Date(Date.UTC(normalizedYear, month - 1, day) - IST_OFFSET_MS);
+  const roundTrip = istDayParts(value);
   if (
-    value.getFullYear() !== normalizedYear
-    || value.getMonth() !== month - 1
-    || value.getDate() !== day
+    !roundTrip
+    || roundTrip.year !== normalizedYear
+    || roundTrip.month !== month
+    || roundTrip.day !== day
   ) return null;
   return value;
 }
@@ -44,27 +63,27 @@ function parseDateToken(token) {
   let match = text.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/);
   if (match) {
     const date = validDate(Number(match[1]), Number(match[2]), Number(match[3]));
-    return date ? { date, day: date.getDate() } : null;
+    return date ? { date, day: istDayParts(date).day } : null;
   }
 
   match = text.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
   if (match) {
     const date = validDate(Number(match[3]), Number(match[2]), Number(match[1]));
-    return date ? { date, day: date.getDate() } : null;
+    return date ? { date, day: istDayParts(date).day } : null;
   }
 
   match = text.match(/^(\d{1,2})(?:st|nd|rd|th)?[\s./-]+([A-Za-z]{3,9})[,\s./-]+(\d{2,4})$/i);
   if (match) {
     const month = MONTHS[match[2].toLowerCase()];
     const date = month ? validDate(Number(match[3]), month, Number(match[1])) : null;
-    return date ? { date, day: date.getDate() } : null;
+    return date ? { date, day: istDayParts(date).day } : null;
   }
 
   match = text.match(/^([A-Za-z]{3,9})[\s./-]+(\d{1,2})(?:st|nd|rd|th)?[,]?[\s./-]+(\d{2,4})$/i);
   if (match) {
     const month = MONTHS[match[1].toLowerCase()];
     const date = month ? validDate(Number(match[3]), month, Number(match[2])) : null;
-    return date ? { date, day: date.getDate() } : null;
+    return date ? { date, day: istDayParts(date).day } : null;
   }
 
   return null;
@@ -180,14 +199,7 @@ function extractExplicitStatementDate(body) {
 function observedCalendarDay(observedAt) {
   if (!observedAt) return null;
   const value = observedAt instanceof Date ? observedAt : new Date(observedAt);
-  if (Number.isNaN(value.getTime())) return null;
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(value);
-  const year = Number(parts.find((part) => part.type === 'year')?.value);
-  const month = Number(parts.find((part) => part.type === 'month')?.value);
-  const day = Number(parts.find((part) => part.type === 'day')?.value);
-  return [year, month, day].every(Number.isInteger) ? { year, month, day } : null;
+  return Number.isNaN(value.getTime()) ? null : istDayParts(value);
 }
 
 /** Extract the recurring statement day, using SMS receive date as fallback. */
