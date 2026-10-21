@@ -14,6 +14,7 @@
  */
 
 const geminiQueue = require('./gemini_queue');
+const { applyFactSpecialists } = require('./sms_facts_route');
 const smsFacts = require('./sms_facts');
 const smsObservationMigration = require('./sms_observation_migration');
 const crypto = require('crypto');
@@ -112,13 +113,28 @@ function registerAiQueueRoutes(app, {
              FROM ai_jobs WHERE profile_id = $1 AND source_key = $2`,
           [req.userId, req.params.sourceKey],
         );
-        return rows.rows[0] || null;
+        const found = rows.rows[0];
+        if (!found) return null;
+        const source = found.status === 'done'
+          ? await smsFacts.loadSmsSourceFacts(client, req.userId, req.params.sourceKey)
+          : null;
+        const suggestions = (source?.facts || [])
+          .filter((fact) => fact.status === 'active' && fact.provenance?.channel === 'ai')
+          .map((fact) => ({
+            factIndex: fact.factIndex,
+            factType: fact.factType,
+            payload: fact.payload,
+          }));
+        return { ...found, suggestions };
       });
       if (!job) return res.status(404).json({ error: 'unknown source' });
       res.status(200).json({
         jobId: job.id,
         status: job.status,
         result: job.result || null,
+        // Only validated structured facts, scoped to the authenticated owner.
+        // The raw SMS and model prompt have already been purged from the job.
+        suggestions: job.suggestions,
         attempts: job.attempts,
         createdAt: job.created_at,
         updatedAt: job.updated_at,
@@ -202,6 +218,8 @@ function registerAiQueueRoutes(app, {
             ...(typeof batchId === 'string' && /^[0-9a-f-]{36}$/i.test(batchId) ? { batchId } : {}),
             ...(Number.isInteger(batchSize) && batchSize >= 1 && batchSize <= 4 ? { batchSize } : {}),
           },
+          applySpecialists: applyFactSpecialists,
+          persistSubscriptionMandate,
         });
         return { status: 200, jobStatus: 'done' };
       });

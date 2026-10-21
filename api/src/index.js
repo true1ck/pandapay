@@ -28,6 +28,7 @@ const {
 const { parseSubscriptionMandate } = require('./subscription_parser');
 const importResolvers = require('./import_resolvers');
 const smsFactsRoute = require('./sms_facts_route');
+const smsRuleBundleRoute = require('./sms_rule_bundle');
 const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
@@ -379,7 +380,7 @@ app.post('/profile', requireVerifiedSession, async (req, res) => {
  */
 app.get('/catalogue', async (req, res) => {
   try {
-    const result = await withUserClient(null, (client) =>
+    const result = await withUserClient(req.user || null, (client) =>
       client.query('SELECT * FROM v_card_catalogue_export ORDER BY name')
     );
     res.json({ cards: result.rows });
@@ -1167,6 +1168,15 @@ app.get('/merchants/nearby', async (req, res) => {
         [lat, lng, radiusM]
       )
     );
+    if (_merchantSearchCache.size >= _MERCHANT_SEARCH_CACHE_MAX_ENTRIES) {
+      const oldestKey = _merchantSearchCache.keys().next().value;
+      if (oldestKey) _merchantSearchCache.delete(oldestKey);
+    }
+    _merchantSearchCache.set(cacheKey, {
+      merchants: result.rows,
+      expiresAt: now + _MERCHANT_SEARCH_CACHE_TTL_MS,
+    });
+
     res.json({ merchants: result.rows });
   } catch (err) {
     console.error('GET /merchants/nearby error', err);
@@ -2142,24 +2152,83 @@ app.post('/acceptance-reports', requireAuth, async (req, res) => {
   }
 });
 
+// Server-side in-memory cache for merchant search queries
+const _merchantSearchCache = new Map();
+const _MERCHANT_SEARCH_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const _MERCHANT_SEARCH_CACHE_MAX_ENTRIES = 500;
+
 app.get('/merchants/search', async (req, res) => {
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   if (q.length === 0) {
     return res.status(400).json({ error: 'q is required' });
   }
 
+  // Set HTTP Cache-Control header so clients/proxies can cache for 5 minutes
+  res.set('Cache-Control', 'public, max-age=300');
+
+  const cacheKey = `${req.user ? req.user.profile_id : 'anon'}:${q.toLowerCase()}`;
+  const cached = _merchantSearchCache.get(cacheKey);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) {
+    return res.json({ merchants: cached.merchants });
+  }
+
   try {
-    const result = await withUserClient(null, (client) =>
+    const result = await withUserClient(req.user || null, (client) =>
       client.query(
-        `SELECT m.id AS merchant_id, m.display_name, m.category_id, m.confidence,
-                l.grid_lat, l.grid_lng
-           FROM merchants m
-           LEFT JOIN LATERAL (
-             SELECT grid_lat, grid_lng FROM merchant_locations
-              WHERE merchant_id = m.id ORDER BY confirmation_count DESC LIMIT 1
-           ) l ON true
-          WHERE m.is_published = true AND m.display_name ILIKE $1
-          ORDER BY m.confirmation_count DESC
+        `WITH published AS (
+           SELECT m.id::text AS merchant_id, m.display_name, m.category_id::text, m.confidence::text,
+                  l.grid_lat, l.grid_lng, 1 AS source_priority, m.confirmation_count
+             FROM merchants m
+             LEFT JOIN LATERAL (
+               SELECT grid_lat, grid_lng FROM merchant_locations
+                WHERE merchant_id = m.id ORDER BY confirmation_count DESC LIMIT 1
+             ) l ON true
+            WHERE m.is_published = true AND (m.display_name ILIKE $1 OR m.vpa ILIKE $1)
+         ),
+         user_txns AS (
+           SELECT ('txn-' || md5(t.merchant_name)) AS merchant_id,
+                  t.merchant_name AS display_name,
+                  t.category_id::text,
+                  'high'::text AS confidence,
+                  NULL::numeric AS grid_lat,
+                  NULL::numeric AS grid_lng,
+                  2 AS source_priority,
+                  COUNT(*)::int AS confirmation_count
+             FROM transactions t
+            WHERE t.merchant_name IS NOT NULL
+              AND t.merchant_name ILIKE $1
+            GROUP BY t.merchant_name, t.category_id
+         ),
+         category_rules AS (
+           SELECT ('mcr-' || mcr.id::text) AS merchant_id,
+                  initcap(mcr.pattern) AS display_name,
+                  mcr.category_id::text,
+                  'high'::text AS confidence,
+                  NULL::numeric AS grid_lat,
+                  NULL::numeric AS grid_lng,
+                  3 AS source_priority,
+                  5 AS confirmation_count
+             FROM merchant_category_rules mcr
+            WHERE mcr.is_active = true
+              AND mcr.pattern ILIKE $1
+         ),
+         combined AS (
+           SELECT * FROM published
+           UNION ALL
+           SELECT * FROM user_txns WHERE REGEXP_REPLACE(LOWER(display_name), '[^a-z0-9]', '', 'g') NOT IN (
+             SELECT REGEXP_REPLACE(LOWER(display_name), '[^a-z0-9]', '', 'g') FROM published WHERE display_name IS NOT NULL
+           )
+           UNION ALL
+           SELECT * FROM category_rules WHERE REGEXP_REPLACE(LOWER(display_name), '[^a-z0-9]', '', 'g') NOT IN (
+             SELECT REGEXP_REPLACE(LOWER(display_name), '[^a-z0-9]', '', 'g') FROM published WHERE display_name IS NOT NULL
+             UNION
+             SELECT REGEXP_REPLACE(LOWER(display_name), '[^a-z0-9]', '', 'g') FROM user_txns WHERE display_name IS NOT NULL
+           )
+         )
+         SELECT merchant_id, display_name, category_id, confidence, grid_lat, grid_lng
+           FROM combined
+          ORDER BY source_priority ASC, confirmation_count DESC
           LIMIT 50`,
         [`%${q}%`]
       )
@@ -5173,6 +5242,13 @@ smsFactsRoute.registerSmsFactsRoutes(app, {
   requireAdmin,
   withUserClient,
   persistSubscriptionMandate,
+});
+// The versioned rule bundle the device downloads and applies locally, so a
+// parser improvement reaches a phone without an app release.
+smsRuleBundleRoute.registerSmsRuleBundleRoutes(app, {
+  requireAuth,
+  requireAdmin,
+  withUserClient,
 });
 aiQueueRoute.registerAiQueueRoutes(app, {
   requireAuth,

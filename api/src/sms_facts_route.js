@@ -25,6 +25,7 @@
 const smsFacts = require('./sms_facts');
 const importResolvers = require('./import_resolvers');
 const smsLearning = require('./sms_learning');
+const smsRuleBundle = require('./sms_rule_bundle');
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -261,6 +262,7 @@ function registerSmsFactsRoutes(app, {
   });
 
   smsLearning.registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient });
+  smsRuleBundle.registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserClient });
 }
 
 module.exports = { registerSmsFactsRoutes, applyFactSpecialists };

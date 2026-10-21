@@ -126,6 +126,34 @@ async function resolveUserCardForImport(client, userId, {
     }
   }
 
+  // Some issuers print the suffix straight after the instrument: "Credit
+  // Card 8708 bill", "Debit Card **** 1234". The strict text rule needs a
+  // marker ("ending 8708", "XX8708"), so this shape was read as no card at
+  // all — the card's own due day could then never be learned from the very
+  // message that states it. Only a suffix that belongs to exactly one owned
+  // card counts, and the digits must sit directly after the instrument word
+  // so a limit ("card limit 5000") can never be read as a card number.
+  if (messageText) {
+    const directSuffix = /\b(?:credit|debit)\s+card\b[\s:*x]{0,4}(\d{4})\b/i.exec(messageText);
+    if (directSuffix) {
+      const byDirectSuffix = await client.query(
+        `SELECT uc.id
+           FROM user_cards uc
+           JOIN card_products cp ON cp.id = uc.card_product_id
+          WHERE uc.profile_id = $1 AND uc.is_archived = false AND uc.last4 = $2
+            AND ($3::uuid IS NULL OR cp.issuer_id = $3::uuid)
+            AND ($4::text IS NULL OR cp.card_type::text = $4::text)`,
+        [userId, directSuffix[1], patternIssuerId || null, cardType]
+      );
+      if (byDirectSuffix.rows.length === 1) {
+        return {
+          userCardId: byDirectSuffix.rows[0].id,
+          basis: `card-suffix:${directSuffix[1]}`,
+        };
+      }
+    }
+  }
+
   // If a suffix was present but did not resolve, do not weaken the evidence
   // to issuer-only matching. A same-issuer card without that suffix may be a
   // different physical card.

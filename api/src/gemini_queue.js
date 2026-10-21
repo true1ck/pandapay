@@ -234,7 +234,12 @@ async function getAttemptCount(client, jobId) {
  * write rides the Phase 1 upsert, which the override read path governs.
  */
 async function completeJobWithResult(client, {
-  job, facts, batchMetadata = {},
+  job,
+  facts,
+  batchMetadata = {},
+  applySpecialists = null,
+  persistSubscriptionMandate = null,
+  reviewRequired = true,
 }) {
   const smsFacts = require('./sms_facts');
   const payload = job.payload || {};
@@ -284,27 +289,20 @@ async function completeJobWithResult(client, {
     landed = upsert.factIds;
   }
 
-  // AI facts are evidence for the device review flow. They must not call the
-  // legacy projection specialists: model-extracted bill dates can mutate a
-  // card's due day, and model-extracted mandates can create/cancel recurring
-  // payments before the user has reviewed them. Trusted device facts and
-  // explicit user corrections still use those specialists in /sms/facts.
-  const specialists = null;
+  let specialists = null;
+  if (typeof applySpecialists === 'function') {
+    specialists = await applySpecialists(client, job.profile_id, { facts }, {
+      occurred: job.occurred_at ? new Date(job.occurred_at) : null,
+      persistSubscriptionMandate,
+    });
+  }
 
-  const safelyProjected = facts.length > 0 && facts.every((fact) => {
-    if (fact.factType === 'balance_snapshot') {
-      return fact.payload?.instrument === 'upi_bank' && Boolean(fact.payload?.accountLast4);
-    }
-    // Model mandate results always remain reviewable until the user confirms.
-    if (fact.factType === 'mandate_lifecycle') return false;
-    return false;
-  });
   await client.query(
     `UPDATE ai_jobs
         SET status = 'done', result = $2, payload = $3,
             lease_token = NULL, lease_expires_at = NULL, updated_at = now()
       WHERE id = $1`,
-    [job.id, JSON.stringify({ landed, specialists, reviewRequired: !safelyProjected,
+    [job.id, JSON.stringify({ landed, specialists, reviewRequired,
       factTypes: facts.map((fact) => fact.factType) }), JSON.stringify({ purged: true })],
   );
   await recordEvent(client, job.id, job.profile_id, 'result', {

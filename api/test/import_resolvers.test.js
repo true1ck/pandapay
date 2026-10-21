@@ -453,3 +453,34 @@ test('private subcategory terms win over built-in import classification', async 
   });
   assert.deepEqual(client.calls[0].params, ['user-1']);
 });
+
+test('a suffix printed straight after "Credit Card" resolves the card', async () => {
+  // "Credit Card 8708 bill" has no marker word ("ending", "XX"), so the
+  // strict text rule read it as no card at all — and the card's own due day
+  // could never be learned from the message that states it.
+  const client = fakeClient([[], [{ id: 'card-hdfc-8708' }]]);
+  const result = await resolveUserCardForImport(client, 'user-1', {
+    last4: null,
+    patternIssuerId: null,
+    instrument: 'credit_card',
+    messageText:
+      'AutoPay Reminder: Rs.1147 will be deducted from HDFC Bank A/c 1797 on 08/SEP/2026 for Credit Card 8708 bill.',
+  });
+
+  assert.deepEqual(result, {
+    userCardId: 'card-hdfc-8708',
+    basis: 'card-suffix:8708',
+  });
+});
+
+test('a card limit is never read as a card number', async () => {
+  const client = fakeClient([[], []]);
+  const result = await resolveUserCardForImport(client, 'user-1', {
+    last4: null,
+    patternIssuerId: null,
+    instrument: 'credit_card',
+    messageText: 'Your Credit Card limit is 5000 and is available now.',
+  });
+
+  assert.equal(result, null);
+});
