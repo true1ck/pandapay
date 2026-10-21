@@ -60,10 +60,7 @@ class AuthApi {
       );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return AuthTokens(
-      accessToken: body['access_token'] as String,
-      refreshToken: body['refresh_token'] as String?,
-    );
+    return AuthTokens(accessToken: body['access_token'] as String, refreshToken: body['refresh_token'] as String?);
   }
 
   Future<AuthTokens> verifyEmailOtp(
@@ -82,10 +79,7 @@ class AuthApi {
       );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return AuthTokens(
-      accessToken: body['access_token'] as String,
-      refreshToken: body['refresh_token'] as String?,
-    );
+    return AuthTokens(accessToken: body['access_token'] as String, refreshToken: body['refresh_token'] as String?);
   }
 
   /// Exchanges a stored refresh token for a fresh access token on startup —
@@ -336,11 +330,7 @@ class AdminApi {
     return (body['requestGroups'] as List).cast<Map<String, dynamic>>();
   }
 
-  Future<void> startScrapingSource({
-    required String issuerName,
-    String? productName,
-    required String baseUrl,
-  }) async {
+  Future<void> startScrapingSource({required String issuerName, String? productName, required String baseUrl}) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/card-requests/start-scraping'),
       headers: _headers,
@@ -495,12 +485,7 @@ class AdminApi {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/merchants/$merchantId/override'),
       headers: _headers,
-      body: jsonEncode({
-        'displayName': ?displayName,
-        'categoryId': ?categoryId,
-        'mcc': ?mcc,
-        'reason': ?reason,
-      }),
+      body: jsonEncode({'displayName': ?displayName, 'categoryId': ?categoryId, 'mcc': ?mcc, 'reason': ?reason}),
     );
     if (response.statusCode != 200) {
       throw AdminApiException(
@@ -736,10 +721,7 @@ class AdminApi {
   /// separately, the CI gate — see .github/workflows/anonymization-audit.yml,
   /// which calls the SQL function directly rather than through this route).
   Future<Map<String, dynamic>> runAnonymizationAuditNow() async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/admin/anonymization-audit-runs/run'),
-      headers: _headers,
-    );
+    final response = await _client.post(Uri.parse('$apiBaseUrl/admin/anonymization-audit-runs/run'), headers: _headers);
     if (response.statusCode != 201) {
       throw AdminApiException(
         'run failed: ${response.statusCode} ${response.body}',
@@ -814,12 +796,7 @@ class AdminApi {
     final response = await _client.put(
       Uri.parse('$apiBaseUrl/admin/parser-patterns/$id'),
       headers: _headers,
-      body: jsonEncode({
-        'regex': ?regex,
-        'fieldMap': ?fieldMap,
-        'isActive': ?isActive,
-        'reason': ?reason,
-      }),
+      body: jsonEncode({'regex': ?regex, 'fieldMap': ?fieldMap, 'isActive': ?isActive, 'reason': ?reason}),
     );
     if (response.statusCode != 200) {
       throw AdminApiException(
@@ -957,6 +934,94 @@ class AdminApi {
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['snapshots'] as List).cast<Map<String, dynamic>>();
+  }
+
+  // ---- SMS AI Operations & Rollout ------------------------------------------
+
+  Future<Map<String, dynamic>> fetchSmsAiSummary() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sms-ai/summary'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/sms-ai/summary failed: ${response.statusCode} ${response.body}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSmsLearningCandidates({int limit = 100}) async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sms-learning/candidates?limit=$limit'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/sms-learning/candidates failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['candidates'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> decideSmsLearningCandidate(String id, String decision) async {
+    if (!const {'manual_pattern_authoring', 'reject'}.contains(decision)) {
+      throw ArgumentError.value(decision, 'decision');
+    }
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/sms-learning/candidates/$id/decision'),
+      headers: _headers,
+      body: jsonEncode({'decision': decision}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'POST /admin/sms-learning/candidates/$id/decision failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSmsAiJobs({String? status, int limit = 50}) async {
+    final query = status != null ? '?status=$status&limit=$limit' : '?limit=$limit';
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sms-ai/jobs$query'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/sms-ai/jobs failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['jobs'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSmsAiJobTimeline(String jobId) async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sms-ai/jobs/$jobId/events'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/sms-ai/jobs/$jobId/events failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['events'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSmsAiQuota() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sms-ai/quota'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/sms-ai/quota failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['quota'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> runSmsAiDryRun(List<Map<String, dynamic>> observations) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/sms-ai/dry-run'),
+      headers: _headers,
+      body: jsonEncode({'observations': observations}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('POST /admin/sms-ai/dry-run failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['report'] as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> fetchSmsRolloutStatus() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sms-ai/rollout'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/sms-ai/rollout failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['rollout'] as Map<String, dynamic>;
   }
 }
 

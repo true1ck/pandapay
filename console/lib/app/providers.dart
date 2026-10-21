@@ -18,14 +18,8 @@ import '../data/token_store.dart';
 ///   --dart-define=PANDAPAY_API_BASE_URL=https://api.pandapay.example \
 ///   --dart-define=PANDAPAY_AUTH_BASE_URL=https://auth.pandapay.example
 /// ```
-const authBaseUrl = String.fromEnvironment(
-  'PANDAPAY_AUTH_BASE_URL',
-  defaultValue: 'http://localhost:3210',
-);
-const apiBaseUrl = String.fromEnvironment(
-  'PANDAPAY_API_BASE_URL',
-  defaultValue: 'http://localhost:4000',
-);
+const authBaseUrl = String.fromEnvironment('PANDAPAY_AUTH_BASE_URL', defaultValue: 'http://localhost:3210');
+const apiBaseUrl = String.fromEnvironment('PANDAPAY_API_BASE_URL', defaultValue: 'http://localhost:4000');
 
 final authApiProvider = Provider<AuthApi>(
   (ref) => AuthApi(authBaseUrl: authBaseUrl),
@@ -223,12 +217,43 @@ final dataQualityDashboardProvider = FutureProvider<Map<String, dynamic>?>((
   return api.fetchDataQualityDashboard();
 });
 
-final anonymizationAuditRunsProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
-      final api = ref.watch(adminApiProvider);
-      if (api == null) return const [];
-      return api.fetchAnonymizationAuditRuns();
-    });
+final smsAiSummaryProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const {};
+  return api.fetchSmsAiSummary();
+});
+
+final smsLearningCandidatesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchSmsLearningCandidates();
+});
+
+final smsAiJobStatusFilterProvider = StateProvider<String?>((ref) => null);
+
+final smsAiJobsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchSmsAiJobs(status: ref.watch(smsAiJobStatusFilterProvider), limit: 100);
+});
+
+final smsAiQuotaProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchSmsAiQuota();
+});
+
+final smsAiJobTimelineProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, jobId) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchSmsAiJobTimeline(jobId);
+});
+
+final anonymizationAuditRunsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchAnonymizationAuditRuns();
+});
 
 final parserPatternsProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,
