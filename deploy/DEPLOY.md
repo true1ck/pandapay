@@ -60,7 +60,8 @@ cp .env.prod.example .env
 ```
 
 Fill in every `CHANGE_ME` in `.env` — the file itself documents how to
-generate each value (JWT secrets, `APP_USER_PASSWORD`, the separate
+generate each value (JWT secrets, the stable `PHONE_LOOKUP_HMAC_KEY`,
+`APP_USER_PASSWORD`, the separate
 `REWARD_WORKER_DB_PASSWORD`, webhook secrets,
 `IMAP_ENCRYPTION_KEY`, `ENCRYPTION_KEY`). Don't confuse the last two:
 `IMAP_ENCRYPTION_KEY` is `api/`'s key for stored IMAP app passwords;
