@@ -324,4 +324,32 @@ void main() {
       expect(updated['due_day'], 2);
     },
   );
+
+  test(
+    'syncCardDatesFromObservations heals due day from verified AutoPay alert',
+    () {
+      final card = UserCard(
+        id: 'c2',
+        cardProductId: 'hdfc_mb',
+        cardName: 'MoneyBack+ Credit Card',
+        isDefault: false,
+        last4: '8708',
+        statementDay: 20,
+        dueDay: null,
+      );
+      store.replaceCards('a', [card]);
+      store.saveObservation('a', 'obs-autopay', {
+        'event_type': 'bill',
+        'card_last4': '8708',
+        'due_date': '2026-10-09T00:00:00.000',
+        'received_at': '2026-10-05T10:00:00.000',
+        'is_autopay': true,
+        'reason_codes': ['autopay_notice'],
+      });
+      store.syncCardDatesFromObservations('a');
+      final updated = store.entities('a', 'cards').single;
+      expect(updated['statement_day'], 20);
+      expect(updated['due_day'], 9);
+    },
+  );
 }
