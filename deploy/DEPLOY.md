@@ -88,11 +88,10 @@ minting tokens that the API cannot verify. Keep the previous key in the set
 until all existing access tokens have expired, then remove it in a later
 deployment.
 
-For GitHub Actions deployments, also configure the stable
-`PHONE_LOOKUP_HMAC_KEY` as an Actions secret in the `production` environment.
-Generate it once with a cryptographically secure random generator and keep it
-unchanged; the deploy workflow upserts this same value into the host `.env`.
-Do not generate a fresh key for each deployment.
+Keep `PHONE_LOOKUP_HMAC_KEY` in the production host `.env` and keep it stable.
+The deploy workflow validates that it is present and sufficiently long, but
+does not read, replace, or transmit it through GitHub Actions. Changing this
+key changes phone-search hashes and requires an explicit reindex.
 
 ## 4. Run migrations
 
