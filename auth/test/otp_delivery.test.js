@@ -224,7 +224,7 @@ test('signup cannot create an account without an authenticated OTP session', asy
   assert.deepEqual(h.userWrites, []);
   const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/authRoutes.js'), 'utf8');
   const signupSource = routeSource.slice(routeSource.indexOf("  '/signup',"), routeSource.indexOf("// POST /auth/validate-token"));
-  assert.match(signupSource, /\n\s*auth,\n\s*validateSignupBody/);
+  assert.match(signupSource, /\r?\n\s*auth,\r?\n\s*validateSignupBody/);
   assert.doesNotMatch(signupSource, /INSERT INTO users/i);
   const legacyValidation = routeSource.slice(routeSource.indexOf("router.post('/validate-token'"));
   assert.doesNotMatch(legacyValidation, /phone_number:\s*payload\.phone_number/);

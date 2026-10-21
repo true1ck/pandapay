@@ -243,34 +243,28 @@ jobs:
               CREATE ROLE deploy_admin_ci LOGIN PASSWORD 'deploy_admin_ci_pw' CREATEROLE;
             END IF;
           END $$;
-          -- The production admin applies the migrations, so it owns the schema
-          -- and its tables. The role script grants on those objects, which
-          -- only their owner may do.
-          ALTER SCHEMA public OWNER TO deploy_admin_ci;
-          GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO deploy_admin_ci;
-          GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO deploy_admin_ci;
-          GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO deploy_admin_ci;
-          DO $$
-          BEGIN
-            IF to_regnamespace('pandapay') IS NOT NULL THEN
-              EXECUTE 'ALTER SCHEMA pandapay OWNER TO deploy_admin_ci';
-              EXECUTE 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA pandapay TO deploy_admin_ci';
-              EXECUTE 'GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pandapay TO deploy_admin_ci';
-              EXECUTE 'GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pandapay TO deploy_admin_ci';
-            END IF;
-          END $$;
+          SQL
+          docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 \
+            -c 'CREATE DATABASE role_setup_ci OWNER deploy_admin_ci'
+          docker compose exec -T \
+            -e PGPASSWORD=deploy_admin_ci_pw \
+            db psql -U deploy_admin_ci -d role_setup_ci -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE public.role_setup_fixture (id integer PRIMARY KEY);
+          CREATE SCHEMA pandapay;
+          CREATE TABLE pandapay.role_setup_fixture (id integer PRIMARY KEY);
           SQL
           for pass in 1 2; do
             docker compose exec -T \
               -e PGPASSWORD=deploy_admin_ci_pw \
               -e APP_USER_PASSWORD=app_user_ci_pw \
               -e REWARD_WORKER_DB_PASSWORD=reward_worker_ci_pw \
-              db psql -U deploy_admin_ci -d pandapay -v ON_ERROR_STOP=1 \
+              db psql -U deploy_admin_ci -d role_setup_ci -v ON_ERROR_STOP=1 \
               -f - < db/setup_app_role.sql
             echo "role setup pass $pass ok"
           done
-          # The roles must still be the locked-down ones the script creates.
-          docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 <<'SQL'
+          # The roles must remain locked down and both schema fixtures must be
+          # accessible to the API role after repeated setup.
+          docker compose exec -T db psql -U postgres -d role_setup_ci -v ON_ERROR_STOP=1 <<'SQL'
           DO $$
           DECLARE
             r record;
@@ -285,8 +279,14 @@ jobs:
                  WHERE rolname IN ('app_user', 'rewards_worker_login')) <> 2 THEN
               RAISE EXCEPTION 'the app roles must exist';
             END IF;
+            IF NOT has_table_privilege('app_user', 'public.role_setup_fixture', 'SELECT')
+               OR NOT has_schema_privilege('app_user', 'pandapay', 'USAGE') THEN
+              RAISE EXCEPTION 'the app role must retain public table and pandapay schema grants';
+            END IF;
           END $$;
           SQL
+          docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 \
+            -c 'DROP DATABASE role_setup_ci'
 
       - name: Verify audited referral operator holds and status
         run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021143000_referral_operator_controls_test.sql

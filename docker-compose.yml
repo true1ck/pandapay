@@ -66,6 +66,7 @@ services:
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-true}"
     volumes:
       - ./db:/db:ro
+      - ./auth/db/migrations:/auth-migrations:ro
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -133,6 +134,26 @@ services:
         else
           echo "skip    demo seeds (SEED_DEMO_DATA=false)"
         fi
+
+        # The auth service uses a separate database and has its own migration
+        # ledger. Init SQL only runs for a brand-new volume, so apply auth
+        # migrations here as well to upgrade long-lived local/test volumes.
+        AUTH_PSQL="psql -h db -U postgres -d pandapay_auth -v ON_ERROR_STOP=1 -q"
+        $$AUTH_PSQL -c "create table if not exists auth_schema_migrations (
+                        version text primary key,
+                        applied_at timestamptz not null default now())"
+        for f in /auth-migrations/*.sql; do
+          name=$$(basename "$$f")
+          version=$${name%.sql}
+          already=$$($$AUTH_PSQL -tAc "select 1 from auth_schema_migrations where version = '$$version'")
+          if [ "$$already" = "1" ]; then
+            echo "skip    auth/$$name (already applied)"
+            continue
+          fi
+          echo "apply   auth/$$name"
+          $$AUTH_PSQL -f "$$f"
+          $$AUTH_PSQL -c "insert into auth_schema_migrations (version) values ('$$version')"
+        done
 
         echo "migrations complete"
 

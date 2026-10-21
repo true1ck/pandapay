@@ -18,12 +18,13 @@ function load(relativePath, dependencies) {
   return loaded.exports;
 }
 
-function makeService(t, otpHash) {
+function makeService(t, otpHash, clearError = null) {
   const row = {
     id: 'otp-row', otp_hash: otpHash, expires_at: new Date(Date.now() + 60_000),
     attempt_count: 0, consumed_at: null, deleted: false, type: 'phone', created_at: new Date(),
   };
   const calls = [];
+  const cleared = [];
   const db = {
     async query(sql, args) {
       calls.push({ sql, args });
@@ -48,15 +49,19 @@ function makeService(t, otpHash) {
     '../db': db,
     '../config': { isProduction: true },
     '../middleware/rateLimitMiddleware': {
-      markActiveOtp: async () => {}, clearActiveOtp: async () => {},
+      markActiveOtp: async () => {},
+      clearActiveOtp: async (...args) => {
+        cleared.push(args);
+        if (clearError) throw clearError;
+      },
     },
   });
   t.after(() => calls.length = 0);
-  return { service, row, calls };
+  return { service, row, calls, cleared };
 }
 
 test('one correct OTP can be consumed by at most one concurrent verification', async t => {
-  const { service, row, calls } = makeService(t, await bcrypt.hash('4826', 4));
+  const { service, row, calls, cleared } = makeService(t, await bcrypt.hash('4826', 4));
   const results = await Promise.all([
     service.verifyOtp('+919876543210', '4826', 'phone'),
     service.verifyOtp('+919876543210', '4826', 'phone'),
@@ -66,6 +71,29 @@ test('one correct OTP can be consumed by at most one concurrent verification', a
   const atomicConsumes = calls.filter(call => call.sql.includes('RETURNING id'));
   assert.equal(atomicConsumes.length, 2);
   assert.ok(atomicConsumes.every(call => /consumed_at IS NULL/.test(call.sql)));
+  assert.deepEqual(cleared, [['+919876543210', 'otp-row', 'signin']]);
+});
+
+test('successful OTP verification clears only its requested purpose window', async t => {
+  const { service, cleared } = makeService(t, await bcrypt.hash('4826', 4));
+  assert.deepEqual(await service.verifyOtp('member@example.com', '4826', 'email', 'recovery'), { ok: true });
+  assert.deepEqual(cleared, [['member@example.com', 'otp-row', 'recovery']]);
+});
+
+test('resend-marker cleanup failure does not undo successful OTP consumption', async t => {
+  const { service, row } = makeService(
+    t,
+    await bcrypt.hash('4826', 4),
+    Object.assign(new Error('cache unavailable'), { code: 'ECONNRESET' }),
+  );
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    assert.deepEqual(await service.verifyOtp('+919876543210', '4826'), { ok: true });
+  } finally {
+    console.error = originalError;
+  }
+  assert.equal(row.consumed_at instanceof Date, true);
 });
 
 test('OTP creation and verification failures never write the raw code to logs', async t => {

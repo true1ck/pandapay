@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
 #
-# Applies db/supabase/migrations in order against ADMIN_DATABASE_URL, the
-# same ledger/skip/seed logic docker-compose.yml's `db-migrate` service runs
-# inline against the local dev container. Extracted here (not a refactor of
-# the dev file, which stays untouched) so docker-compose.prod.yml can run the
-# identical migration ordering against a real, externally-hosted Postgres —
-# managed instance or self-hosted on the same VM, either way reached by URL
-# rather than a compose service name.
+# Applies the product database migrations against ADMIN_DATABASE_URL and the
+# separate auth database migrations against AUTH_DATABASE_URL. Both ledgers
+# are independent because the services use different databases.
 #
 # Usage:
 #   ADMIN_DATABASE_URL=postgres://postgres:...@host:5432/pandapay \
+#   AUTH_DATABASE_URL=postgres://postgres:...@host:5432/pandapay_auth \
 #   SEED_DEMO_DATA=false \
 #     ./migrate.sh
 #
@@ -21,6 +18,7 @@
 set -Eeuo pipefail
 
 : "${ADMIN_DATABASE_URL:?ADMIN_DATABASE_URL must be set (superuser connection to the target database)}"
+: "${AUTH_DATABASE_URL:?AUTH_DATABASE_URL must be set (privileged connection to the auth database)}"
 # db/setup_app_role.sql falls back to the committed dev literal
 # (app_user_dev_pw) when this is unset — fine for docker-compose.yml's local
 # dev flow, not acceptable for anything reachable from the internet. Required
@@ -30,6 +28,7 @@ set -Eeuo pipefail
 export APP_USER_PASSWORD REWARD_WORKER_DB_PASSWORD
 SEED_DEMO_DATA="${SEED_DEMO_DATA:-false}"
 DB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AUTH_MIGRATIONS_DIR="${AUTH_MIGRATIONS_DIR:-$(cd "$DB_DIR/.." && pwd)/auth/db/migrations}"
 
 PSQL="psql $ADMIN_DATABASE_URL -v ON_ERROR_STOP=1 -q"
 
@@ -79,4 +78,23 @@ else
   echo "skip    demo seeds (SEED_DEMO_DATA=false)"
 fi
 
-echo "migrations complete"
+AUTH_PSQL="psql $AUTH_DATABASE_URL -v ON_ERROR_STOP=1 -q"
+$AUTH_PSQL -c "create table if not exists auth_schema_migrations (
+                 version text primary key,
+                 applied_at timestamptz not null default now())"
+
+for f in "$AUTH_MIGRATIONS_DIR"/*.sql; do
+  [ -f "$f" ] || continue
+  name="$(basename "$f")"
+  version="${name%.sql}"
+  already=$($AUTH_PSQL -tAc "select 1 from auth_schema_migrations where version = '$version'")
+  if [ "$already" = "1" ]; then
+    echo "skip    auth/$name (already applied)"
+    continue
+  fi
+  echo "apply   auth/$name"
+  $AUTH_PSQL -f "$f"
+  $AUTH_PSQL -c "insert into auth_schema_migrations (version) values ('$version')"
+done
+
+echo "product and auth migrations complete"

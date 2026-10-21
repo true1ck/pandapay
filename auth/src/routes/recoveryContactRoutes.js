@@ -117,7 +117,7 @@ router.post('/verify', async (req, res) => {
     if (!await contactAvailable(proof.value, channel, user.id)) {
       return res.status(409).json({ error: 'This contact cannot be linked. Use another contact.' });
     }
-    const verified = await verifyOtp(proof.otp_identifier, String(code), 'email');
+    const verified = await verifyOtp(proof.otp_identifier, String(code), 'email', 'replacement');
     if (!verified.ok) return res.status(400).json({ error: 'Invalid or expired code. Your contact has not been changed.' });
     const column = channel === 'email' ? 'email' : 'phone_number';
     const flag = channel === 'email' ? 'is_email_verified' : 'is_phone_verified';

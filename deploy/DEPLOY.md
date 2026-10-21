@@ -134,9 +134,12 @@ ingestion: local detection and review continue when the queue flag is off.
 docker compose -f docker-compose.prod.yml --env-file .env run --rm db-migrate
 ```
 
-This creates the `app_user` and isolated rewards-worker login roles (using
-the distinct passwords from `.env`, never the dev literals —
-`db/scripts/migrate.sh` refuses to run without both values), applies every migration in order, and skips
+This applies the product and separate auth database migration ledgers. The
+auth migration connection must have DDL privileges on `pandapay_auth`; the
+example uses the project's `postgres` role. It also creates the `app_user`
+and isolated rewards-worker login roles using the distinct passwords from
+`.env` (`db/scripts/migrate.sh` refuses to run without either password), and
+skips
 `0013_cron_jobs.sql` (pg_cron isn't available unless your managed Postgres
 offers it — apply that one by hand if it does). Re-run this any time you pull
 a commit with new migrations; it's ledgered and only applies what's new.

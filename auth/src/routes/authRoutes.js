@@ -470,7 +470,12 @@ router.post(
         // Note: If code comes as number, leading zeros may be lost - client should send as string
         const codeString = String(code);
 
-        const result = await verifyOtp(normalizedPhone, codeString);
+        const result = await verifyOtp(
+          normalizedPhone,
+          codeString,
+          'phone',
+          recovery_only === true ? 'recovery' : 'signin',
+        );
 
         // === ADDED FOR OTP ATTEMPT LIMIT ===
         // === SECURITY HARDENING: AUDIT LOGS & ANOMALY FLAGS ===
@@ -880,7 +885,12 @@ router.post(
         // `return { success: true, ... }` line below and went on to mint
         // real access+refresh tokens. Must check `.ok`, same as the phone
         // path (verify-otp route, above) already correctly does.
-        const isValid = await verifyOtp(normalizedEmail, code, 'email');
+        const isValid = await verifyOtp(
+          normalizedEmail,
+          code,
+          'email',
+          recovery_only === true ? 'recovery' : 'signin',
+        );
         if (!isValid.ok) {
           await incrementFailedVerify(normalizedEmail, recovery_only === true ? 'recovery' : 'signin');
           return { error: 'Invalid or expired code', status: 400 };

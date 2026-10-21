@@ -138,7 +138,7 @@ async function createOtp(identifier, type = 'phone', purpose = 'signin') {
  * @param {string} type - 'phone' or 'email'
  * @returns {Promise<{ok: boolean, reason?: string}>} - Whether the OTP is valid
  */
-async function verifyOtp(identifier, code, type = 'phone') {
+async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
   const codeStr = String(code).trim();
   const normalizedIdentifier = identifier.trim().toLowerCase();
 
@@ -267,9 +267,19 @@ async function verifyOtp(identifier, code, type = 'phone') {
      RETURNING id`,
     [otpRecord.id, MAX_OTP_ATTEMPTS],
   );
-  return consumed.rows.length === 1
-    ? { ok: true }
-    : { ok: false, reason: 'consumed_or_expired' };
+  if (consumed.rows.length !== 1) return { ok: false, reason: 'consumed_or_expired' };
+  // Clear only this code's resend marker. The helper compares the stored
+  // request id before deleting, so a late verification cannot clear a newer
+  // OTP's cooldown for the same identifier.
+  try {
+    await clearActiveOtp(identifier, otpRecord.id, purpose);
+  } catch (error) {
+    // Authentication already consumed the OTP atomically. Cleanup is
+    // best-effort; a cache outage must not turn a successful sign-in into a
+    // client-visible failure. The cooldown marker still expires by TTL.
+    console.error('Failed to clear OTP resend marker', error.code || error.name || 'Error');
+  }
+  return { ok: true };
 }
 
 /**

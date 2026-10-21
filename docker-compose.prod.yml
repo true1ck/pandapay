@@ -39,11 +39,14 @@ services:
       dockerfile: migrate/Dockerfile
     environment:
       ADMIN_DATABASE_URL: "${ADMIN_DATABASE_URL:?}"
+      AUTH_DATABASE_URL: "${AUTH_DATABASE_URL:?}"
+      AUTH_MIGRATIONS_DIR: /auth-migrations
       APP_USER_PASSWORD: "${APP_USER_PASSWORD:?}"
       REWARD_WORKER_DB_PASSWORD: "${REWARD_WORKER_DB_PASSWORD:?}"
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-false}"
     volumes:
       - ./db:/db:ro
+      - ./auth/db/migrations:/auth-migrations:ro
 
   api:
     build:

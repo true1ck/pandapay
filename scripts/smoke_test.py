@@ -107,8 +107,14 @@ def main():
     # This allowlisted identifier works only with ALLOW_TEST_OTP=true in a
     # non-production environment; it never invokes a real SMS provider.
     phone = "+911234567890"
-    code, _ = call(AUTH, "POST", "/auth/request-otp", {"phone_number": phone})
-    check("POST /auth/request-otp", code == 200, f"got {code}")
+    code, otp_request = call(AUTH, "POST", "/auth/request-otp", {"phone_number": phone})
+    # Re-running against a live dev stack can encounter the intended no-resend
+    # window from a previous smoke run. The fixed test OTP remains usable in
+    # this explicitly allowlisted environment, so accept only that precise 429.
+    active_otp = code == 429 and "already active" in str(otp_request.get("message", "")).lower()
+    if not check("POST /auth/request-otp", code == 200 or active_otp,
+                 f"got {code}: {otp_request.get('message', '')}"):
+        return 1
     otp = "1234"
     code, tok = call(AUTH, "POST", "/auth/verify-otp",
                      {"phone_number": phone, "code": otp, "device_id": "smoke-test"})
@@ -125,9 +131,12 @@ def main():
     check("POST /profile creates the product profile", code == 201, f"got {code}")
     check("profile id matches the auth user id",
           prof.get("profile", {}).get("id") == tok["user"]["id"])
+    if not prof.get("profile"):
+        return 1
     code, _ = call(API, "GET", "/profile", token=token)
-    check("api accepts an auth-issued token for an activated member",
-          code == 200, f"got {code}")
+    if not check("api accepts an auth-issued token for an activated member",
+                 code == 200, f"got {code}"):
+        return 1
 
     print("=== the money path: a spend must actually earn ===")
     target = None
@@ -144,10 +153,25 @@ def main():
 
     code, j = call(API, "POST", "/user-cards",
                    {"cardProductId": card["id"], "nickname": "Smoke"}, token=token)
-    check("POST /user-cards", code == 201, f"got {code}")
     uc = j.get("userCard", {}).get("id")
+    if code == 409 and j.get("error") == "card_already_added":
+        # Reuse the wallet card from an earlier run against this persistent
+        # local stack; duplicate prevention is expected product behavior.
+        code, wallet = call(API, "GET", "/user-cards", token=token)
+        uc = next((item.get("id") for item in wallet.get("userCards", [])
+                   if item.get("card_product_id") == card["id"]), uc)
+        check("POST /user-cards creates or reuses the test card",
+              code == 200 and bool(uc), f"wallet lookup got {code}")
+    elif not check("POST /user-cards creates or reuses the test card",
+                   code in (200, 201) and bool(uc), f"got {code}"):
+        return 1
+    if not uc:
+        return 1
 
     _, before = call(API, "GET", "/home-summary", token=token)
+    if not isinstance(before.get("homeSummary"), dict):
+        check("GET /home-summary before spend", False, str(before)[:120])
+        return 1
     occurred_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     code, _ = call(API, "POST", "/transactions",
                    {"userCardId": uc, "amountInr": 2000, "categoryId": rule["category_id"],
@@ -155,6 +179,10 @@ def main():
                    token=token)
     check("POST /transactions", code == 201, f"got {code}")
     _, after = call(API, "GET", "/home-summary", token=token)
+
+    if not isinstance(after.get("homeSummary"), dict):
+        check("GET /home-summary after spend", False, str(after)[:120])
+        return 1
 
     expected = 2000 * float(rule["rate"]) / 100
     delta = (float(after["homeSummary"]["rewardsThisMonthInr"])
@@ -179,6 +207,10 @@ def main():
     check("1.2 import is idempotent",
           [r["status"] for r in again.get("results", [])] == ["already_present"])
 
+    opt_out_code, _ = call(API, "POST", "/profile/contributions-opt-in",
+                           {"optIn": False}, token=token)
+    check("2.1 reset contribution opt-in before privacy gate",
+          opt_out_code == 200, f"got {opt_out_code}")
     code, _ = call(API, "POST", "/acceptance-reports",
                    {"vpa": "smoke@okaxis", "network": "visa", "rail": "upi_qr",
                     "result": "declined"}, token=token)
@@ -197,6 +229,8 @@ def main():
                      {"platform": "android", "label": "Smoke"}, token=token)
     check("4 sync device registered", code == 201, f"got {code}")
     device_id = dev.get("deviceId")
+    _, initial_pull = call(API, "GET", f"/sync/pull?deviceId={device_id}&since=0", token=token)
+    initial_cursor = initial_pull.get("latestServerSeq", 0)
     code, txns = call(API, "GET", "/transactions", token=token)
     if not check("4 GET /transactions", code == 200,
                  f"got {code}: {str(txns)[:120]}"):
@@ -215,7 +249,8 @@ def main():
     _, txns = call(API, "GET", "/transactions", token=token)
     check("4 sync push changed the row",
           any(t.get("merchant_name") == "Synced Name" for t in txns["transactions"]))
-    _, pull = call(API, "GET", f"/sync/pull?deviceId={device_id}&since=0", token=token)
+    _, pull = call(API, "GET",
+                   f"/sync/pull?deviceId={device_id}&since={initial_cursor}", token=token)
     check("4 pull excludes the pushing device's own changes",
           len(pull.get("changes", [])) == 0, f"{len(pull.get('changes', []))} echoed back")
 
