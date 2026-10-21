@@ -11,6 +11,85 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 /// (previously computed server-side for cap/milestone period math but never
 /// returned to a client) — Billing Cycle Float needs both.
 void main() {
+  group('Home engagement check-in', () {
+    test('submits only the fresh server-signed receipt', () async {
+      final requests = <http.Request>[];
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'session-token',
+        client: MockClient((request) async {
+          requests.add(request);
+          if (request.url.path == '/home-summary') {
+            return http.Response(
+              jsonEncode({
+                'homeSummary': {
+                  'rewardsThisMonthInr': 0,
+                  'rewardsAllTimeInr': 0,
+                  'transactionCount': 0,
+                  'streakDays': 0,
+                  'engagementReceipt': 'signed-short-lived-receipt',
+                },
+              }),
+              200,
+            );
+          }
+          expect(request.url.path, '/engagement/check-in');
+          return http.Response(
+            jsonEncode({'recorded': true, 'qualified': true}),
+            200,
+          );
+        }),
+      );
+
+      final recorded = await repository.recordHomeEngagementCheckIn(
+        anchor: DateTime.utc(2026, 10, 21),
+        timeZone: 'Asia/Kolkata',
+      );
+
+      expect(recorded, isTrue);
+      expect(requests, hasLength(2));
+      expect(
+        requests.every(
+          (request) =>
+              request.headers['authorization'] == 'Bearer session-token',
+        ),
+        isTrue,
+      );
+      expect(jsonDecode(requests[1].body), {
+        'receiptToken': 'signed-short-lived-receipt',
+      });
+    });
+
+    test(
+      'does not post when the live summary has no campaign receipt',
+      () async {
+        var requestCount = 0;
+        final repository = UserCardsRepository(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'session-token',
+          client: MockClient((request) async {
+            requestCount += 1;
+            return http.Response(
+              jsonEncode({
+                'homeSummary': {
+                  'rewardsThisMonthInr': 0,
+                  'rewardsAllTimeInr': 0,
+                  'transactionCount': 0,
+                  'streakDays': 0,
+                  'engagementReceipt': null,
+                },
+              }),
+              200,
+            );
+          }),
+        );
+
+        expect(await repository.recordHomeEngagementCheckIn(), isFalse);
+        expect(requestCount, 1);
+      },
+    );
+  });
+
   group('UserCard.fromJson', () {
     test('parses statement_day and opened_on when both are set', () {
       final card = UserCard.fromJson({
@@ -165,46 +244,52 @@ void main() {
     expect(state.smsObservationCount, isNull);
   });
 
-  test('updates a transaction note through the dedicated note endpoint', () async {
-    late http.Request request;
-    final repository = UserCardsRepository(
-      apiBaseUrl: 'https://api.test',
-      accessToken: 'token',
-      client: MockClient((incoming) async {
-        request = incoming;
-        return http.Response(
-          jsonEncode({
-            'transaction': {'id': 'txn-1', 'note': 'remember this'},
-          }),
-          200,
-        );
-      }),
-    );
+  test(
+    'updates a transaction note through the dedicated note endpoint',
+    () async {
+      late http.Request request;
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'token',
+        client: MockClient((incoming) async {
+          request = incoming;
+          return http.Response(
+            jsonEncode({
+              'transaction': {'id': 'txn-1', 'note': 'remember this'},
+            }),
+            200,
+          );
+        }),
+      );
 
-    await repository.updateTransactionNote('txn-1', 'remember this');
+      await repository.updateTransactionNote('txn-1', 'remember this');
 
-    expect(request.method, 'PATCH');
-    expect(request.url.path, '/transactions/txn-1/note');
-    expect(jsonDecode(request.body), {'note': 'remember this'});
-  });
+      expect(request.method, 'PATCH');
+      expect(request.url.path, '/transactions/txn-1/note');
+      expect(jsonDecode(request.body), {'note': 'remember this'});
+    },
+  );
 
-  test('accepts a 200 when discovery links an existing card placeholder', () async {
-    final repository = UserCardsRepository(
-      apiBaseUrl: 'https://api.test',
-      accessToken: 'token',
-      client: MockClient(
-        (request) async => http.Response(
-          jsonEncode({
-            'linkedExisting': true,
-            'userCard': {'id': 'uc-linked'},
-          }),
-          200,
+  test(
+    'accepts a 200 when discovery links an existing card placeholder',
+    () async {
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'token',
+        client: MockClient(
+          (request) async => http.Response(
+            jsonEncode({
+              'linkedExisting': true,
+              'userCard': {'id': 'uc-linked'},
+            }),
+            200,
+          ),
         ),
-      ),
-    );
+      );
 
-    expect(await repository.addCard('card-1', last4: '9087'), 'uc-linked');
-  });
+      expect(await repository.addCard('card-1', last4: '9087'), 'uc-linked');
+    },
+  );
 
   test(
     'exposes the duplicate-card API code for a friendly wallet message',

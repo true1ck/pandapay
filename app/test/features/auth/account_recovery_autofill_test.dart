@@ -46,6 +46,9 @@ void main() {
       ProviderScope(
         overrides: [
           localDeviceIdProvider.overrideWith((ref) async => 'recovery-device'),
+          deviceMetadataProvider.overrideWith(
+            (ref) async => const {'platform': 'test'},
+          ),
           authApiProvider.overrideWithValue(
             AuthApi(authBaseUrl: 'http://auth.test', client: client),
           ),
@@ -265,6 +268,9 @@ void main() {
           overrides: [
             localDeviceIdProvider.overrideWith(
               (ref) async => 'recovery-device',
+            ),
+            deviceMetadataProvider.overrideWith(
+              (ref) async => const {'platform': 'test'},
             ),
             authApiProvider.overrideWithValue(
               AuthApi(

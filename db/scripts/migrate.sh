@@ -26,7 +26,8 @@ set -Eeuo pipefail
 # dev flow, not acceptable for anything reachable from the internet. Required
 # here so a staging/prod run can't silently ship the dev password.
 : "${APP_USER_PASSWORD:?APP_USER_PASSWORD must be set to a real generated password — the dev literal is not safe outside docker-compose.yml}"
-export APP_USER_PASSWORD
+: "${REWARD_WORKER_DB_PASSWORD:?REWARD_WORKER_DB_PASSWORD must be set to a distinct generated worker-login password}"
+export APP_USER_PASSWORD REWARD_WORKER_DB_PASSWORD
 SEED_DEMO_DATA="${SEED_DEMO_DATA:-false}"
 DB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 

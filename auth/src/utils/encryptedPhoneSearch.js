@@ -1,54 +1,54 @@
-// src/utils/encryptedPhoneSearch.js
-// === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
-// Helper for searching encrypted phone numbers in database
-// Handles backward compatibility with plaintext phone numbers
+'use strict';
 
-const { encryptPhoneNumber } = require('./fieldEncryption');
+const { createHmac } = require('node:crypto');
 
-/**
- * Build SQL WHERE clause for encrypted phone number search
- * Handles both encrypted and plaintext (backward compatibility)
- * 
- * @param {string} paramIndex - SQL parameter index (e.g., '$1', '$2')
- * @returns {string} - SQL WHERE clause
- */
-function buildEncryptedPhoneWhereClause(paramIndex) {
-  // Search for both encrypted and plaintext (backward compatibility)
-  // The encrypted phone will be passed as first param, plaintext as second
-  return `(phone_number = ${paramIndex} OR phone_number = $${parseInt(paramIndex.replace('$', '')) + 1})`;
+/** Normalize the app's India-friendly input to a stable E.164 representation. */
+function canonicalizePhone(phoneNumber) {
+  if (typeof phoneNumber !== 'string') throw new TypeError('Phone number must be a string');
+  let phone = phoneNumber.trim().replace(/[\s().-]/g, '');
+  if (/^\d{10}$/.test(phone)) phone = `+91${phone}`;
+  if (!/^\+[1-9]\d{1,14}$/.test(phone)) throw new TypeError('Phone number must be a valid E.164 value');
+  return phone;
 }
 
-/**
- * Prepare phone number search parameters
- * Returns both encrypted and plaintext for backward compatibility
- * 
- * @param {string} phoneNumber - Plaintext phone number
- * @returns {string[]} - Array with [encryptedPhone, plaintextPhone]
- */
+function getLookupKey() {
+  const key = process.env.PHONE_LOOKUP_HMAC_KEY;
+  if (!key || Buffer.byteLength(key) < 32) {
+    throw new Error('PHONE_LOOKUP_HMAC_KEY must be configured with at least 32 bytes');
+  }
+  return key;
+}
+
+/** A stable, keyed digest for phone equality/index lookups. */
+function phoneLookupHash(phoneNumber) {
+  return createHmac('sha256', getLookupKey())
+    .update(`pandapay-phone-lookup:v1:${canonicalizePhone(phoneNumber)}`)
+    .digest('hex');
+}
+
+function buildPhoneLookupWhereClause(paramIndex = '$1') {
+  return `(phone_lookup_hash = ${paramIndex})`;
+}
+
 function preparePhoneSearchParams(phoneNumber) {
-  const encryptedPhone = encryptPhoneNumber(phoneNumber);
-  return [encryptedPhone, phoneNumber];
+  return [phoneLookupHash(phoneNumber)];
 }
 
-/**
- * Build SQL query with encrypted phone search
- * 
- * @param {string} baseQuery - Base SQL query (without WHERE clause)
- * @param {string} phoneParamIndex - Starting parameter index (e.g., '$1')
- * @returns {Object} - { query: string, params: string[] }
- */
-function buildEncryptedPhoneQuery(baseQuery, phoneParamIndex = '$1') {
-  const whereClause = buildEncryptedPhoneWhereClause(phoneParamIndex);
-  const query = baseQuery.includes('WHERE') 
+function buildPhoneLookupQuery(baseQuery, phoneParamIndex = '$1') {
+  const whereClause = buildPhoneLookupWhereClause(phoneParamIndex);
+  const query = /\bWHERE\b/i.test(baseQuery)
     ? `${baseQuery} AND ${whereClause}`
     : `${baseQuery} WHERE ${whereClause}`;
-  
   return { query };
 }
 
 module.exports = {
-  buildEncryptedPhoneWhereClause,
+  canonicalizePhone,
+  phoneLookupHash,
+  buildPhoneLookupWhereClause,
   preparePhoneSearchParams,
-  buildEncryptedPhoneQuery,
+  buildPhoneLookupQuery,
+  // Compatibility aliases now use the keyed hash column, never ciphertext.
+  buildEncryptedPhoneWhereClause: buildPhoneLookupWhereClause,
+  buildEncryptedPhoneQuery: buildPhoneLookupQuery,
 };
-

@@ -1,6 +1,7 @@
 // src/services/emailService.js
 const nodemailer = require('nodemailer');
 const config = require('../config');
+const { maskEmail } = require('../utils/recoveryContacts');
 
 // Initialize Nodemailer transporter
 let transporter = null;
@@ -17,9 +18,7 @@ if (config.emailHost && config.emailUser && config.emailPass) {
   });
   console.log('✅ Email service initialized');
 } else {
-  console.warn(config.isProduction
-    ? 'Email SMTP credentials missing. Email authentication delivery is unavailable.'
-    : 'Email SMTP credentials missing. Development emails will be logged to console.');
+  console.warn('Email SMTP credentials missing. Email authentication delivery is unavailable.');
 }
 
 /**
@@ -48,15 +47,7 @@ async function sendOtpEmail(email, code) {
 
   try {
     if (!transporter) {
-      if (config.isProduction) {
-        return { success: false, error: 'Email delivery is not configured' };
-      }
-      console.log('--------------------------------------------------');
-      console.log(`[MOCK EMAIL] To: ${email}`);
-      console.log(`[MOCK EMAIL] Subject: ${mailOptions.subject}`);
-      console.log(`[MOCK EMAIL] Code: ${code}`);
-      console.log('--------------------------------------------------');
-      return { success: true, messageId: 'mock-message-id' };
+      return { success: false, error: 'Email delivery is not configured' };
     }
 
     const info = await transporter.sendMail(mailOptions);
@@ -65,10 +56,10 @@ async function sendOtpEmail(email, code) {
       console.error('[Email Service] SMTP did not accept the OTP recipient');
       return { success: false, error: 'Email recipient was not accepted' };
     }
-    console.log(`[Email Service] OTP sent to ${email} (Message ID: ${info.messageId})`);
+    console.log(`[Email Service] OTP sent to ${maskEmail(email)} (Message ID: ${info.messageId})`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error(`[Email Service] Failed to send OTP to ${email}:`, error.message);
+    console.error('[Email Service] Failed to send OTP:', error.code || error.name || 'delivery_error');
     return { success: false, error: error.message };
   }
 }

@@ -8,6 +8,7 @@ import '../onboarding/entry_brand.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/phone_number_hint.dart';
+import '../../data/product_access_api.dart';
 import '../settings/feedback_support_screen.dart';
 import '../settings/legal_screen.dart';
 import 'account_recovery_screen.dart';
@@ -16,7 +17,7 @@ import 'account_recovery_screen.dart';
 /// bundled "I agree to everything" checkbox. Bumped by hand whenever the
 /// Terms/Privacy copy actually changes; every consent row this screen
 /// writes is tagged with whichever version was current at sign-up time.
-const currentPolicyVersion = '2026-08-07';
+const currentPolicyVersion = appProductTermsVersion;
 
 /// Whether this screen is creating a new account or signing an existing one in.
 ///
@@ -206,6 +207,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
       );
 
+      // Keep the explicit A4 choices through the OTP -> server activation
+      // handoff, including a process restart. Sign-in does not create or
+      // overwrite these sign-up choices.
+      if (_isSignUp) {
+        await ref
+            .read(pendingSignupChoicesStoreProvider.future)
+            .then(
+              (store) => store.save(
+                PendingSignupChoices(
+                  acceptProductTerms: _acceptedTerms,
+                  productTermsVersion: currentPolicyVersion,
+                  optInCrowdsource: _optInCrowdsource,
+                  optInMarketing: _optInMarketing,
+                ),
+              ),
+            );
+      }
+
       final store = await ref.read(tokenStoreProvider.future);
       await store.save(
         accessToken: tokens.accessToken,
@@ -213,55 +232,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
 
-      // Persist the phone only for sign-up. Returning-user login must not
-      // rewrite or revalidate legacy phone formatting.
-      await ref
-          .read(profileApiProvider)!
-          .ensureProfile(
-            email: identifier,
-            phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
-          );
-
-      // A4: record the three purpose-specific consents now that a profile
-      // row exists to attach them to. Each POST /consents call inserts its
-      // own audit-log row (see ConsentsApi's doc-comment) — never skipped
-      // for "required", since even a required grant needs its own
-      // timestamped record per DPDP §8.2.
-      if (_isSignUp) {
-        final consentsApi = ref.read(consentsApiProvider)!;
-        await consentsApi.submit(
-          purpose: 'terms',
-          granted: _acceptedTerms,
-          policyVersion: currentPolicyVersion,
-          sourceScreen: 'A4',
-        );
-        await consentsApi.submit(
-          purpose: 'crowdsource',
-          granted: _optInCrowdsource,
-          policyVersion: currentPolicyVersion,
-          sourceScreen: 'A4',
-        );
-        await consentsApi.submit(
-          purpose: 'marketing',
-          granted: _optInMarketing,
-          policyVersion: currentPolicyVersion,
-          sourceScreen: 'A4',
-        );
-        // Mirrors E12/H4's actual toggle — profiles.contributions_opt_in is
-        // the live flag other screens read, not the consent log itself.
-        if (_optInCrowdsource) {
-          await ref
-              .read(userCardsRepositoryProvider)!
-              .setContributionsOptIn(true);
-        }
+      // Keep returning-user sign-in on its existing path. New sign-ups must
+      // pass the product-access gate before POST /profile creates a profile.
+      if (!_isSignUp) {
+        await ref.read(profileApiProvider)!.ensureProfile(email: identifier);
+        ref.invalidate(profileProvider);
       }
-      ref.invalidate(profileProvider);
 
       // This screen is also reached by being pushed (Home's "Sign in" banner),
       // where nothing else pops it once sign-in succeeds. The embedded case
       // (Cards/Activity/Account watching accessTokenProvider) has no route to
       // pop, so canPop() is false there and this is a no-op.
-      if (mounted && Navigator.of(context).canPop()) {
+      if (!_isSignUp && mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
     } catch (e) {

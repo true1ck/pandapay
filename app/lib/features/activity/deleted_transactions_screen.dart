@@ -6,6 +6,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../data/api_exception.dart' show userFacingErrorMessage;
 import '../../main.dart' show MoneyText;

@@ -31,7 +31,18 @@ void main() {
 
     expect(find.byType(WelcomeScreen), findsOneWidget);
 
+    // The account actions appear after the two automatically played story
+    // slides. Advance fake time through both dwell periods and page
+    // transitions; pumpAndSettle alone cannot fire the delayed timers.
+    await tester.pump(const Duration(milliseconds: 4850));
+    await tester.pump(const Duration(milliseconds: 450));
+    await tester.pump(const Duration(milliseconds: 6600));
+    await tester.pump(const Duration(milliseconds: 450));
+    expect(find.text('Make every\ncard count.'), findsOneWidget);
+
     // Tap "I already have an account".
+    await tester.ensureVisible(find.text('I already have an account'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('I already have an account'));
     await tester.pumpAndSettle();
 

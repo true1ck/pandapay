@@ -161,6 +161,8 @@ This guide will help you deploy the Farm Auth Service on AWS Lightsail Ubuntu se
    # JWT Configuration (IMPORTANT: Generate new secrets for production!)
    JWT_ACCESS_SECRET=your_strong_random_secret_here_min_32_chars
    JWT_REFRESH_SECRET=your_strong_random_secret_here_min_32_chars
+   PHONE_LOOKUP_HMAC_KEY=stable_random_secret_at_least_32_bytes
+   AUTH_INTERNAL_SERVICE_SECRET=separate_backend_only_secret_at_least_32_bytes
    JWT_ACCESS_TTL=15m
    JWT_REFRESH_TTL=180d
    REFRESH_MAX_IDLE_MINUTES=129600 # rolling 90-day inactivity window
@@ -196,7 +198,17 @@ This guide will help you deploy the Farm Auth Service on AWS Lightsail Ubuntu se
    ```
    Copy the output to `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`
 
-4. **Secure .env File**
+4. **Apply Auth Database Migrations Before Starting the Service**
+   ```bash
+   npm run migrate
+   ```
+   Keep `PHONE_LOOKUP_HMAC_KEY` stable. The first migration backfills searchable
+   phone digests from encrypted legacy contacts and therefore also requires the
+   existing `ENCRYPTION_KEY` whenever stored contacts are encrypted. The
+   `AUTH_INTERNAL_SERVICE_SECRET` is for trusted backend callers only; do not
+   put it in the mobile application or expose it to browsers.
+
+5. **Secure .env File**
    ```bash
    chmod 600 .env
    ```

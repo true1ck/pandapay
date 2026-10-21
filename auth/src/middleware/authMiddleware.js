@@ -1,13 +1,5 @@
 // src/middleware/authMiddleware.js
-const jwt = require('jsonwebtoken');
-// === SECURITY HARDENING: JWT KEY ROTATION ===
-const {
-  getKeySecret,
-  getAllKeys,
-  getIssuer,
-  getAudience,
-  validateTokenClaims,
-} = require('../services/jwtKeys');
+const { verifyAccessToken } = require('../services/accessTokenVerification');
 
 async function authMiddleware(req, res, next) {
   const auth = req.headers.authorization || '';
@@ -17,69 +9,11 @@ async function authMiddleware(req, res, next) {
     return res.status(401).json({ error: 'Missing Authorization header' });
   }
 
-  // === SECURITY HARDENING: JWT KEY ROTATION ===
-  // Decode token to get key ID from header
-  let decoded;
+  let payload;
   try {
-    decoded = jwt.decode(token, { complete: true });
-    if (!decoded || !decoded.header) {
-      return res.status(401).json({ error: 'Invalid token format' });
-    }
+    payload = verifyAccessToken(token);
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-
-  // Get secret for the key ID (if present) or try all keys
-  const keyId = decoded.header.kid;
-  if (keyId && !getKeySecret(keyId)) {
     return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-  let payload = null;
-  let verified = false;
-
-  if (keyId) {
-    const secret = getKeySecret(keyId);
-    if (secret) {
-      try {
-        payload = jwt.verify(token, secret, {
-          issuer: getIssuer(),
-          audience: getAudience(),
-        });
-        verified = true;
-      } catch (err) {
-        // Key ID specified but verification failed
-        return res.status(401).json({ error: 'Invalid or expired token' });
-      }
-    }
-  }
-
-  // If key ID not found or not specified, try all keys (for rotation support)
-  if (!verified) {
-    const allKeys = getAllKeys();
-    for (const [kid, keySecret] of Object.entries(allKeys)) {
-      try {
-        payload = jwt.verify(token, keySecret, {
-          issuer: getIssuer(),
-          audience: getAudience(),
-        });
-        verified = true;
-        break;
-      } catch (err) {
-        // Try next key
-        continue;
-      }
-    }
-  }
-
-  if (!verified || !payload) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-
-  // === SECURITY HARDENING: JWT KEY ROTATION ===
-  // Validate JWT claims (iss, aud, exp, iat, nbf)
-  const claimsValidation = validateTokenClaims(payload);
-  if (!claimsValidation.valid) {
-    return res.status(401).json({ error: 'Invalid token claims' });
   }
 
   // === SECURITY HARDENING: GLOBAL LOGOUT ===
@@ -88,7 +22,9 @@ async function authMiddleware(req, res, next) {
   const db = require('../db');
   try {
     const { rows } = await db.query(
-      `SELECT COALESCE(token_version, 1) as token_version FROM users WHERE id = $1`,
+      `SELECT COALESCE(token_version, 1) as token_version,
+              is_active, deleted
+         FROM users WHERE id = $1`,
       [payload.sub]
     );
     
@@ -99,16 +35,39 @@ async function authMiddleware(req, res, next) {
     const userTokenVersion = rows[0].token_version;
     const tokenVersion = payload.token_version || 1;
 
+    if (!rows[0].is_active || rows[0].deleted) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
     // If token version doesn't match, token has been invalidated
     if (tokenVersion !== userTokenVersion) {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
+    if (payload.device_id) {
+      const deviceResult = await db.query(
+        `SELECT id FROM user_devices
+         WHERE user_id = $1 AND device_identifier = $2 AND is_active = TRUE LIMIT 1`,
+        [payload.sub, payload.device_id],
+      );
+      if (deviceResult.rows.length === 0) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+      }
+    }
   } catch (dbErr) {
     // Handle missing token_version column gracefully
     if (dbErr.code === '42703' && dbErr.message && dbErr.message.includes('token_version')) {
-      console.warn('token_version column not found in database, skipping version check');
-      // Continue without token version validation (backward compatibility)
-      // Token will still be validated for expiry and signature
+      console.warn('token_version column not found; validating account status without version check');
+      try {
+        const { rows } = await db.query(
+          'SELECT is_active, deleted FROM users WHERE id = $1', [payload.sub]
+        );
+        if (!rows.length || !rows[0].is_active || rows[0].deleted) {
+          return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+      } catch (statusErr) {
+        console.error('Error validating account status:', statusErr.message);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
     } else {
       console.error('Error validating token version:', dbErr);
       return res.status(500).json({ error: 'Internal server error' });
@@ -124,6 +83,8 @@ async function authMiddleware(req, res, next) {
     high_assurance: payload.high_assurance || false,
     recovery_channel: payload.recovery_channel,
     recovery_verified_at: payload.recovery_verified_at,
+    verified_channel: payload.verified_channel,
+    factor_verified_at: payload.factor_verified_at,
   };
   next();
 }

@@ -6,6 +6,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
+import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 import 'entry_brand.dart';
 
@@ -99,9 +100,18 @@ class AllSetScreen extends ConsumerWidget {
                     // Onboarding completes HERE, not before this screen —
                     // see TrackingSetupScreen._finish()'s doc comment for
                     // the redirect-guard race this ordering avoids.
-                    await ref
-                        .read(onboardingCompleteProvider.notifier)
-                        .complete();
+                    try {
+                      await ref
+                          .read(onboardingCompleteProvider.notifier)
+                          .complete();
+                    } catch (error) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(userFacingErrorMessage(error))),
+                        );
+                      }
+                      return;
+                    }
                     if (!context.mounted) return;
                     Navigator.of(context).popUntil((r) => r.isFirst);
                     context.go(AppRoute.home);

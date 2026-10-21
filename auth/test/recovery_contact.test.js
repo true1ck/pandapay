@@ -31,9 +31,17 @@ async function harness(t) {
       if (sql.startsWith('SELECT id FROM')) return { rows: conflict ? [{ id: 'someone-else' }] : [] };
       if (sql.startsWith('UPDATE users')) {
         const column = sql.includes('SET email') ? 'email' : 'phone_number';
-        assert.equal(args[1], user.id);
-        assert.equal(args[2], user[column]);
-        user[column] = args[0]; updates++;
+        if (column === 'email') {
+          assert.equal(args[1], user.id);
+          assert.equal(args[2], user[column]);
+          user[column] = args[0];
+        } else {
+          assert.equal(args[2], user.id);
+          assert.equal(args[3], user[column]);
+          user[column] = args[0];
+          user.phone_lookup_hash = args[1];
+        }
+        updates++;
         return { rows: [{ id: user.id }] };
       }
       throw new Error('Unexpected SQL');
@@ -61,7 +69,7 @@ async function harness(t) {
     } },
     '../services/smsService': { async sendOtpSms() { sends++; return { success: delivery }; } },
     '../utils/fieldEncryption': { encryptPhoneNumber: value => value, decryptPhoneNumber: value => value },
-    '../utils/encryptedPhoneSearch': { preparePhoneSearchParams: value => [value, value] },
+    '../utils/encryptedPhoneSearch': { preparePhoneSearchParams: value => [value], phoneLookupHash: value => value },
   });
   const app = express(); app.use(express.json()); app.use('/recovery', router);
   const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
@@ -122,6 +130,20 @@ test('replacement challenges cannot be used on another account', async t => {
   h.allowCode();
   assert.equal((await h.post('verify', { challenge: requested.body.challenge, code: '5678' })).status, 403);
   assert.equal(h.updates, 0);
+});
+
+test('phone contact replacement requires the existing email proof and stores a searchable hash', async t => {
+  const h = await harness(t);
+  h.setProof({ id: 'user-a', recovery_channel: 'email', recovery_verified_at: Math.floor(Date.now() / 1000) });
+  const requested = await h.post('request', { identifier: '+919999998888' });
+  assert.equal(requested.status, 200);
+  assert.equal(h.user.phone_number, '+919876541234');
+  h.allowCode();
+  const saved = await h.post('verify', { challenge: requested.body.challenge, code: '5678' });
+  assert.equal(saved.status, 200);
+  assert.equal(h.user.phone_number, '+919999998888');
+  assert.equal(h.user.phone_lookup_hash, '+919999998888');
+  assert.equal(h.user.is_phone_verified, true);
 });
 
 test('conflicting contact and failed delivery leave the linked contact unchanged', async t => {

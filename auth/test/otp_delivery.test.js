@@ -5,6 +5,8 @@ const path = require('node:path');
 const Module = require('node:module');
 const express = require('express');
 
+process.env.PHONE_LOOKUP_HMAC_KEY ||= 'test-phone-lookup-hmac-key-0123456789abcdef';
+
 // Load the real route/service code with isolated provider and storage doubles.
 // No database, SMTP server, production secrets, or test OTP bypass is used.
 function load(relativePath, dependencies) {
@@ -19,9 +21,10 @@ function load(relativePath, dependencies) {
   return loaded.exports;
 }
 
-async function harness(t, useRedis = false) {
+async function harness(t, useRedis = false, { phoneUser = null, identityUser = null } = {}) {
   const rows = [];
   const keys = new Map();
+  const userWrites = [];
   const redis = {
     async exists(key) { return keys.has(key) ? 1 : 0; },
     async incr(key) { const value = Number(keys.get(key) || 0) + 1; keys.set(key, value); return value; },
@@ -43,8 +46,9 @@ async function harness(t, useRedis = false) {
       if (sql.includes('INSERT INTO otp_requests')) {
         const row = {
           id: String(rows.length + 1),
-          identifier: args[2] === 'phone' ? args[0] : args[1],
-          type: args[2],
+          identifier: args[3] === 'phone' ? args[0] : args[2],
+          lookupHash: args[1],
+          type: args[3],
           deleted: false,
         };
         rows.push(row);
@@ -53,15 +57,28 @@ async function harness(t, useRedis = false) {
       if (sql.includes('UPDATE otp_requests')) {
         for (const row of rows) {
           const matches = sql.includes('WHERE id =')
-            ? row.id === args[0] && (row.identifier === args[1] || row.identifier === args[2])
-            : row.identifier === args[0] || row.identifier === args[1];
+            ? row.id === args[0] && (row.identifier === args[1] || row.identifier === args[2] || row.lookupHash === args[1])
+            : row.identifier === args[0] || row.lookupHash === args[0];
           if (matches) {
             row.deleted = true;
           }
         }
         return { rows: [] };
       }
-      if (sql.includes('FROM users')) return { rows: [] };
+      if (sql.includes('FROM users')) {
+        if (sql.includes('WHERE lower(email) = $1')) return { rows: [] };
+        if (identityUser && sql.includes('WHERE id = $1')) {
+          return { rows: identityUser.id === args[0] ? [{ ...identityUser }] : [] };
+        }
+        if (phoneUser && sql.includes('WHERE phone_lookup_hash = $1')) {
+          return { rows: phoneUser.phone_lookup_hash === args[0] ? [{ ...phoneUser }] : [] };
+        }
+        return { rows: [] };
+      }
+      if (sql.startsWith('UPDATE users') || sql.startsWith('INSERT INTO users')) {
+        userWrites.push({ sql, args });
+        return { rows: [] };
+      }
       throw new Error('Unexpected database operation in email delivery test');
     },
   };
@@ -79,7 +96,13 @@ async function harness(t, useRedis = false) {
   const router = load('../src/routes/authRoutes.js', {
     '../db': db,
     '../config': config,
-    '../middleware/authMiddleware': (_req, _res, next) => next(),
+    '../middleware/authMiddleware': (req, res, next) => {
+      if (req.path === '/signup' && !req.headers.authorization) {
+        return res.status(401).json({ error: 'Missing Authorization header' });
+      }
+      req.user = { id: 'authenticated-user' };
+      return next();
+    },
     '../services/smsService': {
       sendOtpSms: async () => { smsCount++; return { success: delivered }; },
     },
@@ -96,7 +119,7 @@ async function harness(t, useRedis = false) {
       RISK_LEVELS: { INFO: 'info' },
     },
     '../utils/fieldEncryption': { encryptPhoneNumber: value => value },
-    '../utils/encryptedPhoneSearch': { preparePhoneSearchParams: value => [value, value] },
+    '../utils/encryptedPhoneSearch': { preparePhoneSearchParams: value => [value], phoneLookupHash: value => value },
     '../utils/timingProtection': {
       executeOtpRequestWithTiming: operation => operation(), otpRequestDelay: noop,
       executeOtpVerifyWithTiming: operation => operation(), otpVerifyDelay: noop,
@@ -111,14 +134,16 @@ async function harness(t, useRedis = false) {
   });
   t.after(() => { server.closeAllConnections(); server.close(); });
   return {
-    rows, otp, limiter,
+    rows, otp, limiter, userWrites,
     failDelivery() { delivered = false; },
     restoreDelivery() { delivered = true; },
     get mailCount() { return mailCount; },
     get smsCount() { return smsCount; },
-    async post(route, body) {
+    async post(route, body, authorization) {
       const response = await fetch(`http://127.0.0.1:${server.address().port}/auth/${route}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        method: 'POST', headers: {
+          'Content-Type': 'application/json', ...(authorization ? { Authorization: authorization } : {}),
+        }, body: JSON.stringify(body),
       });
       return { status: response.status, body: await response.json() };
     },
@@ -177,6 +202,49 @@ test('recovery and normal sign-in have independent OTP resend windows', async t 
   assert.equal(h.mailCount, 2);
 });
 
+test('email OTP cannot attach an unverified phone to an existing phone account', async t => {
+  const phone = '+919876543210';
+  const owner = {
+    id: 'phone-owner', phone_number: `enc:${phone}`, phone_lookup_hash: phone,
+    email: null, is_phone_verified: true, is_email_verified: false,
+    name: null, role: 'user', token_version: 1,
+  };
+  const h = await harness(t, false, { phoneUser: owner });
+  const response = await h.post('verify-email-otp', {
+    email: 'new@example.com', phone_number: phone, code: '1234', device_id: 'device-a',
+  });
+  assert.equal(response.status, 400);
+  assert.deepEqual(h.userWrites, []);
+});
+
+test('signup cannot create an account without an authenticated OTP session', async t => {
+  const h = await harness(t);
+  const response = await h.post('signup', { name: 'New User', phone_number: '+919876543210' });
+  assert.equal(response.status, 401);
+  assert.deepEqual(h.userWrites, []);
+  const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/authRoutes.js'), 'utf8');
+  const signupSource = routeSource.slice(routeSource.indexOf("  '/signup',"), routeSource.indexOf("// POST /auth/validate-token"));
+  assert.match(signupSource, /\n\s*auth,\n\s*validateSignupBody/);
+  assert.doesNotMatch(signupSource, /INSERT INTO users/i);
+  const legacyValidation = routeSource.slice(routeSource.indexOf("router.post('/validate-token'"));
+  assert.doesNotMatch(legacyValidation, /phone_number:\s*payload\.phone_number/);
+});
+
+test('signup cannot replace the verified phone factor with a body-supplied number', async t => {
+  const originalPhone = '+919876543210';
+  const h = await harness(t, false, { identityUser: {
+    id: 'authenticated-user', phone_number: `enc:${originalPhone}`,
+    phone_lookup_hash: originalPhone, is_phone_verified: true,
+    is_email_verified: false, country_code: '+91', name: null, role: 'user', token_version: 1,
+  } });
+  const response = await h.post('signup', {
+    name: 'Profile Name', phone_number: '+919999998888',
+  }, 'Bearer existing-session');
+  assert.equal(response.status, 409);
+  assert.equal(response.body.code, 'existing_factor_required');
+  assert.deepEqual(h.userWrites, []);
+});
+
 test('failed SMS returns an error, discards the code, and allows retry', async t => {
   const h = await harness(t);
   h.failDelivery();
@@ -227,3 +295,24 @@ for (const outcome of ['accepted', 'rejected', 'error']) {
     assert.equal((await service.sendOtpEmail('recovery@example.com', '5678')).success, outcome === 'accepted');
   });
 }
+
+test('email delivery logs neither the full address nor the OTP value', async () => {
+  const service = load('../src/services/emailService.js', {
+    '../config': { isProduction: true, emailHost: 'smtp.invalid', emailUser: 'user', emailPass: 'unused' },
+    nodemailer: { createTransport: () => ({
+      async sendMail() { return { accepted: ['recovery@example.com'], messageId: 'test-id' }; },
+    }) },
+  });
+  const original = { log: console.log, warn: console.warn, error: console.error };
+  const output = [];
+  console.log = (...args) => output.push(args.join(' '));
+  console.warn = (...args) => output.push(args.join(' '));
+  console.error = (...args) => output.push(args.join(' '));
+  try {
+    assert.equal((await service.sendOtpEmail('recovery@example.com', '4826')).success, true);
+  } finally {
+    console.log = original.log; console.warn = original.warn; console.error = original.error;
+  }
+  assert.equal(output.some(line => line.includes('recovery@example.com')), false);
+  assert.equal(output.some(line => line.includes('4826')), false);
+});

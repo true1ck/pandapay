@@ -1,12 +1,13 @@
--- Creates the non-superuser role api/ (and the console) should actually
--- connect as. `postgres` is a superuser and BYPASSES ROW LEVEL SECURITY
+-- Creates the non-superuser roles api/ and its isolated rewards worker
+-- should connect as. `postgres` is a superuser and BYPASSES ROW LEVEL SECURITY
 -- ENTIRELY (rolbypassrls = true by default for superusers, regardless of
 -- FORCE ROW LEVEL SECURITY on the tables) — connecting as `postgres` makes
 -- every RLS policy in 0011_rls_policies.sql a no-op. This was discovered
 -- partway through development: earlier "RLS isolation proven" testing was
 -- actually only exercising the API's `WHERE id = $1` filter, not Postgres
 -- RLS, because api/ was connecting as `postgres`. Run this once per
--- database, then point DATABASE_URL at `app_user`, not `postgres`.
+-- database, then point api/ at `app_user`, not `postgres`; rewards-worker
+-- uses its separate `rewards_worker_login` credential.
 -- Password comes from the APP_USER_PASSWORD environment variable this psql
 -- process was started with, falling back to the dev literal only when unset —
 -- so `docker compose up`'s existing invocation (which never sets it) is
@@ -22,6 +23,7 @@
 -- the conditional at the psql meta-command level instead, so the `create
 -- role` statement itself stays a plain top-level statement.
 \set app_user_password `echo "${APP_USER_PASSWORD:-app_user_dev_pw}"`
+\set rewards_worker_password `echo "${REWARD_WORKER_DB_PASSWORD:-reward_worker_dev_pw}"`
 
 select exists (select 1 from pg_roles where rolname = 'app_user') as app_user_exists \gset
 \if :app_user_exists
@@ -30,11 +32,47 @@ select exists (select 1 from pg_roles where rolname = 'app_user') as app_user_ex
 create role app_user login password :'app_user_password' nosuperuser nobypassrls;
 \endif
 
+select exists (select 1 from pg_roles where rolname = 'rewards_worker_login') as rewards_worker_login_exists \gset
+\if :rewards_worker_login_exists
+alter role rewards_worker_login login password :'rewards_worker_password'
+  nosuperuser nocreatedb nocreaterole inherit noreplication nobypassrls;
+\else
+create role rewards_worker_login login password :'rewards_worker_password'
+  nosuperuser nocreatedb nocreaterole inherit noreplication nobypassrls;
+\endif
+
 grant usage on schema public to app_user;
 grant select, insert, update, delete on all tables in schema public to app_user;
 grant usage, select on all sequences in schema public to app_user;
 grant execute on all functions in schema public to app_user;
 alter default privileges in schema public grant select, insert, update, delete on tables to app_user;
+
+-- Profile creation and identity fields must go through the trusted auth /
+-- promotion bootstrap routine. A blanket public-schema grant above would
+-- otherwise restore direct profile insertion every time this script runs.
+do $$
+begin
+  if to_regclass('public.profiles') is not null then
+    execute 'revoke insert, update, delete on table public.profiles from app_user';
+    execute 'grant update (contributions_opt_in, deletion_requested_at, deletion_due_at) on table public.profiles to app_user';
+  end if;
+
+  -- Existing referral endpoints retain read compatibility; creating a code,
+  -- attribution or qualification is now done through narrowly granted
+  -- promotions SECURITY DEFINER routines.
+  if to_regclass('public.referral_codes') is not null then
+    execute 'revoke insert, update, delete on table public.referral_codes from app_user';
+    execute 'grant select on table public.referral_codes to app_user';
+  end if;
+  if to_regclass('public.referrals') is not null then
+    execute 'revoke insert, update, delete on table public.referrals from app_user';
+    execute 'grant select on table public.referrals to app_user';
+  end if;
+  if to_regclass('public.referral_program') is not null then
+    execute 'revoke insert, update, delete on table public.referral_program from app_user';
+    execute 'grant select on table public.referral_program to app_user';
+  end if;
+end $$;
 
 -- The `pandapay` schema is created by migration 0001, so on a brand-new
 -- database this script necessarily runs BEFORE it exists — and the role has to

@@ -1318,7 +1318,19 @@ class _AddCommitmentSheetState extends ConsumerState<_AddCommitmentSheet> {
     final selected = _category == cat;
     return ChoiceChip(
       label: Text(label),
+      labelStyle: BambooFonts.ui(
+        13,
+        weight: FontWeight.w600,
+        color: selected ? BambooInk.onSlate : BambooInk.ink900,
+      ),
       selected: selected,
+      selectedColor: BambooInk.slate,
+      backgroundColor: BambooInk.paperMuted,
+      checkmarkColor: BambooInk.onSlate,
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
       onSelected: (_) => setState(() => _category = cat),
     );
   }
@@ -1327,7 +1339,19 @@ class _AddCommitmentSheetState extends ConsumerState<_AddCommitmentSheet> {
     final selected = _cadence == cadence;
     return ChoiceChip(
       label: Text(label),
+      labelStyle: BambooFonts.ui(
+        13,
+        weight: FontWeight.w600,
+        color: selected ? BambooInk.onSlate : BambooInk.ink900,
+      ),
       selected: selected,
+      selectedColor: BambooInk.slate,
+      backgroundColor: BambooInk.paperMuted,
+      checkmarkColor: BambooInk.onSlate,
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
       onSelected: (_) => setState(() => _cadence = cadence),
     );
   }

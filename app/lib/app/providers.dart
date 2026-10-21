@@ -16,6 +16,7 @@ import '../data/analytics.dart';
 import '../data/app_status_repository.dart';
 import '../data/api_exception.dart';
 import '../data/auth_api.dart';
+import '../data/product_access_api.dart';
 import '../data/authenticated_http_client.dart';
 import '../data/card_bill_ledger.dart';
 import '../data/card_feedback_repository.dart';
@@ -47,8 +48,10 @@ import '../data/notification_devices_api.dart';
 import '../data/override_resolver.dart';
 import '../data/partner_apply_repository.dart';
 import '../data/recovery_api.dart';
+import '../data/referral_repository.dart';
 import '../data/spend_by_category_repository.dart';
 import '../data/spend_reports_repository.dart';
+import '../data/subscription_credits_repository.dart';
 import '../data/sync_api.dart';
 import '../data/token_store.dart';
 import '../data/upi_payment_service.dart';
@@ -144,6 +147,13 @@ final deviceMetadataProvider = FutureProvider<Map<String, Object?>>(
 /// persists both tokens on a fresh OTP sign-in.
 final accessTokenProvider = StateProvider<String?>((ref) => null);
 
+/// The signed-in account's server-verified product-access namespace. It is
+/// intentionally session-memory only: after a cold start the access API is
+/// checked again before incomplete onboarding can proceed.
+final activationVerifiedNamespaceProvider = StateProvider<String?>(
+  (ref) => null,
+);
+
 /// All refresh entry points in the app share this coordinator.  The auth
 /// service rotates refresh tokens as one-time credentials; separate locks in
 /// the HTTP client and lifecycle keep-alive can otherwise race after resume,
@@ -205,6 +215,25 @@ final profileApiProvider = Provider<ProfileApi?>((ref) {
     client: ref.read(authenticatedHttpClientProvider),
   );
 });
+
+final productAccessApiProvider = Provider<ProductAccessRepository?>((ref) {
+  final token = _stableSessionToken(ref);
+  if (token == null) return null;
+  return ProductAccessApi(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
+});
+
+final pendingInvitationStoreProvider = FutureProvider<PendingInvitationStore>(
+  (ref) async => PendingInvitationStore(),
+);
+
+final pendingSignupChoicesStoreProvider =
+    FutureProvider<PendingSignupChoicesStore>(
+      (ref) async => PendingSignupChoicesStore(),
+    );
 
 /// A8/C8 Request Unsupported Card. Same null-when-signed-out shape as every
 /// other repository provider in this file.
@@ -840,6 +869,14 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
   }
 
   Future<void> complete() async {
+    final api = _ref.read(productAccessApiProvider);
+    if (api == null) {
+      throw StateError('Sign in to finish account setup.');
+    }
+    // The local routing flag must never claim completion until the server has
+    // persisted it. A failed request leaves the local flag false and safely
+    // permits the user to retry from the final setup screen.
+    await api.completeOnboarding();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_onboardingCompleteKey, true);
     state = const AsyncValue.data(true);
@@ -2853,6 +2890,33 @@ final homeSummaryProvider = FutureProvider<HomeSummary?>((ref) async {
   }
 });
 
+/// A Home visit is the user's explicit, foreground check-in for the referral
+/// activity streak. Home watches this date-keyed provider only while that
+/// screen is mounted; signed receipts are fetched live and never cached.
+final homeEngagementCheckInProvider = FutureProvider.family<void, String>((
+  ref,
+  activityDay,
+) async {
+  final repository = ref.watch(userCardsRepositoryProvider);
+  if (repository == null || activityDay.isEmpty) return;
+
+  try {
+    final recorded = await repository
+        .recordHomeEngagementCheckIn(
+          anchor: ref.read(clockProvider).now(),
+          timeZone: ref.read(deviceTimeZoneProvider),
+        )
+        .timeout(_homeRequestTimeout);
+    if (recorded) {
+      ref.invalidate(referralsProvider);
+      ref.invalidate(referralDashboardProvider(ref.read(referralYearProvider)));
+    }
+  } catch (_) {
+    // Check-in is an optional referral enhancement. Network or campaign
+    // failures must never block Home or replace the transaction streak.
+  }
+});
+
 /// Bank-account snapshots derived from SMS observations. Empty when signed
 /// out or when no imported SMS has exposed a masked source account yet.
 final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
@@ -3229,6 +3293,58 @@ final referralsProvider = FutureProvider<ReferralInfo?>((ref) async {
     if (isAuthenticationFailure(error)) return null;
     rethrow;
   }
+});
+
+/// Dedicated v2 referral client. It is deliberately separate from the
+/// legacy referral DTO embedded in UserCardsRepository, which continues to
+/// support older app builds using GET /referrals.
+final referralRepositoryProvider = Provider<ReferralRepository?>((ref) {
+  final token = _stableSessionToken(ref);
+  if (token == null) return null;
+  return HttpReferralRepository(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    cache: LocalAccountScopedJsonCache(
+      () => ref.read(responseCacheProvider.future),
+    ),
+    cacheNamespace: () => ref.read(cacheNamespaceProvider),
+    client: ref.read(authenticatedHttpClientProvider),
+  );
+});
+
+final referralYearProvider = StateProvider<int>(
+  (ref) =>
+      DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30)).year,
+);
+
+final referralDashboardProvider =
+    FutureProvider.family<ReferralDashboard?, int>((ref, year) async {
+      final repository = ref.watch(referralRepositoryProvider);
+      if (repository == null) return null;
+      return repository.loadDashboard(year: year);
+    });
+
+final subscriptionCreditsRepositoryProvider =
+    Provider<SubscriptionCreditsRepository?>((ref) {
+      final token = _stableSessionToken(ref);
+      if (token == null) return null;
+      return HttpSubscriptionCreditsRepository(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: token,
+        cache: LocalAccountScopedJsonCache(
+          () => ref.read(responseCacheProvider.future),
+        ),
+        cacheNamespace: () => ref.read(cacheNamespaceProvider),
+        client: ref.read(authenticatedHttpClientProvider),
+      );
+    });
+
+final subscriptionCreditDataProvider = FutureProvider<SubscriptionCreditData?>((
+  ref,
+) async {
+  final repository = ref.watch(subscriptionCreditsRepositoryProvider);
+  if (repository == null) return null;
+  return repository.load();
 });
 
 /// The device's IANA zone name, overridable in tests. `DateTime.now()`'s

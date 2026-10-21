@@ -107,6 +107,8 @@ module.exports = {
   emailUser: process.env.EMAIL_USER,
   emailPass: process.env.EMAIL_PASS,
   emailFrom: process.env.EMAIL_FROM,
+  // Shared only between auth and trusted backend services; never include in mobile builds.
+  authInternalServiceSecret: process.env.AUTH_INTERNAL_SERVICE_SECRET || null,
   enablePhoneOtp: process.env.ENABLE_PHONE_OTP !== 'false',
   enableEmailOtp: process.env.ENABLE_EMAIL_OTP !== 'false',
 };

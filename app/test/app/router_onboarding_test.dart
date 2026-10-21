@@ -6,8 +6,8 @@ import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
+import 'package:pandapay/features/auth/product_activation_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
-import 'package:pandapay/features/onboarding/permissions_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -121,10 +121,13 @@ void main() {
     },
   );
 
-  testWidgets('a signed-in new account starts required setup', (tester) async {
-    await _pumpApp(tester, onboardingComplete: false, signedIn: true);
+  testWidgets(
+    'a signed-in new account must pass server activation before setup',
+    (tester) async {
+      await _pumpApp(tester, onboardingComplete: false, signedIn: true);
 
-    expect(find.byType(PermissionsScreen), findsOneWidget);
-    expect(find.byType(HomeScreen), findsNothing);
-  });
+      expect(find.byType(ProductActivationScreen), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+    },
+  );
 }

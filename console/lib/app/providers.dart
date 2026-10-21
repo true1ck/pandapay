@@ -27,9 +27,13 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'http://localhost:4000',
 );
 
-final authApiProvider = Provider<AuthApi>((ref) => AuthApi(authBaseUrl: authBaseUrl));
+final authApiProvider = Provider<AuthApi>(
+  (ref) => AuthApi(authBaseUrl: authBaseUrl),
+);
 
-final tokenStoreProvider = FutureProvider<TokenStore>((ref) => TokenStore.load());
+final tokenStoreProvider = FutureProvider<TokenStore>(
+  (ref) => TokenStore.load(),
+);
 
 /// The signed-in access token, or null when signed out. Chunk 10: seeded on
 /// startup from sessionInitProvider (which resolves a stored refresh token
@@ -51,7 +55,10 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
   final authApi = ref.read(authApiProvider);
   try {
     final tokens = await authApi.refresh(refreshToken);
-    await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+    await store.save(
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    );
     ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
   } catch (_) {
     await store.clear();
@@ -75,19 +82,33 @@ final isAdminProvider = FutureProvider<bool>((ref) async {
   return api.isAdmin();
 });
 
-final adminCardsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final referralOperationsProvider = FutureProvider<Map<String, dynamic>>((
+  ref,
+) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const {};
+  return api.fetchReferralOperations();
+});
+
+final adminCardsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchAdminCards();
 });
 
-final cardRequestGroupsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final cardRequestGroupsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchCardRequestGroups();
 });
 
-final errorReportsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final errorReportsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchErrorReports();
@@ -107,7 +128,9 @@ final sourcesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
 });
 
 /// AD-4: recent scrape run history across every source.
-final scrapeRunsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final scrapeRunsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchScrapeRuns();
@@ -117,11 +140,15 @@ final scrapeRunsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
 /// merchantsProvider (below) can .watch() each one independently and only
 /// the filters that actually changed trigger a refetch.
 final merchantCategoryFilterProvider = StateProvider<String?>((ref) => null);
-final merchantMinConfidenceFilterProvider = StateProvider<double?>((ref) => null);
+final merchantMinConfidenceFilterProvider = StateProvider<double?>(
+  (ref) => null,
+);
 final merchantPublishedFilterProvider = StateProvider<bool?>((ref) => null);
 final merchantSearchFilterProvider = StateProvider<String>((ref) => '');
 
-final merchantsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final merchantsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchMerchants(
@@ -132,13 +159,17 @@ final merchantsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async
   );
 });
 
-final merchantConflictsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final merchantConflictsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchMerchantConflicts();
 });
 
-final abuseSignalsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final abuseSignalsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchAbuseSignals();
@@ -146,7 +177,9 @@ final abuseSignalsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) as
 
 /// AD-6.1.4's category filter needs id->name; /categories is public
 /// (same policy as /catalogue) so this doesn't need the admin API wrapper.
-final categoriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final categoriesProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final response = await http.get(Uri.parse('$apiBaseUrl/categories'));
   if (response.statusCode != 200) return const [];
   final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -158,7 +191,9 @@ final categoriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
 final acceptanceNetworkFilterProvider = StateProvider<String?>((ref) => null);
 final acceptancePublishedFilterProvider = StateProvider<bool?>((ref) => null);
 
-final acceptanceSummaryProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final acceptanceSummaryProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchAcceptanceSummary(
@@ -170,25 +205,34 @@ final acceptanceSummaryProvider = FutureProvider<List<Map<String, dynamic>>>((re
 /// AD-7.3: effective-rate monitor filter state.
 final effectiveRateDivergentOnlyProvider = StateProvider<bool>((ref) => false);
 
-final effectiveRateSummaryProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchEffectiveRateSummary(divergentOnly: ref.watch(effectiveRateDivergentOnlyProvider));
-});
+final effectiveRateSummaryProvider = FutureProvider<List<Map<String, dynamic>>>(
+  (ref) async {
+    final api = ref.watch(adminApiProvider);
+    if (api == null) return const [];
+    return api.fetchEffectiveRateSummary(
+      divergentOnly: ref.watch(effectiveRateDivergentOnlyProvider),
+    );
+  },
+);
 
-final dataQualityDashboardProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+final dataQualityDashboardProvider = FutureProvider<Map<String, dynamic>?>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return null;
   return api.fetchDataQualityDashboard();
 });
 
-final anonymizationAuditRunsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchAnonymizationAuditRuns();
-});
+final anonymizationAuditRunsProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+      final api = ref.watch(adminApiProvider);
+      if (api == null) return const [];
+      return api.fetchAnonymizationAuditRuns();
+    });
 
-final parserPatternsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final parserPatternsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchParserPatterns();

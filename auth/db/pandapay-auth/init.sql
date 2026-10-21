@@ -19,13 +19,13 @@ END $$;
 -- =========================
 -- users table (persistent)
 -- =========================
--- phone_number/email are stored encrypted by src/utils/fieldEncryption.js —
--- widened past a plain E.164 VARCHAR(20) to hold ciphertext, and no longer
--- UNIQUE at the column level since encryption isn't deterministic here;
--- src/utils/encryptedPhoneSearch.js is what enforces lookup uniqueness.
+-- phone_number is encrypted at rest. Equality lookup uses phone_lookup_hash,
+-- a keyed digest populated by the auth migration runner; random-IV ciphertext
+-- is not an equality search key.
 CREATE TABLE IF NOT EXISTS users (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     phone_number    VARCHAR(255),
+    phone_lookup_hash VARCHAR(64),
     email           VARCHAR(255),
     country_code    VARCHAR(10),
     name            VARCHAR(255),                  -- allow NULL until profile completed
@@ -71,6 +71,7 @@ EXECUTE FUNCTION set_updated_at();
 CREATE TABLE IF NOT EXISTS otp_requests (
     id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     phone_number  VARCHAR(255),
+    phone_lookup_hash VARCHAR(64),
     email         VARCHAR(255),
     type          VARCHAR(10) NOT NULL DEFAULT 'phone' CHECK (type IN ('phone','email')),
     country_code  VARCHAR(10),
@@ -88,6 +89,14 @@ CREATE INDEX IF NOT EXISTS idx_otp_phone_created
 CREATE INDEX IF NOT EXISTS idx_otp_phone_unconsumed
     ON otp_requests (phone_number)
     WHERE deleted = FALSE AND consumed_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_otp_phone_lookup_hash_unconsumed
+    ON otp_requests (phone_lookup_hash, created_at DESC)
+    WHERE phone_lookup_hash IS NOT NULL AND deleted = FALSE AND consumed_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_users_phone_lookup_hash
+    ON users (phone_lookup_hash)
+    WHERE phone_lookup_hash IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_otp_email_unconsumed
     ON otp_requests (email)

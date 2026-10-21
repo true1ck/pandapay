@@ -12,6 +12,7 @@ import 'app/providers.dart';
 import 'app/assistant_action.dart';
 import 'app/router.dart';
 import 'data/spend_reports_repository.dart';
+import 'data/product_access_api.dart';
 import 'features/settings/appearance_providers.dart';
 
 void main() {
@@ -93,18 +94,30 @@ class _BuildConfigurationErrorApp extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.build_circle_outlined, size: 56, color: Color(0xFF2D333D)),
+                  const Icon(
+                    Icons.build_circle_outlined,
+                    size: 56,
+                    color: Color(0xFF2D333D),
+                  ),
                   const SizedBox(height: 18),
                   const Text(
                     'PandaPay could not start',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Color(0xFF20242B)),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF20242B),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     message,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 16, height: 1.4, color: Color(0xFF5D6470)),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      height: 1.4,
+                      color: Color(0xFF5D6470),
+                    ),
                   ),
                   const SizedBox(height: 20),
                   const Text(
@@ -159,6 +172,9 @@ class PandaPayApp extends ConsumerStatefulWidget {
 
 class _PandaPayAppState extends ConsumerState<PandaPayApp> {
   static const _assistantChannel = MethodChannel('app.pandapay/assistant');
+  static const _installReferrerChannel = MethodChannel(
+    'app.pandapay/install_referrer',
+  );
 
   @override
   void initState() {
@@ -178,13 +194,33 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
       final raw = await _assistantChannel.invokeMethod<String>(
         'getInitialAssistantUri',
       );
-      if (raw != null) _openAssistantUri(raw);
+      if (raw != null) await _openAssistantUri(raw);
     } on PlatformException {
       // Non-Android platforms and test harnesses do not register this
       // optional channel; normal app startup must remain unaffected.
     } on MissingPluginException {
       // The channel is intentionally Android-only. Flutter uses this
       // exception when the platform has no implementation at all.
+    }
+
+    // Android's Play Install Referrer is a deferred-link fallback only. It
+    // stores a validated invite code locally; it never activates an account
+    // or silently replaces a code that arrived through an actual app link.
+    try {
+      final code = await _installReferrerChannel.invokeMethod<String>(
+        'readInvitationCode',
+      );
+      if (code != null && mounted) {
+        final pendingStore = await ref.read(
+          pendingInvitationStoreProvider.future,
+        );
+        await pendingStore.capture(code);
+      }
+    } on PlatformException {
+      // Play Store is absent/unavailable (or the app came from another
+      // installer); manual code entry and ordinary deep links still work.
+    } on MissingPluginException {
+      // iOS and platform-less test harnesses have no Install Referrer API.
     }
   }
 
@@ -193,8 +229,17 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     if (!mounted || uri == null) {
       return;
     }
+    final invitationCode = invitationCodeFromUri(uri);
+    if (invitationCode != null) {
+      // Persist before navigation/session restoration so a cold or warm
+      // invitation link survives the router's authentication redirect.
+      final pendingStore = await ref.read(
+        pendingInvitationStoreProvider.future,
+      );
+      await pendingStore.capture(invitationCode);
+    }
     final request = parseAssistantUri(uri);
-    if (request == null) return;
+    if (request == null && invitationCode == null) return;
 
     // The router starts at /splash while the secure session and onboarding
     // flag are restored. Navigating immediately would be redirected to the
@@ -217,19 +262,22 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     if (!mounted) return;
 
     final router = ref.read(goRouterProvider);
+    if (invitationCode != null) {
+      router.go('${AppRoute.inviteLinkPrefix}/$invitationCode');
+      return;
+    }
+    if (request == null) return;
     switch (request.action) {
       case AssistantAction.spending:
         final period = SpendPeriod.values.firstWhere(
           (candidate) => candidate.wireValue == request.period,
           orElse: () => SpendPeriod.month,
         );
-        ref.read(selectedSpendQueryProvider.notifier).state = SpendReportQuery.preset(period);
+        ref.read(selectedSpendQueryProvider.notifier).state =
+            SpendReportQuery.preset(period);
         router.go(AppRoute.assistantSpending);
       case AssistantAction.addSpend:
-        router.go(
-          AppRoute.assistantAddSpend,
-          extra: request,
-        );
+        router.go(AppRoute.assistantAddSpend, extra: request);
       case AssistantAction.dueDates:
         router.go(AppRoute.assistantDueDates);
       case AssistantAction.wallet:
@@ -270,7 +318,8 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.light,
-      builder: (context, child) => _scaledTextMediaQuery(context, child, textScale),
+      builder: (context, child) =>
+          _scaledTextMediaQuery(context, child, textScale),
       routerConfig: ref.watch(goRouterProvider),
     );
   }
@@ -287,7 +336,11 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
 /// rather than an exact composition — deliberately so: the alternative is
 /// leaving the app preference unapplied, which is what the app did before
 /// and is a worse answer for the user who set it.
-Widget _scaledTextMediaQuery(BuildContext context, Widget? child, double appScale) {
+Widget _scaledTextMediaQuery(
+  BuildContext context,
+  Widget? child,
+  double appScale,
+) {
   final media = MediaQuery.of(context);
   final combined = (media.textScaler.scale(1.0) * appScale).clamp(0.85, 2.0);
   return MediaQuery(
@@ -382,7 +435,9 @@ class MoneyText extends ConsumerWidget {
             formatted,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: baseStyle?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+            style: baseStyle?.copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
           if (showConfidenceIcon) ...[
             const SizedBox(width: 6),

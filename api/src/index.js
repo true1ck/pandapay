@@ -5,7 +5,17 @@ const express = require('express');
 const cors = require('cors');
 const config = require('./config');
 const { withUserClient, pool } = require('./db');
-const { optionalAuth, requireAuth } = require('./auth');
+const {
+  optionalAuth,
+  requireAuth,
+  requireVerifiedSession,
+  verifyMemberRequest,
+  SessionVerificationError,
+} = require('./auth');
+const {
+  registerReferralRoutes,
+  createEngagementReceipt,
+} = require('./referral_routes');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
 const { replayCurrentCapConsumption } = require('./card_state_reconciliation');
 const {
@@ -22,6 +32,7 @@ const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
 const nearbyGoogle = require('./nearby_google');
 const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
+const { registerAdminReferralOperationsRoutes } = require('./admin_referral_operations');
 const rewardMath = require('./reward_math');
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
@@ -207,6 +218,10 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
 }
 
 const app = express();
+// Staging/production expose this process only through one nginx hop bound to
+// loopback. Trust exactly that hop so IP-based abuse controls see the client
+// address without trusting arbitrary forwarded chains from the internet.
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 // optionalAuth first so the request log can record which user a line belongs
@@ -228,6 +243,8 @@ app.get('/ready', async (req, res) => {
     res.status(503).json({ ok: false, database: 'unavailable' });
   }
 });
+
+registerReferralRoutes(app);
 
 /**
  * GET /profile — proves RLS is reachable end to end: an authenticated user
@@ -253,37 +270,102 @@ app.get('/profile', requireAuth, async (req, res) => {
  * place that enforces "only ever insert a profile for your own verified id"
  * — the id column is never taken from the request body.
  */
-app.post('/profile', requireAuth, async (req, res) => {
-  const { displayName, locale, currency, email, phoneNumber } = req.body || {};
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        // COALESCE on update, not EXCLUDED: this route runs on every sign-in,
-        // and a client that omits a field means "I have nothing new to say
-        // about it", not "clear it". EXCLUDED.display_name alone used to
-        // wipe a stored name on the next login that didn't resend one.
-        `INSERT INTO profiles (id, display_name, locale, currency, email, phone_number)
-         VALUES ($1, $2, COALESCE($3, 'en-IN'), COALESCE($4, 'INR'), $5, $6)
-         ON CONFLICT (id) DO UPDATE
-           SET display_name = COALESCE(EXCLUDED.display_name, profiles.display_name),
-               email        = COALESCE(EXCLUDED.email, profiles.email),
-               phone_number = COALESCE(EXCLUDED.phone_number, profiles.phone_number),
-               updated_at   = now()
-         RETURNING *`,
-        [
-          req.userId,
-          displayName || null,
-          locale || null,
-          currency || null,
-          email || null,
-          phoneNumber || null,
-        ]
-      )
+app.post('/profile', requireVerifiedSession, async (req, res) => {
+  const body = req.body || {};
+  if (req.verifiedSession?.guest) {
+    return res.status(403).json({ error: 'membership_required' });
+  }
+
+  const invitationCode = typeof body.invitationCode === 'string'
+    ? body.invitationCode.trim().toUpperCase()
+    : '';
+  const hasPreviewToken = typeof body.invitationPreviewToken === 'string'
+    && body.invitationPreviewToken.length > 0;
+  let preview = null;
+  if (hasPreviewToken) {
+    preview = require('./referral_routes').verifyInvitationPreviewToken(
+      body.invitationPreviewToken,
     );
-    res.status(201).json({ profile: result.rows[0] });
+    if (!preview || (invitationCode && preview.code !== invitationCode)) {
+      return res.status(400).json({ error: 'invitation_preview_invalid' });
+    }
+  } else if (invitationCode) {
+    return res.status(400).json({ error: 'invitation_preview_required' });
+  }
+
+  const selectedCode = preview?.code || invitationCode || null;
+  const acceptRewardTerms = body.acceptRewardTerms === true;
+  const acceptAccessOnly = selectedCode
+    ? body.acceptAccessOnly === true
+    : true;
+  if (selectedCode && !acceptRewardTerms && !acceptAccessOnly) {
+    return res.status(400).json({ error: 'reward_choice_required' });
+  }
+  if (acceptRewardTerms && !preview?.rewardAvailable) {
+    return res.status(409).json({ error: 'offer_changed' });
+  }
+
+  let identityClaims = [];
+  if (acceptRewardTerms) {
+    try {
+      identityClaims = require('./referral_routes').buildEligibilityClaims(
+        req.verifiedSession?.verifiedContacts,
+      );
+    } catch (_) {
+      return res.status(503).json({ error: 'referral_identity_unavailable' });
+    }
+  }
+
+  const acceptProductTerms = body.acceptProductTerms === true;
+  const requestedProductTermsVersion = typeof body.productTermsVersion === 'string'
+    ? body.productTermsVersion.trim()
+    : '';
+  if (acceptProductTerms && requestedProductTermsVersion !== config.productTermsVersion) {
+    return res.status(409).json({ error: 'product_terms_changed' });
+  }
+  if (selectedCode && preview?.accessMode === 'invite_only' && !acceptProductTerms) {
+    return res.status(400).json({ error: 'required_terms_missing' });
+  }
+
+  try {
+    const activation = await withUserClient(req.userId, async (client) => {
+      const result = await client.query(
+        `SELECT promotions.activate_current_user(
+           $1::text, $2::text, $3::text, $4::text, $5::text, $6::text,
+           $7::text, $8::text, $9::boolean, $10::boolean, $11::jsonb,
+           $12::text, $13::boolean
+         ) AS activation`,
+        [
+          typeof body.displayName === 'string' ? body.displayName : null,
+          typeof body.locale === 'string' ? body.locale : null,
+          typeof body.currency === 'string' ? body.currency : null,
+          req.verifiedSession?.verifiedContacts?.email?.verified === true
+            ? req.verifiedSession.verifiedContacts.email.value : null,
+          req.verifiedSession?.verifiedContacts?.phone?.verified === true
+            ? req.verifiedSession.verifiedContacts.phone.value : null,
+          selectedCode,
+          preview?.campaignVersion || null,
+          preview?.termsVersion || 'invite-access-v1',
+          acceptRewardTerms,
+          acceptAccessOnly,
+          JSON.stringify(identityClaims),
+          acceptProductTerms ? config.productTermsVersion : null,
+          acceptProductTerms,
+        ],
+      );
+      const profile = await client.query('SELECT * FROM profiles WHERE id = $1', [req.userId]);
+      return { activation: result.rows[0]?.activation, profile: profile.rows[0] || null };
+    });
+    if (!activation.profile) return res.status(503).json({ error: 'profile_activation_incomplete' });
+    return res.status(201).json(activation);
   } catch (err) {
-    console.error('POST /profile error', err);
-    res.status(500).json({ error: 'internal_error' });
+    if (err.code === 'P0001') {
+      const code = typeof err.message === 'string' && /^[a-z][a-z0-9_]{2,80}$/.test(err.message)
+        ? err.message : 'activation_unavailable';
+      return res.status(code === 'invitation_required' ? 403 : 409).json({ error: code });
+    }
+    console.error('POST /profile activation failed', { code: err.code || null });
+    return res.status(503).json({ error: 'profile_activation_unavailable' });
   }
 });
 
@@ -318,10 +400,8 @@ app.get('/catalogue', async (req, res) => {
  * status-filtered RLS policy for non-admins or a security-definer view).
  */
 async function requireAdmin(req, res, next) {
-  if (!req.userId) {
-    return res.status(401).json({ error: 'Missing or invalid access token' });
-  }
   try {
+    await verifyMemberRequest(req);
     const isAdmin = await withUserClient(req.userId, async (client) => {
       const result = await client.query('SELECT pandapay.is_admin() AS is_admin');
       return result.rows[0].is_admin;
@@ -331,8 +411,11 @@ async function requireAdmin(req, res, next) {
     }
     next();
   } catch (err) {
+    if (err instanceof SessionVerificationError) {
+      return res.status(err.status).json({ error: err.code });
+    }
     console.error('requireAdmin error', err);
-    res.status(500).json({ error: 'internal_error' });
+    res.status(503).json({ error: 'access_check_unavailable' });
   }
 }
 
@@ -348,6 +431,8 @@ app.get('/admin/me', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'internal_error' });
   }
 });
+
+registerAdminReferralOperationsRoutes(app, { withUserClient, requireAdmin });
 
 /**
  * GET /admin/cards — AD-1.1.1 catalogue browse: every card regardless of
@@ -7741,45 +7826,17 @@ app.get('/referrals', requireAuth, async (req, res) => {
     const payload = await withUserClient(req.userId, async (client) => {
       const program = await client.query(`SELECT * FROM referral_program WHERE id = 1`);
 
-      // Mint on first read rather than at sign-up: most users never open
-      // this screen, and a code nobody has seen is a row nobody needs.
-      // ON CONFLICT DO NOTHING + re-select keeps it idempotent under a
-      // double-tap without a second round trip in the common case.
-      const existing = await client.query(
-        `SELECT code FROM referral_codes WHERE profile_id = $1`,
-        [req.userId]
+      // Creation is owned by the access-controlled SECURITY DEFINER routine;
+      // the app_user role cannot insert or mutate referral codes directly.
+      const codeResult = await client.query(
+        'SELECT promotions.ensure_current_invitation_code() AS code',
       );
-      let code = existing.rows[0]?.code;
-      if (!code) {
-        // Crockford-ish base32: no I/L/O/U, so a code read aloud or typed
-        // from a screenshot can't be ambiguous.
-        const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-        for (let attempt = 0; attempt < 5 && !code; attempt += 1) {
-          const suffix = Array.from(
-            { length: 6 },
-            () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]
-          ).join('');
-          const inserted = await client.query(
-            `INSERT INTO referral_codes (profile_id, code) VALUES ($1, $2)
-             ON CONFLICT DO NOTHING RETURNING code`,
-            [req.userId, `PANDA-${suffix}`]
-          );
-          code = inserted.rows[0]?.code;
-          if (!code) {
-            const reread = await client.query(
-              `SELECT code FROM referral_codes WHERE profile_id = $1`,
-              [req.userId]
-            );
-            code = reread.rows[0]?.code;
-          }
-        }
-      }
+      const code = codeResult.rows[0]?.code || null;
 
       const referrals = await client.query(
         `SELECT r.id, r.reward_state, r.created_at, r.qualified_at,
-                COALESCE(r.referee_label, split_part(p.email, '@', 1)) AS label
+                COALESCE(NULLIF(btrim(r.referee_label), ''), 'Friend') AS label
            FROM referrals r
-           LEFT JOIN profiles p ON p.id = r.referee_id
           WHERE r.referrer_id = $1
           ORDER BY r.created_at DESC`,
         [req.userId]
@@ -8089,11 +8146,29 @@ app.get('/home-summary', requireAuth, async (req, res) => {
         if (gap <= 1) streakDays = streak.rows[0].len;
       }
 
+      // A short-lived signed activity receipt is minted only after this
+      // authenticated member's home summary has been assembled. The client
+      // cannot choose its timestamp or activity date; the daily database
+      // constraint still permits at most one credited day.
+      const access = await client.query(
+        'SELECT promotions.get_access_policy() AS policy',
+      );
+      const campaign = access.rows[0]?.policy?.campaign;
+
       return {
         rewardsThisMonthInr: Number(totals.rows[0].this_month),
         rewardsAllTimeInr: Number(totals.rows[0].all_time),
         transactionCount: Number(totals.rows[0].txn_count),
         streakDays,
+        engagementReceipt: campaign?.version
+          ? createEngagementReceipt(
+            req.userId,
+            campaign.calendarZone || 'Asia/Kolkata',
+            config.engagementReceiptSecret,
+            Date.now(),
+            campaign.receiptLifetimeSeconds || 300,
+          )
+          : null,
       };
     });
     res.json({ homeSummary: summary });

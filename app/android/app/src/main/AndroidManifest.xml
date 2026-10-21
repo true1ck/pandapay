@@ -95,6 +95,24 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="pandapay" android:host="assistant" android:pathPrefix="/spending" />
             </intent-filter>
+            <!-- Public invite links. MainActivity forwards these through the
+                 same validated MethodChannel as Assistant links because the
+                 generic Flutter deep-link parser is intentionally disabled. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="pandapay.app"
+                    android:pathPrefix="/i/" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="pandapay" android:host="i" />
+            </intent-filter>
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />

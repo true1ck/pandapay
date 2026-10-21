@@ -154,6 +154,8 @@ The connection automatically handles SSL with self-signed certificates:
    AWS_ACCESS_KEY_ID=your_aws_access_key
    AWS_SECRET_ACCESS_KEY=your_aws_secret_key
    USE_AWS_SSM=true
+   PHONE_LOOKUP_HMAC_KEY=stable_random_secret_at_least_32_bytes
+   AUTH_INTERNAL_SERVICE_SECRET=separate_backend_only_secret_at_least_32_bytes
    ```
 
 ### Step 2: Verify SSM Parameters
@@ -165,29 +167,19 @@ Ensure your SSM parameters are set correctly:
 aws ssm get-parameter --name "/test/livingai/db/app" --with-decryption --region ap-south-1
 ```
 
-### Step 3: Test Database Connection
+### Step 3: Apply Auth Database Migrations Before Starting the Service
 
-Start your application:
-
-```bash
-npm start
-```
-
-You should see:
-```
-✅ Successfully fetched DB credentials from SSM: /test/livingai/db/app (read-write user)
-✅ Using database credentials from AWS SSM Parameter Store
-   Host: db.livingai.app, Database: livingai_test_db, User: read_write_user
-✅ Database connection established successfully
-```
-
-### Step 4: Run Database Migrations
-
-If you have schema changes, run migrations:
+The first versioned migration adds the keyed phone-lookup columns and backfills
+existing encrypted phone contacts. Keep `PHONE_LOOKUP_HMAC_KEY` stable, and
+configure the existing `ENCRYPTION_KEY` if legacy contacts are encrypted. Run:
 
 ```bash
-node run-migration.js
+npm run migrate
 ```
+
+`node run-migration.js` remains a compatible executable alias. Start/restart the
+auth service only after the migration exits successfully. Never put
+`AUTH_INTERNAL_SERVICE_SECRET` in a mobile app or browser bundle.
 
 ## Connection Pool Configuration
 

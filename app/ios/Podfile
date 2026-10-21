@@ -27,11 +27,15 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 
 flutter_ios_podfile_setup
 
-# Google ML Kit currently ships no arm64 iOS Simulator slice.  Keeping this
-# opt-in allows the rest of PandaPay to be exercised on an Apple-Silicon
-# simulator without altering device builds. The scanner remains device-only
-# during this validation mode.
-def pandapay_install_simulator_plugin_pods(application_path)
+# Flutter currently does not filter iOS dev-dependency plugins from the
+# generated registrant. Keep dev-only pods (currently integration_test)
+# available to Debug integration tests, while the Runner build phase guards
+# their registration out of Profile/Release builds.
+#
+# Google ML Kit currently ships no arm64 iOS Simulator slice. The optional
+# skipped_plugins list also lets us exercise the rest of PandaPay on an
+# Apple-Silicon simulator without changing device builds.
+def pandapay_install_ios_pods(application_path, skipped_plugins = [])
   flutter_install_ios_engine_pod(application_path)
 
   symlink_dir = File.expand_path('.symlinks', application_path)
@@ -42,11 +46,10 @@ def pandapay_install_simulator_plugin_pods(application_path)
   dependencies = flutter_parse_plugins_file(
     File.join(application_path, '..', '.flutter-plugins-dependencies'),
   )
-  skipped_plugins = %w[
-    google_mlkit_commons
-    google_mlkit_text_recognition
-    rive_native
-  ]
+  swift_package_manager_enabled = flutter_get_swift_package_manager_enabled(
+    dependencies,
+    'ios',
+  )
 
   flutter_get_plugins_list(dependencies, 'ios').each do |plugin|
     name = plugin['name']
@@ -58,8 +61,30 @@ def pandapay_install_simulator_plugin_pods(application_path)
     File.symlink(path, symlink)
     relative = flutter_relative_path_from_podfile(symlink)
     platform_directory = plugin.fetch('shared_darwin_source', false) ? 'darwin' : 'ios'
-    pod name, path: File.join(relative, platform_directory)
+    podspec_directory = File.join(relative, platform_directory)
+    swift_package_exists = File.exist?(File.join(podspec_directory, name, 'Package.swift'))
+    next if swift_package_manager_enabled && swift_package_exists
+    next if swift_package_exists && !File.exist?(File.join(podspec_directory, "#{name}.podspec"))
+
+    # The test plugin must remain linked for `flutter drive` in Debug, but
+    # CocoaPods otherwise embeds its framework into device Release apps too.
+    if plugin.fetch('dev_dependency', false)
+      pod name, path: podspec_directory, configurations: ['Debug']
+    else
+      pod name, path: podspec_directory
+    end
   end
+end
+
+# Google ML Kit currently ships no arm64 iOS Simulator slice. Keeping this
+# opt-in allows the rest of PandaPay to be exercised on an Apple-Silicon
+# simulator without altering device builds. The scanner remains device-only
+# during this validation mode.
+def pandapay_install_simulator_plugin_pods(application_path)
+  pandapay_install_ios_pods(
+    application_path,
+    %w[google_mlkit_commons google_mlkit_text_recognition rive_native],
+  )
 end
 
 target 'Runner' do
@@ -69,7 +94,7 @@ target 'Runner' do
   if ENV['PANDAPAY_SIMULATOR'] == '1'
     pandapay_install_simulator_plugin_pods(ios_application_path)
   else
-    flutter_install_all_ios_pods ios_application_path
+    pandapay_install_ios_pods(ios_application_path)
   end
   target 'RunnerTests' do
     inherit! :search_paths

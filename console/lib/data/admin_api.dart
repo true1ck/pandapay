@@ -9,7 +9,8 @@ import 'package:http/http.dart' as http;
 class AuthApi {
   final String authBaseUrl;
   final http.Client _client;
-  AuthApi({required this.authBaseUrl, http.Client? client}) : _client = client ?? http.Client();
+  AuthApi({required this.authBaseUrl, http.Client? client})
+    : _client = client ?? http.Client();
 
   Future<void> requestOtp(String phoneNumber) async {
     final response = await _client.post(
@@ -18,7 +19,9 @@ class AuthApi {
       body: jsonEncode({'phone_number': phoneNumber}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('OTP request failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'OTP request failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -29,20 +32,32 @@ class AuthApi {
       body: jsonEncode({'email': email}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('Email OTP request failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'Email OTP request failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
   /// Returns both tokens — AD-0.3's session needs the refresh token too, to
   /// survive a page reload without asking for OTP again (Chunk 10).
-  Future<AuthTokens> verifyOtp(String phoneNumber, String code, String deviceId) async {
+  Future<AuthTokens> verifyOtp(
+    String phoneNumber,
+    String code,
+    String deviceId,
+  ) async {
     final response = await _client.post(
       Uri.parse('$authBaseUrl/auth/verify-otp'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone_number': phoneNumber, 'code': code, 'device_id': deviceId}),
+      body: jsonEncode({
+        'phone_number': phoneNumber,
+        'code': code,
+        'device_id': deviceId,
+      }),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('OTP verify failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'OTP verify failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return AuthTokens(
@@ -51,14 +66,20 @@ class AuthApi {
     );
   }
 
-  Future<AuthTokens> verifyEmailOtp(String email, String code, String deviceId) async {
+  Future<AuthTokens> verifyEmailOtp(
+    String email,
+    String code,
+    String deviceId,
+  ) async {
     final response = await _client.post(
       Uri.parse('$authBaseUrl/auth/verify-email-otp'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'email': email, 'code': code, 'device_id': deviceId}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('Email OTP verify failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'Email OTP verify failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return AuthTokens(
@@ -78,7 +99,9 @@ class AuthApi {
       body: jsonEncode({'refresh_token': refreshToken}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('Refresh failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'Refresh failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return AuthTokens(
@@ -99,25 +122,71 @@ class AdminApi {
   final String accessToken;
   final http.Client _client;
 
-  AdminApi({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-      : _client = client ?? http.Client();
+  AdminApi({
+    required this.apiBaseUrl,
+    required this.accessToken,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer $accessToken',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $accessToken',
+    'Content-Type': 'application/json',
+  };
 
   Future<bool> isAdmin() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/me'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/me'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) return false;
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['isAdmin'] as bool? ?? false;
   }
 
-  Future<List<Map<String, dynamic>>> fetchAdminCards() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/cards'), headers: _headers);
+  Future<Map<String, dynamic>> fetchReferralOperations() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/referrals/operations'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/cards failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/referrals/operations failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['operations'] as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> setReferralHold({
+    required String scope,
+    required bool paused,
+    required String reason,
+  }) async {
+    final response = await _client.put(
+      Uri.parse(
+        '$apiBaseUrl/admin/referrals/holds/${Uri.encodeComponent(scope)}',
+      ),
+      headers: _headers,
+      body: jsonEncode({'paused': paused, 'reason': reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'PUT /admin/referrals/holds/$scope failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['hold'] as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAdminCards() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/cards'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'GET /admin/cards failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['cards'] as List).cast<Map<String, dynamic>>();
@@ -125,28 +194,40 @@ class AdminApi {
 
   /// AD-1.1.3 typed writer, client side: only ever sends `rate` (+ optional
   /// audit reason), never a raw JSON blob of the whole rule.
-  Future<void> updateRewardRuleRate(String ruleId, double rate, {String? reason}) async {
+  Future<void> updateRewardRuleRate(
+    String ruleId,
+    double rate, {
+    String? reason,
+  }) async {
     final response = await _client.put(
       Uri.parse('$apiBaseUrl/admin/reward-rules/$ruleId'),
       headers: _headers,
       body: jsonEncode({'rate': rate, 'reason': ?reason}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('PUT /admin/reward-rules/$ruleId failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'PUT /admin/reward-rules/$ruleId failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
   /// AD-1.1.4 state machine transition: draft->in_review->published->archived
   /// (and in_review->draft to send back). Publishing sets verified_at/by
   /// server-side — this is the human verification pass, not automatic.
-  Future<Map<String, dynamic>> changeCardStatus(String cardId, String status, {String? reason}) async {
+  Future<Map<String, dynamic>> changeCardStatus(
+    String cardId,
+    String status, {
+    String? reason,
+  }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/cards/$cardId/status'),
       headers: _headers,
       body: jsonEncode({'status': status, 'reason': ?reason}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('POST /admin/cards/$cardId/status failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'POST /admin/cards/$cardId/status failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['card'] as Map<String, dynamic>;
@@ -170,10 +251,16 @@ class AdminApi {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/$urlSegment'),
       headers: _headers,
-      body: jsonEncode({'cardProductId': cardProductId, ...fields, 'reason': ?reason}),
+      body: jsonEncode({
+        'cardProductId': cardProductId,
+        ...fields,
+        'reason': ?reason,
+      }),
     );
     if (response.statusCode != 201) {
-      throw AdminApiException('POST /admin/$urlSegment failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'POST /admin/$urlSegment failed: ${response.statusCode} ${response.body}',
+      );
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
@@ -190,19 +277,27 @@ class AdminApi {
       body: jsonEncode({...fields, 'reason': ?reason}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('PUT /admin/$urlSegment/$id failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'PUT /admin/$urlSegment/$id failed: ${response.statusCode} ${response.body}',
+      );
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<void> deleteRuleFamilyRow(String urlSegment, String id, {String? reason}) async {
+  Future<void> deleteRuleFamilyRow(
+    String urlSegment,
+    String id, {
+    String? reason,
+  }) async {
     final response = await _client.delete(
       Uri.parse('$apiBaseUrl/admin/$urlSegment/$id'),
       headers: _headers,
       body: jsonEncode({'reason': ?reason}),
     );
     if (response.statusCode != 204) {
-      throw AdminApiException('DELETE /admin/$urlSegment/$id failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'DELETE /admin/$urlSegment/$id failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -219,16 +314,23 @@ class AdminApi {
       body: jsonEncode({...fields, 'reason': ?reason}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('PUT /admin/$urlSegment/by-card/$cardProductId failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'PUT /admin/$urlSegment/by-card/$cardProductId failed: ${response.statusCode} ${response.body}',
+      );
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   /// AD-2.1: card requests grouped by issuer+product with counts.
   Future<List<Map<String, dynamic>>> fetchCardRequestGroups() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/card-requests'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/card-requests'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/card-requests failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/card-requests failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['requestGroups'] as List).cast<Map<String, dynamic>>();
@@ -242,18 +344,29 @@ class AdminApi {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/card-requests/start-scraping'),
       headers: _headers,
-      body: jsonEncode({'issuerName': issuerName, 'productName': ?productName, 'baseUrl': baseUrl}),
+      body: jsonEncode({
+        'issuerName': issuerName,
+        'productName': ?productName,
+        'baseUrl': baseUrl,
+      }),
     );
     if (response.statusCode != 201) {
-      throw AdminApiException('POST start-scraping failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'POST start-scraping failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
   /// AD-2.2: data error reports, shown vs claimed against the live value.
   Future<List<Map<String, dynamic>>> fetchErrorReports() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/error-reports'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/error-reports'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/error-reports failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/error-reports failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['errorReports'] as List).cast<Map<String, dynamic>>();
@@ -265,7 +378,9 @@ class AdminApi {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('approve failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'approve failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -276,36 +391,54 @@ class AdminApi {
       body: jsonEncode({'reason': ?reason}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('reject failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'reject failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
   /// AD-4.2/AD-5: the unified policy-change alert queue.
   Future<List<Map<String, dynamic>>> fetchAlerts() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/alerts'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/alerts'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/alerts failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/alerts failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['alerts'] as List).cast<Map<String, dynamic>>();
   }
 
   Future<Map<String, dynamic>> fetchAlertDetail(String alertId) async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/alerts/$alertId'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/alerts/$alertId'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/alerts/$alertId failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/alerts/$alertId failed: ${response.statusCode} ${response.body}',
+      );
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<void> decideAlert(String alertId, String decision, {String? note}) async {
+  Future<void> decideAlert(
+    String alertId,
+    String decision, {
+    String? note,
+  }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/alerts/$alertId/decide'),
       headers: _headers,
       body: jsonEncode({'decision': decision, 'note': ?note}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('decide failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'decide failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -323,10 +456,14 @@ class AdminApi {
       'published': ?published?.toString(),
       if (query != null && query.isNotEmpty) 'q': query,
     };
-    final uri = Uri.parse('$apiBaseUrl/admin/merchants').replace(queryParameters: params);
+    final uri = Uri.parse(
+      '$apiBaseUrl/admin/merchants',
+    ).replace(queryParameters: params);
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/merchants failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/merchants failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['merchants'] as List).cast<Map<String, dynamic>>();
@@ -335,9 +472,14 @@ class AdminApi {
   /// AD-6.2.1: full detail for one merchant — locations, contribution
   /// history, and any conflicts.
   Future<Map<String, dynamic>> fetchMerchantDetail(String merchantId) async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/merchants/$merchantId'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/merchants/$merchantId'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/merchants/$merchantId failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/merchants/$merchantId failed: ${response.statusCode} ${response.body}',
+      );
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
@@ -361,7 +503,9 @@ class AdminApi {
       }),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('override failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'override failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -373,39 +517,57 @@ class AdminApi {
       body: jsonEncode({'reason': ?reason}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('unpublish failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'unpublish failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
   /// AD-6.3.1: pending merchant conflicts — cases the automatic
   /// majority-wins rule doesn't confidently resolve.
   Future<List<Map<String, dynamic>>> fetchMerchantConflicts() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/merchant-conflicts'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/merchant-conflicts'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/merchant-conflicts failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/merchant-conflicts failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['conflicts'] as List).cast<Map<String, dynamic>>();
   }
 
   /// AD-6.3.3: resolve a conflict — writes the value, locks the record.
-  Future<void> resolveMerchantConflict(String conflictId, String resolvedValue, {String? reason}) async {
+  Future<void> resolveMerchantConflict(
+    String conflictId,
+    String resolvedValue, {
+    String? reason,
+  }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/merchant-conflicts/$conflictId/resolve'),
       headers: _headers,
       body: jsonEncode({'resolvedValue': resolvedValue, 'reason': ?reason}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('resolve failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'resolve failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
   /// AD-6.4.1: unresolved abuse signals (burst submissions, impossible
   /// geography, high conflict rate) awaiting an operator's block decision.
   Future<List<Map<String, dynamic>>> fetchAbuseSignals() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/abuse-signals'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/abuse-signals'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/abuse-signals failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/abuse-signals failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['abuseSignals'] as List).cast<Map<String, dynamic>>();
@@ -419,34 +581,51 @@ class AdminApi {
       body: jsonEncode({'reason': ?reason}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('block failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'block failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
   /// AD-7.1: acceptance-summary rows filtered by network/rail/published —
   /// same "filtered table, not a real map" scope note as fetchMerchants.
-  Future<List<Map<String, dynamic>>> fetchAcceptanceSummary({String? network, String? rail, bool? published}) async {
+  Future<List<Map<String, dynamic>>> fetchAcceptanceSummary({
+    String? network,
+    String? rail,
+    bool? published,
+  }) async {
     final params = <String, String>{
       'network': ?network,
       'rail': ?rail,
       'published': ?published?.toString(),
     };
-    final uri = Uri.parse('$apiBaseUrl/admin/acceptance-summary').replace(queryParameters: params);
+    final uri = Uri.parse(
+      '$apiBaseUrl/admin/acceptance-summary',
+    ).replace(queryParameters: params);
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/acceptance-summary failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/acceptance-summary failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['acceptanceSummary'] as List).cast<Map<String, dynamic>>();
   }
 
   /// AD-7.2: one acceptance-summary row's detail — report counts + confidence.
-  Future<Map<String, dynamic>> fetchAcceptanceDetail(String merchantId, String network, String rail) async {
-    final uri = Uri.parse('$apiBaseUrl/admin/acceptance-summary/$merchantId')
-        .replace(queryParameters: {'network': network, 'rail': rail});
+  Future<Map<String, dynamic>> fetchAcceptanceDetail(
+    String merchantId,
+    String network,
+    String rail,
+  ) async {
+    final uri = Uri.parse(
+      '$apiBaseUrl/admin/acceptance-summary/$merchantId',
+    ).replace(queryParameters: {'network': network, 'rail': rail});
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw AdminApiException('GET acceptance detail failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET acceptance detail failed: ${response.statusCode} ${response.body}',
+      );
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
@@ -471,7 +650,9 @@ class AdminApi {
       }),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('publish failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'publish failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -487,10 +668,14 @@ class AdminApi {
       'categoryId': ?categoryId,
       if (divergentOnly == true) 'divergentOnly': 'true',
     };
-    final uri = Uri.parse('$apiBaseUrl/admin/effective-rate-summary').replace(queryParameters: params);
+    final uri = Uri.parse(
+      '$apiBaseUrl/admin/effective-rate-summary',
+    ).replace(queryParameters: params);
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/effective-rate-summary failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/effective-rate-summary failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['effectiveRateSummary'] as List).cast<Map<String, dynamic>>();
@@ -502,11 +687,14 @@ class AdminApi {
     String categoryId,
     String periodMonth,
   ) async {
-    final uri = Uri.parse('$apiBaseUrl/admin/effective-rate-summary/$cardProductId/$categoryId/samples')
-        .replace(queryParameters: {'periodMonth': periodMonth});
+    final uri = Uri.parse(
+      '$apiBaseUrl/admin/effective-rate-summary/$cardProductId/$categoryId/samples',
+    ).replace(queryParameters: {'periodMonth': periodMonth});
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw AdminApiException('GET effective-rate samples failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET effective-rate samples failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['samples'] as List).cast<Map<String, dynamic>>();
@@ -516,9 +704,14 @@ class AdminApi {
   /// api/'s GET /admin/data-quality-dashboard doc comment for what's
   /// explicitly NOT here (trend lines, alerting) and why.
   Future<Map<String, dynamic>> fetchDataQualityDashboard() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/data-quality-dashboard'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/data-quality-dashboard'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/data-quality-dashboard failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/data-quality-dashboard failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['dashboard'] as Map<String, dynamic>;
@@ -526,10 +719,14 @@ class AdminApi {
 
   /// AD-9.1: full anonymization-audit run history.
   Future<List<Map<String, dynamic>>> fetchAnonymizationAuditRuns() async {
-    final response =
-        await _client.get(Uri.parse('$apiBaseUrl/admin/anonymization-audit-runs'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/anonymization-audit-runs'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/anonymization-audit-runs failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/anonymization-audit-runs failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['auditRuns'] as List).cast<Map<String, dynamic>>();
@@ -544,7 +741,9 @@ class AdminApi {
       headers: _headers,
     );
     if (response.statusCode != 201) {
-      throw AdminApiException('run failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'run failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['auditRun'] as Map<String, dynamic>;
@@ -555,15 +754,22 @@ class AdminApi {
   /// — sms_parser.js can't parse a single real SMS without at least one
   /// active pattern to match against, so this is what actually makes that
   /// feature reachable end to end, not just its own screen.
-  Future<List<Map<String, dynamic>>> fetchParserPatterns({String? channel, bool? isActive}) async {
+  Future<List<Map<String, dynamic>>> fetchParserPatterns({
+    String? channel,
+    bool? isActive,
+  }) async {
     final query = {
       'channel': ?channel,
       if (isActive != null) 'isActive': isActive.toString(),
     };
-    final uri = Uri.parse('$apiBaseUrl/admin/parser-patterns').replace(queryParameters: query.isEmpty ? null : query);
+    final uri = Uri.parse(
+      '$apiBaseUrl/admin/parser-patterns',
+    ).replace(queryParameters: query.isEmpty ? null : query);
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/parser-patterns failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/parser-patterns failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['parserPatterns'] as List).cast<Map<String, dynamic>>();
@@ -592,7 +798,9 @@ class AdminApi {
       }),
     );
     if (response.statusCode != 201) {
-      throw AdminApiException('POST /admin/parser-patterns failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'POST /admin/parser-patterns failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -614,7 +822,9 @@ class AdminApi {
       }),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('PUT /admin/parser-patterns/$id failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'PUT /admin/parser-patterns/$id failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -625,16 +835,23 @@ class AdminApi {
       body: jsonEncode({'reason': ?reason}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('DELETE /admin/parser-patterns/$id failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'DELETE /admin/parser-patterns/$id failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
   // ---- AD-3 scraper source registry -----------------------------------------
 
   Future<List<Map<String, dynamic>>> fetchSources() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sources'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sources'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/sources failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/sources failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['sources'] as List).cast<Map<String, dynamic>>();
@@ -661,7 +878,9 @@ class AdminApi {
       }),
     );
     if (response.statusCode != 201) {
-      throw AdminApiException('POST /admin/sources failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'POST /admin/sources failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -688,14 +907,21 @@ class AdminApi {
       }),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('PATCH /admin/sources/$id failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'PATCH /admin/sources/$id failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
   Future<List<Map<String, dynamic>>> fetchSourcePages(String sourceId) async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sources/$sourceId/pages'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sources/$sourceId/pages'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/sources/$sourceId/pages failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/sources/$sourceId/pages failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['sourcePages'] as List).cast<Map<String, dynamic>>();
@@ -704,20 +930,30 @@ class AdminApi {
   // ---- AD-4 change detection / diff review -----------------------------------
 
   Future<List<Map<String, dynamic>>> fetchScrapeRuns() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/scrape-runs'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/scrape-runs'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/scrape-runs failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/scrape-runs failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['scrapeRuns'] as List).cast<Map<String, dynamic>>();
   }
 
-  Future<List<Map<String, dynamic>>> fetchSourcePageSnapshots(String sourcePageId) async {
-    final response =
-        await _client.get(Uri.parse('$apiBaseUrl/admin/source-pages/$sourcePageId/snapshots'), headers: _headers);
+  Future<List<Map<String, dynamic>>> fetchSourcePageSnapshots(
+    String sourcePageId,
+  ) async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/source-pages/$sourcePageId/snapshots'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
       throw AdminApiException(
-          'GET /admin/source-pages/$sourcePageId/snapshots failed: ${response.statusCode} ${response.body}');
+        'GET /admin/source-pages/$sourcePageId/snapshots failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['snapshots'] as List).cast<Map<String, dynamic>>();

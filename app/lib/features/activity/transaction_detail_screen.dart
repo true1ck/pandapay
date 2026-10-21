@@ -845,6 +845,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     value: entry.categoryLabel,
                     trailing: needsCategoryAssignment
                         ? TextButton.icon(
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(0, 48),
+                              padding: EdgeInsets.zero,
+                            ),
                             onPressed: _openEdit,
                             icon: const Icon(Icons.category_outlined, size: 18),
                             label: const Text('Assign category'),
@@ -895,6 +899,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                                   if (tags.isNotEmpty)
                                     const SizedBox(width: AppSpace.xs),
                                   TextButton.icon(
+                                    style: TextButton.styleFrom(
+                                      minimumSize: const Size(0, 48),
+                                      padding: EdgeInsets.zero,
+                                    ),
                                     onPressed: () async {
                                       final selected =
                                           await showTransactionTagPicker(
@@ -1828,10 +1836,13 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasValue = value != null && value!.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.md),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: hasValue
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.center,
         children: [
           SizedBox(
             width: 90,
@@ -1842,16 +1853,16 @@ class _DetailRow extends StatelessWidget {
           ),
           Expanded(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (value != null && value!.isNotEmpty)
+                if (hasValue)
                   Text(
                     value!,
                     style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                   ),
-                if (value != null && value!.isNotEmpty && trailing != null)
-                  const SizedBox(height: AppSpace.xs),
-                if (trailing != null) trailing!,
+                if (trailing != null)
+                  Align(alignment: Alignment.centerLeft, child: trailing!),
               ],
             ),
           ),

@@ -8,6 +8,9 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import com.android.installreferrer.api.InstallReferrerClient
+import com.android.installreferrer.api.InstallReferrerStateListener
+import com.android.installreferrer.api.InstallReferrerClient.InstallReferrerResponse
 import com.google.android.gms.auth.api.identity.GetPhoneNumberHintIntentRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.shounakmulay.telephony.sms.IncomingSmsReceiver
@@ -34,6 +37,10 @@ class MainActivity : FlutterFragmentActivity() {
         const val ASSISTANT_CHANNEL = "app.pandapay/assistant"
         const val PHONE_NUMBER_HINT_CHANNEL = "app.pandapay/phone_number_hint"
         const val DEVICE_INFO_CHANNEL = "app.pandapay/device_info"
+        const val INSTALL_REFERRER_CHANNEL = "app.pandapay/install_referrer"
+        const val INSTALL_REFERRER_PREFS = "pandapay_install_referrer"
+        const val INSTALL_REFERRER_CHECKED = "checked"
+        const val INVITATION_CODE_KEY = "invitation_code"
         const val REQUEST_CODE = 0x5091 // arbitrary, local to this Activity
         const val PHONE_NUMBER_HINT_REQUEST_CODE = 0x5092
         const val MAX_ICON_PX = 96
@@ -42,6 +49,8 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingResult: MethodChannel.Result? = null
     private var pendingPhoneHintResult: MethodChannel.Result? = null
     private var assistantChannel: MethodChannel? = null
+    private var pendingInstallReferrerResult: MethodChannel.Result? = null
+    private var installReferrerClient: InstallReferrerClient? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,6 +109,15 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            INSTALL_REFERRER_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "readInvitationCode" -> readInstallReferrerInvitation(result)
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getInstalledUpiApps" -> result.success(installedUpiApps())
@@ -115,6 +133,92 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    /**
+     * Reads only PandaPay's invite_code parameter from Google Play. The raw
+     * referrer may contain unrelated campaign metadata, so only the validated
+     * code is persisted. The Play API is queried once after a successful
+     * response; transient service failures remain retryable on next launch.
+     */
+    private fun readInstallReferrerInvitation(result: MethodChannel.Result) {
+        val preferences = getSharedPreferences(INSTALL_REFERRER_PREFS, MODE_PRIVATE)
+        if (preferences.getBoolean(INSTALL_REFERRER_CHECKED, false)) {
+            result.success(preferences.getString(INVITATION_CODE_KEY, null))
+            return
+        }
+        if (pendingInstallReferrerResult != null) {
+            result.error("busy", "Install Referrer lookup is already running", null)
+            return
+        }
+
+        val client = InstallReferrerClient.newBuilder(this).build()
+        installReferrerClient = client
+        pendingInstallReferrerResult = result
+        try {
+            client.startConnection(object : InstallReferrerStateListener {
+                override fun onInstallReferrerSetupFinished(responseCode: Int) {
+                    when (responseCode) {
+                        InstallReferrerResponse.OK -> {
+                            val code = runCatching {
+                                invitationCodeFromReferrer(client.installReferrer.installReferrer)
+                            }.getOrNull()
+                            preferences.edit()
+                                .putBoolean(INSTALL_REFERRER_CHECKED, true)
+                                .apply {
+                                    if (code != null) putString(INVITATION_CODE_KEY, code)
+                                }
+                                .apply()
+                            finishInstallReferrer(code)
+                        }
+                        InstallReferrerResponse.FEATURE_NOT_SUPPORTED -> {
+                            preferences.edit()
+                                .putBoolean(INSTALL_REFERRER_CHECKED, true)
+                                .apply()
+                            finishInstallReferrer(null)
+                        }
+                        else -> finishInstallReferrer(null)
+                    }
+                    runCatching { client.endConnection() }
+                    installReferrerClient = null
+                }
+
+                override fun onInstallReferrerServiceDisconnected() {
+                    finishInstallReferrer(null)
+                    runCatching { client.endConnection() }
+                    installReferrerClient = null
+                }
+            })
+        } catch (_: Exception) {
+            finishInstallReferrer(null)
+            runCatching { client.endConnection() }
+            installReferrerClient = null
+        }
+    }
+
+    private fun finishInstallReferrer(code: String?) {
+        val result = pendingInstallReferrerResult
+        pendingInstallReferrerResult = null
+        result?.success(code)
+    }
+
+    private fun invitationCodeFromReferrer(raw: String): String? {
+        val candidates = listOf(raw, Uri.decode(raw)).distinct()
+        for (candidate in candidates) {
+            val query = if (candidate.startsWith("http://", true) ||
+                candidate.startsWith("https://", true)
+            ) {
+                Uri.parse(candidate).getQueryParameter("invite_code")
+            } else {
+                Uri.parse("https://play.google.com/?$candidate")
+                    .getQueryParameter("invite_code")
+            }
+            val normalized = query?.trim()?.uppercase() ?: continue
+            if (normalized.length in 6..32 &&
+                Regex("^[A-Z0-9]+(?:-[A-Z0-9]+)*$").matches(normalized)
+            ) return normalized
+        }
+        return null
     }
 
     private fun requestPhoneNumberHint(result: MethodChannel.Result) {

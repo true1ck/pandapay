@@ -13,6 +13,7 @@ import 'features/dashboard/data_quality_dashboard_screen.dart';
 import 'features/parser_patterns/parser_patterns_screen.dart';
 import 'features/queues/card_requests_screen.dart';
 import 'features/queues/error_reports_screen.dart';
+import 'features/referrals/referral_operations_screen.dart';
 import 'features/scraper/scrape_diff_review_screen.dart';
 import 'features/scraper/sources_screen.dart';
 
@@ -63,8 +64,11 @@ class _AuthGate extends ConsumerWidget {
 
     final isAdmin = ref.watch(isAdminProvider);
     return isAdmin.when(
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, _) => Scaffold(body: Center(child: Text('Failed to verify admin access: $err'))),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (err, _) => Scaffold(
+        body: Center(child: Text('Failed to verify admin access: $err')),
+      ),
       data: (admin) {
         if (!admin) {
           return const Scaffold(
@@ -102,6 +106,7 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
     (label: 'Parser Patterns', screen: ParserPatternsScreen()),
     (label: 'Sources', screen: SourcesScreen()),
     (label: 'Scrape Diff Review', screen: ScrapeDiffReviewScreen()),
+    (label: 'Referral Operations', screen: ReferralOperationsScreen()),
   ];
 
   @override
@@ -125,11 +130,15 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
                   child: IntrinsicHeight(
                     child: NavigationRail(
                       selectedIndex: _selected,
-                      onDestinationSelected: (i) => setState(() => _selected = i),
+                      onDestinationSelected: (i) =>
+                          setState(() => _selected = i),
                       labelType: NavigationRailLabelType.all,
                       destinations: [
                         for (final d in _destinations)
-                          NavigationRailDestination(icon: const Icon(Icons.circle), label: Text(d.label)),
+                          NavigationRailDestination(
+                            icon: const Icon(Icons.circle),
+                            label: Text(d.label),
+                          ),
                       ],
                     ),
                   ),

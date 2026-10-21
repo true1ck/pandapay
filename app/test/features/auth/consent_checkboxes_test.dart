@@ -32,7 +32,15 @@ void main() {
     // GoRoute for AppRoute.signUp) — LoginScreen itself is a bare Container,
     // so TextField/CheckboxListTile need that same Material ancestor here.
     return ProviderScope(
-      overrides: overrides,
+      overrides: [
+        // OTP verification attaches device metadata in production. Keep this
+        // widget test independent of the host's native package-info channel.
+        localDeviceIdProvider.overrideWith((ref) async => 'test-device'),
+        deviceMetadataProvider.overrideWith(
+          (ref) async => const {'platform': 'test'},
+        ),
+        ...overrides,
+      ],
       child: MaterialApp(
         home: Scaffold(body: LoginScreen(mode: mode)),
       ),

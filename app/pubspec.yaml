@@ -237,6 +237,11 @@ dependencies:
   crypto: ^3.0.7
   google_sign_in: ^6.2.1
   image: 4.10.1
+
+dev_dependencies:
+  integration_test:
+    sdk: flutter
+
 flutter:
 
   # The following line ensures that the Material Icons font is

@@ -34,7 +34,13 @@ if (isProduction) {
   REQUIRED_ENV.push(
     'INBOUND_EMAIL_WEBHOOK_SECRET',
     'PARTNER_WEBHOOK_SECRET',
-    'IMAP_ENCRYPTION_KEY'
+    'IMAP_ENCRYPTION_KEY',
+    'AUTH_INTERNAL_BASE_URL',
+    'AUTH_INTERNAL_SERVICE_SECRET',
+    'REFERRAL_IDENTITY_HMAC_KEY',
+    'REFERRAL_PREVIEW_SECRET',
+    'ENGAGEMENT_RECEIPT_SECRET',
+    'REWARD_WORKER_INTERNAL_SECRET'
   );
 }
 
@@ -72,6 +78,19 @@ if (process.env.JWT_KEYS_JSON) {
 if (Object.keys(jwtKeys).length === 0) {
   throw new Error('JWT_KEYS_JSON must contain at least one signing key');
 }
+
+for (const key of [
+  'AUTH_INTERNAL_SERVICE_SECRET',
+  'REFERRAL_IDENTITY_HMAC_KEY',
+  'REFERRAL_PREVIEW_SECRET',
+  'ENGAGEMENT_RECEIPT_SECRET',
+  'REWARD_WORKER_INTERNAL_SECRET',
+]) {
+  const value = process.env[key];
+  if (value && Buffer.byteLength(value) < 32) {
+    throw new Error(`${key} must contain at least 32 bytes`);
+  }
+}
 if (!jwtKeys[jwtActiveKeyId]) {
   throw new Error(`JWT_ACTIVE_KEY_ID ${jwtActiveKeyId} is not present in JWT_KEYS_JSON`);
 }
@@ -89,6 +108,20 @@ module.exports = {
   jwtKeys,
   jwtIssuer,
   jwtAudience,
+  authInternalBaseUrl: (process.env.AUTH_INTERNAL_BASE_URL || '').replace(/\/$/, '') || null,
+  authInternalServiceSecret: process.env.AUTH_INTERNAL_SERVICE_SECRET || null,
+  referralIdentityHmacKey: process.env.REFERRAL_IDENTITY_HMAC_KEY || null,
+  referralIdentityHmacKeyVersion: process.env.REFERRAL_IDENTITY_HMAC_KEY_VERSION || 'v1',
+  referralPreviewSecret: process.env.REFERRAL_PREVIEW_SECRET || null,
+  engagementReceiptSecret: process.env.ENGAGEMENT_RECEIPT_SECRET || null,
+  rewardWorkerInternalSecret: process.env.REWARD_WORKER_INTERNAL_SECRET || null,
+  rewardWorkerApiUrl: (process.env.REWARD_WORKER_API_URL || 'http://api:4000').replace(/\/$/, ''),
+  rewardWorkerId: process.env.REWARD_WORKER_ID || process.env.HOSTNAME || `rewards-${process.pid}`,
+  rewardWorkerPollIntervalMs: Math.max(1000, Number(process.env.REWARD_WORKER_POLL_INTERVAL_MS) || 5000),
+  rewardWorkerBatchSize: Math.min(20, Math.max(1, Number(process.env.REWARD_WORKER_BATCH_SIZE) || 5)),
+  rewardWorkerLeaseSeconds: Math.min(900, Math.max(15, Number(process.env.REWARD_WORKER_LEASE_SECONDS) || 90)),
+  rewardWorkerEnabled: process.env.REWARD_WORKER_ENABLED === 'true',
+  productTermsVersion: process.env.PRODUCT_TERMS_VERSION || '2026-08-07',
   inboundEmailWebhookSecret: process.env.INBOUND_EMAIL_WEBHOOK_SECRET || null,
   partnerWebhookSecret: process.env.PARTNER_WEBHOOK_SECRET || null,
   imapEncryptionKey: process.env.IMAP_ENCRYPTION_KEY || null,

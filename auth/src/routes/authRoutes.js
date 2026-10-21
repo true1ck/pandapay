@@ -64,7 +64,7 @@ const {
 } = require('../services/auditLogger');
 // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
 const { encryptPhoneNumber, decryptPhoneNumber } = require('../utils/fieldEncryption');
-const { preparePhoneSearchParams } = require('../utils/encryptedPhoneSearch');
+const { preparePhoneSearchParams, phoneLookupHash } = require('../utils/encryptedPhoneSearch');
 // === SECURITY HARDENING: TIMING ATTACK PROTECTION ===
 const { executeOtpRequestWithTiming, otpRequestDelay, executeOtpVerifyWithTiming, otpVerifyDelay } = require('../utils/timingProtection');
 // === SECURITY HARDENING: ENUMERATION DETECTION ===
@@ -79,21 +79,6 @@ function normalizePhone(phone) {
   // if user enters 10-digit, prepend +91
   if (p.length === 10) return '+91' + p;
   return p; // fallback
-}
-
-// Compare a phone value read from the database with a phone supplied by the
-// client. Stored values may be encrypted or legacy plaintext, and the client
-// may provide either 10 digits or an E.164 +91 value.
-function phoneValuesMatch(storedPhone, suppliedPhone) {
-  if (typeof storedPhone !== 'string' || !storedPhone.trim() || !suppliedPhone) {
-    return false;
-  }
-
-  const normalizedSupplied = normalizePhone(suppliedPhone);
-  const decryptedStored = decryptPhoneNumber(storedPhone);
-  return [storedPhone, decryptedStored].some((value) => {
-    return typeof value === 'string' && normalizePhone(value) === normalizedSupplied;
-  });
 }
 
 // helper: validate phone number format
@@ -311,14 +296,14 @@ router.post(
         });
       }
 
-      // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
-      // Encrypt phone number before searching
+      // Search the keyed canonical phone digest. Random-IV ciphertext cannot
+      // be used for equality lookups.
       const phoneSearchParams = preparePhoneSearchParams(normalizedPhone);
 
       // Check if user exists and has a name (fully registered)
       const found = await db.query(
         `SELECT id, name FROM users 
-         WHERE (phone_number = $1 OR phone_number = $2)
+         WHERE phone_lookup_hash = $1
            AND deleted = FALSE`,
         phoneSearchParams
       );
@@ -474,11 +459,6 @@ router.post(
       const verificationResult = await executeOtpVerifyWithTiming(async () => {
         const { phone_number, code, device_id, device_info, recovery_only } = req.body;
 
-        // Debug: Log entire request body to see what's being received
-        console.log('[verify-otp] Request body keys:', Object.keys(req.body || {}));
-        console.log('[verify-otp] device_info type:', typeof device_info);
-        console.log('[verify-otp] device_info value:', JSON.stringify(device_info));
-
         if (!phone_number || !code) {
           return { error: 'phone_number and code are required', status: 400 };
         }
@@ -489,15 +469,6 @@ router.post(
         // bcrypt.compare requires string, and validation expects string
         // Note: If code comes as number, leading zeros may be lost - client should send as string
         const codeString = String(code);
-
-        // Debug logging (remove in production or use proper logger)
-        console.log('[OTP Verify] Request body:', JSON.stringify({
-          phone_number: normalizedPhone.replace(/\d(?=\d{4})/g, '*'),
-          code: codeString,
-          code_type: typeof code,
-          code_length: codeString.length,
-          device_id: device_id?.substring(0, 20) + '...'
-        }));
 
         const result = await verifyOtp(normalizedPhone, codeString);
 
@@ -554,7 +525,7 @@ router.post(
         `SELECT id, phone_number, name, role,
               COALESCE(token_version, 1) as token_version
        FROM users
-       WHERE (phone_number = $1 OR phone_number = $2)
+       WHERE phone_lookup_hash = $1
          AND deleted = FALSE`,
         phoneSearchParams
       );
@@ -582,12 +553,13 @@ router.post(
 
         // Create new user with minimal data (name will be added via signup endpoint)
         const newUserResult = await db.query(
-          `INSERT INTO users (phone_number, country_code, language, timezone, is_phone_verified)
-         VALUES ($1, $2, $3, $4, TRUE)
+          `INSERT INTO users (phone_number, phone_lookup_hash, country_code, language, timezone, is_phone_verified)
+         VALUES ($1, $2, $3, $4, $5, TRUE)
          RETURNING id, phone_number, name, role,
                    COALESCE(token_version, 1) as token_version`,
           [
             encryptedPhone,
+            phoneLookupHash(normalizedPhone),
             countryCode,
             device_info?.language_code || null,
             device_info?.timezone || null
@@ -597,13 +569,8 @@ router.post(
         user = newUserResult.rows[0];
       } else {
         user = found.rows[0];
-        if (recovery_only === true) {
-          // A successful SMS code proves control of this linked number.
-          await db.query(
-            'UPDATE users SET is_phone_verified = TRUE WHERE id = $1',
-            [user.id]
-          );
-        }
+        // A successful code proves control of this number on every login path.
+        await db.query('UPDATE users SET is_phone_verified = TRUE WHERE id = $1', [user.id]);
       }
 
       // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
@@ -628,13 +595,6 @@ router.post(
       const isNewDevice = existingDevice.rows.length === 0;
       // Check if this is a new account (user was just created or has no name)
       const isExistingAccount = user.name && user.name.trim() !== '';
-
-      // Log FCM token for debugging
-      if (device_info?.fcm_token) {
-        console.log(`[verify-otp] FCM token received: ${device_info.fcm_token.substring(0, 20)}...`);
-      } else {
-        console.log(`[verify-otp] No FCM token in device_info. Device info:`, JSON.stringify(device_info || {}));
-      }
 
       // upsert user_devices row
       await db.query(
@@ -725,6 +685,7 @@ router.post(
       // This allows step-up auth for sensitive actions
       const accessToken = signAccessToken(user, {
         highAssurance: true, deviceId: devId,
+        verifiedChannel: 'phone',
         recoveryChannel: recovery_only === true ? 'phone' : undefined,
       });
       const refreshToken = recovery_only === true ? null : await issueRefreshToken({
@@ -808,14 +769,16 @@ router.post(
         if (normalizedPhone) {
           const phoneSearchParams = preparePhoneSearchParams(normalizedPhone);
           const usersResult = await db.query(
-            `SELECT id, email, phone_number FROM users WHERE email = $1 OR phone_number = $2 OR phone_number = $3`,
-            [normalizedEmail, phoneSearchParams[0], phoneSearchParams[1]]
+            `SELECT id, email, phone_number, phone_lookup_hash, is_phone_verified
+             FROM users
+             WHERE lower(email) = $1 OR phone_lookup_hash = $2`,
+            [normalizedEmail, phoneSearchParams[0]]
           );
           const users = usersResult.rows;
           
           if (users && users.length > 0) {
-            const sameEmailUser = users.find(u => u.email === normalizedEmail);
-            const samePhoneUser = users.find(u => phoneValuesMatch(u.phone_number, normalizedPhone));
+            const sameEmailUser = users.find(u => String(u.email || '').toLowerCase() === normalizedEmail);
+            const samePhoneUser = users.find(u => u.phone_lookup_hash === phoneSearchParams[0]);
 
             if (is_signup === true || is_signup === 'true') {
               // If signing up, these must NOT exist
@@ -824,7 +787,8 @@ router.post(
               }
             } else {
               // If logging in, they MUST match if they both exist on an account
-              if (sameEmailUser && sameEmailUser.phone_number && !phoneValuesMatch(sameEmailUser.phone_number, normalizedPhone)) {
+              if (sameEmailUser && sameEmailUser.phone_number &&
+                  (!sameEmailUser.is_phone_verified || sameEmailUser.phone_lookup_hash !== phoneSearchParams[0])) {
                 return { error: 'This email is registered with a different phone number.', status: 409 };
               }
 
@@ -933,18 +897,20 @@ router.post(
 
       let user;
 
-      // === SECURITY HARDENING: CROSS-ACCOUNT UNIQUE CHECK ===
-      // Ensure that email and phone number are not registered to DIFFERENT accounts.
+      // Resolve the verified email first. A phone supplied in this request is
+      // only a claim; it cannot be added to or used to select an account.
       const foundByEmail = await db.query(
-        `SELECT id, email, phone_number, name, role, COALESCE(token_version, 1) as token_version
-         FROM users WHERE email = $1 AND deleted = FALSE`,
+        `SELECT id, email, phone_number, phone_lookup_hash, is_phone_verified,
+                is_email_verified, name, role, COALESCE(token_version, 1) as token_version
+         FROM users WHERE lower(email) = $1 AND deleted = FALSE`,
         [normalizedEmail]
       );
       
       const foundByPhone = hasPhone
         ? await db.query(
-            `SELECT id, email, phone_number, name, role, COALESCE(token_version, 1) as token_version
-             FROM users WHERE (phone_number = $1 OR phone_number = $2) AND deleted = FALSE`,
+            `SELECT id, email, phone_number, phone_lookup_hash, is_phone_verified,
+                    is_email_verified, name, role, COALESCE(token_version, 1) as token_version
+             FROM users WHERE phone_lookup_hash = $1 AND deleted = FALSE`,
             preparePhoneSearchParams(normalizedPhone)
           )
         : { rows: [] };
@@ -963,50 +929,37 @@ router.post(
         return res.status(400).json({ error: 'Invalid or expired code' });
       }
 
-      if (foundByEmail.rows.length > 0 && foundByPhone.rows.length > 0) {
-        if (foundByEmail.rows[0].id !== foundByPhone.rows[0].id) {
+      if (foundByEmail.rows.length > 0) {
+        user = foundByEmail.rows[0];
+        if (foundByPhone.rows.some(phoneUser => phoneUser.id !== user.id)) {
           return res.status(409).json({ error: 'This email and phone number belong to different accounts.' });
         }
-        user = foundByEmail.rows[0];
-        // Ensure email is marked verified
-        await db.query(`UPDATE users SET is_email_verified = TRUE WHERE id = $1`, [user.id]);
-      } else if (foundByEmail.rows.length > 0) {
-        user = foundByEmail.rows[0];
-        if (hasPhone) {
-          // A phone supplied by normal login/sign-up must still match the
-          // phone already linked to this email.
-          const phoneSearchParams = preparePhoneSearchParams(normalizedPhone);
-          // Encrypted phone values use a random IV, so a newly encrypted copy
-          // is not byte-for-byte equal to the stored value. Compare the
-          // decrypted value as well as the legacy encrypted/plaintext forms.
-          if (user.phone_number && !phoneValuesMatch(user.phone_number, normalizedPhone)) {
-            return res.status(409).json({ error: 'This email is registered with a different phone number.' });
-          }
-          await db.query(`UPDATE users SET is_email_verified = TRUE, phone_number = $2 WHERE id = $1`, [user.id, encryptedPhone]);
-        } else {
-          // Account recovery verifies ownership of the email and keeps the
-          // existing phone number intact.
-          await db.query(`UPDATE users SET is_email_verified = TRUE WHERE id = $1`, [user.id]);
+        if (!user.is_email_verified && user.is_phone_verified) {
+          return res.status(409).json({
+            error: 'Verify the existing sign-in method before linking this email to the account.',
+            code: 'existing_factor_required',
+          });
         }
-      } else if (foundByPhone.rows.length > 0) {
-        user = foundByPhone.rows[0];
-        // User exists with this phone, but not this email. Is another email already set?
-        if (user.email && user.email !== normalizedEmail) {
-          return res.status(409).json({ error: 'This phone number is registered with a different email.' });
+        if (hasPhone && (!user.is_phone_verified || user.phone_lookup_hash !== phoneLookupHash(normalizedPhone))) {
+          return res.status(409).json({
+            error: 'The supplied phone is not a verified contact on this account. Verify the existing sign-in method before linking it.',
+            code: 'existing_factor_required',
+          });
         }
-        await db.query(`UPDATE users SET is_email_verified = TRUE, email = $2 WHERE id = $1`, [user.id, normalizedEmail]);
+        await db.query('UPDATE users SET is_email_verified = TRUE WHERE id = $1', [user.id]);
       } else {
-        // Recovery must never create a new account just because the email was
-        // not found. New accounts require the normal sign-up flow with a
-        // phone number.
-        if (!hasPhone) {
+        // A supplied phone is only an unverified claim. If it already belongs
+        // to any account, that account must be entered through its existing
+        // factor and the contact-recovery flow. New email users remain
+        // email-only until another factor is verified separately.
+        if (recovery_only === true || foundByPhone.rows.length > 0) {
           return res.status(400).json({ error: 'Invalid or expired code' });
         }
         const newUserResult = await db.query(
-          `INSERT INTO users (email, phone_number, language, timezone, is_email_verified)
-           VALUES ($1, $2, $3, $4, TRUE)
+          `INSERT INTO users (email, language, timezone, is_email_verified)
+           VALUES ($1, $2, $3, TRUE)
            RETURNING id, email, name, role, COALESCE(token_version, 1) as token_version`,
-          [normalizedEmail, encryptedPhone, device_info?.language_code || null, device_info?.timezone || null]
+          [normalizedEmail, device_info?.language_code || null, device_info?.timezone || null]
         );
         user = newUserResult.rows[0];
       }
@@ -1071,6 +1024,7 @@ router.post(
 
       const accessToken = signAccessToken(user, {
         highAssurance: true, deviceId: devId,
+        verifiedChannel: 'email',
         recoveryChannel: recovery_only === true ? 'email' : undefined,
       });
       const refreshToken = recovery_only === true ? null : await issueRefreshToken({
@@ -1201,7 +1155,9 @@ router.post(
 
       await checkAnomalies(user.id, 'google_login', clientIp);
 
-      const accessToken = signAccessToken(user, { highAssurance: true, deviceId: devId });
+      const accessToken = signAccessToken(user, {
+        highAssurance: true, deviceId: devId, verifiedChannel: 'google',
+      });
       const refreshToken = await issueRefreshToken({
         userId: user.id, deviceId: devId, userAgent: req.headers['user-agent'], ip: clientIp,
       });
@@ -1459,6 +1415,7 @@ router.post(
 // Signup endpoint: Create new user with name, phone, and location
 router.post(
   '/signup',
+  auth,
   validateSignupBody,
   async (req, res) => {
     const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
@@ -1475,57 +1432,65 @@ router.post(
     try {
       const { name, phone_number, state, district, city_village, device_id, device_info } = req.body;
 
-      // Debug: Log entire request body to see what's being received
-      console.log('[signup] Request body keys:', Object.keys(req.body || {}));
-      console.log('[signup] Location data:', { state, district, city_village, city_village_type: typeof city_village, city_village_length: city_village?.length });
-      console.log('[signup] device_info type:', typeof device_info);
-      console.log('[signup] device_info value:', JSON.stringify(device_info));
-
       // Normalize phone number
-      const normalizedPhone = normalizePhone(phone_number);
+      const normalizedPhone = phone_number ? normalizePhone(phone_number) : null;
 
       // Validate phone number format
-      if (!isValidPhoneNumber(normalizedPhone)) {
+      if (normalizedPhone && !isValidPhoneNumber(normalizedPhone)) {
         return res.status(400).json({
           success: false,
           message: 'Invalid phone number format. Please use E.164 format (e.g., +919876543210)',
         });
       }
 
-      // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
-      // Encrypt phone number before storing/searching
-      const encryptedPhone = encryptPhoneNumber(normalizedPhone);
-      const phoneSearchParams = preparePhoneSearchParams(normalizedPhone);
-
-      // Check if user already exists
+      // Signup completes a profile created by a verified authentication
+      // factor. It must never create an identity from request-body contacts.
       const existingUser = await db.query(
-        `SELECT id, phone_number, name, role, NULL::text as user_type, 
+        `SELECT id, phone_number, phone_lookup_hash, is_phone_verified,
+                is_email_verified, country_code, name, role, NULL::text as user_type,
                 COALESCE(token_version, 1) as token_version
          FROM users
-         WHERE (phone_number = $1 OR phone_number = $2)
-           AND deleted = FALSE`,
-        phoneSearchParams
+         WHERE id = $1 AND deleted = FALSE`,
+        [req.user.id]
       ).catch(async (err) => {
         if (err.code === '42703' && err.message.includes('token_version')) {
           return await db.query(
-            `SELECT id, phone_number, name, role, NULL::text as user_type, 1 as token_version
-             FROM users
-             WHERE (phone_number = $1 OR phone_number = $2)
-               AND deleted = FALSE`,
-            phoneSearchParams
+            `SELECT id, phone_number, phone_lookup_hash, is_phone_verified,
+                    is_email_verified, country_code, name, role, NULL::text as user_type,
+                    1 as token_version
+             FROM users WHERE id = $1 AND deleted = FALSE`,
+            [req.user.id]
           );
         }
         throw err;
       });
 
+      if (existingUser.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Verified account not found.' });
+      }
+      const existing = existingUser.rows[0];
+      if (!existing.is_phone_verified && !existing.is_email_verified) {
+        return res.status(403).json({ success: false, message: 'Complete a verified sign-in before creating a profile.' });
+      }
+      if (normalizedPhone && (!existing.is_phone_verified ||
+          existing.phone_lookup_hash !== phoneLookupHash(normalizedPhone))) {
+        return res.status(409).json({
+          success: false,
+          code: 'existing_factor_required',
+          message: 'The supplied phone is not a verified contact on this account.',
+        });
+      }
+      const profilePhone = normalizedPhone || (existing.is_phone_verified && existing.phone_number
+        ? decryptPhoneNumber(existing.phone_number)
+        : null);
+
       if (existingUser.rows.length > 0) {
-        const existing = existingUser.rows[0];
         // Check if user was just created by verify-otp (has no name) - allow update
         if (!existing.name || existing.name.trim() === '') {
           // User exists but has no name (was just created by verify-otp), update it with signup data
-          const countryCode = normalizedPhone.startsWith('+')
-            ? normalizedPhone.match(/^\+(\d{1,3})/)?.[0] || '+91'
-            : '+91';
+          const countryCode = profilePhone?.startsWith('+')
+            ? profilePhone.match(/^\+(\d{1,3})/)?.[0] || '+91'
+            : existing.country_code || '+91';
 
           // Update user with name, country code, language, and timezone
           const updatedUser = await db.query(
@@ -1682,176 +1647,10 @@ router.post(
         }
       }
 
-      // Extract country code from phone number
-      const countryCode = normalizedPhone.startsWith('+')
-        ? normalizedPhone.match(/^\+(\d{1,3})/)?.[0] || '+91'
-        : '+91';
+      // An authenticated subject must resolve to the profile row above;
+      // signup is never an identity-creation endpoint.
+      return res.status(404).json({ success: false, message: 'Verified account not found.' });
 
-      // Create new user with all available data
-      const newUser = await db.query(
-        `INSERT INTO users (phone_number, name, country_code, language, timezone)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, phone_number, name, role, NULL::text as user_type, 
-                   COALESCE(token_version, 1) as token_version, country_code, created_at`,
-        [
-          encryptedPhone,
-          name,
-          countryCode,
-          device_info?.language_code || null,
-          device_info?.timezone || null
-        ]
-      ).catch(async (err) => {
-        if (err.code === '42703' && err.message.includes('token_version')) {
-          const result = await db.query(
-            `INSERT INTO users (phone_number, name, country_code, language, timezone)
-             VALUES ($1, $2, $3, $4, $5)
-             RETURNING id, phone_number, name, role, NULL::text as user_type, 
-                       1 as token_version, country_code, created_at`,
-            [
-              encryptedPhone,
-              name,
-              countryCode,
-              device_info?.language_code || null,
-              device_info?.timezone || null
-            ]
-          );
-          result.rows[0].token_version = 1;
-          return result;
-        }
-        throw err;
-      });
-
-      const user = newUser.rows[0];
-
-      // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
-      // Decrypt phone number before returning to client
-      if (user.phone_number) {
-        user.phone_number = decryptPhoneNumber(user.phone_number);
-      }
-
-      // Create location entry if location data provided
-      let locationId = null;
-      if (state || district || city_village) {
-        const locationResult = await db.query(
-          `INSERT INTO locations (user_id, state, district, city_village, is_saved_address, location_type, source_type, source_confidence)
-           VALUES ($1, $2, $3, $4, TRUE, 'home', 'manual', 'high')
-           RETURNING id`,
-          [user.id, state || null, district || null, city_village || null]
-        );
-        locationId = locationResult.rows[0]?.id;
-      }
-
-      // Update last_login_at
-      await db.query(
-        `UPDATE users SET last_login_at = NOW() WHERE id = $1`,
-        [user.id]
-      );
-
-      const devId = sanitizeDeviceId(device_id);
-
-      // Log FCM token for debugging
-      if (device_info?.fcm_token) {
-        console.log(`[signup] FCM token received: ${device_info.fcm_token.substring(0, 20)}...`);
-      } else {
-        console.log(`[signup] No FCM token in device_info. Device info:`, JSON.stringify(device_info || {}));
-      }
-
-      // Upsert user_devices row
-      await db.query(
-        `
-        INSERT INTO user_devices (
-          user_id, device_identifier, device_platform, device_model,
-          os_version, app_version, language_code, timezone, fcm_token, last_seen_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-        ON CONFLICT (user_id, device_identifier)
-        DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at,
-                      device_platform = EXCLUDED.device_platform,
-                      device_model = EXCLUDED.device_model,
-                      os_version = EXCLUDED.os_version,
-                      app_version = EXCLUDED.app_version,
-                      language_code = EXCLUDED.language_code,
-                      timezone = EXCLUDED.timezone,
-                      fcm_token = EXCLUDED.fcm_token,
-                      is_active = true
-        `,
-        [
-          user.id,
-          devId,
-          device_info?.platform || 'android',
-          device_info?.model || null,
-          device_info?.os_version || null,
-          device_info?.app_version || null,
-          device_info?.language_code || null,
-          device_info?.timezone || null,
-          device_info?.fcm_token || null,  // Will be null if not provided or Firebase not initialized
-        ]
-      );
-
-      // Additional debug: Log what was actually saved
-      const savedDeviceResult = await db.query(
-        `SELECT fcm_token FROM user_devices WHERE user_id = $1 AND device_identifier = $2`,
-        [user.id, devId]
-      );
-      if (savedDeviceResult.rows.length > 0) {
-        const savedFcmToken = savedDeviceResult.rows[0].fcm_token;
-        if (savedFcmToken) {
-          console.log(`[signup] FCM token successfully saved to DB: ${savedFcmToken.substring(0, 20)}...`);
-        } else {
-          console.log(`[signup] WARNING: FCM token is NULL in database after save`);
-        }
-      }
-
-      // === SECURITY HARDENING: AUDIT LOGS & ANOMALY FLAGS ===
-      await logAuthEvent({
-        userId: user.id,
-        action: 'signup',
-        status: 'success',
-        riskLevel: RISK_LEVELS.INFO,
-        deviceId: devId,
-        ipAddress: clientIp,
-        userAgent: req.headers['user-agent'],
-        meta: {
-          is_new_account: true,
-          platform: device_info?.platform || 'android',
-        },
-      });
-
-      // Issue tokens
-      const accessToken = signAccessToken(user, { highAssurance: true, deviceId: devId });
-      const refreshToken = await issueRefreshToken({
-        userId: user.id,
-        deviceId: devId,
-        userAgent: req.headers['user-agent'],
-        ip: clientIp,
-      });
-
-      const needsProfile = !user.name;
-
-      // Get count of active devices
-      const deviceCountResult = await db.query(
-        `SELECT COUNT(*) as count FROM user_devices WHERE user_id = $1 AND is_active = true`,
-        [user.id]
-      );
-      const activeDevicesCount = parseInt(deviceCountResult.rows[0].count, 10);
-
-      return res.json({
-        success: true,
-        user: {
-          id: user.id,
-          phone_number: user.phone_number,
-          name: user.name,
-          country_code: user.country_code,
-          created_at: user.created_at,
-        },
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        needs_profile: needsProfile,
-        is_new_account: true,
-        is_new_device: true,
-        active_devices_count: activeDevicesCount,
-        location_id: locationId,
-      });
     } catch (err) {
       console.error('[signup] Error details:', {
         message: err.message,
@@ -1859,7 +1658,6 @@ router.post(
         code: err.code,
         constraint: err.constraint,
         detail: err.detail,
-        body: req.body
       });
 
       // Handle unique constraint violation (phone number already exists)
@@ -2032,7 +1830,6 @@ router.post('/validate-token', async (req, res) => {
           sub: payload.sub,
           role: payload.role || 'user',
           user_type: payload.user_type || null,
-          phone_number: payload.phone_number || null,
           token_version: payload.token_version || 1,
           high_assurance: payload.high_assurance || false,
           is_guest: true,
@@ -2124,7 +1921,6 @@ router.post('/validate-token', async (req, res) => {
         sub: payload.sub,
         role: payload.role,
         user_type: payload.user_type,
-        phone_number: payload.phone_number,
         token_version: payload.token_version || 1,
         high_assurance: payload.high_assurance || false,
         is_guest: payload.is_guest || false,

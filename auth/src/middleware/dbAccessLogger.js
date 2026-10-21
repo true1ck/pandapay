@@ -24,8 +24,6 @@
  * - auth_audit
  */
 
-const db = require('../db');
-
 const LOGGING_ENABLED = process.env.DB_ACCESS_LOGGING_ENABLED === 'true' || process.env.DB_ACCESS_LOGGING_ENABLED === '1';
 const LOG_LEVEL = process.env.DB_ACCESS_LOG_LEVEL || 'sensitive'; // 'all' or 'sensitive'
 
@@ -97,6 +95,9 @@ function sanitizeParams(params) {
 
   return params.map(param => {
     if (typeof param === 'string') {
+      if (/^\d{4,8}$/.test(param)) {
+        return '[REDACTED_OTP]';
+      }
       // Check if it looks like a phone number
       if (/^\+?\d{10,15}$/.test(param)) {
         return '[REDACTED_PHONE]';
@@ -138,14 +139,14 @@ function shouldLogQuery(query) {
  * Log database access
  * @param {Object} logData - Log data
  */
-async function logDbAccess(logData) {
-  if (!LOGGING_ENABLED) {
+async function logDbAccess(logData, executor) {
+  if (!LOGGING_ENABLED || !executor || typeof executor.query !== 'function') {
     return;
   }
 
   try {
     // Ensure db_access_log table exists
-    await ensureDbAccessLogTable();
+    await ensureDbAccessLogTable(executor);
 
     const {
       query,
@@ -158,7 +159,7 @@ async function logDbAccess(logData) {
       duration = null,
     } = logData;
 
-    await db.query(
+    await executor.query(
       `INSERT INTO db_access_log (
         query_type, tables_accessed, query_text, params_sanitized,
         user_id, ip_address, user_agent, duration_ms, created_at
@@ -183,9 +184,9 @@ async function logDbAccess(logData) {
 /**
  * Ensure db_access_log table exists
  */
-async function ensureDbAccessLogTable() {
+async function ensureDbAccessLogTable(executor) {
   try {
-    await db.query(`
+    await executor.query(`
       CREATE TABLE IF NOT EXISTS db_access_log (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         query_type VARCHAR(20) NOT NULL,
@@ -217,7 +218,10 @@ async function ensureDbAccessLogTable() {
  * @param {Object} context - Request context (optional)
  * @returns {Promise} - Query result
  */
-async function loggedQuery(query, params = [], context = {}) {
+async function loggedQuery(query, params = [], context = {}, executor) {
+  if (!executor || typeof executor.query !== 'function') {
+    throw new TypeError('loggedQuery requires a database executor');
+  }
   const startTime = Date.now();
   const queryType = getQueryType(query);
   const tables = extractTableNames(query);
@@ -225,12 +229,12 @@ async function loggedQuery(query, params = [], context = {}) {
   // Check if we should log this query
   if (!shouldLogQuery(query)) {
     // Execute query without logging
-    return db.query(query, params);
+    return executor.query(query, params);
   }
 
   try {
     // Execute query
-    const result = await db.query(query, params);
+    const result = await executor.query(query, params);
     
     const duration = Date.now() - startTime;
 
@@ -244,7 +248,7 @@ async function loggedQuery(query, params = [], context = {}) {
       ipAddress: context.ipAddress || null,
       userAgent: context.userAgent || null,
       duration,
-    }).catch(err => {
+    }, executor).catch(err => {
       console.error('[dbAccessLogger] Failed to log (non-blocking):', err.message);
     });
 
@@ -262,7 +266,7 @@ async function loggedQuery(query, params = [], context = {}) {
       userAgent: context.userAgent || null,
       duration,
       error: err.message,
-    }).catch(() => {
+    }, executor).catch(() => {
       // Ignore logging errors
     });
 

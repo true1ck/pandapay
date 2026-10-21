@@ -60,7 +60,8 @@ cp .env.prod.example .env
 ```
 
 Fill in every `CHANGE_ME` in `.env` — the file itself documents how to
-generate each value (JWT secrets, `APP_USER_PASSWORD`, webhook secrets,
+generate each value (JWT secrets, `APP_USER_PASSWORD`, the separate
+`REWARD_WORKER_DB_PASSWORD`, webhook secrets,
 `IMAP_ENCRYPTION_KEY`, `ENCRYPTION_KEY`). Don't confuse the last two:
 `IMAP_ENCRYPTION_KEY` is `api/`'s key for stored IMAP app passwords;
 `ENCRYPTION_KEY` is `auth/`'s separate key for field-level PII encryption —
@@ -72,10 +73,11 @@ with `:?` rather than defaulting it. `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET`
 the same values `api/` and `auth/` both read — the compose file already wires
 one value to both services, just don't hand-edit them differently later.
 
-`ADMIN_DATABASE_URL` is the superuser connection to your Postgres instance;
-`API_DATABASE_URL`/`AUTH_DATABASE_URL` are filled in with the `app_user`
-role and `pandapay`/`pandapay_auth` database names that the migration step
-below creates.
+`ADMIN_DATABASE_URL` is the privileged connection to your Postgres instance;
+`API_DATABASE_URL` uses `app_user`, while `REWARD_WORKER_DATABASE_URL` uses
+the separate `rewards_worker_login`. Both target `pandapay`; only the latter
+can assume the narrow worker role. `AUTH_DATABASE_URL` targets the separate
+`pandapay_auth` database.
 
 For JWT rotation, set `JWT_KEYS_JSON` and `JWT_ACTIVE_KEY_ID` together. The
 same key set, active key id, `JWT_ISSUER`, and `JWT_AUDIENCE` must be supplied
@@ -91,9 +93,9 @@ deployment.
 docker compose -f docker-compose.prod.yml --env-file .env run --rm db-migrate
 ```
 
-This creates the `app_user` role (with the password from `.env`, not the dev
-literal — `db/scripts/migrate.sh` refuses to run without
-`APP_USER_PASSWORD` set), applies every migration in order, and skips
+This creates the `app_user` and isolated rewards-worker login roles (using
+the distinct passwords from `.env`, never the dev literals —
+`db/scripts/migrate.sh` refuses to run without both values), applies every migration in order, and skips
 `0013_cron_jobs.sql` (pg_cron isn't available unless your managed Postgres
 offers it — apply that one by hand if it does). Re-run this any time you pull
 a commit with new migrations; it's ledgered and only applies what's new.
@@ -113,6 +115,39 @@ night:
 ```bash
 docker compose -f docker-compose.prod.yml exec backup crontab -l
 ```
+
+The `rewards-worker` service runs separately from the API. It claims outbox
+events with bounded leases, records attempt history and heartbeats, retries
+transient failures, and expires unqualified reservations only after the signed
+receipt grace period. It does not pay cash or redeem subscription benefits.
+Check liveness and backlog with an administrator/read-only operations
+connection (not the app or worker login):
+
+```sql
+select worker_id, heartbeat_at, now() - heartbeat_at as heartbeat_age,
+       polls, claimed_events, completed_events, last_error_code
+  from promotions.reward_worker_heartbeats
+ order by heartbeat_at desc;
+
+select state, count(*) as events,
+       min(available_at) filter (where state = 'pending') as oldest_pending
+  from promotions.reward_outbox
+ group by state order by state;
+```
+
+Set alert thresholds from staging observations for missing heartbeats, aged
+pending work, and dead/expired events. Those operational tables are not
+readable by either the API app login or the worker login.
+
+The authenticated admin console's **Referral Operations** page reads the
+privacy-safe status RPC and offers four reason-required emergency holds:
+admission, enrollment, fulfillment, and credit redemption. Each action is
+admin-gated by the API and appended to the referral operator audit log. A
+release restores the exact switch value captured when the hold was applied;
+it does not delete an earned entitlement or modify a spin/credit ledger.
+There is deliberately no console control here for changing prize odds,
+budgets, or subscription benefits. Keep redemption paused until a reviewed
+platform benefit is actually configured and sandbox-verified.
 
 ## 6. nginx + TLS
 

@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/transaction_tags_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/data/local/split_repository.dart';
 import 'package:pandapay/features/activity/transaction_detail_screen.dart';
@@ -108,6 +112,7 @@ Future<void> _pump(
   WidgetTester tester, {
   required _FakeUserCardsRepository repo,
   TransactionEntry? initialEntry,
+  TransactionTagsRepository? tagsRepository,
 }) async {
   final router = GoRouter(
     initialLocation: '/activity/t1',
@@ -127,7 +132,11 @@ Future<void> _pump(
   );
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [userCardsRepositoryProvider.overrideWithValue(repo)],
+      overrides: [
+        userCardsRepositoryProvider.overrideWithValue(repo),
+        if (tagsRepository != null)
+          transactionTagsProvider.overrideWith((ref) => tagsRepository),
+      ],
       child: MaterialApp.router(routerConfig: router),
     ),
   );
@@ -419,6 +428,19 @@ void main() {
   testWidgets('cardless UPI and unknown category are shown honestly', (
     tester,
   ) async {
+    final database = openInMemoryForTesting();
+    final httpClient = MockClient((request) async => http.Response('{}', 200));
+    final tagsRepository = TransactionTagsRepository(
+      database: database,
+      namespace: 'test-user',
+      apiBaseUrl: 'http://localhost',
+      accessToken: 'test-token',
+      client: httpClient,
+    );
+    addTearDown(() {
+      httpClient.close();
+      database.close();
+    });
     final repo = _FakeUserCardsRepository(
       TransactionEntry(
         id: 't1',
@@ -433,12 +455,32 @@ void main() {
         status: 'active',
       ),
     );
-    await _pump(tester, repo: repo);
+    await _pump(tester, repo: repo, tagsRepository: tagsRepository);
 
     expect(find.text('UPI / bank account'), findsOneWidget);
     expect(find.text('Other'), findsOneWidget);
     expect(find.text('Assign category'), findsOneWidget);
+    expect(find.text('Add tag'), findsOneWidget);
     expect(find.text('—'), findsNothing);
+
+    final categoryLabel = find.text('Category');
+    final categoryValue = find.text('Other');
+    expect(
+      tester.getTopLeft(categoryLabel).dy,
+      closeTo(tester.getTopLeft(categoryValue).dy, 1),
+    );
+    expect(
+      tester.getTopLeft(find.widgetWithText(TextButton, 'Assign category')).dx,
+      closeTo(tester.getTopLeft(categoryValue).dx, 1),
+    );
+    expect(
+      tester.getCenter(find.text('Tags')).dy,
+      closeTo(tester.getCenter(find.text('Add tag')).dy, 1),
+    );
+    expect(
+      tester.getTopLeft(find.widgetWithText(TextButton, 'Add tag')).dx,
+      closeTo(tester.getTopLeft(categoryValue).dx, 1),
+    );
   });
 
   testWidgets('marking ignored calls the repository with the chosen reason', (

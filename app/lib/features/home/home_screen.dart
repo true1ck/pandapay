@@ -104,6 +104,11 @@ class HomeScreen extends ConsumerWidget {
     final ranked = ref.watch(rankedRecommendationsProvider);
     final tutorialKeys = ref.watch(tutorialKeysProvider);
     final now = ref.watch(clockProvider).now();
+    // A signed engagement receipt is issued only after a live Home-summary
+    // request, so cached/offline data can never manufacture streak activity.
+    ref.watch(
+      homeEngagementCheckInProvider(DateFormat('yyyy-MM-dd').format(now)),
+    );
 
     // Keep the page hierarchy clear: greeting, spending summary, quick actions,
     // then the purchase controls and the recommendation they drive.
@@ -2610,6 +2615,7 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
         r'\b(?:lic|licind|dhan|dhanhq|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel|paytm\s+money)\b',
       ).hasMatch(label);
     }
+
     // Keep the issuer in the identity. Two different banks can legitimately
     // have accounts ending in the same four digits; keying only by suffix
     // silently dropped one account and produced an incorrect total.

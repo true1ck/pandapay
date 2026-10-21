@@ -12,6 +12,7 @@ import '../../main.dart' show MoneyText;
 import '../insights/payments_due_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../referrals/invite_friends_screen.dart';
+import '../subscription_credits/subscription_credits_screen.dart';
 import '../tools/split_planner_screen.dart';
 import '../geofence/nearby_merchants_screen.dart';
 import '../settings/feedback_support_screen.dart';
@@ -144,6 +145,16 @@ class AccountScreen extends ConsumerWidget {
               label: 'Invite friends',
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const InviteFriendsScreen()),
+              ),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            AccountTile(
+              icon: Icons.account_balance_wallet_outlined,
+              label: 'Subscription credits',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SubscriptionCreditsScreen(),
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.sm),

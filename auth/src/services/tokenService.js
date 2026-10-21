@@ -42,6 +42,12 @@ function signAccessToken(user, options = {}) {
   if (options.highAssurance === true) {
     payload.high_assurance = true;
   }
+  if (['email', 'phone', 'google'].includes(options.verifiedChannel)) {
+    payload.verified_channel = options.verifiedChannel;
+    payload.factor_verified_at = Number.isInteger(options.factorVerifiedAt)
+      ? options.factorVerifiedAt
+      : Math.floor(Date.now() / 1000);
+  }
   if (['email', 'phone'].includes(options.recoveryChannel)) {
     payload.recovery_channel = options.recoveryChannel;
     payload.recovery_verified_at = Math.floor(Date.now() / 1000);

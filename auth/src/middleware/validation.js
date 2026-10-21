@@ -147,7 +147,6 @@ function validateRequestOtpBody(req, res, next) {
   if (!phone_number) {
     return res.status(400).json({ error: 'phone_number is required' });
   }
-
   const phoneCheck = validatePhone(phone_number);
   if (!phoneCheck.valid) {
     return res.status(400).json({ error: phoneCheck.error });
@@ -458,10 +457,6 @@ function validateSignupBody(req, res, next) {
     return res.status(400).json({ error: 'name is required' });
   }
 
-  if (!phone_number) {
-    return res.status(400).json({ error: 'phone_number is required' });
-  }
-
   // Validate each field
   const nameCheck = validateName(name);
   if (!nameCheck.valid) {
@@ -473,9 +468,11 @@ function validateSignupBody(req, res, next) {
     return res.status(400).json({ error: 'name must be 50 characters or less' });
   }
 
-  const phoneCheck = validatePhone(phone_number);
-  if (!phoneCheck.valid) {
-    return res.status(400).json({ error: phoneCheck.error });
+  if (phone_number !== undefined && phone_number !== null && phone_number !== '') {
+    const phoneCheck = validatePhone(phone_number);
+    if (!phoneCheck.valid) {
+      return res.status(400).json({ error: phoneCheck.error });
+    }
   }
 
   // Validate optional location fields

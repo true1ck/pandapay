@@ -213,6 +213,21 @@ jobs:
           docker compose up -d --wait --wait-timeout 180
           docker compose ps
 
+      # The second role-setup pass must preserve the promotions grants and
+      # profile restrictions. Both scripts use a transaction and roll back all
+      # synthetic referral/credit data before the HTTP smoke suite runs.
+      - name: Verify referral schema permissions and disabled defaults
+        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021130000_referral_promotions_permissions_test.sql
+
+      - name: Verify referral activation, Bamboo and idempotent spins
+        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021133000_referral_journey_test.sql
+
+      - name: Verify isolated reward worker leases and retries
+        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021140000_rewards_worker_outbox_test.sql
+
+      - name: Verify audited referral operator holds and status
+        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021143000_referral_operator_controls_test.sql
+
       - name: Smoke test
         run: python3 scripts/smoke_test.py
 

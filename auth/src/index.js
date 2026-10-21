@@ -5,6 +5,7 @@ const config = require('./config');
 const db = require('./db');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
+const internalRoutes = require('./routes/internalRoutes');
 // === ADDED FOR RATE LIMITING ===
 const { initRedis, closeRedis } = require('./services/redisClient');
 // === ADMIN SECURITY VISUALIZER ===
@@ -138,6 +139,7 @@ app.get('/ready', async (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/users/me/recovery-contact', require('./routes/recoveryContactRoutes'));
+app.use('/internal', internalRoutes);
 
 // === ADMIN SECURITY VISUALIZER ===
 // Admin dashboard and API endpoints (only enabled if flag is set)

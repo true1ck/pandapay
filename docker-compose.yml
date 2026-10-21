@@ -60,6 +60,8 @@ services:
         condition: service_healthy
     environment:
       PGPASSWORD: postgres
+      APP_USER_PASSWORD: app_user_dev_pw
+      REWARD_WORKER_DB_PASSWORD: reward_worker_dev_pw
       # Set to false for staging/production-shaped environments.
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-true}"
     volumes:
@@ -151,6 +153,14 @@ services:
       # Must match auth/'s signing secret exactly — api/src/auth.js verifies
       # tokens auth/ issued.
       JWT_ACCESS_SECRET: dev_access_secret_change_me
+      AUTH_INTERNAL_BASE_URL: http://auth:3210
+      AUTH_INTERNAL_SERVICE_SECRET: dev_internal_service_secret_change_me_32_bytes
+      REFERRAL_IDENTITY_HMAC_KEY: dev_referral_identity_hmac_key_change_me_32_bytes
+      REFERRAL_IDENTITY_HMAC_KEY_VERSION: v1
+      REFERRAL_PREVIEW_SECRET: dev_referral_preview_secret_change_me_32_bytes
+      ENGAGEMENT_RECEIPT_SECRET: dev_engagement_receipt_secret_change_me_32_bytes
+      REWARD_WORKER_INTERNAL_SECRET: dev_reward_worker_internal_secret_change_me_32_bytes
+      PRODUCT_TERMS_VERSION: 2026-08-07
       INBOUND_EMAIL_WEBHOOK_SECRET: dev_inbound_secret_change_me
       PARTNER_WEBHOOK_SECRET: dev_partner_secret_change_me
       IMAP_ENCRYPTION_KEY: dev_imap_key_change_me_32_bytes_ok
@@ -166,6 +176,35 @@ services:
       # Novu API using port 4000 (for example, PANDAPAY_API_HOST_PORT=4001).
       - "${PANDAPAY_API_HOST_PORT:-4000}:4000"
 
+  rewards-worker:
+    build:
+      context: ./api
+    command: ["node", "src/rewards_worker.js"]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+      db-migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://rewards_worker_login:reward_worker_dev_pw@db:5432/pandapay
+      DB_SSL: "false"
+      NODE_ENV: development
+      JWT_ACCESS_SECRET: dev_access_secret_change_me
+      AUTH_INTERNAL_BASE_URL: http://auth:3210
+      AUTH_INTERNAL_SERVICE_SECRET: dev_internal_service_secret_change_me_32_bytes
+      REFERRAL_IDENTITY_HMAC_KEY: dev_referral_identity_hmac_key_change_me_32_bytes
+      REFERRAL_IDENTITY_HMAC_KEY_VERSION: v1
+      REFERRAL_PREVIEW_SECRET: dev_referral_preview_secret_change_me_32_bytes
+      ENGAGEMENT_RECEIPT_SECRET: dev_engagement_receipt_secret_change_me_32_bytes
+      REWARD_WORKER_INTERNAL_SECRET: dev_reward_worker_internal_secret_change_me_32_bytes
+      REWARD_WORKER_API_URL: http://api:4000
+      REWARD_WORKER_ENABLED: "true"
+      REWARD_WORKER_ID: rewards-worker-local-1
+      REWARD_WORKER_POLL_INTERVAL_MS: "5000"
+      REWARD_WORKER_BATCH_SIZE: "5"
+      REWARD_WORKER_LEASE_SECONDS: "90"
+
   auth:
     build:
       context: ./auth
@@ -179,6 +218,7 @@ services:
       PORT: "3210"
       NODE_ENV: development
       JWT_ACCESS_SECRET: dev_access_secret_change_me
+      AUTH_INTERNAL_SERVICE_SECRET: dev_internal_service_secret_change_me_32_bytes
       JWT_REFRESH_SECRET: dev_refresh_secret_change_me
       JWT_ACCESS_TTL: 15m
       JWT_REFRESH_TTL: 180d

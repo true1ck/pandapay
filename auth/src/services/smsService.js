@@ -1,7 +1,7 @@
 // src/services/smsService.js
 const twilio = require('twilio');
 // === SECURITY HARDENING: OTP LOGGING ===
-const { logOtpForDebug, logOtpEvent } = require('../utils/otpLogger');
+const { logOtpEvent } = require('../utils/otpLogger');
 
 const {
   TWILIO_ACCOUNT_SID,
@@ -27,7 +27,6 @@ async function sendOtpSms(toPhone, code) {
   // === SECURITY HARDENING: OTP LOGGING ===
   // Use safe OTP logging (only in development)
   if (!client) {
-    logOtpForDebug(toPhone, code);
     logOtpEvent(toPhone, false);
     return { success: false, error: 'Twilio not configured' };
   }
@@ -49,7 +48,6 @@ async function sendOtpSms(toPhone, code) {
   } else {
     // === SECURITY HARDENING: OTP LOGGING ===
     // Use safe logging instead of direct console.log
-    logOtpForDebug(toPhone, code);
     logOtpEvent(toPhone, false);
     return { success: false, error: 'No Twilio sender configured' };
   }
@@ -61,7 +59,7 @@ async function sendOtpSms(toPhone, code) {
     return { success: true, sid: msg.sid };
   } catch (err) {
     const errorMessage = err.message || 'Unknown error';
-    console.error('❌ Failed to send SMS via Twilio:', errorMessage);
+    console.error('❌ Failed to send SMS via Twilio:', err.code || err.name || 'delivery_error');
     
     // Check for specific Twilio error types
     const isShortCodeError = errorMessage.includes('Short Code');
@@ -77,7 +75,6 @@ async function sendOtpSms(toPhone, code) {
     
     // === SECURITY HARDENING: OTP LOGGING ===
     // Use safe logging for fallback
-    logOtpForDebug(toPhone, code);
     logOtpEvent(toPhone, false);
     return { success: false, error: errorMessage };
   }

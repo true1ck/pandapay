@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
+import 'package:pandapay/app/tutorial_keys.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/account/account_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
@@ -32,7 +33,7 @@ class _EmptyCategoryRepository implements CategoryRepository {
   Future<List<SpendCategory>> fetchCategories() async => const [];
 }
 
-Future<void> _pumpApp(WidgetTester tester) async {
+Future<void> _pumpApp(WidgetTester tester, {TutorialKeys? tutorialKeys}) async {
   SharedPreferences.setMockInitialValues({
     'pandapay_app.onboarding_complete_v1': true,
     'pandapay_app.tutorial_seen_v1': true,
@@ -50,6 +51,8 @@ Future<void> _pumpApp(WidgetTester tester) async {
         sessionInitProvider.overrideWith((ref) async {}),
         sessionKeepAliveProvider.overrideWith((ref) {}),
         accessTokenProvider.overrideWith((ref) => 'test-token'),
+        if (tutorialKeys != null)
+          tutorialKeysProvider.overrideWithValue(tutorialKeys),
       ],
       child: Consumer(
         builder: (context, ref, _) => MaterialApp.router(
@@ -123,8 +126,9 @@ void main() {
   testWidgets('the scan FAB is present on every tab (not just Home)', (
     tester,
   ) async {
-    await _pumpApp(tester);
-    expect(find.byIcon(Icons.qr_code_scanner_rounded), findsOneWidget);
+    final keys = TutorialKeys();
+    await _pumpApp(tester, tutorialKeys: keys);
+    expect(find.byKey(keys.scanFab), findsOneWidget);
 
     await tester.tap(
       find.descendant(
@@ -134,6 +138,6 @@ void main() {
     );
     await tester.pump();
     await tester.pump();
-    expect(find.byIcon(Icons.qr_code_scanner_rounded), findsOneWidget);
+    expect(find.byKey(keys.scanFab), findsOneWidget);
   });
 }

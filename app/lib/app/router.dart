@@ -18,6 +18,8 @@ import '../features/activity/edit_transaction_screen.dart';
 import '../features/activity/needs_review_screen.dart';
 import '../features/activity/transaction_detail_screen.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/invite_link_screen.dart';
+import '../features/auth/product_activation_screen.dart';
 import '../features/cards/benefit_detail_screen.dart';
 import '../features/cards/benefits_cheat_sheet_screen.dart';
 import '../features/cards/card_detail_screen.dart';
@@ -72,6 +74,7 @@ import '../features/geofence/nearby_merchants_screen.dart';
 import '../features/cards/find_cards_screen.dart';
 import 'assistant_action.dart';
 import 'providers.dart';
+import '../data/product_access_api.dart' show invitationCodeFromUri;
 import 'tutorial_keys.dart';
 
 /// Route paths as constants so a typo becomes a compile-time-adjacent grep
@@ -82,6 +85,9 @@ abstract final class AppRoute {
   static const welcome = '/welcome';
   static const logIn = '/login';
   static const signUp = '/signup';
+  static const inviteLink = '/i/:code';
+  static const inviteLinkPrefix = '/i';
+  static const productActivation = '/account/activate';
   static const home = '/home';
   static const cards = '/cards';
   static const insights = '/insights';
@@ -220,6 +226,7 @@ abstract final class AppRoute {
     welcome,
     logIn,
     signUp,
+    productActivation,
     permissions,
     tour,
     addFirstCard,
@@ -240,6 +247,7 @@ class _RouterRefreshNotifier extends ChangeNotifier {
     // made GoRouter re-evaluate the whole shell every refresh interval.
     ref.listen(cacheNamespaceProvider, (_, _) => notifyListeners());
     ref.listen(onboardingCompleteProvider, (_, _) => notifyListeners());
+    ref.listen(activationVerifiedNamespaceProvider, (_, _) => notifyListeners());
     // S5/S6 — re-evaluate redirect once the status/version checks resolve,
     // and again any time appStatusProvider is invalidated (e.g.
     // MaintenanceScreen's "Try again" button).
@@ -361,6 +369,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final path = state.uri.path;
 
+      // iOS may deliver a custom `pandapay://i/CODE` URI as a route whose
+      // host is `i`; normalize it before route matching. Android's generic
+      // Flutter deep-link parser is disabled and forwards validated native
+      // intents through PandaPayApp instead.
+      final invitationCode = invitationCodeFromUri(state.uri);
+      if (invitationCode != null && path != '${AppRoute.inviteLinkPrefix}/$invitationCode') {
+        return '${AppRoute.inviteLinkPrefix}/$invitationCode';
+      }
+
       // S5/S6 — checked first, ahead of the onboarding guard below: a
       // maintenance window or a too-old install blocks the app regardless
       // of onboarding state. Only acts once appStatusProvider has actually
@@ -403,7 +420,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // once loading is done).
       if (path == AppRoute.splash) {
         if (!signedIn) return AppRoute.welcome;
-        return complete ? AppRoute.home : AppRoute.permissions;
+        return complete ? AppRoute.home : AppRoute.productActivation;
       }
 
       // Authentication is a hard gate. The only unauthenticated routes are
@@ -415,6 +432,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               AppRoute.logIn,
               AppRoute.signUp,
             }.contains(path)
+                || path.startsWith('${AppRoute.inviteLinkPrefix}/')
             ? null
             : AppRoute.welcome;
       }
@@ -422,9 +440,22 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // New accounts must complete setup before entering Home. Returning
       // accounts with a persisted onboarding flag go straight to the shell.
       if (!complete) {
+        // An invite URL must be allowed to persist its code before the user
+        // signs up. All other incomplete signed-in sessions pass through the
+        // server-verified activation screen, including after a cold restart.
+        if (path.startsWith('${AppRoute.inviteLinkPrefix}/')) return null;
+        final namespace = ref.read(cacheNamespaceProvider);
+        final activationVerified =
+            ref.read(activationVerifiedNamespaceProvider) == namespace;
+        if (!activationVerified) {
+          return path == AppRoute.productActivation
+              ? null
+              : AppRoute.productActivation;
+        }
         const setupRoutes = {
           AppRoute.logIn,
           AppRoute.signUp,
+          AppRoute.productActivation,
           AppRoute.permissions,
           AppRoute.tour,
           AppRoute.addFirstCard,
@@ -462,6 +493,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoute.welcome,
         pageBuilder: (context, state) =>
             const NoTransitionPage(child: WelcomeScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.inviteLink,
+        pageBuilder: (context, state) => NoTransitionPage(
+          child: InviteLinkScreen(code: state.pathParameters['code'] ?? ''),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.productActivation,
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: ProductActivationScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoute.logIn,

@@ -598,11 +598,16 @@ class HomeSummary {
   final int transactionCount;
   final int streakDays;
 
+  /// Short-lived, server-signed proof that this authenticated user opened
+  /// Home. Never persist this value in the offline summary cache.
+  final String? engagementReceiptToken;
+
   const HomeSummary({
     required this.rewardsThisMonth,
     required this.rewardsAllTime,
     required this.transactionCount,
     required this.streakDays,
+    this.engagementReceiptToken,
   });
 
   factory HomeSummary.fromJson(Map<String, dynamic> json) {
@@ -611,6 +616,7 @@ class HomeSummary {
       rewardsAllTime: Money.fromRupees(_num(json['rewardsAllTimeInr'])),
       transactionCount: int.parse((json['transactionCount'] ?? 0).toString()),
       streakDays: int.parse((json['streakDays'] ?? 0).toString()),
+      engagementReceiptToken: json['engagementReceipt'] as String?,
     );
   }
 }
@@ -1913,6 +1919,33 @@ class UserCardsRepository {
     return summary == null
         ? null
         : HomeSummary.fromJson(summary as Map<String, dynamic>);
+  }
+
+  /// Records a referral-program engagement day only after the user visits
+  /// Home and receives a fresh signed receipt from the server. A repeated
+  /// submission is safe: the database enforces one credited day per user and
+  /// campaign date. The receipt is deliberately never written to local cache.
+  Future<bool> recordHomeEngagementCheckIn({
+    DateTime? anchor,
+    String? timeZone,
+  }) async {
+    final summary = await fetchHomeSummary(anchor: anchor, timeZone: timeZone);
+    final receipt = summary?.engagementReceiptToken;
+    if (receipt == null || receipt.isEmpty) return false;
+
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/engagement/check-in'),
+      headers: _headers,
+      body: jsonEncode({'receiptToken': receipt}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'POST /engagement/check-in failed: '
+        '${response.statusCode} ${response.body}',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['recorded'] == true || body['qualified'] == true;
   }
 
   /// Returns distinct masked bank accounts observed in SMS imports and the

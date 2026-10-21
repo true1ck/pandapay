@@ -191,7 +191,7 @@ async function query(text, params = [], context = {}) {
   const DB_ACCESS_LOGGING_ENABLED = process.env.DB_ACCESS_LOGGING_ENABLED === 'true' || process.env.DB_ACCESS_LOGGING_ENABLED === '1';
 
   if (DB_ACCESS_LOGGING_ENABLED) {
-    return loggedQuery(text, params, context);
+    return loggedQuery(text, params, context, dbPool);
   }
 
   return dbPool.query(text, params);

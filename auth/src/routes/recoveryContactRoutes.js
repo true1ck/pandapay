@@ -10,7 +10,7 @@ const { createOtp, verifyOtp, discardUndeliveredOtp } = require('../services/otp
 const { sendOtpEmail } = require('../services/emailService');
 const { sendOtpSms } = require('../services/smsService');
 const { encryptPhoneNumber, decryptPhoneNumber } = require('../utils/fieldEncryption');
-const { preparePhoneSearchParams } = require('../utils/encryptedPhoneSearch');
+const { preparePhoneSearchParams, phoneLookupHash } = require('../utils/encryptedPhoneSearch');
 const { maskEmail, maskPhone } = require('../utils/recoveryContacts');
 
 const router = express.Router();
@@ -50,7 +50,7 @@ function normalize(value, channel) {
 async function contactAvailable(value, channel, userId) {
   const query = channel === 'email'
     ? ['SELECT id FROM users WHERE lower(email) = $1 AND id <> $2', [value, userId]]
-    : ['SELECT id FROM users WHERE (phone_number = $1 OR phone_number = $2) AND id <> $3',
+    : ['SELECT id FROM users WHERE phone_lookup_hash = $1 AND id <> $2',
       [...preparePhoneSearchParams(value), userId]];
   return (await db.query(...query)).rows.length === 0;
 }
@@ -122,11 +122,18 @@ router.post('/verify', async (req, res) => {
     const column = channel === 'email' ? 'email' : 'phone_number';
     const flag = channel === 'email' ? 'is_email_verified' : 'is_phone_verified';
     const value = channel === 'email' ? proof.value : encryptPhoneNumber(proof.value);
-    const updated = await db.query(
-      `UPDATE users SET ${column} = $1, ${flag} = TRUE, updated_at = NOW()
-       WHERE id = $2 AND ${column} IS NOT DISTINCT FROM $3 AND deleted = FALSE RETURNING id`,
-      [value, user.id, previous]
-    );
+    const updated = channel === 'email'
+      ? await db.query(
+          `UPDATE users SET email = $1, is_email_verified = TRUE, updated_at = NOW()
+           WHERE id = $2 AND email IS NOT DISTINCT FROM $3 AND deleted = FALSE RETURNING id`,
+          [value, user.id, previous]
+        )
+      : await db.query(
+          `UPDATE users SET phone_number = $1, phone_lookup_hash = $2,
+                            is_phone_verified = TRUE, updated_at = NOW()
+           WHERE id = $3 AND phone_number IS NOT DISTINCT FROM $4 AND deleted = FALSE RETURNING id`,
+          [value, phoneLookupHash(proof.value), user.id, previous]
+        );
     if (!updated.rows.length) return res.status(409).json({ error: 'Your linked contact changed. Start verification again.' });
     user[column] = value;
     user[flag] = true;
