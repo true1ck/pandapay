@@ -105,6 +105,35 @@ if [ -n "${GOOGLE_PLACES_API_KEY:-}" ]; then
   echo "    google places api key configuration updated"
 fi
 
+# Gemini is a server-only, opt-in integration. Require a strong worker token
+# when enabled, and persist only values supplied by the host operator/secret
+# store. Never print either secret.
+ensure_optional_env_key() {
+  local key="$1"
+  local count
+  count="$(awk -v key="$key" 'index($0, key "=") == 1 { count++ } END { print count + 0 }' .env)"
+  if [ "$count" -gt 1 ]; then
+    echo "FATAL: .env must contain at most one $key entry (found $count)"
+    exit 1
+  fi
+  if [ "$count" -eq 0 ]; then
+    upsert_env_value "$key" ""
+  fi
+}
+ensure_optional_env_key AI_WORKER_TOKEN
+ensure_optional_env_key GEMINI_API_KEY
+AI_WORKER_TOKEN_VALUE="$(sed -n 's/^AI_WORKER_TOKEN=//p' .env | sed 's/^"//; s/"$//')"
+GEMINI_API_KEY_VALUE="$(sed -n 's/^GEMINI_API_KEY=//p' .env | sed 's/^"//; s/"$//')"
+if { [ -n "$AI_WORKER_TOKEN_VALUE" ] && [ -z "$GEMINI_API_KEY_VALUE" ]; } \
+  || { [ -z "$AI_WORKER_TOKEN_VALUE" ] && [ -n "$GEMINI_API_KEY_VALUE" ]; }; then
+  echo "FATAL: AI_WORKER_TOKEN and GEMINI_API_KEY must both be set or both be blank"
+  exit 1
+fi
+if [ -n "$AI_WORKER_TOKEN_VALUE" ] && [ "${#AI_WORKER_TOKEN_VALUE}" -lt 32 ]; then
+  echo "FATAL: AI_WORKER_TOKEN must contain at least 32 characters"
+  exit 1
+fi
+
 echo "==> Backing up the database before migrating"
 mkdir -p "$BACKUP_DIR"
 DBURL="$(grep -E '^ADMIN_DATABASE_URL=' .env | cut -d= -f2- | tr -d '"'"'"'')"
@@ -150,7 +179,17 @@ docker compose -f docker-compose.prod.yml --env-file .env \
   up --build --abort-on-container-exit --exit-code-from db-migrate db-migrate
 
 echo "==> Rebuilding and restarting services"
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build api auth backup
+if [ -n "$AI_WORKER_TOKEN_VALUE" ]; then
+  docker compose --profile sms-ai -f docker-compose.prod.yml --env-file .env \
+    up -d --build api auth backup rewards-worker gemini-worker
+else
+  # Explicitly stop a worker from an earlier enabled deploy. Supplying blank
+  # credentials closes API worker routes as well as stopping provider calls.
+  docker compose --profile sms-ai -f docker-compose.prod.yml --env-file .env \
+    stop gemini-worker >/dev/null 2>&1 || true
+  docker compose -f docker-compose.prod.yml --env-file .env \
+    up -d --build api auth backup rewards-worker
+fi
 
 echo "==> Waiting for health"
 for i in $(seq 1 30); do

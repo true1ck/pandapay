@@ -160,6 +160,11 @@ services:
       REFERRAL_PREVIEW_SECRET: dev_referral_preview_secret_change_me_32_bytes
       ENGAGEMENT_RECEIPT_SECRET: dev_engagement_receipt_secret_change_me_32_bytes
       REWARD_WORKER_INTERNAL_SECRET: dev_reward_worker_internal_secret_change_me_32_bytes
+      # A blank token keeps both AI acceptance and worker endpoints disabled.
+      # Set AI_WORKER_TOKEN and GEMINI_API_KEY in the local .env to opt in.
+      AI_WORKER_TOKEN: "${AI_WORKER_TOKEN:-}"
+      GEMINI_REQUESTS_PER_MINUTE: "${GEMINI_REQUESTS_PER_MINUTE:-10}"
+      GEMINI_TOKENS_PER_MINUTE: "${GEMINI_TOKENS_PER_MINUTE:-12000}"
       PRODUCT_TERMS_VERSION: "2026-08-07"
       INBOUND_EMAIL_WEBHOOK_SECRET: dev_inbound_secret_change_me
       PARTNER_WEBHOOK_SECRET: dev_partner_secret_change_me
@@ -175,6 +180,28 @@ services:
       # Keep the host port configurable so PandaPay can coexist with a local
       # Novu API using port 4000 (for example, PANDAPAY_API_HOST_PORT=4001).
       - "${PANDAPAY_API_HOST_PORT:-4000}:4000"
+
+  # Opt-in development worker. It only runs when `--profile sms-ai` is used,
+  # and the API only accepts AI jobs when the matching worker token is set.
+  # Keep the Gemini API key in the local .env; it is never passed to the API.
+  gemini-worker:
+    profiles: ["sms-ai"]
+    build:
+      context: ./api
+    command: ["node", "src/gemini_worker.js"]
+    depends_on:
+      api:
+        condition: service_started
+    restart: "on-failure:5"
+    environment:
+      AI_WORKER_API_BASE_URL: http://api:4000
+      AI_WORKER_TOKEN: "${AI_WORKER_TOKEN:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.8-flash}"
+      AI_WORKER_INTERVAL_MS: "${AI_WORKER_INTERVAL_MS:-2000}"
+      AI_WORKER_BATCH_MAX: "${AI_WORKER_BATCH_MAX:-4}"
+      AI_WORKER_BATCH_WINDOW_MS: "${AI_WORKER_BATCH_WINDOW_MS:-300}"
+      AI_PROVIDER_TIMEOUT_MS: "${AI_PROVIDER_TIMEOUT_MS:-20000}"
 
   rewards-worker:
     build:

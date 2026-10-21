@@ -1,0 +1,60 @@
+# GLM 5.3 Flash handoff: implement PandaPay SMS intelligence
+
+**Read this first when GLM 5.3 Flash starts work in `C:\Users\sujay\CKProjects\PandaPay`.** The [master plan](SMS_INTELLIGENCE_MASTER_IMPLEMENTATION_PLAN.md) is the product/architecture source of truth. This document is the execution contract for an implementing model. Complete phases in order and preserve the current app flow. It is not a request to replace Gemini with GLM: **Gemini remains the app's primary classification API**. GLM 5.3 Flash is the coding agent.
+
+## Copy-ready first prompt for GLM 5.3 Flash
+
+> Implement PandaPay's SMS intelligence system from `docs/SMS_INTELLIGENCE_MASTER_IMPLEMENTATION_PLAN.md`, using `docs/GLM53_FLASH_SMS_IMPLEMENTATION_HANDOFF.md` as the execution contract. Read the linked documents and current code before editing. Begin with Phase 0 only: baseline current behavior and add meaningful shared fixtures/regression tests for existing login auto-detection, incremental scan, idempotency, offline retry, account isolation, financial message families, and the supplied Needs Review screenshot cases. Do not build Gemini or change product behavior in Phase 0. Preserve all existing uncommitted user changes. Report exact files changed, test commands/results, discovered conflicts, and the Phase 0 exit gate. Continue to Phase 1 only after Phase 0 is complete and verified; then proceed phase by phase through the master plan.
+
+The same prompt can be used for a long-running agent. If the model must stop between phases, resume with: **“Continue from the last completed phase in `docs/GLM53_FLASH_SMS_IMPLEMENTATION_HANDOFF.md`; inspect current `git status` and tests before editing.”** Do not restart the project or repeat already completed phases.
+
+## Non-negotiable rules
+
+1. **Do not break the existing flow.** After login and SMS permission, onboarding and the authenticated app shell automatically capture old eligible messages once, then only newer inbox provider IDs. A second app open with no new SMS must not rescan history, upload, create a Gemini job, or add a review item. Read the [compatibility audit](sms-existing-flow-compatibility-audit.md) before editing intake or lifecycle code.
+2. **Preserve source identity.** Current device/server source keys are user/profile + normalized sender + body. Receipts, observations and duplicate prevention rely on them. Add aliases only via an explicit migration; never silently change the hash or reset `sms_inbox_progress`. A widened filter needs a separate versioned historical backfill, if historical discovery is desired.
+3. **Keep local detection working offline.** Gemini is a fallback for unresolved facts, never a prerequisite for local capture, existing parser results or the existing Needs Review UI. Network, provider or quota failure leaves durable recoverable state.
+4. **Treat one SMS as several possible facts.** A debit with balance updates a posted transaction and a dated snapshot; a mandate is not a purchase; a bill is not a new spend. Follow [message families](sms-message-families-plan.md) and [economic kinds](../TRANSACTION_CLASSIFICATION_PLAN.md).
+5. **Use the existing Needs Review screen.** Extend item types, wording and actions. Do not create a second review inbox. User corrections and dismissals take priority over late AI results and future rule versions.
+6. **Keep Gemini credentials on the server.** Start with one Gemini project. Use the durable queue, per-message validation and adaptive microbatch design. Do not add GLM as a production provider in this implementation.
+7. **Protect existing work.** The checkout had unrelated modified and untracked files at planning time, including `api/src/index.js`, `app/lib/app/providers.dart`, parser/resolver files, tests and new `card_bill_ledger.dart`. Inspect `git status` and the latest content first. Do not reset, clean, overwrite or delete those changes. Work in small reviewable slices.
+8. **Make data handling truthful.** `sms_consent_screen.dart` currently says message text is never stored server-side; a short-lived encrypted AI job would change that. Update disclosure and retention behavior before enabling live AI calls. Bank-masked account numbers help; run an automatic payload check for exceptional sensitive fields. No user manual redaction or per-message prompt.
+9. **No fake success.** A valid JSON response, pattern match, or model self-rating is not enough for an automatic financial write. Validate amount/date roles, posted status, account identity, duplicate state and family-specific decision gates. If calibration data is insufficient, abstain and use Needs Review.
+
+## Phase contract
+
+Only mark a phase complete when its exit gate is demonstrated. The following paths are starting points; inspect the latest code before deciding the final edit set.
+
+| Phase | Implementation request | Files to inspect first | Required exit evidence |
+| --- | --- | --- | --- |
+| **0 — Baseline and fixtures** | Record current behavior and build representative positive/negative fixtures, including three screenshot messages, duplicate delivery, mixed bill+offer, debit+balance, mandate, refund, card bill repayment, ambiguous suffix and cross-account cases. Preserve baseline tests. | `app/lib/app/providers.dart`, `sms_listener_service.dart`, `sms_inbox_scanner.dart`, `local_sms_parser.dart`, `local/sms_intake_repository.dart`, `api/src/sms_parser.js`, existing SMS tests. | Current test results plus new fixtures; no product behavior change; documented baseline failures and expected outputs. |
+| **1 — Typed source/fact contract** | Add additive schema and local/server DTOs for source envelope, multiple typed facts, lifecycle, amount/date roles, field provenance, versions, validation and user overrides. Keep legacy response adapters. | `db/supabase/migrations`, `app/lib/data/local/financial_store.dart`, `api/src/index.js`, `api/src/import_source_key.js`. | Replaying one source creates one set of fact IDs; old source hashes/receipts and old clients remain valid; user override wins. |
+| **2 — Device/server routing** | Broaden relevance from transaction-only to all useful financial families; distinguish safe discard from recognized non-spend; apply specialist deterministic extractors. Add separate historical backfill checkpoint only if needed. | `sms_text_hint.dart`, `sms_listener_service.dart`, `sms_import_store.dart`, `local_sms_parser.dart`, server parser/resolvers. | Login auto-import, incremental scan, live/background/backup dedupe, account isolation and offline outbox tests all pass; balance/mandate/bill messages are not silently discarded. |
+| **3 — Product projections** | Make Home balances, card bill cycles, commitments, recurring/subscriptions, card discovery/profile hints and transaction metrics consume validated facts. Keep existing UI flows and domain reducers. | `providers.dart`, `financial_store.dart`, `card_bill_ledger.dart`, `commitments_repository.dart`, `api/src/recurring.js`, account-summaries and card-discovery paths. | Screens agree on facts; latest balance has SMS date; no bill/mandate as spend or repayment double count; historical rewards/caps unaffected. |
+| **4 — Needs Review and corrections** | Extend existing review item kinds, safe prefill and family-specific actions; sync structured confirmed decisions/dismissals, not raw pending text; protect against AI/rule replay. | `needs_review_repository.dart`, `needs_review_screen.dart`, `providers.dart`, server correction APIs. | One recoverable task for each uncertain actionable message; screenshot security/service cases do not show “Review transaction”; corrected fact survives restart and rerun. |
+| **5 — Gemini queue** | Add durable jobs/batches/events, acceptance/result API, worker leases, fairness, rate/token/day/spend gates, retries, auto payload check and structured per-item validator. Prove single-item behavior before microbatching. | [Gemini queue](sms-gemini-final-architecture.md), [microbatch plan](sms-gemini-microbatch-plan.md), existing API auth/RLS/observability. | 429/crash/timeout and app retry create no duplicate job or economic event; failed item goes to review; one user's data cannot enter another user's result. |
+| **6 — Learning and admin** | Candidate-rule clustering/evaluation, versioned approval/distribution, redacted operations tables/APIs and console UI. Start admin read-only; audited controls later. | [Admin plan](sms-ai-admin-monitoring-plan.md), `api/src/admin_rule_families.js`, `console/lib/data/admin_api.dart`, console navigation. | New account receives approved rules; bad rule can roll back; job timeline and quota are visible without raw SMS exposure. |
+| **7 — Migration and rollout** | Dry-run old observations, compare old/new projections, stage by feature flag/family, preserve user overrides, then enable gradually. | [Master rollout section](SMS_INTELLIGENCE_MASTER_IMPLEMENTATION_PLAN.md#9-repository-implementation-sequence), [compatibility matrix](sms-existing-flow-compatibility-audit.md#compatibility-test-matrix-for-each-implementation-phase). | Every compatibility and product gate passes; deltas are reviewed; rollback does not lose facts, receipts or corrections. |
+
+## Tests and verification commands
+
+Run targeted tests while editing and broader suites at a phase gate. From `api/`, `npm test` runs syntax checks and all Node tests. From `app/`, use `flutter test` for affected Dart tests, then the full app suite at phase gates. From `console/`, use `flutter analyze` and `flutter test` when admin code changes. If tools/dependencies are unavailable, report the exact command and failure and still run all feasible static or targeted checks. Do not claim a gate passed from code inspection alone.
+
+Minimum regression cases are listed in [the compatibility audit](sms-existing-flow-compatibility-audit.md#compatibility-test-matrix-for-each-implementation-phase). Maintain a single labeled corpus for local/server parity. Add tests for new behavior where the outcome matters; avoid tests that merely mirror implementation helpers. Verify migrations on a database copy or isolated test environment before rollout.
+
+## Reporting format after each phase
+
+Report in this order:
+
+1. **Phase and status:** complete, incomplete, or blocked, with precise remaining work.
+2. **Changed files and behavior:** how the feature works now and what existing behavior was preserved.
+3. **Evidence:** commands run, counts of passed/failed tests, migration results and any measured classifier metrics. Distinguish design targets from measured values.
+4. **Compatibility gate:** state the relevant login/incremental/dedupe/offline/account-switch/backfill checks explicitly.
+5. **Risks and next phase:** only concrete risks and the next dependent slice.
+
+Do not call the entire SMS program complete after one phase. The final completion report must show that all seven phase gates and the master plan's release checklist passed, or list exactly what remains.
+
+## Parallel work, if the implementation environment supports agents
+
+Parallelize **only independent work with file ownership**. Phase 0 corpus/test inventory and Phase 1 schema design can be researched concurrently, but schema edits and parser adapters should land sequentially. After the fact contract is stable, separate agents can own (a) device intake/local parser, (b) server extractors/projections, and (c) admin read-only UI. One integration owner must reconcile the shared DTOs, migrations and tests. Do not let agents edit `app/lib/app/providers.dart` or `api/src/index.js` concurrently. Gemini queue and mobile review integration must share source/job state contracts before either lands. A shared working tree requires explicit file boundaries or isolated worktrees.
+
+**Model availability in this Codex session:** its subagent spawn menu exposes GPT models, not GLM 5.3 Flash. Use this handoff with an external GLM 5.3 Flash implementation session. Do not silently substitute a different coding model when the requested implementer is GLM.

@@ -72,6 +72,13 @@ services:
       ENGAGEMENT_RECEIPT_SECRET: "${ENGAGEMENT_RECEIPT_SECRET:?}"
       REWARD_WORKER_INTERNAL_SECRET: "${REWARD_WORKER_INTERNAL_SECRET:?}"
       PRODUCT_TERMS_VERSION: "${PRODUCT_TERMS_VERSION:-2026-08-07}"
+      # A blank token leaves AI routes closed. deploy/deploy.sh requires the
+      # Gemini key and worker token to be configured together before it starts
+      # the opt-in worker profile.
+      AI_WORKER_TOKEN: "${AI_WORKER_TOKEN:-}"
+      GEMINI_REQUESTS_PER_MINUTE: "${GEMINI_REQUESTS_PER_MINUTE:-10}"
+      GEMINI_TOKENS_PER_MINUTE: "${GEMINI_TOKENS_PER_MINUTE:-12000}"
+      SMS_LEARNING_HMAC_KEY: "${SMS_LEARNING_HMAC_KEY:-}"
       INBOUND_EMAIL_WEBHOOK_SECRET: "${INBOUND_EMAIL_WEBHOOK_SECRET:?}"
       PARTNER_WEBHOOK_SECRET: "${PARTNER_WEBHOOK_SECRET:?}"
       IMAP_ENCRYPTION_KEY: "${IMAP_ENCRYPTION_KEY:?}"
@@ -85,6 +92,43 @@ services:
       NOTIFICATION_SERVICE_TIMEOUT_MS: "${NOTIFICATION_SERVICE_TIMEOUT_MS:-4000}"
     ports:
       - "127.0.0.1:4000:4000"
+
+  # Opt-in because AI acceptance is disabled until both server credentials
+  # are configured. Never expose GEMINI_API_KEY to the API or mobile app.
+  gemini-worker:
+    profiles: ["sms-ai"]
+    build:
+      context: ./api
+    command: ["node", "src/gemini_worker.js"]
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          process.exit(require('fs').readFileSync('/proc/1/cmdline', 'utf8')
+          .includes('src/gemini_worker.js') ? 0 : 1)
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    environment:
+      NODE_ENV: production
+      AI_WORKER_API_BASE_URL: http://api:4000
+      AI_WORKER_TOKEN: "${AI_WORKER_TOKEN:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.8-flash}"
+      AI_WORKER_INTERVAL_MS: "${AI_WORKER_INTERVAL_MS:-2000}"
+      AI_WORKER_BATCH_MAX: "${AI_WORKER_BATCH_MAX:-4}"
+      AI_WORKER_BATCH_WINDOW_MS: "${AI_WORKER_BATCH_WINDOW_MS:-300}"
+      AI_PROVIDER_TIMEOUT_MS: "${AI_PROVIDER_TIMEOUT_MS:-20000}"
+      GEMINI_REQUESTS_PER_MINUTE: "${GEMINI_REQUESTS_PER_MINUTE:-10}"
+      GEMINI_TOKENS_PER_MINUTE: "${GEMINI_TOKENS_PER_MINUTE:-12000}"
 
   rewards-worker:
     build:

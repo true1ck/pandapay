@@ -93,6 +93,41 @@ The deploy workflow validates that it is present and sufficiently long, but
 does not read, replace, or transmit it through GitHub Actions. Changing this
 key changes phone-search hashes and requires an explicit reindex.
 
+### Optional Gemini SMS classification worker
+
+Gemini remains disabled until an operator configures both `AI_WORKER_TOKEN`
+(a random secret of at least 32 characters) and `GEMINI_API_KEY` in the
+host-only `.env`. Keep the Gemini key server-side; it is consumed only by the
+isolated worker container. Set both entries blank to disable the integration.
+The deploy script rejects a one-sided configuration, does not print either
+value, and stops an already-running worker when the integration is disabled.
+
+The worker credentials are only a transport/call gate. Message acceptance is
+also fail-closed on the API feature flag `sms_ai_queue_enabled`; an absent row
+means **disabled**. First deploy migrations and the API/worker with credentials
+present, verify the AI Operations dashboard, quotas, queue age, retries, and
+provider-capacity wait counters, then start with a small deterministic rollout
+through an audited privileged database session:
+
+```sql
+insert into public.feature_flags (key, is_enabled, rollout_percent, description)
+values ('sms_ai_queue_enabled', true, 1, 'Gemini SMS classification pilot')
+on conflict (key) do update set
+  is_enabled = excluded.is_enabled,
+  rollout_percent = excluded.rollout_percent,
+  description = excluded.description,
+  updated_at = now();
+```
+
+Increase to 5%, then 25%, then 100% only after observing stable queue age,
+valid result rates, 429/retry counts, cost/quota use, and no regressions in
+Needs Review or existing transaction/bill/balance/card flows. Roll back
+immediately by setting `is_enabled = false, rollout_percent = 0`; accepted
+jobs remain durable and can be drained or failed deliberately. Keep user
+contribution learning independently governed by `profiles.contributions_opt_in`
+(off by default). This change does not make AI analysis mandatory for SMS
+ingestion: local detection and review continue when the queue flag is off.
+
 ## 4. Run migrations
 
 ```bash
