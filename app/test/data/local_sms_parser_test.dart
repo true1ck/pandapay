@@ -124,7 +124,8 @@ void main() {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'CANBNK',
-      body: 'IMPS CC PMT Rs.80000 debited from Canara A/c XX2626. UTR 123456789012.',
+      body:
+          'IMPS CC PMT Rs.80000 debited from Canara A/c XX2626. UTR 123456789012.',
       receivedAt: DateTime(2026, 10, 18),
     );
     expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
@@ -142,45 +143,48 @@ void main() {
     expect(result?.transaction?.merchantName, 'Bank transfer');
   });
 
-  test('unlabelled credit, refund, reward, loan and fee classifications stay out of income', () {
-    final credit = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'HDFCBK',
-      body:
-          'Your HDFC Bank A/c XX9080 is credited with Rs.80,000. UTR 123456789012. Avl Bal Rs.1,20,000.',
-      receivedAt: DateTime(2026, 10, 18),
-    );
-    final refund = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'BANK',
-      body:
-          'Refund of Rs.250 received in your savings account ending 5799 from AMAZON.',
-      receivedAt: DateTime(2026, 10, 18),
-    );
-    final reward = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'BANK',
-      body: 'Cashback of INR 80 credited to your wallet.',
-      receivedAt: DateTime(2026, 10, 18),
-    );
-    final loan = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'BANK',
-      body: 'EMI repayment of Rs.12000 debited from your bank account.',
-      receivedAt: DateTime(2026, 10, 18),
-    );
-    final fee = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'BANK',
-      body: 'Service charge of Rs.250 debited from your bank account.',
-      receivedAt: DateTime(2026, 10, 18),
-    );
-    expect(credit?.transaction?.entryKind, TxnEntryKind.transfer);
-    expect(refund?.transaction?.entryKind, TxnEntryKind.transfer);
-    expect(reward?.transaction?.entryKind, TxnEntryKind.transfer);
-    expect(loan?.transaction?.entryKind, TxnEntryKind.transfer);
-    expect(fee?.transaction?.entryKind, TxnEntryKind.spend);
-  });
+  test(
+    'unlabelled credit, refund, reward, loan and fee classifications stay out of income',
+    () {
+      final credit = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'HDFCBK',
+        body:
+            'Your HDFC Bank A/c XX9080 is credited with Rs.80,000. UTR 123456789012. Avl Bal Rs.1,20,000.',
+        receivedAt: DateTime(2026, 10, 18),
+      );
+      final refund = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'BANK',
+        body:
+            'Refund of Rs.250 received in your savings account ending 5799 from AMAZON.',
+        receivedAt: DateTime(2026, 10, 18),
+      );
+      final reward = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'BANK',
+        body: 'Cashback of INR 80 credited to your wallet.',
+        receivedAt: DateTime(2026, 10, 18),
+      );
+      final loan = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'BANK',
+        body: 'EMI repayment of Rs.12000 debited from your bank account.',
+        receivedAt: DateTime(2026, 10, 18),
+      );
+      final fee = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'BANK',
+        body: 'Service charge of Rs.250 debited from your bank account.',
+        receivedAt: DateTime(2026, 10, 18),
+      );
+      expect(credit?.transaction?.entryKind, TxnEntryKind.transfer);
+      expect(refund?.transaction?.entryKind, TxnEntryKind.transfer);
+      expect(reward?.transaction?.entryKind, TxnEntryKind.transfer);
+      expect(loan?.transaction?.entryKind, TxnEntryKind.transfer);
+      expect(fee?.transaction?.entryKind, TxnEntryKind.spend);
+    },
+  );
 
   test('card refunds, reversals and statement rewards remain transfers', () {
     LocalSmsObservation? parse(String body) => LocalSmsParser.parse(
@@ -196,7 +200,11 @@ void main() {
       'Statement credit of Rs.100 applied to card ending 7788.',
     ]) {
       final result = parse(body);
-      expect(result?.transaction?.entryKind, TxnEntryKind.transfer, reason: body);
+      expect(
+        result?.transaction?.entryKind,
+        TxnEntryKind.transfer,
+        reason: body,
+      );
     }
   });
 
@@ -211,51 +219,65 @@ void main() {
     expect(result?.transaction?.merchantName, 'Loan disbursement');
   });
 
-  test('income words inside a reversal or refund do not make it earned income', () {
-    for (final body in [
-      'Interest reversal of Rs.500 credited to your account ending 2626.',
-      'Dividend refund of Rs.250 credited to your account ending 2626.',
-    ]) {
+  test(
+    'income words inside a reversal or refund do not make it earned income',
+    () {
+      for (final body in [
+        'Interest reversal of Rs.500 credited to your account ending 2626.',
+        'Dividend refund of Rs.250 credited to your account ending 2626.',
+      ]) {
+        final result = LocalSmsParser.parse(
+          namespace: 'user:test',
+          sender: 'BANK',
+          body: body,
+          receivedAt: DateTime(2026, 10, 18),
+        );
+        expect(
+          result?.transaction?.entryKind,
+          TxnEntryKind.transfer,
+          reason: body,
+        );
+      }
+    },
+  );
+
+  test(
+    'investment redemption proceeds are not treated as a new contribution',
+    () {
       final result = LocalSmsParser.parse(
         namespace: 'user:test',
         sender: 'BANK',
-        body: body,
+        body:
+            'Mutual fund redemption proceeds of Rs.5000 credited to your account ending 2626.',
         receivedAt: DateTime(2026, 10, 18),
       );
-      expect(result?.transaction?.entryKind, TxnEntryKind.transfer, reason: body);
-    }
-  });
+      expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
+      expect(result?.transaction?.merchantName, 'Investment proceeds');
+    },
+  );
 
-  test('investment redemption proceeds are not treated as a new contribution', () {
-    final result = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'BANK',
-      body:
-          'Mutual fund redemption proceeds of Rs.5000 credited to your account ending 2626.',
-      receivedAt: DateTime(2026, 10, 18),
-    );
-    expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
-    expect(result?.transaction?.merchantName, 'Investment proceeds');
-  });
-
-  test('broker settlement payout to the bank is an investment-proceeds transfer', () {
-    final result = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'VM-DHANHQ-S',
-      body:
-          'Dear Sujay We have transferred Rs 93.82 to your bank account ending with XXXXXXX2626 as a part of running account settlement vide Ref No PO26101713812965. To continue trading and investing, add funds back to your Dhan account.',
-      receivedAt: DateTime(2026, 10, 18),
-    );
-    expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
-    expect(result?.transaction?.merchantName, 'Investment proceeds');
-    expect(result?.transaction?.accountLast4, '2626');
-  });
+  test(
+    'broker settlement payout to the bank is an investment-proceeds transfer',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VM-DHANHQ-S',
+        body:
+            'Dear Sujay We have transferred Rs 93.82 to your bank account ending with XXXXXXX2626 as a part of running account settlement vide Ref No PO26101713812965. To continue trading and investing, add funds back to your Dhan account.',
+        receivedAt: DateTime(2026, 10, 18),
+      );
+      expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
+      expect(result?.transaction?.merchantName, 'Investment proceeds');
+      expect(result?.transaction?.accountLast4, '2626');
+    },
+  );
 
   test('named wallet top-up still parses as a wallet load transfer', () {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'PAYTM',
-      body: 'Rs.5000 added to Paytm wallet from your bank account. UPI Ref 123456789012.',
+      body:
+          'Rs.5000 added to Paytm wallet from your bank account. UPI Ref 123456789012.',
       receivedAt: DateTime(2026, 10, 18),
     );
     expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
@@ -274,18 +296,24 @@ void main() {
     expect(result?.transaction?.merchantName, isNot('Wallet load'));
   });
 
-  test('a debit addressed to the profile name is a self-transfer, not spending', () {
-    final result = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'HDFCBK',
-      body:
-          'Sent Rs.5000.00 From HDFC Bank A/C *1797 To SUJAY SHANTARAM KURTIKAR. Not you? Call 1800. Ref 12345678',
-      receivedAt: DateTime(2026, 10, 18),
-      ownUserName: 'Sujay Shantaram Kurtikar',
-    );
-    expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
-    expect(result?.transaction?.merchantName, 'Transfer between own accounts');
-  });
+  test(
+    'a debit addressed to the profile name is a self-transfer, not spending',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'HDFCBK',
+        body:
+            'Sent Rs.5000.00 From HDFC Bank A/C *1797 To SUJAY SHANTARAM KURTIKAR. Not you? Call 1800. Ref 12345678',
+        receivedAt: DateTime(2026, 10, 18),
+        ownUserName: 'Sujay Shantaram Kurtikar',
+      );
+      expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
+      expect(
+        result?.transaction?.merchantName,
+        'Transfer between own accounts',
+      );
+    },
+  );
 
   test('same person named without a profile name stays a spend', () {
     final result = LocalSmsParser.parse(
@@ -327,7 +355,8 @@ void main() {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'BANK',
-      body: 'Loan interest charge of Rs.500 debited from your account ending 2626.',
+      body:
+          'Loan interest charge of Rs.500 debited from your account ending 2626.',
       receivedAt: DateTime(2026, 10, 18),
     );
     expect(result?.transaction?.entryKind, TxnEntryKind.spend);
@@ -611,6 +640,7 @@ void main() {
     expect(result?.amountDue?.rupees, 3000);
     expect(result?.dueDate?.day, 20);
     expect(result?.statementDate, isNull);
+    expect(result?.statementDateExplicit, isFalse);
   });
 
   test('keeps the statement-generation day separately from the due date', () {
@@ -623,6 +653,7 @@ void main() {
     );
     expect(result?.eventType, LocalSmsEventType.bill);
     expect(result?.statementDate?.day, 5);
+    expect(result?.statementDateExplicit, isFalse);
     expect(result?.dueDate?.day, 20);
   });
 
@@ -635,6 +666,7 @@ void main() {
       receivedAt: DateTime(2026, 10, 6),
     );
     expect(result?.statementDate, DateTime(2026, 10, 3));
+    expect(result?.statementDateExplicit, isTrue);
   });
 
   test('does not learn the due date as the billing day', () {

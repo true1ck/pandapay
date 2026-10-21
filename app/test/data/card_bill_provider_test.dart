@@ -58,54 +58,54 @@ void main() {
     return container;
   }
 
-  test('captured bill SMS shows the issuer bill, then payment marks it paid',
-      () async {
-    final store = cache.financialStore;
-    store.replaceCards('user:account-a', [card]);
-    // Known-empty coverage keeps every transaction read offline-local.
-    store.saveTransactions(
-      'user:account-a',
-      [],
-      completeQuery: const TransactionQuery(),
-    );
-    // Same fields SmsImportStore writes when the local parser reads
-    // "statement generated ... Total amount due ... Minimum due ... Due date".
-    store.saveObservation('user:account-a', 'obs1', {
-      'id': 'obs1',
-      'received_at': DateTime(2026, 10, 18).toUtc().toIso8601String(),
-      'sender_bank': 'AXISBK',
-      'card_last4': '7788',
-      'event_type': 'bill',
-      'statement_date': DateTime(2026, 10, 18).toIso8601String(),
-      'due_date': DateTime(2026, 11, 2).toIso8601String(),
-      'amount_due_paise': 2156000,
-      'minimum_due_paise': 107800,
-      'confidence': 0.95,
-    });
+  test(
+    'captured bill SMS shows the issuer bill, then payment marks it paid',
+    () async {
+      final store = cache.financialStore;
+      store.replaceCards('user:account-a', [card]);
+      // Known-empty coverage keeps every transaction read offline-local.
+      store.saveTransactions(
+        'user:account-a',
+        [],
+        completeQuery: const TransactionQuery(),
+      );
+      // Same fields SmsImportStore writes when the local parser reads
+      // "statement generated ... Total amount due ... Minimum due ... Due date".
+      store.saveObservation('user:account-a', 'obs1', {
+        'id': 'obs1',
+        'received_at': DateTime(2026, 10, 18).toUtc().toIso8601String(),
+        'sender_bank': 'AXISBK',
+        'card_last4': '7788',
+        'event_type': 'bill',
+        'statement_date': DateTime(2026, 10, 18).toIso8601String(),
+        'statement_date_explicit': true,
+        'due_date': DateTime(2026, 11, 2).toIso8601String(),
+        'amount_due_paise': 2156000,
+        'minimum_due_paise': 107800,
+        'confidence': 0.95,
+      });
 
-    final container = offlineContainer();
-    addTearDown(container.dispose);
-    final subscription = container.listen(paymentsDueProvider, (_, next) {});
-    addTearDown(subscription.close);
-    final rows = await container
-        .read(paymentsDueProvider.future)
-        .timeout(const Duration(seconds: 10));
+      final container = offlineContainer();
+      addTearDown(container.dispose);
+      final subscription = container.listen(paymentsDueProvider, (_, next) {});
+      addTearDown(subscription.close);
+      final rows = await container
+          .read(paymentsDueProvider.future)
+          .timeout(const Duration(seconds: 10));
 
-    expect(rows, hasLength(1));
-    final bill = rows.single.bill;
-    expect(bill, isNotNull);
-    expect(bill!.statementDate, DateTime(2026, 10, 18));
-    expect(bill.dueDate, DateTime(2026, 11, 2));
-    expect(bill.amountDue, Money.fromRupees(21560));
-    expect(bill.minimumDue, Money.fromRupees(1078));
-    expect(bill.isPaid, isFalse);
-    expect(bill.outstanding, Money.fromRupees(21560));
+      expect(rows, hasLength(1));
+      final bill = rows.single.bill;
+      expect(bill, isNotNull);
+      expect(bill!.statementDate, DateTime(2026, 10, 18));
+      expect(bill.dueDate, DateTime(2026, 11, 2));
+      expect(bill.amountDue, Money.fromRupees(21560));
+      expect(bill.minimumDue, Money.fromRupees(1078));
+      expect(bill.isPaid, isFalse);
+      expect(bill.outstanding, Money.fromRupees(21560));
 
-    // The payment receipt arrives (imported SMS or server sync, either way
-    // it lands in the local store before the screen re-reads the ledger).
-    store.saveTransactions(
-      'user:account-a',
-      [
+      // The payment receipt arrives (imported SMS or server sync, either way
+      // it lands in the local store before the screen re-reads the ledger).
+      store.saveTransactions('user:account-a', [
         TransactionEntry(
           id: 'pay1',
           amount: Money.fromRupees(21560),
@@ -116,17 +116,16 @@ void main() {
           source: 'sms',
           status: 'active',
         ),
-      ],
-      completeQuery: const TransactionQuery(),
-    );
-    await Future<void>.delayed(Duration.zero);
-    container.invalidate(cardBillLedgerProvider);
-    final ledger = await container
-        .read(cardBillLedgerProvider.future)
-        .timeout(const Duration(seconds: 10));
-    expect(ledger['card']!.current!.isPaid, isTrue);
-    expect(ledger['card']!.current!.outstanding, Money.fromRupees(0));
-  });
+      ], completeQuery: const TransactionQuery());
+      await Future<void>.delayed(Duration.zero);
+      container.invalidate(cardBillLedgerProvider);
+      final ledger = await container
+          .read(cardBillLedgerProvider.future)
+          .timeout(const Duration(seconds: 10));
+      expect(ledger['card']!.current!.isPaid, isTrue);
+      expect(ledger['card']!.current!.outstanding, Money.fromRupees(0));
+    },
+  );
 
   test('reminder without a stated statement date keeps the unverified claim '
       'off the screen', () async {

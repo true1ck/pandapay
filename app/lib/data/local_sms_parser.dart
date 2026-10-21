@@ -46,6 +46,7 @@ class LocalSmsObservation {
   final String? cadenceHint;
   final DateTime? dueDate;
   final DateTime? statementDate;
+  final bool statementDateExplicit;
   final Money? availableBalance, amountDue, minimumDue, autopayLimit;
   final LocalSmsEventType eventType;
   final LocalSmsDisposition disposition;
@@ -59,6 +60,7 @@ class LocalSmsObservation {
     this.cadenceHint,
     this.dueDate,
     this.statementDate,
+    this.statementDateExplicit = false,
     this.availableBalance,
     this.amountDue,
     this.minimumDue,
@@ -94,7 +96,7 @@ class LocalSmsReviewDraft {
 /// formats remain durable intake for server parsing; they never become guessed
 /// spending. Values are local observations until server reconciliation.
 class LocalSmsParser {
-  static const version = 6;
+  static const version = 7;
 
   /// Messages with a quoted price or a card name are not necessarily a
   /// payment. Apply this before either upload or manual review, including to
@@ -216,10 +218,12 @@ class LocalSmsParser {
     if (recipientTokens.isEmpty) return false;
     var matched = 0;
     for (final nameToken in nameTokens) {
-      if (recipientTokens.any((token) =>
-          token == nameToken ||
-          (token.length >= 2 && nameToken.startsWith(token)) ||
-          (nameToken.length >= 2 && token.startsWith(nameToken)))) {
+      if (recipientTokens.any(
+        (token) =>
+            token == nameToken ||
+            (token.length >= 2 && nameToken.startsWith(token)) ||
+            (nameToken.length >= 2 && token.startsWith(nameToken)),
+      )) {
         matched += 1;
       }
     }
@@ -234,7 +238,8 @@ class LocalSmsParser {
     final match = _re(
       r"\bfrom\s+([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80}?)(?=\s+(?:on|for|ref(?:erence)?|txn|utr|a\/?c\.?|account|bal(?:ance)?|avl|available)\b|[.,;]|$)",
     ).firstMatch(body);
-    return match != null && _isOwnPersonName(match.group(1)!.trim(), ownUserName);
+    return match != null &&
+        _isOwnPersonName(match.group(1)!.trim(), ownUserName);
   }
 
   static bool _incomingBankTransferCandidate(String body) =>
@@ -250,31 +255,36 @@ class LocalSmsParser {
         r'\b(?:salary|wages?|payroll|pension|interest|dividend|rent|commission|consulting|business\s+(?:receipt|income)|invoice\s+paid)\b',
       ).hasMatch(body);
 
-  static bool _loanRepayment(String body) => !_feeCharge(body) && _re(
-    r'\b(?:loan|personal\s+loan|home\s+loan|car\s+loan|education\s+loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|debited|repaid|repayment|deducted|transferred)\b',
-  ).hasMatch(body);
+  static bool _loanRepayment(String body) =>
+      !_feeCharge(body) &&
+      _re(
+        r'\b(?:loan|personal\s+loan|home\s+loan|car\s+loan|education\s+loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|debited|repaid|repayment|deducted|transferred)\b',
+      ).hasMatch(body);
 
   static bool _feeCharge(String body) => _re(
     r'\b(?:bank\s+charge|service\s+charge|processing\s+fee|convenience\s+fee|late\s+fee|annual\s+fee|maintenance\s+fee|finance\s+charge|interest\s+charge|interest\s+(?:on\s+)?(?:loan|emi)|(?:loan|emi)\s+interest|commission|brokerage\s+fee|gst\s+on\s+(?:fee|charge))\b',
   ).hasMatch(body);
 
   static bool _investmentProceeds(String body) =>
-      (_re(r'\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b')
-              .hasMatch(body) &&
-          _re(r'\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b')
-              .hasMatch(body));
+      (_re(
+        r'\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b',
+      ).hasMatch(body) &&
+      _re(
+        r'\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b',
+      ).hasMatch(body));
 
   static bool _cardCredit(String body) {
     if (!_re(r'\b(?:credit|debit)\s+card\b|\bcard\b').hasMatch(body)) {
       return false;
     }
-    if (_re(r'\b(?:payment|amount|minimum)\s+due\b|\bdue\s+on\b')
-        .hasMatch(body)) {
+    if (_re(
+      r'\b(?:payment|amount|minimum)\s+due\b|\bdue\s+on\b',
+    ).hasMatch(body)) {
       return false;
     }
     if (_re(
-      r'\b(?:declined|failed|pending|processing|initiated|cancelled|canceled)\b',
-    ).hasMatch(body) &&
+          r'\b(?:declined|failed|pending|processing|initiated|cancelled|canceled)\b',
+        ).hasMatch(body) &&
         !_re(r'\b(?:reversed|refunded|credited)\b').hasMatch(body)) {
       return false;
     }
@@ -284,6 +294,7 @@ class LocalSmsParser {
         (_re(r'\b(?:reversed|reversal)\b').hasMatch(body) &&
             _re(r'\b(?:posted|applied|credited)\b').hasMatch(body));
   }
+
   static bool sensitive(String body) => RegExp(
     r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
     caseSensitive: false,
@@ -482,10 +493,12 @@ class LocalSmsParser {
                 ownUserName != null &&
                 _isOwnPersonName(merchant, ownUserName)) ||
             _ownNameInFromClause(body, ownUserName) ||
-            _re(r'\b(?:refund(?:ed)?|reversal|reversed|cashback|reward|salary\s+advance|loan\s+disbursement|cash\s+deposit|cash\s+withdrawal)\b').hasMatch(body)
+            _re(
+              r'\b(?:refund(?:ed)?|reversal|reversed|cashback|reward|salary\s+advance|loan\s+disbursement|cash\s+deposit|cash\s+withdrawal)\b',
+            ).hasMatch(body)
         ? TxnEntryKind.transfer
         : _re(r'\b(?:credited|received|deposited)\b').hasMatch(body) &&
-            _earnedIncomeCredit(body)
+              _earnedIncomeCredit(body)
         ? TxnEntryKind.income
         : TxnEntryKind.spend;
 
@@ -556,6 +569,7 @@ class LocalSmsParser {
       }
     }
     DateTime? statementDate;
+    var statementDateExplicit = false;
     final statementAlert =
         _re(
           r'\b(?:credit\s+card|card\b[\s\S]{0,45}\b(?:ending|last\s*4|no\.?|number|xx|x{2,}|\*{2,})\s*[:#.-]?\s*\d{4})\b',
@@ -622,7 +636,10 @@ class LocalSmsParser {
         // billing day.
         if (dueClause.hasMatch(match.group(0)!)) continue;
         statementDate = parseDate(match.group(group)!);
-        if (statementDate != null) break;
+        if (statementDate != null) {
+          statementDateExplicit = true;
+          break;
+        }
       }
       // Most issuers omit the generated date from the body. The SMS receive
       // date is then the best available statement-day observation.
@@ -724,6 +741,7 @@ class LocalSmsParser {
       cadenceHint: cadenceHint,
       dueDate: due,
       statementDate: statementDate,
+      statementDateExplicit: statementDateExplicit,
       availableBalance: balance,
       amountDue: amountDue ?? billAmount,
       minimumDue: minimumDue,
@@ -859,10 +877,13 @@ class LocalSmsParser {
         !brokerSettlement &&
         isInvestmentMovementDescription(body);
     final walletLoad = _walletLoad(body) && !brokerSettlement;
-    final refundCredit = _re(r'\b(?:refund(?:ed)?|chargeback)\b').hasMatch(body);
+    final refundCredit = _re(
+      r'\b(?:refund(?:ed)?|chargeback)\b',
+    ).hasMatch(body);
     final reversalCredit = _re(r'\b(?:reversal|reversed)\b').hasMatch(body);
-    final rewardCredit = _re(r'\b(?:cashback|reward|rewards|points?|miles?)\b')
-        .hasMatch(body);
+    final rewardCredit = _re(
+      r'\b(?:cashback|reward|rewards|points?|miles?)\b',
+    ).hasMatch(body);
     final loanDisbursement = _re(
       r'\b(?:loan|personal\s+loan|salary\s+advance|credit\s+line)\b[\s\S]{0,70}\b(?:credited|received|disbursed|disbursement)\b',
     ).hasMatch(body);
@@ -963,11 +984,14 @@ class LocalSmsParser {
     } else if (brokerSettlement) {
       merchant = 'Investment proceeds';
     } else if (cardCredit) {
-      merchant = _re(r'\b(?:refund(?:ed)?|reversed?|reversal|chargeback)\b')
-          .hasMatch(body)
+      merchant =
+          _re(
+            r'\b(?:refund(?:ed)?|reversed?|reversal|chargeback)\b',
+          ).hasMatch(body)
           ? 'Refund'
-          : _re(r'\b(?:cashback|reward|rewards|points?|miles?)\b')
-                .hasMatch(body)
+          : _re(
+              r'\b(?:cashback|reward|rewards|points?|miles?)\b',
+            ).hasMatch(body)
           ? 'Reward or cashback'
           : _re(r'\breversed?|reversal\b').hasMatch(body)
           ? 'Reversal'

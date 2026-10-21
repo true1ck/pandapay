@@ -578,7 +578,8 @@ class FinancialStore {
       final legacyBankSender = RegExp(
         r'(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)',
       ).hasMatch(sender);
-      final bankAccount = row['is_bank_account'] == true ||
+      final bankAccount =
+          row['is_bank_account'] == true ||
           (row['is_bank_account'] == null &&
               legacyBankSender &&
               !RegExp(
@@ -595,9 +596,7 @@ class FinancialStore {
           !upiServiceSender &&
           !cardSuffixes.contains(account)) {
         final canonical = canonicalBankSender(row['sender_bank']);
-        byAccount
-            .putIfAbsent('$canonical:$account', () => [])
-            .add(row);
+        byAccount.putIfAbsent('$canonical:$account', () => []).add(row);
       }
     }
     DateTime? latestBalanceAt(List<Map<String, dynamic>> rows) {
@@ -608,6 +607,7 @@ class FinancialStore {
       }
       return null;
     }
+
     return [
       for (final entry in byAccount.entries)
         BankAccountSummary(
@@ -662,7 +662,10 @@ class FinancialStore {
     final existingNote = body['note'] as String?;
     final cleanOldNote = existingNote
         ?.replaceFirst(
-          RegExp(r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*', caseSensitive: false),
+          RegExp(
+            r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*',
+            caseSensitive: false,
+          ),
           '',
         )
         .trim();
@@ -692,7 +695,10 @@ class FinancialStore {
     final rawNote = body['note'] as String?;
     final restoredNote = rawNote
         ?.replaceFirst(
-          RegExp(r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*', caseSensitive: false),
+          RegExp(
+            r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*',
+            caseSensitive: false,
+          ),
           '',
         )
         .trim();
@@ -703,7 +709,9 @@ class FinancialStore {
       {
         ...body,
         'status': 'active',
-        'note': (restoredNote != null && restoredNote.isNotEmpty) ? restoredNote : null,
+        'note': (restoredNote != null && restoredNote.isNotEmpty)
+            ? restoredNote
+            : null,
       },
       DateTime.now().millisecondsSinceEpoch,
       sourceKey: body['source_key'] as String?,
@@ -860,6 +868,7 @@ class FinancialStore {
               'autopay_limit_paise': obs.autopayLimit?.paise,
               'due_date': obs.dueDate?.toIso8601String(),
               'statement_date': obs.statementDate?.toIso8601String(),
+              'statement_date_explicit': obs.statementDateExplicit,
               'event_type': obs.eventType.wireValue,
               'disposition': obs.disposition.wireValue,
               'reason_codes': obs.reasonCodes,
@@ -872,10 +881,13 @@ class FinancialStore {
               );
               for (final cardRow in cardRows) {
                 final cardBody =
-                    jsonDecode(cardRow['payload'] as String) as Map<String, dynamic>;
+                    jsonDecode(cardRow['payload'] as String)
+                        as Map<String, dynamic>;
                 if (cardBody['last4'] == obs.cardLast4) {
                   if (cardBody['due_day'] == null) {
-                    patchCard(ns, cardRow['id'] as String, {'due_day': obs.dueDate!.day});
+                    patchCard(ns, cardRow['id'] as String, {
+                      'due_day': obs.dueDate!.day,
+                    });
                   }
                 }
               }
@@ -897,6 +909,7 @@ class FinancialStore {
       // Best-effort local repair
     }
   }
+
   void syncCardDatesFromObservations(String ns) {
     try {
       final cardRows = database.db.select(
@@ -910,7 +923,8 @@ class FinancialStore {
       );
       var changed = false;
       for (final cardRow in cardRows) {
-        final card = jsonDecode(cardRow['payload'] as String) as Map<String, dynamic>;
+        final card =
+            jsonDecode(cardRow['payload'] as String) as Map<String, dynamic>;
         final currentDueDay = card['due_day'] as int?;
         final currentStmtDay = card['statement_day'] as int?;
 
@@ -919,7 +933,8 @@ class FinancialStore {
 
         final matchingBills = <Map<String, dynamic>>[];
         for (final obsRow in obsRows) {
-          final obs = jsonDecode(obsRow['payload'] as String) as Map<String, dynamic>;
+          final obs =
+              jsonDecode(obsRow['payload'] as String) as Map<String, dynamic>;
           if (obs['event_type'] != 'bill') continue;
 
           final obsLast4 = obs['card_last4'] as String?;
@@ -927,8 +942,10 @@ class FinancialStore {
           final biller = (obs['biller_name'] as String? ?? '').toLowerCase();
 
           final matchesLast4 = obsLast4 != null && obsLast4 == cardLast4;
-          final matchesFamily = obsLast4 == null &&
-              ((sender.contains('tneu') || biller.contains('tata')) && cardName.contains('tata'));
+          final matchesFamily =
+              obsLast4 == null &&
+              ((sender.contains('tneu') || biller.contains('tata')) &&
+                  cardName.contains('tata'));
 
           if (!matchesLast4 && !matchesFamily) continue;
           matchingBills.add(obs);
@@ -937,14 +954,20 @@ class FinancialStore {
         if (matchingBills.isEmpty) continue;
 
         matchingBills.sort((a, b) {
-          final aDate = (a['received_at'] ?? a['statement_date'] ?? '') as String;
-          final bDate = (b['received_at'] ?? b['statement_date'] ?? '') as String;
+          final aDate =
+              (a['received_at'] ?? a['statement_date'] ?? '') as String;
+          final bDate =
+              (b['received_at'] ?? b['statement_date'] ?? '') as String;
           return bDate.compareTo(aDate);
         });
 
         int? newDueDay;
         int? newStmtDay;
         for (final obs in matchingBills) {
+          // A reminder's due date is for one upcoming payment, not a verified
+          // recurring card-cycle day. Only trust dates attached to a
+          // statement date explicitly printed by the issuer.
+          if (obs['statement_date_explicit'] != true) continue;
           if (newDueDay == null && obs['due_date'] != null) {
             final dt = DateTime.tryParse(obs['due_date'] as String);
             if (dt != null) newDueDay = dt.day;

@@ -2953,9 +2953,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
     final issuerB = canonicalBankSender(
       b.issuerSlug ?? b.issuerShortName ?? b.issuerName,
     );
-    return issuerA.isEmpty ||
-        issuerB.isEmpty ||
-        issuerA == issuerB;
+    return issuerA.isEmpty || issuerB.isEmpty || issuerA == issuerB;
   }
 
   List<BankAccountSummary> mergeAccounts(
@@ -3077,8 +3075,9 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
 /// card-bill payment receipts. Reactive to both SMS capture and the
 /// transaction snapshot so a payment flips its bill to Paid on the next
 /// rebuild. Empty map when signed out.
-final cardBillLedgerProvider =
-    FutureProvider<Map<String, CardBillLedger>>((ref) async {
+final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
+  ref,
+) async {
   final markReady = _financialChanges(ref, 'observations');
   final repo = ref.watch(userCardsRepositoryProvider);
   List<UserCard> cards;
@@ -3096,11 +3095,17 @@ final cardBillLedgerProvider =
 
   final evidence = <CardBillEvidence>[];
   DateTime? earliestAnchor;
-  for (final obs in store?.entities(namespace, 'sms_observations') ?? const []) {
+  for (final obs
+      in store?.entities(namespace, 'sms_observations') ?? const []) {
     if (obs['event_type'] != 'bill') continue;
-    final explicit = DateTime.tryParse(obs['statement_date'] as String? ?? '');
+    final parsedStatement = DateTime.tryParse(
+      obs['statement_date'] as String? ?? '',
+    );
+    final statementDateExplicit = obs['statement_date_explicit'] == true;
     final received = DateTime.tryParse(obs['received_at'] as String? ?? '');
-    final anchor = explicit ?? received;
+    final anchor = statementDateExplicit
+        ? parsedStatement
+        : (received ?? parsedStatement);
     if (anchor == null) continue;
     earliestAnchor = earliestAnchor == null || anchor.isBefore(earliestAnchor)
         ? anchor
@@ -3110,7 +3115,7 @@ final cardBillLedgerProvider =
         cardLast4: obs['card_last4'] as String?,
         family: obs['sender_bank'] as String?,
         statementDate: anchor,
-        statementDateExplicit: explicit != null,
+        statementDateExplicit: statementDateExplicit && parsedStatement != null,
         dueDate: DateTime.tryParse(obs['due_date'] as String? ?? ''),
         amountDue: _moneyFromPaise(obs['amount_due_paise']),
         minimumDue: _moneyFromPaise(obs['minimum_due_paise']),
@@ -3125,9 +3130,7 @@ final cardBillLedgerProvider =
     // late payment may trail the due date; a quarter either way is the
     // generous bound, tied to the oldest evidence so old history costs
     // nothing on fresh installs.
-    final from = earliestAnchor
-        .subtract(const Duration(days: 92))
-        .toUtc();
+    final from = earliestAnchor.subtract(const Duration(days: 92)).toUtc();
     payments = await loadTransactionsWithOfflineCache(
       ref,
       repo: repo,
@@ -3137,7 +3140,10 @@ final cardBillLedgerProvider =
     if (ref.read(cacheNamespaceProvider) != namespace) return const {};
   }
 
-  final usable = [for (final txn in payments) if (isCardBillPaymentTxn(txn)) txn];
+  final usable = [
+    for (final txn in payments)
+      if (isCardBillPaymentTxn(txn)) txn,
+  ];
   if (evidence.isEmpty && usable.isEmpty) return const {};
   markReady();
   return deriveCardBills(
@@ -4419,10 +4425,7 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
     // matching the server engine's confirmed-only total.
     totalAnnual: series
         .where((item) => item.status == 'confirmed')
-        .fold(
-          const Money.zero(),
-          (total, item) => total + item.annualCost,
-        ),
+        .fold(const Money.zero(), (total, item) => total + item.annualCost),
   );
 }
 
@@ -5853,4 +5856,3 @@ extension _FirstWhereOrNull<T> on List<T> {
     return null;
   }
 }
-

@@ -67,7 +67,8 @@ class SmsImportStore {
         body: message.body,
         receivedAt: message.receivedAt,
         cards: cards,
-        ownUserName: ownUserName ?? store.database.profileDisplayName(namespace),
+        ownUserName:
+            ownUserName ?? store.database.profileDisplayName(namespace),
       );
       if (observation != null) {
         store.saveObservation(namespace, key, {
@@ -94,6 +95,7 @@ class SmsImportStore {
           'autopay_limit_paise': observation.autopayLimit?.paise,
           'due_date': observation.dueDate?.toIso8601String(),
           'statement_date': observation.statementDate?.toIso8601String(),
+          'statement_date_explicit': observation.statementDateExplicit,
           'event_type': observation.eventType.wireValue,
           'disposition': observation.disposition.wireValue,
           'reason_codes': observation.reasonCodes,
