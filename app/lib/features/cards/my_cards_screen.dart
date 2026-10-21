@@ -16,7 +16,9 @@ import 'find_cards_screen.dart';
 import 'card_add_guard.dart';
 import 'card_summary.dart';
 import 'card_visual.dart';
+import 'package:intl/intl.dart';
 import '../insights/credit_utilization_ui.dart';
+import '../insights/payments_due_screen.dart';
 import '../quickadd/quick_add_screen.dart';
 
 /// C1 My Cards (ui-spec Group C, implementation-plan-group-c-d.md) —
@@ -348,6 +350,8 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
     final bestFor = product == null
         ? const <String>[]
         : bestUsedFor(product, categories);
+    final duePayments = ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
+    final duePayment = duePayments.where((d) => d.card.id == card.id).firstOrNull;
 
     return Opacity(
       opacity: card.isArchived ? 0.55 : 1,
@@ -398,6 +402,8 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                     userCard: card,
                     cycleSpend: spendSummary?.cycleTotal,
                     latestSpend: spendSummary?.latestSpend,
+                    effectiveBillingDay: duePayment?.bill?.statementDate.day ?? card.statementDay,
+                    effectiveDueDay: duePayment?.dueOn.day ?? card.dueDay,
                   ),
                 ),
                 const SizedBox(height: AppSpace.md),
@@ -448,13 +454,17 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
               ],
-              if (card.dueDay != null && !card.isArchived) ...[
+              if (!card.isArchived && (duePayment != null || card.dueDay != null)) ...[
                 const SizedBox(height: AppSpace.sm),
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        _nextDueDateLabel(card.dueDay!),
+                        duePayment != null
+                            ? (duePayment.daysUntilDue == 0
+                                ? 'Due today · ${DateFormat('dd MMM').format(duePayment.dueOn)}'
+                                : 'Next due in ${duePayment.daysUntilDue} days · ${DateFormat('dd MMM').format(duePayment.dueOn)}')
+                            : _nextDueDateLabel(card.dueDay!),
                         style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                       ),
                     ),

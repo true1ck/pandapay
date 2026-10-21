@@ -743,6 +743,7 @@ class FinancialStore {
         }, timestamp);
       }
     });
+    syncCardDatesFromObservations(ns);
     if (before != jsonEncode(entities(ns, 'cards'))) {
       _notify(ns, entity: 'cards');
     }

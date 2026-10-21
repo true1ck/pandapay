@@ -10,6 +10,7 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import 'card_actions_screen.dart';
 import 'card_visual.dart';
+import '../insights/payments_due_screen.dart' show DuePayment, paymentsDueProvider;
 import '../insights/lounge_access_screen.dart' show isInCurrentLoungeWindow;
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart';
@@ -119,6 +120,11 @@ class CardDetailScreen extends ConsumerWidget {
                   final spendSummary = ref.watch(
                     cardSpendSummaryProvider,
                   )[userCard.id];
+                  final duePayments =
+                      ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
+                  final duePayment = duePayments
+                      .where((d) => d.card.id == userCard.id)
+                      .firstOrNull;
                   final sections = [
                     (
                       label: 'Rewards',
@@ -162,7 +168,11 @@ class CardDetailScreen extends ConsumerWidget {
                     ),
                     (
                       label: 'Statement',
-                      body: _StatementTab(userCard: userCard, embedded: true),
+                      body: _StatementTab(
+                        userCard: userCard,
+                        duePayment: duePayment,
+                        embedded: true,
+                      ),
                     ),
                   ];
                   final selected = initialTabIndex.clamp(
@@ -188,6 +198,10 @@ class CardDetailScreen extends ConsumerWidget {
                         userCard: userCard,
                         cycleSpend: spendSummary?.cycleTotal,
                         latestSpend: spendSummary?.latestSpend,
+                        effectiveBillingDay:
+                            duePayment?.bill?.statementDate.day ?? userCard.statementDay,
+                        effectiveDueDay:
+                            duePayment?.dueOn.day ?? userCard.dueDay,
                       ),
                       const SizedBox(height: AppSpace.lg),
                       for (final section in ordered) ...[
@@ -1398,8 +1412,13 @@ class _BenefitsTab extends ConsumerWidget {
 
 class _StatementTab extends StatelessWidget {
   final UserCard userCard;
+  final DuePayment? duePayment;
   final bool embedded;
-  const _StatementTab({required this.userCard, this.embedded = false});
+  const _StatementTab({
+    required this.userCard,
+    this.duePayment,
+    this.embedded = false,
+  });
 
   @override
   Widget build(BuildContext context) {

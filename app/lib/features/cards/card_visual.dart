@@ -46,6 +46,8 @@ class CardVisual extends StatelessWidget {
   final TransactionEntry? latestSpend;
   final double? width;
   final double? height;
+  final int? effectiveBillingDay;
+  final int? effectiveDueDay;
 
   const CardVisual({
     super.key,
@@ -56,6 +58,8 @@ class CardVisual extends StatelessWidget {
     this.latestSpend,
     this.width,
     this.height,
+    this.effectiveBillingDay,
+    this.effectiveDueDay,
   });
 
   @override
@@ -206,7 +210,7 @@ class CardVisual extends StatelessWidget {
                               Expanded(
                                 child: _CardDataPoint(
                                   label: 'BILLING DAY',
-                                  value: _dayLabel(userCard!.statementDay),
+                                  value: _dayLabel(effectiveBillingDay ?? userCard!.statementDay),
                                   foreground: palette.foreground,
                                   muted: palette.foregroundMuted,
                                 ),
@@ -214,7 +218,7 @@ class CardVisual extends StatelessWidget {
                               Expanded(
                                 child: _CardDataPoint(
                                   label: 'DUE DAY',
-                                  value: _dayLabel(userCard!.dueDay),
+                                  value: _dayLabel(effectiveDueDay ?? userCard!.dueDay),
                                   foreground: palette.foreground,
                                   muted: palette.foregroundMuted,
                                 ),

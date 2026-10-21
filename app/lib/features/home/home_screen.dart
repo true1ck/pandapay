@@ -1015,9 +1015,13 @@ class _UtilizationWarningBanner extends ConsumerWidget {
     final pct = (worstResult.ratio * 100).toStringAsFixed(0);
     final utilizationColor = CreditUtilizationUi.color(worstResult.ratio);
     final now = ref.watch(clockProvider).now();
-    final due = userCard.dueDay == null
-        ? null
-        : _nextOccurrence(userCard.dueDay!, now);
+    final duePayments =
+        ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
+    final cardDue = duePayments.where((d) => d.card.id == userCard.id).firstOrNull;
+    final due = cardDue?.dueOn ??
+        (userCard.dueDay == null
+            ? null
+            : _nextOccurrence(userCard.dueDay!, now));
     final dueClause = due == null
         ? 'Paying it down'
         : 'Paying it down before ${due.day}/${due.month}';
@@ -3384,6 +3388,9 @@ class _HomeDueCard extends StatelessWidget {
                   width: double.infinity,
                   height: 58,
                   showProductName: false,
+                  effectiveBillingDay:
+                      row.bill?.statementDate.day ?? row.card.statementDay,
+                  effectiveDueDay: row.dueOn.day,
                 ),
               ),
               const SizedBox(height: AppSpace.sm),

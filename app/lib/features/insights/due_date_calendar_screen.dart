@@ -9,6 +9,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../cards/card_visual.dart';
+import 'payments_due_screen.dart';
 
 /// ui-spec.md E8 Due Date Calendar. Statement/due days come from Task E-0's
 /// gap-fill (statementDay already existed client-side; dueDay is new).
@@ -23,6 +24,7 @@ class DueDateCalendarScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final pairs = ref.watch(ownedCardsWithProductProvider);
     final reminders = ref.watch(dueDateRemindersProvider);
+    final duePayments = ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
 
     return pairs.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -56,6 +58,7 @@ class DueDateCalendarScreen extends ConsumerWidget {
                 child: _CardDateTile(
                   userCard: userCard,
                   product: product,
+                  duePayment: duePayments.where((d) => d.card.id == userCard.id).firstOrNull,
                   reminderOn: reminders.contains(userCard.id),
                   onToggleReminder: () => ref
                       .read(dueDateRemindersProvider.notifier)
@@ -87,11 +90,13 @@ class DueDateCalendarScreen extends ConsumerWidget {
 class _CardDateTile extends StatelessWidget {
   final UserCard userCard;
   final CardProduct product;
+  final DuePayment? duePayment;
   final bool reminderOn;
   final VoidCallback onToggleReminder;
   const _CardDateTile({
     required this.userCard,
     required this.product,
+    this.duePayment,
     required this.reminderOn,
     required this.onToggleReminder,
   });
@@ -99,12 +104,10 @@ class _CardDateTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final nextDue = userCard.dueDay == null
-        ? null
-        : _nextOccurrence(userCard.dueDay!, now);
-    final nextStatement = userCard.statementDay == null
-        ? null
-        : _nextOccurrence(userCard.statementDay!, now);
+    final nextDue = duePayment?.dueOn ??
+        (userCard.dueDay == null ? null : _nextOccurrence(userCard.dueDay!, now));
+    final nextStatement = duePayment?.bill?.statementDate ??
+        (userCard.statementDay == null ? null : _nextOccurrence(userCard.statementDay!, now));
     final displayName = userCard.nickname?.isNotEmpty == true
         ? userCard.nickname!
         : product.name;
@@ -127,7 +130,13 @@ class _CardDateTile extends StatelessWidget {
               children: [
                 SizedBox(
                   width: 62,
-                  child: CardVisual(product: product, showProductName: false),
+                  child: CardVisual(
+                    product: product,
+                    userCard: userCard,
+                    showProductName: false,
+                    effectiveBillingDay: nextStatement?.day ?? userCard.statementDay,
+                    effectiveDueDay: nextDue?.day ?? userCard.dueDay,
+                  ),
                 ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
