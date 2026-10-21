@@ -27,13 +27,30 @@ class GeminiProviderError extends Error {
   }
 }
 
-function retryAfterMsFromHeaders(headers) {
+function retryAfterMsFromHeaders(headers, errorBody = null) {
   const value = headers?.get?.('retry-after');
-  if (!value) return undefined;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
-  const date = Date.parse(value);
-  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
+  if (value) {
+    const seconds = Number(value);
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+    const date = Date.parse(value);
+    if (Number.isFinite(date)) return Math.max(0, date - Date.now());
+  }
+  if (errorBody) {
+    try {
+      const data = typeof errorBody === 'string' ? JSON.parse(errorBody) : errorBody;
+      const details = data?.error?.details || [];
+      for (const d of details) {
+        if (typeof d?.retryDelay === 'string') {
+          const match = /^([0-9.]+)s$/i.exec(d.retryDelay);
+          if (match) {
+            const s = parseFloat(match[1]);
+            if (Number.isFinite(s)) return Math.max(0, s * 1000);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+  return undefined;
 }
 
 function nextAdaptiveBatchSize(current, maximum, outcome) {
@@ -145,9 +162,10 @@ class GeminiProvider {
       let providerError = '';
       try { providerError = JSON.stringify(await response.json()); } catch (_) { /* no body */ }
       const quotaError = response.status === 403 && /quota|resource[_ -]?exhausted|rate.?limit/i.test(providerError);
-      const retryable = response.status === 408 || response.status === 409 || response.status === 429 || response.status >= 500 || quotaError;
-      const retryAfterMs = retryAfterMsFromHeaders(response.headers)
-        ?? (quotaError ? 60 * 60 * 1000 : undefined);
+      const is429 = response.status === 429 || quotaError;
+      const retryable = response.status === 408 || response.status === 409 || is429 || response.status >= 500;
+      const parsedDelay = retryAfterMsFromHeaders(response.headers, providerError);
+      const retryAfterMs = parsedDelay ?? (is429 ? (30000 + Math.floor(Math.random() * 5000)) : undefined);
       throw new GeminiProviderError(`Gemini HTTP ${response.status}`, {
         retryable,
         retryAfterMs,
@@ -187,9 +205,12 @@ class GeminiProvider {
       let providerError = '';
       try { providerError = JSON.stringify(await response.json()); } catch (_) { /* no body */ }
       const quotaError = response.status === 403 && /quota|resource[_ -]?exhausted|rate.?limit/i.test(providerError);
+      const is429 = response.status === 429 || quotaError;
+      const parsedDelay = retryAfterMsFromHeaders(response.headers, providerError);
+      const retryAfterMs = parsedDelay ?? (is429 ? (30000 + Math.floor(Math.random() * 5000)) : undefined);
       throw new GeminiProviderError(`Gemini HTTP ${response.status}`, {
-        retryable: response.status === 408 || response.status === 409 || response.status === 429 || response.status >= 500 || quotaError,
-        retryAfterMs: retryAfterMsFromHeaders(response.headers) ?? (quotaError ? 60 * 60 * 1000 : undefined),
+        retryable: response.status === 408 || response.status === 409 || is429 || response.status >= 500,
+        retryAfterMs,
         status: response.status,
       });
     }
@@ -316,8 +337,10 @@ async function runWorkerOnce({
   } catch (error) {
     const outcomes = [];
     for (const job of jobs) outcomes.push(await settleFailure(job, error));
+    const backoffMs = error?.retryAfterMs || Math.max(0, ...outcomes.map((o) => o.outcome?.delayMs || 0).filter(Number.isFinite));
     return { leased: true, completed: false, retried: outcomes.some((item) => item.retried),
-      failed: outcomes.some((item) => item.failed), jobId: jobs[0].id, batchSize: jobs.length, outcomes };
+      failed: outcomes.some((item) => item.failed), jobId: jobs[0].id, batchSize: jobs.length, outcomes,
+      ...(backoffMs > 0 ? { backoffMs } : {}) };
   }
 }
 
@@ -329,13 +352,22 @@ function startWorker(options = {}) {
   let timer = null;
   const tick = async () => {
     if (stopped) return;
+    let nextDelay = intervalMs;
     try {
       const outcome = await runWorkerOnce({ ...options, maxBatch: adaptiveBatchSize });
       adaptiveBatchSize = nextAdaptiveBatchSize(adaptiveBatchSize, configuredMaxBatch, outcome);
+      if (outcome?.retried && outcome?.backoffMs > 0) {
+        nextDelay = Math.max(intervalMs, outcome.backoffMs);
+        console.warn(`Gemini worker throttled (429/quota), sleeping for ${Math.round(nextDelay / 1000)}s`);
+      }
     } catch (error) {
       console.error('Gemini worker tick failed:', error.message || error);
+      if (error?.status === 429 || error?.retryable) {
+        nextDelay = Math.max(intervalMs, error?.retryAfterMs || 30000);
+        console.warn(`Gemini worker throttled, sleeping for ${Math.round(nextDelay / 1000)}s`);
+      }
     } finally {
-      if (!stopped) timer = setTimeout(tick, intervalMs);
+      if (!stopped) timer = setTimeout(tick, nextDelay);
     }
   };
   timer = setTimeout(tick, 0);

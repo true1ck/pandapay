@@ -208,3 +208,31 @@ test('adaptive batch size ramps up after success and backs off after provider fa
   assert.equal(nextAdaptiveBatchSize(4, 4, { retried: true }), 2);
   assert.equal(nextAdaptiveBatchSize(2, 4, { failed: true }), 1);
 });
+
+test('provider 429 extracts retryDelay from JSON error body or defaults to 30s+', async () => {
+  const providerWithDetails = new GeminiProvider({
+    apiKey: 'test-key',
+    fetchImpl: async () => response({
+      error: {
+        code: 429,
+        status: 'RESOURCE_EXHAUSTED',
+        details: [{ retryDelay: '45s' }],
+      },
+    }, 429),
+  });
+
+  await assert.rejects(
+    async () => providerWithDetails.classify({ payload: { body: 'text' } }),
+    (err) => err instanceof GeminiProviderError && err.retryAfterMs === 45000 && err.retryable === true,
+  );
+
+  const providerWithoutDelay = new GeminiProvider({
+    apiKey: 'test-key',
+    fetchImpl: async () => response({ error: { code: 429 } }, 429),
+  });
+
+  await assert.rejects(
+    async () => providerWithoutDelay.classify({ payload: { body: 'text' } }),
+    (err) => err instanceof GeminiProviderError && err.retryAfterMs >= 30000 && err.retryable === true,
+  );
+});

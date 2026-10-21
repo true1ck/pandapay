@@ -816,7 +816,7 @@ class FinancialStore {
       ''');
       final applied = database.db.select(
         'SELECT 1 FROM local_repairs WHERE namespace=? AND repair_key=?',
-        [ns, 'autopay_repair_v2'],
+        [ns, 'bill_and_autopay_repair_v3'],
       );
       if (applied.isNotEmpty) return;
 
@@ -835,10 +835,11 @@ class FinancialStore {
             : DateTime.tryParse(receivedAtMs.toString());
         if (receivedAt == null) continue;
 
-        if (RegExp(
-          r'\b(?:autopay\s+(?:alert|reminder)|will\s+be\s+(?:auto[- ]?)?(?:deducted|debited)|auto[- ]?(?:deducted|debited))\b',
+        final isBillCandidate = RegExp(
+          r'\b(?:autopay\s+(?:alert|reminder)|will\s+be\s+(?:auto[- ]?)?(?:deducted|debited)|auto[- ]?(?:deducted|debited)|bill\b[\s\S]{0,40}\b(?:ready|due|generated)|statement\b[\s\S]{0,40}\b(?:ready|due|generated))\b',
           caseSensitive: false,
-        ).hasMatch(body)) {
+        ).hasMatch(body) || sender.toUpperCase().contains('TNEU');
+        if (isBillCandidate) {
           final obs = LocalSmsParser.parse(
             namespace: ns,
             sender: sender,
@@ -850,6 +851,10 @@ class FinancialStore {
               "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' AND source_key=? AND pending=1",
               [ns, sourceKey],
             );
+            final isAutopay = RegExp(
+              r'\b(?:autopay\s+(?:alert|reminder)|will\s+be\s+(?:auto[- ]?)?(?:deducted|debited)|auto[- ]?(?:deducted|debited))\b',
+              caseSensitive: false,
+            ).hasMatch(body);
             saveObservation(ns, sourceKey, {
               'id': sourceKey,
               'sender_bank': sender
@@ -874,10 +879,10 @@ class FinancialStore {
               'disposition': obs.disposition.wireValue,
               'reason_codes': [
                 ...obs.reasonCodes,
-                'autopay_notice',
+                if (isAutopay) 'autopay_notice',
               ],
               'confidence': obs.confidence,
-              'is_autopay': true,
+              if (isAutopay) 'is_autopay': true,
             });
             if (obs.cardLast4 != null && obs.dueDate != null) {
               final cardRows = database.db.select(
@@ -903,7 +908,7 @@ class FinancialStore {
       }
       database.db.execute(
         'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
-        [ns, 'autopay_repair_v2'],
+        [ns, 'bill_and_autopay_repair_v3'],
       );
       if (changed) {
         _notify(ns, entity: 'cards');
