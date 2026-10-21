@@ -125,6 +125,9 @@ class LocalSmsParser {
             _re(r'\b(?:credited|received|deposited)\b').hasMatch(text))) {
       return false;
     }
+    if (_re(r'\bautopay\s+(?:alert|reminder)\b').hasMatch(text)) {
+      return false;
+    }
     final offer = _re(
       r'\b(?:offer|sale|discount|cashback|voucher|coupon|rewarding|shop\s+at|grab|buy\s+now|apply\s+now|prices?\s+slashed|treat\s+yourself|festive\s+shopping|eligible\s+for\s+conversion|convert\s+(?:to|into)\s+emi|international\s+roaming\s+pack)\b|\b(?:get|earn|save)\b[\s\S]{0,45}\b(?:reward|cashback|off|free|voucher)\b',
     ).hasMatch(text);
@@ -555,6 +558,8 @@ class LocalSmsParser {
       r'\bpay\s+by\s*[:\-]?\s*',
       r'\b(?:payment|bill|amount)\s+due\s+date\b[\s\S]{0,120}?\b(?:is|on|by)\s*[:\-]?\s*',
       r'\b(?:renew(?:s|al|ing)?|expires?)\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
+      r'\b(?:will|shall|to)?\s*(?:be\s+)?(?:auto[- ]?)?(?:deducted|debited)\b[\s\S]{0,70}?\bon\s*[:\-]?\s*',
+      r'\b(?:auto[- ]?deducted|auto[- ]?debited)\s+on\s*[:\-]?\s*',
       if (isInsuranceReminder)
         r'\b(?:premium|policy)\b[\s\S]{0,90}?\b(?:due|payable|debit(?:ed)?|scheduled)\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
       if (isInsuranceReminder)
@@ -674,12 +679,18 @@ class LocalSmsParser {
     final amountDue = money(
       _re(
         r'\b(?:total|full|statement|amount)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
-      ).firstMatch(body)?.group(1),
+      ).firstMatch(body)?.group(1) ??
+          _re(
+            r'\btotal\s+(?:amt|amount)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1),
     );
     final billAmount = money(
       _re(
         r'\b(?:bill|invoice|premium)\s+(?:of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
-      ).firstMatch(body)?.group(1),
+      ).firstMatch(body)?.group(1) ??
+          _re(
+            r'\bautopay\s+(?:alert|reminder)\s*[:\-]?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1),
     );
     final minimumDue = money(
       _re(
@@ -688,7 +699,7 @@ class LocalSmsParser {
     );
     final autopayLimit = money(
       _re(
-        r'\b(?:max(?:imum)?|mandate)\s*(?:limit|amount)?\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
+        r'\b(?:max(?:imum)?|mandate)\s*(?:limit|amount)?\s*(?:[:\-]|\s+(?:of|is|for))?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
       ).firstMatch(body)?.group(1),
     );
     final hasAutopay = _re(
@@ -714,16 +725,20 @@ class LocalSmsParser {
     final hasBillMarker =
         due != null ||
         _re(
-          r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\b(?:statement|bill|invoice)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b|\b(?:subscription|membership)\b[\s\S]{0,50}\b(?:renew|renewal|due|expires?)\b',
+          r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\b(?:statement|bill|invoice)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b|\b(?:subscription|membership)\b[\s\S]{0,50}\b(?:renew|renewal|due|expires?)\b|\bautopay\s+(?:alert|reminder)\b|\b(?:auto[- ]?debited|auto[- ]?deducted)\b[\s\S]{0,60}?\b(?:dues?|bill)\b',
         ).hasMatch(body);
+    // "No money was debited" makes the debit word a negation, not evidence
+    // of movement — failure notices from banks print exactly this sentence.
     final hasCompletedMovement =
-        _re(
-          r'\b(?:spent|debited|debit|paid|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed)\b',
-        ).hasMatch(body) ||
-        (!failed && _re(r'\b(?:purchase|purchased)\b').hasMatch(body)) ||
-        _re(
-          r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred)\b[\s\S]{0,40}\b(?:successful|successfully|completed)\b',
-        ).hasMatch(body);
+        !_re(r'\b(?:no\s+money\s+(?:was|is)?\s*(?:debited|deducted)|not\s+(?:debited|deducted|charged))\b')
+                .hasMatch(body) &&
+        (_re(
+              r'\b(?:spent|debited|debit|paid|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed)\b',
+            ).hasMatch(body) ||
+            (!failed && _re(r'\b(?:purchase|purchased)\b').hasMatch(body)) ||
+            _re(
+              r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred)\b[\s\S]{0,40}\b(?:successful|successfully|completed)\b',
+            ).hasMatch(body));
     LocalSmsObservation observation([
       TransactionEntry? row,
       LocalSmsEventType? type,
@@ -768,9 +783,8 @@ class LocalSmsParser {
     );
     // Reminders and offers are observations, never purchases.
     final futureDebit =
-        isInsuranceReminder &&
         _re(
-          r'\b(?:will|shall|to)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)\b',
+          r'\b(?:will|shall|to|scheduled to)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)\b',
         ).hasMatch(body);
     if (isNonTransactionNoise(sender, body)) {
       return observation(
@@ -834,6 +848,7 @@ class LocalSmsParser {
         !hasCompletedMovement) {
       return observation();
     }
+    if (futureDebit) return observation();
     final amount = money(
       _re(
         r'(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',

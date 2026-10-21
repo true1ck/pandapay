@@ -34,8 +34,8 @@
       },
       "baseline": {
         "gate": "capture",
-        "device": "balance observation saved, then localIgnore acknowledges intake so the server never sees it",
-        "server": "no match without a pattern"
+        "device": "balance observation saved, typed balance_snapshot fact enqueued in the local outbox, then localIgnore acknowledges intake so /transactions/from-sms never sees it; the background drain uploads the typed fact",
+        "server": "receives balance_only as a typed balance_snapshot fact via POST /sms/facts; no transaction row"
       }
     },
     {
@@ -52,8 +52,8 @@
       },
       "baseline": {
         "gate": "capture",
-        "device": "bill observation with statement date, total, minimum and due date; no spend",
-        "server": "no transaction match; statement day extractor detects 12-10-26"
+        "device": "bill observation saved AND typed bill_obligation facts minted (due_total 3000 + due_minimum 600, due date Nov 5, statement date Oct 12, last4 4321) into the outbox; legacy batch sync unchanged",
+        "server": "statement and due days heal via POST /sms/facts specialists; no transaction match from the pattern parser"
       }
     },
     {
@@ -70,8 +70,8 @@
       },
       "baseline": {
         "gate": "capture",
-        "device": "bill observation with biller name and amount; offer clause ignored; no spend",
-        "server": "no transaction match"
+        "device": "bill observation with biller name 'TNEB electricity' and amount; offer clause ignored; typed bill_obligation due_total fact (1500) minted into the outbox; no spend",
+        "server": "accepts the bill fact via POST /sms/facts; pattern parser still finds no transaction"
       }
     },
     {
@@ -88,8 +88,8 @@
       },
       "baseline": {
         "gate": "capture",
-        "device": "autopay observation, then localIgnore acknowledges intake; the limit extractor misses 'maximum limit of INR 2,000.00' wording so even the local observation loses the ceiling; server mandate parser never sees this message",
-        "server": "extractor, if reached directly, registers NETFLIX with a merchant-name flaw (trailing 'with'), ceiling 2000, unconfirmed 30-day cadence"
+        "device": "autopay observation with the ceiling now extracted ('maximum limit of INR 2,000.00' matches), typed mandate_lifecycle registered fact (merchant NETFLIX, limit 2000, accountLast4 1797) enqueued in the outbox; intake localIgnore",
+        "server": "typed fact accepted via POST /sms/facts and persisted as a subscription mandate with merchant NETFLIX and ceiling 2000"
       }
     },
     {
@@ -122,9 +122,9 @@
         "note": "failure is a distinct typed fact (renewal-at-risk signal), not disposable noise"
       },
       "baseline": {
-        "gate": "exclude",
-        "device": "the prefilter stops the message before any observation exists",
-        "server": "never receives it"
+        "gate": "capture",
+        "device": "capturesFinancialSms admits it; failed observation with localIgnore (no completed movement); typed pending_or_failed_attempt fact (biller NETFLIX) minted in the outbox",
+        "server": "typed fact accepted via POST /sms/facts"
       }
     },
     {
@@ -139,9 +139,9 @@
         "review": false
       },
       "baseline": {
-        "gate": "exclude",
-        "device": "the prefilter stops the message; no cancellation fact exists anywhere",
-        "server": "never receives it"
+        "gate": "capture",
+        "device": "captured as a terminal failed observation; typed mandate_lifecycle cancelled fact (merchant NETFLIX, accountLast4 1797) minted into the outbox; intake localIgnore",
+        "server": "accepts the cancelled mandate via POST /sms/facts and persists the lifecycle through the injected mandate writer"
       }
     },
     {
@@ -373,9 +373,9 @@
         "note": "failed attempt is safe noise for spending; typed fact optional in a first release"
       },
       "baseline": {
-        "gate": "exclude",
-        "device": "prefilter nonSpendWords rejects it",
-        "server": "never receives it"
+        "gate": "capture",
+        "device": "capturesFinancialSms admits failed attempts; failed observation with localIgnore; typed pending_or_failed_attempt fact (INR 500, credit card) minted in the outbox",
+        "server": "typed fact accepted via POST /sms/facts"
       }
     },
     {

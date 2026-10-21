@@ -10,6 +10,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/local_sms_parser.dart';
+import '../../data/local/sms_facts_outbox.dart';
 import '../../data/needs_review_repository.dart';
 import '../../data/user_cards_repository.dart'
     show TxnEntryKind, TxnInstrument, UserCard;
@@ -46,23 +47,85 @@ String _reviewInstrumentLabel(TxnInstrument instrument) => switch (instrument) {
   TxnInstrument.other => 'Other payment',
 };
 
-String _reviewTypeLabel(String body) {
-  final instrument = _instrumentFromReviewText(body);
+bool _isSecurityOrServiceAlert(String body) {
+  final text = body.toLowerCase();
+  return RegExp(
+    r'\b(?:transaction\s+check\s+alert|check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|call\s+forwarding\b|sim\s+swap|service\s+alert|fraud\s+alert|suspicious\s+activity)\b',
+  ).hasMatch(text);
+}
+
+bool _isInvestmentSettlement(String body) {
+  final text = body.toLowerCase();
+  return RegExp(
+    r'\b(?:kotak\s+neo|demat|settlement\s+payout|running\s+a/?c\s+settlement)\b',
+  ).hasMatch(text);
+}
+
+bool _isMandateReview(String body) {
+  final text = body.toLowerCase();
+  return RegExp(
+    r'\b(?:auto[-\s]?pay|e[-\s]?mandate|standing\s+instruction)\b',
+  ).hasMatch(text);
+}
+
+String _reviewTypeLabel(NeedsReviewItem item) {
+  if (item.kind == NeedsReviewKind.securityOrServiceAlert ||
+      _isSecurityOrServiceAlert(item.body)) {
+    return 'Security or service alert';
+  }
+  if (item.kind == NeedsReviewKind.investmentSettlement ||
+      _isInvestmentSettlement(item.body)) {
+    return 'Investment settlement payout';
+  }
+  if (item.kind == NeedsReviewKind.mandate || _isMandateReview(item.body)) {
+    return 'AutoPay mandate alert';
+  }
+  final instrument = _instrumentFromReviewText(item.body);
   return instrument == TxnInstrument.other
       ? 'Possible transaction'
       : _reviewInstrumentLabel(instrument);
 }
 
-String _reviewReasonLabel(String? reason) => switch (reason) {
-  'no_transaction_match' => 'We could not match this message to a transaction.',
-  'unparseable_amount' => 'The amount in this message is unclear.',
-  'ambiguous_account_debit' =>
-    'We could not tell which account or payment method was used.',
-  'not_a_successful_spend' =>
-    'This message may not describe a completed payment.',
-  null => 'Please check the message before adding it.',
-  _ => 'Please check the message before adding it.',
-};
+String _reviewReasonLabel(String? reason, String body) {
+  if (_isSecurityOrServiceAlert(body)) {
+    return 'Verification or service notice — not a spending transaction.';
+  }
+  if (_isInvestmentSettlement(body)) {
+    return 'Funds settlement from broker or demat account.';
+  }
+  if (_isMandateReview(body)) {
+    return 'Mandate authorization or notification.';
+  }
+  return switch (reason) {
+    'no_transaction_match' => 'We could not match this message to a transaction.',
+    'unparseable_amount' => 'The amount in this message is unclear.',
+    'ambiguous_account_debit' =>
+      'We could not tell which account or payment method was used.',
+    'not_a_successful_spend' =>
+      'This message may not describe a completed payment.',
+    null => 'Please check the message before adding it.',
+    _ => 'Please check the message before adding it.',
+  };
+}
+
+String _reviewActionLabel(NeedsReviewItem item) {
+  if (item.kind == NeedsReviewKind.securityOrServiceAlert ||
+      _isSecurityOrServiceAlert(item.body)) {
+    return 'Dismiss alert';
+  }
+  if (item.kind == NeedsReviewKind.investmentSettlement ||
+      _isInvestmentSettlement(item.body)) {
+    return 'Review transfer';
+  }
+  if (item.kind == NeedsReviewKind.mandate || _isMandateReview(item.body)) {
+    return 'Confirm mandate';
+  }
+  if (item.reason == 'ambiguous_account_debit' ||
+      item.reason == 'card_not_unambiguous') {
+    return 'Choose card/account';
+  }
+  return 'Review transaction';
+}
 
 Future<void> _persistCommitmentDismissal(
   WidgetRef ref,
@@ -100,6 +163,43 @@ Future<void> _persistCommitmentDismissal(
           confidence: 1,
         ),
       );
+}
+
+Future<void> _persistSmsFactCorrection(
+  WidgetRef ref, {
+  required String sourceKey,
+  required int factIndex,
+  required Map<String, dynamic> patch,
+  required String reason,
+}) async {
+  final namespace = ref.read(cacheNamespaceProvider);
+  final cache = await ref.read(responseCacheProvider.future);
+  final outbox = SmsFactsOutbox(cache.financialStore.database);
+  outbox.enqueueOverride(
+    namespace,
+    sourceKey: sourceKey,
+    factIndex: factIndex,
+    patch: patch,
+    reason: reason,
+  );
+
+  final repository = ref.read(userCardsRepositoryProvider);
+  if (repository == null || ref.read(isOnlineProvider).valueOrNull == false) return;
+  try {
+    final accepted = await repository.overrideSmsFact(
+      sourceKey: sourceKey,
+      factIndex: factIndex,
+      patch: patch,
+      reason: reason,
+    );
+    if (accepted) {
+      outbox.acknowledgeOverride(namespace, sourceKey, factIndex);
+    } else {
+      outbox.failedOverride(namespace, sourceKey, factIndex);
+    }
+  } catch (_) {
+    outbox.failedOverride(namespace, sourceKey, factIndex);
+  }
 }
 
 typedef _BillReviewResult = ({
@@ -244,6 +344,12 @@ class _CommitmentNeedsReviewTileState
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(commitmentsProvider);
       ref.invalidate(needsReviewItemsProvider);
+      // Phase 4: the confirmed decision also rides the typed-fact contract.
+      // A structured override (source key + fact index + payload patch, no
+      // raw text) makes the server's bill projection agree with the user
+      // even if a later replay re-uploads the parser-derived payload — the
+      // read path always applies user corrections first.
+      await _overrideConfirmedBillFacts(ref, result);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -253,6 +359,42 @@ class _CommitmentNeedsReviewTileState
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Best-effort structured correction for the source this review item came
+  /// from (`commitment:<sourceKey>`). Never blocks the local save: a 404
+  /// (facts are not on the server yet) or any network failure leaves the
+  /// correction for a future sync — the local decision is already durable.
+  Future<void> _overrideConfirmedBillFacts(
+    WidgetRef ref,
+    _BillReviewResult result,
+  ) async {
+    if (!widget.item.id.startsWith('commitment:')) return;
+    final sourceKey = widget.item.id.substring('commitment:'.length);
+    if (sourceKey.length != 64) return;
+    final observation = _parse();
+    if (observation == null) return;
+    final facts = buildSmsFactsForObservation(
+      body: widget.item.body,
+      observation: observation,
+      receivedAt: widget.item.receivedAt,
+    );
+    final billFact = facts
+        .where((fact) => fact.payload['amountRole'] == 'due_total')
+        .firstOrNull;
+    if (billFact == null) return;
+    final patch = <String, dynamic>{
+      'dueDate': result.dueOn.toUtc().toIso8601String(),
+      if (result.amount != null) 'amountDueInr': result.amount!.rupees,
+    };
+    await _persistSmsFactCorrection(
+      ref,
+      sourceKey: sourceKey,
+      factIndex: billFact.factIndex ?? 0,
+      patch: patch,
+      reason: 'confirmed in needs review',
+    );
+    ref.invalidate(needsReviewItemsProvider);
   }
 
   Future<void> _reviewAndSaveCommitment() async {
@@ -727,6 +869,22 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       ref.invalidate(needsReviewItemsProvider);
+      if (widget.item.id.length == 64) {
+        await _persistSmsFactCorrection(
+          ref,
+          sourceKey: widget.item.id,
+          factIndex: 0,
+          patch: {
+              'entryKind': result.entryKind.wireValue,
+              'amountInr': result.amount,
+              if (result.merchantName != null) 'merchant': result.merchantName,
+              'instrument': result.instrument.wireValue,
+              'occurredAt': result.occurredAt.toUtc().toIso8601String(),
+              'amountRole': 'posted',
+          },
+          reason: 'confirmed in needs review',
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -736,6 +894,15 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _handlePrimaryAction() async {
+    if (widget.item.kind == NeedsReviewKind.securityOrServiceAlert ||
+        _isSecurityOrServiceAlert(widget.item.body)) {
+      await _dismissNotATransaction();
+      return;
+    }
+    await _fillManually();
   }
 
   @override
@@ -782,7 +949,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           ),
           const SizedBox(height: AppSpace.sm),
           Text(
-            _reviewTypeLabel(item.body),
+            _reviewTypeLabel(item),
             style: BambooFonts.ui(
               12.5,
               weight: FontWeight.w700,
@@ -792,10 +959,13 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                   : BambooInk.ink500,
             ),
           ),
-          if (item.reason != null) ...[
+          if (item.reason != null ||
+              _isSecurityOrServiceAlert(item.body) ||
+              _isInvestmentSettlement(item.body) ||
+              _isMandateReview(item.body)) ...[
             const SizedBox(height: AppSpace.xs),
             Text(
-              _reviewReasonLabel(item.reason),
+              _reviewReasonLabel(item.reason, item.body),
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],
@@ -829,7 +999,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                     ),
                     textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
                   ),
-                  onPressed: _busy ? null : _fillManually,
+                  onPressed: _busy ? null : _handlePrimaryAction,
                   child: _busy
                       ? const SizedBox(
                           width: 16,
@@ -839,7 +1009,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                             color: BambooInk.lime,
                           ),
                         )
-                      : const Text('Review transaction'),
+                      : Text(_reviewActionLabel(item)),
                 ),
               ),
             ],

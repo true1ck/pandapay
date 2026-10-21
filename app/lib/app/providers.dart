@@ -33,6 +33,7 @@ import '../data/import_repository.dart';
 import '../data/local/app_database.dart';
 import '../data/local/response_cache.dart';
 import '../data/local/financial_store.dart';
+import '../data/local/sms_facts_outbox.dart';
 import '../data/local/sms_intake_repository.dart';
 import '../data/local/sms_import_store.dart';
 import '../data/local_sms_parser.dart';
@@ -70,6 +71,7 @@ import '../features/sms_import/sms_listener_service.dart';
 import '../features/sms_import/sms_inbox_scanner.dart';
 import '../features/sms_import/sms_capture_worker.dart';
 import '../features/sms_import/sms_background_queue.dart';
+import '../features/sms_import/sms_text_hint.dart';
 import '../features/settings/settings_sync.dart';
 import '../features/sync/sync_engine.dart';
 import 'env.dart';
@@ -1356,6 +1358,15 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
         } else if (outcome == 'needs_review' || outcome == 'unparsed') {
           // Preserve unsupported input for review without silently retrying it
           // forever or treating an unconfirmed local parse as final spending.
+          // Best-effort submit to the server AI queue for background classification.
+          repository
+              .submitAiJob(
+                sourceKey: key,
+                sender: message.sender,
+                body: message.body,
+                occurredAt: message.occurredAt,
+              )
+              .ignore();
           await ref
               .read(needsReviewRepositoryProvider)
               .add(
@@ -2935,11 +2946,28 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   );
   final key = _scopedCacheKey(ref, cacheKey);
   final cached = await _readCacheOrNull(ref, cache, key);
+  // UPI-platform families (SBIUPI & friends) quote the counterparty's masked
+  // account, never the user's — they mint phantom account rows. Applied at
+  // every list source (cache decode + server merge); the local store filters
+  // its own rows in bankAccounts(). Checked on the RAW issuer strings —
+  // canonicalBankSender collapses 'sbiupi' to 'sbi', hiding the marker.
+  // ponytail: remove once server dedupes.
+  bool isUpiPhantom(BankAccountSummary account) => RegExp(
+    r'upi',
+  ).hasMatch(
+    [
+      account.issuerSlug,
+      account.issuerShortName,
+      account.issuerName,
+    ].whereType<String>().join(' ').toLowerCase(),
+  );
+
   List<BankAccountSummary> decode(CachedResponse snapshot) =>
       ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['accounts']
               as List)
           .cast<Map<String, dynamic>>()
           .map(BankAccountSummary.fromJson)
+          .where((account) => !isUpiPhantom(account))
           .toList();
 
   bool sameAccount(BankAccountSummary a, BankAccountSummary b) {
@@ -2960,6 +2988,9 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
     List<BankAccountSummary> local,
     List<BankAccountSummary> remote,
   ) {
+    // UPI-platform families from rows the server parsed before the exclusion
+    // existed — drop them at the merge point as well.
+    remote = remote.where((r) => !isUpiPhantom(r)).toList();
     final merged = [...local];
     for (final incoming in remote) {
       final index = merged.indexWhere(
@@ -5184,6 +5215,50 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     return completed;
   }
 
+  // The local review row is the durable source of truth for unresolved SMSs.
+  // Reconcile by the existing source key; a crash between local capture and
+  // POST /ai/jobs can then safely retry without rereading the inbox.
+  Future<void> reconcileAiNeedsReview() async {
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null || ref.read(isOnlineProvider).valueOrNull == false) return;
+    final namespace = ref.read(cacheNamespaceProvider);
+    final reviewRepo = ref.read(needsReviewRepositoryProvider);
+    final items = await reviewRepo.fetchAll();
+    var changed = false;
+    for (final item in items.take(20)) {
+      if (ref.read(cacheNamespaceProvider) != namespace) break;
+      if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(item.id) ||
+          LocalSmsParser.sensitive(item.body) ||
+          !capturesFinancialSms(item.body)) {
+        continue;
+      }
+      final status = await repo.fetchAiJobStatus(item.id);
+      if (status == null) {
+        await repo.submitAiJob(
+          sourceKey: item.id,
+          sender: item.sender,
+          body: item.body,
+          occurredAt: item.receivedAt,
+        );
+        continue;
+      }
+      final result = status['result'];
+      if (status['status'] == 'done' && result is Map &&
+          result['reviewRequired'] == false) {
+        await reviewRepo.remove(item.id);
+        changed = true;
+      }
+    }
+    if (changed) {
+      ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
+      ref.invalidate(userCardsProvider);
+      ref.invalidate(myCardsProvider);
+      ref.invalidate(homeSummaryProvider);
+      ref.invalidate(bankAccountSummariesProvider);
+    }
+  }
+
   // Local scanning has no API dependency. Progress advances only after each
   // page has been captured, and later passes read strictly newer provider IDs.
   Future<bool> reconcileInbox() async {
@@ -5263,6 +5338,11 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
             await retryExistingNeedsReview()) {
           await prefs.setBool(reviewKey, true);
         }
+        try {
+          await reconcileAiNeedsReview();
+        } catch (_) {
+          // Review rows remain local and retry on the next lifecycle pass.
+        }
         if (changed) {
           ref.invalidate(userCardsProvider);
           ref.invalidate(transactionsProvider);
@@ -5308,6 +5388,11 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     onResume: () => unawaited(flushAndRetry()),
   );
   ref.onDispose(listener.dispose);
+  final aiReconcileTimer = Timer.periodic(
+    const Duration(seconds: 90),
+    (_) => unawaited(flushAndRetry()),
+  );
+  ref.onDispose(aiReconcileTimer.cancel);
   // Once at startup too: the most common case is the app being opened
   // fresh after messages arrived, which fires no resume event.
   unawaited(flushAndRetry());
@@ -5692,6 +5777,48 @@ class SmsAutoImportController {
         break;
       }
       await Future<void>.delayed(Duration.zero);
+    }
+    // Phase 2: drain the typed-facts outbox (balance snapshots, autopay
+    // mandate life-cycle, failed attempts). Raw bodies never ride this
+    // path; facts are replay-idempotent under the same source key. Failures
+    // keep the row queued; a 404 (older backend image) also keeps it.
+    try {
+      final factsOutbox = SmsFactsOutbox(cache.financialStore.database);
+      for (final entry in factsOutbox.pending(namespace)) {
+        if (_ref.read(cacheNamespaceProvider) != namespace) break;
+        if (_ref.read(isOnlineProvider).valueOrNull == false) break;
+        final accepted = await repo.logSmsFacts(envelope: entry.envelope);
+        if (accepted) {
+          factsOutbox.acknowledge(namespace, entry.id);
+        } else {
+          factsOutbox.failed(namespace, entry.id);
+        }
+      }
+      for (final correction in factsOutbox.pendingOverrides(namespace)) {
+        if (_ref.read(cacheNamespaceProvider) != namespace) break;
+        if (_ref.read(isOnlineProvider).valueOrNull == false) break;
+        final accepted = await repo.overrideSmsFact(
+          sourceKey: correction.sourceKey,
+          factIndex: correction.factIndex,
+          patch: correction.patch,
+          reason: correction.reason,
+        );
+        if (accepted) {
+          factsOutbox.acknowledgeOverride(
+            namespace,
+            correction.sourceKey,
+            correction.factIndex,
+          );
+        } else {
+          factsOutbox.failedOverride(
+            namespace,
+            correction.sourceKey,
+            correction.factIndex,
+          );
+        }
+      }
+    } catch (_) {
+      // Facts accumulate durably; the next sync retries.
     }
     if (_ref.read(cacheNamespaceProvider) == namespace &&
         (imported > 0 ||

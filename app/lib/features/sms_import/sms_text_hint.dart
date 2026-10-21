@@ -52,6 +52,30 @@ String? extractLast4Hint(String smsBody) {
   return matches.first;
 }
 
+/// OTP and security alerts must never be persisted or uploaded — they often
+/// contain "txn", "INR", and a card suffix that would read like spend.
+bool _looksOtpOrSecurity(String lower) {
+  return RegExp(
+        r'\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b',
+      ).hasMatch(lower) ||
+      RegExp(r"\b(?:do not|don't|never)\s+share\b").hasMatch(lower) ||
+      RegExp(r'\bvalid\s+(?:for|till|until)\b').hasMatch(lower);
+}
+
+const _promoWords = [
+  'apply now',
+  'pre-approved',
+  'lifetime free',
+  'ltf',
+  'personal loan',
+  'enjoy',
+  'exclusive offer',
+  'get free',
+  'special offer',
+];
+
+bool _looksPromotional(String lower) => _promoWords.any(lower.contains);
+
 /// Rough client-side pre-filter for "does this look like a bank
 /// transaction SMS at all" — used only to decide whether it's worth
 /// forwarding to POST /transactions/from-sms in the first place (avoids
@@ -67,13 +91,7 @@ bool looksLikeTransactionSms(String smsBody) {
   // OTP and security alerts often contain "txn", "INR", and a card suffix.
   // Reject them before the high-recall keyword check so they never reach the
   // importer or appear in Needs Review as if they were failed transactions.
-  final otpOrSecurity =
-      RegExp(
-        r'\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b',
-      ).hasMatch(lower) ||
-      RegExp(r"\b(?:do not|don't|never)\s+share\b").hasMatch(lower) ||
-      RegExp(r'\bvalid\s+(?:for|till|until)\b').hasMatch(lower);
-  if (otpOrSecurity) return false;
+  if (_looksOtpOrSecurity(lower)) return false;
 
   // These alerts describe a failed, cancelled, reversed, pending, or
   // refunded attempt. They are not completed spending and must never become
@@ -90,18 +108,7 @@ bool looksLikeTransactionSms(String smsBody) {
   if (nonSpendWords.any(lower.contains)) return false;
 
   // 1. Hard reject obvious promotional spam
-  const promoWords = [
-    'apply now',
-    'pre-approved',
-    'lifetime free',
-    'ltf',
-    'personal loan',
-    'enjoy',
-    'exclusive offer',
-    'get free',
-    'special offer',
-  ];
-  if (promoWords.any(lower.contains)) return false;
+  if (_looksPromotional(lower)) return false;
 
   // 2. Must contain transaction keywords
   const keywords = [
@@ -163,4 +170,37 @@ bool looksLikeTransactionSms(String smsBody) {
     'clear funds',
   ];
   return dueDateWords.any(lower.contains);
+}
+
+/// SMS intelligence Phase 2: the capture decision for inbox entry points
+/// (live delivery, background handler, incremental scan). Spend candidates
+/// keep the exact [looksLikeTransactionSms] behavior; this additionally
+/// captures recognized NON-spend financial messages — autopay mandate
+/// registration/cancellation/failure and declined payment attempts — so
+/// their typed facts reach the server instead of being silently discarded
+/// on-device. Bill/statement and balance messages already pass the strict
+/// gate. OTP/safety vetoes and promo rejection stay absolute.
+bool capturesFinancialSms(String smsBody) {
+  if (looksLikeTransactionSms(smsBody)) return true;
+  final lower = smsBody.toLowerCase();
+  if (_looksOtpOrSecurity(lower) || _looksPromotional(lower)) return false;
+
+  // AutoPay mandate family: registration, scheduled notices, failures and
+  // cancellations are mandate-lifecycle facts regardless of how the amount
+  // phrase reads.
+  if (RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate)\b').hasMatch(lower)) {
+    return true;
+  }
+  // Declined/failed payment attempts carry financial context (an amount and
+  // a payment instrument/transaction cue); they must not become spend rows,
+  // but the attempt fact is worth the server knowing about.
+  final failedAttempt =
+      RegExp(
+        r'\b(?:declined?|failed|failure)\b',
+      ).hasMatch(lower) &&
+      RegExp(r'(?:inr|rs\.|rs\s|₹)').hasMatch(lower) &&
+      RegExp(
+        r'\b(?:txn|transaction|purchase|payment|card|a\/?c\.?|account)\b',
+      ).hasMatch(lower);
+  return failedAttempt;
 }

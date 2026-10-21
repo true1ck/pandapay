@@ -75,7 +75,6 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
         (c) =>
             !c.isArchived &&
             (c.dueDay != null ||
-                ledger[c.id]?.current?.dueDate != null ||
                 // A bill SMS may anchor the ledger even without a synced due
                 // day, but only when its cycle anchor was explicitly stated;
                 // a received-date anchor plus a due date from a mere reminder
@@ -100,8 +99,8 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
   for (final card in active) {
     final bill = ledger[card.id]?.current;
     final DateTime dueOn;
-    if (bill?.dueDate != null) {
-      dueOn = bill!.dueDate!;
+    if (bill?.dueDate != null && bill!.statementDateVerified) {
+      dueOn = bill.dueDate!;
     } else if (card.dueDay != null) {
       dueOn = bill != null
           ? nextOccurrenceOf(card.dueDay!, bill.statementDate)

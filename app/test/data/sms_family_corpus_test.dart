@@ -30,8 +30,9 @@ void main() {
   LocalSmsObservation? parseCase(Map<String, dynamic> c) {
     final raw = c['body'] as String;
     // Mirrors the real capture path: gate first, sensitivity veto second, then
-    // the local parser.
-    if (!looksLikeTransactionSms(raw) || LocalSmsParser.sensitive(raw)) {
+    // the local parser. Phase 2: the gate is the broadened capture decision
+    // (spend candidates plus recognized non-spend families).
+    if (!capturesFinancialSms(raw) || LocalSmsParser.sensitive(raw)) {
       return null;
     }
     return LocalSmsParser.parse(
@@ -93,15 +94,14 @@ void main() {
       );
     });
 
-    test('autopay_mandate: local-only autopay observation, never spend', () {
+    test('autopay_mandate: mandate observation whose ceiling is now captured', () {
       final o = parseCase(cases['autopay_mandate']!)!;
       expect(o.eventType, LocalSmsEventType.autopay);
       expect(o.disposition, LocalSmsDisposition.localIgnore);
       expect(o.transaction, isNull);
-      // BASELINE GAP → Phase 2: the extractor does not read "maximum limit
-      // of INR 2,000.00" (only "Max limit: ..."), so the ceiling is lost
-      // even to the local observation.
-      expect(o.autopayLimit, isNull);
+      // Phase 2 fixed the Phase 0 gap: "maximum limit of INR 2,000.00" is
+      // read, so the mandate fact carries its ceiling.
+      expect(o.autopayLimit?.paise, 200000);
     });
 
     test('autopay_scheduled: no posted spend', () {
@@ -110,12 +110,19 @@ void main() {
       expect(o.disposition, isNot(LocalSmsDisposition.sync));
     });
 
-    test('autopay_failed: gate excludes the whole family today', () {
-      expect(parseCase(cases['autopay_failed']!), isNull);
+    test('autopay_failed: captured as a terminal failed observation', () {
+      final o = parseCase(cases['autopay_failed']!)!;
+      expect(o.eventType, LocalSmsEventType.failed);
+      expect(o.disposition, LocalSmsDisposition.localIgnore);
+      expect(o.transaction, isNull);
     });
 
-    test('mandate_cancelled: gate excludes the cancellation notice', () {
-      expect(parseCase(cases['mandate_cancelled']!), isNull);
+    test('mandate_cancelled: captured as a terminal failed observation', () {
+      final o = parseCase(cases['mandate_cancelled']!)!;
+      expect(o.eventType, LocalSmsEventType.failed);
+      expect(o.disposition, LocalSmsDisposition.localIgnore);
+      expect(o.transaction, isNull);
+      expect(o.accountLast4, '1797');
     });
 
     test('refund_with_offer: refund is a transfer, not income, not promotion', () {
@@ -190,8 +197,11 @@ void main() {
       expect(LocalSmsParser.sensitive(body), isTrue);
     });
 
-    test('declined_attempt: failed attempt is excluded today', () {
-      expect(parseCase(cases['declined_attempt']!), isNull);
+    test('declined_attempt: captured as a terminal failed observation', () {
+      final o = parseCase(cases['declined_attempt']!)!;
+      expect(o.eventType, LocalSmsEventType.failed);
+      expect(o.disposition, LocalSmsDisposition.localIgnore);
+      expect(o.transaction, isNull);
     });
 
     test(

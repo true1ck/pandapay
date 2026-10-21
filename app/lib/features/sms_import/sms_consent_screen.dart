@@ -55,13 +55,21 @@ class SmsConsentScreen extends StatelessWidget {
               const _Point(
                 icon: Icons.lock_outline_rounded,
                 text:
-                    'Bank alerts are sent to PandaPay over an encrypted connection to pull out the amount, '
-                    'merchant and date.',
+                    'Filtered bank alerts are sent to PandaPay over an encrypted connection to identify '
+                    'transactions, balances, bills and payment instructions.',
+              ),
+              const _Point(
+                icon: Icons.auto_awesome_outlined,
+                text:
+                    'If PandaPay cannot classify a financial alert, it may send a redacted copy to Gemini '
+                    'for help. Account numbers, references and links are masked first. The AI result is '
+                    'checked, and uncertain messages stay in Needs review for you.',
               ),
               const _Point(
                 icon: Icons.delete_outline_rounded,
                 text:
-                    'The message text is never stored on our servers — only the transaction it produced.',
+                    'PandaPay purges message text from its processing queue after classification. '
+                    'Your on-device Needs review item stays available until you resolve or dismiss it.',
               ),
               const _Point(
                 icon: Icons.toggle_off_outlined,

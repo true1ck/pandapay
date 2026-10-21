@@ -40,8 +40,10 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
   if (sender == null || body == null) return;
   // The same cheap pre-filter the foreground path uses, applied BEFORE
   // anything is written: an OTP or a delivery notice must never be
-  // persisted to disk, not even briefly.
-  if (!looksLikeTransactionSms(body) || LocalSmsParser.sensitive(body)) return;
+  // persisted to disk, not even briefly. Phase 2: non-spend financial
+  // messages (autopay mandate life-cycle, declined attempts) are captured
+  // too, so their typed facts reach the server.
+  if (!capturesFinancialSms(body) || LocalSmsParser.sensitive(body)) return;
 
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -187,7 +189,7 @@ class SmsListenerService {
       if (sender == null ||
           body == null ||
           date == null ||
-          !looksLikeTransactionSms(body) ||
+          !capturesFinancialSms(body) ||
           LocalSmsParser.sensitive(body)) {
         continue;
       }
@@ -276,8 +278,8 @@ class SmsListenerService {
   /// address, message body and Android received timestamp for every incoming
   /// SMS while the app is running — no filtering by sender here (that's the server's
   /// parser_patterns.sender_pattern's job); this layer only does the cheap
-  /// looksLikeTransactionSms() pre-filter to avoid forwarding obvious
-  /// non-transaction noise (OTPs, delivery notices) to the API at all.
+  /// capturesFinancialSms() pre-filter to avoid forwarding obvious
+  /// non-financial noise (OTPs, delivery notices, offers) to the API at all.
   ///
   /// Background delivery is registered alongside it via
   /// [smsBackgroundHandler], so an alert arriving while the app is closed
@@ -293,7 +295,7 @@ class SmsListenerService {
         final sender = message.address;
         final body = message.body;
         if (sender == null || body == null) return;
-        if (!looksLikeTransactionSms(body)) return;
+        if (!capturesFinancialSms(body)) return;
         final messageTimestamp = message.date ?? message.dateSent;
         onSms(
           sender,

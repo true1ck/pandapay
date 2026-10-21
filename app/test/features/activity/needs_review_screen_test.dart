@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeUserCardsRepository implements UserCardsRepository {
   Map<String, dynamic>? lastLogArgs;
+  Map<String, dynamic>? lastOverrideArgs;
 
   @override
   Future<String> logTransaction({
@@ -34,6 +35,22 @@ class _FakeUserCardsRepository implements UserCardsRepository {
       'categoryId': categoryId,
     };
     return 'fake-txn-id';
+  }
+
+  @override
+  Future<bool> overrideSmsFact({
+    required String sourceKey,
+    required int factIndex,
+    required Map<String, dynamic> patch,
+    String? reason,
+  }) async {
+    lastOverrideArgs = {
+      'sourceKey': sourceKey,
+      'factIndex': factIndex,
+      'patch': patch,
+      'reason': reason,
+    };
+    return true;
   }
 
   @override
@@ -244,4 +261,118 @@ void main() {
     final tombstones = await commitments.fetchAll();
     expect(tombstones.single.status, CommitmentStatus.dismissed);
   });
+
+  testWidgets(
+    'screenshot security case (HDFC Transaction Check Alert) shows Dismiss alert and not Review transaction',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'sec-1',
+          sender: 'VM-HDFCBK-S',
+          body:
+              'Transaction Check Alert! We tried to contact you twice to confirm the following txn: Rs.2,000.00 on Card XX4321 at AMAZON on 16-10-26. If this was not you, call 1860-266-2661',
+          receivedAt: DateTime(2026, 10, 16),
+        ),
+      );
+      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+      expect(find.text('Security or service alert'), findsOneWidget);
+      expect(find.text('Review transaction'), findsNothing);
+      expect(find.text('Dismiss alert'), findsOneWidget);
+
+      await tester.tap(find.text('Dismiss alert'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nothing needs review'), findsOneWidget);
+      expect(await reviews.fetchAll(), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'screenshot service case (ViCARE call forwarding) shows Dismiss alert and not Review transaction',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'serv-1',
+          sender: 'ViCARE',
+          body: 'Call Forwarding is now active',
+          receivedAt: DateTime(2026, 10, 16),
+        ),
+      );
+      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+      expect(find.text('Security or service alert'), findsOneWidget);
+      expect(find.text('Review transaction'), findsNothing);
+      expect(find.text('Dismiss alert'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'screenshot investment settlement case (Kotak Neo) shows Review transfer and not Review transaction',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'kotak-1',
+          sender: 'KOTAKN',
+          body:
+              'Kotak Neo: Running A/c settlement payout of INR 15,500.00 initiated for your demat account. You should receive funds in A/c XX1234 by EOD.',
+          receivedAt: DateTime(2026, 10, 16),
+        ),
+      );
+      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+      expect(find.text('Investment settlement payout'), findsOneWidget);
+      expect(find.text('Review transaction'), findsNothing);
+      expect(find.text('Review transfer'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'ambiguous account debit shows Choose card/account action label',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'ambig-1',
+          sender: 'HDFCBK',
+          body: 'Rs.500 spent',
+          reason: 'ambiguous_account_debit',
+          receivedAt: DateTime(2026, 10, 16),
+        ),
+      );
+      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+      expect(find.text('Choose card/account'), findsOneWidget);
+      expect(find.text('Review transaction'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'saving reviewed transaction syncs structured fact override for 64-char source key',
+    (tester) async {
+      final key = 'f' * 64;
+      await reviews.add(
+        NeedsReviewItem(
+          id: key,
+          sender: 'VM-HDFCBK',
+          body: 'Rs.499 spent at AMAZON',
+          reason: 'no_transaction_match',
+          receivedAt: DateTime(2026, 10, 1),
+        ),
+      );
+      final repo = _FakeUserCardsRepository();
+      await _pump(tester, repo: repo, reviews: reviews);
+
+      await tester.tap(find.text('Review transaction'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Save transaction'));
+      await tester.pumpAndSettle();
+
+      expect(repo.lastOverrideArgs, isNotNull);
+      expect(repo.lastOverrideArgs!['sourceKey'], key);
+      expect(repo.lastOverrideArgs!['factIndex'], 0);
+      expect((repo.lastOverrideArgs!['patch'] as Map)['amountRole'], 'posted');
+      expect(await reviews.fetchAll(), isEmpty);
+    },
+  );
 }

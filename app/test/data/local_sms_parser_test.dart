@@ -6,6 +6,16 @@ import 'package:pandapay/data/user_cards_repository.dart' show TxnEntryKind;
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 
 void main() {
+  test('completed auto-debit is not treated as a future reminder', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'HDFCBK',
+      body: 'Rs 500 was auto-debited from A/c XX1797 for NETFLIX on 20-10-2026.',
+      receivedAt: DateTime(2026, 10, 20),
+    );
+    expect(result?.eventType, LocalSmsEventType.transaction);
+    expect(result?.transaction, isNotNull);
+  });
   test(
     'both legs of an explicit own-bank transfer stay out of spending and income',
     () {
@@ -694,6 +704,36 @@ void main() {
     expect(result?.billerName, 'Alegra Communication Private Limited');
     expect(result?.amountDue?.rupees, 1600);
     expect(result?.confidence, greaterThanOrEqualTo(0.85));
+  });
+
+  test('classifies AutoPay alert deduction as a bill observation without creating spend', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VD-HDFCBK-S',
+      body:
+          'AutoPay Alert! Your HDFC Bank Credit Card 8708 bill Total Amt: Rs.10944 will be deducted from your A/C 1797 on 09/OCT/2026. Ignore if paid',
+      receivedAt: DateTime(2026, 10, 7),
+    );
+    expect(result?.transaction, isNull);
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.cardLast4, '8708');
+    expect(result?.amountDue?.rupees, 10944);
+    expect(result?.dueDate, DateTime(2026, 10, 9));
+  });
+
+  test('classifies AutoPay reminder deduction as a bill observation without creating spend', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VD-HDFCBN-S',
+      body:
+          'AutoPay Reminder: Rs.4150 will be deducted from HDFC Bank A/c 1797 on 09/JUL/2026 for Credit Card 8708 bill.',
+      receivedAt: DateTime(2026, 7, 6),
+    );
+    expect(result?.transaction, isNull);
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.cardLast4, '8708');
+    expect(result?.amountDue?.rupees, 4150);
+    expect(result?.dueDate, DateTime(2026, 7, 9));
   });
 
   test('review draft pre-fills unresolved transaction suggestions', () {

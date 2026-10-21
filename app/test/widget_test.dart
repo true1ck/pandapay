@@ -133,6 +133,7 @@ void main() {
           accessTokenProvider.overrideWith((ref) => 'fake-access-token'),
           _noSessionInit,
           sessionKeepAliveProvider.overrideWith((ref) {}),
+          smsBackgroundFlushProvider.overrideWith((ref) {}),
         ],
       );
       addTearDown(container.dispose);

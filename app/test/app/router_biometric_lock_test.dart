@@ -58,6 +58,7 @@ Future<void> _pumpApp(
         userCardsProvider.overrideWith((ref) async => const []),
         sessionInitProvider.overrideWith((ref) async {}),
         sessionKeepAliveProvider.overrideWith((ref) {}),
+        smsBackgroundFlushProvider.overrideWith((ref) {}),
         accessTokenProvider.overrideWith((ref) => 'test-token'),
         ...extraOverrides,
       ],
@@ -153,6 +154,7 @@ void main() {
           userCardsProvider.overrideWith((ref) async => const []),
           sessionInitProvider.overrideWith((ref) async {}),
           sessionKeepAliveProvider.overrideWith((ref) {}),
+          smsBackgroundFlushProvider.overrideWith((ref) {}),
           accessTokenProvider.overrideWith((ref) => 'test-token'),
         ],
       );

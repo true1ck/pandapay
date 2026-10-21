@@ -3,6 +3,7 @@ import '../needs_review_repository.dart';
 import '../user_cards_repository.dart';
 import '../../features/sms_import/sms_background_queue.dart';
 import 'financial_store.dart';
+import 'sms_facts_outbox.dart';
 import 'sms_intake_repository.dart';
 
 /// The same capture transaction is used by inbox import, foreground delivery
@@ -122,13 +123,74 @@ class SmsImportStore {
             ),
           );
         }
+        if (observation.eventType == LocalSmsEventType.bill &&
+            observation.confidence >= .85 &&
+            observation.statementDate != null) {
+          if (observation.dueDate != null || observation.statementDate != null) {
+            for (final card in cards) {
+              final matchesLast4 =
+                  observation.cardLast4 != null && card.last4 == observation.cardLast4;
+              final matchesFamily = observation.cardLast4 == null &&
+                  message.sender.toUpperCase().contains('TNEU') &&
+                  card.cardName.toLowerCase().contains('tata');
+              if (matchesLast4 || matchesFamily) {
+                final patch = <String, dynamic>{};
+                if (card.dueDay == null && observation.dueDate != null) {
+                  patch['due_day'] = observation.dueDate!.day;
+                }
+                if (card.statementDay == null && observation.statementDate != null) {
+                  patch['statement_day'] = observation.statementDate!.day;
+                }
+                if (patch.isNotEmpty) {
+                  store.patchCard(namespace, card.id, patch);
+                }
+              }
+            }
+          }
+        }
+        // Phase 3: bill obligations also reach the typed fact contract so
+        // bill projections share one feed with
+        // the balance/mandate/attempt families. INSERT OR IGNORE keeps a
+        // replay dedup; the legacy observation sync is unchanged.
+        if (observation.eventType == LocalSmsEventType.bill) {
+          final facts = buildSmsFactsForObservation(
+            body: message.body,
+            observation: observation,
+            receivedAt: message.receivedAt,
+          );
+          if (facts.isNotEmpty) {
+            SmsFactsOutbox(store.database).enqueue(
+              namespace,
+              message,
+              facts,
+              sourceKey: key,
+            );
+          }
+        }
         // High-confidence non-spending classifications are terminal on the
         // device. They must not wait for the hosted parser, where they would
         // otherwise be uploaded as raw SMS and potentially reappear as
         // review items. Transaction and bill observations retain the
-        // existing sync behavior until their structured server contracts are
-        // added.
+        // existing sync behavior until their structured server contracts
+        // are added.
         if (observation.disposition == LocalSmsDisposition.localIgnore) {
+          // Phase 2: a terminal local acknowledgement no longer means the
+          // server never learns — recognized non-spend shapes mint typed
+          // facts queued for POST /sms/facts. The raw body still never
+          // leaves the device through this path.
+          final facts = buildSmsFactsForObservation(
+            body: message.body,
+            observation: observation,
+            receivedAt: message.receivedAt,
+          );
+          if (facts.isNotEmpty) {
+            SmsFactsOutbox(store.database).enqueue(
+              namespace,
+              message,
+              facts,
+              sourceKey: key,
+            );
+          }
           intake.acknowledge(namespace, key);
         }
         // Billing dates are selected across the captured inbox by the server.

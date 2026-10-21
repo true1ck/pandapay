@@ -4,7 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'local/app_database.dart';
 import 'local_sms_parser.dart';
 
-enum NeedsReviewKind { transaction, commitment }
+enum NeedsReviewKind {
+  transaction,
+  commitment,
+  securityOrServiceAlert,
+  investmentSettlement,
+  mandate,
+}
 
 /// Task D-4 (ui-spec D4 Needs Review Queue) — one raw SMS the parser
 /// couldn't match, kept entirely ON-DEVICE.
@@ -16,13 +22,18 @@ enum NeedsReviewKind { transaction, commitment }
 /// CHECK constraint that strips every digit before it's ever stored. That
 /// table exists to help admins tune parser_patterns across ALL users, not
 /// to give one user back their own message text — the two are different
-/// features that happen to share a trigger event (a failed parse).
+/// features that happen to share a trigger event (a failed parse). The
+/// existing review item stays on-device. If the server parser cannot classify
+/// it, the AI fallback may send a redacted copy to the configured Gemini
+/// provider; local review remains available when AI is disabled or fails.
 /// ui-spec D4 explicitly wants "raw text shown for context," which a
 /// digit-stripped admin record structurally cannot provide. Rather than
 /// requesting a schema change to a table designed for anonymized telemetry
 /// (a real, separate decision — flagged, not made unilaterally here), this
 /// keeps the raw SMS exactly where it already lives today: the device that
-/// received it. Nothing here is ever uploaded.
+/// received it. The separate, explicit AI fallback uploads only after the
+/// normal financial-message filter and removes sensitive identifiers on the
+/// server before calling Gemini.
 class NeedsReviewItem {
   final String id;
   final String sender;
