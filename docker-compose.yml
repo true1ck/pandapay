@@ -181,9 +181,20 @@ services:
       context: ./api
     command: ["node", "src/rewards_worker.js"]
     # The shared API image probes /ready, but this worker has no HTTP server.
-    # Process restart policy and database heartbeats are its liveness signals.
+    # Check the actual PID 1 command instead; deeper liveness is monitored via
+    # the worker heartbeat table.
     healthcheck:
-      disable: true
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          process.exit(require('fs').readFileSync('/proc/1/cmdline', 'utf8')
+          .includes('src/rewards_worker.js') ? 0 : 1)
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
     depends_on:
       api:
