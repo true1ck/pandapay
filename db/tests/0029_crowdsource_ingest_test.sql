@@ -69,7 +69,7 @@ begin
     'visa', 'upi_qr', 'declined', 12.97123456, 77.59456789, '1.2.0');
   if not v_ok then raise exception 'first contribution was refused'; end if;
 
-  select count(*) into v_count from merchants where is_published;
+  select count(*) into v_count from merchants where is_published and vpa = 'chai@okaxis';
   if v_count <> 0 then
     raise exception 'merchant published on a single contribution — gate is N >= 2';
   end if;
@@ -79,7 +79,7 @@ begin
     'visa', 'upi_qr', 'declined', 12.97119999, 77.59451111, '1.2.0');
   if not v_ok then raise exception 'second contribution was refused'; end if;
 
-  select count(*) into v_count from merchants where is_published and confidence = 'low';
+  select count(*) into v_count from merchants where is_published and confidence = 'low' and vpa = 'chai@okaxis';
   if v_count <> 1 then
     raise exception 'publication gate did not fire at 2 distinct devices (published+low = %)', v_count;
   end if;

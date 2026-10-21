@@ -7,7 +7,6 @@ import 'package:pandapay/data/local/sms_rule_bundle.dart';
 import 'package:pandapay/data/local/sms_rule_bundle_store.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
-import 'package:pandapay_domain/pandapay_domain.dart';
 
 void main() {
   group('RestrictedSmsRule validation', () {
