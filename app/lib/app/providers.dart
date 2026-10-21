@@ -94,6 +94,20 @@ bool _isIgnorableSmsResult(SmsImportResult result) =>
     result.reason == 'not_a_successful_spend' ||
     result.reason == 'non_transaction_message';
 
+/// Determines whether an error during startup review replay is fatal to the pass.
+/// Server refusals on specific messages (4xx) should skip that message and continue,
+/// while transport/server failures (5xx, network drops) stop the pass for retry later.
+bool reviewReplayShouldStop(Object error) {
+  if (error is ApiException) {
+    final status = error.statusCode;
+    if (status != null && status >= 400 && status < 500) {
+      return false;
+    }
+    return true;
+  }
+  return true;
+}
+
 final authApiProvider = Provider<AuthApi>(
   (ref) => AuthApi(authBaseUrl: _authBaseUrl),
 );
@@ -5193,11 +5207,13 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           await reviewRepo.remove(item.id);
           changed = true;
         }
-      } catch (_) {
-        // Keep the remaining items for the next app start if the API is
-        // offline or auth has not finished restoring yet.
-        completed = false;
-        break;
+      } catch (e) {
+        if (reviewReplayShouldStop(e)) {
+          // Keep the remaining items for the next app start if the API is
+          // offline or auth has not finished restoring yet.
+          completed = false;
+          break;
+        }
       }
     }
     if (changed || dueDayUpdated || statementDayUpdated) {
