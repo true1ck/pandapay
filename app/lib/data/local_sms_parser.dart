@@ -112,8 +112,9 @@ class LocalSmsParser {
     // appends an offer. Let the bill parser handle it.
     if (_re(
       r'\b(?:payment|amount|minimum|total)\s+due\b|\bdue\s+date\b|\b(?:statement|bill|premium)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b',
-    ).hasMatch(text))
+    ).hasMatch(text)) {
       return false;
+    }
     // Past aggregate spend is often quoted solely to sell an EMI conversion.
     // It is not a new debit alert.
     if (_re(
@@ -784,9 +785,7 @@ class LocalSmsParser {
       transaction: row,
       cardLast4: cardLast4,
       accountLast4: isInsuranceReminder
-          ? (policyLast4 == null
-                ? null
-                : policyLast4.substring(policyLast4.length - 4))
+          ? policyLast4?.substring(policyLast4.length - 4)
           : accountLast4,
       billerName: billerName,
       cadenceHint: cadenceHint,

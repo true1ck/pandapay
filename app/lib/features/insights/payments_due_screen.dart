@@ -99,7 +99,7 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
   for (final card in active) {
     final bill = ledger[card.id]?.current;
     final DateTime dueOn;
-    if (bill?.dueDate != null && bill!.statementDateVerified) {
+    if (bill?.dueDate != null && (bill!.statementDateVerified || card.dueDay != null)) {
       dueOn = bill.dueDate!;
     } else if (card.dueDay != null) {
       dueOn = bill != null

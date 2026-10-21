@@ -816,7 +816,7 @@ class FinancialStore {
       ''');
       final applied = database.db.select(
         'SELECT 1 FROM local_repairs WHERE namespace=? AND repair_key=?',
-        [ns, 'autopay_repair_v1'],
+        [ns, 'autopay_repair_v2'],
       );
       if (applied.isNotEmpty) return;
 
@@ -872,8 +872,12 @@ class FinancialStore {
               'statement_date_explicit': obs.statementDateExplicit,
               'event_type': obs.eventType.wireValue,
               'disposition': obs.disposition.wireValue,
-              'reason_codes': obs.reasonCodes,
+              'reason_codes': [
+                ...obs.reasonCodes,
+                'autopay_notice',
+              ],
               'confidence': obs.confidence,
+              'is_autopay': true,
             });
             if (obs.cardLast4 != null && obs.dueDate != null) {
               final cardRows = database.db.select(
@@ -899,7 +903,7 @@ class FinancialStore {
       }
       database.db.execute(
         'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
-        [ns, 'autopay_repair_v1'],
+        [ns, 'autopay_repair_v2'],
       );
       if (changed) {
         _notify(ns, entity: 'cards');
@@ -965,15 +969,18 @@ class FinancialStore {
         int? newDueDay;
         int? newStmtDay;
         for (final obs in matchingBills) {
+          final isExplicit = obs['statement_date_explicit'] == true;
+          final isAutopay = obs['is_autopay'] == true ||
+              (obs['reason_codes'] as List?)?.contains('autopay_notice') == true;
           // A reminder's due date is for one upcoming payment, not a verified
-          // recurring card-cycle day. Only trust dates attached to a
-          // statement date explicitly printed by the issuer.
-          if (obs['statement_date_explicit'] != true) continue;
+          // recurring card-cycle day. Only trust dates attached to an explicit
+          // statement date or an established AutoPay schedule.
+          if (!isExplicit && !isAutopay) continue;
           if (newDueDay == null && obs['due_date'] != null) {
             final dt = DateTime.tryParse(obs['due_date'] as String);
             if (dt != null) newDueDay = dt.day;
           }
-          if (newStmtDay == null && obs['statement_date'] != null) {
+          if (newStmtDay == null && obs['statement_date'] != null && isExplicit) {
             final dt = DateTime.tryParse(obs['statement_date'] as String);
             if (dt != null) newStmtDay = dt.day;
           }

@@ -180,9 +180,15 @@ void main() {
       expect(roles, {'due_total', 'due_minimum'});
       final total = facts.firstWhere((f) => f.payload['amountRole'] == 'due_total');
       expect(total.payload['amountDueInr'], 3000.0);
-      // Device dates pin to local midnight; the UTC wire value shifts back
-      // one evening. The server specialist re-derives the IST day (5).
-      expect(total.payload['dueDate'], '2026-11-04T18:30:00.000Z');
+      // Device dates pin to local midnight, so the wire value is that
+      // calendar day in the device's own timezone and shifts back one
+      // evening in UTC. The server specialist re-derives the IST day (5).
+      // Compare the calendar day, never the instant: the same source must
+      // pass this test on a phone in India and on a UTC CI runner.
+      final dueDate = DateTime.parse(total.payload['dueDate'] as String).toLocal();
+      expect(dueDate.year, 2026);
+      expect(dueDate.month, 11);
+      expect(dueDate.day, 5);
       expect(total.payload['statementDate'], contains('-10-'));
       expect(total.payload['last4'], '4321');
       expect(total.payload['instrument'], 'credit_card');
