@@ -5,14 +5,12 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../account/account_screen.dart' show AccountTile;
-import '../cards/card_skin_preview_screen.dart';
 import '../cards/my_cards_screen.dart';
 import '../home_widget/widget_settings_screen.dart';
 import '../import/import_hub_screen.dart';
 import '../sms_import/sms_import_screen.dart';
 import 'account_settings_screen.dart';
 import 'appearance_screen.dart';
-import 'data_storage_screen.dart';
 import 'email_phone_screen.dart';
 import 'feedback_support_screen.dart';
 import 'help_faq_screen.dart';
@@ -21,7 +19,6 @@ import 'linked_devices_screen.dart';
 import 'notification_settings_screen.dart';
 import 'privacy_permissions_screen.dart';
 import 'transaction_tags_screen.dart';
-import 'whats_new_screen.dart';
 
 /// Design 20 "Settings & security" — one screen, grouped, reached from a
 /// single row on You.
@@ -121,12 +118,6 @@ class SettingsHubScreen extends ConsumerWidget {
                 }
               },
             ),
-            const SizedBox(height: AppSpace.sm),
-            AccountTile(
-              icon: Icons.palette_outlined,
-              label: 'Card styles',
-              onTap: () => open(const CardSkinPreviewScreen()),
-            ),
             const SizedBox(height: AppSpace.xxl),
 
             const _GroupHeader('Account'),
@@ -155,12 +146,6 @@ class SettingsHubScreen extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpace.sm),
             AccountTile(
-              icon: Icons.storage_outlined,
-              label: 'Data & storage',
-              onTap: () => open(const DataStorageScreen()),
-            ),
-            const SizedBox(height: AppSpace.sm),
-            AccountTile(
               icon: Icons.widgets_outlined,
               label: 'Home-screen widget',
               onTap: () => open(const WidgetSettingsScreen()),
@@ -178,12 +163,6 @@ class SettingsHubScreen extends ConsumerWidget {
               icon: Icons.help_outline_rounded,
               label: 'Help & FAQ',
               onTap: () => open(const HelpFaqScreen()),
-            ),
-            const SizedBox(height: AppSpace.sm),
-            AccountTile(
-              icon: Icons.new_releases_outlined,
-              label: "What's new",
-              onTap: () => open(const WhatsNewScreen()),
             ),
             const SizedBox(height: AppSpace.sm),
             AccountTile(
