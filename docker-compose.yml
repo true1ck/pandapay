@@ -160,7 +160,7 @@ services:
       REFERRAL_PREVIEW_SECRET: dev_referral_preview_secret_change_me_32_bytes
       ENGAGEMENT_RECEIPT_SECRET: dev_engagement_receipt_secret_change_me_32_bytes
       REWARD_WORKER_INTERNAL_SECRET: dev_reward_worker_internal_secret_change_me_32_bytes
-      PRODUCT_TERMS_VERSION: 2026-08-07
+      PRODUCT_TERMS_VERSION: "2026-08-07"
       INBOUND_EMAIL_WEBHOOK_SECRET: dev_inbound_secret_change_me
       PARTNER_WEBHOOK_SECRET: dev_partner_secret_change_me
       IMAP_ENCRYPTION_KEY: dev_imap_key_change_me_32_bytes_ok
