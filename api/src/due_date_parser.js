@@ -128,6 +128,10 @@ function extractDueDate(body) {
     new RegExp(`\\b(?:payment|amount|minimum|bill|total)\\b[\\s\\S]{0,100}?\\b(?:must|should|needs?\\s+to|is)(?:\\s+to)?\\s+(?:be\\s+)?(?:paid|made|cleared|settled)\\s+(?:on\\s+or\\s+before|by|before|on)\\s+(${DATE_TOKEN})`, 'i'),
     new RegExp(`\\blast\\s+date\\s+(?:for\\s+)?(?:payment|paying|pay)\\s*(?:is|on|by|:)\\s*(${DATE_TOKEN})`, 'i'),
     new RegExp(`\\b(?:payment|bill)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s*[:\\-]?\\s*(${DATE_TOKEN})`, 'i'),
+    // AutoPay / Auto-debit deduction alerts ("will be deducted from your A/C ... on 09/OCT/2026",
+    // "deducted from ... on 09/JUL/2026", "auto-debited on 23-09-26").
+    new RegExp(`\\b(?:will|shall|to)?\\s*(?:be\\s+)?(?:auto[- ]?)?(?:deducted|debited)\\b[\\s\\S]{0,70}?\\bon\\s+(${DATE_TOKEN})`, 'i'),
+    new RegExp(`\\b(?:auto[- ]?deducted|auto[- ]?debited)\\s+on\\s+(${DATE_TOKEN})`, 'i'),
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);

@@ -92,6 +92,17 @@ test('extracts a due date when payment is made by a date', () => {
   assert.equal(result.day, 16);
 });
 
+test('extracts a due date from AutoPay alerts and deduction reminders', () => {
+  const hdfcAutoPay = 'AutoPay Alert!\nYour HDFC Bank Credit Card 8708 bill\nTotal Amt: Rs.10944\nwill be deducted from your A/C 1797 on 09/OCT/2026. Ignore if paid';
+  assert.equal(extractDueDate(hdfcAutoPay).day, 9);
+
+  const hdfcReminder = 'AutoPay Reminder:\nRs.4150 will be deducted from HDFC Bank A/c 1797 on 09/JUL/2026 for Credit Card 8708 bill.\nFor Query: Ask EVA resu.io/ZPCKZ7';
+  assert.equal(extractDueDate(hdfcReminder).day, 9);
+
+  const kotakReminder = 'REMINDER: INR 30 will be auto-debited on 23-09-26 from your Kotak Bank A/c towards o/s dues on Kotak Card x0592.';
+  assert.equal(extractDueDate(kotakReminder).day, 23);
+});
+
 test('extracts HDFC MoneyBack-style historical statement wording', () => {
   const messages = [
     'Your HDFC Bank MoneyBack+ Credit Card ending XX1234 statement is generated. Payment due date of your card is 16/10/2026.',

@@ -27,12 +27,15 @@ const {
 } = require('./sms_parser');
 const { parseSubscriptionMandate } = require('./subscription_parser');
 const importResolvers = require('./import_resolvers');
+const smsFactsRoute = require('./sms_facts_route');
 const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
 const nearbyGoogle = require('./nearby_google');
 const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
 const { registerAdminReferralOperationsRoutes } = require('./admin_referral_operations');
+const aiQueueRoute = require('./ai_queue_route');
+const aiProviderQuotaRoute = require('./ai_provider_quota_route');
 const rewardMath = require('./reward_math');
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
@@ -5158,6 +5161,28 @@ app.post('/transactions', requireAuth, async (req, res) => {
     console.error('POST /transactions error', err);
     res.status(500).json({ error: 'internal_error' });
   }
+});
+
+/**
+ * Typed SMS facts and unresolved-message AI jobs share the existing source
+ * identity and downstream specialists. AI results remain reviewable unless
+ * a verified fact is safely materialized.
+ */
+smsFactsRoute.registerSmsFactsRoutes(app, {
+  requireAuth,
+  requireAdmin,
+  withUserClient,
+  persistSubscriptionMandate,
+});
+aiQueueRoute.registerAiQueueRoutes(app, {
+  requireAuth,
+  requireAdmin,
+  withUserClient,
+  persistSubscriptionMandate,
+});
+aiProviderQuotaRoute.registerProviderQuotaRoute(app, {
+  requireWorkerAuth: aiQueueRoute.requireWorkerAuth,
+  withUserClient,
 });
 
 /**

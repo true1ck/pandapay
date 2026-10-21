@@ -1217,6 +1217,8 @@ module.exports = {
   isAmbiguousAccountDebit,
   isExplicitOwnAccountTransfer,
   KNOWN_FIELDS,
+  isSecurityOrOtpMessage,
+  isNonTransactionNoise,
   extractAvailableBalance,
   isBankAccountMessage,
 };

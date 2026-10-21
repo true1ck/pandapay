@@ -345,6 +345,26 @@ function bodyHashOf(sender, body) {
 }
 
 /**
+ * Writes (or replaces) the user correction for one fact slot. The upsert
+ * re-player never calls this, so a correction survives every replay. The
+ * patch itself is validated by the caller via resolveFactsWithOverrides
+ * before this write happens.
+ */
+async function writeSmsFactOverride(
+  client,
+  profileId,
+  { sourceId, factIndex, patch, reason },
+) {
+  await client.query(
+    `INSERT INTO fact_overrides (profile_id, source_id, fact_index, patch, reason)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (source_id, fact_index)
+     DO UPDATE SET patch = EXCLUDED.patch, reason = EXCLUDED.reason, applied_at = now()`,
+    [profileId, sourceId, factIndex, JSON.stringify(patch), reason || null],
+  );
+}
+
+/**
  * Upserts one source envelope + its fact set. Replaying the same source
  * (same sourceKey) re-uses the existing envelope and, because fact indices
  * are deterministic, leaves the fact rows — and fact IDs — untouched.
@@ -355,12 +375,18 @@ function bodyHashOf(sender, body) {
 async function upsertSmsSourceFacts(
   client,
   profileId,
-  { sender, bodyHash, sourceKey, facts, occurredAt, channel = 'sms' },
+  { sender, bodyHash, sourceKey, facts, occurredAt, channel = 'sms', indexOffset = 0 },
 ) {
   if (!Array.isArray(facts) || facts.length === 0) {
     throw new Error('facts must be a non-empty array');
   }
-  const indexed = assignDeterministicIndices(facts);
+  if (!Number.isInteger(indexOffset) || indexOffset < 0) {
+    throw new Error('indexOffset must be a non-negative integer');
+  }
+  const indexed = assignDeterministicIndices(facts).map((fact) => ({
+    ...fact,
+    factIndex: fact.factIndex + indexOffset,
+  }));
   for (const fact of indexed) {
     if (fact.factIndex === undefined) throw new Error('indexing failed');
   }
@@ -484,4 +510,5 @@ module.exports = {
   bodyHashOf,
   upsertSmsSourceFacts,
   loadSmsSourceFacts,
+  writeSmsFactOverride,
 };

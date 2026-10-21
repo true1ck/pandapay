@@ -206,3 +206,126 @@ test('ambiguous_suffix_two_banks: no automatic pairing anywhere', () => {
   assert.equal(credit.fields.accountLast4, '9080');
   assert.notEqual(credit.fields.merchant, 'Sujay Kumar');
 });
+
+// Phase 2/3 device routing: the shapes the device minter
+// (buildSmsFactsForObservation) produces for recognized non-spend families
+// must be accepted by the server contract verbatim. Pinning both sides of
+// the same corpus keeps the Dart/Node validators in lockstep.
+const deviceMintedShapes = {
+  balance_only: {
+    factType: 'balance_snapshot',
+    payload: {
+      availableBalanceInr: 9000,
+      asOfAt: '2026-10-16T04:30:00.000Z',
+      instrument: 'upi_bank',
+      accountLast4: '9876',
+    },
+  },
+  card_statement: [
+    {
+      factType: 'bill_obligation',
+      payload: {
+        amountRole: 'due_total',
+        amountDueInr: 3000,
+        dueDate: '2026-11-04T18:30:00.000Z',
+        statementDate: '2026-10-11T18:30:00.000Z',
+        billerName: 'Axis Bank',
+        last4: '4321',
+        instrument: 'credit_card',
+      },
+    },
+    {
+      factType: 'bill_obligation',
+      payload: {
+        amountRole: 'due_minimum',
+        minimumDueInr: 600,
+        dueDate: '2026-11-04T18:30:00.000Z',
+        statementDate: '2026-10-11T18:30:00.000Z',
+        billerName: 'Axis Bank',
+        last4: '4321',
+        instrument: 'credit_card',
+      },
+    },
+  ],
+  bill_with_offer: {
+    factType: 'bill_obligation',
+    payload: {
+      amountRole: 'due_total',
+      amountDueInr: 1500,
+      dueDate: '2026-10-17T18:30:00.000Z',
+      billerName: 'TNEB electricity',
+      accountLast4: null,
+    },
+  },
+  autopay_mandate: {
+    factType: 'mandate_lifecycle',
+    payload: {
+      mandateStatus: 'registered',
+      asOfAt: '2026-10-16T10:00:00.000Z',
+      limitInr: 2000,
+      merchant: 'NETFLIX',
+      accountLast4: '1797',
+    },
+  },
+  autopay_failed: {
+    factType: 'pending_or_failed_attempt',
+    payload: {
+      attemptStatus: 'failed',
+      occurredAt: '2026-10-16T10:00:00.000Z',
+      merchant: 'NETFLIX',
+    },
+  },
+  mandate_cancelled: {
+    factType: 'mandate_lifecycle',
+    payload: {
+      mandateStatus: 'cancelled',
+      asOfAt: '2026-10-16T10:00:00.000Z',
+      merchant: 'NETFLIX',
+      accountLast4: '1797',
+    },
+  },
+  declined_attempt: {
+    factType: 'pending_or_failed_attempt',
+    payload: {
+      attemptStatus: 'failed',
+      occurredAt: '2026-10-16T10:00:00.000Z',
+      merchant: null,
+      last4: '4321',
+      instrument: 'credit_card',
+    },
+  },
+};
+
+test('device-minted fact shapes validate under the server contract verbatim', async () => {
+  const { validateFactSet } = require('../src/sms_facts');
+  for (const [caseId, fact] of Object.entries(deviceMintedShapes)) {
+    const list = Array.isArray(fact) ? fact : [fact];
+    const result = validateFactSet(
+      list.map((f) => ({
+        factType: f.factType,
+        payload: Object.fromEntries(
+          Object.entries(f.payload).filter(([, v]) => v !== null),
+        ),
+      })),
+    );
+    assert.deepEqual(
+      { case: caseId, ...result },
+      { case: caseId, valid: true, errors: [] },
+      `device-minted shape for ${caseId} must be server-valid`,
+    );
+  }
+  // The device never posts a parsed bill as spend semantics: the due roles
+  // are refused with a posted entryKind and the attempt family refuses any
+  // amountInr at all.
+  const asSpend = validateFactSet([
+    {
+      factType: 'bill_obligation',
+      payload: {
+        amountRole: 'due_total',
+        amountDueInr: 3000,
+        dueDate: '2026-11-04T18:30:00.000Z',
+      },
+    },
+  ]);
+  assert.equal(asSpend.valid, true);
+});
