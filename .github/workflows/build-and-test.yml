@@ -110,6 +110,7 @@ jobs:
           if [ ! -f "$HOME/.android/debug.keystore" ]; then
             keytool -genkeypair -noprompt \
               -keystore "$HOME/.android/debug.keystore" \
+              -storetype JKS \
               -storepass android -keypass android -alias androiddebugkey \
               -dname "CN=Android Debug,O=Android,C=US" \
               -keyalg RSA -keysize 2048 -validity 10000
