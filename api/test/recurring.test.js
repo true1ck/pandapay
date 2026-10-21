@@ -349,3 +349,42 @@ test('non-spend transaction kinds are rejected defensively by the detector', () 
   }));
   assert.equal(detectRecurringSeries(rows).length, 0);
 });
+
+test('a driver-parsed date column still projects a valid next charge', () => {
+  // Postgres `date` columns (OID 1082) come back from the driver as JS
+  // Dates. Appending a time suffix to one produced an invalid date, and the
+  // route's toISOString() on it threw "Invalid time value" — the whole
+  // subscriptions screen returned 500 for any profile with a series.
+  const driverDate = new Date(2026, 9, 21); // local midnight, as pg parses it
+  const next = nextExpectedAfter(driverDate, 30, new Date('2026-10-21T00:00:00Z'));
+  assert.ok(next instanceof Date);
+  assert.equal(Number.isNaN(next.getTime()), false);
+  // A monthly cycle keeps the billing day instead of drifting by 30 days.
+  assert.equal(next.toISOString().slice(0, 10), '2026-11-21');
+});
+
+test('a plain calendar day keeps the day it names', () => {
+  const next = nextExpectedAfter('2026-10-21', 30, new Date('2026-10-21T00:00:00Z'));
+  assert.equal(next.toISOString().slice(0, 10), '2026-11-21');
+});
+
+test('an unusable anchor yields no date instead of an invalid one', () => {
+  assert.equal(nextExpectedAfter('not-a-date', 30, new Date()), null);
+  assert.equal(nextExpectedAfter(null, 30, new Date()), null);
+  assert.equal(nextExpectedAfter(undefined, 30, new Date()), null);
+});
+
+test('a lapsed saved renewal date is still flagged from a driver-parsed date', () => {
+  const { engineStatus } = require('../src/recurring');
+  const status = engineStatus(
+    {
+      cadence_days: 30,
+      cadence_confirmed: true,
+      detection_source: 'manual',
+      occurrence_count: 3,
+      next_expected_on: new Date(2026, 8, 1),
+    },
+    new Date('2026-10-21T00:00:00Z'),
+  );
+  assert.equal(status, 'at_risk');
+});

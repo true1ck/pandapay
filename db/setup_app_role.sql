@@ -34,8 +34,27 @@ create role app_user login password :'app_user_password' nosuperuser nobypassrls
 
 select exists (select 1 from pg_roles where rolname = 'rewards_worker_login') as rewards_worker_login_exists \gset
 \if :rewards_worker_login_exists
-alter role rewards_worker_login login password :'rewards_worker_password'
-  nosuperuser nocreatedb nocreaterole inherit noreplication nobypassrls;
+-- The role already exists, so only the credential is rotated here. Restating
+-- the security attributes ("nosuperuser", "nobypassrls") is refused with
+-- "permission denied to alter role" for a deploy admin that has CREATEROLE
+-- but not SUPERUSER — "Only roles with the SUPERUSER attribute may change the
+-- SUPERUSER attribute" — which failed every deploy after the role's first
+-- creation. The attributes are already the ones this file creates, and only a
+-- superuser can change them anyway. The password is passed through a session
+-- setting because psql does not substitute variables inside a dollar-quoted
+-- body.
+select set_config('pandapay.rewards_worker_password', :'rewards_worker_password', false);
+do $$
+begin
+  begin
+    execute format(
+      'alter role rewards_worker_login login password %L',
+      current_setting('pandapay.rewards_worker_password')
+    );
+  exception when insufficient_privilege then
+    raise notice 'rewards_worker_login exists; this admin role cannot rotate its password (that needs SUPERUSER). Keeping the existing credentials — rotate them with a superuser if the host password changed.';
+  end;
+end $$;
 \else
 create role rewards_worker_login login password :'rewards_worker_password'
   nosuperuser nocreatedb nocreaterole inherit noreplication nobypassrls;

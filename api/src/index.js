@@ -7537,9 +7537,14 @@ app.get('/recurring', requireAuth, async (req, res) => {
         // when that date lapses, engineStatus below flags it for review
         // rather than quietly projecting a future their data never showed.
         const derivedAnchor = r.last_seen_on || r.first_seen_on;
-        const derivedDate = derivedAnchor
-          ? nextExpectedAfter(new Date(`${derivedAnchor}T00:00:00Z`), cadenceDays, now)
-              .toISOString().slice(0, 10)
+        // A `date` column arrives from the driver as a JS Date, so it is
+        // normalized inside nextExpectedAfter; appending a time suffix to it
+        // here produced an invalid date and took the whole screen down.
+        const derivedNext = derivedAnchor
+          ? nextExpectedAfter(derivedAnchor, cadenceDays, now)
+          : null;
+        const derivedDate = derivedNext
+          ? derivedNext.toISOString().slice(0, 10)
           : null;
         const nextExpectedOn = r.user_edited
           ? (r.next_expected_on ?? derivedDate)

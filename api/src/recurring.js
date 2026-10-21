@@ -197,6 +197,35 @@ function daysBetween(a, b) {
 }
 
 /**
+ * The UTC midnight of a calendar day, from any shape a `date` column can
+ * arrive in.
+ *
+ * The driver parses a Postgres `date` (OID 1082) into a JS Date, so
+ * appending a time suffix to it ("Mon Oct 21 2026 …T00:00:00Z") is not a
+ * date at all — it is an invalid one, and every later `toISOString()` on it
+ * throws "Invalid time value". Strings are read as plain calendar days so a
+ * `YYYY-MM-DD` value keeps the day it names instead of shifting a day in
+ * some other timezone.
+ */
+function utcDayStart(value) {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+  }
+  const text = String(value).trim();
+  if (!text) return null;
+  const calendarDay = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  if (calendarDay) {
+    return new Date(
+      Date.UTC(Number(calendarDay[1]), Number(calendarDay[2]) - 1, Number(calendarDay[3])),
+    );
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
  * Return the next scheduled occurrence after today.
  *
  * A recurring row can be read long after its last observed charge. Returning
@@ -204,9 +233,13 @@ function daysBetween(a, b) {
  * keep the cadence-based model, but roll the display date forward to the next
  * cycle while leaving the last observed charge available to the UI for stale
  * or missed-payment review.
+ *
+ * An unusable anchor date yields null instead of an invalid date, so one
+ * malformed row can never take the whole screen down.
  */
 function nextExpectedAfter(date, cadenceDays, now = new Date()) {
-  let next = new Date(date);
+  let next = utcDayStart(date);
+  if (!next) return null;
   next.setUTCHours(0, 0, 0, 0);
   const anchorDay = next.getUTCDate();
   const calendarMonthly = cadenceDays >= 26 && cadenceDays <= 32;
@@ -382,7 +415,10 @@ function engineStatus(row, now = new Date()) {
       now.getMonth(),
       now.getDate()
     );
-    if (new Date(`${savedNext}T00:00:00Z`) < today) return 'at_risk';
+    // The driver hands back a `date` column as a JS Date; normalize it to
+    // the calendar day it names instead of string-concatenating a suffix.
+    const savedDay = utcDayStart(savedNext);
+    if (savedDay && savedDay < today) return 'at_risk';
   }
   // Manually entered subscriptions are user-asserted facts, not observed
   // patterns: they stay confirmed on trust.
@@ -392,7 +428,9 @@ function engineStatus(row, now = new Date()) {
   const source = row.detectionSource ?? row.detection_source;
   const anchor = row.lastSeenOn ?? row.last_seen_on ?? row.firstSeenOn ?? row.first_seen_on;
   if (!anchor) return 'confirmed';
-  const age = daysBetween(new Date(anchor), now);
+  const anchorDay = utcDayStart(anchor);
+  if (!anchorDay) return 'confirmed';
+  const age = daysBetween(anchorDay, now);
   if (age > Math.round(cadence * 1.5)) {
     const occurrences = Number(row.occurrenceCount ?? row.occurrence_count) || 0;
     return source === 'mandate' && occurrences <= 1 ? 'unused' : 'at_risk';
@@ -407,6 +445,7 @@ module.exports = {
   annualMultiplier,
   engineStatus,
   nextExpectedAfter,
+  utcDayStart,
   isUsableSubscriptionName,
   isDisplayableSubscriptionRecord,
   isInvestmentFundingMessage,

@@ -229,6 +229,65 @@ jobs:
       - name: Verify SMS AI RLS, worker leasing, and provider capacity
         run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021230000_sms_ai_permissions_test.sql
 
+      # The deploy runs the role script as an admin that has CREATEROLE but
+      # not SUPERUSER. Restating a role's SUPERUSER attribute is refused for
+      # that admin ("permission denied to alter role"), so the second and
+      # every later deploy failed before the containers were rebuilt. Run the
+      # script twice as such an admin: both passes must succeed.
+      - name: Verify the app role setup is safe for a non-superuser deploy admin
+        run: |
+          docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'deploy_admin_ci') THEN
+              CREATE ROLE deploy_admin_ci LOGIN PASSWORD 'deploy_admin_ci_pw' CREATEROLE;
+            END IF;
+          END $$;
+          -- The production admin applies the migrations, so it owns the schema
+          -- and its tables. The role script grants on those objects, which
+          -- only their owner may do.
+          ALTER SCHEMA public OWNER TO deploy_admin_ci;
+          GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO deploy_admin_ci;
+          GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO deploy_admin_ci;
+          GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO deploy_admin_ci;
+          DO $$
+          BEGIN
+            IF to_regnamespace('pandapay') IS NOT NULL THEN
+              EXECUTE 'ALTER SCHEMA pandapay OWNER TO deploy_admin_ci';
+              EXECUTE 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA pandapay TO deploy_admin_ci';
+              EXECUTE 'GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pandapay TO deploy_admin_ci';
+              EXECUTE 'GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pandapay TO deploy_admin_ci';
+            END IF;
+          END $$;
+          SQL
+          for pass in 1 2; do
+            docker compose exec -T \
+              -e PGPASSWORD=deploy_admin_ci_pw \
+              -e APP_USER_PASSWORD=app_user_ci_pw \
+              -e REWARD_WORKER_DB_PASSWORD=reward_worker_ci_pw \
+              db psql -U deploy_admin_ci -d pandapay -v ON_ERROR_STOP=1 \
+              -f - < db/setup_app_role.sql
+            echo "role setup pass $pass ok"
+          done
+          # The roles must still be the locked-down ones the script creates.
+          docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            r record;
+          BEGIN
+            FOR r IN SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
+                      WHERE rolname IN ('app_user', 'rewards_worker_login') LOOP
+              IF r.rolsuper OR r.rolbypassrls THEN
+                RAISE EXCEPTION 'role % must not be superuser or bypass rls', r.rolname;
+              END IF;
+            END LOOP;
+            IF (SELECT count(*) FROM pg_roles
+                 WHERE rolname IN ('app_user', 'rewards_worker_login')) <> 2 THEN
+              RAISE EXCEPTION 'the app roles must exist';
+            END IF;
+          END $$;
+          SQL
+
       - name: Verify audited referral operator holds and status
         run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021143000_referral_operator_controls_test.sql
 
