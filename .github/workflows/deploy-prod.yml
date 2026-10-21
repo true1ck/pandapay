@@ -86,12 +86,15 @@ jobs:
           NOTIFICATION_SERVICE_URL: ${{ secrets.NOTIFICATION_SERVICE_URL }}
           NOTIFICATION_SERVICE_API_KEY: ${{ secrets.NOTIFICATION_SERVICE_API_KEY }}
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          PHONE_LOOKUP_HMAC_KEY: ${{ secrets.PHONE_LOOKUP_HMAC_KEY }}
         run: |
           test -n "$NOTIFICATION_SERVICE_URL"
           test -n "$NOTIFICATION_SERVICE_API_KEY"
+          test -n "$PHONE_LOOKUP_HMAC_KEY"
           {
             printf 'export NOTIFICATION_SERVICE_URL=%q\n' "$NOTIFICATION_SERVICE_URL"
             printf 'export NOTIFICATION_SERVICE_API_KEY=%q\n' "$NOTIFICATION_SERVICE_API_KEY"
+            printf 'export PHONE_LOOKUP_HMAC_KEY=%q\n' "$PHONE_LOOKUP_HMAC_KEY"
             if [ -n "$GOOGLE_PLACES_API_KEY" ]; then
               printf 'export GOOGLE_PLACES_API_KEY=%q\n' "$GOOGLE_PLACES_API_KEY"
             fi

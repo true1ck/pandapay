@@ -23,8 +23,7 @@
 #   rates; SEED_DEMO_DATA must stay false here.
 # - It never replaces .env. Secrets live only on the host and are gitignored,
 #   so `git reset --hard` below leaves them alone. The CI workflow may pass
-#   the notification-provider variables explicitly; only those two keys are
-#   upserted below, never the whole file.
+#   allow-listed values explicitly; never the whole file is replaced.
 set -euo pipefail
 
 SHA="${1:?usage: deploy.sh <commit-sha>}"
@@ -32,6 +31,26 @@ APP_DIR="/home/ubuntu/apps/pandapay"
 REPO="https://github.com/true1ck/pandapay.git"
 BACKUP_DIR="/home/ubuntu/backups"
 STAMP="$(date +%Y%m%d-%H%M%S)"
+
+upsert_env_value() {
+  local key="$1"
+  local value="$2"
+  local tmp=".env.tmp.$$"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { replaced = 0 }
+    index($0, key "=") == 1 {
+      print key "=" value
+      replaced = 1
+      next
+    }
+    { print }
+    END {
+      if (!replaced) print key "=" value
+    }
+  ' .env > "$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" .env
+}
 
 cd "$APP_DIR"
 
@@ -52,6 +71,12 @@ check_single_env_key() {
     exit 1
   fi
 }
+
+if [ -z "${PHONE_LOOKUP_HMAC_KEY:-}" ] || [ "${#PHONE_LOOKUP_HMAC_KEY}" -lt 32 ]; then
+  echo "FATAL: a stable PHONE_LOOKUP_HMAC_KEY of at least 32 bytes must be supplied"
+  exit 1
+fi
+upsert_env_value PHONE_LOOKUP_HMAC_KEY "$PHONE_LOOKUP_HMAC_KEY"
 
 # Compose checks presence later, but these checks must happen before the
 # backup/migration steps so a legacy or ambiguous .env cannot start a partial
@@ -79,31 +104,9 @@ for key in DATABASE_URL JWT_ISSUER JWT_AUDIENCE JWT_ACTIVE_KEY_ID; do
   fi
 done
 
-# The notification provider is a server-side integration. Keep its project
-# key out of the repository and the mobile app, but make the auto-deploy path
-# able to provision the two host-only values from GitHub environment secrets.
-# This is deliberately an allow-list: no other host secret can be changed by
-# the deployment workflow.
-upsert_env_value() {
-  local key="$1"
-  local value="$2"
-  local tmp=".env.tmp.$$"
-  awk -v key="$key" -v value="$value" '
-    BEGIN { replaced = 0 }
-    index($0, key "=") == 1 {
-      print key "=" value
-      replaced = 1
-      next
-    }
-    { print }
-    END {
-      if (!replaced) print key "=" value
-    }
-  ' .env > "$tmp"
-  chmod 600 "$tmp"
-  mv "$tmp" .env
-}
-
+# The notification provider and phone-lookup HMAC key are server-side secrets.
+# Only these allow-listed values can be provisioned from GitHub environment
+# secrets; no other host secret can be changed by the deployment workflow.
 if [ -n "${NOTIFICATION_SERVICE_URL:-}" ] || [ -n "${NOTIFICATION_SERVICE_API_KEY:-}" ]; then
   [ -n "${NOTIFICATION_SERVICE_URL:-}" ] || {
     echo "FATAL: NOTIFICATION_SERVICE_URL was not supplied"
