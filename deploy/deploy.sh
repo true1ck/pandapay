@@ -52,6 +52,28 @@ check_single_env_key() {
   fi
 }
 
+# Writes one allow-listed value into the host .env. The whole file is never
+# replaced, only the named key, and the result keeps its 0600 permissions.
+upsert_env_value() {
+  local key="$1"
+  local value="$2"
+  local tmp=".env.tmp.$$"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { replaced = 0 }
+    index($0, key "=") == 1 {
+      print key "=" value
+      replaced = 1
+      next
+    }
+    { print }
+    END {
+      if (!replaced) print key "=" value
+    }
+  ' .env > "$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" .env
+}
+
 if ! grep -Eq '^PHONE_LOOKUP_HMAC_KEY=.{32,}$' .env; then
   echo "FATAL: .env must contain a stable PHONE_LOOKUP_HMAC_KEY of at least 32 characters"
   exit 1
