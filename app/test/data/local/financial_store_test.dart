@@ -312,6 +312,9 @@ void main() {
         'event_type': 'bill',
         'card_last4': '7105',
         'statement_date': '2026-10-14T00:00:00.000',
+        // Only a statement date the issuer printed heals the card's cycle
+        // days; a receive-date anchor never does.
+        'statement_date_explicit': true,
         'due_date': '2026-11-02T00:00:00.000',
         'received_at': '2026-10-14T10:00:00.000',
       });
