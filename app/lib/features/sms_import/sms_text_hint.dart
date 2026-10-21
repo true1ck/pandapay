@@ -186,17 +186,37 @@ bool capturesFinancialSms(String smsBody, {String sender = ''}) {
   final lower = smsBody.toLowerCase();
   if (_looksOtpOrSecurity(lower)) return false;
 
-  // Reuse the parser's issuer/body-aware negative classifier. It recognizes
-  // EMI solicitations and service notices while preserving completed
-  // transactions and bills that happen to carry an offer footer.
-  if (LocalSmsParser.isNonTransactionNoise(sender, smsBody)) return false;
-
   // Completed movement, bill/balance facts, and failed attempts take priority
   // over marketing footers. This helper is also used to decide AI eligibility.
-  if (RegExp(
+  final strongFinancialEvidence = RegExp(
     r'\b(?:debited|credited|spent|paid|charged|transferred|withdrawn|received|deposited|refunded)\b|\b(?:txn|transaction|purchase|recharge|payment)\b[\s\S]{0,55}\b(?:successful|completed|processed)\b|\b(?:amount|payment|minimum|total)\s+due\b|\bdue\s+(?:date|on|by)\b|\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\b(?:available|current|closing)\s+balance\b|\bcredit\s+limit\b',
-  ).hasMatch(lower))
-    return true;
+  ).hasMatch(lower);
+
+  // Past aggregate spend sold as an EMI conversion is a known false positive
+  // even though it mentions transactions and amounts. Keep this specific
+  // veto ahead of the financial-evidence override.
+  final emiSolicitation =
+      RegExp(
+        r'\b(?:eligible\s+for\s+conversion|convert(?:ion)?\s+(?:to|into)\s+(?:flexipay\s+)?emi|flexipay\s+emis?)\b',
+      ).hasMatch(lower) &&
+      !RegExp(r'\b(?:your\s+)?(?:txn|transaction)\s+of\b').hasMatch(lower);
+  if (emiSolicitation) return false;
+
+  final balanceSnapshotEvidence = RegExp(
+    r'\b(?:available|current|closing)\s+balance\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?',
+  ).hasMatch(lower);
+
+  // Reuse the parser's issuer/body-aware negative classifier. Real financial
+  // facts (including balance snapshots) survive marketing footers; recognized
+  // offers and service notices without a strong event are discarded. The
+  // movement and bill cases are already exempted by that classifier when
+  // they contain a completed event/due fact; balance snapshots need the
+  // explicit evidence exception because they need not use a movement verb.
+  if (LocalSmsParser.isNonTransactionNoise(sender, smsBody) &&
+      !balanceSnapshotEvidence) {
+    return false;
+  }
+  if (strongFinancialEvidence) return true;
   if (_looksPromotional(lower)) return false;
   if (looksLikeTransactionSms(smsBody)) return true;
 

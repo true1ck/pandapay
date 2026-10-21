@@ -1,7 +1,7 @@
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'user_cards_repository.dart';
-import 'local/financial_store.dart' show canonicalBankSender, familyNamesCardDisplayName;
+import 'local/financial_store.dart' show familyNamesCardDisplayName;
 
 /// Evidence line an SMS bill message contributes to one card's ledger.
 /// Field-level, not message-level: a reminder can arrive with a subset

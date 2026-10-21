@@ -231,5 +231,137 @@ void main() {
         isFalse,
       );
     });
+
+    test('keeps a completed card purchase from a promotional sender', () {
+      expect(
+        capturesFinancialSms(
+          'Your transaction of INR 1,250.00 on card XX4321 at STORE is successful. '
+          'Get 10% cashback on your next purchase.',
+          sender: 'VM-BANK-P',
+        ),
+        isTrue,
+      );
+    });
+
+    test('filters an offer with a quoted price and a spend threshold', () {
+      expect(
+        capturesFinancialSms(
+          'Shop now: buy a phone for Rs.19999. Spend INR 5000 and earn '
+          'cashback. Offer valid until 30 Nov.',
+          sender: 'VM-BRAND-P',
+        ),
+        isFalse,
+      );
+    });
+
+    test('filters a card offer that says no annual fee will be charged', () {
+      expect(
+        capturesFinancialSms(
+          'Apply now for our card. No annual fee will be charged. '
+          'Get exclusive offers and cashback on shopping.',
+          sender: 'VM-BANK-P',
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'filters an offer that mentions card transactions but no completed event',
+      () {
+        expect(
+          capturesFinancialSms(
+            'Use your HDFC Bank card for purchases this weekend and get 5% off. '
+            'Shop now; offer valid at participating stores.',
+            sender: 'VM-HDFCBK-P',
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('keeps a balance snapshot with a promotional footer', () {
+      expect(
+        capturesFinancialSms(
+          'Available balance in account XX1234 is INR 8,450.25 as of 22 Oct. '
+          'Apply now for a personal loan.',
+          sender: 'VM-BANK-S',
+        ),
+        isTrue,
+      );
+    });
+
+    test('keeps a bill due notice with an offer footer', () {
+      expect(
+        capturesFinancialSms(
+          'Your statement is generated. Total amount due INR 4,200 by 5 Nov. '
+          'Get cashback when you pay.',
+          sender: 'VM-BANK-P',
+        ),
+        isTrue,
+      );
+    });
+
+    test('keeps a refund actually credited despite an offer footer', () {
+      expect(
+        capturesFinancialSms(
+          'Refund of INR 799 has been credited to your account. '
+          'Enjoy exclusive offers with our card.',
+          sender: 'VM-BANK-S',
+        ),
+        isTrue,
+      );
+    });
+
+    test('keeps an AutoPay mandate notice for lifecycle classification', () {
+      expect(
+        capturesFinancialSms(
+          'Your AutoPay mandate for INR 999 is scheduled for 25 Oct.',
+          sender: 'VM-BANK-S',
+        ),
+        isTrue,
+      );
+    });
+
+    test('keeps a declined payment as a reviewable financial attempt', () {
+      expect(
+        capturesFinancialSms(
+          'Your card payment of Rs.500 was declined. No amount has been debited.',
+          sender: 'VM-BANK-S',
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'filters security and verification messages containing a money amount',
+      () {
+        expect(
+          capturesFinancialSms(
+            'Security code 123456 for payment of INR 500. Never share this code.',
+            sender: 'VM-BANK-S',
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('filters a non-financial service notice with account wording', () {
+      expect(
+        capturesFinancialSms(
+          'Alert: call forwarding is active on your mobile number. Dial ##002# to deactivate.',
+          sender: 'VM-TELECOM-S',
+        ),
+        isFalse,
+      );
+    });
+
+    test('filters unrelated, empty, and whitespace-only messages', () {
+      expect(
+        capturesFinancialSms('Your parcel will arrive tomorrow.'),
+        isFalse,
+      );
+      expect(capturesFinancialSms(''), isFalse);
+      expect(capturesFinancialSms('   \n\t  '), isFalse);
+    });
   });
 }
