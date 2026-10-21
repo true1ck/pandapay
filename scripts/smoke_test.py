@@ -117,8 +117,6 @@ def main():
     token = tok["access_token"]
 
     print("=== cross-service JWT (auth mints, api verifies) ===")
-    code, _ = call(API, "GET", "/profile", token=token)
-    check("api accepts an auth-issued token", code == 200, f"got {code}")
     check("api rejects an absent token", call(API, "GET", "/user-cards")[0] == 401)
 
     print("=== profile bridge (auth DB -> product DB) ===")
@@ -127,6 +125,9 @@ def main():
     check("POST /profile creates the product profile", code == 201, f"got {code}")
     check("profile id matches the auth user id",
           prof.get("profile", {}).get("id") == tok["user"]["id"])
+    code, _ = call(API, "GET", "/profile", token=token)
+    check("api accepts an auth-issued token for an activated member",
+          code == 200, f"got {code}")
 
     print("=== the money path: a spend must actually earn ===")
     target = None
