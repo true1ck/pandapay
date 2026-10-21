@@ -3717,9 +3717,15 @@ bool _isKnownOffline() => _lastKnownOffline;
 /// than taking down the whole provider and everything that depends on it.
 Future<ResponseCache?> _cacheOrNull(Ref ref) async {
   try {
-    final cache = await ref.watch(responseCacheProvider.future);
+    // Resolve all Ref values before the async gap. Riverpod can invalidate
+    // this provider while the cache initializes; using ref.read afterwards
+    // then throws before the provider gets a chance to rebuild. Since this is
+    // a best-effort helper, that assertion used to be mistaken for a missing
+    // cache and caused reads of valid offline snapshots to hang on a fetch.
     final namespace = ref.read(cacheNamespaceProvider);
     final token = ref.read(accessTokenProvider);
+    final cacheFuture = ref.watch(responseCacheProvider.future);
+    final cache = await cacheFuture;
     if (namespace.startsWith('user:') && token != null) {
       cache.migratePrefix(
         'session:${sha256.convert(utf8.encode(token))}:',

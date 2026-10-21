@@ -2270,9 +2270,11 @@ class TransactionEntry {
       parentUserCategoryId: json['parent_user_category_id'] as String?,
       userCategoryId: userCategoryId,
       categoryName: _displayCategoryName(json['category_name'] as String?),
-      subcategoryName: _displayCategoryName(
-        json['subcategory_name'] as String?,
-      ),
+      // A missing subcategory is not an "Other" category. Activity's
+      // category label uses the parent name when there is no child category.
+      subcategoryName: json['subcategory_name'] == null
+          ? null
+          : _displayCategoryName(json['subcategory_name'] as String?),
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
       cardLast4: json['card_last4'] as String?,
       accountLast4: json['account_last4'] as String?,

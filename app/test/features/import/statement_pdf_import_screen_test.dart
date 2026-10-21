@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/data/import_repository.dart';
 import 'package:pandapay/data/import_models.dart';
 import 'package:pandapay/data/user_cards_repository.dart'
@@ -121,6 +122,9 @@ Future<void> waitForParsing(WidgetTester tester) async {
 }
 
 void main() {
+  setUpAll(() => BambooFonts.useSystemFontsForTests = true);
+  tearDownAll(() => BambooFonts.useSystemFontsForTests = false);
+
   testWidgets(
     'mixed-account PDF auto-suggests sources and supports non-card spending',
     (tester) async {

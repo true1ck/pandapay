@@ -341,9 +341,9 @@ class _ScanCardScreenState extends State<ScanCardScreen>
     if (side == _ScanSide.front) {
       _frontExtracted = extracted;
       setState(() => _scanSide = _ScanSide.back);
-      _showSnack(
-        'Front captured. Flip the card and scan the back so we can find the card number.',
-      );
+      // The inline hint already tells the user to flip the card. Avoid a
+      // SnackBar here: it overlays the back-side capture controls on compact
+      // screens and makes the next action harder to reach.
     } else {
       _backExtracted = extracted;
       final combined = _combinedExtracted;

@@ -527,6 +527,9 @@ void main() {
     expect(find.text('Delete transaction'), findsOneWidget);
     await tester.tap(find.text('Delete transaction'));
     await tester.pumpAndSettle();
+    expect(find.text('Delete transaction?'), findsOneWidget);
+    await tester.tap(find.text('Delete'), warnIfMissed: false);
+    await tester.pumpAndSettle();
 
     expect(repo.lastIgnoreReason, 'transfer');
   });

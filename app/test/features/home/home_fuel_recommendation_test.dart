@@ -75,6 +75,7 @@ void main() {
           categoryRepositoryProvider.overrideWithValue(
             _MockCategoryRepository(categories),
           ),
+          categoriesProvider.overrideWith((ref) async => categories),
           userCardsProvider.overrideWith((ref) async => [ownedCard]),
           enteredAmountProvider.overrideWith((ref) => Money.fromRupees(1500)),
           selectedCategoryProvider.overrideWith((ref) => 'dining'),

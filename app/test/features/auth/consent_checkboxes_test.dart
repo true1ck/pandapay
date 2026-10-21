@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,11 +12,40 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/auth_api.dart';
 import 'package:pandapay/data/consents_api.dart';
 import 'package:pandapay/features/auth/login_screen.dart';
+import 'package:pandapay/data/product_access_api.dart';
+import 'package:pandapay/features/auth/product_activation_screen.dart';
+import 'package:pandapay/app/router.dart';
+
+class _AlreadyActiveProductAccess implements ProductAccessRepository {
+  @override
+  Future<ProductAccessPolicy> loadPolicy() async =>
+      const ProductAccessPolicy(admissionMode: 'open');
+
+  @override
+  Future<ProductAccessState> loadAccess() async =>
+      const ProductAccessState(state: 'active');
+
+  @override
+  Future<InvitationPreview?> validateInvitation(String code) async => null;
+
+  @override
+  Future<Map<String, dynamic>> activate({
+    String? invitationCode,
+    String? invitationPreviewToken,
+    bool? acceptRewardTerms,
+    bool? acceptAccessOnly,
+    bool? acceptProductTerms,
+    String? productTermsVersion,
+  }) async => const {};
+
+  @override
+  Future<void> completeOnboarding() async {}
+}
 
 /// A4: DPDP §8.2 purpose-specific consent checkboxes on sign-up. Verifies
 /// (1) the required Terms checkbox actually gates submission, and (2) a
-/// successful sign-up writes one POST /consents call per purpose (terms,
-/// crowdsource, marketing), not a single bundled write.
+/// successful sign-up carries purpose choices across OTP and records one POST
+/// /consents call per purpose only after server activation.
 void main() {
   setUp(() {
     // TokenStore reads real SharedPreferences on every save() call
@@ -122,7 +152,7 @@ void main() {
   );
 
   testWidgets(
-    'a successful sign-up writes one POST /consents call per purpose',
+    'sign-up stores consent choices at OTP and records them after activation',
     (tester) async {
       final otpClient = MockClient((req) async {
         if (req.url.path.contains('request-email-otp')) {
@@ -141,15 +171,6 @@ void main() {
         client: otpClient,
       );
 
-      final profileClient = MockClient((req) async {
-        return http.Response(
-          jsonEncode({
-            'profile': {'id': 'profile-new', 'display_name': null},
-          }),
-          201,
-        );
-      });
-
       final consentCalls = <Map<String, dynamic>>[];
       final consentsClient = MockClient((req) async {
         consentCalls.add(jsonDecode(req.body) as Map<String, dynamic>);
@@ -160,13 +181,6 @@ void main() {
         wrap(
           overrides: [
             authApiProvider.overrideWithValue(authApi),
-            profileApiProvider.overrideWithValue(
-              ProfileApi(
-                apiBaseUrl: 'http://api.test',
-                accessToken: 'tok-abc',
-                client: profileClient,
-              ),
-            ),
             consentsApiProvider.overrideWithValue(
               ConsentsApi(
                 apiBaseUrl: 'http://api.test',
@@ -196,6 +210,49 @@ void main() {
       await tester.tap(find.text('Verify & continue'));
       await tester.pumpAndSettle();
 
+      // OTP verification does not create a profile or write the audit trail;
+      // it safely persists the explicit choices across the activation gate.
+      expect(consentCalls, isEmpty);
+      final savedChoices = await PendingSignupChoicesStore().read();
+      expect(savedChoices?.acceptProductTerms, isTrue);
+      expect(savedChoices?.optInCrowdsource, isFalse);
+      expect(savedChoices?.optInMarketing, isFalse);
+
+      final router = GoRouter(
+        initialLocation: AppRoute.productActivation,
+        routes: [
+          GoRoute(
+            path: AppRoute.productActivation,
+            builder: (_, _) => const ProductActivationScreen(),
+          ),
+          GoRoute(
+            path: AppRoute.permissions,
+            builder: (_, _) => const Scaffold(body: Text('Permissions')),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          key: const ValueKey('activation-provider-scope'),
+          overrides: [
+            accessTokenProvider.overrideWith((ref) => 'tok-abc'),
+            productAccessApiProvider.overrideWithValue(
+              _AlreadyActiveProductAccess(),
+            ),
+            consentsApiProvider.overrideWithValue(
+              ConsentsApi(
+                apiBaseUrl: 'http://api.test',
+                accessToken: 'tok-abc',
+                client: consentsClient,
+              ),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
       expect(consentCalls.length, 3);
       final purposes = consentCalls.map((c) => c['purpose']).toSet();
       expect(purposes, {'terms', 'crowdsource', 'marketing'});
@@ -209,6 +266,7 @@ void main() {
         (c) => c['purpose'] == 'crowdsource',
       );
       expect(crowdsource['granted'], isFalse);
+      expect(await PendingSignupChoicesStore().read(), isNull);
     },
   );
 }

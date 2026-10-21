@@ -13,8 +13,12 @@ import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/auth/login_screen.dart';
 import 'package:pandapay/features/account/account_screen.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/main.dart';
 import 'package:pandapay/features/home/home_screen.dart';
+import 'package:pandapay/features/activity/activity_screen.dart'
+    show activityTransactionsProvider;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Chunk 15 added a startup session-resume step (sessionInitProvider) that
@@ -213,6 +217,9 @@ void main() {
   testWidgets(
     'Chunk 18: Activity tab shows real logged transactions when signed in',
     (tester) async {
+      final database = openInMemoryForTesting();
+      addTearDown(database.close);
+      final cache = ResponseCache(database);
       await tester.pumpWidget(
         _appWithFakeCatalogue(
           [_rupayCard()],
@@ -229,7 +236,10 @@ void main() {
                         {
                           'id': 'txn-1',
                           'amount_inr': '1000.00',
-                          'occurred_at': '2026-08-05T10:00:00Z',
+                          // Activity opens to the current month; keep the
+                          // fixture in that same month rather than freezing
+                          // it to an old date that eventually disappears.
+                          'occurred_at': DateTime.now().toIso8601String(),
                           'merchant_name': null,
                           'category_name': 'Online',
                           'card_name': 'Test RuPay Card',
@@ -246,13 +256,33 @@ void main() {
                 }),
               ),
             ),
+            responseCacheProvider.overrideWith((ref) async => cache),
+            transactionTagsProvider.overrideWith((ref) => null),
+            activityTransactionsProvider.overrideWith(
+              (ref) async => [
+                TransactionEntry(
+                  id: 'txn-1',
+                  amount: Money.fromRupees(1000),
+                  occurredAt: DateTime.now(),
+                  categoryName: 'Online',
+                  cardDisplayName: 'Test RuPay Card',
+                  userCardId: 'uc-1',
+                  source: 'manual',
+                  status: 'active',
+                ),
+              ],
+            ),
           ],
         ),
       );
-      await tester.pumpAndSettle();
+      // The signed-in shell has a persistent loading animation while the
+      // Activity data provider refreshes. Advance it deterministically rather
+      // than waiting for all tickers (which are not expected to stop).
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
 
       await tester.tap(_navTab('Insights'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       // All Activity lost its own grid tile when the eighteen-tile grid was
       // consolidated to six; it is a row below the grid now.
       //
@@ -275,11 +305,12 @@ void main() {
             )
             .first,
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.text('Transactions'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
 
-      expect(find.text('Test RuPay Card · Online'), findsOneWidget);
+      expect(find.textContaining('Test RuPay Card · Online'), findsOneWidget);
       // Spending rows include the explicit money-out sign. Keep this tied to
       // the user-visible amount rather than the card/category metadata.
       expect(find.text('−₹1,000.00'), findsWidgets);

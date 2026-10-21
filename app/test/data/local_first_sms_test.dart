@@ -136,7 +136,7 @@ void main() {
         QueuedSms(
           sender: 'AX-HDFCBK',
           body: 'Your account XX1797 available balance is INR 7000.',
-          receivedAt: DateTime(2026, 10, 20),
+          receivedAt: DateTime.utc(2026, 10, 20),
         ),
       );
       store.capture(
@@ -144,7 +144,7 @@ void main() {
         QueuedSms(
           sender: 'AD-HDFCBK-S',
           body: 'Your account XX1797 available balance is INR 5000.',
-          receivedAt: DateTime(2026, 10, 18),
+          receivedAt: DateTime.utc(2026, 10, 18),
         ),
       );
       store.capture(
@@ -152,21 +152,17 @@ void main() {
         QueuedSms(
           sender: 'AD-HDFCBK',
           body: 'Rs.200 debited from your account XX1797.',
-          receivedAt: DateTime(2026, 10, 21),
+          receivedAt: DateTime.utc(2026, 10, 21),
         ),
       );
-      final accounts = cache.financialStore
-          .bankAccounts('user:account-a');
+      final accounts = cache.financialStore.bankAccounts('user:account-a');
       expect(accounts, hasLength(1));
       expect(accounts.single.accountLast4, '1797');
       expect(accounts.single.issuerShortName, 'HDFC Bank');
       expect(accounts.single.availableBalance?.rupees, 7000);
-      // received_at is stored and read back in UTC; IST-local turns midnight
-      // into the previous day's 18:30Z.
-      expect(
-        accounts.single.latestSmsAt?.toUtc(),
-        DateTime.parse('2026-10-20T18:30:00.000Z'),
-      );
+      // Use explicit UTC instants so this test is independent of the
+      // machine's timezone (developer laptops are often IST; CI is UTC).
+      expect(accounts.single.latestSmsAt?.toUtc(), DateTime.utc(2026, 10, 21));
     },
   );
 
@@ -384,7 +380,8 @@ void main() {
         'user:account-a',
         QueuedSms(
           sender: 'KOTAKB',
-          body: 'Rs.900 debited from a/c XX2626 net banking. New Bal: Rs.45,120.',
+          body:
+              'Rs.900 debited from a/c XX2626 net banking. New Bal: Rs.45,120.',
           receivedAt: DateTime(2026, 10, 21),
         ),
       );

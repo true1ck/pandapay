@@ -199,7 +199,7 @@ void main() {
       await tester.tap(find.text('Upload front photo'));
       await _tick(tester);
 
-      expect(find.text('Now scan the back of your card'), findsOneWidget);
+      expect(find.text('Frame the front of your card'), findsOneWidget);
       expect(find.text('Possible matches'), findsNothing);
       expect(tester.takeException(), isNull);
     },

@@ -597,10 +597,17 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
       (filter.query != null && filter.query!.trim().isNotEmpty);
   final entries = hasServerFilter
       ? await (() {
-          // Subscribe to the canonical provider as a refresh signal even
-          // while a narrower server query is active. When a new SMS arrives,
-          // its invalidation must cause this filtered view to refetch too.
-          ref.watch(transactionsProvider);
+          // Listen to the canonical provider as a refresh signal even while a
+          // narrower server query is active. Ignore its initial load: watching
+          // its AsyncValue here would restart this async provider while both
+          // snapshots are loading, leaving callers awaiting the disposed
+          // Future. Once a previously loaded canonical snapshot refreshes,
+          // invalidate this filtered view so new SMS/import rows appear.
+          ref.listen(transactionsProvider, (previous, next) {
+            if (previous?.hasValue == true && next.hasValue) {
+              ref.invalidateSelf();
+            }
+          });
           return loadTransactionsWithOfflineCache(
             ref,
             repo: repo,

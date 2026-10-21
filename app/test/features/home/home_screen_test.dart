@@ -469,6 +469,8 @@ void main() {
   testWidgets('hero card\'s Details link opens the B4 comparison screen', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final recs = [
       Recommendation(
         card: _card('c1'),
@@ -498,7 +500,11 @@ void main() {
     // Only the hero (rank 0) card gets the entry point, not every row.
     expect(find.text('Details ↗'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Details ↗'));
+    await tester.scrollUntilVisible(
+      find.text('Details ↗'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Details ↗'));
     await tester.pumpAndSettle();
 
@@ -509,6 +515,8 @@ void main() {
   testWidgets(
     'hero card\'s "Pay with this card" button opens Quick Add prefilled',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final recs = [
         Recommendation(
           card: _card('c1'),
@@ -531,7 +539,11 @@ void main() {
 
       expect(find.text('Pay with this card'), findsOneWidget);
 
-      await tester.ensureVisible(find.text('Pay with this card'));
+      await tester.scrollUntilVisible(
+        find.text('Pay with this card'),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.tap(find.text('Pay with this card'));
       for (var i = 0; i < 6; i++) {
         await tester.pump(const Duration(milliseconds: 100));

@@ -11,6 +11,37 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 /// (previously computed server-side for cap/milestone period math but never
 /// returned to a client) — Billing Cycle Float needs both.
 void main() {
+  group('TransactionEntry category labels', () {
+    test('does not invent an Other subcategory when none was supplied', () {
+      final transaction = TransactionEntry.fromJson({
+        'id': 'txn-dining',
+        'amount_inr': 125,
+        'occurred_at': '2026-10-20T12:00:00Z',
+        'category_name': 'Dining',
+        'source': 'manual',
+        'status': 'active',
+      });
+
+      expect(transaction.categoryName, 'Dining');
+      expect(transaction.subcategoryName, isNull);
+      expect(transaction.categoryLabel, 'Dining');
+    });
+
+    test('keeps Other for an explicitly unclassified subcategory', () {
+      final transaction = TransactionEntry.fromJson({
+        'id': 'txn-dining-other',
+        'amount_inr': 125,
+        'occurred_at': '2026-10-20T12:00:00Z',
+        'category_name': 'Dining',
+        'subcategory_name': 'Unclassified',
+        'source': 'manual',
+        'status': 'active',
+      });
+
+      expect(transaction.categoryLabel, 'Dining · Other');
+    });
+  });
+
   group('Home engagement check-in', () {
     test('submits only the fresh server-signed receipt', () async {
       final requests = <http.Request>[];

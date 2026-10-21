@@ -5,11 +5,15 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/features/home/home_screen.dart';
 
 void main() {
-  testWidgets('shows the offline banner when isOnlineProvider reads false', (tester) async {
+  testWidgets('Home does not show the legacy connectivity banner offline', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          rankedRecommendationsProvider.overrideWithValue(const AsyncValue.data([])),
+          rankedRecommendationsProvider.overrideWithValue(
+            const AsyncValue.data([]),
+          ),
           isOnlineProvider.overrideWith((ref) => Stream.value(false)),
         ],
         child: const MaterialApp(home: Scaffold(body: HomeScreen())),
@@ -17,14 +21,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining("You're offline"), findsOneWidget);
+    expect(find.textContaining("You're offline"), findsNothing);
   });
 
-  testWidgets('shows no banner when isOnlineProvider reads true', (tester) async {
+  testWidgets('shows no banner when isOnlineProvider reads true', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          rankedRecommendationsProvider.overrideWithValue(const AsyncValue.data([])),
+          rankedRecommendationsProvider.overrideWithValue(
+            const AsyncValue.data([]),
+          ),
           isOnlineProvider.overrideWith((ref) => Stream.value(true)),
         ],
         child: const MaterialApp(home: Scaffold(body: HomeScreen())),

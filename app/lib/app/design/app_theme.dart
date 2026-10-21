@@ -200,19 +200,33 @@ abstract final class BambooChartColors {
 /// Bamboo Ink's type system. Outfit carries headings and interface copy;
 /// IBM Plex Sans keeps monetary figures compact and easy to compare.
 abstract final class BambooFonts {
+  /// Lets widget tests render deterministically without fetching remote font
+  /// files. Production keeps the branded Google Fonts enabled by default.
+  @visibleForTesting
+  static bool useSystemFontsForTests = false;
+
   static TextStyle money(
     double size, {
     FontWeight weight = FontWeight.w800,
     Color color = BambooInk.ink900,
     double? letterSpacing,
-  }) => GoogleFonts.ibmPlexSans(
-    fontSize: size,
-    fontWeight: weight,
-    color: color,
-    letterSpacing: letterSpacing ?? 0,
-    height: 1.0,
-    fontFeatures: const [FontFeature.tabularFigures()],
-  );
+  }) => useSystemFontsForTests
+      ? TextStyle(
+          fontSize: size,
+          fontWeight: weight,
+          color: color,
+          letterSpacing: letterSpacing ?? 0,
+          height: 1.0,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        )
+      : GoogleFonts.ibmPlexSans(
+          fontSize: size,
+          fontWeight: weight,
+          color: color,
+          letterSpacing: letterSpacing ?? 0,
+          height: 1.0,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        );
 
   static TextStyle heading(
     double size, {
@@ -220,25 +234,40 @@ abstract final class BambooFonts {
     Color color = BambooInk.ink900,
     double? letterSpacing,
     double? height,
-  }) => GoogleFonts.outfit(
-    fontSize: size,
-    fontWeight: weight,
-    color: color,
-    letterSpacing: letterSpacing ?? -size * 0.035,
-    height: height,
-  );
+  }) => useSystemFontsForTests
+      ? TextStyle(
+          fontSize: size,
+          fontWeight: weight,
+          color: color,
+          letterSpacing: letterSpacing ?? -size * 0.035,
+          height: height,
+        )
+      : GoogleFonts.outfit(
+          fontSize: size,
+          fontWeight: weight,
+          color: color,
+          letterSpacing: letterSpacing ?? -size * 0.035,
+          height: height,
+        );
 
   static TextStyle ui(
     double size, {
     FontWeight weight = FontWeight.w400,
     Color color = BambooInk.ink900,
     double? height,
-  }) => GoogleFonts.outfit(
-    fontSize: size,
-    fontWeight: weight,
-    color: color,
-    height: height,
-  );
+  }) => useSystemFontsForTests
+      ? TextStyle(
+          fontSize: size,
+          fontWeight: weight,
+          color: color,
+          height: height,
+        )
+      : GoogleFonts.outfit(
+          fontSize: size,
+          fontWeight: weight,
+          color: color,
+          height: height,
+        );
 }
 
 /// Dark-mode neutrals. `AppColors` above is a set of hardcoded light-mode

@@ -66,6 +66,7 @@ void main() {
         overrides: [
           accessTokenProvider.overrideWith((ref) => 'test-token'),
           responseCacheProvider.overrideWith((ref) async => cache),
+          transactionTagsProvider.overrideWith((ref) => null),
           userCardsRepositoryProvider.overrideWithValue(
             _AuthFailingRepository(),
           ),
@@ -107,6 +108,7 @@ void main() {
         overrides: [
           accessTokenProvider.overrideWith((ref) => 'test-token'),
           responseCacheProvider.overrideWith((ref) async => cache),
+          transactionTagsProvider.overrideWith((ref) => null),
           userCardsRepositoryProvider.overrideWithValue(
             _AuthFailingRepository(),
           ),
@@ -180,6 +182,7 @@ void main() {
       overrides: [
         accessTokenProvider.overrideWith((ref) => 'test-token'),
         responseCacheProvider.overrideWith((ref) async => cache),
+        transactionTagsProvider.overrideWith((ref) => null),
         userCardsRepositoryProvider.overrideWithValue(_AuthFailingRepository()),
       ],
     );
@@ -263,6 +266,7 @@ void main() {
       overrides: [
         accessTokenProvider.overrideWith((ref) => 'test-token'),
         responseCacheProvider.overrideWith((ref) async => cache),
+        transactionTagsProvider.overrideWith((ref) => null),
         userCardsRepositoryProvider.overrideWithValue(_EmptyRepository()),
       ],
     );
@@ -303,6 +307,7 @@ void main() {
         overrides: [
           accessTokenProvider.overrideWith((ref) => 'test-token'),
           responseCacheProvider.overrideWith((ref) async => cache),
+          transactionTagsProvider.overrideWith((ref) => null),
           userCardsRepositoryProvider.overrideWithValue(
             _AuthFailingRepository(),
           ),

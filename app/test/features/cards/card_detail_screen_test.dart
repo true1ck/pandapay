@@ -95,6 +95,9 @@ Future<void> _pump(
           _FakeCatalogueRepository(catalogue),
         ),
         categoryRepositoryProvider.overrideWithValue(_FakeCategoryRepository()),
+        categoriesProvider.overrideWith(
+          (ref) => _FakeCategoryRepository().fetchCategories(),
+        ),
         userCardsProvider.overrideWith((ref) async => owned),
         myCardsProvider.overrideWith((ref) async => owned),
       ],
