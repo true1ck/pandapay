@@ -73,6 +73,18 @@ String _reviewTypeLabel(NeedsReviewItem item) {
       _isSecurityOrServiceAlert(item.body)) {
     return 'Security or service alert';
   }
+  if (item.aiSuggestions?.isNotEmpty == true) {
+    final first = item.aiSuggestions!.first;
+    final type = first['factType'];
+    return switch (type) {
+      'balance_snapshot' => 'Bank balance alert',
+      'bill_obligation' => 'Card bill alert',
+      'mandate_lifecycle' => 'AutoPay mandate alert',
+      'posted_movement' => 'Possible transaction',
+      'security_or_service_alert' => 'Security or service alert',
+      _ => 'Financial alert',
+    };
+  }
   if (item.kind == NeedsReviewKind.investmentSettlement ||
       _isInvestmentSettlement(item.body)) {
     return 'Investment settlement payout';
@@ -112,6 +124,18 @@ String _reviewActionLabel(NeedsReviewItem item) {
   if (item.kind == NeedsReviewKind.securityOrServiceAlert ||
       _isSecurityOrServiceAlert(item.body)) {
     return 'Dismiss alert';
+  }
+  if (item.aiSuggestions?.isNotEmpty == true) {
+    final first = item.aiSuggestions!.first;
+    final type = first['factType'];
+    return switch (type) {
+      'balance_snapshot' => 'Confirm balance',
+      'bill_obligation' => 'Review bill',
+      'mandate_lifecycle' => 'Confirm mandate',
+      'security_or_service_alert' => 'Dismiss alert',
+      'promotion' => 'Dismiss promotion',
+      _ => 'Review transaction',
+    };
   }
   if (item.kind == NeedsReviewKind.investmentSettlement ||
       _isInvestmentSettlement(item.body)) {
@@ -522,11 +546,13 @@ class _CommitmentNeedsReviewTileState
 class _ReviewBillSheet extends ConsumerStatefulWidget {
   final NeedsReviewItem item;
   final LocalSmsObservation? parsed;
+  final Map<String, dynamic>? suggestionFact;
   final Future<void> Function() onDiscard;
 
   const _ReviewBillSheet({
     required this.item,
-    required this.parsed,
+    this.parsed,
+    this.suggestionFact,
     required this.onDiscard,
   });
 
@@ -546,25 +572,28 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
   void initState() {
     super.initState();
     final parsed = widget.parsed;
-    final suggestedTitle = parsed?.billerName?.trim();
+    final payload = widget.suggestionFact?['payload'] as Map<String, dynamic>?;
+    final suggestedTitle = parsed?.billerName?.trim() ??
+        (payload?['billerName'] as String?)?.trim();
     _titleController = TextEditingController(
       text: suggestedTitle?.isNotEmpty == true
-          ? suggestedTitle
+          ? suggestedTitle!
           : widget.item.sender,
     );
+    final amtPaise = parsed?.amountDue?.paise ??
+        (payload?['amountDueInr'] is num ? ((payload!['amountDueInr'] as num) * 100).round() : null) ??
+        (payload?['minimumDueInr'] is num ? ((payload!['minimumDueInr'] as num) * 100).round() : null);
     _amountController = TextEditingController(
-      text: parsed?.amountDue == null
-          ? ''
-          : (parsed!.amountDue!.paise / 100).toStringAsFixed(2),
+      text: amtPaise == null ? '' : (amtPaise / 100).toStringAsFixed(2),
     );
-    final identifier = parsed?.accountLast4 ?? parsed?.cardLast4;
+    final last4 = parsed?.accountLast4 ?? parsed?.cardLast4 ?? (payload?['last4'] as String?);
     _identifierController = TextEditingController(
-      text: identifier == null ? '' : '••••$identifier',
+      text: last4 == null || last4.isEmpty ? '' : '••••$last4',
     );
     _category = CommitmentCategory.fromText(
       '${_titleController.text} ${widget.item.sender}',
     );
-    _cadence = switch (parsed?.cadenceHint) {
+    _cadence = switch (parsed?.cadenceHint ?? payload?['cadence']) {
       'quarterly' => CommitmentCadence.quarterly,
       'halfYearly' => CommitmentCadence.halfYearly,
       'annual' => CommitmentCadence.annual,
@@ -573,7 +602,8 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
             ? CommitmentCadence.annual
             : CommitmentCadence.monthly,
     };
-    _dueOn = parsed?.dueDate;
+    final dueStr = payload?['dueDate'] as String?;
+    _dueOn = parsed?.dueDate ?? (dueStr != null ? DateTime.tryParse(dueStr) : null);
   }
 
   @override
@@ -807,6 +837,398 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
   }
 }
 
+class _ReviewBalanceSheet extends ConsumerStatefulWidget {
+  final NeedsReviewItem item;
+  final Map<String, dynamic>? fact;
+
+  const _ReviewBalanceSheet({
+    required this.item,
+    this.fact,
+  });
+
+  @override
+  ConsumerState<_ReviewBalanceSheet> createState() => _ReviewBalanceSheetState();
+}
+
+class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
+  late final TextEditingController _balanceController;
+  late final TextEditingController _accountController;
+  late DateTime _asOfAt;
+
+  @override
+  void initState() {
+    super.initState();
+    final payload = widget.fact?['payload'] as Map<String, dynamic>?;
+    final balance = payload?['availableBalanceInr'];
+    _balanceController = TextEditingController(
+      text: balance is num && balance.isFinite ? balance.toStringAsFixed(2) : '',
+    );
+    final account = payload?['accountLast4'] as String?;
+    _accountController = TextEditingController(
+      text: account != null && account.isNotEmpty ? account : '',
+    );
+    final asOfStr = payload?['asOfAt'] as String?;
+    _asOfAt = (asOfStr != null ? DateTime.tryParse(asOfStr) : null) ?? widget.item.receivedAt;
+  }
+
+  @override
+  void dispose() {
+    _balanceController.dispose();
+    _accountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _asOfAt,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _asOfAt = picked);
+  }
+
+  void _confirm() {
+    final balText = _balanceController.text.trim().replaceAll(',', '');
+    final balValue = double.tryParse(balText);
+    if (balValue == null || balValue < 0) return;
+    final acct = _accountController.text.trim().replaceAll(RegExp(r'[^\d]'), '');
+    Navigator.of(context).pop((
+      balance: balValue,
+      accountLast4: acct.length >= 4 ? acct.substring(acct.length - 4) : (acct.isEmpty ? null : acct),
+      asOfAt: _asOfAt,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final balText = _balanceController.text.trim().replaceAll(',', '');
+    final balValue = double.tryParse(balText);
+    final canConfirm = balValue != null && balValue >= 0;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: BambooInk.paper,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      padding: EdgeInsets.only(
+        left: AppSpace.lg,
+        right: AppSpace.lg,
+        top: AppSpace.lg,
+        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.account_balance_outlined, color: BambooInk.jade),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    'Confirm bank balance',
+                    style: BambooFonts.heading(17, color: BambooInk.ink900),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            Text(
+              'Confirm or correct the balance detected in this message.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: AppSpace.md),
+            Container(
+              padding: const EdgeInsets.all(AppSpace.sm),
+              decoration: BoxDecoration(
+                color: BambooInk.paperMuted,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Text(
+                widget.item.body,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            TextField(
+              controller: _balanceController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setState(() {}),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: InputDecoration(
+                labelText: 'Available balance (₹)',
+                prefixText: '₹ ',
+                filled: true,
+                fillColor: BambooInk.glassFillOnPaper,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            TextField(
+              controller: _accountController,
+              keyboardType: TextInputType.number,
+              maxLength: 4,
+              onChanged: (_) => setState(() {}),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: InputDecoration(
+                labelText: 'Account last 4 digits (optional)',
+                counterText: '',
+                filled: true,
+                fillColor: BambooInk.glassFillOnPaper,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            InkWell(
+              onTap: _pickDate,
+              borderRadius: BorderRadius.circular(16),
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'As of date',
+                  filled: true,
+                  fillColor: BambooInk.glassFillOnPaper,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${_asOfAt.day.toString().padLeft(2, '0')}/${_asOfAt.month.toString().padLeft(2, '0')}/${_asOfAt.year}',
+                        style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                      ),
+                    ),
+                    const Icon(Icons.calendar_today_outlined, size: 19),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpace.xl),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+              ),
+              onPressed: canConfirm ? _confirm : null,
+              child: const Text('Confirm balance'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewMandateSheet extends ConsumerStatefulWidget {
+  final NeedsReviewItem item;
+  final Map<String, dynamic>? fact;
+
+  const _ReviewMandateSheet({
+    required this.item,
+    this.fact,
+  });
+
+  @override
+  ConsumerState<_ReviewMandateSheet> createState() => _ReviewMandateSheetState();
+}
+
+class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _amountController;
+  late final TextEditingController _identifierController;
+  CommitmentCadence _cadence = CommitmentCadence.monthly;
+  DateTime _dueOn = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    final payload = widget.fact?['payload'] as Map<String, dynamic>?;
+    final name = payload?['mandateName'] as String?;
+    _titleController = TextEditingController(
+      text: name != null && name.trim().isNotEmpty ? name.trim() : widget.item.sender,
+    );
+    final limit = payload?['limitInr'] ?? payload?['amountLimitInr'];
+    _amountController = TextEditingController(
+      text: limit is num && limit.isFinite ? limit.toStringAsFixed(2) : '',
+    );
+    final last4 = payload?['last4'] as String?;
+    _identifierController = TextEditingController(
+      text: last4 != null && last4.isNotEmpty ? '••••$last4' : '',
+    );
+    final cadenceStr = payload?['cadence'] as String?;
+    _cadence = switch (cadenceStr) {
+      'quarterly' => CommitmentCadence.quarterly,
+      'halfYearly' => CommitmentCadence.halfYearly,
+      'annual' => CommitmentCadence.annual,
+      _ => CommitmentCadence.monthly,
+    };
+    final asOfStr = payload?['asOfAt'] as String? ?? payload?['startDate'] as String?;
+    _dueOn = (asOfStr != null ? DateTime.tryParse(asOfStr) : null) ?? widget.item.receivedAt;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _amountController.dispose();
+    _identifierController.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
+    final amtText = _amountController.text.trim().replaceAll(',', '');
+    final amtValue = amtText.isEmpty ? null : double.tryParse(amtText);
+    final identifier = _identifierController.text.trim();
+    Navigator.of(context).pop((
+      title: title,
+      amount: amtValue == null ? null : Money.fromRupees(amtValue),
+      dueOn: _dueOn,
+      category: CommitmentCategory.subscription,
+      cadence: _cadence,
+      identifier: identifier.isEmpty ? null : identifier,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _titleController.text.trim();
+    return Container(
+      decoration: const BoxDecoration(
+        color: BambooInk.paper,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      padding: EdgeInsets.only(
+        left: AppSpace.lg,
+        right: AppSpace.lg,
+        top: AppSpace.lg,
+        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.autorenew_rounded, color: BambooInk.jade),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    'Confirm AutoPay mandate',
+                    style: BambooFonts.heading(17, color: BambooInk.ink900),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            Text(
+              'Confirm or edit the recurring mandate detected from this SMS.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: AppSpace.md),
+            Container(
+              padding: const EdgeInsets.all(AppSpace.sm),
+              decoration: BoxDecoration(
+                color: BambooInk.paperMuted,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Text(
+                widget.item.body,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            TextField(
+              controller: _titleController,
+              textCapitalization: TextCapitalization.words,
+              onChanged: (_) => setState(() {}),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: InputDecoration(
+                labelText: 'Mandate or service name',
+                filled: true,
+                fillColor: BambooInk.glassFillOnPaper,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            TextField(
+              controller: _amountController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setState(() {}),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: InputDecoration(
+                labelText: 'Maximum limit (optional)',
+                prefixText: '₹ ',
+                filled: true,
+                fillColor: BambooInk.glassFillOnPaper,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            DropdownButtonFormField<CommitmentCadence>(
+              initialValue: _cadence,
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: InputDecoration(
+                labelText: 'Repeats',
+                filled: true,
+                fillColor: BambooInk.glassFillOnPaper,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              items: [
+                for (final cadence in CommitmentCadence.values)
+                  DropdownMenuItem(value: cadence, child: Text(cadence.label)),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _cadence = value);
+              },
+            ),
+            const SizedBox(height: AppSpace.lg),
+            TextField(
+              controller: _identifierController,
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: InputDecoration(
+                labelText: 'Account or card (optional)',
+                filled: true,
+                fillColor: BambooInk.glassFillOnPaper,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+            const SizedBox(height: AppSpace.xl),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+              ),
+              onPressed: title.isNotEmpty ? _confirm : null,
+              child: const Text('Confirm mandate'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _NeedsReviewTile extends ConsumerStatefulWidget {
   final NeedsReviewItem item;
   const _NeedsReviewTile(this.item);
@@ -817,6 +1239,27 @@ class _NeedsReviewTile extends ConsumerStatefulWidget {
 
 class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   bool _busy = false;
+
+  String get _aiSummary {
+    final types =
+        widget.item.aiSuggestions
+            ?.map((suggestion) => suggestion['factType'])
+            .whereType<String>()
+            .toSet() ??
+        const <String>{};
+    final labels = types.map(
+      (type) => switch (type) {
+        'posted_movement' => 'transaction',
+        'balance_snapshot' => 'bank balance',
+        'bill_obligation' => 'card bill',
+        'bill_payment' => 'bill payment',
+        'mandate_lifecycle' => 'mandate',
+        'card_identity_hint' => 'card detail',
+        _ => 'financial detail',
+      },
+    );
+    return 'Gemini suggests ${labels.join(', ')}. Check the SMS before saving.';
+  }
 
   Future<void> _dismissNotATransaction() async {
     setState(() => _busy = true);
@@ -834,7 +1277,21 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
     }
   }
 
-  Future<void> _fillManually() async {
+  Future<void> _resolveFactSuggestion(int factIndex) async {
+    final current = widget.item.aiSuggestions ?? const [];
+    final remaining = current.where((s) => s['factIndex'] != factIndex).toList();
+    if (remaining.isEmpty) {
+      await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
+    } else {
+      await ref.read(needsReviewRepositoryProvider).updateAiSuggestions(widget.item.id, remaining);
+    }
+    ref.invalidate(needsReviewItemsProvider);
+  }
+
+  Future<void> _reviewMovement([Map<String, dynamic>? movementFact]) async {
+    final fact = movementFact ?? widget.item.aiSuggestions
+        ?.where((suggestion) => suggestion['factType'] == 'posted_movement')
+        .firstOrNull;
     final result =
         await showModalBottomSheet<
           ({
@@ -849,7 +1306,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
         >(
           context: context,
           isScrollControlled: true,
-          builder: (context) => _FillFieldsSheet(item: widget.item),
+          builder: (context) => _FillFieldsSheet(item: widget.item, suggestionFact: fact),
         );
     if (result == null) return;
     setState(() => _busy = true);
@@ -865,26 +1322,217 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             instrument: result.instrument,
             entryKind: result.entryKind,
           );
-      await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(needsReviewItemsProvider);
+      final suggestedIndex = fact?['factIndex'];
+      final factIdx = suggestedIndex is int && suggestedIndex >= 0
+          ? suggestedIndex
+          : 0;
       if (widget.item.id.length == 64) {
         await _persistSmsFactCorrection(
           ref,
           sourceKey: widget.item.id,
-          factIndex: 0,
+          factIndex: factIdx,
           patch: {
-              'entryKind': result.entryKind.wireValue,
-              'amountInr': result.amount,
-              if (result.merchantName != null) 'merchant': result.merchantName,
-              'instrument': result.instrument.wireValue,
-              'occurredAt': result.occurredAt.toUtc().toIso8601String(),
-              'amountRole': 'posted',
+            'entryKind': result.entryKind.wireValue,
+            'amountInr': result.amount,
+            if (result.merchantName != null) 'merchant': result.merchantName,
+            'instrument': result.instrument.wireValue,
+            'occurredAt': result.occurredAt.toUtc().toIso8601String(),
+            'amountRole': 'posted',
           },
           reason: 'confirmed in needs review',
         );
       }
+      ref.invalidate(userCardsProvider);
+      ref.invalidate(myCardsProvider);
+      await _resolveFactSuggestion(factIdx);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _reviewBalance([Map<String, dynamic>? balanceFact]) async {
+    final fact = balanceFact ?? widget.item.aiSuggestions
+        ?.where((s) => s['factType'] == 'balance_snapshot')
+        .firstOrNull;
+    final result = await showModalBottomSheet<
+      ({
+        double balance,
+        String? accountLast4,
+        DateTime asOfAt,
+      })
+    >(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _ReviewBalanceSheet(item: widget.item, fact: fact),
+    );
+    if (result == null) return;
+    setState(() => _busy = true);
+    try {
+      final namespace = ref.read(cacheNamespaceProvider);
+      final cache = await ref.read(responseCacheProvider.future);
+      final rawSender = widget.item.sender
+          .toUpperCase()
+          .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
+          .replaceFirst(RegExp(r'-[A-Z]$'), '');
+      final factIdx = (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
+          ? fact['factIndex'] as int
+          : 0;
+      final obsId = widget.item.id.length == 64
+          ? '${widget.item.id}:$factIdx'
+          : widget.item.id;
+      cache.financialStore.saveObservation(namespace, obsId, {
+        'id': obsId,
+        'sender_bank': rawSender,
+        'parser_version': LocalSmsParser.version,
+        'received_at': result.asOfAt.toUtc().toIso8601String(),
+        'account_last4': result.accountLast4,
+        'is_bank_account': true,
+        'balance_paise': (result.balance * 100).round(),
+        'confidence': 1.0,
+      });
+      ref.invalidate(bankAccountSummariesProvider);
+      ref.invalidate(homeSummaryProvider);
+      if (widget.item.id.length == 64) {
+        await _persistSmsFactCorrection(
+          ref,
+          sourceKey: widget.item.id,
+          factIndex: factIdx,
+          patch: {
+            'availableBalanceInr': result.balance,
+            if (result.accountLast4 != null) 'accountLast4': result.accountLast4,
+            'asOfAt': result.asOfAt.toUtc().toIso8601String(),
+          },
+          reason: 'confirmed in needs review',
+        );
+      }
+      await _resolveFactSuggestion(factIdx);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _reviewBill([Map<String, dynamic>? billFact]) async {
+    final fact = billFact ?? widget.item.aiSuggestions
+        ?.where((s) => s['factType'] == 'bill_obligation')
+        .firstOrNull;
+    final factIdx = (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
+        ? fact['factIndex'] as int
+        : 0;
+    final result = await showModalBottomSheet<_BillReviewResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _ReviewBillSheet(
+        item: widget.item,
+        suggestionFact: fact,
+        onDiscard: () async {
+          await _resolveFactSuggestion(factIdx);
+        },
+      ),
+    );
+    if (result == null) return;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(commitmentsRepositoryProvider)
+          .save(
+            Commitment(
+              id: 'review-${widget.item.id}-$factIdx',
+              title: result.title,
+              category: result.category,
+              amount: result.amount,
+              dueOn: result.dueOn,
+              identifier: result.identifier,
+              cadence: result.cadence,
+              source: CommitmentSource.sms,
+              isUserConfirmed: true,
+              confidence: 1,
+            ),
+          );
+      ref.invalidate(commitmentsProvider);
+      if (widget.item.id.length == 64) {
+        await _persistSmsFactCorrection(
+          ref,
+          sourceKey: widget.item.id,
+          factIndex: factIdx,
+          patch: {
+            'dueDate': result.dueOn.toUtc().toIso8601String(),
+            if (result.amount != null) 'amountDueInr': result.amount!.rupees,
+          },
+          reason: 'confirmed in needs review',
+        );
+      }
+      await _resolveFactSuggestion(factIdx);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _reviewMandate([Map<String, dynamic>? mandateFact]) async {
+    final fact = mandateFact ?? widget.item.aiSuggestions
+        ?.where((s) => s['factType'] == 'mandate_lifecycle')
+        .firstOrNull;
+    final factIdx = (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
+        ? fact['factIndex'] as int
+        : 0;
+    final result = await showModalBottomSheet<_BillReviewResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _ReviewMandateSheet(
+        item: widget.item,
+        fact: fact,
+      ),
+    );
+    if (result == null) return;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(commitmentsRepositoryProvider)
+          .save(
+            Commitment(
+              id: 'mandate-${widget.item.id}-$factIdx',
+              title: result.title,
+              category: CommitmentCategory.subscription,
+              amount: result.amount,
+              dueOn: result.dueOn,
+              identifier: result.identifier,
+              cadence: result.cadence,
+              source: CommitmentSource.sms,
+              isUserConfirmed: true,
+              confidence: 1,
+            ),
+          );
+      ref.invalidate(commitmentsProvider);
+      if (widget.item.id.length == 64) {
+        await _persistSmsFactCorrection(
+          ref,
+          sourceKey: widget.item.id,
+          factIndex: factIdx,
+          patch: {
+            'mandateStatus': 'registered',
+            if (result.amount != null) 'limitInr': result.amount!.rupees,
+          },
+          reason: 'confirmed in needs review',
+        );
+      }
+      await _resolveFactSuggestion(factIdx);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -902,7 +1550,125 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       await _dismissNotATransaction();
       return;
     }
-    await _fillManually();
+    final suggestions = widget.item.aiSuggestions;
+    if (suggestions != null && suggestions.isNotEmpty) {
+      final first = suggestions.first;
+      final type = first['factType'];
+      switch (type) {
+        case 'balance_snapshot':
+          await _reviewBalance(first);
+          return;
+        case 'bill_obligation':
+          await _reviewBill(first);
+          return;
+        case 'mandate_lifecycle':
+          await _reviewMandate(first);
+          return;
+        case 'security_or_service_alert':
+        case 'promotion':
+          await _resolveFactSuggestion(
+            (first['factIndex'] as int?) ?? 0,
+          );
+          return;
+        case 'posted_movement':
+        default:
+          await _reviewMovement(first);
+          return;
+      }
+    }
+    if (widget.item.kind == NeedsReviewKind.mandate || _isMandateReview(widget.item.body)) {
+      await _reviewMandate();
+      return;
+    }
+    await _reviewMovement();
+  }
+
+  Widget _buildSuggestionTile(Map<String, dynamic> s) {
+    final type = s['factType'] as String? ?? '';
+    final payload = (s['payload'] as Map<String, dynamic>?) ?? const {};
+    final (icon, title, subtitle, actionLabel) = switch (type) {
+      'posted_movement' => (
+        Icons.credit_card_outlined,
+        'Transaction: ₹${((payload['amountInr'] as num?) ?? 0).toStringAsFixed(2)}',
+        (payload['merchant'] as String?) ?? 'Purchase',
+        'Review',
+      ),
+      'balance_snapshot' => (
+        Icons.account_balance_outlined,
+        'Balance: ₹${((payload['availableBalanceInr'] as num?) ?? 0).toStringAsFixed(2)}',
+        payload['accountLast4'] != null ? 'A/c ••••${payload['accountLast4']}' : 'Bank balance',
+        'Confirm',
+      ),
+      'bill_obligation' => (
+        Icons.receipt_long_outlined,
+        'Bill: ₹${((payload['amountDueInr'] as num?) ?? (payload['minimumDueInr'] as num?) ?? 0).toStringAsFixed(2)}',
+        (payload['billerName'] as String?) ?? 'Card/Utility bill',
+        'Review',
+      ),
+      'mandate_lifecycle' => (
+        Icons.autorenew_rounded,
+        'Mandate: ${(payload['mandateName'] as String?) ?? 'AutoPay'}',
+        payload['limitInr'] != null ? 'Limit ₹${(payload['limitInr'] as num).toStringAsFixed(2)}' : 'Recurring mandate',
+        'Confirm',
+      ),
+      _ => (
+        Icons.info_outline,
+        'Financial detail',
+        type,
+        'Review',
+      ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.xs),
+      decoration: BoxDecoration(
+        color: BambooInk.paper,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: BambooInk.jade),
+          const SizedBox(width: AppSpace.xs),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink900)),
+                Text(subtitle, style: BambooFonts.ui(11, color: BambooInk.ink500)),
+              ],
+            ),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: _busy
+                ? null
+                : () async {
+                    switch (type) {
+                      case 'balance_snapshot':
+                        await _reviewBalance(s);
+                        break;
+                      case 'bill_obligation':
+                        await _reviewBill(s);
+                        break;
+                      case 'mandate_lifecycle':
+                        await _reviewMandate(s);
+                        break;
+                      case 'posted_movement':
+                      default:
+                        await _reviewMovement(s);
+                        break;
+                    }
+                  },
+            child: Text(actionLabel, style: BambooFonts.ui(12, weight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -959,6 +1725,21 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                   : BambooInk.ink500,
             ),
           ),
+          if (item.aiSuggestions?.isNotEmpty == true) ...[
+            const SizedBox(height: AppSpace.xs),
+            Text(
+              _aiSummary,
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+          ],
+          if (item.aiSuggestions != null && item.aiSuggestions!.length > 1) ...[
+            const SizedBox(height: AppSpace.sm),
+            for (final suggestion in item.aiSuggestions!)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.xs),
+                child: _buildSuggestionTile(suggestion),
+              ),
+          ],
           if (item.reason != null ||
               _isSecurityOrServiceAlert(item.body) ||
               _isInvestmentSettlement(item.body) ||
@@ -1022,7 +1803,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
 
 class _FillFieldsSheet extends ConsumerStatefulWidget {
   final NeedsReviewItem item;
-  const _FillFieldsSheet({required this.item});
+  final Map<String, dynamic>? suggestionFact;
+  const _FillFieldsSheet({required this.item, this.suggestionFact});
 
   @override
   ConsumerState<_FillFieldsSheet> createState() => _FillFieldsSheetState();
@@ -1054,6 +1836,30 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
       _amountController.text = _draft.amount!.rupees.toStringAsFixed(2);
     }
     _merchantController.text = _draft.merchantName ?? '';
+    final movement = widget.suggestionFact ?? widget.item.aiSuggestions
+        ?.where((suggestion) => suggestion['factType'] == 'posted_movement')
+        .firstOrNull;
+    final payload = movement?['payload'];
+    if (payload is Map) {
+      final amount = payload['amountInr'];
+      if (amount is num && amount.isFinite && amount > 0) {
+        _amountController.text = amount.toStringAsFixed(2);
+      }
+      final merchant = payload['merchant'];
+      if (merchant is String && merchant.trim().isNotEmpty) {
+        _merchantController.text = merchant.trim();
+      }
+      final instrument = payload['instrument'];
+      if (instrument is String) {
+        _instrument = TxnInstrument.fromJson(instrument);
+      }
+      final entryKind = payload['entryKind'];
+      if (entryKind is String) {
+        _entryKind = TxnEntryKind.fromJson(entryKind);
+      }
+      final occurredAt = DateTime.tryParse('${payload['occurredAt'] ?? ''}');
+      if (occurredAt != null) _occurredAt = occurredAt;
+    }
   }
 
   @override

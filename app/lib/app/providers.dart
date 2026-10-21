@@ -33,6 +33,8 @@ import '../data/import_repository.dart';
 import '../data/local/app_database.dart';
 import '../data/local/response_cache.dart';
 import '../data/local/financial_store.dart';
+import '../data/local/sms_rule_bundle.dart';
+import '../data/local/sms_rule_bundle_store.dart';
 import '../data/local/sms_facts_outbox.dart';
 import '../data/local/sms_intake_repository.dart';
 import '../data/local/sms_import_store.dart';
@@ -576,7 +578,13 @@ Future<void> recoverLegacyPendingChanges(WidgetRef ref) async {
       ]);
     }
     for (final entry in intake.pending('legacy', limit: 100000)) {
-      SmsImportStore(cache.financialStore).capture(namespace, entry.message);
+      final bundle = SmsRuleBundleStore(
+        cache.financialStore.database,
+      ).loadActiveBundleSync();
+      SmsImportStore(
+        cache.financialStore,
+        downloadedRules: bundle,
+      ).capture(namespace, entry.message);
       intake.acknowledge('legacy', entry.id);
     }
     db.execute('RELEASE SAVEPOINT recover_pending');
@@ -1011,6 +1019,20 @@ final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((ref) {
   return ref.watch(needsReviewRepositoryProvider).fetchAll();
 });
 
+/// The shared SMS rule bundle the server publishes: a versioned set of
+/// sender/word patterns the device applies locally, so a parser improvement
+/// reaches a phone without an app release.
+final smsRuleBundleStoreProvider = FutureProvider<SmsRuleBundleStore>((ref) async {
+  final db = await ref.watch(appDatabaseProvider.future);
+  return SmsRuleBundleStore(db);
+});
+
+/// The bundle currently in force on this device.
+final activeSmsRuleBundleProvider = FutureProvider<SmsRuleBundle?>((ref) async {
+  final store = await ref.watch(smsRuleBundleStoreProvider.future);
+  return store.loadActiveBundle();
+});
+
 /// D1's badge (ui-spec §1: "Activity... with badge for D4 count") and
 /// Insights Hub's tile both read this rather than the full list, so
 /// neither has to unwrap an AsyncValue just to show a number.
@@ -1235,7 +1257,13 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       }
       final cache = await ref.read(responseCacheProvider.future);
       cache.financialStore.migrateLegacy(namespace);
-      SmsImportStore(cache.financialStore).capture(
+      final bundle = SmsRuleBundleStore(
+        cache.financialStore.database,
+      ).loadActiveBundleSync();
+      SmsImportStore(
+        cache.financialStore,
+        downloadedRules: bundle,
+      ).capture(
         namespace,
         QueuedSms(
           sender: message.sender,
@@ -1253,7 +1281,13 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
           throw StateError('Account changed during import');
         }
         final end = (start + 100).clamp(0, messages.length);
-        SmsImportStore(cache.financialStore).captureBatch(namespace, [
+        final bundle = SmsRuleBundleStore(
+          cache.financialStore.database,
+        ).loadActiveBundleSync();
+        SmsImportStore(
+          cache.financialStore,
+          downloadedRules: bundle,
+        ).captureBatch(namespace, [
           for (final message in messages.sublist(start, end))
             QueuedSms(
               sender: message.sender,
@@ -3573,7 +3607,10 @@ final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
 final merchantSearchRepositoryProvider = Provider<MerchantSearchRepository>((
   ref,
 ) {
-  return HttpMerchantSearchRepository(baseUrl: _apiBaseUrl);
+  return HttpMerchantSearchRepository(
+    baseUrl: _apiBaseUrl,
+    accessToken: ref.watch(accessTokenProvider),
+  );
 });
 
 /// Exact-VPA merchant directory lookup used by QR scan. It is intentionally
@@ -5258,6 +5295,18 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         );
         continue;
       }
+      final rawSuggestions = status['suggestions'];
+      if (status['status'] == 'done' && rawSuggestions is List) {
+        // The classifier's structured suggestions belong to the review item
+        // so the user sees what the model proposed before deciding.
+        final suggestions = rawSuggestions
+            .whereType<Map>()
+            .map((value) => Map<String, dynamic>.from(value))
+            .toList();
+        changed =
+            await reviewRepo.updateAiSuggestions(item.id, suggestions) ||
+            changed;
+      }
       final result = status['result'];
       if (status['status'] == 'done' && result is Map &&
           result['reviewRequired'] == false) {
@@ -5301,6 +5350,28 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         smsCaptureNamespaceKey,
         ref.read(cacheNamespaceProvider),
       );
+      // The shared rule bundle is downloaded, not local, so the device has to
+      // be online to learn a new rule. It refreshes here — on the lifecycle
+      // pass — rather than inside the SMS sync: a sync pass must make
+      // exactly one request, and an offline pass must make none.
+      if (ref.read(isOnlineProvider).valueOrNull == true) {
+        try {
+          final cache = await ref.read(responseCacheProvider.future);
+          final bundleStore = SmsRuleBundleStore(
+            cache.financialStore.database,
+          );
+          final updated = await bundleStore.syncRules(
+            ref.read(authenticatedHttpClientProvider),
+            apiBaseUrl: _apiBaseUrl,
+            bearerToken: ref.read(accessTokenProvider),
+          );
+          if (updated) {
+            ref.invalidate(activeSmsRuleBundleProvider);
+          }
+        } catch (_) {
+          // Best effort: the cached bundle keeps working offline.
+        }
+      }
       do {
         rerunRequested = false;
         // Start the receiver from the same authenticated lifecycle pass as the

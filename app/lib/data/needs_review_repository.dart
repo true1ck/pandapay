@@ -41,6 +41,7 @@ class NeedsReviewItem {
   final String? reason;
   final DateTime receivedAt;
   final NeedsReviewKind kind;
+  final List<Map<String, dynamic>>? aiSuggestions;
 
   const NeedsReviewItem({
     required this.id,
@@ -49,7 +50,19 @@ class NeedsReviewItem {
     this.reason,
     required this.receivedAt,
     this.kind = NeedsReviewKind.transaction,
+    this.aiSuggestions,
   });
+
+  NeedsReviewItem copyWith({List<Map<String, dynamic>>? aiSuggestions}) =>
+      NeedsReviewItem(
+        id: id,
+        sender: sender,
+        body: body,
+        reason: reason,
+        receivedAt: receivedAt,
+        kind: kind,
+        aiSuggestions: aiSuggestions ?? this.aiSuggestions,
+      );
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -58,20 +71,29 @@ class NeedsReviewItem {
     'reason': reason,
     'receivedAt': receivedAt.toIso8601String(),
     'kind': kind.name,
+    if (aiSuggestions != null) 'aiSuggestions': aiSuggestions,
   };
 
-  factory NeedsReviewItem.fromJson(Map<String, dynamic> json) =>
-      NeedsReviewItem(
-        id: json['id'] as String,
-        sender: json['sender'] as String,
-        body: json['body'] as String,
-        reason: json['reason'] as String?,
-        receivedAt: DateTime.parse(json['receivedAt'] as String),
-        kind: NeedsReviewKind.values.firstWhere(
-          (kind) => kind.name == json['kind'],
-          orElse: () => NeedsReviewKind.transaction,
-        ),
-      );
+  factory NeedsReviewItem.fromJson(Map<String, dynamic> json) {
+    final rawSuggestions = json['aiSuggestions'];
+    return NeedsReviewItem(
+      id: json['id'] as String,
+      sender: json['sender'] as String,
+      body: json['body'] as String,
+      reason: json['reason'] as String?,
+      receivedAt: DateTime.parse(json['receivedAt'] as String),
+      kind: NeedsReviewKind.values.firstWhere(
+        (kind) => kind.name == json['kind'],
+        orElse: () => NeedsReviewKind.transaction,
+      ),
+      aiSuggestions: rawSuggestions is List
+          ? rawSuggestions
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList()
+          : null,
+    );
+  }
 }
 
 const _needsReviewKey = 'pandapay_app.needs_review_queue_v1';
@@ -234,6 +256,43 @@ class NeedsReviewRepository {
       ...withoutRetry,
       jsonEncode(item.toJson()),
     ]);
+  }
+
+  /// Persists owner-scoped, validated Gemini facts onto an existing local
+  /// review row. It deliberately never recreates a row that the user already
+  /// dismissed or resolved while the network request was in flight.
+  Future<bool> updateAiSuggestions(
+    String id,
+    List<Map<String, dynamic>> suggestions,
+  ) async {
+    final items = await fetchAll();
+    final current = items.where((item) => item.id == id).firstOrNull;
+    if (current == null ||
+        jsonEncode(current.aiSuggestions ?? const []) ==
+            jsonEncode(suggestions)) {
+      return false;
+    }
+    final updated = jsonEncode(
+      current.copyWith(aiSuggestions: suggestions).toJson(),
+    );
+    if (loadDatabase != null) {
+      (await _database()).db.execute(
+        'UPDATE local_needs_review SET payload=? WHERE namespace=? AND id=?',
+        [updated, namespace, id],
+      );
+      return true;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_needsReviewKey) ?? const [];
+    var changed = false;
+    final patched = raw.map((entry) {
+      final value = jsonDecode(entry) as Map<String, dynamic>;
+      if (value['id'] != id) return entry;
+      changed = true;
+      return updated;
+    }).toList();
+    if (changed) await prefs.setStringList(_needsReviewKey, patched);
+    return changed;
   }
 
   String _normalizeBody(String body) =>

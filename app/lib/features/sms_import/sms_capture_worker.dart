@@ -3,6 +3,7 @@ import 'dart:isolate';
 import '../../data/local/app_database.dart';
 import '../../data/local/financial_store.dart';
 import '../../data/local/sms_import_store.dart';
+import '../../data/local/sms_rule_bundle_store.dart';
 import 'sms_background_queue.dart';
 
 /// A serial database owner for bulk inbox capture. Only plain values cross
@@ -154,7 +155,8 @@ class SmsCaptureWorker {
                 receivedAt: DateTime.fromMillisecondsSinceEpoch(row[2] as int),
               ),
           ];
-          SmsImportStore(store).captureBatch(namespace, messages);
+          final rules = SmsRuleBundleStore(database).loadActiveBundleSync();
+          SmsImportStore(store, downloadedRules: rules).captureBatch(namespace, messages);
           replies.send([id, changed.toList(), null]);
         } catch (error) {
           // Never return raw message bodies in diagnostics.

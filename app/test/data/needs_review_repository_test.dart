@@ -46,6 +46,31 @@ void main() {
     expect(all.first.id, '2');
   });
 
+  test('AI suggestions update only an existing review item', () async {
+    final repo = NeedsReviewRepository();
+    const id = 'source-1';
+    final suggestions = <Map<String, dynamic>>[
+      {
+        'factIndex': 0,
+        'factType': 'posted_movement',
+        'payload': {'amountInr': 125.0, 'entryKind': 'spend'},
+      },
+    ];
+    expect(await repo.updateAiSuggestions(id, suggestions), isFalse);
+    await repo.add(NeedsReviewItem(
+      id: id,
+      sender: 'VM-BANK',
+      body: 'Rs.125 spent',
+      receivedAt: DateTime(2026, 1, 1),
+    ));
+    expect(await repo.updateAiSuggestions(id, suggestions), isTrue);
+    expect((await repo.fetchAll()).single.aiSuggestions, suggestions);
+    expect(await repo.updateAiSuggestions(id, suggestions), isFalse);
+    await repo.remove(id);
+    expect(await repo.updateAiSuggestions(id, suggestions), isFalse);
+    expect(await repo.fetchAll(), isEmpty);
+  });
+
   test('removeAll drops every id in the set', () async {
     final repo = NeedsReviewRepository();
     await repo.add(NeedsReviewItem(id: '1', sender: 's1', body: 'b1', receivedAt: DateTime(2026, 1, 1)));

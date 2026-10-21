@@ -5,6 +5,7 @@ import '../../features/sms_import/sms_background_queue.dart';
 import 'financial_store.dart';
 import 'sms_facts_outbox.dart';
 import 'sms_intake_repository.dart';
+import 'sms_rule_bundle.dart';
 
 /// The same capture transaction is used by inbox import, foreground delivery
 /// and the Android background isolate. Upload is deliberately separate.
@@ -12,7 +13,8 @@ class SmsImportStore {
   final FinancialStore store;
   // Drain profile name into the parser for own-name self-transfer matching.
   final String? ownUserName;
-  SmsImportStore(this.store, {this.ownUserName});
+  final SmsRuleBundle? downloadedRules;
+  SmsImportStore(this.store, {this.ownUserName, this.downloadedRules});
   void captureBatch(String namespace, List<QueuedSms> messages) {
     store.batch(() {
       final db = store.database.db;
@@ -70,6 +72,7 @@ class SmsImportStore {
         cards: cards,
         ownUserName:
             ownUserName ?? store.database.profileDisplayName(namespace),
+        downloadedRules: downloadedRules,
       );
       if (observation != null) {
         store.saveObservation(namespace, key, {

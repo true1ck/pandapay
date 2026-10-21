@@ -93,17 +93,26 @@ String? safeMerchantMccForUpiHandoff({
 
 class HttpMerchantSearchRepository implements MerchantSearchRepository {
   final String baseUrl;
+  final String? accessToken;
   final http.Client _client;
 
-  HttpMerchantSearchRepository({required this.baseUrl, http.Client? client})
-    : _client = client ?? http.Client();
+  HttpMerchantSearchRepository({
+    required this.baseUrl,
+    this.accessToken,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
+
+  Map<String, String> get _headers => {
+        if (accessToken != null && accessToken!.isNotEmpty)
+          'Authorization': 'Bearer $accessToken',
+      };
 
   @override
   Future<List<NearbyMerchantCandidate>> search(String query) async {
     final uri = Uri.parse(
       '$baseUrl/merchants/search',
     ).replace(queryParameters: {'q': query});
-    final response = await _client.get(uri);
+    final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
       throw ApiException(
         'GET /merchants/search failed: ${response.statusCode} ${response.body}',

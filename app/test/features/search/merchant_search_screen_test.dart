@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/catalogue_repository.dart' show SpendCategory;
+import 'package:pandapay/data/user_cards_repository.dart' show TransactionEntry;
 import 'package:pandapay/data/merchant_search_repository.dart';
 import 'package:pandapay/features/search/merchant_search_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -193,5 +194,38 @@ void main() {
 
     expect(find.text('Something went wrong'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Try again'), findsOneWidget);
+  });
+  testWidgets('searches and finds a merchant added or detected in user transaction history', (tester) async {
+    final repo = _FakeMerchantSearchRepository(const {});
+
+    final txn = TransactionEntry(
+      id: 'txn-tokai',
+      amount: Money.fromRupees(450),
+      occurredAt: DateTime(2026, 10, 20),
+      merchantName: 'Blue Tokai Coffee',
+      categoryId: 'dining-id',
+      source: 'sms',
+      status: 'active',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          merchantSearchRepositoryProvider.overrideWithValue(repo),
+          catalogueProvider.overrideWith((ref) async => [_card('dining-card', rate: 0.05)]),
+          userCardsProvider.overrideWith((ref) async => const []),
+          transactionsProvider.overrideWith((ref) async => [txn]),
+        ],
+        child: const MaterialApp(home: MerchantSearchScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'tokai');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Blue Tokai Coffee'), findsOneWidget);
+    expect(find.text('Use dining-card'), findsOneWidget);
   });
 }

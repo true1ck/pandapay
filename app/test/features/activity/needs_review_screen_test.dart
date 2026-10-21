@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class _FakeUserCardsRepository implements UserCardsRepository {
   Map<String, dynamic>? lastLogArgs;
   Map<String, dynamic>? lastOverrideArgs;
+  final List<Map<String, dynamic>> allOverrideArgs = [];
 
   @override
   Future<String> logTransaction({
@@ -50,6 +51,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
       'patch': patch,
       'reason': reason,
     };
+    allOverrideArgs.add(lastOverrideArgs!);
     return true;
   }
 
@@ -373,6 +375,179 @@ void main() {
       expect(repo.lastOverrideArgs!['factIndex'], 0);
       expect((repo.lastOverrideArgs!['patch'] as Map)['amountRole'], 'posted');
       expect(await reviews.fetchAll(), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'balance_snapshot AI suggestion shows Confirm balance and persists observation on confirm',
+    (tester) async {
+      final key = 'b' * 64;
+      await reviews.add(
+        NeedsReviewItem(
+          id: key,
+          sender: 'HDFCBK',
+          body: 'Available balance in A/c 1234 is INR 12500.50',
+          receivedAt: DateTime(2026, 10, 10),
+          aiSuggestions: [
+            {
+              'factIndex': 0,
+              'factType': 'balance_snapshot',
+              'payload': {
+                'availableBalanceInr': 12500.50,
+                'accountLast4': '1234',
+                'asOfAt': '2026-10-10T12:00:00.000Z',
+              },
+            },
+          ],
+        ),
+      );
+      final repo = _FakeUserCardsRepository();
+      await _pump(tester, repo: repo, reviews: reviews);
+
+      expect(find.text('Confirm balance'), findsOneWidget);
+      await tester.tap(find.text('Confirm balance'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Confirm bank balance'), findsOneWidget);
+      expect(find.text('12500.50'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Confirm balance').last);
+      await tester.pumpAndSettle();
+
+      expect(repo.lastOverrideArgs, isNotNull);
+      expect(repo.lastOverrideArgs!['sourceKey'], key);
+      expect(repo.lastOverrideArgs!['factIndex'], 0);
+      expect((repo.lastOverrideArgs!['patch'] as Map)['availableBalanceInr'], 12500.50);
+      expect(await reviews.fetchAll(), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'bill_obligation AI suggestion shows Review bill and persists commitment on save',
+    (tester) async {
+      final key = 'c' * 64;
+      await reviews.add(
+        NeedsReviewItem(
+          id: key,
+          sender: 'AIRTEL',
+          body: 'Bill of Rs.1499.00 due on 2026-11-05 for Broadband',
+          receivedAt: DateTime(2026, 10, 10),
+          aiSuggestions: [
+            {
+              'factIndex': 0,
+              'factType': 'bill_obligation',
+              'payload': {
+                'billerName': 'Airtel Broadband',
+                'amountDueInr': 1499.00,
+                'dueDate': '2026-11-05T00:00:00.000Z',
+                'last4': '5678',
+              },
+            },
+          ],
+        ),
+      );
+      final repo = _FakeUserCardsRepository();
+      final commitments = CommitmentsRepository(namespace: 'user:test');
+      await _pump(tester, repo: repo, reviews: reviews, commitments: commitments);
+
+      expect(find.text('Review bill'), findsOneWidget);
+      await tester.tap(find.text('Review bill'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review bill details'), findsOneWidget);
+      expect(find.text('Airtel Broadband'), findsOneWidget);
+      expect(find.text('1499.00'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save bill').last);
+      await tester.pumpAndSettle();
+
+      expect(repo.lastOverrideArgs, isNotNull);
+      expect(repo.lastOverrideArgs!['sourceKey'], key);
+      expect(repo.lastOverrideArgs!['factIndex'], 0);
+      expect(await reviews.fetchAll(), isEmpty);
+      final savedBills = await commitments.fetchAll();
+      expect(savedBills, hasLength(1));
+      expect(savedBills.single.title, 'Airtel Broadband');
+    },
+  );
+
+  testWidgets(
+    'multi-fact SMS resolves individual facts sequentially without dropping remaining ones',
+    (tester) async {
+      final key = 'd' * 64;
+      await reviews.add(
+        NeedsReviewItem(
+          id: key,
+          sender: 'HDFCBK',
+          body: 'Rs.499.00 spent at SWIGGY. Avail Bal INR 12500.50 in A/c 1234',
+          receivedAt: DateTime(2026, 10, 10),
+          aiSuggestions: [
+            {
+              'factIndex': 0,
+              'factType': 'posted_movement',
+              'payload': {
+                'amountInr': 499.00,
+                'merchant': 'SWIGGY',
+                'instrument': 'upi_bank',
+                'entryKind': 'spend',
+              },
+            },
+            {
+              'factIndex': 1,
+              'factType': 'balance_snapshot',
+              'payload': {
+                'availableBalanceInr': 12500.50,
+                'accountLast4': '1234',
+                'asOfAt': '2026-10-10T12:00:00.000Z',
+              },
+            },
+          ],
+        ),
+      );
+      final repo = _FakeUserCardsRepository();
+      await _pump(tester, repo: repo, reviews: reviews);
+
+      // Both suggestions should be visible in multi-suggestion mode
+      expect(find.text('Transaction: ₹499.00'), findsOneWidget);
+      expect(find.text('Balance: ₹12500.50'), findsOneWidget);
+      expect(find.text('Review transaction'), findsOneWidget);
+
+      // Resolve first fact (transaction) via primary button
+      await tester.tap(find.text('Review transaction'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review this transaction'), findsOneWidget);
+      await tester.tap(find.text('Save transaction'));
+      await tester.pumpAndSettle();
+
+      // Transaction override recorded for fact 0
+      expect(repo.allOverrideArgs, hasLength(1));
+      expect(repo.allOverrideArgs[0]['factIndex'], 0);
+
+      // Item must NOT be removed from queue; it now has 1 remaining suggestion (balance)
+      final remainingItems = await reviews.fetchAll();
+      expect(remainingItems, hasLength(1));
+      expect(remainingItems.single.aiSuggestions, hasLength(1));
+      expect(remainingItems.single.aiSuggestions!.single['factType'], 'balance_snapshot');
+
+      // The button now says Confirm balance
+      expect(find.text('Confirm balance'), findsOneWidget);
+
+      // Resolve remaining fact (balance)
+      await tester.tap(find.text('Confirm balance'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Confirm bank balance'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Confirm balance').last);
+      await tester.pumpAndSettle();
+
+      // Balance override recorded for fact 1
+      expect(repo.allOverrideArgs, hasLength(2));
+      expect(repo.allOverrideArgs[1]['factIndex'], 1);
+
+      // Now all facts resolved, review queue is empty
+      expect(await reviews.fetchAll(), isEmpty);
+      expect(find.text('Nothing needs review'), findsOneWidget);
     },
   );
 }

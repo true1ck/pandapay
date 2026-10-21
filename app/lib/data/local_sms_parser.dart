@@ -3,6 +3,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'investment_classifier.dart';
 import 'user_cards_repository.dart';
 import 'local/sms_intake_repository.dart';
+import 'local/sms_rule_bundle.dart';
 
 enum LocalSmsEventType {
   transaction,
@@ -96,7 +97,11 @@ class LocalSmsReviewDraft {
 /// formats remain durable intake for server parsing; they never become guessed
 /// spending. Values are local observations until server reconciliation.
 class LocalSmsParser {
-  static const version = 7;
+  // 8: the server can now resolve a card bill notice whose suffix is printed
+  // straight after the instrument ("Credit Card 8708 bill"), so the open
+  // review queue is re-examined once more and a card's due day can finally be
+  // learned from its own AutoPay message.
+  static const version = 8;
 
   /// Messages with a quoted price or a card name are not necessarily a
   /// payment. Apply this before either upload or manual review, including to
@@ -522,8 +527,39 @@ class LocalSmsParser {
     required DateTime receivedAt,
     List<UserCard> cards = const [],
     String? ownUserName,
+    SmsRuleBundle? downloadedRules,
   }) {
     if (body.length > 20000 || sensitive(body)) return null;
+
+    // Safety gate: built-in non-transaction noise checks MUST run before any
+    // downloaded rule. A downloaded rule can never turn marketing/promotional
+    // offers, EMI solicitations or service notices into financial events.
+    if (isNonTransactionNoise(sender, body)) {
+      return const LocalSmsObservation(
+        eventType: LocalSmsEventType.promotion,
+        disposition: LocalSmsDisposition.localIgnore,
+        reasonCodes: ['non_transaction_message'],
+      );
+    }
+
+    if (downloadedRules != null && downloadedRules.rules.isNotEmpty) {
+      for (final rule in downloadedRules.rules) {
+        if (!rule.matchesSender(sender)) continue;
+        final match = rule.regExp.firstMatch(body);
+        if (match == null) continue;
+
+        final obs = _applyDownloadedRule(
+          namespace: namespace,
+          rule: rule,
+          match: match,
+          sender: sender,
+          body: body,
+          receivedAt: receivedAt,
+          cards: cards,
+        );
+        if (obs != null) return obs;
+      }
+    }
     final cardLast4 =
         _re(
           r'\b(?:credit\s+|debit\s+)?card\b[\s\S]{0,45}?(?:ending(?:\s+with)?\s*|x{1,4}|\*{1,4}|\.{3,}|last\s*4\s*|no\.?\s*)\D{0,5}(\d{4})\b',
@@ -1095,4 +1131,172 @@ class LocalSmsParser {
       ),
     );
   }
+
+  static LocalSmsObservation? _applyDownloadedRule({
+    required String namespace,
+    required RestrictedSmsRule rule,
+    required Match match,
+    required String sender,
+    required String body,
+    required DateTime receivedAt,
+    required List<UserCard> cards,
+  }) {
+    if (rule.family == SmsRuleFamily.ignoreNoise) {
+      // Safety safeguard: an ignore rule cannot silence an SMS containing real
+      // completed movement verbs, due dates or balance markers.
+      final hasFinancialWords = RegExp(
+        r'\b(?:debited|credited|spent|paid|charged|transferred|withdrawn|received|due date|amount due|balance|avail bal)\b',
+        caseSensitive: false,
+      ).hasMatch(body);
+      if (hasFinancialWords) return null;
+
+      return LocalSmsObservation(
+        eventType: LocalSmsEventType.promotion,
+        disposition: LocalSmsDisposition.localIgnore,
+        reasonCodes: ['downloaded_rule_noise_match', rule.id],
+        confidence: rule.confidence,
+      );
+    }
+
+    String? getGroup(String field) {
+      final idx = rule.fieldMap[field];
+      if (idx == null || idx < 1 || idx > match.groupCount) return null;
+      return match.group(idx)?.trim();
+    }
+
+    Money? parseMoney(String? text) {
+      if (text == null) return null;
+      final cleaned = text.replaceAll(RegExp(r'[, ]'), '');
+      final val = double.tryParse(cleaned);
+      if (val == null || val <= 0 || !val.isFinite) return null;
+      return Money.fromRupees(val);
+    }
+
+    if (rule.family == SmsRuleFamily.postedMovement) {
+      // Safety check: must contain completed payment wording
+      final hasCompletedWording = RegExp(
+        r'\b(?:debited|credited|spent|paid|charged|transferred|withdrawn|received|successful|completed)\b',
+        caseSensitive: false,
+      ).hasMatch(body);
+      if (!hasCompletedWording) return null;
+
+      final amount = parseMoney(getGroup('amount') ?? getGroup('amountInr'));
+      if (amount == null) return null;
+      final merchant = getGroup('merchant') ?? 'Unknown Merchant';
+      final last4 = getGroup('last4') ?? getGroup('cardLast4') ?? getGroup('accountLast4');
+
+      var instrument = TxnInstrument.upiBank;
+      final rawInst = (rule.defaultFields['instrument'] ?? getGroup('instrument'))?.toString().toLowerCase();
+      if (rawInst == 'creditcard' || rawInst == 'credit_card') {
+        instrument = TxnInstrument.creditCard;
+      } else if (rawInst == 'debitcard' || rawInst == 'debit_card') {
+        instrument = TxnInstrument.debitCard;
+      } else if (rawInst == 'wallet') {
+        instrument = TxnInstrument.wallet;
+      }
+
+      var entryKind = TxnEntryKind.spend;
+      final rawKind = (rule.defaultFields['entryKind'] ?? getGroup('entryKind'))?.toString().toLowerCase();
+      if (rawKind == 'income' || rawKind == 'credit') {
+        entryKind = TxnEntryKind.income;
+      }
+
+      String? matchedCardId;
+      if (last4 != null) {
+        for (final c in cards) {
+          if (c.last4 == last4) {
+            matchedCardId = c.id;
+            break;
+          }
+        }
+      }
+
+      // Instrument safety: if card is claimed but last4 is missing/invalid, default away from card
+      if ((instrument == TxnInstrument.creditCard || instrument == TxnInstrument.debitCard) &&
+          (last4 == null || last4.length != 4)) {
+        instrument = TxnInstrument.other;
+      }
+
+      // Calibrate confidence: an unassigned card cannot be auto-accepted at ultra-high confidence
+      var calibratedConfidence = rule.confidence;
+      if (instrument == TxnInstrument.creditCard && matchedCardId == null) {
+        calibratedConfidence = calibratedConfidence.clamp(0.5, 0.90);
+      }
+
+      final key = smsSourceKey(namespace, sender, body);
+      final txn = TransactionEntry(
+        id: 'local-sms:$key',
+        sourceKey: key,
+        userCardId: matchedCardId,
+        amount: amount,
+        merchantName: merchant,
+        occurredAt: receivedAt,
+        instrument: instrument,
+        entryKind: entryKind,
+        cardLast4: last4,
+        source: 'sms',
+        status: 'active',
+        rewardState: 'estimated',
+      );
+
+      return LocalSmsObservation(
+        transaction: txn,
+        cardLast4: last4,
+        confidence: calibratedConfidence,
+        disposition: LocalSmsDisposition.sync,
+        reasonCodes: ['downloaded_rule_match', rule.id],
+      );
+    }
+
+    if (rule.family == SmsRuleFamily.balanceSnapshot) {
+      final bal = parseMoney(getGroup('availableBalance') ?? getGroup('availableBalanceInr'));
+      final acct = getGroup('accountLast4') ?? getGroup('last4');
+      if (bal == null && acct == null) return null;
+      return LocalSmsObservation(
+        eventType: LocalSmsEventType.balance,
+        disposition: LocalSmsDisposition.localObservation,
+        availableBalance: bal,
+        accountLast4: acct,
+        confidence: rule.confidence,
+        reasonCodes: ['downloaded_rule_balance', rule.id],
+      );
+    }
+
+    if (rule.family == SmsRuleFamily.billObligation) {
+      final amt = parseMoney(getGroup('amountDue') ?? getGroup('amountDueInr') ?? getGroup('minimumDue'));
+      final dueRaw = getGroup('dueDate');
+      final due = dueRaw != null ? parseDate(dueRaw) : null;
+      final biller = getGroup('billerName') ?? sender;
+      final last4 = getGroup('last4') ?? getGroup('cardLast4');
+      if (amt == null && due == null) return null;
+      return LocalSmsObservation(
+        eventType: LocalSmsEventType.bill,
+        disposition: LocalSmsDisposition.localObservation,
+        amountDue: amt,
+        dueDate: due,
+        billerName: biller,
+        cardLast4: last4,
+        confidence: rule.confidence,
+        reasonCodes: ['downloaded_rule_bill', rule.id],
+      );
+    }
+
+    if (rule.family == SmsRuleFamily.mandateLifecycle) {
+      final lim = parseMoney(getGroup('autopayLimit') ?? getGroup('limitInr'));
+      final biller = getGroup('billerName') ?? getGroup('merchant') ?? sender;
+      final last4 = getGroup('last4') ?? getGroup('cardLast4');
+      return LocalSmsObservation(
+        eventType: LocalSmsEventType.autopay,
+        disposition: LocalSmsDisposition.localObservation,
+        autopayLimit: lim,
+        billerName: biller,
+        cardLast4: last4,
+        confidence: rule.confidence,
+        reasonCodes: ['downloaded_rule_mandate', rule.id],
+      );
+    }
+
+    return null;
+  }
+
 }
