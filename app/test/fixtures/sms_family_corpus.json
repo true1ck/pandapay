@@ -1,0 +1,418 @@
+{
+  "schema": "sms_family_corpus_v1",
+  "description": "Single labeled corpus shared by device (app/test) and server (api/test) SMS baselines. Each case records the desired end-state (expected) and the measured current behavior (baseline). Phase 0 asserts the baseline only; later phases flip assertions toward expected and may rewrite baseline.",
+  "cases": [
+    {
+      "id": "send_debit_with_balance",
+      "sender": "HDFCBK",
+      "body": "INR 1,250.50 debited from your A/c XX1234 on 16-10-26 for UPI-P2M to GROCERY_M. Avl bal Rs.8,750.25.",
+      "family": "posted_movement",
+      "expected": {
+        "capture": true,
+        "facts": ["posted_movement", "balance_snapshot", "card_identity_hint"],
+        "spend": { "amount": 1250.5, "kind": "spend" },
+        "balance": 8750.25,
+        "review": false
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "one spend transaction plus balance persisted as an observation field, not a typed fact",
+        "server": "spend parsed with availableBalanceInr, no typed fact contract"
+      }
+    },
+    {
+      "id": "balance_only",
+      "sender": "SBIINB",
+      "body": "Your A/c XX9876 available balance is Rs.9,000.00 as on 16-10-26.",
+      "family": "balance_snapshot",
+      "expected": {
+        "capture": true,
+        "facts": ["balance_snapshot"],
+        "spend": null,
+        "review": false,
+        "note": "recognized non-spend: should sync a typed balance fact, never terminally acknowledged before projection/sync"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "balance observation saved, then localIgnore acknowledges intake so the server never sees it",
+        "server": "no match without a pattern"
+      }
+    },
+    {
+      "id": "card_statement",
+      "sender": "AXISBK",
+      "body": "Your Axis Bank Credit Card XX4321 e-statement generated on 12-10-26. Total Amount Due INR 3,000.00, Minimum Amount Due INR 600.00, pay by 05-Nov-26.",
+      "family": "bill_obligation",
+      "expected": {
+        "capture": true,
+        "facts": ["bill_obligation"],
+        "spend": null,
+        "review": false,
+        "note": "statement total, minimum due and due date must stay separate money/date roles"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "bill observation with statement date, total, minimum and due date; no spend",
+        "server": "no transaction match; statement day extractor detects 12-10-26"
+      }
+    },
+    {
+      "id": "bill_with_offer",
+      "sender": "TNBPAY",
+      "body": "Your TNEB electricity bill of Rs.1,500 is due on 18-10-26. Pay on TNEB app and get Rs.100 cashback offer!",
+      "family": "bill_obligation",
+      "expected": {
+        "capture": true,
+        "facts": ["bill_obligation"],
+        "spend": null,
+        "review": false,
+        "note": "a real bill wins over appended marketing language"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "bill observation with biller name and amount; offer clause ignored; no spend",
+        "server": "no transaction match"
+      }
+    },
+    {
+      "id": "autopay_mandate",
+      "sender": "HDFCBK",
+      "body": "AutoPay e-mandate successfully registered for NETFLIX with maximum limit of INR 2,000.00 on HDFC Bank A/c XX1797",
+      "family": "mandate_lifecycle",
+      "expected": {
+        "capture": true,
+        "facts": ["mandate_lifecycle"],
+        "spend": null,
+        "review": false,
+        "note": "mandate ceiling is not a charge and never becomes spend; should reach the server as a typed fact"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "autopay observation, then localIgnore acknowledges intake; the limit extractor misses 'maximum limit of INR 2,000.00' wording so even the local observation loses the ceiling; server mandate parser never sees this message",
+        "server": "extractor, if reached directly, registers NETFLIX with a merchant-name flaw (trailing 'with'), ceiling 2000, unconfirmed 30-day cadence"
+      }
+    },
+    {
+      "id": "autopay_scheduled",
+      "sender": "HDFCBK",
+      "body": "Your Netflix AutoPay of INR 799 is scheduled for 17-10-26. The next payment due on 18-10-26.",
+      "family": "mandate_lifecycle",
+      "expected": {
+        "capture": true,
+        "facts": ["pending_or_failed_attempt"],
+        "spend": null,
+        "review": false
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "no spend; kept as a bill-type observation because of the due phrase",
+        "server": "no transaction match; subscription parser reads it as non_mandate_alert"
+      }
+    },
+    {
+      "id": "autopay_failed",
+      "sender": "HDFCBK",
+      "body": "AutoPay payment for NETFLIX failed due to insufficient balance. No money was debited.",
+      "family": "mandate_lifecycle",
+      "expected": {
+        "capture": true,
+        "facts": ["pending_or_failed_attempt"],
+        "spend": null,
+        "review": false,
+        "note": "failure is a distinct typed fact (renewal-at-risk signal), not disposable noise"
+      },
+      "baseline": {
+        "gate": "exclude",
+        "device": "the prefilter stops the message before any observation exists",
+        "server": "never receives it"
+      }
+    },
+    {
+      "id": "mandate_cancelled",
+      "sender": "HDFCBK",
+      "body": "Your NETFLIX AutoPay mandate has been cancelled successfully on HDFC A/c XX1797.",
+      "family": "mandate_lifecycle",
+      "expected": {
+        "capture": true,
+        "facts": ["mandate_lifecycle"],
+        "spend": null,
+        "review": false
+      },
+      "baseline": {
+        "gate": "exclude",
+        "device": "the prefilter stops the message; no cancellation fact exists anywhere",
+        "server": "never receives it"
+      }
+    },
+    {
+      "id": "refund_with_offer",
+      "sender": "HDFCBK",
+      "body": "Your refund of Rs.499 was credited to credit card XX4321. Get 5% cashback on next purchase!",
+      "family": "refund",
+      "expected": {
+        "capture": true,
+        "facts": ["posted_movement"],
+        "spend": null,
+        "review": false,
+        "note": "refund is not earned income and not a promotion"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "credit-card credit recognized as a Refund transfer; offer clause ignored",
+        "server": "conservative parser returns transfer/refund 499 on card 4321"
+      }
+    },
+    {
+      "id": "card_bill_payment",
+      "sender": "AXISBK",
+      "body": "Rs.12,000.00 debited from your Axis Bank A/c XX8801 towards your Axis Bank Credit Card bill payment on 12-11-26.",
+      "family": "card_repayment",
+      "expected": {
+        "capture": true,
+        "facts": ["posted_movement", "bill_payment"],
+        "spend": null,
+        "review": false,
+        "note": "repayment is a transfer plus a bill settlement relationship, never a second purchase"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "transfer labeled Credit card bill payment",
+        "server": "conservative parser returns transfer with card_bill kind, 12000"
+      }
+    },
+    {
+      "id": "outstanding_reminder",
+      "sender": "HDFCBK",
+      "body": "INR 4,000.00 outstanding on your HDFC credit card XX4321 as on 10-11-26. Pay by 15-11-26 to avoid interest.",
+      "family": "bill_obligation",
+      "expected": {
+        "capture": true,
+        "facts": ["bill_obligation"],
+        "spend": null,
+        "review": false,
+        "note": "outstanding updates the existing cycle without replacing the original statement total"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "no spend; lands as a generic unknown review item (no outstanding field exists)",
+        "server": "no transaction match"
+      }
+    },
+    {
+      "id": "kotak_settlement",
+      "sender": "KOTAKN",
+      "body": "Kotak Neo: Running A/c settlement payout of INR 15,500.00 initiated for your demat account. You should receive funds in A/c XX1234 by EOD.",
+      "family": "investment_settlement",
+      "expected": {
+        "capture": true,
+        "facts": ["posted_movement"],
+        "spend": null,
+        "review": false,
+        "note": "investment settlement/proceeds observation; never consumer spend or earned income"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "no spend observation; generic unknown review item",
+        "server": "no transaction match; broker settlement vocabulary does not include 'Kotak Neo'"
+      }
+    },
+    {
+      "id": "hdfc_txn_check_alert",
+      "sender": "VM-HDFCBK-S",
+      "body": "Transaction Check Alert! We tried to contact you twice to confirm the following txn: Rs.2,000.00 on Card XX4321 at AMAZON on 16-10-26. If this was not you, call 1860-266-2661",
+      "family": "security_or_service_alert",
+      "expected": {
+        "capture": true,
+        "facts": ["security_or_service_alert"],
+        "spend": null,
+        "review": false,
+        "note": "verification alert: must never create a transaction review action or a posted spend"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "no local transaction; generic unknown review item (the screenshot false-review case)",
+        "server": "conservative parser FALSE POSITIVE: posts a 2000 spend with merchant 'contact you twice to confirm the following'"
+      }
+    },
+    {
+      "id": "reversed_credit",
+      "sender": "HDFCBK",
+      "body": "Rs.500.00 reversed back to your HDFC Bank A/c XX1234 on 16-10-26.",
+      "family": "reversal",
+      "expected": {
+        "capture": true,
+        "facts": ["posted_movement"],
+        "spend": null,
+        "review": false,
+        "note": "reversal links to the original event; not earned income"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "transfer labeled Reversal",
+        "server": "conservative parser returns transfer/reversal 500"
+      }
+    },
+    {
+      "id": "upi_person_spend",
+      "sender": "HDFCBK",
+      "body": "Rs.250 debited from A/c XX1234 to Sujay Enterprises via UPI on 16-10-26. Ref 123456789012",
+      "family": "posted_movement",
+      "expected": {
+        "capture": true,
+        "facts": ["posted_movement"],
+        "spend": { "amount": 250, "kind": "spend" },
+        "review": false,
+        "note": "payment to a person is a cost; a namesake store is not a self-transfer without wider profile-name evidence"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "spend, but the merchant capture swallows the account clause ('A/c XX1234 to Sujay Enterprises') instead of the payee; with ownUserName 'Sujay Kumar' it stays spend because one matching token is not enough",
+        "server": "conservative parser returns spend with transferParty Sujay Enterprises and a junk merchant 'A/c XX1234 to Sujay Enterprises'-style clause"
+      }
+    },
+    {
+      "id": "salary_income",
+      "sender": "HDFCBK",
+      "body": "Your account XX1234 credited INR 50000 as salary on 16-10-26.",
+      "family": "earned_income",
+      "expected": {
+        "capture": true,
+        "facts": ["posted_movement"],
+        "spend": null,
+        "review": false,
+        "note": "explicit earned income wording is the only automatic income classification"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "income transaction labeled Salary",
+        "server": "conservative parser returns income entry"
+      }
+    },
+    {
+      "id": "atm_withdrawal",
+      "sender": "HDFCBK",
+      "body": "Rs.20000 withdrawn from HDFC Bank Card x8406 at ATM on 13/10/26.",
+      "family": "cash_movement",
+      "expected": {
+        "capture": true,
+        "facts": ["posted_movement"],
+        "spend": null,
+        "review": false,
+        "note": "own cash movement: excluded from spending, shown in cash flow"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "transfer labeled Cash withdrawal on debit card 8406",
+        "server": "conservative parser returns transfer/cash_withdrawal"
+      }
+    },
+    {
+      "id": "call_forwarding_vicare",
+      "sender": "VZ-ViCARE-S",
+      "body": "Call Forwarding is now active on your Vodafone idea number.",
+      "family": "security_or_service_alert",
+      "expected": {
+        "capture": false,
+        "facts": ["non_financial"],
+        "spend": null,
+        "review": false,
+        "note": "safely excluded with a recorded reason count, not silently dropped and never reviewed as a transaction"
+      },
+      "baseline": {
+        "gate": "exclude",
+        "device": "the transaction-only prefilter rejects it before capture",
+        "server": "never receives it"
+      }
+    },
+    {
+      "id": "cashback_offer_only",
+      "sender": "DM-PYTM-P",
+      "body": "Get Rs.100 cashback when you spend Rs.15,000 on Paytm app recharge offers. Apply now!",
+      "family": "promotion",
+      "expected": {
+        "capture": false,
+        "facts": ["promotion"],
+        "spend": null,
+        "review": false,
+        "note": "conditional offer language; no completed movement, no user review"
+      },
+      "baseline": {
+        "gate": "exclude",
+        "device": "prefilter promo words reject it",
+        "server": "never receives it"
+      }
+    },
+    {
+      "id": "otp_security",
+      "sender": "VM-HDFCBK-S",
+      "body": "OTP 483921 for txn of Rs.2,500 on your HDFC card XX4321. Do not share.",
+      "family": "security_or_service_alert",
+      "expected": {
+        "capture": false,
+        "facts": ["security_or_service_alert"],
+        "spend": null,
+        "review": false,
+        "note": "safety veto before persistence, AI or review; body must never leave the process"
+      },
+      "baseline": {
+        "gate": "exclude",
+        "device": "OTP/safety filter rejects before anything is written",
+        "server": "never receives it"
+      }
+    },
+    {
+      "id": "declined_attempt",
+      "sender": "ICICIB",
+      "body": "INR 500 purchase declined on credit card XX4321.",
+      "family": "posted_movement",
+      "expected": {
+        "capture": true,
+        "facts": ["pending_or_failed_attempt"],
+        "spend": null,
+        "review": false,
+        "note": "failed attempt is safe noise for spending; typed fact optional in a first release"
+      },
+      "baseline": {
+        "gate": "exclude",
+        "device": "prefilter nonSpendWords rejects it",
+        "server": "never receives it"
+      }
+    },
+    {
+      "id": "ambiguous_suffix_two_banks",
+      "sender": "HDFCBK",
+      "body": "Rs.3,000 debited from HDFC Bank A/c XX9080 on 16-10-26 for balance transfer to another bank.",
+      "family": "identity",
+      "expected": {
+        "capture": true,
+        "facts": ["posted_movement"],
+        "spend": null,
+        "review": true,
+        "note": "paired with ambiguous_suffix_two_banks_second; same last four at two institutions must stay independent observations and never merge automatically"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "bank debit without a named recipient stays an ambiguous review item; suffix captured per observation",
+        "server": "no transaction match (ambiguous account debit)"
+      }
+    },
+    {
+      "id": "ambiguous_suffix_two_banks_second",
+      "sender": "CANBNK",
+      "body": "Your Canara Bank account XX9080 was credited Rs.3,000 on 16-10-26 from HDFC Bank. Ref 908877665544.",
+      "family": "identity",
+      "expected": {
+        "capture": true,
+        "facts": ["posted_movement"],
+        "spend": null,
+        "review": false,
+        "note": "credit names both banks but no shared reference; automatic pairing must stay off until evidence clears the gates"
+      },
+      "baseline": {
+        "gate": "capture",
+        "device": "credit from another bank is a transfer observation on the Canara leg only",
+        "server": "conservative parser returns a transfer credit; no automatic pairing happens without a relationship feature"
+      }
+    }
+  ]
+}

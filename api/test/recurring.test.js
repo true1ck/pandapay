@@ -47,9 +47,11 @@ test('three regular monthly charges are detected', () => {
   assert.strictEqual(series[0].occurrenceCount, 3);
 });
 
-test('two charges are not enough', () => {
-  // Two of anything is a coincidence waiting to be disproved.
-  assert.strictEqual(detectRecurringSeries(monthly('Netflix', 649, '2026-05-03', 2)).length, 0);
+test('two anonymous charges are not enough', () => {
+  // Two of anything is a coincidence waiting to be disproved — for
+  // merchants without a brand-name match; known brands admit on two
+  // (see the brand test below).
+  assert.strictEqual(detectRecurringSeries(monthly('Blue Tokai', 350, '2026-05-03', 2)).length, 0);
 });
 
 test('the next charge is predicted one cadence after the last', () => {
@@ -178,8 +180,8 @@ test('merchant name formatting differences are one series, not several', () => {
   assert.strictEqual(series.length, 1);
   assert.strictEqual(
     series[0].displayName,
-    'netflix*subscription',
-    'the most recent spelling is what appears on the latest statement'
+    'Netflix',
+    'the known-brand catalog names the series canonically'
   );
 });
 
@@ -222,19 +224,120 @@ test('series are ordered by what they cost per year', () => {
   assert.strictEqual(series[0].displayName, 'Pricey');
 });
 
-test('annual cost converts any cadence to a yearly figure', () => {
-  assert.strictEqual(Math.round(annualCost({ typicalAmountInr: 649, cadenceDays: 30 })), 7896);
+test('annual cost follows calendar cycles, not 365/day blocks', () => {
+  // A ₹1,850 sub billed on the 1st of every month costs ₹22,200/year —
+  // twelve payments — not 1,850 × 365/30 = 22,508.33 with an imaginary
+  // 12th-and-a-bit payment. The buckets mirror cadenceLabel.
+  assert.strictEqual(Math.round(annualCost({ typicalAmountInr: 1850, cadenceDays: 30 })), 22200);
+  assert.strictEqual(Math.round(annualCost({ typicalAmountInr: 649, cadenceDays: 30 })), 7788);
+  assert.strictEqual(Math.round(annualCost({ typicalAmountInr: 999, cadenceDays: 91 })), 3996, 'quarterly ×4');
+  assert.strictEqual(Math.round(annualCost({ typicalAmountInr: 119, cadenceDays: 15 })), 3094, 'fortnightly ×26');
+  assert.strictEqual(Math.round(annualCost({ typicalAmountInr: 499, cadenceDays: 7 })), 25948, 'weekly ×52');
   assert.strictEqual(Math.round(annualCost({ typicalAmountInr: 1499, cadenceDays: 365 })), 1499);
+  // A 40-day cycle is not a calendar month: fall back to 365/days.
+  assert.strictEqual(
+    annualCost({ typicalAmountInr: 100, cadenceDays: 40 }),
+    (100 * 365) / 40,
+  );
 });
 
-test('broker funding and generic transfers never become recurring subscriptions', () => {
+test('engine status: confirmed while billing, needs_cadence on guesses', () => {
+  const { engineStatus } = require('../src/recurring');
+  const now = new Date('2026-10-21T12:00:00Z');
+  assert.strictEqual(
+    engineStatus({
+      cadence_days: 30,
+      cadence_confirmed: true,
+      detection_source: 'observed',
+      occurrence_count: 3,
+      first_seen_on: '2026-07-01',
+      last_seen_on: '2026-10-01',
+    }, now),
+    'confirmed',
+  );
+  assert.strictEqual(
+    engineStatus({ cadence_days: 30, cadence_confirmed: false, detection_source: 'mandate', occurrence_count: 1 }, now),
+    'needs_cadence',
+  );
+});
+
+test('engine status: unused mandates and at-risk series', () => {
+  const { engineStatus } = require('../src/recurring');
+  const now = new Date('2026-10-21T12:00:00Z');
+  // Mandate registered in March, never billed: past 1.5 cycles.
+  assert.strictEqual(
+    engineStatus({
+      cadence_days: 30,
+      cadence_confirmed: true,
+      detection_source: 'mandate',
+      occurrence_count: 1,
+      first_seen_on: '2026-03-01',
+      last_seen_on: '2026-03-01',
+    }, now),
+    'unused',
+  );
+  // It used to bill; the charges stopped.
+  assert.strictEqual(
+    engineStatus({
+      cadence_days: 30,
+      cadence_confirmed: true,
+      detection_source: 'observed',
+      occurrence_count: 4,
+      first_seen_on: '2025-06-01',
+      last_seen_on: '2026-06-01',
+    }, now),
+    'at_risk',
+  );
+  // A user-entered date that already passed is the user's own lapsed claim.
+  assert.strictEqual(
+    engineStatus({
+      cadence_days: 30,
+      cadence_confirmed: true,
+      detection_source: 'manual',
+      occurrence_count: 0,
+      first_seen_on: null,
+      last_seen_on: null,
+      next_expected_on: '2026-08-01',
+    }, now),
+    'at_risk',
+  );
+});
+
+test('broker brands are allowed as subscriptions; transfer wording is not', () => {
+  // Broker AMC/SIP-style recurring debits are spend the user asked to see
+  // ('zerodha should show'); generic transfer labels still never group.
+  const zamc = detectRecurringSeries(monthly('Zerodha', 75, '2026-05-01', 3));
+  assert.equal(zamc.length, 1);
   const rows = [
     txn('Bank transfer', 5000, '2026-05-01'),
     txn('Bank transfer', 5000, '2026-05-31'),
     txn('Bank transfer', 5000, '2026-06-30'),
-    txn('Groww', 5000, '2026-05-01'),
-    txn('Groww', 5000, '2026-05-31'),
-    txn('Groww', 5000, '2026-06-30'),
+  ];
+  assert.equal(detectRecurringSeries(rows).length, 0);
+});
+
+test('known brands are admitted on two charges and get the canonical name', () => {
+  const rows = [
+    txn('OPENAILLC', 1999, '2026-08-01'),
+    txn('OpenAILLC', 1999, '2026-08-31'),
+  ];
+  const series = detectRecurringSeries(rows);
+  assert.strictEqual(series.length, 1, 'two brand-matched charges qualify');
+  assert.strictEqual(series[0].displayName, 'OpenAI', 'display name comes from the catalog');
+});
+
+test('unknown merchants still need three charges', () => {
+  assert.strictEqual(detectRecurringSeries(monthly('Blue Tokai', 350, '2026-05-03', 2)).length, 0);
+});
+
+test('account-movement wording never becomes a recurring subscription', () => {
+  const rows = [
+    txn('Bank transfer', 5000, '2026-05-01'),
+    txn('Bank transfer', 5000, '2026-05-31'),
+    txn('Bank transfer', 5000, '2026-06-30'),
+    txn('Transfer to SIP account', 3000, '2026-04-01'),
+    txn('Transfer to SIP account', 3000, '2026-05-01'),
+    txn('Transfer to SIP account', 3000, '2026-06-01'),
   ];
   assert.equal(detectRecurringSeries(rows).length, 0);
 });

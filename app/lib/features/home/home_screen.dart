@@ -23,6 +23,7 @@ import '../insights/credit_utilization_screen.dart';
 import '../insights/credit_utilization_ui.dart';
 import '../insights/payments_due_screen.dart'
     show DuePayment, paymentsDueProvider;
+import '../../data/card_bill_ledger.dart' show CardBill;
 import '../insights/spend_trends_screen.dart' show SpendingDonut;
 import '../insights/spending_visuals.dart' show spendingCategoryVisual;
 import '../import/import_hub_screen.dart';
@@ -3203,9 +3204,15 @@ class _HomeDuesAndReminders extends ConsumerWidget {
     final rows =
         ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
     final catalogue = ref.watch(catalogueProvider).valueOrNull ?? const [];
+    final now = ref.watch(clockProvider).now();
     var total = const Money.zero();
     for (final row in rows) {
-      total += row.loggedThisCycle;
+      final bill = row.bill;
+      if (bill != null && bill.amountDue != null) {
+        total += bill.outstanding ?? const Money.zero();
+      } else {
+        total += row.loggedThisCycle;
+      }
     }
 
     return Padding(
@@ -3287,6 +3294,7 @@ class _HomeDuesAndReminders extends ConsumerWidget {
                     product: catalogue.firstWhereOrNull(
                       (product) => product.id == rows[index].card.cardProductId,
                     ),
+                    now: now,
                   ),
                 ),
               ),
@@ -3300,7 +3308,11 @@ class _HomeDuesAndReminders extends ConsumerWidget {
                 child: Row(
                   children: [
                     Text(
-                      'Tracked spend on these cards',
+                      rows.any(
+                            (row) => row.bill?.amountDue != null,
+                          )
+                          ? 'Outstanding on these cards'
+                          : 'Tracked spend on these cards',
                       style: BambooFonts.ui(12, color: BambooInk.ink500),
                     ),
                     const Spacer(),
@@ -3325,8 +3337,13 @@ class _HomeDuesAndReminders extends ConsumerWidget {
 class _HomeDueCard extends StatelessWidget {
   final DuePayment row;
   final CardProduct? product;
+  final DateTime now;
 
-  const _HomeDueCard({required this.row, required this.product});
+  const _HomeDueCard({
+    required this.row,
+    required this.product,
+    required this.now,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -3334,6 +3351,9 @@ class _HomeDueCard extends StatelessWidget {
     final name = row.card.nickname?.isNotEmpty == true
         ? row.card.nickname!
         : row.card.cardName;
+    final bill = row.bill;
+    final outstanding = bill?.outstanding;
+    final showsBill = bill != null && bill.isCurrentAsOf(now);
     return SizedBox(
       width: 236,
       child: Container(
@@ -3394,20 +3414,76 @@ class _HomeDueCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 3),
-            Text(
-              'Logged spend this cycle',
-              style: BambooFonts.ui(11, color: BambooInk.ink500),
-            ),
-            MoneyText(
-              row.loggedThisCycle,
-              confidence: Confidence.estimated,
-              style: BambooFonts.money(18, color: BambooInk.ink900),
-              hidePaise: true,
-              showConfidenceIcon: false,
-            ),
+            if (showsBill) ...[
+              Text(
+                'Bill · ${DateFormat('dd MMM').format(bill.statementDate)}',
+                style: BambooFonts.ui(11, color: BambooInk.ink500),
+              ),
+              MoneyText(
+                bill.isPaid ? bill.amountDue! : (outstanding ?? bill.paidToward),
+                confidence: Confidence.estimated,
+                style: BambooFonts.money(18, color: BambooInk.ink900),
+                hidePaise: true,
+                showConfidenceIcon: false,
+              ),
+              const SizedBox(height: 2),
+              _BillStateChip(bill: bill),
+            ] else ...[
+              Text(
+                'Logged spend this cycle',
+                style: BambooFonts.ui(11, color: BambooInk.ink500),
+              ),
+              MoneyText(
+                row.loggedThisCycle,
+                confidence: Confidence.estimated,
+                style: BambooFonts.money(18, color: BambooInk.ink900),
+                hidePaise: true,
+                showConfidenceIcon: false,
+              ),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+/// One line under the bill amount: full "Paid", partial progress, or the
+/// requested "minimum due" nudge when the bill is only part-covered.
+class _BillStateChip extends StatelessWidget {
+  final CardBill bill;
+
+  const _BillStateChip({required this.bill});
+
+  @override
+  Widget build(BuildContext context) {
+    if (bill.amountDue == null) {
+      return Text(
+        bill.paidToward.isZero
+            ? 'Amount not seen in SMS'
+            : 'Payment ${bill.paidToward.format(hidePaise: true)}',
+        style: BambooFonts.ui(11, color: BambooInk.ink500),
+      );
+    }
+    if (bill.isPaid) {
+      return Text(
+        'Paid ✓',
+        style: BambooFonts.ui(
+          11.5,
+          weight: FontWeight.w700,
+          color: BambooInk.rankBadgeInk,
+        ),
+      );
+    }
+    if (bill.hasPayments) {
+      return Text(
+        '${bill.paidToward.format(hidePaise: true)} of ${bill.amountDue!.format(hidePaise: true)} paid',
+        style: BambooFonts.ui(11, color: BambooInk.ink500),
+      );
+    }
+    return Text(
+      'Unpaid',
+      style: BambooFonts.ui(11, color: BambooInk.ink500),
     );
   }
 }

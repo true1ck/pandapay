@@ -7,6 +7,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/card_bill_ledger.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/user_cards_repository.dart';
 
@@ -38,11 +39,19 @@ class DuePayment {
   /// real balance is higher.
   final Money loggedThisCycle;
 
+  /// The issuer bill state the SMS engine derived for this card's newest
+  /// statement cycle: bill amount, due date and how the user's card-bill
+  /// payments cover it. Null when no bill SMS has been imported
+  /// (or the card's last4 is unknown) — the UI must then fall back to
+  /// [loggedThisCycle] with its honest "estimated" labelling.
+  final CardBill? bill;
+
   const DuePayment({
     required this.card,
     required this.dueOn,
     required this.daysUntilDue,
     required this.loggedThisCycle,
+    this.bill,
   });
 
   /// PandaPay cannot verify an issuer mandate, so every card needs the user
@@ -50,15 +59,30 @@ class DuePayment {
   bool get needsAttention => true;
 }
 
-/// Design 13's list, soonest first.
+/// Per-card bill ledger from SMS (bill-generated messages + payment
+/// receipts), used to show the issuer's actual bill instead of the logged
+/// estimate. Empty when nothing has been imported.
 final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
   ref.watch(transactionsProvider);
   final repo = ref.watch(userCardsRepositoryProvider);
   final cards = await ref.watch(myCardsProvider.future);
   final now = ref.watch(clockProvider).now();
   final today = DateTime(now.year, now.month, now.day);
+  final ledger = await ref.watch(cardBillLedgerProvider.future);
 
-  final active = cards.where((c) => !c.isArchived && c.dueDay != null).toList();
+  final active = cards
+      .where(
+        (c) =>
+            !c.isArchived &&
+            (c.dueDay != null ||
+                // A bill SMS may anchor the ledger even without a synced due
+                // day, but only when its cycle anchor was explicitly stated;
+                // a received-date anchor plus a due date from a mere reminder
+                // is exactly the unverified claim the tests reject.
+                (ledger[c.id]?.current != null &&
+                    ledger[c.id]!.current!.statementDateVerified)),
+      )
+      .toList();
   if (active.isEmpty) return const [];
 
   final earliestCycleStart = DateTime(now.year, now.month - 2, 1);
@@ -73,9 +97,21 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
 
   final rows = <DuePayment>[];
   for (final card in active) {
-    final dueOn = nextOccurrenceOf(card.dueDay!, today);
+    final bill = ledger[card.id]?.current;
+    final DateTime dueOn;
+    if (bill?.dueDate != null) {
+      dueOn = bill!.dueDate!;
+    } else if (card.dueDay != null) {
+      dueOn = nextOccurrenceOf(card.dueDay!, today);
+    } else if (bill != null) {
+      // No stored due day and the bill SMS omitted the date; the next
+      // statement date is the best available estimate of the due date.
+      dueOn = nextOccurrenceOf(bill.statementDate.day, today);
+    } else {
+      continue;
+    }
     final cycleStart = card.statementDay == null
-        ? null
+        ? (bill?.statementDate)
         : previousOccurrenceOf(card.statementDay!, today);
 
     var logged = const Money.zero();
@@ -98,6 +134,7 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
         dueOn: dueOn,
         daysUntilDue: dueOn.difference(today).inDays,
         loggedThisCycle: logged,
+        bill: bill,
       ),
     );
   }
@@ -223,6 +260,7 @@ class _ComingUpRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final card = row.card;
+    final bill = row.bill;
 
     return Container(
       decoration: BoxDecoration(
@@ -272,7 +310,40 @@ class _ComingUpRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpace.sm),
-          const Icon(Icons.chevron_right_rounded, color: BambooInk.ink500),
+          if (bill != null)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  bill.amountDue == null
+                      ? 'Amount not seen'
+                      : (bill.amountDue!.format(hidePaise: true)),
+                  style: BambooFonts.money(15, color: BambooInk.ink900),
+                ),
+                const SizedBox(height: 2),
+                if (bill.isPaid)
+                  Text(
+                    'Paid ✓',
+                    style: BambooFonts.ui(
+                      12,
+                      weight: FontWeight.w600,
+                      color: BambooInk.rankBadgeInk,
+                    ),
+                  )
+                else if (bill.hasPayments)
+                  Text(
+                    '${bill.paidToward.format(hidePaise: true)} paid',
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  )
+                else if (bill.minimumDue != null)
+                  Text(
+                    'Min ${bill.minimumDue!.format(hidePaise: true)}',
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
+              ],
+            )
+          else
+            const Icon(Icons.chevron_right_rounded, color: BambooInk.ink500),
         ],
       ),
     );

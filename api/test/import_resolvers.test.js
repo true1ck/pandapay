@@ -144,7 +144,7 @@ test('syncs statement day from the historical statement alert date', async () =>
 
   assert.equal(result.updated, true);
   assert.equal(result.detected.day, 5);
-  assert.deepEqual(client.calls[1].params, [5, 'hdfc-8708', 'user-1']);
+  assert.deepEqual(client.calls[1].params, [5, 'hdfc-8708', 'user-1', false]);
   assert.match(client.calls[1].sql, /SET statement_day = \$1/);
 });
 
@@ -200,6 +200,134 @@ test('accepts a current-month statement only when the generation date is printed
   });
   assert.equal(result.updated, true);
   assert.equal(result.detected.day, 15);
+});
+
+test('learns a printed billing day no matter how old the SMS is', async () => {
+  const client = fakeClient([[{ id: 'axis-card' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    return client.calls.length === 1
+      ? { rows: [{ id: 'axis-card' }] }
+      : { rows: [{ id: 'axis-card' }], rowCount: 1 };
+  };
+  const result = await syncStatementDayFromSms(client, 'user-1', {
+    body: 'Your Axis credit card ending 7105 statement was generated on 15-May-2026. Due on 02-Jun-2026.',
+    observedAt: new Date('2026-10-18T10:00:00.000Z'),
+    asOf: new Date('2026-10-20T10:00:00.000Z'),
+  });
+  assert.equal(result.updated, true);
+  assert.equal(result.detected.day, 15);
+});
+
+test('keeps the printed period end preferred over the receive fallback', async () => {
+  const client = fakeClient([[{ id: 'hdfc-8708' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    return client.calls.length === 1
+      ? { rows: [{ id: 'hdfc-8708' }] }
+      : { rows: [{ id: 'hdfc-8708' }], rowCount: 1 };
+  };
+  const result = await syncStatementDayFromSms(client, 'user-1', {
+    body: 'Your statement for HDFC Bank Credit Card ending XX8708 for the period 04-Sep-2026 to 03-Oct-2026 is ready.',
+    observedAt: new Date('2026-10-05T10:00:00.000Z'),
+    asOf: new Date('2026-10-20T10:00:00.000Z'),
+  });
+  assert.equal(result.updated, true);
+  assert.equal(result.detected.day, 3);
+});
+
+test('learns a due day from an older bill alert', async () => {
+  const body = 'HDFC Bank Credit Card ending XX8708. Payment due date: 20/04/2026.';
+  const client = fakeClient([[{ id: 'hdfc-8708' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    if (client.calls.length === 1) return { rows: [{ id: 'hdfc-8708' }] };
+    return { rows: [{ id: 'hdfc-8708' }], rowCount: 1 };
+  };
+
+  const result = await syncDueDayFromSms(client, 'user-1', {
+    body,
+    observedAt: new Date('2026-09-05T10:00:00.000Z'),
+    asOf: new Date('2026-10-20T10:00:00.000Z'),
+  });
+
+  assert.equal(result.updated, true);
+  assert.equal(result.detected.day, 20);
+  assert.deepEqual(client.calls[1].params, [20, 'hdfc-8708', 'user-1']);
+});
+
+test('a newer printed billing day heals a previously SMS-learned one', async () => {
+  const client = fakeClient([[{ id: 'axis-card' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    return client.calls.length === 1
+      ? { rows: [{ id: 'axis-card' }] }
+      : { rows: [], rowCount: 1 };
+  };
+  const result = await syncStatementDayFromSms(client, 'user-1', {
+    body: 'Your Axis credit card ending 7105 statement was generated on 05-Jun-2026.',
+    observedAt: new Date('2026-09-18T10:00:00.000Z'),
+    asOf: new Date('2026-10-20T10:00:00.000Z'),
+  });
+  assert.equal(result.updated, true);
+  assert.equal(result.detected.day, 5);
+  assert.match(client.calls[1].sql, /statement_day_source = 'sms'/);
+  // explicit flag as the last parameter drives the heal/keep decision
+  assert.deepEqual(client.calls[1].params[3], true);
+  assert.match(client.calls[1].sql, /statement_day IS DISTINCT FROM \$1/);
+});
+
+test('a receive-date fallback never overwrites an existing billing day', async () => {
+  const body = 'Your credit card ending 8708 statement is generated. Due on: 20/10/2026.';
+  const client = fakeClient([[{ id: 'hdfc-8708' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    return client.calls.length === 1
+      ? { rows: [{ id: 'hdfc-8708' }] }
+      : { rows: [], rowCount: 0 };
+  };
+  const result = await syncStatementDayFromSms(client, 'user-1', {
+    body,
+    observedAt: new Date('2026-09-20T10:00:00.000Z'),
+    asOf: new Date('2026-10-20T10:00:00.000Z'),
+  });
+  assert.equal(result.updated, false);
+  assert.equal(result.detected.day, 20);
+  // fallback tier cannot replace an existing value
+  assert.deepEqual(client.calls[1].params[3], false);
+});
+
+test('a user-saved billing day is never overwritten by an SMS heal', async () => {
+  const client = fakeClient([[{ id: 'axis-card' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    return client.calls.length === 1
+      ? { rows: [{ id: 'axis-card' }] }
+      : { rows: [], rowCount: 0 };
+  };
+  const result = await syncStatementDayFromSms(client, 'user-1', {
+    body: 'Your Axis credit card ending 7105 statement was generated on 05-Jun-2026.',
+    observedAt: new Date('2026-09-18T10:00:00.000Z'),
+    asOf: new Date('2026-10-20T10:00:00.000Z'),
+  });
+  assert.equal(result.updated, false);
+});
+
+test('a user-saved due day is never overwritten by an SMS heal', async () => {
+  const body = 'Your statement for HDFC Bank Credit Card ending XX8708 is generated. Due on: 20/10/2026.';
+  const client = fakeClient([[{ id: 'hdfc-8708' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    return client.calls.length === 1
+      ? { rows: [{ id: 'hdfc-8708' }] }
+      : { rows: [], rowCount: 0 };
+  };
+  const result = await syncDueDayFromSms(client, 'user-1', {
+    body,
+    observedAt: new Date('2026-09-05T10:00:00.000Z'),
+    asOf: new Date('2026-10-20T10:00:00.000Z'),
+  });
+  assert.equal(result.updated, false);
 });
 
 test('category fallback recognises a fuel-station merchant when no rule exists', async () => {

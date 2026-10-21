@@ -1,12 +1,15 @@
 const { normalizeMerchant } = require('./reward_math');
+const { brandFor } = require('./brand_catalog');
 
 // Financial-account movements must not become subscriptions just because a
 // bank statement repeats them. Broker funding, SIPs, mutual-fund purchases,
 // and generic transfer labels are money movements, not recurring services.
-// Keep this separate from isUsableSubscriptionName: a user may still choose
-// to manually track a legitimate paid product whose name happens to contain
-// a broker brand.
-const FINANCIAL_MOVEMENT_NAME = /\b(?:bank\s+transfer|transfer\s+to|transfer\s+between|cash\s+withdrawal|credit\s+card\s+bill\s+payment|investment\s+contribution|money\s+received|salary|refund|cashback|dividend|zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|demat|trading|broker(?:age|ing)?|portfolio|mutual\s+fund|systematic\s+investment|sip|stocks?|shares?|equity|investment)\b/i;
+// Broker brand names alone (Zerodha, Groww, ...) are allowed through: their
+// AMC/maintenance fees are genuine paid subscriptions, and a recurring
+// SIP-like bank debit is spend the user may want surfaced. Investment
+// WORDING is still blocked, and message-level funding checks
+// (isInvestmentFundingMessage) still guard at ingestion.
+const FINANCIAL_MOVEMENT_NAME = /\b(?:bank\s+transfer|transfer\s+to|transfer\s+between|cash\s+withdrawal|credit\s+card\s+bill\s+payment|investment\s+contribution|money\s+received|salary|refund|cashback|dividend|demat|trading|broker(?:age|ing)?|portfolio|mutual\s+fund|systematic\s+investment|sip|stocks?|shares?|equity|investment)\b/i;
 
 const FINANCIAL_PROVIDER = /\b(?:zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|demat|trading|broker(?:age|ing)?|portfolio)\b/i;
 const INVESTMENT_INTENT = /\b(?:sip|systematic\s+investment|mutual\s+fund|investment|invested|invest(?:ment)?\s+account|add(?:ing|ed)?\s+(?:money|funds?)|funds?\s+(?:added|credited|transferred|deposited)|top[ -]?up|fund(?:ed|ing)|buy|bought|purchase(?:d)?|units?|stocks?|shares?|equity)\b/i;
@@ -260,7 +263,13 @@ function detectRecurringSeries(rows, { now = new Date() } = {}) {
 
   const series = [];
   for (const [key, group] of byMerchant) {
-    if (group.length < MIN_OCCURRENCES) continue;
+    // Known brands are admitted on two matching charges: a brand-name match
+    // is strong prior evidence, and two hugs the pattern one transparent
+    // step below the anonymous-merchant rule of three. Everything else
+    // keeps the conservative rule.
+    const brand = brandFor(group[group.length - 1]?.merchant_name);
+    const minOccurrences = brand ? 2 : MIN_OCCURRENCES;
+    if (group.length < minOccurrences) continue;
 
     const amounts = group.map((r) => Number(r.amount_inr));
     const typical = median(amounts);
@@ -272,7 +281,7 @@ function detectRecurringSeries(rows, { now = new Date() } = {}) {
     const consistent = group.filter(
       (r) => Math.abs(Number(r.amount_inr) - typical) <= typical * AMOUNT_TOLERANCE
     );
-    if (consistent.length < MIN_OCCURRENCES) continue;
+    if (consistent.length < minOccurrences) continue;
 
     const dates = consistent.map((r) => new Date(r.occurred_at)).sort((a, b) => a - b);
     const gaps = [];
@@ -294,10 +303,10 @@ function detectRecurringSeries(rows, { now = new Date() } = {}) {
     const latest = consistent[consistent.length - 1];
     series.push({
       merchantKey: key,
-      // The most recent spelling, not the first: merchants rename
-      // themselves and the newest string is the one the user will
-      // recognise on their statement.
-      displayName: latest.merchant_name,
+      // The canonical catalog name when the merchant matches a known brand
+      // ('OPENAILLC' → 'OpenAI'), otherwise the most recent spelling: the
+      // one the user will recognise on their statement.
+      displayName: brand?.name ?? latest.merchant_name,
       typicalAmountInr: typical,
       cadenceDays: Math.round(cadence),
       occurrenceCount: consistent.length,
@@ -313,23 +322,90 @@ function detectRecurringSeries(rows, { now = new Date() } = {}) {
 
   // Biggest annual cost first — that is the order in which someone
   // reviewing their subscriptions wants to see them.
-  series.sort((a, b) => {
-    const aYear = (a.typicalAmountInr * 365) / a.cadenceDays;
-    const bYear = (b.typicalAmountInr * 365) / b.cadenceDays;
-    return bYear - aYear;
-  });
+  series.sort((a, b) => annualCost(b) - annualCost(a));
   return series;
 }
 
 /** What a series costs per year, at its detected cadence. */
 function annualCost(series) {
-  return (series.typicalAmountInr * 365) / series.cadenceDays;
+  return series.typicalAmountInr * annualMultiplier(series.cadenceDays);
+}
+
+/**
+ * Charges per year implied by a cadence.
+ *
+ * `365 / cadenceDays` is wrong for calendar cycles: a ₹1,499 subscription
+ * billed monthly costs ₹17,988/year, not 1,499 × 365/30 = 18,239. Calendar
+ * billing (the 1st of every month) runs on 12/4/2/1 annual payments, so the
+ * estimate is bucketed to the same named cycles the UI labels use
+ * (cadenceLabel). Only genuinely off-calendar cadences (e.g. exact 28-day
+ * cycles) fall back to 365/days — that over-counts by ~2% there, which is
+ * the honest price of an odd cycle.
+ */
+function annualMultiplier(cadenceDays) {
+  if (cadenceDays >= 350) return 1; // yearly
+  if (cadenceDays >= 175) return 2; // ~6 months
+  if (cadenceDays >= 85) return 4; // ~quarterly
+  if (cadenceDays >= 26 && cadenceDays <= 32) return 12; // monthly
+  if (cadenceDays >= 13 && cadenceDays <= 17) return 26; // fortnightly
+  if (cadenceDays >= 5 && cadenceDays <= 10) return 52; // weekly
+  return 365 / cadenceDays;
+}
+
+/**
+ * One honest state per series, computed at read time from stored facts.
+ * Replaces the previous triple-coincidence of cadence flags, renewal passing
+ * and staleness that three UI checks had to reverse-engineer.
+ *
+ * - confirmed: the cadence is proven (user edit, mandate text, or ≥3 real
+ *   charges) and the series is currently billing.
+ * - needs_cadence: merchant and amount are known but the cycle is a guess;
+ *   render the per-charge amount only, never an annual figure.
+ * - unused: an AutoPay mandate was registered but no charges followed for
+ *   longer than the mandate's own cycle — show it registered, not spending.
+ * - at_risk: it used to bill and now hasn't, past one-and-a-half cycles —
+ *   cancelled, paused, or a missed charge; worth one review.
+ */
+function engineStatus(row, now = new Date()) {
+  const cadence = Number(row.cadenceDays ?? row.cadence_days) || 30;
+  if (row.cadenceConfirmed === false || row.cadence_confirmed === false) {
+    return 'needs_cadence';
+  }
+  // A saved renewal date that already passed is direct evidence the saved
+  // schedule didn't happen — the user must re-assert it. This applies to
+  // user-edited dates as well: their lapsed claim is their data, and it
+  // stays flagged rather than being silently projected forward.
+  const savedNext = row.nextExpectedOn ?? row.next_expected_on;
+  if (savedNext) {
+    const today = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+    if (new Date(`${savedNext}T00:00:00Z`) < today) return 'at_risk';
+  }
+  // Manually entered subscriptions are user-asserted facts, not observed
+  // patterns: they stay confirmed on trust.
+  if (row.detectionSource === 'manual' || row.detection_source === 'manual') {
+    return 'confirmed';
+  }
+  const source = row.detectionSource ?? row.detection_source;
+  const anchor = row.lastSeenOn ?? row.last_seen_on ?? row.firstSeenOn ?? row.first_seen_on;
+  if (!anchor) return 'confirmed';
+  const age = daysBetween(new Date(anchor), now);
+  if (age > Math.round(cadence * 1.5)) {
+    const occurrences = Number(row.occurrenceCount ?? row.occurrence_count) || 0;
+    return source === 'mandate' && occurrences <= 1 ? 'unused' : 'at_risk';
+  }
+  return 'confirmed';
 }
 
 module.exports = {
   detectRecurringSeries,
   merchantSeriesKey,
   annualCost,
+  annualMultiplier,
+  engineStatus,
   nextExpectedAfter,
   isUsableSubscriptionName,
   isDisplayableSubscriptionRecord,

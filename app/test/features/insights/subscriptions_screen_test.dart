@@ -72,7 +72,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('1 subscription'), findsOneWidget);
+    expect(find.text('1 active'), findsOneWidget);
     expect(find.text('OpenAI'), findsOneWidget);
     expect(find.textContaining('Renews around 1 Nov 2026'), findsOneWidget);
     expect(find.text('7308080808'), findsNothing);
@@ -129,7 +129,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('1 subscription'), findsOneWidget);
+      expect(find.text('1 active'), findsOneWidget);
       expect(find.text('OpenAILLC'), findsOneWidget);
       expect(find.text('AutoPay'), findsOneWidget);
       expect(find.text('Axis Bank Card XX7105'), findsOneWidget);

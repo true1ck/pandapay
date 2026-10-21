@@ -141,10 +141,21 @@ class SubscriptionsScreen extends ConsumerWidget {
                 onRefresh: () async => ref.invalidate(recurringReportProvider),
               );
             }
-            final totalAnnual = subscriptions.fold(
-              const Money.zero(),
-              (total, subscription) => total + subscription.annualCost,
-            );
+            // The engine split them; the screen groups the same truth.
+            final billing = subscriptions
+                .where((s) => s.status == 'confirmed')
+                .toList(growable: false);
+            final flagged = subscriptions
+                .where(
+                  (s) => s.status == 'at_risk' || s.status == 'unused',
+                )
+                .toList(growable: false);
+            final needsCadence = subscriptions
+                .where((s) => s.status == 'needs_cadence')
+                .toList(growable: false);
+            // The server total already counts only proven, still-billing
+            // series; re-folding here would put guesses back in the headline.
+            final totalAnnual = data.totalAnnual;
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(recurringReportProvider),
               child: ListView(
@@ -156,11 +167,37 @@ class SubscriptionsScreen extends ConsumerWidget {
                   AppShell.navClearance,
                 ),
                 children: [
-                  _TotalCard(series: subscriptions, totalAnnual: totalAnnual),
+                  _TotalCard(
+                    series: billing,
+                    totalAnnual: totalAnnual,
+                    pendingCount: flagged.length + needsCadence.length,
+                  ),
                   const SizedBox(height: AppSpace.lg),
-                  for (var i = 0; i < subscriptions.length; i++) ...[
-                    _SeriesCard(series: subscriptions[i], toneIndex: i),
+                  for (var i = 0; i < billing.length; i++) ...[
+                    _SeriesCard(series: billing[i], toneIndex: i),
                     const SizedBox(height: AppSpace.md),
+                  ],
+                  if (flagged.isNotEmpty) ...[
+                    _SectionLabel(
+                      'Flagged — watch or fix',
+                      Icons.flag_rounded,
+                    ),
+                    const SizedBox(height: AppSpace.xs),
+                    for (var i = 0; i < flagged.length; i++) ...[
+                      _SeriesCard(series: flagged[i], toneIndex: i),
+                      const SizedBox(height: AppSpace.md),
+                    ],
+                  ],
+                  if (needsCadence.isNotEmpty) ...[
+                    _SectionLabel(
+                      'Confirm the cadence',
+                      Icons.schedule_rounded,
+                    ),
+                    const SizedBox(height: AppSpace.xs),
+                    for (var i = 0; i < needsCadence.length; i++) ...[
+                      _SeriesCard(series: needsCadence[i], toneIndex: i),
+                      const SizedBox(height: AppSpace.md),
+                    ],
                   ],
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpace.xs),
@@ -795,10 +832,42 @@ class _InfoPill extends StatelessWidget {
   }
 }
 
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  const _SectionLabel(this.label, this.icon);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.md, bottom: AppSpace.xs),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: BambooInk.ink500),
+          const SizedBox(width: AppSpace.xs),
+          Text(
+            label,
+            style: BambooFonts.ui(
+              12,
+              weight: FontWeight.w700,
+              color: BambooInk.ink700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TotalCard extends StatelessWidget {
   final List<RecurringSeries> series;
   final Money totalAnnual;
-  const _TotalCard({required this.series, required this.totalAnnual});
+  final int pendingCount;
+  const _TotalCard({
+    required this.series,
+    required this.totalAnnual,
+    this.pendingCount = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -854,7 +923,8 @@ class _TotalCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${series.length} subscription${series.length == 1 ? '' : 's'}',
+                        '${series.length} active'
+                        '${pendingCount > 0 ? ' · $pendingCount to review' : ''}',
                         style: BambooFonts.ui(
                           11.5,
                           weight: FontWeight.w600,
@@ -959,6 +1029,25 @@ class _SeriesCard extends ConsumerWidget {
     return next;
   }
 
+  /// The yearly line is only honest once the cycle is proven. Until then the
+  /// per-cycle amount is what's real; a fabricated annual number built on a
+  /// guessed cadence would bleed into the headline later.
+  String get _costLine {
+    if (series.typicalAmount.paise <= 0) {
+      return 'Amount not stated in the AutoPay alert';
+    }
+    final perCycle =
+        '₹${series.typicalAmount.format(hidePaise: true)} this cycle';
+    switch (series.status) {
+      case 'needs_cadence':
+        return '$perCycle — confirm the cadence to estimate the year';
+      case 'unused':
+        return '$perCycle at registration, never charged';
+      default:
+        return '${series.annualCost.format(hidePaise: true)} estimated per year';
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final next = series.nextExpectedOn;
@@ -1052,10 +1141,17 @@ class _SeriesCard extends ConsumerWidget {
                     color: _subscriptionAccent,
                     background: _subscriptionTint,
                   ),
-                if (series.needsReview)
+                if (series.status == 'at_risk')
                   const _InfoPill(
                     icon: Icons.warning_amber_rounded,
                     label: 'Needs review',
+                    color: Color(0xFF9B6500),
+                    background: Color(0xFFFFF3D6),
+                  ),
+                if (series.status == 'unused')
+                  const _InfoPill(
+                    icon: Icons.bolt_rounded,
+                    label: 'No charges yet',
                     color: Color(0xFF9B6500),
                     background: Color(0xFFFFF3D6),
                   ),
@@ -1063,12 +1159,10 @@ class _SeriesCard extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpace.xs),
             Text(
-              series.typicalAmount.paise > 0
-                  ? '${series.annualCost.format(hidePaise: true)} estimated per year'
-                  : 'Amount not stated in the AutoPay alert',
+              _costLine,
               style: BambooFonts.ui(12, color: BambooInk.ink500),
             ),
-            if (next != null && !series.needsReview) ...[
+            if (next != null && series.status == 'confirmed') ...[
               const SizedBox(height: AppSpace.xs),
               Row(
                 children: [
@@ -1091,7 +1185,7 @@ class _SeriesCard extends ConsumerWidget {
                 ],
               ),
             ],
-            if (series.needsReview &&
+            if (series.status == 'at_risk' &&
                 !series.hasPastRenewal &&
                 series.lastSeenOn != null) ...[
               const SizedBox(height: AppSpace.xs),
@@ -1116,7 +1210,33 @@ class _SeriesCard extends ConsumerWidget {
                 ],
               ),
             ],
-            if (series.needsReview && series.hasPastRenewal) ...[
+            if (series.status == 'unused') ...[
+              const SizedBox(height: AppSpace.xs),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.pause_circle_outline_rounded,
+                    size: 16,
+                    color: Color(0xFF9B6500),
+                  ),
+                  const SizedBox(width: AppSpace.xs),
+                  Expanded(
+                    child: Text(
+                      series.lastSeenOn == null
+                          ? 'Registered on AutoPay, but no charge was detected'
+                          : 'Registered on AutoPay, but no charge since '
+                                '${_formatDate(series.lastSeenOn!)}',
+                      style: BambooFonts.ui(
+                        12,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (series.status == 'at_risk' && series.hasPastRenewal) ...[
               const SizedBox(height: AppSpace.xs),
               Row(
                 children: [
@@ -1401,3 +1521,4 @@ class _SeriesCard extends ConsumerWidget {
     }
   }
 }
+

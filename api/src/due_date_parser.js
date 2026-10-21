@@ -132,9 +132,16 @@ function isCreditCardStatementAlert(body) {
   if (!hasCardContext) return false;
 
   const generated = /\b(?:e[- ]?statement|statement|bill)\b[\s\S]{0,70}\b(?:generated|ready|available|issued|created|raised|prepared)\b/i.test(text);
+  // A printed billing period ("for the period 04-Sep-2026 to 03-Oct-2026")
+  // is bill context on its own, even when the "ready" clause falls outside
+  // the character window above.
+  const periodPrinted = new RegExp(
+    `\\b(?:period|cycle)\\b[\\s\\S]{0,25}?(${DATE_TOKEN})[\\s\\S]{0,15}?\\b(?:to|till|until)\\s*[:\\-]?\\s*(${DATE_TOKEN})`,
+    'i',
+  ).test(text);
   // A due reminder or outstanding-balance notice is not evidence of when
   // the statement was generated, even if it repeats the bill amount.
-  return generated;
+  return generated || periodPrinted;
 }
 
 function extractExplicitStatementDate(body) {
@@ -143,16 +150,29 @@ function extractExplicitStatementDate(body) {
     .replace(/\s+/g, ' ')
     .trim();
   if (!text || !isCreditCardStatementAlert(text)) return null;
+  // Capture group 2 carries the cycle END date: issuing banks print the
+  // statement period far more often than a generation date, and the cycle
+  // closes on that printed date. That is the billing day.
   const patterns = [
-    new RegExp(`\\b(?:statement|e[- ]?statement|bill)\\b[\\s\\S]{0,45}?\\b(?:generated|issued|created|raised|prepared|dated|date)\\b\\s*(?:on|is|:|-)?\\s*(${DATE_TOKEN})`, 'i'),
-    new RegExp(`\\b(?:generated|issued|created|raised|prepared|dated)\\s*(?:on|date|is|:|-)?\\s*(${DATE_TOKEN})`, 'i'),
+    new RegExp(`\\b(?:period|cycle)\\b[\\s\\S]{0,25}?(${DATE_TOKEN})[\\s\\S]{0,15}?\\b(?:to|till|until)\\s*[:\\-]?\\s*(${DATE_TOKEN})`, 'i'),
+    new RegExp(`\\b(?:statement|e[- ]?statement|bill)\\b[\\s\\S]{0,45}?\\b(?:generated|issued|created|raised|prepared|dated)\\b\\s*(?:on|is|:|-)?\\s*(${DATE_TOKEN})`, 'i'),
+    new RegExp(`\\b(?:generated|issued|created|raised|prepared|dated)\\s*(?:date\\s+)?(?:on|is|:|-)?\\s*(${DATE_TOKEN})`, 'i'),
     new RegExp(`\\b(?:statement|e[- ]?statement|bill)\\s+date\\s*(?:is|on|:|-)?\\s*(${DATE_TOKEN})`, 'i'),
   ];
-  for (const pattern of patterns) {
+  // The period pattern closes with the cycle-end date in group 2; every
+  // other pattern captures the printed date in group 1.
+  const [periodPattern, ...printedPatterns] = patterns;
+  for (const [pattern, group] of [
+    [periodPattern, 2],
+    ...printedPatterns.map((printed) => [printed, 1]),
+  ]) {
     const match = text.match(pattern);
     if (!match) continue;
-    const parsed = parseDateToken(match[1]);
-    if (parsed) return { ...parsed, raw: match[1], explicit: true };
+    // A due/payable clause inside the matched phrase means the captured date
+    // is the PAYMENT date printed in the same bill SMS, not the billing day.
+    if (/\b(?:due|payable|pay\s+by)\b/i.test(match[0])) continue;
+    const parsed = parseDateToken(match[group]);
+    if (parsed) return { ...parsed, raw: match[group], explicit: true };
   }
   return null;
 }

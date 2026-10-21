@@ -211,9 +211,9 @@ async function syncCreditLimitFromSms(client, userId, { body, patternIssuerId })
 /**
  * Learn a card's recurring payment due day from an explicit issuer alert.
  *
- * This is additive and conservative: it requires both an explicit due-date
- * phrase and an unambiguous card match. Existing user-entered data is not
- * overwritten by a later alert.
+ * An SMS-learned day heals when a newer bill SMS prints a different due
+ * day (the issuer may have moved it); user-entered data is not overwritten
+ * by a later alert. Card matching must be unambiguous.
  */
 async function syncDueDayFromSms(client, userId, {
   body,
@@ -235,8 +235,10 @@ async function syncDueDayFromSms(client, userId, {
       return Number(parts.find((part) => part.type === 'year')?.value) * 12
         + Number(parts.find((part) => part.type === 'month')?.value);
     };
-    const distance = monthIndex(today) - monthIndex(observed);
-    if (distance < 0 || distance > 2) return null;
+    // The printed due day stays true however old the SMS is — most cards'
+    // only explicit due-day evidence arrives months before onboarding. Only
+    // a future-dated message is nonsense.
+    if (monthIndex(today) - monthIndex(observed) < 0) return null;
   }
 
   const card = explicitUserCardId
@@ -251,13 +253,19 @@ async function syncDueDayFromSms(client, userId, {
       });
   if (!card) return { detected, updated: false, reason: 'card_not_unambiguous' };
 
+  // Due days carry an explicit printed phrase by construction, so a newer
+  // bill SMS heals a previously learned (non-user) value the same way
+  // statement_day does.
   const updated = await client.query(
     `UPDATE user_cards
-        SET due_day = $1
+        SET due_day = $1,
+            due_day_source = 'sms'
       WHERE id = $2
         AND profile_id = $3
         AND is_archived = false
-        AND due_day IS NULL
+        AND due_day IS DISTINCT FROM $1
+        AND (due_day IS NULL
+             OR due_day_source <> 'user')
       RETURNING id`,
     [detected.day, card.userCardId, userId],
   );
@@ -270,7 +278,13 @@ async function syncDueDayFromSms(client, userId, {
   };
 }
 
-/** Learn the recurring statement day from a card-bill SMS. */
+/**
+ * Learn the recurring statement day from a card-bill SMS.
+ *
+ * A printed (generation/period-end) date overwrites an SMS-learned day the
+ * same way due_day heals; a receive-date fallback may only fill an empty
+ * value; a user-entered day is never touched.
+ */
 async function syncStatementDayFromSms(client, userId, {
   body,
   patternIssuerId,
@@ -278,9 +292,11 @@ async function syncStatementDayFromSms(client, userId, {
   explicitUserCardId,
   asOf = new Date(),
 }) {
-  // Only the two completed billing cycles are evidence for a recurring day.
-  // In particular, a current-month live alert must not win before a newly
-  // granted inbox permission has supplied the previous month's history.
+  // Only the two completed billing cycles are evidence for an arrival-date
+  // fallback: a current-month live alert must not win before a newly granted
+  // inbox permission has supplied the previous month's history. A printed
+  // generation or period-end date, however, is self-dated by its own text —
+  // any age teaches it.
   const observed = observedAt && new Date(observedAt);
   const today = new Date(asOf);
   if (!observed || Number.isNaN(observed.getTime()) || Number.isNaN(today.getTime())) return null;
@@ -297,7 +313,7 @@ async function syncStatementDayFromSms(client, userId, {
     ? detected.date.getFullYear() * 12 + detected.date.getMonth() + 1
     : monthInIndia(observed);
   const monthsAgo = monthInIndia(today) - evidenceMonth;
-  if (monthsAgo !== 1 && monthsAgo !== 2 && !(monthsAgo === 0 && detected.explicit)) return null;
+  if (!detected.explicit && monthsAgo !== 1 && monthsAgo !== 2) return null;
 
   const card = explicitUserCardId
     ? (await userCardMatchesInstrument(client, userId, explicitUserCardId, 'credit_card', extractLast4(body))
@@ -311,15 +327,22 @@ async function syncStatementDayFromSms(client, userId, {
       });
   if (!card) return { detected, updated: false, reason: 'card_not_unambiguous' };
 
+  // Healing rule: an SMS-learned day follows newer explicit evidence (the
+  // issuer may have moved the billing day), a receive-date fallback may only
+  // fill an empty value, and a user-entered day is never touched. Equal
+  // values no-op rather than churning the change log.
   const updated = await client.query(
     `UPDATE user_cards
-        SET statement_day = $1
+        SET statement_day = $1,
+            statement_day_source = 'sms'
       WHERE id = $2
         AND profile_id = $3
         AND is_archived = false
-        AND statement_day IS NULL
+        AND statement_day IS DISTINCT FROM $1
+        AND (statement_day IS NULL
+             OR ($4 AND statement_day_source <> 'user'))
       RETURNING id`,
-    [detected.day, card.userCardId, userId],
+    [detected.day, card.userCardId, userId, Boolean(detected.explicit)],
   );
 
   return {
@@ -585,12 +608,126 @@ async function fileForReview(client, userId, { source, rawText, sender, parseErr
   return inserted.rows[0].id;
 }
 
+/**
+ * The IST day-of-month printed for a device-extracted date. Device facts
+ * carry an ISO instant; the day the user recognizes is the Asia/Kolkata
+ * calendar day, matching how extractStatementDate/extractDueDate derive
+ * their `day` from raw SMS text.
+ */
+function istDayOfMonth(isoDate) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(isoDate));
+  return Number(parts.find((part) => part.type === 'day')?.value);
+}
+
+/**
+ * Statement-day learning from a typed device fact. The device already ran
+ * extractStatementDate on the raw body and passed only the resulting
+ * statementDate — the raw text never rides the facts route. Device facts are
+ * always explicit printed dates, so the healing rule is the explicit branch
+ * of syncStatementDayFromSms (no arrival-date fallback).
+ */
+async function syncStatementDayFromFact(client, userId, {
+  statementDate,
+  last4,
+  patternIssuerId,
+  explicitUserCardId,
+}) {
+  if (!statementDate || Number.isNaN(new Date(statementDate).getTime())) return null;
+  const day = istDayOfMonth(statementDate);
+  if (!day) return null;
+
+  const card = explicitUserCardId
+    ? (await userCardMatchesInstrument(client, userId, explicitUserCardId, 'credit_card', last4)
+      ? { userCardId: explicitUserCardId, basis: 'explicit-user-card' }
+      : null)
+    : await resolveUserCardForImport(client, userId, {
+        last4,
+        patternIssuerId,
+        instrument: 'credit_card',
+      });
+  if (!card) return { detected: { day }, updated: false, reason: 'card_not_unambiguous' };
+
+  const updated = await client.query(
+    `UPDATE user_cards
+        SET statement_day = $1,
+            statement_day_source = 'sms'
+      WHERE id = $2
+        AND profile_id = $3
+        AND is_archived = false
+        AND statement_day IS DISTINCT FROM $1
+        AND (statement_day IS NULL OR statement_day_source <> 'user')
+      RETURNING id`,
+    [day, card.userCardId, userId],
+  );
+
+  return {
+    detected: { day },
+    updated: updated.rowCount > 0,
+    userCardId: card.userCardId,
+    basis: card.basis,
+  };
+}
+
+/**
+ * Due-day learning from a typed device fact. Same healing rule as
+ * syncDueDayFromSms: a different printed day from a newer bill heals the
+ * SMS-learned value; a user-entered day is never overwritten.
+ */
+async function syncDueDayFromFact(client, userId, {
+  dueDate,
+  last4,
+  patternIssuerId,
+  explicitUserCardId,
+}) {
+  if (!dueDate || Number.isNaN(new Date(dueDate).getTime())) return null;
+  const day = istDayOfMonth(dueDate);
+  if (!day) return null;
+
+  const card = explicitUserCardId
+    ? (await userCardMatchesInstrument(client, userId, explicitUserCardId, 'credit_card', last4)
+      ? { userCardId: explicitUserCardId, basis: 'explicit-user-card' }
+      : null)
+    : await resolveUserCardForImport(client, userId, {
+        last4,
+        patternIssuerId,
+        instrument: 'credit_card',
+      });
+  if (!card) return { detected: { day }, updated: false, reason: 'card_not_unambiguous' };
+
+  const updated = await client.query(
+    `UPDATE user_cards
+        SET due_day = $1,
+            due_day_source = 'sms'
+      WHERE id = $2
+        AND profile_id = $3
+        AND is_archived = false
+        AND due_day IS DISTINCT FROM $1
+        AND (due_day IS NULL OR due_day_source <> 'user')
+      RETURNING id`,
+    [day, card.userCardId, userId],
+  );
+
+  return {
+    detected: { day },
+    updated: updated.rowCount > 0,
+    userCardId: card.userCardId,
+    basis: card.basis,
+  };
+}
+
 module.exports = {
   resolveUserCardForImport,
   userCardMatchesInstrument,
   syncCreditLimitFromSms,
   syncDueDayFromSms,
   syncStatementDayFromSms,
+  syncDueDayFromFact,
+  syncStatementDayFromFact,
   extractStatementDate,
   resolveUserCategoryForImport,
   resolveCategoryAssignmentForImport,

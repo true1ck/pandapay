@@ -826,6 +826,12 @@ class RecurringSeries {
   final bool cadenceConfirmed;
   final Money annualCost;
 
+  /// One honest state computed by the detection engine:
+  /// confirmed | at_risk | needs_cadence | unused. Null when the source
+  /// predates the engine (an old offline cache, a test fixture) — `status`
+  /// then derives it from the stored facts.
+  final String? engineStatus;
+
   const RecurringSeries({
     required this.id,
     required this.displayName,
@@ -847,7 +853,51 @@ class RecurringSeries {
     this.autopayStatus = 'unknown',
     this.mandateReference,
     this.cadenceConfirmed = true,
+    this.engineStatus,
   });
+
+  /// The engine state, derived from raw facts when the source didn't carry
+  /// one. Same rules as the server engine — see [resolveStatus].
+  String get status =>
+      engineStatus ??
+      resolveStatus(
+        cadenceConfirmed: cadenceConfirmed,
+        detectionSource: detectionSource,
+        cadenceDays: cadenceDays,
+        occurrenceCount: occurrenceCount,
+        firstSeenOn: null,
+        lastSeenOn: lastSeenOn,
+        nextExpectedOn: nextExpectedOn,
+      );
+
+  /// Fallback status for data that predates the engine field (an offline
+  /// cache written by an older build, or the local SMS-only detector). Same
+  /// rules as the server's engineStatus, phrased over the fields stored here.
+  static String resolveStatus({
+    required bool cadenceConfirmed,
+    required String detectionSource,
+    required int cadenceDays,
+    int? occurrenceCount,
+    DateTime? firstSeenOn,
+    DateTime? lastSeenOn,
+    DateTime? nextExpectedOn,
+  }) {
+    final today = DateTime.now();
+    final dayOnly = DateTime(today.year, today.month, today.day);
+    if (!cadenceConfirmed) return 'needs_cadence';
+    if (nextExpectedOn != null && nextExpectedOn.isBefore(dayOnly)) {
+      return 'at_risk';
+    }
+    if (detectionSource == 'manual') return 'confirmed';
+    final anchor = lastSeenOn ?? firstSeenOn;
+    if (anchor == null) return 'confirmed';
+    final age = dayOnly.difference(anchor).inDays;
+    if (age > (cadenceDays * 1.5).round()) {
+      final isUnused = detectionSource == 'mandate' && (occurrenceCount ?? 0) <= 1;
+      return isUnused ? 'unused' : 'at_risk';
+    }
+    return 'confirmed';
+  }
 
   bool get hasActiveAutoPay =>
       autopayStatus == 'active' || (autopayStatus == 'unknown' && isMandate);
@@ -885,38 +935,60 @@ class RecurringSeries {
     return 'About every ${(cadenceDays / 7).round()} weeks';
   }
 
-  factory RecurringSeries.fromJson(Map<String, dynamic> json) =>
-      RecurringSeries(
-        id: json['id'] as String,
-        displayName: json['displayName'] as String? ?? 'Unknown',
-        typicalAmount: _money(json['typicalAmountInr']),
-        cadenceDays: (json['cadenceDays'] as num?)?.toInt() ?? 30,
-        occurrenceCount: (json['occurrenceCount'] as num?)?.toInt() ?? 0,
-        annualCost: _money(json['annualCostInr']),
-        lastSeenOn: json['lastSeenOn'] == null
-            ? null
-            : DateTime.parse(json['lastSeenOn'] as String),
-        nextExpectedOn: json['nextExpectedOn'] == null
-            ? null
-            : DateTime.parse(json['nextExpectedOn'] as String),
-        userCategoryId: json['userCategoryId'] as String?,
-        categoryName: json['categoryName'] as String?,
-        subcategoryName: json['subcategoryName'] as String?,
-        cardName: json['cardName'] as String?,
-        paymentMethod: json['paymentMethod'] as String?,
-        detectionSource: json['detectionSource'] as String? ?? 'observed',
-        isMandate:
-            json['isMandate'] == true || json['detectionSource'] == 'mandate',
-        isUserEdited: json['isUserEdited'] == true,
-        lifecycleStatus: json['lifecycleStatus'] as String? ?? 'active',
-        autopayStatus:
-            json['autopayStatus'] as String? ??
-            ((json['isMandate'] == true || json['detectionSource'] == 'mandate')
-                ? 'active'
-                : 'unknown'),
-        mandateReference: json['mandateReference'] as String?,
-        cadenceConfirmed: json['cadenceConfirmed'] as bool? ?? true,
-      );
+  factory RecurringSeries.fromJson(Map<String, dynamic> json) {
+    final cadenceDays = (json['cadenceDays'] as num?)?.toInt() ?? 30;
+    final detectionSource = json['detectionSource'] as String? ?? 'observed';
+    final cadenceConfirmed = json['cadenceConfirmed'] as bool? ?? true;
+    final lastSeenOn = json['lastSeenOn'] == null
+        ? null
+        : DateTime.parse(json['lastSeenOn'] as String);
+    final firstSeenOn = json['firstSeenOn'] == null
+        ? null
+        : DateTime.parse(json['firstSeenOn'] as String);
+    final nextExpectedOn = json['nextExpectedOn'] == null
+        ? null
+        : DateTime.parse(json['nextExpectedOn'] as String);
+    final occurrenceCount = (json['occurrenceCount'] as num?)?.toInt() ?? 0;
+    final engine =
+        json['engineStatus'] as String? ??
+        resolveStatus(
+          cadenceConfirmed: cadenceConfirmed,
+          detectionSource: detectionSource,
+          cadenceDays: cadenceDays,
+          occurrenceCount: occurrenceCount,
+          firstSeenOn: firstSeenOn,
+          lastSeenOn: lastSeenOn,
+          nextExpectedOn: nextExpectedOn,
+        );
+    return RecurringSeries(
+      id: json['id'] as String,
+      displayName: json['displayName'] as String? ?? 'Unknown',
+      typicalAmount: _money(json['typicalAmountInr']),
+      cadenceDays: cadenceDays,
+      occurrenceCount: occurrenceCount,
+      annualCost: _money(json['annualCostInr']),
+      lastSeenOn: lastSeenOn,
+      nextExpectedOn: nextExpectedOn,
+      userCategoryId: json['userCategoryId'] as String?,
+      categoryName: json['categoryName'] as String?,
+      subcategoryName: json['subcategoryName'] as String?,
+      cardName: json['cardName'] as String?,
+      paymentMethod: json['paymentMethod'] as String?,
+      detectionSource: detectionSource,
+      isMandate:
+          json['isMandate'] == true || json['detectionSource'] == 'mandate',
+      isUserEdited: json['isUserEdited'] == true,
+      lifecycleStatus: json['lifecycleStatus'] as String? ?? 'active',
+      autopayStatus:
+          json['autopayStatus'] as String? ??
+          ((json['isMandate'] == true || json['detectionSource'] == 'mandate')
+              ? 'active'
+              : 'unknown'),
+      mandateReference: json['mandateReference'] as String?,
+      cadenceConfirmed: cadenceConfirmed,
+      engineStatus: engine,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -939,6 +1011,7 @@ class RecurringSeries {
     'autopayStatus': autopayStatus,
     'mandateReference': mandateReference,
     'cadenceConfirmed': cadenceConfirmed,
+    if (engineStatus != null) 'engineStatus': engineStatus,
   };
 }
 

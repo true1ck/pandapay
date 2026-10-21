@@ -118,6 +118,29 @@ test('rejects impossible dates', () => {
   assert.equal(extractDueDate('Payment due date: 31/02/2026.'), null);
 });
 
+test('does not capture the due date as the statement day', () => {
+  const bodies = [
+    'Your credit card ending XX8708 statement is ready. Total due Rs 900. Due date: 20-Oct-2026.',
+    'Your HDFC Bank MoneyBack+ Credit Card ending XX1234 statement is generated. Payment due date of your card is 16/10/2026.',
+    'Your HDFC Bank Credit Card ending XX1234 statement is generated. Payment due date for your card payment is 16/10/2026.',
+  ];
+  for (const body of bodies) {
+    const result = extractStatementDate(body, new Date('2026-10-08T10:00:00.000Z'));
+    assert.equal(result.explicit, false, body);
+    assert.equal(result.day, 8, body); // receive-date fallback, never the printed due day
+  }
+});
+
+test('learns the billing day from the printed statement period end', () => {
+  const result = extractStatementDate(
+    'Your statement for HDFC Bank Credit Card ending XX8708 for the period 04-Sep-2026 to 03-Oct-2026 is ready.',
+    new Date('2026-10-05T10:00:00.000Z'),
+  );
+  assert.equal(result.explicit, true);
+  assert.equal(result.day, 3);
+  assert.equal(result.date.getMonth(), 9);
+});
+
 test('learns statement day from a generated-statement SMS receive date', () => {
   const body = 'Your statement for Axis Bank Credit Card no. XX7105 is generated. Due on: 02-11-26.';
   const result = extractStatementDate(body, new Date('2026-09-05T18:30:00.000Z'));
