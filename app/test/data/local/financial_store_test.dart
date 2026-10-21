@@ -352,4 +352,32 @@ void main() {
       expect(updated['due_day'], 9);
     },
   );
+
+  test(
+    'syncCardDatesFromObservations heals statement day from statement generated alert without explicit token',
+    () {
+      final card = UserCard(
+        id: 'c-axis',
+        cardProductId: 'axis_fk',
+        cardName: 'Flipkart Axis Bank Credit Card',
+        isDefault: false,
+        last4: '7105',
+        statementDay: 26,
+        dueDay: 2,
+      );
+      store.replaceCards('a', [card]);
+      store.saveObservation('a', 'obs-axis', {
+        'event_type': 'bill',
+        'card_last4': '7105',
+        'statement_date': '2026-10-14T10:00:00.000',
+        'statement_date_explicit': false,
+        'due_date': '2026-11-02T00:00:00.000',
+        'received_at': '2026-10-14T10:00:00.000',
+      });
+      store.syncCardDatesFromObservations('a');
+      final updated = store.entities('a', 'cards').single;
+      expect(updated['statement_day'], 14);
+      expect(updated['due_day'], 2);
+    },
+  );
 }

@@ -200,9 +200,26 @@ async function requireAuth(req, res, next) {
   }
 }
 
+
+function requireValidJwt(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid access token' });
+  }
+  try {
+    const payload = verifyAccessToken(header.slice(7));
+    req.accessToken = header.slice(7);
+    req.authClaims = payload;
+    req.userId = payload.sub;
+    return next();
+  } catch (_) {
+    return res.status(401).json({ error: 'Missing or invalid access token' });
+  }
+}
 module.exports = {
   optionalAuth,
   requireAuth,
+  requireValidJwt,
   requireVerifiedSession,
   verifyAccessToken,
   verifyRequestSession,

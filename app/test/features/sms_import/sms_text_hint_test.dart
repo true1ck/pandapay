@@ -176,4 +176,60 @@ void main() {
       );
     });
   });
+
+  group('capturesFinancialSms promotional filtering', () {
+    test('keeps a completed debit with a promotional footer', () {
+      expect(
+        capturesFinancialSms(
+          'Your card XX1234 was debited Rs.500 at STORE. '
+          'Get 5% cashback on your next purchase.',
+          sender: 'VM-BANK-S',
+        ),
+        isTrue,
+      );
+    });
+
+    test('keeps a bill reminder with an offer footer', () {
+      expect(
+        capturesFinancialSms(
+          'Your credit card bill of Rs.5000 is due on 25 Oct. '
+          'Get cashback when you pay.',
+          sender: 'VM-BANK-S',
+        ),
+        isTrue,
+      );
+    });
+
+    test('filters a spend threshold cashback promotion', () {
+      expect(
+        capturesFinancialSms(
+          'Spend INR 15000 on your card and get cashback of INR 250. '
+          'Offer valid this month.',
+          sender: 'VM-BANK-P',
+        ),
+        isFalse,
+      );
+    });
+
+    test('filters an EMI solicitation quoting historic spend', () {
+      expect(
+        capturesFinancialSms(
+          'Your combined spends of Rs.40016 are eligible for conversion '
+          'to Flexipay EMIs. Click link.',
+          sender: 'BP-SBICRD-S',
+        ),
+        isFalse,
+      );
+    });
+
+    test('filters OTPs even when they contain transaction wording', () {
+      expect(
+        capturesFinancialSms(
+          'OTP 123456 to confirm your transaction of INR 500. Do not share.',
+          sender: 'VM-BANK-S',
+        ),
+        isFalse,
+      );
+    });
+  });
 }

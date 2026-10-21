@@ -10,6 +10,22 @@ import '../local_sms_parser.dart';
 /// ("AD-" advertising, "AX-" activity, "VM-"/"PD-" operator packs, "-S"/"-T"
 /// channel suffixes). The account identity is the *bank code*, not the
 /// channel, so a real account must not show up as one row per sender ID.
+/// Sender families that bill SMS use, mapped to distinctive tokens they name
+/// in the registered card's display name.
+const billFamilyCardTokens = <String, List<String>>{
+  'mytneu': ['tata neu'],
+  'tnbpay': ['tata neu'],
+  'tatanu': ['tata neu'],
+};
+
+bool familyNamesCardDisplayName(String? family, String cardDisplayName) {
+  if (family == null || family.isEmpty) return false;
+  final tokens = billFamilyCardTokens[canonicalBankSender(family)];
+  if (tokens == null) return false;
+  final lower = cardDisplayName.toLowerCase();
+  return tokens.every(lower.contains);
+}
+
 String canonicalBankSender(Object? sender) {
   var text = (sender ?? '').toString().trim().toLowerCase();
   if (text.isEmpty) return 'unknown';
@@ -816,7 +832,7 @@ class FinancialStore {
       ''');
       final applied = database.db.select(
         'SELECT 1 FROM local_repairs WHERE namespace=? AND repair_key=?',
-        [ns, 'bill_and_autopay_repair_v3'],
+        [ns, 'bill_and_autopay_repair_v4'],
       );
       if (applied.isNotEmpty) return;
 
@@ -836,9 +852,9 @@ class FinancialStore {
         if (receivedAt == null) continue;
 
         final isBillCandidate = RegExp(
-          r'\b(?:autopay\s+(?:alert|reminder)|will\s+be\s+(?:auto[- ]?)?(?:deducted|debited)|auto[- ]?(?:deducted|debited)|bill\b[\s\S]{0,40}\b(?:ready|due|generated)|statement\b[\s\S]{0,40}\b(?:ready|due|generated))\b',
+          r'\b(?:autopay\s+(?:alert|reminder)|will\s+be\s+(?:auto[- ]?)?(?:deducted|debited)|auto[- ]?(?:deducted|debited)|bill\b[\s\S]{0,100}\b(?:ready|due|generated)|statement\b[\s\S]{0,100}\b(?:ready|due|generated))\b',
           caseSensitive: false,
-        ).hasMatch(body) || sender.toUpperCase().contains('TNEU');
+        ).hasMatch(body);
         if (isBillCandidate) {
           final obs = LocalSmsParser.parse(
             namespace: ns,
@@ -884,7 +900,7 @@ class FinancialStore {
               'confidence': obs.confidence,
               if (isAutopay) 'is_autopay': true,
             });
-            if (obs.cardLast4 != null && obs.dueDate != null) {
+            if (obs.cardLast4 != null && obs.dueDate != null && (isAutopay || obs.statementDate != null)) {
               final cardRows = database.db.select(
                 "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='cards'",
                 [ns],
@@ -908,7 +924,7 @@ class FinancialStore {
       }
       database.db.execute(
         'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
-        [ns, 'bill_and_autopay_repair_v3'],
+        [ns, 'bill_and_autopay_repair_v4'],
       );
       if (changed) {
         _notify(ns, entity: 'cards');
@@ -952,10 +968,9 @@ class FinancialStore {
           final biller = (obs['biller_name'] as String? ?? '').toLowerCase();
 
           final matchesLast4 = obsLast4 != null && obsLast4 == cardLast4;
-          final matchesFamily =
-              obsLast4 == null &&
-              ((sender.contains('tneu') || biller.contains('tata')) &&
-                  cardName.contains('tata'));
+          final matchesFamily = obsLast4 == null &&
+              (familyNamesCardDisplayName(sender, cardName) ||
+                  familyNamesCardDisplayName(biller, cardName));
 
           if (!matchesLast4 && !matchesFamily) continue;
           matchingBills.add(obs);
@@ -977,15 +992,16 @@ class FinancialStore {
           final isExplicit = obs['statement_date_explicit'] == true;
           final isAutopay = obs['is_autopay'] == true ||
               (obs['reason_codes'] as List?)?.contains('autopay_notice') == true;
-          // A reminder's due date is for one upcoming payment, not a verified
-          // recurring card-cycle day. Only trust dates attached to an explicit
-          // statement date or an established AutoPay schedule.
-          if (!isExplicit && !isAutopay) continue;
+          final hasStatementAlert = obs['statement_date'] != null;
+          // Only trust dates attached to a statement generation notice, an explicit
+          // statement date, or an established AutoPay schedule. A mere payment reminder
+          // carries no statement date and must not claim recurring card-cycle days.
+          if (!hasStatementAlert && !isExplicit && !isAutopay) continue;
           if (newDueDay == null && obs['due_date'] != null) {
             final dt = DateTime.tryParse(obs['due_date'] as String);
             if (dt != null) newDueDay = dt.day;
           }
-          if (newStmtDay == null && obs['statement_date'] != null && isExplicit) {
+          if (newStmtDay == null && obs['statement_date'] != null) {
             final dt = DateTime.tryParse(obs['statement_date'] as String);
             if (dt != null) newStmtDay = dt.day;
           }

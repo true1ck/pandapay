@@ -43,7 +43,10 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
   // persisted to disk, not even briefly. Phase 2: non-spend financial
   // messages (autopay mandate life-cycle, declined attempts) are captured
   // too, so their typed facts reach the server.
-  if (!capturesFinancialSms(body) || LocalSmsParser.sensitive(body)) return;
+  if (!capturesFinancialSms(body, sender: sender) ||
+      LocalSmsParser.sensitive(body)) {
+    return;
+  }
 
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -189,7 +192,7 @@ class SmsListenerService {
       if (sender == null ||
           body == null ||
           date == null ||
-          !capturesFinancialSms(body) ||
+          !capturesFinancialSms(body, sender: sender) ||
           LocalSmsParser.sensitive(body)) {
         continue;
       }
@@ -295,7 +298,7 @@ class SmsListenerService {
         final sender = message.address;
         final body = message.body;
         if (sender == null || body == null) return;
-        if (!capturesFinancialSms(body)) return;
+        if (!capturesFinancialSms(body, sender: sender)) return;
         final messageTimestamp = message.date ?? message.dateSent;
         onSms(
           sender,

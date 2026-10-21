@@ -5282,7 +5282,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       if (ref.read(cacheNamespaceProvider) != namespace) break;
       if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(item.id) ||
           LocalSmsParser.sensitive(item.body) ||
-          !capturesFinancialSms(item.body)) {
+          !capturesFinancialSms(item.body, sender: item.sender)) {
         continue;
       }
       final status = await repo.fetchAiJobStatus(item.id);

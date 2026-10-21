@@ -715,23 +715,23 @@ class LocalSmsParser {
         : null;
     final amountDue = money(
       _re(
-        r'\b(?:total|full|statement|amount)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
+        r'\b(?:total|full|statement|amount)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
       ).firstMatch(body)?.group(1) ??
           _re(
-            r'\btotal\s+(?:amt|amount)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
+            r'\btotal\s+(?:amt|amount)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1),
     );
     final billAmount = money(
       _re(
-        r'\b(?:bill|invoice|premium)\s+(?:of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
+        r'\b(?:bill|invoice|premium)\s+(?:of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
       ).firstMatch(body)?.group(1) ??
           _re(
-            r'\bautopay\s+(?:alert|reminder)\s*[:\-]?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
+            r'\bautopay\s+(?:alert|reminder)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1),
     );
     final minimumDue = money(
       _re(
-        r'\b(?:minimum|min)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
+        r'\b(?:minimum|min)\s*(?:amt|amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
       ).firstMatch(body)?.group(1),
     );
     final autopayLimit = money(

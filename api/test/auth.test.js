@@ -18,7 +18,7 @@ process.env.JWT_AUDIENCE = 'mobile-app';
 process.env.AUTH_INTERNAL_BASE_URL = 'http://auth.test';
 process.env.AUTH_INTERNAL_SERVICE_SECRET = 'test-auth-internal-secret-which-is-over-32-bytes';
 
-const { verifyAccessToken, optionalAuth, requireAuth } = require('../src/auth');
+const { verifyAccessToken, optionalAuth, requireAuth, requireValidJwt } = require('../src/auth');
 
 function makeToken(secret, keyid, claims = {}) {
   return jwt.sign(
@@ -108,5 +108,34 @@ test('requireAuth fails closed for a request without an authenticated token', as
   await requireAuth({ userId: null, accessToken: null }, response, () => { nextCalls += 1; });
   assert.equal(statusCode, 401);
   assert.deepEqual(responseBody, { error: 'session_invalid' });
+  assert.equal(nextCalls, 0);
+});
+
+test('requireValidJwt admits request with valid signed JWT without session check', () => {
+  const token = makeToken('current-access-secret', 'current', { sub: 'production-smoke-test' });
+  const req = { headers: { authorization: 'Bearer ' + token } };
+  let nextCalls = 0;
+  requireValidJwt(req, {}, () => { nextCalls += 1; });
+  assert.equal(nextCalls, 1);
+  assert.equal(req.userId, 'production-smoke-test');
+  assert.equal(req.authClaims.sub, 'production-smoke-test');
+});
+
+test('requireValidJwt rejects request with missing or malformed token', () => {
+  let statusCode;
+  let responseBody;
+  let nextCalls = 0;
+  const res = {
+    status(code) { statusCode = code; return this; },
+    json(body) { responseBody = body; return this; },
+  };
+  requireValidJwt({ headers: {} }, res, () => { nextCalls += 1; });
+  assert.equal(statusCode, 401);
+  assert.deepEqual(responseBody, { error: 'Missing or invalid access token' });
+  assert.equal(nextCalls, 0);
+
+  requireValidJwt({ headers: { authorization: 'Bearer invalid-jwt' } }, res, () => { nextCalls += 1; });
+  assert.equal(statusCode, 401);
+  assert.deepEqual(responseBody, { error: 'Missing or invalid access token' });
   assert.equal(nextCalls, 0);
 });

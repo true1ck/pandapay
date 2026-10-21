@@ -8,6 +8,7 @@ const { withUserClient, pool } = require('./db');
 const {
   optionalAuth,
   requireAuth,
+  requireValidJwt,
   requireVerifiedSession,
   verifyMemberRequest,
   SessionVerificationError,
@@ -1194,7 +1195,7 @@ app.get('/merchants/nearby', async (req, res) => {
 
 /** Authenticated, Google Maps-backed foreground discovery. Coordinates stay
  * in the POST body so request logs never contain a user's precise location. */
-app.post('/merchants/nearby/google', requireAuth, async (req, res) => {
+app.post('/merchants/nearby/google', requireValidJwt, async (req, res) => {
   const lat = req.body?.lat;
   const lng = req.body?.lng;
   const radiusM = req.body?.radiusM === undefined ? 2000 : req.body.radiusM;

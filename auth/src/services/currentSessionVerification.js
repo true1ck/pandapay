@@ -39,12 +39,22 @@ async function verifyCurrentSession(token, executor = db) {
     };
   }
 
-  const { rows } = await executor.query(
-    `SELECT id, email, phone_number, is_email_verified, is_phone_verified,
-            is_active, deleted, COALESCE(token_version, 1) AS token_version
-       FROM users WHERE id = $1`,
-    [payload.sub],
-  );
+  let rows;
+  try {
+    const result = await executor.query(
+      `SELECT id, email, phone_number, is_email_verified, is_phone_verified,
+              is_active, deleted, COALESCE(token_version, 1) AS token_version
+         FROM users WHERE id = $1`,
+      [payload.sub],
+    );
+    rows = result.rows;
+  } catch (err) {
+    if (err && err.code === '22P02') {
+      rows = [];
+    } else {
+      throw err;
+    }
+  }
   const user = rows[0];
   const tokenVersionCurrent = user && (payload.token_version || 1) === user.token_version;
   let deviceActive = true;

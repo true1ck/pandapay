@@ -1,7 +1,7 @@
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'user_cards_repository.dart';
-import 'local/financial_store.dart' show canonicalBankSender;
+import 'local/financial_store.dart' show canonicalBankSender, familyNamesCardDisplayName;
 
 /// Evidence line an SMS bill message contributes to one card's ledger.
 /// Field-level, not message-level: a reminder can arrive with a subset
@@ -408,22 +408,8 @@ CardBill _mergeOne(List<CardBillEvidence> cycle) {
 
 DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 
-// Sender families that bill SMS use, mapped to the distinctive tokens they
-// name in the registered card's display name. YAGNI: extend as new issuers
-// show the same pattern (bill SMS quoting no card digits).
-const Map<String, List<String>> _billFamilyCardTokens = {
-  'mytneu': ['tata neu'],
-  'tnbpay': ['tata neu'],
-  'tatanu': ['tata neu'],
-};
-
-bool _familyNamesCard(String? family, UserCard card) {
-  if (family == null) return false;
-  final tokens = _billFamilyCardTokens[canonicalBankSender(family)];
-  if (tokens == null) return false;
-  final lower = '${card.nickname ?? ''} ${card.cardName}'.toLowerCase();
-  return tokens.every(lower.contains);
-}
+bool _familyNamesCard(String? family, UserCard card) =>
+    familyNamesCardDisplayName(family, '${card.nickname ?? ''} ${card.cardName}');
 
 extension _FirstWhereOrNull<T> on Iterable<T> {
   T? firstWhereOrNull(bool Function(T) test) {

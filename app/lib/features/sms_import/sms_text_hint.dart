@@ -18,6 +18,8 @@
 /// only, and callers must not treat it as a resolved card id.
 library;
 
+import '../../data/local_sms_parser.dart';
+
 /// Returns a bare 4-digit string if [smsBody] contains a "ending NNNN" /
 /// "XXNNNN" / "card NNNN" style last-4 mention, else null. Deliberately
 /// conservative: multiple distinct 4-digit candidates (e.g. an OTP or a
@@ -180,10 +182,23 @@ bool looksLikeTransactionSms(String smsBody) {
 /// their typed facts reach the server instead of being silently discarded
 /// on-device. Bill/statement and balance messages already pass the strict
 /// gate. OTP/safety vetoes and promo rejection stay absolute.
-bool capturesFinancialSms(String smsBody) {
-  if (looksLikeTransactionSms(smsBody)) return true;
+bool capturesFinancialSms(String smsBody, {String sender = ''}) {
   final lower = smsBody.toLowerCase();
-  if (_looksOtpOrSecurity(lower) || _looksPromotional(lower)) return false;
+  if (_looksOtpOrSecurity(lower)) return false;
+
+  // Reuse the parser's issuer/body-aware negative classifier. It recognizes
+  // EMI solicitations and service notices while preserving completed
+  // transactions and bills that happen to carry an offer footer.
+  if (LocalSmsParser.isNonTransactionNoise(sender, smsBody)) return false;
+
+  // Completed movement, bill/balance facts, and failed attempts take priority
+  // over marketing footers. This helper is also used to decide AI eligibility.
+  if (RegExp(
+    r'\b(?:debited|credited|spent|paid|charged|transferred|withdrawn|received|deposited|refunded)\b|\b(?:txn|transaction|purchase|recharge|payment)\b[\s\S]{0,55}\b(?:successful|completed|processed)\b|\b(?:amount|payment|minimum|total)\s+due\b|\bdue\s+(?:date|on|by)\b|\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\b(?:available|current|closing)\s+balance\b|\bcredit\s+limit\b',
+  ).hasMatch(lower))
+    return true;
+  if (_looksPromotional(lower)) return false;
+  if (looksLikeTransactionSms(smsBody)) return true;
 
   // AutoPay mandate family: registration, scheduled notices, failures and
   // cancellations are mandate-lifecycle facts regardless of how the amount
@@ -195,9 +210,7 @@ bool capturesFinancialSms(String smsBody) {
   // a payment instrument/transaction cue); they must not become spend rows,
   // but the attempt fact is worth the server knowing about.
   final failedAttempt =
-      RegExp(
-        r'\b(?:declined?|failed|failure)\b',
-      ).hasMatch(lower) &&
+      RegExp(r'\b(?:declined?|failed|failure)\b').hasMatch(lower) &&
       RegExp(r'(?:inr|rs\.|rs\s|₹)').hasMatch(lower) &&
       RegExp(
         r'\b(?:txn|transaction|purchase|payment|card|a\/?c\.?|account)\b',
