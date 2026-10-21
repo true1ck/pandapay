@@ -98,10 +98,26 @@ begin
     raise exception 'fractional paise distribution accepted';
   end if;
 
-  if (select admission_mode <> 'open' or active_campaign_version is not null
-        from promotions.access_settings where singleton)
-     or exists (select 1 from promotions.campaign_versions) then
-    raise exception 'promotion migration must ship with no active campaign and open admission';
+  if not exists (
+       select 1 from promotions.access_settings
+        where singleton
+          and admission_mode = 'open'
+          and active_campaign_version is null
+     ) then
+    raise exception 'promotion defaults must ship with open admission and no active campaign';
+  end if;
+  if exists (
+       select 1 from promotions.campaign_state
+        where enrollment_open
+           or fulfillment_paused is distinct from true
+           or redemption_paused is distinct from true
+           or platform_benefit_available
+           or total_budget_paise <> 0
+           or issued_paise <> 0
+           or reserved_paise <> 0
+           or enrollment_count <> 0
+     ) then
+    raise exception 'configured campaigns must ship paused with zero budget and no issued rewards';
   end if;
 end
 $$;
