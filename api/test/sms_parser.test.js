@@ -1040,3 +1040,34 @@ test('credit-card account references never become bank account evidence', () => 
   assert.equal(result.ok, true);
   assert.equal(result.fields.accountLast4, undefined);
 });
+
+test('an AutoPay bill notice is a bill, never a purchase', () => {
+  // The issuer states the amount that WILL be deducted for the card bill.
+  // Read as a spend it invents a transaction for money that has not moved —
+  // and it moves the card's limit state with it.
+  const alert = parseSmsAgainstPatterns([], {
+    sender: 'VD-HDFCBK-S',
+    body:
+      'AutoPay Alert! \n Your HDFC Bank Credit Card 8708 bill \n Total Amt: Rs.10944 \n will be deducted from your A/C 1797 on 09/OCT/2026. Ignore if paid',
+  });
+  assert.equal(alert.ok, false);
+
+  const reminder = parseSmsAgainstPatterns([], {
+    sender: 'VM-HDFCBN-S',
+    body:
+      'AutoPay Reminder: \n Rs.1147 will be deducted from HDFC Bank A/c 1797 on 08/SEP/2026 for Credit Card 8708 bill. \n For Query: Ask EVA resu.io/ZPCKZ7',
+  });
+  assert.equal(reminder.ok, false);
+});
+
+test('a real card purchase is still a purchase', () => {
+  const spend = parseSmsAgainstPatterns([], {
+    sender: 'AD-HDFCBK-S',
+    body:
+      'Spent Rs.85781 On HDFC Bank Card 8708 At Flipkart On 2026-10-20:22:35:07.Not You? To Block+Reissue Call 18002586161',
+  });
+  assert.equal(spend.ok, true);
+  assert.equal(spend.fields.entryKind, 'spend');
+  assert.equal(spend.fields.amountInr, 85781);
+  assert.equal(spend.fields.last4, '8708');
+});

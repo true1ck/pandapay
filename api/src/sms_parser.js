@@ -770,8 +770,28 @@ function parseBuiltInUpiDebit(sms) {
   };
 }
 
+/**
+ * Does this message announce a card BILL rather than a purchase?
+ *
+ * An issuer's AutoPay notice states the amount that will be deducted for a
+ * card bill ("AutoPay Alert! Your HDFC Bank Credit Card 8708 bill, Total
+ * Amt: Rs.10944, will be deducted from your A/C 1797 on 09/OCT/2026"). Read
+ * as a spend it invents a transaction for money that has not moved, and it
+ * moves the card's limit state with it. The device parser already classifies
+ * these as bill obligations; this keeps the server in step.
+ */
+function isCardBillNotice(body) {
+  const text = String(body || '');
+  if (/\bauto[-\s]?pay\s+(?:alert|reminder)\b/i.test(text)) return true;
+  return (
+    /\bwill\s+be\s+(?:auto[-\s]?)?(?:deducted|debited)\b/i.test(text) &&
+    /\b(?:credit\s+card|card)\b[\s\S]{0,60}\bbill\b/i.test(text)
+  );
+}
+
 function parseBuiltInCardSpend(sms) {
   const body = String(sms?.body || '');
+  if (isCardBillNotice(body)) return { ok: false, reason: 'card_bill_notice' };
   if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_builtin_card_match' };
   const last4Match = body.match(/\b(?:credit|debit)\s+card\s+(?:no\.?\s*)?(\d{4})\b/i)
     || body.match(/\b(?:credit|debit)\s+card\b[\s\S]{0,60}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|\.{3,}|last\s*4|no\.?)\D{0,5}(\d{4})/i)

@@ -141,6 +141,11 @@ jobs:
               merchant_count: count,
               degraded: payload.degraded === true,
               partial: payload.partial === true,
+              // The provider's own reason, so a failing gate explains itself
+              // (expired Places key, provider outage, blocked egress) instead
+              // of only showing a status code.
+              error: payload.error || null,
+              detail: payload.detail || null,
             }));
             if (!response.ok || count < 0
               || !['google_places', 'google_maps', 'openstreetmap_fallback'].includes(payload.source)) {
