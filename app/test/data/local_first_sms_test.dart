@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay/app/providers.dart';
-import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/authenticated_http_client.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
