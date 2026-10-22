@@ -67,6 +67,14 @@ class IndianNarrationSanitizer {
       }
     }
 
+    // 1b. UPI QR VPA Normalization (e.g. paytmqr63650y@ptys -> Paytm QR)
+    if (RegExp(r'^paytmqr\w*@\w+$', caseSensitive: false).hasMatch(text)) {
+      return 'Paytm QR';
+    }
+    if (RegExp(r'^bharatpe\w*@\w+$', caseSensitive: false).hasMatch(text)) {
+      return 'BharatPe QR';
+    }
+
     // 2. Aggregator Shield: Strip gateway prefixes (e.g. RAZORPAY*SWIGGY -> SWIGGY)
     text = text.replaceFirst(_aggregatorPrefixRe, '');
 

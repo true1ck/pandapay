@@ -4,6 +4,17 @@ import 'package:pandapay/data/flashtext_merchant_extractor.dart';
 
 void main() {
   group('IndianNarrationSanitizer', () {
+    test('normalizes UPI QR VPA handles to canonical QR merchants', () {
+      expect(
+        IndianNarrationSanitizer.sanitize('paytmqr63650y@ptys'),
+        equals('Paytm QR'),
+      );
+      expect(
+        IndianNarrationSanitizer.sanitize('bharatpe99128@icici'),
+        equals('BharatPe QR'),
+      );
+    });
+
     test('strips payment gateway aggregator prefixes', () {
       expect(IndianNarrationSanitizer.sanitize('RAZORPAY*SWIGGY'), equals('SWIGGY'));
       expect(IndianNarrationSanitizer.sanitize('PAYTM*ZEPTO'), equals('ZEPTO'));
