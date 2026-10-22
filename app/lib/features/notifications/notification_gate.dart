@@ -7,6 +7,7 @@ import '../../app/providers.dart'
         notificationPreferencesProvider,
         notificationPreferencesRepositoryProvider,
         recordAppNotification;
+import '../../app/design/app_theme.dart' show AppColors;
 import '../../data/notification_preferences_repository.dart';
 
 /// Userappimplementation_plan.md UA-8.3: "Quiet hours + daily frequency cap
@@ -95,7 +96,9 @@ class NotificationGate {
 
   Future<void> _ensurePluginInitialized() async {
     if (_pluginInitialized) return;
-    const androidInit = AndroidInitializationSettings('@drawable/ic_notification');
+    const androidInit = AndroidInitializationSettings(
+      '@drawable/ic_notification',
+    );
     const iosInit = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
@@ -165,6 +168,7 @@ class NotificationGate {
         importance: Importance.defaultImportance,
         priority: Priority.defaultPriority,
         icon: '@drawable/ic_notification',
+        color: AppColors.teal500,
       );
       const details = NotificationDetails(
         android: androidDetails,
@@ -202,6 +206,7 @@ class NotificationGate {
         importance: Importance.defaultImportance,
         priority: Priority.defaultPriority,
         icon: '@drawable/ic_notification',
+        color: AppColors.teal500,
       );
       final details = NotificationDetails(
         android: androidDetails,

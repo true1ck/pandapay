@@ -10,6 +10,9 @@ import 'package:permission_handler/permission_handler.dart' as ph;
 import '../notifications/notification_gate.dart';
 import 'nearby_merchants_repository.dart';
 
+// app_theme.dart supplies AppColors for notification accent colors.
+import '../../app/design/app_theme.dart' show AppColors;
+
 /// Runtime health is separate from the account's saved opt-in.
 enum GeofenceMonitorStatus {
   off,
@@ -200,6 +203,11 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
             foregroundNotificationConfig: const ForegroundNotificationConfig(
               notificationText: 'Checking for nearby businesses',
               notificationTitle: 'PandaPay is checking your location',
+              notificationIcon: AndroidResource(
+                name: 'ic_notification',
+                defType: 'drawable',
+              ),
+              color: AppColors.teal500,
               enableWakeLock: true,
             ),
           )
@@ -334,6 +342,7 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
       icon: '@drawable/ic_notification',
+      color: AppColors.teal500,
     );
     const details = NotificationDetails(
       android: androidDetails,
