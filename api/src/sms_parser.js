@@ -45,20 +45,28 @@ function isNonTransactionNoise(sender, body) {
       && !/\b(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)\b/i.test(text)
       && !/\b(?:debited|charged)\s*(?:by|with|for)?\s*(?:₹|rs\.?|inr)/i.test(text)) return true;
   const completed = /\b(?:your\s+(?:txn|transaction)\s+of|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)(?:\s+(?:by|with|for|towards|of|amounting\s+to))?\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:sent|cash\s+withdrawal|withdrawal|auto[-\s]?debit)\s*(?:of|by)?\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase|settlement|payout)\b[\s\S]{0,45}\b(?:successful|completed|initiated|processed))/i.test(text);
-  if (completed || (/\b(?:cashback|refund)\b/i.test(text) && /\b(?:credited|received|deposited)\b/i.test(text)) || /\b(?:debit|credit)\s+hua\b/i.test(text)) return false;
+  if (completed || /\bdeducted\s+from\b[\s\S]{0,80}?\btowards\b/i.test(text) || (/\b(?:cashback|refund)\b/i.test(text) && /\b(?:credited|received|deposited)\b/i.test(text)) || /\b(?:debit|credit)\s+hua\b/i.test(text)) return false;
   if (/\bautopay\s+(?:alert|reminder)\b/i.test(text)) return false;
   return /\b(?:offer|sale|discount|cashback|voucher|coupon|rewarding|shop\s+at|grab|buy\s+now|apply\s+now|prices?\s+slashed|treat\s+yourself|festive\s+shopping|eligible\s+for\s+conversion|convert\s+(?:to|into)\s+emi|international\s+roaming\s+pack)\b|\b(?:get|earn|save)\b[\s\S]{0,45}\b(?:reward|cashback|off|free|voucher)\b/i.test(text)
     || /\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service|transaction\s+check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|sim\s+swap|reported\s+(?:your\s+)?fund\s+bal(?:ance)?|securities\s+bal(?:ance)?|excludes\s+your\s+bank|beware\s+(?:of\s+)?dealing\s+(?:in|on)\s+unsolicited\s+tips|unsolicited\s+tips|due\s+for\s+renewal|renew\s+now\s+with\s+policybazaar|wallet\s+balance\s+is\s+(?:rs\.?|inr)\s*0|add\s+money\s+to\s+wallet|report\s+spam|trai\s+dnd|telecommunications\s+act|sanchar\s+saathi|chakshu|online\s+investment\s+scams|traded\s+value\s+for\b|has\s+been\s+dispatched|has\s+been\s+delivered|card\s+usage\s+settings?|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated|ckyc\s+record|central\s+kyc\s+registry|out\s+for\s+delivery\s+with\s+cash\s+memo|pls\s+share\s+delivery\s+code|delivery\s+code\s+\d+)\b/i.test(text)
     || /\b(?:will\s+remain\s+open\s+and\s+fully\s+operational|available\s+at\s+our\s+branches\s+during\s+normal\s+working\s+hours|submission\s+of\s+positive\s+pay\s+details\s+is\s+mandatory)\b/i.test(text)
     || /\bdone\s+\d+\s+out\s+of\s+\d+\s+free\s+transactions\s+at\s+[\w\s]+atms\b/i.test(text)
     || /\b(?:cdsl|nsdl)\s*:\s*(?:debit|credit)\s+in\s+a\/c\b[\s\S]{0,40}\b(?:etf|bees|shares?|units?|mf)\b/i.test(text)
+    || /\b(?:cdsl|nsdl)\s*:\s*(?:unpledge|pledge)\b/i.test(text)
+    || /\b(?:updated\s+(?:your\s+)?address\s+under\s+folio|address\s+in\s+folio[^\w\n]*\w+\s+is\s+updated|based\s+on\s+feed\s+received\s+from\s+kra)\b/i.test(text)
     || /\b(?:track\s+it\s+using\s+this\s+ticket\s+id|ticket\s+id\s*:\s*\d+\s+on\s+the\s+help\s+section|we're\s+on\s+it\s+and\s+will\s+get\s+back\s+to\s+you\s+in\s+\d+[-–]\d+\s+hours)\b/i.test(text)
     || /\benable\s+online,\s+international\s+(?:and|&)\s+contactless\s+transactions\b/i.test(text)
     || /\byour\s+ekyc\s+has\s+been\s+successfully\s+completed\b/i.test(text)
-    || /\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,60}\bwill\s+be\s+paused\b/i.test(text)
+    || /\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,80}\b(?:paused|unavailable|interrupted)\b/i.test(text)
+    || /\bregistration\s+alert\s*:\s*device\s+name\b/i.test(text)
+    || /\bcoupons?\s+expire\b/i.test(text)
+    || /\b(?:order\b[\s\S]{0,40}\b(?:is\s+)?dispatched\s+through|order\s+(?:is\s+)?dispatched\s+through|we\s+have\s+received\s+your\s+order\s+id)\b/i.test(text)
+    || /\blifetime[- ]free\s+credit\s+card\s+facility\s+has\s+been\s+enabled\b/i.test(text)
     || /\b(?:bse\s+trade\s+confirmation|welcome\s+to\s+nse,\s+you\s+have\s+been\s+registered\b|registered\s+with\s+[\w\s]+in\s+segment(?:\(s\))?|registered\s+with\s+[\w\s]+in\s+segment\(s\))\b/i.test(text)
     || /\b(?:puc\s+certificate\s+for\s+vehicle\b|your\s+itr\s+for\s+ay\b[\s\S]{0,30}\bawaits\s+at\s+the\s+e[- ]?filing\s+portal)\b/i.test(text)
     || /\b(?:renew\s+your\s+expired\s+(?:two\s+wheeler|car|motor|vehicle|health)?\s*insurance\b|will\s+expire\s+on\b[\s\S]{0,50}\b(?:premium\s+starts?\s+(?:just\s+)?(?:at\s+)?(?:rs\.?|inr)|instant\s+renewal,\s+visit|renew\s+before\s+expiry))\b/i.test(text)
+    || /\b(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+for\b[\s\S]{0,50}\b(?:has\s+expired|expires\s+today|will\s+expire)\b/i.test(text)
+    || /\b(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+expired\b/i.test(text)
     || /\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+card\s+with\s+limit\s+upto|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application)\b/i.test(text)
     || /\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b/i.test(text)
     || (/-p\s*$/i.test(String(sender || '')) && !/\b(?:txn|transaction|debited|credited|spent|paid|charged|received|refund|statement|bill\s+due)\b/i.test(text));
@@ -92,7 +100,7 @@ function isNonTransactionAlert(body) {
 function isBankAccountUpiMessage(body) {
   const text = String(body || '').toLowerCase();
   return /\b(?:upi|a\/?c\.?|account)\b/.test(text)
-    && (/\b(?:debit(?:ed)?|paid|spent|sent|transferred)\b/.test(text) || isWalletLoadMessage(text))
+    && (/\b(?:debit(?:ed)?|paid|spent|sent|transferred)\b/.test(text) || /\bdeducted\s+from\b[\s\S]{0,80}?\btowards\b/.test(text) || isWalletLoadMessage(text))
     && !/\b(?:credit|debit)\s+card\b/.test(text);
 }
 
@@ -514,7 +522,10 @@ function parseBuiltInAccountDebit(sms) {
 
   // Without a beneficiary or an explicit own-account destination, the debit
   // could be a purchase, loan, transfer, or cash movement. Ask for review.
-  const payeeMatch = body.match(/\b(?:at|to|for|fvg|beneficiary|payee)\s+([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80})/i);
+  const towardsMatch = body.match(
+    /\btowards\s+([A-Za-z0-9][A-Za-z0-9 .&'@_/-]{1,80}?)(?=\s+(?:umrn\s*:?|avl|available|bal(?:ance)?|ref(?:erence)?|txn|transaction|on|dated)\b|\s*\(|[.,;]|$)/i
+  );
+  const payeeMatch = towardsMatch || body.match(/\b(?:at|to|for|fvg|beneficiary|payee)\s+([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80})/i);
   if (!payeeMatch || /^(?:rs|inr|rupees?)(?:\b|$)/i.test(payeeMatch[1])) {
     return { ok: false, reason: 'ambiguous_account_debit' };
   }
@@ -523,7 +534,7 @@ function parseBuiltInAccountDebit(sms) {
   if (!amountMatch) return { ok: false, reason: 'no_account_debit_match' };
 
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
-  const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
+  const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?|umrn)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
   const walletLoad = isWalletLoadMessage(body);
 
   return {
@@ -532,7 +543,7 @@ function parseBuiltInAccountDebit(sms) {
     parserKind: 'builtin_account_debit',
     fields: withAvailableBalance({
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
-      merchant: walletLoad ? 'Wallet load' : 'Bank transfer',
+      merchant: towardsMatch ? towardsMatch[1].trim() : (walletLoad ? 'Wallet load' : 'Bank transfer'),
       ...(accountLast4 ? { accountLast4 } : {}),
       ...(dateMatch ? { date: dateMatch[1] } : {}),
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
@@ -638,6 +649,7 @@ function isSuccessfulSpend(body) {
   if (isRejectedTransaction(text)) return false;
   if (isNonTransactionAlert(text)) return false;
   return /\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b/.test(text)
+    || /\bdeducted\s+from\b[\s\S]{0,80}?\btowards\b/.test(text)
     || /\b(?:payment|purchase|transaction)\b[\s\S]{0,80}\b(?:successful|successfully|completed)\b/.test(text)
     || isWalletLoadMessage(text);
 }
