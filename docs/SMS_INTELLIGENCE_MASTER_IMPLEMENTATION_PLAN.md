@@ -1,6 +1,8 @@
 # PandaPay SMS intelligence: master implementation plan
 
-**Status:** implementation handoff, 21 October 2026. No feature code is implemented by this document. This plan is the source of truth for the SMS classifier, Gemini processing, shared learning, product projections, Needs Review and admin monitoring. Where an older diagram says every successful SMS becomes a transaction, follow this plan's **multi-fact** contract instead.
+**Status:** original implementation handoff, 21 October 2026. No feature code is implemented by this document. For remaining work, [the final autonomous implementation plan](SMS_INTELLIGENCE_FINAL_AUTONOMOUS_IMPLEMENTATION_PLAN.md) is authoritative. This document remains a reference for the SMS classifier, Gemini processing, product projections, Needs Review and admin monitoring. Where an older diagram says every successful SMS becomes a transaction, follow this plan's **multi-fact** contract instead.
+
+**22 October 2026 learning decision:** For the *remaining autonomous learning work*, follow [the researched technique decision](SMS_LEARNING_TECHNIQUE_RESEARCH_AND_DECISION.md) and [implementation plan](SMS_AUTONOMOUS_LEARNING_AND_CANONICAL_FACTS_PLAN.md). They supersede this document's earlier requirement for routine admin approval of shared rules. Candidate generation, evidence checks, shadow/canary promotion, and rollback are automatic; admin retains monitoring and emergency controls. Existing capture, fact, and Gemini compatibility requirements in this master plan still apply.
 
 For GLM 5.3 Flash as the coding agent, start with the [copy-ready implementation handoff](GLM53_FLASH_SMS_IMPLEMENTATION_HANDOFF.md). Gemini remains the application API provider; GLM is the implementer.
 
@@ -60,7 +62,7 @@ flowchart TD
   N --> Q[Confirm / correct / dismiss]
   Q --> R[User override + safe feedback label]
   R --> S[Candidate template + regression evaluation]
-  S -->|admin approved| T[Versioned shared rule pack]
+  S -->|automated evaluation and staged promotion| T[Versioned shared rule pack]
   T --> D
   T --> G
 ```
@@ -114,9 +116,9 @@ Extend `NeedsReviewKind` and the existing `app/lib/features/activity/needs_revie
 
 ## 8. Shared learning, new users and admin
 
-Cluster reviewed or validated cases by normalized sender and wording structure; infer stable anchors and variable slots. Keep a candidate rule private until it passes positive, hard-negative, multi-user and historical replay. A few matching users seed a candidate, not an automatically trusted global rule. Admin approves a versioned rule pack; the server uses it immediately and devices download/cache it for offline detection. Roll back a rule by version if precision degrades. Never distribute a user's raw SMS, account mapping or corrections as a shared rule.
+Cluster reviewed or validated cases by normalized sender and wording structure; infer stable anchors and variable slots. Keep a candidate rule private until it passes positive, hard-negative, multi-user and historical replay. A few matching users seed a candidate, not an automatically trusted global rule. A narrowly privileged worker automatically promotes a versioned rule pack after the newer plan's evidence, shadow, and cohort gates pass; the server uses it immediately and devices download/cache it for offline detection. Roll back a rule by version if precision degrades. Never distribute a user's raw SMS, account mapping or corrections as a shared rule.
 
-Add the [SMS AI Operations](sms-ai-admin-monitoring-plan.md) view in the existing Flutter Web console. Store job, batch, batch-item, event and quota records with the worker. Show queue depth/age, effective dispatch order, grouped calls, quota headroom, 429/backoff, parser/rule/model versions, validation reasons, per-family outcomes and user correction rates. Admin endpoints are read-only first, paginated, auth-gated and redacted. Later controls (pause/resume/retry) require audit logs and cannot replay over a user correction.
+Add the [SMS AI Operations](sms-ai-admin-monitoring-plan.md) view in the existing Flutter Web console. Store job, batch, batch-item, event and quota records with the worker. Show queue depth/age, effective dispatch order, grouped calls, quota headroom, 429/backoff, parser/rule/model versions, validation reasons, per-family outcomes and user correction rates. Admin endpoints are read-only first, paginated, auth-gated and redacted. Later controls (pause/resume/retry) require audit logs and cannot replay over a user correction. Routine rule promotion follows the automatic evidence gates in the newer learning plan.
 
 ## 9. Repository implementation sequence
 

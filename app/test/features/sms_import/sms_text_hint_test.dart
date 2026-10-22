@@ -364,4 +364,52 @@ void main() {
       expect(capturesFinancialSms('   \n\t  '), isFalse);
     });
   });
+
+  group('classifySmsTriage', () {
+    test('classifies OTP/security as sensitive', () {
+      final res = classifySmsTriage('VM-BANK', '8123 is your OTP. Do not share.');
+      expect(res.kind, SmsTriageKind.sensitive);
+      expect(res.reasonCode, 'security_message');
+    });
+
+    test('classifies completed movement as financialCandidate', () {
+      final res = classifySmsTriage('VM-HDFCBK', 'Rs.500 debited from a/c XX1234 at SWIGGY. Get 10% off next order');
+      expect(res.kind, SmsTriageKind.financialCandidate);
+      expect(res.reasonCode, 'financial_evidence');
+    });
+
+    test('classifies statement/bill as financialCandidate', () {
+      final res = classifySmsTriage('VM-AXISBK', 'Statement generated for Card XX1234. Total amount due Rs. 5000 by 15-Nov.');
+      expect(res.kind, SmsTriageKind.financialCandidate);
+      expect(res.reasonCode, 'financial_evidence');
+    });
+
+    test('classifies AutoPay mandate as financialCandidate', () {
+      final res = classifySmsTriage('VM-ICICIB', 'Your AutoPay mandate of Rs. 999 is scheduled.');
+      expect(res.kind, SmsTriageKind.financialCandidate);
+      expect(res.reasonCode, 'mandate_lifecycle');
+    });
+
+    test('classifies declined payment attempt as financialCandidate', () {
+      final res = classifySmsTriage('VM-HDFCBK', 'Your txn of Rs. 400 on card xx1234 was declined.');
+      expect(res.kind, SmsTriageKind.financialCandidate);
+      expect(res.reasonCode, 'failed_attempt');
+    });
+
+    test('classifies promo message as promotion', () {
+      final res = classifySmsTriage('VM-HDFCBK-P', 'Apply now for pre-approved personal loan up to 5 Lakhs!');
+      expect(res.kind, SmsTriageKind.promotion);
+    });
+
+    test('classifies empty or random text as unrelated', () {
+      final res1 = classifySmsTriage('VM-OTHER', '');
+      expect(res1.kind, SmsTriageKind.unrelated);
+      expect(res1.reasonCode, 'empty_body');
+
+      final res2 = classifySmsTriage('VM-OTHER', 'Good morning, have a nice day!');
+      expect(res2.kind, SmsTriageKind.unrelated);
+      expect(res2.reasonCode, 'no_financial_signal');
+    });
+  });
+
 }

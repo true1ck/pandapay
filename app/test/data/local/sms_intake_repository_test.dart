@@ -110,4 +110,29 @@ void main() {
       );
     },
   );
+
+  test('records source decision and forgetRaw cleans intake while retaining decision', () {
+    final key = smsSourceKey('a', 'VM-HDFC', 'OTP 123456');
+    intake.recordDecision(
+      'a',
+      sourceKey: key,
+      decision: 'ignored_promotion',
+      state: 'final',
+      reasonCode: 'promotional_message',
+      receivedAt: 1729200000000,
+      policyVersion: 'v1',
+    );
+
+    final dec = intake.decision('a', key);
+    expect(dec, isNotNull);
+    expect(dec!.decision, 'ignored_promotion');
+    expect(dec.state, 'final');
+    expect(dec.reasonCode, 'promotional_message');
+    expect(intake.wasProcessed('a', key), isTrue);
+
+    intake.capture('a', sms('temp'));
+    intake.forgetRaw('a', key);
+    expect(intake.decision('a', key), isNotNull);
+  });
+
 }

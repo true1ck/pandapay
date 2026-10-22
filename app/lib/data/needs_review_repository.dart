@@ -53,14 +53,17 @@ class NeedsReviewItem {
     this.aiSuggestions,
   });
 
-  NeedsReviewItem copyWith({List<Map<String, dynamic>>? aiSuggestions}) =>
+  NeedsReviewItem copyWith({
+    NeedsReviewKind? kind,
+    List<Map<String, dynamic>>? aiSuggestions,
+  }) =>
       NeedsReviewItem(
         id: id,
         sender: sender,
         body: body,
         reason: reason,
         receivedAt: receivedAt,
-        kind: kind,
+        kind: kind ?? this.kind,
         aiSuggestions: aiSuggestions ?? this.aiSuggestions,
       );
 
@@ -106,8 +109,9 @@ void addNeedsReviewSync(
   String namespace,
   NeedsReviewItem item,
 ) {
-  if (item.kind == NeedsReviewKind.transaction &&
-      LocalSmsParser.isNonTransactionNoise(item.sender, item.body)) {
+  final resolved = NeedsReviewRepository.resolveItemKind(item);
+  if (resolved.kind == NeedsReviewKind.transaction &&
+      LocalSmsParser.isNonTransactionNoise(resolved.sender, resolved.body)) {
     return;
   }
   database.db.execute(
@@ -115,7 +119,7 @@ void addNeedsReviewSync(
   );
   database.db.execute(
     'INSERT OR REPLACE INTO local_needs_review VALUES (?,?,?)',
-    [namespace, item.id, jsonEncode(item.toJson())],
+    [namespace, resolved.id, jsonEncode(resolved.toJson())],
   );
 }
 
@@ -175,8 +179,10 @@ class NeedsReviewRepository {
             namespace,
           ])
           .map(
-            (r) => NeedsReviewItem.fromJson(
-              jsonDecode(r['payload'] as String) as Map<String, dynamic>,
+            (r) => resolveItemKind(
+              NeedsReviewItem.fromJson(
+                jsonDecode(r['payload'] as String) as Map<String, dynamic>,
+              ),
             ),
           )
           .toList();
@@ -189,8 +195,9 @@ class NeedsReviewRepository {
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
     final items = raw
         .map(
-          (s) =>
-              NeedsReviewItem.fromJson(jsonDecode(s) as Map<String, dynamic>),
+          (s) => resolveItemKind(
+            NeedsReviewItem.fromJson(jsonDecode(s) as Map<String, dynamic>),
+          ),
         )
         .toList();
     final noise = items.where(_isNoise).map((item) => item.id).toList();
@@ -199,51 +206,91 @@ class NeedsReviewRepository {
       ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
   }
 
-  bool _isNoise(NeedsReviewItem item) =>
-      item.kind == NeedsReviewKind.transaction &&
-      LocalSmsParser.isNonTransactionNoise(item.sender, item.body);
+  static bool isSecurityOrServiceAlert(String body) {
+    final text = body.toLowerCase();
+    return RegExp(
+      r'\b(?:transaction\s+check\s+alert|check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|call\s+forwarding\b|sim\s+swap|service\s+alert|fraud\s+alert|suspicious\s+activity)\b',
+    ).hasMatch(text);
+  }
+
+  static bool isInvestmentSettlement(String body) {
+    final text = body.toLowerCase();
+    return RegExp(
+      r'\b(?:kotak\s+neo|demat|settlement\s+payout|running\s+a/?c\s+settlement)\b',
+    ).hasMatch(text);
+  }
+
+  static bool isMandateReview(String body) {
+    final text = body.toLowerCase();
+    return RegExp(
+      r'\b(?:auto[-\s]?pay|e[-\s]?mandate|standing\s+instruction)\b',
+    ).hasMatch(text);
+  }
+
+  static NeedsReviewItem resolveItemKind(NeedsReviewItem item) {
+    if (item.kind != NeedsReviewKind.transaction) return item;
+    if (isSecurityOrServiceAlert(item.body)) {
+      return item.copyWith(kind: NeedsReviewKind.securityOrServiceAlert);
+    }
+    if (isInvestmentSettlement(item.body)) {
+      return item.copyWith(kind: NeedsReviewKind.investmentSettlement);
+    }
+    if (isMandateReview(item.body)) {
+      return item.copyWith(kind: NeedsReviewKind.mandate);
+    }
+    return item;
+  }
+
+  bool _isNoise(NeedsReviewItem item) {
+    final resolved = resolveItemKind(item);
+    if (resolved.kind != NeedsReviewKind.transaction) {
+      return false;
+    }
+    return LocalSmsParser.isNonTransactionNoise(resolved.sender, resolved.body);
+  }
 
   Future<void> add(NeedsReviewItem item) async {
-    if (_isNoise(item)) return;
+    final resolved = resolveItemKind(item);
+    if (_isNoise(resolved)) return;
     if (loadDatabase != null) {
       final db = await _database();
       final current = await fetchAll();
       if (current.any(
         (old) =>
-            old.id != item.id &&
+            old.id != resolved.id &&
             old.sender.trim().toLowerCase() ==
-                item.sender.trim().toLowerCase() &&
-            _normalizeBody(old.body) == _normalizeBody(item.body) &&
-            old.receivedAt.difference(item.receivedAt).abs() <=
+                resolved.sender.trim().toLowerCase() &&
+            _normalizeBody(old.body) == _normalizeBody(resolved.body) &&
+            old.receivedAt.difference(resolved.receivedAt).abs() <=
                 const Duration(minutes: 5),
       )) {
         return;
       }
       db.db.execute(
         'INSERT OR REPLACE INTO local_needs_review VALUES (?,?,?)',
-        [namespace, item.id, jsonEncode(item.toJson())],
+        [namespace, resolved.id, jsonEncode(resolved.toJson())],
       );
       return;
     }
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
-    final normalizedSender = item.sender.trim().toLowerCase();
+    final normalizedSender = resolved.sender.trim().toLowerCase();
     // SMS gateways sometimes add indentation/newlines when the same alert is
     // delivered through two channels. Treat that as the same message while
     // preserving the original body for display and one-tap resolution.
-    final normalizedBody = _normalizeBody(item.body);
+    final normalizedBody = _normalizeBody(resolved.body);
     var duplicate = false;
     final withoutRetry = raw.where((entry) {
       try {
         final existing = NeedsReviewItem.fromJson(
           jsonDecode(entry) as Map<String, dynamic>,
         );
-        if (existing.id == item.id) return false;
+        if (existing.id == resolved.id) return false;
         final sameMessage =
             existing.sender.trim().toLowerCase() == normalizedSender &&
             _normalizeBody(existing.body) == normalizedBody;
         final closeInTime =
-            existing.receivedAt.difference(item.receivedAt).abs() <=
+            existing.receivedAt.difference(resolved.receivedAt).abs() <=
             const Duration(minutes: 5);
         if (sameMessage && closeInTime) duplicate = true;
         return true;
@@ -254,7 +301,7 @@ class NeedsReviewRepository {
     if (duplicate) return;
     await prefs.setStringList(_needsReviewKey, [
       ...withoutRetry,
-      jsonEncode(item.toJson()),
+      jsonEncode(resolved.toJson()),
     ]);
   }
 

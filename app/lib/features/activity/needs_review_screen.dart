@@ -47,26 +47,14 @@ String _reviewInstrumentLabel(TxnInstrument instrument) => switch (instrument) {
   TxnInstrument.other => 'Other payment',
 };
 
-bool _isSecurityOrServiceAlert(String body) {
-  final text = body.toLowerCase();
-  return RegExp(
-    r'\b(?:transaction\s+check\s+alert|check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|call\s+forwarding\b|sim\s+swap|service\s+alert|fraud\s+alert|suspicious\s+activity)\b',
-  ).hasMatch(text);
-}
+bool _isSecurityOrServiceAlert(String body) =>
+    NeedsReviewRepository.isSecurityOrServiceAlert(body);
 
-bool _isInvestmentSettlement(String body) {
-  final text = body.toLowerCase();
-  return RegExp(
-    r'\b(?:kotak\s+neo|demat|settlement\s+payout|running\s+a/?c\s+settlement)\b',
-  ).hasMatch(text);
-}
+bool _isInvestmentSettlement(String body) =>
+    NeedsReviewRepository.isInvestmentSettlement(body);
 
-bool _isMandateReview(String body) {
-  final text = body.toLowerCase();
-  return RegExp(
-    r'\b(?:auto[-\s]?pay|e[-\s]?mandate|standing\s+instruction)\b',
-  ).hasMatch(text);
-}
+bool _isMandateReview(String body) =>
+    NeedsReviewRepository.isMandateReview(body);
 
 String _reviewTypeLabel(NeedsReviewItem item) {
   if (item.kind == NeedsReviewKind.securityOrServiceAlert ||

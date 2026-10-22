@@ -319,6 +319,25 @@ List<SmsFactValidationEntry> buildSmsFactsForObservation({
     default:
       break;
   }
+
+  // Multi-fact extraction: an SMS that is primarily a transaction, bill, or attempt
+  // can also carry an explicit balance snapshot.
+  if (observation.eventType != LocalSmsEventType.balance &&
+      observation.availableBalance != null &&
+      observation.availableBalance!.paise >= 0) {
+    final balance = observation.availableBalance!;
+    final isCard = _reMatch(r'\\bcredit\\s+(?:card|limit)\\b', lower);
+    final payload = <String, Object?>{
+      'availableBalanceInr': balance.rupees,
+      'asOfAt': asOfAt,
+      'instrument': isCard ? 'credit_card' : 'upi_bank',
+      if (isCard && observation.cardLast4 != null) 'last4': observation.cardLast4,
+      if (!isCard && observation.accountLast4 != null)
+        'accountLast4': observation.accountLast4,
+    };
+    add('balance_snapshot', payload);
+  }
+
   return facts;
 }
 

@@ -31,6 +31,30 @@ class SmsIntakeEntry {
   const SmsIntakeEntry(this.id, this.message);
 }
 
+class SmsSourceDecision {
+  final String sourceKey;
+  final String decision;
+  final String state;
+  final String reasonCode;
+  final String policyVersion;
+  final String? parserVersion;
+  final int? bundleVersion;
+  final int receivedAt;
+  final int decidedAt;
+
+  const SmsSourceDecision({
+    required this.sourceKey,
+    required this.decision,
+    required this.state,
+    required this.reasonCode,
+    required this.policyVersion,
+    this.parserVersion,
+    this.bundleVersion,
+    required this.receivedAt,
+    required this.decidedAt,
+  });
+}
+
 /// Append/ack queue, not read/replace. An SMS arriving during an upload is
 /// never overwritten by that upload's old copy of the queue. Failed items
 /// remain on disk; there is no drop-oldest limit.
@@ -54,6 +78,19 @@ class SmsIntakeRepository {
       );
       CREATE INDEX IF NOT EXISTS sms_captured_by_date
         ON sms_captured_messages(namespace,received_at DESC,id);
+      CREATE TABLE IF NOT EXISTS sms_source_decisions (
+        namespace TEXT NOT NULL,
+        source_key TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        state TEXT NOT NULL,
+        reason_code TEXT NOT NULL,
+        policy_version TEXT NOT NULL,
+        parser_version TEXT,
+        bundle_version INTEGER,
+        received_at INTEGER NOT NULL,
+        decided_at INTEGER NOT NULL,
+        PRIMARY KEY(namespace, source_key)
+      );
     ''');
     if (!database.db
         .select('PRAGMA table_info(sms_intake)')
@@ -66,6 +103,71 @@ class SmsIntakeRepository {
       'CREATE INDEX IF NOT EXISTS sms_pending_retry ON sms_intake(namespace,next_attempt)',
     );
   }
+
+  SmsSourceDecision? decision(String namespace, String sourceKey) {
+    final rows = database.db.select(
+      'SELECT source_key, decision, state, reason_code, policy_version, '
+      'parser_version, bundle_version, received_at, decided_at '
+      'FROM sms_source_decisions WHERE namespace=? AND source_key=? LIMIT 1',
+      [namespace, sourceKey],
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    return SmsSourceDecision(
+      sourceKey: row['source_key'] as String,
+      decision: row['decision'] as String,
+      state: row['state'] as String,
+      reasonCode: row['reason_code'] as String,
+      policyVersion: row['policy_version'] as String,
+      parserVersion: row['parser_version'] as String?,
+      bundleVersion: row['bundle_version'] as int?,
+      receivedAt: row['received_at'] as int,
+      decidedAt: row['decided_at'] as int,
+    );
+  }
+
+  void recordDecision(
+    String namespace, {
+    required String sourceKey,
+    required String decision,
+    required String state,
+    required String reasonCode,
+    required int receivedAt,
+    String? parserVersion,
+    int? bundleVersion,
+    String policyVersion = 'v1',
+  }) {
+    database.db.execute(
+      'INSERT OR REPLACE INTO sms_source_decisions ('
+      'namespace, source_key, decision, state, reason_code, '
+      'policy_version, parser_version, bundle_version, received_at, decided_at'
+      ') VALUES (?,?,?,?,?,?,?,?,?,?)',
+      [
+        namespace,
+        sourceKey,
+        decision,
+        state,
+        reasonCode,
+        policyVersion,
+        parserVersion,
+        bundleVersion,
+        receivedAt,
+        now().millisecondsSinceEpoch,
+      ],
+    );
+  }
+
+  void forgetRaw(String namespace, String sourceKey) {
+    database.db.execute('DELETE FROM sms_intake WHERE namespace=? AND id=?', [
+      namespace,
+      sourceKey,
+    ]);
+    database.db.execute(
+      'DELETE FROM sms_captured_messages WHERE namespace=? AND id=?',
+      [namespace, sourceKey],
+    );
+  }
+
   String capture(String namespace, QueuedSms sms) {
     final id = smsSourceKey(namespace, sms.sender, sms.body);
     remember(namespace, sms);
@@ -114,8 +216,9 @@ class SmsIntakeRepository {
   }
 
   bool wasProcessed(String namespace, String id) => database.db.select(
-    'SELECT 1 FROM sms_captured_messages WHERE namespace=? AND id=? AND processed=1',
-    [namespace, id],
+    'SELECT 1 FROM sms_captured_messages WHERE namespace=? AND id=? AND processed=1 '
+    'UNION ALL SELECT 1 FROM sms_source_decisions WHERE namespace=? AND source_key=? AND state="final"',
+    [namespace, id, namespace, id],
   ).isNotEmpty;
 
   List<String> capturedBodies(String namespace, {int limit = 500}) => database
@@ -190,6 +293,10 @@ class SmsIntakeRepository {
         ns,
         id,
       ]);
+      database.db.execute(
+        'UPDATE sms_source_decisions SET state="final" WHERE namespace=? AND source_key=?',
+        [ns, id],
+      );
       database.db.execute('RELEASE SAVEPOINT sms_ack');
     } catch (_) {
       database.db.execute('ROLLBACK TO SAVEPOINT sms_ack');
@@ -215,6 +322,9 @@ class SmsIntakeRepository {
   void clear(String ns) {
     database.db.execute('DELETE FROM sms_intake WHERE namespace=?', [ns]);
     database.db.execute('DELETE FROM sms_captured_messages WHERE namespace=?', [
+      ns,
+    ]);
+    database.db.execute('DELETE FROM sms_source_decisions WHERE namespace=?', [
       ns,
     ]);
   }

@@ -124,7 +124,7 @@ class LocalSmsParser {
       return true;
     }
     final completed = _re(
-      r'\b(?:your\s+(?:txn|transaction)\s+of|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase)\b[\s\S]{0,45}\b(?:successful|completed))',
+      r'\b(?:your\s+(?:txn|transaction)\s+of|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:recharge|payment|transaction|purchase)\b[\s\S]{0,45}\b(?:successful|completed))',
     ).hasMatch(text);
     if (completed ||
         (_re(r'\b(?:cashback|refund)\b').hasMatch(text) &&
@@ -1158,7 +1158,11 @@ class LocalSmsParser {
     }
 
     String? getGroup(String field) {
-      final idx = rule.fieldMap[field];
+      final idx = rule.fieldMap[field] ??
+          rule.fieldMap[field.replaceAll('cardLast4', 'card_last4')] ??
+          rule.fieldMap[field.replaceAll('accountLast4', 'account_last4')] ??
+          rule.fieldMap[field.replaceAll('amountInr', 'amount_inr')] ??
+          rule.fieldMap[field.replaceAll('merchantName', 'merchant_name')];
       if (idx == null || idx < 1 || idx > match.groupCount) return null;
       return match.group(idx)?.trim();
     }
@@ -1239,6 +1243,7 @@ class LocalSmsParser {
       );
 
       return LocalSmsObservation(
+        eventType: LocalSmsEventType.transaction,
         transaction: txn,
         cardLast4: last4,
         confidence: calibratedConfidence,

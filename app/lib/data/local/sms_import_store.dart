@@ -1,3 +1,4 @@
+import '../../features/sms_import/sms_text_hint.dart';
 import '../local_sms_parser.dart';
 import '../needs_review_repository.dart';
 import '../user_cards_repository.dart';
@@ -52,7 +53,9 @@ class SmsImportStore {
     List<UserCard> cards,
     SmsIntakeRepository intake,
   ) {
-    if (LocalSmsParser.sensitive(message.body)) return;
+    final triage = classifySmsTriage(message.sender, message.body);
+    if (triage.kind == SmsTriageKind.sensitive) return;
+
     final db = store.database.db;
     db.execute('SAVEPOINT sms_capture');
     try {
@@ -63,6 +66,25 @@ class SmsImportStore {
         db.execute('RELEASE SAVEPOINT sms_capture');
         return;
       }
+
+      if (triage.kind == SmsTriageKind.promotion ||
+          triage.kind == SmsTriageKind.unrelated) {
+        intake.recordDecision(
+          namespace,
+          sourceKey: sourceKey,
+          decision: triage.kind == SmsTriageKind.promotion
+              ? 'ignored_promotion'
+              : 'ignored_unrelated',
+          state: 'final',
+          reasonCode: triage.reasonCode,
+          receivedAt: message.receivedAt.millisecondsSinceEpoch,
+          policyVersion: 'v1',
+        );
+        intake.forgetRaw(namespace, sourceKey);
+        db.execute('RELEASE SAVEPOINT sms_capture');
+        return;
+      }
+
       final key = intake.capture(namespace, message);
       final observation = LocalSmsParser.parse(
         namespace: namespace,
@@ -75,6 +97,24 @@ class SmsImportStore {
         downloadedRules: downloadedRules,
       );
       if (observation != null) {
+        final decision = observation.disposition == LocalSmsDisposition.localIgnore
+            ? 'ignored_noise'
+            : (observation.disposition == LocalSmsDisposition.review
+                ? 'financial_review'
+                : 'financial_auto');
+        intake.recordDecision(
+          namespace,
+          sourceKey: key,
+          decision: decision,
+          state: 'final',
+          reasonCode: observation.reasonCodes.isNotEmpty
+              ? observation.reasonCodes.first
+              : triage.reasonCode,
+          receivedAt: message.receivedAt.millisecondsSinceEpoch,
+          parserVersion: LocalSmsParser.version.toString(),
+          bundleVersion: downloadedRules?.bundleVersion,
+          policyVersion: 'v1',
+        );
         store.saveObservation(namespace, key, {
           'id': key,
           'sender_bank': message.sender
@@ -199,6 +239,16 @@ class SmsImportStore {
         // Billing dates are selected across the captured inbox by the server.
         // A capture page is not a complete cycle, so writing the first date
         // here would lock in an older or reminder SMS before history arrives.
+      } else {
+        intake.recordDecision(
+          namespace,
+          sourceKey: key,
+          decision: 'unparsed_financial',
+          state: 'pending',
+          reasonCode: triage.reasonCode,
+          receivedAt: message.receivedAt.millisecondsSinceEpoch,
+          policyVersion: 'v1',
+        );
       }
       db.execute('RELEASE SAVEPOINT sms_capture');
     } catch (_) {
