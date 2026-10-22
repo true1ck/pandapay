@@ -1,8 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
-import 'package:pandapay/data/local_sms_parser.dart';
-import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 import 'package:pandapay/data/local/sms_import_store.dart';
 import 'package:pandapay/data/local/sms_rule_bundle.dart';
 import 'package:pandapay/data/local/sms_rule_exposure_outbox.dart';

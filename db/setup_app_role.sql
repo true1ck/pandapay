@@ -116,6 +116,15 @@ begin
     execute 'revoke insert, update, delete on table public.referral_program from app_user';
     execute 'grant select on table public.referral_program to app_user';
   end if;
+
+  -- Autonomous SMS learner health history is written only by its dedicated
+  -- worker login; the blanket public-schema grant above would otherwise give
+  -- the app role write access that the worker-health migration narrowed to
+  -- read-only. Mirrors that migration's `grant select ... to app_user`.
+  if to_regclass('public.sms_learning_worker_runs') is not null then
+    execute 'revoke insert, update, delete on table public.sms_learning_worker_runs from app_user';
+    execute 'grant select on table public.sms_learning_worker_runs to app_user';
+  end if;
 end $$;
 
 -- The `pandapay` schema is created by migration 0001, so on a brand-new
