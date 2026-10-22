@@ -1,7 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../lib/data/catalogue_repository.dart' show SpendCategory;
-import '../../../lib/data/user_cards_repository.dart' show UserCard;
+import '../../../lib/data/user_cards_repository.dart'
+    show TransactionTag, UserCard;
 import '../../../lib/features/voice/voice_action_parser.dart';
 
 void main() {
@@ -17,6 +18,14 @@ void main() {
     last4: last4,
     isDefault: false,
   );
+
+  TransactionTag tag(String id, String name) =>
+      TransactionTag(id: id, name: name);
+
+  final tags = [
+    tag('tag-office', 'Food in office'),
+    tag('tag-trip', 'Goa trip'),
+  ];
 
   test('parses an expense and resolves the existing wallet card', () {
     final draft = VoiceActionParser.parse(
@@ -109,5 +118,42 @@ void main() {
 
     expect(draft.type, VoiceActionType.unsupported);
     expect(draft.canSave, isFalse);
+  });
+
+  test('preselects a tag whose name is spoken in the transcript', () {
+    final draft = VoiceActionParser.parse(
+      'on food in office Undertaker office spent 200 rupees',
+      cards: const [],
+      categories: categories,
+      tags: tags,
+    );
+
+    expect(draft.type, VoiceActionType.expense);
+    expect(draft.tagIds, ['tag-office']);
+  });
+
+  test('leaves tags empty and save-optional when none are spoken', () {
+    final draft = VoiceActionParser.parse(
+      'spent 100 rupees on groceries',
+      cards: const [],
+      categories: categories,
+      tags: tags,
+    );
+
+    expect(draft.tagIds, isEmpty);
+    expect(draft.issues, isNot(contains(contains('tag'))));
+  });
+
+  test('attaches tags only to the segment that mentioned them', () {
+    final drafts = VoiceActionParser.parseMany(
+      'spent 100 rupees on the food in office lunch and then paid 250 rupees for the goa trip tickets',
+      cards: const [],
+      categories: categories,
+      tags: tags,
+    );
+
+    expect(drafts[0].transcript, contains('food in office'));
+    expect(drafts[0].tagIds, ['tag-office']);
+    expect(drafts[1].tagIds, ['tag-trip']);
   });
 }

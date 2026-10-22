@@ -1,5 +1,6 @@
 import '../../data/catalogue_repository.dart' show SpendCategory;
-import '../../data/user_cards_repository.dart' show TxnInstrument, UserCard;
+import '../../data/user_cards_repository.dart'
+    show TransactionTag, TxnInstrument, UserCard;
 
 enum VoiceActionType { expense, pointsRedemption, unsupported }
 
@@ -15,6 +16,7 @@ class VoiceActionDraft {
   final String? userCardId;
   final String? categoryId;
   final TxnInstrument instrument;
+  final List<String> tagIds;
   final List<String> issues;
 
   const VoiceActionDraft({
@@ -26,6 +28,7 @@ class VoiceActionDraft {
     this.userCardId,
     this.categoryId,
     this.instrument = TxnInstrument.creditCard,
+    this.tagIds = const [],
     this.issues = const [],
   });
 
@@ -43,15 +46,20 @@ class VoiceActionParser {
     String raw, {
     required List<UserCard> cards,
     required List<SpendCategory> categories,
+    List<TransactionTag> tags = const [],
   }) {
     final transcript = raw.trim();
     if (transcript.isEmpty) {
-      return [parse(transcript, cards: cards, categories: categories)];
+      return [
+        parse(transcript, cards: cards, categories: categories, tags: tags),
+      ];
     }
 
     final matches = _moneyMatches(transcript);
     if (matches.length <= 1) {
-      return [parse(transcript, cards: cards, categories: categories)];
+      return [
+        parse(transcript, cards: cards, categories: categories, tags: tags),
+      ];
     }
 
     return [
@@ -59,7 +67,13 @@ class VoiceActionParser {
         parse(
           transcript
               .substring(
-                index == 0 ? 0 : matches[index - 1].end,
+                index == 0
+                    ? 0
+                    : _segmentStart(
+                        transcript,
+                        matches[index - 1].end,
+                        matches[index].start,
+                      ),
                 index + 1 == matches.length
                     ? transcript.length
                     : matches[index + 1].start,
@@ -67,14 +81,28 @@ class VoiceActionParser {
               .trim(),
           cards: cards,
           categories: categories,
+          tags: tags,
         ),
     ];
+  }
+
+  /// Each dictation segment starts where the previous one ended — but the old
+  /// "previous match end" bound bled the prior spend's trailing clause (its
+  /// tag phrases, merchant words) into the next draft, so cut at the first
+  /// clause separator between the two money mentions instead.
+  static int _segmentStart(String text, int previousEnd, int ownStart) {
+    final separator = RegExp(
+      r'\b(?:and|then|also|plus)\b|[,;.?!]',
+      caseSensitive: false,
+    ).firstMatch(text.substring(previousEnd, ownStart));
+    return separator == null ? previousEnd : previousEnd + separator.end;
   }
 
   static VoiceActionDraft parse(
     String raw, {
     required List<UserCard> cards,
     required List<SpendCategory> categories,
+    List<TransactionTag> tags = const [],
   }) {
     final transcript = raw.trim();
     final lower = transcript.toLowerCase();
@@ -139,8 +167,32 @@ class VoiceActionParser {
       userCardId: cardMatch.card?.id,
       categoryId: category?.id,
       instrument: instrument,
+      tagIds: _matchingTagIds(lower, tags),
       issues: issues,
     );
+  }
+
+  /// Preselects every existing tag whose name appears verbatim
+  /// (word-by-word, in order) in the transcript — saying "groceries at the
+  /// food in office trip" attaches a "food in office" tag. Detection only
+  /// preseeds the review sheet's editable tag field; it never creates tags.
+  static List<String> _matchingTagIds(String text, List<TransactionTag> tags) {
+    if (tags.isEmpty) return const [];
+    final words = _words(text);
+    final matched = <String>[];
+    for (final tag in tags) {
+      final name = _words(tag.name);
+      if (name.isEmpty || name.length > words.length) continue;
+      outer:
+      for (var start = 0; start + name.length <= words.length; start++) {
+        for (var i = 0; i < name.length; i++) {
+          if (words[start + i] != name[i]) continue outer;
+        }
+        matched.add(tag.id);
+        break;
+      }
+    }
+    return matched;
   }
 
   static double? _moneyAmount(String text) {

@@ -9,7 +9,9 @@ import 'package:uuid/uuid.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/category_picker.dart';
 import '../../app/providers.dart';
+import '../../app/transaction_tag_picker.dart' show TransactionTagField;
 import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/transaction_tags_repository.dart' show TransactionTag;
 import '../../data/user_cards_repository.dart' show TxnInstrument, UserCard;
 import 'voice_action_parser.dart';
 
@@ -225,10 +227,13 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     final cards = ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
     final categories =
         ref.read(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
+    final tags =
+        ref.read(transactionTagsProvider)?.tags ?? const <TransactionTag>[];
     final drafts = VoiceActionParser.parseMany(
       _transcript,
       cards: cards,
       categories: categories,
+      tags: tags,
     );
     for (final editor in _editors) {
       editor.dispose();
@@ -337,7 +342,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
                 'Voice points redemption${editor.merchantController.text.trim().isEmpty ? '' : ': ${editor.merchantController.text.trim()}'}',
           );
         } else {
-          await repo.logTransaction(
+          final transactionId = await repo.logTransaction(
             userCardId: editor.instrument == TxnInstrument.creditCard
                 ? editor.selectedCardId
                 : null,
@@ -353,6 +358,13 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
             instrument: editor.instrument,
             clientMutationId: const Uuid().v4(),
           );
+          if (editor.selectedTagIds.isNotEmpty) {
+            // Tag links are local-first: they queue in the outbox even when
+            // offline, so a failure here can never lose the saved spend.
+            await ref.read(transactionTagsProvider)?.assign([
+              transactionId,
+            ], editor.selectedTagIds.toList());
+          }
         }
       }
       ref.invalidate(userCardsProvider);
@@ -645,6 +657,11 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
             },
           ),
           const SizedBox(height: 12),
+          TransactionTagField(
+            selectedIds: editor.selectedTagIds,
+            onChanged: (value) => setState(() => editor.selectedTagIds = value),
+          ),
+          const SizedBox(height: 12),
         ],
         DropdownButtonFormField<String>(
           initialValue: editor.selectedCardId,
@@ -723,7 +740,8 @@ class _VoiceDraftEditor {
       noteController = TextEditingController(text: draft.transcript),
       selectedCardId = draft.userCardId,
       selectedCategoryId = draft.categoryId,
-      instrument = draft.instrument;
+      instrument = draft.instrument,
+      selectedTagIds = Set<String>.of(draft.tagIds);
 
   final TextEditingController amountController;
   final TextEditingController pointsController;
@@ -732,6 +750,7 @@ class _VoiceDraftEditor {
   String? selectedCardId;
   String? selectedCategoryId;
   TxnInstrument instrument;
+  Set<String> selectedTagIds;
 
   void dispose() {
     amountController.dispose();
