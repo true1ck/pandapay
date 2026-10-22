@@ -4,6 +4,8 @@ import 'investment_classifier.dart';
 import 'user_cards_repository.dart';
 import 'local/sms_intake_repository.dart';
 import 'local/sms_rule_bundle.dart';
+import 'indian_narration_sanitizer.dart';
+import 'flashtext_merchant_extractor.dart';
 
 enum LocalSmsEventType {
   transaction,
@@ -1381,6 +1383,12 @@ class LocalSmsParser {
         merchant != null &&
         _re(r'^(?:your\s+)?(?:\w+\s+)?wallet$').hasMatch(merchant)) {
       merchant = null;
+    }
+    if (merchant != null) {
+      final sanitized = IndianNarrationSanitizer.sanitize(merchant);
+      if (sanitized.isNotEmpty) {
+        merchant = sanitized;
+      }
     }
     final ownNameTransfer =
         merchant != null &&
