@@ -146,10 +146,15 @@ void main() {
       expect(o.disposition, LocalSmsDisposition.review);
     });
 
-    test('hdfc_txn_check_alert: no spend, generic review today (screenshot case)', () {
-      final o = parseCase(cases['hdfc_txn_check_alert']!)!;
-      expect(o.transaction, isNull);
-      expect(o.disposition, LocalSmsDisposition.review);
+    test('hdfc_txn_check_alert: verification alert is dropped, not reviewed (screenshot case)', () {
+      // The corpus fixture documents the end state: this verification alert
+      // must never mint a spend or a review action. The shipped contract
+      // (7c107ea) goes one step further — the triage gate classifies it as a
+      // service notice and drops it before any observation is stored.
+      final c = cases['hdfc_txn_check_alert']!;
+      final raw = c['body'] as String;
+      expect(capturesFinancialSms(raw, sender: c['sender'] as String), isFalse);
+      expect(parseCase(c), isNull);
     });
 
     test('reversed_credit: reversal is a transfer, not earned income', () {

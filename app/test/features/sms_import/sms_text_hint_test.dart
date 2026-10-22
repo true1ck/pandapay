@@ -461,7 +461,9 @@ void main() {
 
       const hdfc = 'Transaction Check Alert! We tried to contact you twice to confirm the following txn: Rs.2,000.00 on Card XX4321 at AMAZON on 16-10-26. If this was not you, call 1860-266-2661';
       expect(looksLikeTransactionSms(hdfc), isTrue);
-      expect(capturesFinancialSms(hdfc, sender: 'VM-HDFCBK-S'), isTrue);
+      // Service-notice gate: verification alerts are dropped at triage, never
+      // surfaced as review items (the screenshot false-review case).
+      expect(capturesFinancialSms(hdfc, sender: 'VM-HDFCBK-S'), isFalse);
     });
   });
 }
