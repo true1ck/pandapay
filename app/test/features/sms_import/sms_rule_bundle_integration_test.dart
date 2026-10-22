@@ -118,11 +118,13 @@ void main() {
 
       final secondMessage = QueuedSms(
         sender: 'VK-NEOBANK-T',
-        body: 'NeoBank: Rs. 990.00 spent at Starbucks with card 4321',
+        body: 'NeoBank: 990.00 at Starbucks card 4321',
         receivedAt: DateTime(2026, 10, 21, 19, 0),
       );
       final afterRollbackChanges = await worker.capture('profile:alpha', [secondMessage]);
-      // Built-in parser doesn't know NeoBank pattern, and rules are rolled back -> no transaction change
+      // With the bundle rolled back the only remaining matcher is the built-in
+      // parser, and this wording has neither a currency keyword nor a
+      // completed-movement verb, so it produces no transaction.
       expect(afterRollbackChanges.contains('transactions'), isFalse);
     },
   );
