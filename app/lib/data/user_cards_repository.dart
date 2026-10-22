@@ -899,7 +899,41 @@ class CardDiscoveryResult {
   }
 }
 
+class DismissalQueueEntry {
+  final String sourceKey;
+  final String? sender;
+  final String? reason;
+  final String? templateText;
+  final String? sampleBody;
+  final String? family;
+  final DateTime queuedAt;
+
+  const DismissalQueueEntry({
+    required this.sourceKey,
+    this.sender,
+    this.reason,
+    this.templateText,
+    this.sampleBody,
+    this.family,
+    required this.queuedAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'sourceKey': sourceKey,
+    if (sender != null) 'sender': sender,
+    if (reason != null) 'reason': reason,
+    if (templateText != null) 'templateText': templateText,
+    if (sampleBody != null) 'sampleBody': sampleBody,
+    if (family != null) 'family': family,
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+  };
+}
+
 class UserCardsRepository {
+  final List<DismissalQueueEntry> _dismissalRetryQueue = [];
+
+  List<DismissalQueueEntry> get dismissalRetryQueue =>
+      List.unmodifiable(_dismissalRetryQueue);
   final String apiBaseUrl;
   final String accessToken;
   final http.Client _client;
@@ -1448,6 +1482,8 @@ class UserCardsRepository {
     required int factIndex,
     required Map<String, dynamic> patch,
     String? reason,
+    String? templateText,
+    String? sampleBody,
   }) async {
     final response = await _client
         .post(
@@ -1458,6 +1494,8 @@ class UserCardsRepository {
             'factIndex': factIndex,
             'patch': patch,
             'reason': ?reason,
+            'templateText': ?templateText,
+            'sampleBody': ?sampleBody,
           }),
         )
         .timeout(const Duration(seconds: 15));
@@ -1468,6 +1506,90 @@ class UserCardsRepository {
       );
     }
     return true;
+  }
+
+  /// SMS intelligence Phase 3/5: uploads a structured dismissal signal for negative learning.
+  /// Handles offline/network errors gracefully by recording to local retry queue so
+  /// user experience is never disrupted.
+  Future<bool> dismissSms({
+    required String sourceKey,
+    String? sender,
+    String? reason,
+    String? templateText,
+    String? sampleBody,
+    String? family,
+  }) async {
+    final entry = DismissalQueueEntry(
+      sourceKey: sourceKey,
+      sender: sender,
+      reason: reason,
+      templateText: templateText,
+      sampleBody: sampleBody,
+      family: family,
+      queuedAt: DateTime.now(),
+    );
+    try {
+      final response = await _client
+          .post(
+            Uri.parse('$apiBaseUrl/sms/dismiss'),
+            headers: _headers,
+            body: jsonEncode({
+              'sourceKey': sourceKey,
+              if (sender != null) 'sender': sender,
+              if (reason != null) 'reason': reason,
+              if (templateText != null) 'templateText': templateText,
+              if (sampleBody != null) 'sampleBody': sampleBody,
+              if (family != null) 'family': family,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        _dismissalRetryQueue.removeWhere((e) => e.sourceKey == sourceKey);
+        return true;
+      }
+      if (!_dismissalRetryQueue.any((e) => e.sourceKey == sourceKey)) {
+        _dismissalRetryQueue.add(entry);
+      }
+      return false;
+    } catch (_) {
+      // Offline / network failure: record to retry queue so user experience is not disrupted.
+      if (!_dismissalRetryQueue.any((e) => e.sourceKey == sourceKey)) {
+        _dismissalRetryQueue.add(entry);
+      }
+      return false;
+    }
+  }
+
+  /// Retries queued dismissals that previously failed due to offline/network issues.
+  Future<int> flushDismissalQueue() async {
+    if (_dismissalRetryQueue.isEmpty) return 0;
+    final toRetry = List<DismissalQueueEntry>.from(_dismissalRetryQueue);
+    var succeeded = 0;
+    for (final entry in toRetry) {
+      try {
+        final response = await _client
+            .post(
+              Uri.parse('$apiBaseUrl/sms/dismiss'),
+              headers: _headers,
+              body: jsonEncode({
+                'sourceKey': entry.sourceKey,
+                if (entry.sender != null) 'sender': entry.sender,
+                if (entry.reason != null) 'reason': entry.reason,
+                if (entry.templateText != null) 'templateText': entry.templateText,
+                if (entry.sampleBody != null) 'sampleBody': entry.sampleBody,
+                if (entry.family != null) 'family': entry.family,
+              }),
+            )
+            .timeout(const Duration(seconds: 10));
+        if (response.statusCode == 200) {
+          _dismissalRetryQueue.removeWhere((e) => e.sourceKey == entry.sourceKey);
+          succeeded++;
+        }
+      } catch (_) {
+        // Keep in queue for next retry
+      }
+    }
+    return succeeded;
   }
 
   /// SMS intelligence Phase 5: queues an unresolved SMS for server AI classification.

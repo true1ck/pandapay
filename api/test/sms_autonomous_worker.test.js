@@ -85,7 +85,7 @@ test('sms_autonomous_worker: proposeCandidates skips clusters with < 5 distinct 
   assert.equal(outcome.totalClusters, 1);
 });
 
-test('sms_autonomous_worker: evaluateCandidates advances valid candidate to active', async () => {
+test('sms_autonomous_worker: evaluateCandidates advances valid candidate to evaluated (never active directly)', async () => {
   const { compileTemplate } = require('../src/sms_template_compiler');
   const compiled = compileTemplate('debited by {AMOUNT} on card {LAST4} at {MERCHANT}.', 'posted_movement');
 
@@ -133,12 +133,12 @@ test('sms_autonomous_worker: evaluateCandidates advances valid candidate to acti
     },
   };
 
-  const outcome = await evaluateCandidates(mockDb, { targetState: 'active' });
+  const outcome = await evaluateCandidates(mockDb);
   assert.equal(outcome.evaluated, 1);
   assert.equal(outcome.passed, 1);
   assert.equal(outcome.rejected, 0);
   assert.equal(updates.length, 1);
-  assert.equal(updates[0].params[0], 'active');
+  assert.equal(updates[0].params[0], 'evaluated');
   assert.equal(updates[0].params[2], 'cand_123');
 });
 
@@ -292,4 +292,18 @@ test('sms_autonomous_worker: rollbackRegressedBundle handles invalid version or 
   const notFoundRes = await rollbackRegressedBundle(mockDb, 999);
   assert.equal(notFoundRes.rolledBack, false);
   assert.equal(notFoundRes.reason, 'bundle_not_found_or_already_inactive');
+});
+
+test('sms_autonomous_worker: startAutonomousWorker and stopAutonomousWorker lifecycle', async () => {
+  const { startAutonomousWorker, stopAutonomousWorker } = require('../src/sms_autonomous_worker');
+  const mockDb = {
+    async query() {
+      return { rows: [] };
+    },
+  };
+
+  const handle = startAutonomousWorker(mockDb, { intervalMs: 100000 });
+  assert.ok(handle);
+  assert.equal(typeof handle.stop, 'function');
+  stopAutonomousWorker();
 });

@@ -20,6 +20,9 @@
  * values. A later replay of POST /sms/facts with the original payload can
  * never resurrect the corrected base: the read path always applies
  * fact_overrides first (Phase 1 contract guarantee).
+ *
+ * Needs Review outcomes & dismissals are safely linked to consent-checked
+ * learning examples for the autonomous worker.
  */
 
 const smsFacts = require('./sms_facts');
@@ -190,7 +193,7 @@ function registerSmsFactsRoutes(app, {
   });
 
   app.post('/sms/facts/overrides', requireAuth, async (req, res) => {
-    const { sourceKey, factIndex, patch, reason } = req.body || {};
+    const { sourceKey, factIndex, patch, reason, templateText, sampleBody } = req.body || {};
     if (typeof sourceKey !== 'string' || !HEX64.test(sourceKey)) {
       return res.status(400).json({ error: 'sourceKey must be a hex sha256' });
     }
@@ -242,6 +245,18 @@ function registerSmsFactsRoutes(app, {
             family: target.factType,
             fields: smsLearning.changedSafeFields(target.payload, corrected?.payload),
           });
+          // Also record structured learning example for autonomous learning
+          if (baseline.sender) {
+            await smsLearning.recordLearningExample(client, {
+              profileId: req.userId,
+              sender: baseline.sender,
+              factFamily: target.factType,
+              templateText,
+              sampleBody,
+              extractedFields: corrected?.payload || patch,
+              isNegative: false,
+            });
+          }
         } catch (learningError) {
           // Learning is auxiliary. A learning-table outage must never undo
           // the user's correction or prevent the existing fact specialists.
@@ -258,6 +273,72 @@ function registerSmsFactsRoutes(app, {
     } catch (error) {
       console.error('POST /sms/facts/overrides error', error.message || error);
       res.status(500).json({ error: 'override write failed' });
+    }
+  });
+
+  app.post('/sms/dismiss', requireAuth, async (req, res) => {
+    const { sourceKey, sender, sampleBody, templateText, reason, family } = req.body || {};
+    if (sourceKey !== undefined && (typeof sourceKey !== 'string' || !HEX64.test(sourceKey))) {
+      return res.status(400).json({ error: 'sourceKey must be a hex sha256 when provided' });
+    }
+    if (sender !== undefined && (typeof sender !== 'string' || sender.length > 50)) {
+      return res.status(400).json({ error: 'sender must be a string up to 50 chars' });
+    }
+
+    try {
+      const outcome = await withUserClient(req.userId, async (client) => {
+        let senderToUse = sender;
+        if (sourceKey) {
+          const baseline = await smsFacts.loadSmsSourceFacts(client, req.userId, sourceKey);
+          if (!baseline) {
+            return { status: 404, error: 'source_not_found_or_unauthorized' };
+          }
+          if (!senderToUse) {
+            senderToUse = baseline.sender;
+          }
+        }
+
+        if (!senderToUse) {
+          return { status: 400, error: 'sender_required_when_source_unknown' };
+        }
+
+        let learningOutcome = { recorded: 0 };
+        try {
+          learningOutcome = await smsLearning.recordReviewDismissal(client, {
+            profileId: req.userId,
+            sender: senderToUse,
+            body: sampleBody || templateText || '',
+            reason: reason || 'user_dismissed',
+            family: family || 'ignore_noise',
+          });
+        } catch (learningError) {
+          console.warn('SMS dismissal learning feedback skipped:', learningError.message || learningError);
+        }
+
+        return {
+          status: 200,
+          dismissed: true,
+          learningRecorded: Boolean(learningOutcome && learningOutcome.recorded > 0),
+          learningReason: learningOutcome?.disabled ? 'consent_disabled' : (learningOutcome?.error || null),
+        };
+      });
+      res.status(outcome.status).json(outcome);
+    } catch (error) {
+      console.error('POST /sms/dismiss error', error.message || error);
+      res.status(500).json({ error: 'dismissal record failed' });
+    }
+  });
+
+  app.post('/admin/sms-learning/cycle', requireAdmin, async (req, res) => {
+    try {
+      const outcome = await withUserClient(req.userId, async (client) => {
+        const smsAutonomousWorker = require('./sms_autonomous_worker');
+        return smsAutonomousWorker.runAutonomousCycle(client, req.body || {});
+      });
+      res.status(200).json({ ok: true, ...outcome });
+    } catch (error) {
+      console.error('POST /admin/sms-learning/cycle error', error.message || error);
+      res.status(500).json({ error: 'autonomous cycle failed' });
     }
   });
 

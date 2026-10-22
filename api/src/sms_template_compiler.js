@@ -7,14 +7,87 @@
 
 const { isSafeRegex, countCaptureGroups, ALLOWED_FIELDS } = require('./sms_rule_bundle');
 
+const FINANCIAL_KEYWORDS = /\b(?:debited|credited|paid|spent|transferred|withdrawn|received|due date|amount due|available bal|avail bal)\b/i;
+
+const ISSUER_MAP = {
+  HDFC: 'HDFC',
+  HDFCBK: 'HDFC',
+  ICICI: 'ICICI',
+  ICICIB: 'ICICI',
+  SBI: 'SBI',
+  SBIN: 'SBI',
+  SBIINB: 'SBI',
+  AXIS: 'AXIS',
+  AXISBK: 'AXIS',
+  KOTAK: 'KOTAK',
+  KOTAKB: 'KOTAK',
+  PNB: 'PNB',
+  PNBSMS: 'PNB',
+  YES: 'YES',
+  YESBNK: 'YES',
+  IDFC: 'IDFC',
+  IDFCFB: 'IDFC',
+  CANARA: 'CANARA',
+  CANBNK: 'CANARA',
+  BOB: 'BOB',
+  BOI: 'BOI',
+  INDUS: 'INDUS',
+  INDUSB: 'INDUS',
+  RBL: 'RBL',
+  RBLBNK: 'RBL',
+  FEDERAL: 'FEDERAL',
+  FEDBNK: 'FEDERAL',
+};
+
+/**
+ * Extracts a normalized bank issuer token from SMS sender string (e.g. "AD-HDFCBK" -> "HDFC").
+ * Returns null if sender is empty or issuer cannot be identified.
+ * Never returns wildcards ('.*' or '*').
+ *
+ * @param {string} sender
+ * @returns {string|null}
+ */
+function deriveIssuerPrefix(sender) {
+  if (typeof sender !== 'string' || !sender.trim()) return null;
+  const upper = sender.trim().toUpperCase();
+  // Strictly forbid wildcards
+  if (upper === '.*' || upper === '*' || upper === '.+' || upper.includes('*') || upper.includes('.*')) {
+    return null;
+  }
+
+  const match = upper.match(/^[A-Z]{2}-([A-Z0-9]+)(?:-[A-Z]+)?$/);
+  const token = match ? match[1] : upper.replace(/[^A-Z0-9]/g, '');
+  if (!token) return null;
+
+  for (const [key, issuer] of Object.entries(ISSUER_MAP)) {
+    if (token.includes(key)) {
+      return issuer;
+    }
+  }
+  return token.length >= 3 ? token : null;
+}
+
+/**
+ * Derives a strict, non-wildcard sender pattern for a candidate rule.
+ * Never returns '.*' or '*' - returns null if issuer is unknown so candidate proposal can abstain.
+ *
+ * @param {string} sender
+ * @returns {string|null}
+ */
+function deriveSenderPattern(sender) {
+  const issuer = deriveIssuerPrefix(sender);
+  if (!issuer || issuer === '*' || issuer === '.*' || issuer.includes('*')) return null;
+  return issuer;
+}
+
 const SLOT_DEFINITIONS = {
-  AMOUNT: '(?:(?:₹|Rs\\.?|INR)\\s*([0-9,]+(?:\\.[0-9]{1,2})?))',
+  AMOUNT: '(?:₹|Rs\\.?|INR)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)',
   LAST4: '([0-9]{4})',
   MERCHANT: '([A-Za-z0-9\\s&._-]{2,40}?)',
-  DATE: '([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}|[0-9]{1,2}\\s+[A-Za-z]{3,9}\\s+[0-9]{2,4})',
+  DATE: '(\\d{1,2}(?:[-/]\\d{1,2}|\\s+[A-Za-z]{3,9})[-/\\s]\\d{2,4})',
   REF: '([A-Za-z0-9]{6,25})',
-  BAL: '(?:(?:₹|Rs\\.?|INR)\\s*([0-9,]+(?:\\.[0-9]{1,2})?))',
-  DUE_DATE: '([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}|[0-9]{1,2}\\s+[A-Za-z]{3,9}\\s+[0-9]{2,4})',
+  BAL: '(?:₹|Rs\\.?|INR)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)',
+  DUE_DATE: '(\\d{1,2}(?:[-/]\\d{1,2}|\\s+[A-Za-z]{3,9})[-/\\s]\\d{2,4})',
   OPT_SPACE: '\\s*',
 };
 
@@ -36,6 +109,15 @@ function compileTemplate(template, options = {}) {
   const opts = typeof options === 'string' ? { family: options } : (options || {});
   if (typeof template !== 'string' || template.trim().length === 0) {
     return { compiledRegex: null, fieldMap: {}, valid: false, error: 'template_empty_or_invalid' };
+  }
+
+  if (template.length > MAX_REGEX_LENGTH) {
+    return {
+      compiledRegex: null,
+      fieldMap: {},
+      valid: false,
+      error: `template_exceeds_max_length (${template.length} > ${MAX_REGEX_LENGTH})`,
+    };
   }
 
   const family = opts.family || 'posted_movement';
@@ -147,7 +229,16 @@ function compileTemplate(template, options = {}) {
     ? { ...opts.fieldMap }
     : fieldMap;
 
-  if (family !== 'ignore_noise') {
+  if (family === 'ignore_noise') {
+    if (FINANCIAL_KEYWORDS.test(compiledRegex)) {
+      return {
+        compiledRegex,
+        fieldMap: {},
+        valid: false,
+        error: 'ignore_noise_cannot_match_financial_keywords',
+      };
+    }
+  } else {
     for (const [field, groupIdx] of Object.entries(finalFieldMap)) {
       if (!ALLOWED_FIELDS.has(field)) {
         return {
@@ -170,10 +261,81 @@ function compileTemplate(template, options = {}) {
 
   return {
     compiledRegex,
-    fieldMap: finalFieldMap,
+    fieldMap: family === 'ignore_noise' ? {} : finalFieldMap,
     valid: true,
     error: null,
   };
+}
+
+/**
+ * Synthesizes a slot-based template from a sample body and known extracted fields.
+ * Replaces changing transaction data with typed placeholders ({AMOUNT}, {LAST4}, etc.).
+ *
+ * @param {string} sampleBody
+ * @param {object} [extractedFields]
+ * @returns {string}
+ */
+function synthesizeTemplate(sampleBody, extractedFields = {}) {
+  if (typeof sampleBody !== 'string' || !sampleBody.trim()) return '';
+  let text = sampleBody.trim().replace(/\s+/g, ' ');
+
+  // 1. Balance replacement
+  const balVal = extractedFields.availableBalance || extractedFields.currentBalance || extractedFields.bal;
+  if (balVal) {
+    const balNum = String(balVal).replace(/,/g, '');
+    const balPattern = new RegExp(`(?:₹|Rs\\.?|INR)\\s*${escapeRegex(balVal)}(?:\\.00)?|(?:₹|Rs\\.?|INR)\\s*${escapeRegex(balNum)}(?:\\.00)?`, 'i');
+    text = text.replace(balPattern, '{BAL}');
+  } else {
+    text = text.replace(/(?<=\b(?:bal|balance|avl bal|avail bal)\s*[:=]?\s*)(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\.[0-9]{1,2})?/gi, '{BAL}');
+  }
+
+  // 2. Amount replacement
+  const amtVal = extractedFields.amount || extractedFields.amountDue || extractedFields.amountInr;
+  if (amtVal) {
+    const amtNum = String(amtVal).replace(/,/g, '');
+    const amtPattern = new RegExp(`(?:₹|Rs\\.?|INR)\\s*${escapeRegex(amtVal)}(?:\\.00)?|(?:₹|Rs\\.?|INR)\\s*${escapeRegex(amtNum)}(?:\\.00)?`, 'i');
+    text = text.replace(amtPattern, '{AMOUNT}');
+  } else {
+    text = text.replace(/(?<!\{BAL\})(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\.[0-9]{1,2})?/i, '{AMOUNT}');
+  }
+
+  // 3. Due Date replacement
+  const dueDateVal = extractedFields.dueDate;
+  if (dueDateVal) {
+    text = text.replace(new RegExp(escapeRegex(String(dueDateVal)), 'i'), '{DUE_DATE}');
+  }
+
+  // 4. Date replacement
+  const dateVal = extractedFields.asOf || extractedFields.date;
+  if (dateVal) {
+    text = text.replace(new RegExp(escapeRegex(String(dateVal)), 'i'), '{DATE}');
+  } else {
+    text = text.replace(/\b[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}\b|\b[0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{2,4}\b/i, '{DATE}');
+  }
+
+  // 5. Last4 replacement
+  const last4Val = extractedFields.last4 || extractedFields.accountLast4;
+  if (last4Val && String(last4Val).length === 4) {
+    text = text.replace(new RegExp(`\\b${escapeRegex(String(last4Val))}\\b`), '{LAST4}');
+  } else {
+    text = text.replace(/(?<=\b(?:card|a\/c|ac|account)\s*(?:no\.?|ending)?\s*(?:[Xx*]{2,12})?\s*)[0-9]{4}\b/i, '{LAST4}');
+  }
+
+  // 6. Reference replacement
+  const refVal = extractedFields.reference || extractedFields.ref;
+  if (refVal) {
+    text = text.replace(new RegExp(`\\b${escapeRegex(String(refVal))}\\b`, 'i'), '{REF}');
+  } else {
+    text = text.replace(/(?<=\b(?:ref|rrn|utr|txn id)\s*[:#-]?\s*)[A-Za-z0-9]{6,25}\b/i, '{REF}');
+  }
+
+  // 7. Merchant replacement
+  const merchantVal = extractedFields.merchant;
+  if (merchantVal && typeof merchantVal === 'string' && merchantVal.length >= 2) {
+    text = text.replace(new RegExp(`(?<=\\b(?:at|to|towards|for)\\s+)${escapeRegex(merchantVal)}`, 'i'), '{MERCHANT}');
+  }
+
+  return text.trim();
 }
 
 module.exports = {
@@ -181,4 +343,7 @@ module.exports = {
   MAX_REGEX_LENGTH,
   escapeRegex,
   compileTemplate,
+  deriveIssuerPrefix,
+  deriveSenderPattern,
+  synthesizeTemplate,
 };

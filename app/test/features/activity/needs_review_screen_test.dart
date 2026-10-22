@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
@@ -44,14 +47,42 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     required int factIndex,
     required Map<String, dynamic> patch,
     String? reason,
+    String? templateText,
+    String? sampleBody,
   }) async {
     lastOverrideArgs = {
       'sourceKey': sourceKey,
       'factIndex': factIndex,
       'patch': patch,
       'reason': reason,
+      'templateText': templateText,
+      'sampleBody': sampleBody,
     };
     allOverrideArgs.add(lastOverrideArgs!);
+    return true;
+  }
+
+  Map<String, dynamic>? lastDismissArgs;
+  final List<Map<String, dynamic>> allDismissArgs = [];
+
+  @override
+  Future<bool> dismissSms({
+    required String sourceKey,
+    String? sender,
+    String? reason,
+    String? templateText,
+    String? sampleBody,
+    String? family,
+  }) async {
+    lastDismissArgs = {
+      'sourceKey': sourceKey,
+      'sender': sender,
+      'reason': reason,
+      'templateText': templateText,
+      'sampleBody': sampleBody,
+      'family': family,
+    };
+    allDismissArgs.add(lastDismissArgs!);
     return true;
   }
 
@@ -550,4 +581,183 @@ void main() {
       expect(find.text('Nothing needs review'), findsOneWidget);
     },
   );
+
+    testWidgets(
+      'dismissing not-a-transaction preserves immediate optimistic UI dismissal and calls dismissSms',
+      (tester) async {
+        final repo = _FakeUserCardsRepository();
+        await reviews.add(
+          NeedsReviewItem(
+            id: 'txn-item-123',
+            sender: 'VM-HDFCBK',
+            body: 'Debited Rs. 500 at Store',
+            receivedAt: DateTime(2026, 10, 22),
+          ),
+        );
+        await _pump(tester, repo: repo, reviews: reviews);
+
+        expect(find.text('Debited Rs. 500 at Store'), findsOneWidget);
+
+        // Tap Ignore message (_dismissNotATransaction)
+        await tester.tap(find.text('Ignore message'));
+        await tester.pumpAndSettle();
+
+        // 1. Immediate optimistic UI dismissal: item is gone immediately
+        expect(find.text('Debited Rs. 500 at Store'), findsNothing);
+        expect(find.text('Nothing needs review'), findsOneWidget);
+        expect(await reviews.fetchAll(), isEmpty);
+
+        // 2. repository.dismissSms was invoked with expected parameters
+        expect(repo.lastDismissArgs, isNotNull);
+        expect(repo.lastDismissArgs!['sourceKey'], 'txn-item-123');
+        expect(repo.lastDismissArgs!['sender'], 'VM-HDFCBK');
+        expect(repo.lastDismissArgs!['reason'], 'user_dismissed');
+        expect(repo.lastDismissArgs!['family'], 'ignore_noise');
+      },
+    );
+
+    testWidgets(
+      'dismissing commitment item preserves immediate optimistic dismissal and calls dismissSms',
+      (tester) async {
+        final repo = _FakeUserCardsRepository();
+        final commitments = CommitmentsRepository(namespace: 'user:test');
+        await reviews.add(
+          NeedsReviewItem(
+            id: 'bill-item-456',
+            sender: 'HDFCBK',
+            body: 'Your bill of Rs. 2000 is generated. Due date 28-10-2026',
+            receivedAt: DateTime(2026, 10, 22),
+            kind: NeedsReviewKind.commitment,
+          ),
+        );
+        await _pump(
+          tester,
+          repo: repo,
+          reviews: reviews,
+          commitments: commitments,
+        );
+
+        expect(find.byTooltip('Dismiss message'), findsOneWidget);
+
+        // Tap dismiss button (_dismiss)
+        await tester.tap(find.byTooltip('Dismiss message'));
+        await tester.pumpAndSettle();
+
+        // 1. Immediate optimistic UI dismissal
+        expect(await reviews.fetchAll(), isEmpty);
+        expect(find.text('Nothing needs review'), findsOneWidget);
+
+        // 2. repository.dismissSms was invoked
+        expect(repo.lastDismissArgs, isNotNull);
+        expect(repo.lastDismissArgs!['sourceKey'], 'bill-item-456');
+        expect(repo.lastDismissArgs!['sender'], 'HDFCBK');
+        expect(repo.lastDismissArgs!['reason'], 'user_dismissed');
+        expect(repo.lastDismissArgs!['family'], 'ignore_noise');
+      },
+    );
+
+    testWidgets(
+      'Dismiss all calls dismissSms for all queued items and immediately clears screen',
+      (tester) async {
+        final repo = _FakeUserCardsRepository();
+        await reviews.add(
+          NeedsReviewItem(
+            id: 'item-1',
+            sender: 's1',
+            body: 'b1',
+            receivedAt: DateTime.now(),
+          ),
+        );
+        await reviews.add(
+          NeedsReviewItem(
+            id: 'item-2',
+            sender: 's2',
+            body: 'b2',
+            receivedAt: DateTime.now(),
+          ),
+        );
+        await _pump(tester, repo: repo, reviews: reviews);
+
+        await tester.tap(find.text('Dismiss all'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Nothing needs review'), findsOneWidget);
+        expect(await reviews.fetchAll(), isEmpty);
+        expect(repo.allDismissArgs, hasLength(2));
+        expect(repo.allDismissArgs.map((a) => a['sourceKey']).toSet(), {'item-1', 'item-2'});
+      },
+    );
+
+    test(
+      'UserCardsRepository.dismissSms handles offline network error gracefully by recording to retry queue',
+      () async {
+        final failingClient = MockClient((request) async {
+          throw http.ClientException('Network is unreachable / device offline');
+        });
+
+        final repo = UserCardsRepository(
+          apiBaseUrl: 'https://api.pandapay.test',
+          accessToken: 'test-token',
+          client: failingClient,
+        );
+
+        expect(repo.dismissalRetryQueue, isEmpty);
+
+        // Calling dismissSms when offline must return false gracefully and record into local retry queue
+        final result = await repo.dismissSms(
+          sourceKey: 'abc' * 21 + 'd',
+          sender: 'AD-HDFCBK',
+          sampleBody: 'Sample SMS text',
+          reason: 'user_dismissed',
+          family: 'ignore_noise',
+        );
+
+        expect(result, isFalse);
+        expect(repo.dismissalRetryQueue, hasLength(1));
+        final entry = repo.dismissalRetryQueue.first;
+        expect(entry.sourceKey, 'abc' * 21 + 'd');
+        expect(entry.sender, 'AD-HDFCBK');
+        expect(entry.reason, 'user_dismissed');
+        expect(entry.family, 'ignore_noise');
+      },
+    );
+
+    test(
+      'UserCardsRepository.flushDismissalQueue retries offline queued dismissals upon reconnection',
+      () async {
+        var isOnline = false;
+
+        final mockClient = MockClient((request) async {
+          if (!isOnline) {
+            throw http.ClientException('Connection reset');
+          }
+          return http.Response(jsonEncode({'ok': true}), 200);
+        });
+
+        final repo = UserCardsRepository(
+          apiBaseUrl: 'https://api.pandapay.test',
+          accessToken: 'test-token',
+          client: mockClient,
+        );
+
+        // Initially offline
+        await repo.dismissSms(
+          sourceKey: 'key-offline-1',
+          sender: 'AD-HDFCBK',
+          reason: 'user_dismissed',
+        );
+        expect(repo.dismissalRetryQueue, hasLength(1));
+
+        // Still offline: flush fails, entries remain
+        final flushedOffline = await repo.flushDismissalQueue();
+        expect(flushedOffline, 0);
+        expect(repo.dismissalRetryQueue, hasLength(1));
+
+        // Device reconnects
+        isOnline = true;
+        final flushedOnline = await repo.flushDismissalQueue();
+        expect(flushedOnline, 1);
+        expect(repo.dismissalRetryQueue, isEmpty);
+      },
+    );
 }

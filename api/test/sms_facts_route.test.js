@@ -98,9 +98,9 @@ function fakeClient({ contributionsOptIn = true } = {}) {
         });
         return { rows: [] };
       }
-      if (sql.startsWith('INSERT INTO sms_learning_feedback')) {
+      if (sql.startsWith('INSERT INTO sms_learning_feedback') || sql.includes('sms_learning_examples')) {
         learningFeedback.push(params);
-        return { rows: [], rowCount: 1 };
+        return { rows: [{ id: 'ex-1' }], rowCount: 1 };
       }
       // Learning needs the user's cross-user contribution opt-in. Without it
       // the route correctly records nothing, so the fake must grant consent.
@@ -170,6 +170,10 @@ function harness() {
         handlers.set(path.endsWith('/overrides') ? 'overrides' : 'facts', hh);
         requiredAuth = requiredAuth || !!requireAuth;
       }
+      if (path === '/sms/dismiss') {
+        handlers.set('dismiss', hh);
+        requiredAuth = requiredAuth || !!requireAuth;
+      }
     },
     get: () => {},
   };
@@ -209,6 +213,7 @@ function harness() {
     mandateCalls,
     call: invoke('facts'),
     overrideCall: invoke('overrides'),
+    dismissCall: invoke('dismiss'),
   };
 }
 
@@ -575,5 +580,53 @@ test('overriding an unknown source or fact slot fails explicitly', async () => {
   assert.equal(missing.status, 400);
 });
 
+test('POST /sms/dismiss verifies source ownership and rejects unauthorized sources', async () => {
+  const client = fakeClient();
+  const route = harness();
 
+  // 1. Unknown sourceKey returns 404
+  const unowned = await route.dismissCall(client, {
+    userId: 'user-1',
+    body: { sourceKey: '1'.repeat(64), reason: 'not_a_transaction' },
+  });
+  assert.equal(unowned.status, 404);
+  assert.equal(unowned.body.error, 'source_not_found_or_unauthorized');
 
+  // 2. Missing sender and missing sourceKey returns 400
+  const missingSender = await route.dismissCall(client, {
+    userId: 'user-1',
+    body: { reason: 'not_a_transaction' },
+  });
+  assert.equal(missingSender.status, 400);
+  assert.equal(missingSender.body.error, 'sender_required_when_source_unknown');
+
+  // 3. Valid source owned by user records dismissal and resolves sender
+  await route.call(client, {
+    userId: 'user-1',
+    body: {
+      sourceKey: '2'.repeat(64),
+      sender: 'HDFCBK',
+      bodyHash: '3'.repeat(64),
+      facts: [balanceFact()],
+    },
+  });
+
+  const prevKey = process.env.SMS_LEARNING_HMAC_KEY;
+  process.env.SMS_LEARNING_HMAC_KEY = 'test_learning_secret_key_32_characters_long';
+  try {
+    const validDismiss = await route.dismissCall(client, {
+      userId: 'user-1',
+      body: {
+        sourceKey: '2'.repeat(64),
+        sampleBody: 'Your loan offer is ready',
+        reason: 'not_financial',
+      },
+    });
+    assert.equal(validDismiss.status, 200);
+    assert.equal(validDismiss.body.dismissed, true);
+    assert.equal(validDismiss.body.learningRecorded, true);
+  } finally {
+    if (prevKey === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;
+    else process.env.SMS_LEARNING_HMAC_KEY = prevKey;
+  }
+});

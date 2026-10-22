@@ -5,6 +5,8 @@ const {
   escapeRegex,
   SLOT_DEFINITIONS,
   MAX_REGEX_LENGTH,
+  deriveIssuerPrefix,
+  deriveSenderPattern,
 } = require('../src/sms_template_compiler');
 const { validateRule } = require('../src/sms_rule_bundle');
 
@@ -92,6 +94,61 @@ test('sms_template_compiler: handles OPT_SPACE without creating capture groups',
   assert.ok(sample2.match(re));
 });
 
+test('sms_template_compiler: verifies slot definitions for AMOUNT, LAST4, MERCHANT, DATE, REF, BAL, DUE_DATE', () => {
+  const allSlots = ['AMOUNT', 'LAST4', 'MERCHANT', 'DATE', 'REF', 'BAL', 'DUE_DATE'];
+  for (const slot of allSlots) {
+    assert.ok(slot in SLOT_DEFINITIONS, `Expected ${slot} in SLOT_DEFINITIONS`);
+    assert.ok(typeof SLOT_DEFINITIONS[slot] === 'string' && SLOT_DEFINITIONS[slot].length > 0);
+  }
+
+  // Verify compilation of each individual slot
+  for (const slot of allSlots) {
+    const res = compileTemplate(`Prefix {${slot}} Suffix`, 'posted_movement');
+    assert.equal(res.valid, true, `Slot ${slot} should compile successfully`);
+    assert.ok(Object.keys(res.fieldMap).length >= 1, `Slot ${slot} should produce at least one field mapping`);
+  }
+});
+
+test('sms_template_compiler: deriveIssuerPrefix and deriveSenderPattern never return wildcards .* or *', () => {
+  const wildcardInputs = ['.*', '*', '.+', '.*?', '^.*$', 'AD-.*', '*BANK*', '  *  ', '  .*  '];
+  for (const input of wildcardInputs) {
+    const prefix = deriveIssuerPrefix(input);
+    const pattern = deriveSenderPattern(input);
+    assert.equal(prefix, null, `deriveIssuerPrefix should return null for wildcard input: ${input}`);
+    assert.equal(pattern, null, `deriveSenderPattern should return null for wildcard input: ${input}`);
+  }
+
+  // Falsy / invalid inputs return null
+  assert.equal(deriveIssuerPrefix(''), null);
+  assert.equal(deriveIssuerPrefix('   '), null);
+  assert.equal(deriveIssuerPrefix(null), null);
+  assert.equal(deriveIssuerPrefix(undefined), null);
+  assert.equal(deriveSenderPattern(''), null);
+  assert.equal(deriveSenderPattern(null), null);
+
+  // Concrete issuers are resolved properly without wildcards
+  assert.equal(deriveIssuerPrefix('AD-HDFCBK'), 'HDFC');
+  assert.equal(deriveSenderPattern('AD-HDFCBK'), 'HDFC');
+
+  assert.equal(deriveIssuerPrefix('VM-ICICIB'), 'ICICI');
+  assert.equal(deriveSenderPattern('VM-ICICIB'), 'ICICI');
+
+  assert.equal(deriveIssuerPrefix('SBIINB'), 'SBI');
+  assert.equal(deriveSenderPattern('SBIINB'), 'SBI');
+
+  assert.equal(deriveIssuerPrefix('AXISBK'), 'AXIS');
+  assert.equal(deriveSenderPattern('AXISBK'), 'AXIS');
+
+  assert.equal(deriveIssuerPrefix('KOTAKB'), 'KOTAK');
+  assert.equal(deriveSenderPattern('KOTAKB'), 'KOTAK');
+
+  // Concrete unknown issuer with length >= 3 returns uppercase token, never wildcard
+  const custom = deriveSenderPattern('AD-XYZBNK');
+  assert.equal(custom, 'XYZBNK');
+  assert.ok(!custom.includes('*'));
+  assert.ok(!custom.includes('.*'));
+});
+
 test('sms_template_compiler: rejects templates with unknown slots', () => {
   const badTemplate = 'Spent {AMOUNT} on {SOMETHING_UNKNOWN}';
   const result = compileTemplate(badTemplate, 'posted_movement');
@@ -107,12 +164,34 @@ test('sms_template_compiler: rejects empty or non-string templates', () => {
   assert.equal(compileTemplate(undefined).valid, false);
 });
 
-test('sms_template_compiler: enforces MAX_REGEX_LENGTH <= 250 characters', () => {
+test('sms_template_compiler: enforces template string length <= 250 characters', () => {
+  const over250 = 'A'.repeat(251);
+  const result = compileTemplate(over250, 'posted_movement');
+  assert.equal(result.valid, false);
+  assert.match(result.error, /template_exceeds_max_length/);
+});
+
+test('sms_template_compiler: enforces MAX_REGEX_LENGTH <= 250 characters on compiled regex', () => {
   const longTemplate = 'This is a deliberately very long prefix in the SMS body designed to exceed the maximum compiled regex length limit of 250 characters: debited by {AMOUNT} on card {LAST4} at {MERCHANT} on {DATE} with ref {REF} and remaining bal {BAL}';
   const result = compileTemplate(longTemplate, 'posted_movement');
 
   assert.equal(result.valid, false);
   assert.match(result.error, /compiled_regex_exceeds_max_length/);
+});
+
+test('sms_template_compiler: ensures ReDoS-safe patterns that do not hang on pathological input', () => {
+  const template = 'debited by {AMOUNT} on card {LAST4} at {MERCHANT}';
+  const result = compileTemplate(template, 'posted_movement');
+  assert.equal(result.valid, true);
+
+  const re = new RegExp(result.compiledRegex, 'i');
+  // Attempt ReDoS with a long string of repeating spaces and characters
+  const evilInput = 'debited by Rs. ' + '9'.repeat(100) + ' on card ' + 'X'.repeat(100);
+  const startTime = Date.now();
+  re.test(evilInput);
+  const elapsedMs = Date.now() - startTime;
+  // Execution time must be nearly instantaneous (< 50ms)
+  assert.ok(elapsedMs < 50, `Expected ReDoS evaluation < 50ms, took ${elapsedMs}ms`);
 });
 
 test('sms_template_compiler: output passes validateRule in sms_rule_bundle', () => {

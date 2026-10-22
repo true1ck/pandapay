@@ -183,6 +183,8 @@ Future<void> _persistSmsFactCorrection(
   required int factIndex,
   required Map<String, dynamic> patch,
   required String reason,
+  String? sampleBody,
+  String? templateText,
 }) async {
   final namespace = ref.read(cacheNamespaceProvider);
   final cache = await ref.read(responseCacheProvider.future);
@@ -203,6 +205,8 @@ Future<void> _persistSmsFactCorrection(
       factIndex: factIndex,
       patch: patch,
       reason: reason,
+      sampleBody: sampleBody,
+      templateText: templateText,
     );
     if (accepted) {
       outbox.acknowledgeOverride(namespace, sourceKey, factIndex);
@@ -252,9 +256,19 @@ class NeedsReviewScreen extends ConsumerWidget {
               onPressed: () async {
                 final reviewItems =
                     items.valueOrNull ?? const <NeedsReviewItem>[];
+                final repo = ref.read(userCardsRepositoryProvider);
                 for (final item in reviewItems) {
                   if (item.kind == NeedsReviewKind.commitment) {
                     await _persistCommitmentDismissal(ref, item);
+                  }
+                  if (repo != null) {
+                    repo.dismissSms(
+                      sourceKey: item.id,
+                      sender: item.sender,
+                      sampleBody: item.body,
+                      reason: 'user_dismissed',
+                      family: 'ignore_noise',
+                    ).ignore();
                   }
                 }
                 final ids = [for (final item in reviewItems) item.id];
@@ -321,8 +335,19 @@ class _CommitmentNeedsReviewTileState
     try {
       await _persistCommitmentDismissal(ref, widget.item);
       ref.invalidate(commitmentsProvider);
+      // Immediate optimistic UI dismissal: remove and invalidate before background sync
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(needsReviewItemsProvider);
+      final repo = ref.read(userCardsRepositoryProvider);
+      if (repo != null) {
+        repo.dismissSms(
+          sourceKey: widget.item.id,
+          sender: widget.item.sender,
+          sampleBody: widget.item.body,
+          reason: 'user_dismissed',
+          family: 'ignore_noise',
+        ).ignore();
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -1252,8 +1277,19 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   Future<void> _dismissNotATransaction() async {
     setState(() => _busy = true);
     try {
+      // Immediate optimistic UI dismissal: remove and invalidate before background sync
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(needsReviewItemsProvider);
+      final repo = ref.read(userCardsRepositoryProvider);
+      if (repo != null) {
+        repo.dismissSms(
+          sourceKey: widget.item.id,
+          sender: widget.item.sender,
+          sampleBody: widget.item.body,
+          reason: 'user_dismissed',
+          family: 'ignore_noise',
+        ).ignore();
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -1328,6 +1364,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             'amountRole': 'posted',
           },
           reason: 'confirmed in needs review',
+          sampleBody: widget.item.body,
         );
       }
       ref.invalidate(userCardsProvider);
@@ -1397,6 +1434,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             'asOfAt': result.asOfAt.toUtc().toIso8601String(),
           },
           reason: 'confirmed in needs review',
+          sampleBody: widget.item.body,
         );
       }
       await _resolveFactSuggestion(factIdx);
@@ -1459,6 +1497,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             if (result.amount != null) 'amountDueInr': result.amount!.rupees,
           },
           reason: 'confirmed in needs review',
+          sampleBody: widget.item.body,
         );
       }
       await _resolveFactSuggestion(factIdx);
@@ -1518,6 +1557,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             if (result.amount != null) 'limitInr': result.amount!.rupees,
           },
           reason: 'confirmed in needs review',
+          sampleBody: widget.item.body,
         );
       }
       await _resolveFactSuggestion(factIdx);
