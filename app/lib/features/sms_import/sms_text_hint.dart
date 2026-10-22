@@ -61,12 +61,15 @@ bool _looksOtpOrSecurity(String lower) {
         r'\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b',
       ).hasMatch(lower) ||
       RegExp(r"\b(?:do not|don't|never)\s+share\b").hasMatch(lower) ||
-      RegExp(r'\bvalid\s+(?:for|till|until)\b').hasMatch(lower);
+      RegExp(
+        r'\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b',
+      ).hasMatch(lower);
 }
 
 const _promoWords = [
   'apply now',
   'pre-approved',
+  'pre approved',
   'lifetime free',
   'ltf',
   'personal loan',
@@ -74,6 +77,18 @@ const _promoWords = [
   'exclusive offer',
   'get free',
   'special offer',
+  'festive offer',
+  'limited period offer',
+  'use code',
+  'promo code',
+  'coupon code',
+  'recharge offer',
+  'cashback offer',
+  'win up to',
+  'claim your',
+  'instant loan',
+  'congratulations',
+  'hurry',
 ];
 
 bool _looksPromotional(String lower) => _promoWords.any(lower.contains);
@@ -112,40 +127,7 @@ bool looksLikeTransactionSms(String smsBody) {
   // 1. Hard reject obvious promotional spam
   if (_looksPromotional(lower)) return false;
 
-  // 2. Must contain transaction keywords
-  const keywords = [
-    'spent',
-    'debited',
-    'credited',
-    'received',
-    'deposited',
-    'refund',
-    'reversal',
-    'txn',
-    'transaction',
-    'purchase',
-    'paid',
-    'used for',
-    'used at',
-    'charged',
-    'withdrawn',
-    'payment of',
-    'ending with',
-    'ending in',
-    'card no',
-    'a/c',
-    'alert:',
-    'inr',
-    'rs.',
-    'rs ',
-    '₹',
-  ];
-  if (keywords.any(lower.contains)) return true;
-
-  // Statement/bill alerts are not spend alerts, but they are still required
-  // by the due-date engine. These messages often contain only a card suffix,
-  // a due date, and a statement amount, so the old transaction-only gate
-  // silently discarded them before the API could learn the card's due day.
+  // 2. Statement/bill alerts are required by the due-date engine.
   const dueDateWords = [
     'payment due',
     'due date',
@@ -171,7 +153,38 @@ bool looksLikeTransactionSms(String smsBody) {
     'maintain sufficient balance',
     'clear funds',
   ];
-  return dueDateWords.any(lower.contains);
+  if (dueDateWords.any(lower.contains)) return true;
+
+  // 3. Core financial movement verbs
+  final hasMovementVerb = RegExp(
+    r'\b(?:spent|debited|credited|withdrawn|charged|transferred|refund(?:ed)?|revers(?:al|ed)|payout|settlement|received|deposited)\b',
+    caseSensitive: false,
+  ).hasMatch(lower);
+  if (hasMovementVerb) return true;
+
+  // 4. Explicit payment or card cue with amount
+  // 3-pillar validation: never return true on standalone currency tokens ('rs.', 'inr', '₹')
+  // or 'a/c' alone. Require an amount combined with an explicit payment/txn cue OR an explicit card cue.
+  final hasCurrencyWithAmount = RegExp(
+    r'(?:inr|rs\.?|rs\s|₹)\s*[\d,]+(?:\.\d{1,2})?|[\d,]+(?:\.\d{1,2})?\s*(?:inr|rs\.?|₹)',
+    caseSensitive: false,
+  ).hasMatch(lower);
+
+  if (hasCurrencyWithAmount) {
+    final hasPaymentCue = RegExp(
+      r'\b(?:payment(?:\s+of)?|purchase(?:\s+of)?|paid|used\s+(?:for|at)|txns?|transactions?)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+
+    final hasExplicitCardCue = RegExp(
+      r'\b(?:card\b[\s\S]{0,35}?(?:ending|no\.?|xx|\*{2,}|\.{3,}|\d{4})|credit\s+card|debit\s+card)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+
+    if (hasPaymentCue || hasExplicitCardCue) return true;
+  }
+
+  return false;
 }
 
 /// SMS intelligence Phase 2: the capture decision for inbox entry points
@@ -205,22 +218,60 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
     return const SmsTriageResult(SmsTriageKind.sensitive, 'security_message');
   }
 
-  final emiSolicitation =
-      RegExp(
-        r'\b(?:eligible\s+for\s+conversion|convert(?:ion)?\s+(?:to|into)\s+(?:flexipay\s+)?emi|flexipay\s+emis?)\b',
-      ).hasMatch(lower) &&
-      !RegExp(r'\b(?:your\s+)?(?:txn|transaction)\s+of\b').hasMatch(lower);
-  if (emiSolicitation) {
+  final cleanSender = sender.trim();
+  if (cleanSender.isNotEmpty) {
+    // 10-digit mobile numbers are P2P chats or smishing fraud; Indian banks never send transaction alerts from them.
+    final is10DigitP2p = RegExp(r'^(?:\+?91[\-\s]?|0)?[6-9]\d{9}$').hasMatch(cleanSender);
+    if (is10DigitP2p) {
+      return const SmsTriageResult(SmsTriageKind.unrelated, 'p2p_mobile_number');
+    }
+
+    // TRAI 140-series telemarketing CLI (10 digits starting with 140)
+    final isTrai140Promo = RegExp(r'^(?:\+?91[\-\s]?|0)?140\d{7}$').hasMatch(cleanSender);
+    if (isTrai140Promo) {
+      return const SmsTriageResult(SmsTriageKind.promotion, 'numeric_promotional_sender');
+    }
+
+    // 6-digit numeric headers where digit 1-8 is bulk promotional SMS (TRAI DLT)
+    final isNumericPromo = RegExp(r'^(?:[A-Za-z]{2}-)?\d{6}(?:-[A-Za-z])?$').hasMatch(cleanSender);
+    if (isNumericPromo) {
+      return const SmsTriageResult(SmsTriageKind.promotion, 'numeric_promotional_sender');
+    }
+
+    // Suffix -P / -p: Treat as promotional route. Discard unless it contains an unambiguous completed card/account transaction alert.
+    final isPromotionalRoute = RegExp(r'-[Pp]$').hasMatch(cleanSender);
+    if (isPromotionalRoute) {
+      final isCompletedOrBill = LocalSmsParser.isCompletedTransactionOrBill(smsBody);
+      if (!isCompletedOrBill) {
+        return const SmsTriageResult(SmsTriageKind.promotion, 'promotional_route_sender');
+      }
+    }
+  }
+
+  final emiSolicitation = RegExp(
+    r'\b(?:eligible\s+for\s+(?:[\w\s]{0,20}\s+)?(?:conversion|emis?)|convert(?:ed|ing)?\b[\s\S]{0,60}?\b(?:in)?to\b[\s\S]{0,20}?\b(?:smart\s+|flexipay\s+|easy\s+)?emis?|can\s+(?:now\s+)?be\s+converted\s+(?:in)?to\s+emis?|flexipay\s+emis?)\b',
+  ).hasMatch(lower);
+  if (emiSolicitation &&
+      !RegExp(r'\b(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)\b').hasMatch(lower) &&
+      !RegExp(r'\b(?:debited|spent|charged)\s*(?:by|with|for)?\s*(?:₹|rs\.?|inr)').hasMatch(lower)) {
     return const SmsTriageResult(SmsTriageKind.promotion, 'emi_solicitation');
   }
 
   final strongFinancialEvidence = RegExp(
-    r'\b(?:debited|credited|spent|paid|charged|transferred|withdrawn|received|deposited|refunded)\b|\b(?:txn|transaction|purchase|recharge|payment)\b[\s\S]{0,55}\b(?:successful|completed|processed)\b|\b(?:amount|payment|minimum|total)\s+due\b|\bdue\s+(?:date|on|by)\b|\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\b(?:available|current|closing)\s+balance\b|\bcredit\s+limit\b',
-  ).hasMatch(lower);
+    r'\b(?:debited|credited|debit|credit|spent|paid|charged|transferred|withdrawn|withdrawal|received|deposited|refund|refunded|reversal|reversed|payout|settlement|deducted|sent)\b|\b(?:txn|transaction|purchase|recharge|payment)\b[\s\S]{0,55}\b(?:successful|completed|processed)\b|\b(?:amount|payment|minimum|total)\s+due\b|\bdue\s+(?:date|on|by)\b|\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\b(?:available|current|closing|avl|avail)\s+(?:bal(?:ance)?|limit)\b',
+  ).hasMatch(lower) || (
+    RegExp(r'\bcredit\s+limit\b').hasMatch(lower) &&
+    RegExp(r'\b(?:a\/?c|account|card)\b[\s\S]{0,30}\b(?:ending|no\.?|xx|\*{2,})\b').hasMatch(lower) &&
+    !RegExp(r'\b(?:apply\s+now|pre[-\s]?approved|upgrade\s+your|zero\s+joining\s+fee|no\s+annual\s+fee|lifetime\s+free)\b').hasMatch(lower)
+  );
 
   final balanceSnapshotEvidence = RegExp(
-    r'\b(?:available|current|closing)\s+balance\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?',
-  ).hasMatch(lower);
+    r'\b(?:available|current|closing|avl|avail)\s+(?:bal(?:ance)?|limit)\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?[\s\S]{0,40}\b(?:available|current|closing|avl|avail)\s+(?:bal(?:ance)?|limit)\b',
+  ).hasMatch(lower) || (
+    RegExp(r'\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?').hasMatch(lower) &&
+    RegExp(r'\b(?:a\/?c|account|card)\b[\s\S]{0,30}\b(?:ending|no\.?|xx|\*{2,})\b').hasMatch(lower) &&
+    !RegExp(r'\b(?:apply\s+now|pre[-\s]?approved|upgrade\s+your|zero\s+joining\s+fee|no\s+annual\s+fee|lifetime\s+free)\b').hasMatch(lower)
+  );
 
   if (LocalSmsParser.isNonTransactionNoise(sender, smsBody) &&
       !balanceSnapshotEvidence) {
@@ -231,7 +282,7 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
     return const SmsTriageResult(SmsTriageKind.financialCandidate, 'financial_evidence');
   }
 
-  if (RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate)\b').hasMatch(lower)) {
+  if (RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate|auto[-\s]?debit|sip\b|standing\s+instruction)\b').hasMatch(lower)) {
     return const SmsTriageResult(SmsTriageKind.financialCandidate, 'mandate_lifecycle');
   }
 

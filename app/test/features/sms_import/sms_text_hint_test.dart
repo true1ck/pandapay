@@ -410,6 +410,58 @@ void main() {
       expect(res2.kind, SmsTriageKind.unrelated);
       expect(res2.reasonCode, 'no_financial_signal');
     });
-  });
+    test('rejects 10-digit mobile phone numbers as P2P fraud', () {
+      final res1 = classifySmsTriage('9876543210', 'Rs.500 debited from your card');
+      expect(res1.kind, SmsTriageKind.unrelated);
+      expect(res1.reasonCode, 'p2p_mobile_number');
 
+      final res2 = classifySmsTriage('+91 9876543210', 'Rs.500 debited from your card');
+      expect(res2.kind, SmsTriageKind.unrelated);
+      expect(res2.reasonCode, 'p2p_mobile_number');
+
+      final res3 = classifySmsTriage('+91-9876543210', 'Rs.500 debited from your card');
+      expect(res3.kind, SmsTriageKind.unrelated);
+      expect(res3.reasonCode, 'p2p_mobile_number');
+    });
+
+    test('rejects 6-digit numeric headers as bulk promotional SMS', () {
+      final res1 = classifySmsTriage('512345', 'Rs.500 debited from your card');
+      expect(res1.kind, SmsTriageKind.promotion);
+      expect(res1.reasonCode, 'numeric_promotional_sender');
+
+      final res2 = classifySmsTriage('VM-123456', 'Rs.500 debited from your card');
+      expect(res2.kind, SmsTriageKind.promotion);
+      expect(res2.reasonCode, 'numeric_promotional_sender');
+
+      final res3 = classifySmsTriage('123456-A', 'Rs.500 debited from your card');
+      expect(res3.kind, SmsTriageKind.promotion);
+      expect(res3.reasonCode, 'numeric_promotional_sender');
+    });
+
+    test('rejects -P suffix unless unambiguous completed alert', () {
+      final res1 = classifySmsTriage('VM-HDFCBK-P', 'Enjoy big discounts on your card shopping!');
+      expect(res1.kind, SmsTriageKind.promotion);
+      expect(res1.reasonCode, 'promotional_route_sender');
+
+      final res2 = classifySmsTriage('VM-HDFCBK-P', 'Your transaction of INR 1,250.00 on card XX4321 is successful.');
+      expect(res2.kind, SmsTriageKind.financialCandidate);
+    });
+
+    test('3-pillar validation: rejects standalone currency tokens or a/c alone', () {
+      expect(looksLikeTransactionSms('Check your a/c details'), isFalse);
+      expect(looksLikeTransactionSms('Payment accepted in Rs. or INR or ₹'), isFalse);
+      expect(looksLikeTransactionSms('Fees on your a/c: Rs.'), isFalse);
+      expect(looksLikeTransactionSms('Your a/c balance is Rs. 500'), isFalse);
+    });
+
+    test('captures kotak_settlement and hdfc_txn_check_alert correctly', () {
+      const kotak = 'Kotak Neo: Running A/c settlement payout of INR 15,500.00 initiated for your demat account. You should receive funds in A/c XX1234 by EOD.';
+      expect(looksLikeTransactionSms(kotak), isTrue);
+      expect(capturesFinancialSms(kotak, sender: 'KOTAKN'), isTrue);
+
+      const hdfc = 'Transaction Check Alert! We tried to contact you twice to confirm the following txn: Rs.2,000.00 on Card XX4321 at AMAZON on 16-10-26. If this was not you, call 1860-266-2661';
+      expect(looksLikeTransactionSms(hdfc), isTrue);
+      expect(capturesFinancialSms(hdfc, sender: 'VM-HDFCBK-S'), isTrue);
+    });
+  });
 }

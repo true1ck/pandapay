@@ -1006,6 +1006,8 @@ test('promotional prices and service notices do not become transactions', () => 
     ['TX-WAKFTT-P', 'Treat yourself to a sofa at just Rs.28,125. Grab offer today.'],
     ['BP-SBICRD-S', 'Card trxns. of combined value Rs.40016 are eligible for conversion to EMIs.'],
     ['VA-SBIBNK-S', 'YONO services is being blocked due to suspicious txns in your account. Visit nearest branch.'],
+    ['VZ-ViCARE-S', 'Call Forwarding is now active on your Vodafone idea number.'],
+    ['VZ-ViCARE-S', 'Calls are being forwarded to +919876543210. To deactivate this service dial *#62#.'],
   ];
   for (const [sender, body] of noise) {
     const result = parseSmsAgainstPatterns([], { sender, body });
@@ -1017,6 +1019,14 @@ test('promotional prices and service notices do not become transactions', () => 
     body: 'Recharge of Rs.349 successful. Get an additional recharge FREE.',
   });
   assert.notEqual(real.reason, 'non_transaction_message');
+
+  const debitWithPromoFooter = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Rs.1,250 debited from card XX1234 at Swiggy. Enjoy 20% off on your next order with coupon SWIGGY20.',
+  });
+  assert.equal(debitWithPromoFooter.ok, true);
+  assert.equal(debitWithPromoFooter.fields.amountInr, 1250);
+  assert.equal(debitWithPromoFooter.fields.last4, '1234');
 });
 
 test('Slice UPI credit-card alerts remain card transactions, not bank-account UPI', () => {

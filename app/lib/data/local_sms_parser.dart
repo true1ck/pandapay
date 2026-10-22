@@ -103,10 +103,63 @@ class LocalSmsParser {
   // learned from its own AutoPay message.
   static const version = 8;
 
+  /// True if the message represents an unambiguous completed transaction, bill obligation,
+  /// or balance snapshot. Used by Stage 0 sender scrubbing to whitelist real transactional
+  /// alerts from promotional routes (-P).
+  static bool isCompletedTransactionOrBill(String body) {
+    final text = body.replaceAll(RegExp(r'\s+'), ' ');
+    if (_re(
+      r'\b(?:payment|amount|minimum|total)\s+due\b|\bdue\s+date\b|\b(?:statement|bill|premium)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b',
+    ).hasMatch(text)) {
+      return true;
+    }
+    final completed = _re(
+      r'\b(?:your\s+(?:txn|transaction)\s+of|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)(?:\s+(?:by|with|for|towards|of|amounting\s+to))?\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:sent|cash\s+withdrawal|withdrawal|auto[-\s]?debit)\s*(?:of|by)?\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase|settlement|payout)\b[\s\S]{0,45}\b(?:successful|completed|initiated|processed))',
+    ).hasMatch(text);
+    if (completed ||
+        (_re(r'\b(?:cashback|refund)\b').hasMatch(text) &&
+            _re(r'\b(?:credited|received|deposited)\b').hasMatch(text)) ||
+        _re(r'\b(?:debit|credit)\s+hua\b').hasMatch(text)) {
+      return true;
+    }
+    if (_re(r'\bautopay\s+(?:alert|reminder)\b').hasMatch(text)) {
+      return true;
+    }
+    final balance = (_re(
+          r'\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b',
+        ).hasMatch(text) ||
+        (_re(
+              r'\b(?:available|current|closing|avl|avail)\s+(?:credit\s+limit|limit)\b|\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?',
+            ).hasMatch(text) &&
+            !_re(
+              r'\b(?:apply\s+now|pre[-\s]?approved|upgrade\s+your|zero\s+joining\s+fee|no\s+annual\s+fee|lifetime\s+free|instant\s+cash\s+loan)\b',
+            ).hasMatch(text))) &&
+        !_re(r'\b(?:eligible\s+for\s+(?:conversion|flexipay|emi)|convert\s+(?:to|into)\s+emi)\b').hasMatch(text);
+    if (balance) {
+      return true;
+    }
+    return false;
+  }
+
   /// Messages with a quoted price or a card name are not necessarily a
   /// payment. Apply this before either upload or manual review, including to
   /// rows captured by an older app version.
   static bool isNonTransactionNoise(String sender, String body) {
+    final cleanSender = sender.trim();
+    if (cleanSender.isNotEmpty) {
+      // 10-digit mobile phone numbers are P2P / smishing fraud
+      if (RegExp(r'^(?:\+?91[\-\s]?|0)?[6-9]\d{9}$').hasMatch(cleanSender)) {
+        return true;
+      }
+      // TRAI 140-series telemarketing CLI
+      if (RegExp(r'^(?:\+?91[\-\s]?|0)?140\d{7}$').hasMatch(cleanSender)) {
+        return true;
+      }
+      // 6-digit numeric headers where digit 1-8 is bulk promotional SMS (TRAI DLT)
+      if (RegExp(r'^(?:[A-Za-z]{2}-)?\d{6}(?:-[A-Za-z])?$').hasMatch(cleanSender)) {
+        return true;
+      }
+    }
     final text = body.replaceAll(RegExp(r'\s+'), ' ');
     // A real amount due or statement remains useful even when the issuer
     // appends an offer. Let the bill parser handle it.
@@ -118,17 +171,19 @@ class LocalSmsParser {
     // Past aggregate spend is often quoted solely to sell an EMI conversion.
     // It is not a new debit alert.
     if (_re(
-          r'\b(?:eligible\s+for\s+conversion|convert(?:ion)?\s+(?:to|into)\s+(?:flexipay\s+)?emi|flexipay\s+emis?)\b',
+          r'\b(?:eligible\s+for\s+(?:[\w\s]{0,20}\s+)?(?:conversion|flexipay|emis?)|convert(?:ed|ing)?\b[\s\S]{0,60}?\b(?:in)?to\b[\s\S]{0,20}?\b(?:smart\s+|flexipay\s+|easy\s+)?emis?|can\s+(?:now\s+)?be\s+converted\s+(?:in)?to\s+emis?|flexipay\s+emis?)\b',
         ).hasMatch(text) &&
-        !_re(r'\b(?:your\s+)?(?:txn|transaction)\s+of\b').hasMatch(text)) {
+        !_re(r'\b(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)\b').hasMatch(text) &&
+        !_re(r'\b(?:debited|charged)\s*(?:by|with|for)?\s*(?:₹|rs\.?|inr)').hasMatch(text)) {
       return true;
     }
     final completed = _re(
-      r'\b(?:your\s+(?:txn|transaction)\s+of|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:recharge|payment|transaction|purchase)\b[\s\S]{0,45}\b(?:successful|completed))',
+      r'\b(?:your\s+(?:txn|transaction)\s+of|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)(?:\s+(?:by|with|for|towards|of|amounting\s+to))?\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:sent|cash\s+withdrawal|withdrawal|auto[-\s]?debit)\s*(?:of|by)?\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase|settlement|payout)\b[\s\S]{0,45}\b(?:successful|completed|initiated|processed))',
     ).hasMatch(text);
     if (completed ||
         (_re(r'\b(?:cashback|refund)\b').hasMatch(text) &&
-            _re(r'\b(?:credited|received|deposited)\b').hasMatch(text))) {
+            _re(r'\b(?:credited|received|deposited)\b').hasMatch(text)) ||
+        _re(r'\b(?:debit|credit)\s+hua\b').hasMatch(text)) {
       return false;
     }
     if (_re(r'\bautopay\s+(?:alert|reminder)\b').hasMatch(text)) {
@@ -140,13 +195,24 @@ class LocalSmsParser {
     final serviceNotice = _re(
       r'\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service)\b',
     ).hasMatch(text);
-    final promotionalSender = _re(r'-p\s*$').hasMatch(sender);
+    final balance = (_re(
+          r'\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b',
+        ).hasMatch(text) ||
+        (_re(
+              r'\b(?:available|current|closing|avl|avail)\s+(?:credit\s+limit|limit)\b|\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?',
+            ).hasMatch(text) &&
+            !_re(
+              r'\b(?:apply\s+now|pre[-\s]?approved|upgrade\s+your|zero\s+joining\s+fee|no\s+annual\s+fee|lifetime\s+free|instant\s+cash\s+loan)\b',
+            ).hasMatch(text))) &&
+        !_re(r'\b(?:eligible\s+for\s+(?:conversion|flexipay|emi)|convert\s+(?:to|into)\s+emi)\b').hasMatch(text);
+    if (balance) {
+      return false;
+    }
+
+    final promotionalSender = _re(r'-p\s*$').hasMatch(cleanSender);
     return offer ||
         serviceNotice ||
-        (promotionalSender &&
-            !_re(
-              r'\b(?:txn|transaction|debited|credited|spent|paid|charged|received|refund|statement|bill\s+due)\b',
-            ).hasMatch(text));
+        promotionalSender;
   }
 
   /// True only for a deposit/current/savings-bank alert. Account-shaped
