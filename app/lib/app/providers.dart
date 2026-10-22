@@ -3254,22 +3254,31 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
 
   var payments = const <TransactionEntry>[];
   if (repo != null && earliestAnchor != null) {
-    // Payments may precede their bill by most of a cycle (pre-paid) and a
-    // late payment may trail the due date; a quarter either way is the
-    // generous bound, tied to the oldest evidence so old history costs
-    // nothing on fresh installs.
     final from = earliestAnchor.subtract(const Duration(days: 92)).toUtc();
-    payments = await loadTransactionsWithOfflineCache(
-      ref,
-      repo: repo,
-      cacheKey: 'transactions:bill_payments',
-      from: from,
-    );
+    try {
+      payments = await loadTransactionsWithOfflineCache(
+        ref,
+        repo: repo,
+        cacheKey: 'transactions:bill_payments',
+        from: from,
+      );
+    } catch (_) {
+      payments = const [];
+    }
     if (ref.read(cacheNamespaceProvider) != namespace) return const {};
   }
 
+  var allTxns = payments;
+  if (allTxns.isEmpty && store != null) {
+    final localRows = store.entities(namespace, 'transactions');
+    allTxns = [
+      for (final raw in localRows)
+        TransactionEntry.fromJson(raw),
+    ];
+  }
+
   final usable = [
-    for (final txn in payments)
+    for (final txn in allTxns)
       if (isCardBillPaymentTxn(txn)) txn,
   ];
   if (evidence.isEmpty && usable.isEmpty) return const {};
@@ -3278,6 +3287,7 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
     cards: cards,
     evidence: evidence,
     payments: usable,
+    transactions: allTxns,
     now: now,
   );
 });

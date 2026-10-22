@@ -506,6 +506,30 @@ void main() {
           'AY-AIRTEL-P',
           'Breaking news: 5-Din ka Airtel International Roaming pack. Payein sirf Rs.999.',
         ),
+        (
+          'VM-NSEIND-S',
+          'NSE: Zerodha Broking reported your Fund bal Rs 5420.00 and securities bal Rs 45000.00. Balances excludes your Bank.',
+        ),
+        (
+          'AD-BSEIND-S',
+          'BSE Alert: Beware of dealing in unsolicited tips through SMS or social media. Avoid unsolicited tips.',
+        ),
+        (
+          'VK-POLBZR-P',
+          'Your car insurance policy is due for renewal. Renew now with Policybazaar for 50% discount.',
+        ),
+        (
+          'VM-PAYTMW-P',
+          'Your Paytm wallet balance is Rs 0. Add money to wallet to enjoy seamless payments.',
+        ),
+        (
+          'VZ-ViCARE-S',
+          'Call Forwarding is now active on your mobile number.',
+        ),
+        (
+          'VM-HDFCBK-S',
+          'Transaction Check Alert! We tried to contact you to confirm txn on Card 1234',
+        ),
       ];
       for (final (sender, body) in ignored) {
         expect(

@@ -88,3 +88,6 @@ PEM_PandaPay/
 .tmp-dart-appdata/
 app/.tmp-dart-appdata/
 .docker-task-config/
+
+# Local database backups
+backups/

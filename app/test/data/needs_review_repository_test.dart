@@ -269,6 +269,93 @@ void main() {
     db.close();
   });
 
+  test('fetchAll purges regulatory balance reports, unsolicited tips, insurance renewals, wallet zero balance, and service alerts automatically', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final items = [
+      NeedsReviewItem(
+        id: 'noise-reg-fund',
+        sender: 'VM-ZERODH',
+        body: 'Zerodha Broking reported your Fund bal Rs 4500 and securities bal Rs 25000. Balances excludes your Bank.',
+        receivedAt: DateTime(2026, 1, 1),
+      ),
+      NeedsReviewItem(
+        id: 'noise-tips',
+        sender: 'AD-NSEIND',
+        body: 'NSE Alert: Beware of dealing in unsolicited tips through SMS. Never trade on unsolicited tips.',
+        receivedAt: DateTime(2026, 1, 2),
+      ),
+      NeedsReviewItem(
+        id: 'noise-insurance',
+        sender: 'VK-POLBZR',
+        body: 'Your car insurance is due for renewal. Renew now with Policybazaar to get 50% off.',
+        receivedAt: DateTime(2026, 1, 3),
+      ),
+      NeedsReviewItem(
+        id: 'noise-wallet',
+        sender: 'VM-PAYTMW',
+        body: 'Your wallet balance is Rs 0. Add money to wallet to enjoy instant checkouts.',
+        receivedAt: DateTime(2026, 1, 4),
+      ),
+      NeedsReviewItem(
+        id: 'noise-forwarding',
+        sender: 'VZ-ViCARE',
+        body: 'Alert: Call Forwarding is now active on your mobile number.',
+        receivedAt: DateTime(2026, 1, 5),
+      ),
+      NeedsReviewItem(
+        id: 'noise-check-alert',
+        sender: 'VM-HDFCBK-S',
+        body: 'Transaction Check Alert! We tried to contact you to confirm txn on Card 1234.',
+        receivedAt: DateTime(2026, 1, 6),
+      ),
+      NeedsReviewItem(
+        id: 'legit-txn',
+        sender: 'AD-HDFCBK',
+        body: 'Spent Rs. 1,500 on HDFC Bank Card 1234 at Freshmart.',
+        receivedAt: DateTime(2026, 1, 7),
+      ),
+    ];
+
+    for (final item in items.take(6)) {
+      expect(NeedsReviewRepository.isNoiseItem(item), isTrue, reason: item.body);
+    }
+    expect(NeedsReviewRepository.isNoiseItem(items.last), isFalse);
+
+    await prefs.setStringList(
+      'pandapay_app.needs_review_queue_v1',
+      items.map((i) => jsonEncode(i.toJson())).toList(),
+    );
+    final repoPrefs = NeedsReviewRepository();
+    final fetchedPrefs = await repoPrefs.fetchAll();
+    expect(fetchedPrefs.map((i) => i.id).toList(), ['legit-txn']);
+    final remainingPrefs = prefs.getStringList('pandapay_app.needs_review_queue_v1');
+    expect(remainingPrefs, hasLength(1));
+    expect(jsonDecode(remainingPrefs!.single)['id'], 'legit-txn');
+
+    final db = openInMemoryForTesting();
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+    );
+    for (final item in items) {
+      db.db.execute(
+        'INSERT INTO local_needs_review VALUES (?,?,?)',
+        ['user:test', item.id, jsonEncode(item.toJson())],
+      );
+    }
+    final repoSqlite = NeedsReviewRepository(
+      namespace: 'user:test',
+      loadDatabase: () async => db,
+    );
+    final fetchedSqlite = await repoSqlite.fetchAll();
+    expect(fetchedSqlite.map((i) => i.id).toList(), ['legit-txn']);
+    final remainingSqlite = db.db.select(
+      'SELECT id FROM local_needs_review WHERE namespace=?',
+      ['user:test'],
+    );
+    expect(remainingSqlite.map((r) => r['id']).toList(), ['legit-txn']);
+    db.close();
+  });
+
   test('addNeedsReviewSync deduplicates exact id and fuzzy sender/body/time matches', () async {
     final db = openInMemoryForTesting();
     const ns = 'user:test';

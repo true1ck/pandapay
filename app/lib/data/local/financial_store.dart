@@ -12,11 +12,7 @@ import '../local_sms_parser.dart';
 /// channel, so a real account must not show up as one row per sender ID.
 /// Sender families that bill SMS use, mapped to distinctive tokens they name
 /// in the registered card's display name.
-const billFamilyCardTokens = <String, List<String>>{
-  'mytneu': ['tata neu'],
-  'tnbpay': ['tata neu'],
-  'tatanu': ['tata neu'],
-};
+const billFamilyCardTokens = <String, List<String>>{};
 
 bool familyNamesCardDisplayName(String? family, String cardDisplayName) {
   if (family == null || family.isEmpty) return false;

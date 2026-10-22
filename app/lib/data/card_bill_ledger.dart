@@ -1,7 +1,8 @@
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'user_cards_repository.dart';
-import 'local/financial_store.dart' show familyNamesCardDisplayName;
+import 'local/financial_store.dart'
+    show canonicalBankSender, familyNamesCardDisplayName;
 
 /// Evidence line an SMS bill message contributes to one card's ledger.
 /// Field-level, not message-level: a reminder can arrive with a subset
@@ -143,15 +144,119 @@ Map<String, CardBillLedger> deriveCardBills({
   required List<UserCard> cards,
   required List<CardBillEvidence> evidence,
   required List<TransactionEntry> payments,
+  List<TransactionEntry> transactions = const [],
   required DateTime now,
 }) {
+  final orphanAttributed = <String, List<CardBillEvidence>>{};
+  final orphanRows = evidence.where((e) => e.cardLast4 == null).toList();
+
+  for (final orphan in orphanRows) {
+    final candidates = _candidateCardsForEvidence(orphan, cards);
+    if (candidates.isEmpty) continue;
+
+    UserCard? target;
+    if (candidates.length == 1) {
+      target = candidates.single;
+    } else if (orphan.amountDue != null) {
+      final billPaise = orphan.amountDue!.paise;
+      final candidateSpends = <UserCard, int>{};
+      final activeCandidates = <UserCard>[];
+
+      for (final candidate in candidates) {
+        final spendPaise = _calculateCandidateCycleSpend(
+          candidate,
+          orphan.statementDate,
+          transactions,
+          evidence: evidence,
+        ).paise;
+        candidateSpends[candidate] = spendPaise;
+        // Disqualify candidates with spend < 5% of bill.
+        if (spendPaise >= billPaise * 0.05 && spendPaise > 0) {
+          activeCandidates.add(candidate);
+        }
+      }
+
+      if (activeCandidates.length == 1) {
+        // If one candidate card has active cycle spend and others are disqualified, pick the active candidate!
+        target = activeCandidates.single;
+      } else if (activeCandidates.length > 1) {
+        // If multiple candidates have active spend, prioritize historical attribution,
+        // else pick the one with spend closest to the bill amount.
+        final historical = activeCandidates
+            .where((c) => _hasHistoricalAttribution(
+                  c,
+                  orphan.family,
+                  evidence,
+                  [...transactions, ...payments],
+                ))
+            .toList();
+        if (historical.length == 1) {
+          target = historical.single;
+        } else {
+          UserCard? bestMatch;
+          var bestDiff = double.infinity;
+          for (final candidate in activeCandidates) {
+            final diff =
+                (candidateSpends[candidate]! - billPaise).abs().toDouble();
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              bestMatch = candidate;
+            }
+          }
+          target = bestMatch;
+        }
+      } else {
+        // Disqualified or no active spend in cycle: check historical attribution
+        final historical = candidates
+            .where((c) => _hasHistoricalAttribution(
+                  c,
+                  orphan.family,
+                  evidence,
+                  [...transactions, ...payments],
+                ))
+            .toList();
+        if (historical.length == 1) {
+          target = historical.single;
+        }
+      }
+    }
+
+    if (target == null) {
+      // Historical attribution fallback if orphan.amountDue was null or unresolved
+      final historical = candidates
+          .where((c) => _hasHistoricalAttribution(
+                c,
+                orphan.family,
+                evidence,
+                [...transactions, ...payments],
+              ))
+          .toList();
+      if (historical.length == 1) {
+        target = historical.single;
+      } else {
+        // Fallback: only attach if exactly one candidate has a direct name token match
+        final directlyNamed =
+            candidates.where((c) => _familyNamesCard(orphan.family, c)).toList();
+        if (directlyNamed.length == 1) {
+          target = directlyNamed.single;
+        }
+      }
+    }
+
+    if (target != null) {
+      orphanAttributed.putIfAbsent(target.id, () => []).add(orphan);
+    }
+  }
+
   final ledgers = <String, CardBillLedger>{};
   for (final card in cards) {
     final own = evidence
         .where((e) => e.cardLast4 != null && e.cardLast4 == card.last4)
         .toList();
-    if (own.isNotEmpty) {
-      final cycles = _mergeCycles(own, now: now);
+    final attachedOrphans = orphanAttributed[card.id] ?? const [];
+    final combined = [...own, ...attachedOrphans];
+    if (combined.isNotEmpty) {
+      final cycles = _mergeCycles(combined, now: now);
       if (cycles.isNotEmpty) {
         ledgers[card.id] = CardBillLedger(
           current: cycles.first,
@@ -159,37 +264,6 @@ Map<String, CardBillLedger> deriveCardBills({
         );
       }
     }
-  }
-
-  // Some issuer bill SMS never quote card digits (e.g. YY-MYTNEU-S for the
-  // HDFC Tata Neu card). They carry a sender family instead; attach when
-  // that family names exactly one registered card via its display name.
-  // Merge into the card's own last4 evidence rather than only filling
-  // gaps: HDFC statements arrive without amount or due date, and without
-  // merging the family-named bill (which carries both) the row would show
-  // a statement with nothing owed.
-  for (final card in cards) {
-    final familyRows = evidence
-        .where(
-          (e) =>
-              e.cardLast4 == null &&
-              _familyNamesCard(e.family, card),
-        )
-        .toList();
-    if (familyRows.isEmpty) continue;
-    final others = cards
-        .where((other) => other.id != card.id)
-        .any((other) => _familyNamesCard(familyRows.first.family, other));
-    if (others) continue;
-    final own = evidence
-        .where((e) => e.cardLast4 != null && e.cardLast4 == card.last4)
-        .toList();
-    final cycles = _mergeCycles([...own, ...familyRows], now: now);
-    if (cycles.isEmpty) continue;
-    ledgers[card.id] = CardBillLedger(
-      current: cycles.first,
-      previous: cycles.length > 1 ? cycles[1] : null,
-    );
   }
 
   final attributed = <String, List<TransactionEntry>>{};
@@ -420,3 +494,180 @@ extension _FirstWhereOrNull<T> on Iterable<T> {
   }
 }
 
+
+
+bool _isHdfcCard(UserCard card) {
+  final name = [card.nickname, card.cardName].whereType<String>().join(' ').toLowerCase();
+  return name.contains('hdfc') ||
+      name.contains('moneyback') ||
+      name.contains('millennia') ||
+      name.contains('regalia') ||
+      name.contains('infinia') ||
+      name.contains('tata neu') ||
+      name.contains('swiggy');
+}
+
+List<UserCard> _candidateCardsForEvidence(
+  CardBillEvidence orphan,
+  List<UserCard> cards,
+) {
+  final family = orphan.family;
+  if (family == null || family.isEmpty) return const [];
+  final canonical = canonicalBankSender(family);
+
+  // 1. Aggregators / Co-brand sender families for HDFC Bank
+  // MYTNEU/TNBPAy are sent by the Tata Neu app for ALL HDFC cards (including
+  // MoneyBack+, Millennia, Regalia, etc.), not solely the co-branded card.
+  final isHdfcFamily = canonical == 'hdfc' ||
+      canonical == 'mytneu' ||
+      canonical == 'tnbpay' ||
+      canonical == 'tatanu';
+  if (isHdfcFamily) {
+    final hdfcCards = cards.where(_isHdfcCard).toList();
+    if (hdfcCards.isNotEmpty) return hdfcCards;
+  }
+
+  // 2. Specific card name match via family token
+  final named = cards.where((c) => _familyNamesCard(family, c)).toList();
+  if (named.length == 1) return named;
+
+  // 3. General bank code prefix/slug match against card name/nickname
+  final bankMatched = cards.where((c) {
+    final name = [c.nickname, c.cardName].whereType<String>().join(' ').toLowerCase();
+    return name.contains(canonical);
+  }).toList();
+  if (bankMatched.isNotEmpty) return bankMatched;
+
+  return named;
+}
+
+Money _calculateCandidateCycleSpend(
+  UserCard card,
+  DateTime statementDate,
+  List<TransactionEntry> txns, {
+  List<CardBillEvidence> evidence = const [],
+}) {
+  final start = statementDate.subtract(const Duration(days: 35));
+  final end = statementDate;
+  var total = const Money.zero();
+  for (final t in txns) {
+    if (t.status != 'active' || t.entryKind != TxnEntryKind.spend) continue;
+    if (isCardBillPaymentTxn(t)) continue;
+    final merch = (t.merchantName ?? '').toLowerCase();
+    final note = (t.note ?? '').toLowerCase();
+    if (merch.contains('bill payment') || note.contains('bill payment')) continue;
+    if (merch.contains('autopay') || note.contains('autopay')) continue;
+    // Exclude large single anomaly transactions occurring at statement night
+    if (t.amount.paise > 5000000) continue;
+    // Exclude debits matching a known autopay or bill evidence amount for this card
+    final isKnownBill = evidence.any(
+      (e) =>
+          e.cardLast4 == card.last4 &&
+          e.amountDue != null &&
+          e.amountDue!.paise == t.amount.paise,
+    );
+    if (isKnownBill) continue;
+
+    final match = (t.userCardId != null && t.userCardId == card.id) ||
+        (t.cardLast4 != null && t.cardLast4 == card.last4);
+    if (!match) continue;
+    if (t.occurredAt.isBefore(start) ||
+        t.occurredAt.isAfter(end.add(const Duration(hours: 12)))) {
+      continue;
+    }
+    total += t.amount;
+  }
+  return total;
+}
+
+bool _hasHistoricalAttribution(
+  UserCard candidate,
+  String? orphanFamily,
+  List<CardBillEvidence> evidence,
+  List<TransactionEntry> txns,
+) {
+  if (orphanFamily == null || orphanFamily.isEmpty) return false;
+  final canonical = canonicalBankSender(orphanFamily);
+  final isAggregator = (canonical == 'mytneu' ||
+      canonical == 'tnbpay' ||
+      canonical == 'tatanu');
+
+  // 1. Evidence check: does any orphan bill from this sender family share an amount with an explicit bill for this candidate?
+  for (final orphan in evidence.where((e) => e.cardLast4 == null && e.amountDue != null)) {
+    if (orphan.family == null) continue;
+    final orphanFam = canonicalBankSender(orphan.family);
+    final matchesFam = orphanFam == canonical ||
+        (isAggregator && (orphanFam == 'mytneu' || orphanFam == 'tnbpay' || orphanFam == 'tatanu'));
+    if (!matchesFam) continue;
+
+    for (final ex in evidence.where((e) => e.cardLast4 != null && e.cardLast4 == candidate.last4 && e.amountDue != null)) {
+      if (orphan.amountDue == ex.amountDue) {
+        return true;
+      }
+    }
+  }
+
+  // 2. Direct evidence check (other bill / AutoPay alert evidence lines)
+  for (final ev in evidence) {
+    if (ev.cardLast4 != null && ev.cardLast4 == candidate.last4) {
+      if (ev.family != null) {
+        final evFam = canonicalBankSender(ev.family);
+        if (evFam == canonical ||
+            (isAggregator &&
+                (evFam == 'mytneu' ||
+                    evFam == 'tnbpay' ||
+                    evFam == 'tatanu'))) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // 2. Transactions / Payments check
+  for (final t in txns) {
+    final cardMatch = (t.userCardId != null && t.userCardId == candidate.id) ||
+        (t.cardLast4 != null && t.cardLast4 == candidate.last4) ||
+        (candidate.last4 != null &&
+            ((t.merchantName ?? '').contains(candidate.last4!) ||
+                (t.note ?? '').contains(candidate.last4!)));
+    if (!cardMatch) continue;
+
+    final merch = (t.merchantName ?? '').toLowerCase();
+    final note = (t.note ?? '').toLowerCase();
+    final isPaymentOrAutopay = isCardBillPaymentTxn(t) ||
+        merch.contains('bill payment') ||
+        note.contains('bill payment') ||
+        merch.contains('autopay') ||
+        note.contains('autopay');
+    if (!isPaymentOrAutopay) continue;
+
+    if (merch.contains(canonical) || note.contains(canonical)) {
+      return true;
+    }
+    final rawFamily = orphanFamily.toLowerCase();
+    if (merch.contains(rawFamily) || note.contains(rawFamily)) {
+      return true;
+    }
+    final src = t.source.toLowerCase();
+    if (src.contains(canonical)) {
+      return true;
+    }
+    if (isAggregator) {
+      if (merch.contains('tata neu') ||
+          note.contains('tata neu') ||
+          merch.contains('mytneu') ||
+          note.contains('mytneu') ||
+          merch.contains('tnbpay') ||
+          note.contains('tnbpay') ||
+          merch.contains('tatanu') ||
+          note.contains('tatanu') ||
+          src.contains('mytneu') ||
+          src.contains('tnbpay') ||
+          src.contains('tatanu')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}

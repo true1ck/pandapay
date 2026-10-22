@@ -486,4 +486,233 @@ void main() {
     expect(bill.dueDate, DateTime(2026, 11, 8));
     expect(bill.amountDue, Money.fromRupees(8331));
   });
+  test('aggregator HDFC bill triangulates by spend when multiple HDFC cards exist', () {
+    final moneyBack = UserCard.fromJson({
+      'id': 'card-mb',
+      'card_product_id': 'p1',
+      'card_name': 'MoneyBack+ Credit Card',
+      'last4': '8708',
+      'is_default': false,
+    });
+    final tataNeu = UserCard.fromJson({
+      'id': 'card-tn',
+      'card_product_id': 'p2',
+      'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
+      'last4': '1366',
+      'is_default': false,
+    });
+
+    final txns = <TransactionEntry>[
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(500),
+        occurredAt: DateTime(2026, 10, 16),
+        userCardId: 'card-mb',
+        entryKind: TxnEntryKind.spend,
+        instrument: TxnInstrument.creditCard,
+        source: 'sms',
+        status: 'active',
+      ),
+      TransactionEntry(
+        id: 't2',
+        amount: Money.fromRupees(7831),
+        occurredAt: DateTime(2026, 10, 8),
+        userCardId: 'card-mb',
+        entryKind: TxnEntryKind.spend,
+        instrument: TxnInstrument.creditCard,
+        source: 'sms',
+        status: 'active',
+      ),
+      TransactionEntry(
+        id: 't3',
+        amount: Money.fromRupees(12),
+        occurredAt: DateTime(2026, 9, 23),
+        userCardId: 'card-tn',
+        entryKind: TxnEntryKind.spend,
+        instrument: TxnInstrument.creditCard,
+        source: 'sms',
+        status: 'active',
+      ),
+    ];
+
+    final ledgers = deriveCardBills(
+      cards: [moneyBack, tataNeu],
+      evidence: [
+        CardBillEvidence(
+          cardLast4: '8708',
+          statementDate: DateTime(2026, 10, 20),
+          statementDateExplicit: false,
+          dueDate: null,
+          amountDue: null,
+          minimumDue: null,
+          confidence: 0.6,
+        ),
+        CardBillEvidence(
+          cardLast4: '1366',
+          statementDate: DateTime(2026, 10, 20),
+          statementDateExplicit: false,
+          dueDate: null,
+          amountDue: null,
+          minimumDue: null,
+          confidence: 0.6,
+        ),
+        CardBillEvidence(
+          cardLast4: null,
+          family: 'MYTNEU',
+          statementDate: DateTime(2026, 10, 21),
+          statementDateExplicit: true,
+          dueDate: DateTime(2026, 11, 8),
+          amountDue: Money.fromRupees(8331),
+          minimumDue: null,
+          confidence: 0.95,
+        ),
+      ],
+      payments: const [],
+      transactions: txns,
+      now: now,
+    );
+
+    expect(ledgers['card-mb'], isNotNull);
+    final mbBill = ledgers['card-mb']!.current!;
+    expect(mbBill.amountDue, Money.fromRupees(8331));
+    expect(mbBill.dueDate, DateTime(2026, 11, 8));
+    expect(ledgers['card-tn']?.current?.amountDue, isNull);
+  });
+
+  test('aggregator HDFC bill resolves to card with historical AutoPay evidence when offline', () {
+    final moneyBack = UserCard.fromJson({
+      'id': 'card-mb',
+      'card_product_id': 'p1',
+      'card_name': 'MoneyBack+ Credit Card',
+      'last4': '8708',
+      'is_default': false,
+    });
+    final tataNeu = UserCard.fromJson({
+      'id': 'card-tn',
+      'card_product_id': 'p2',
+      'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
+      'last4': '1366',
+      'is_default': false,
+    });
+
+    final ledgers = deriveCardBills(
+      cards: [moneyBack, tataNeu],
+      evidence: [
+        CardBillEvidence(
+          cardLast4: '8708',
+          family: 'JK-MYTNEU-S',
+          statementDate: DateTime(2026, 10, 20),
+          statementDateExplicit: false,
+          dueDate: null,
+          amountDue: null,
+          minimumDue: null,
+          confidence: 0.6,
+        ),
+        CardBillEvidence(
+          cardLast4: null,
+          family: 'JK-MYTNEU-S',
+          statementDate: DateTime(2026, 10, 21),
+          statementDateExplicit: true,
+          dueDate: DateTime(2026, 11, 8),
+          amountDue: Money.fromRupees(8331),
+          minimumDue: null,
+          confidence: 0.95,
+        ),
+      ],
+      payments: const [],
+      transactions: const [],
+      now: now,
+    );
+
+    expect(ledgers['card-mb'], isNotNull);
+    final mbBill = ledgers['card-mb']!.current!;
+    expect(mbBill.amountDue, Money.fromRupees(8331));
+    expect(mbBill.dueDate, DateTime(2026, 11, 8));
+    expect(ledgers['card-tn'], isNull);
+  });
+
+  test('candidate cycle spend ignores bill payments, autopay, and huge single anomalies', () {
+    final moneyBack = UserCard.fromJson({
+      'id': 'card-mb',
+      'card_product_id': 'p1',
+      'card_name': 'MoneyBack+ Credit Card',
+      'last4': '8708',
+      'is_default': false,
+    });
+    final tataNeu = UserCard.fromJson({
+      'id': 'card-tn',
+      'card_product_id': 'p2',
+      'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
+      'last4': '1366',
+      'is_default': false,
+    });
+
+    final txns = <TransactionEntry>[
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(4000),
+        occurredAt: DateTime(2026, 10, 10),
+        userCardId: 'card-mb',
+        entryKind: TxnEntryKind.spend,
+        instrument: TxnInstrument.creditCard,
+        source: 'sms',
+        status: 'active',
+      ),
+      TransactionEntry(
+        id: 't2',
+        amount: Money.fromRupees(20000),
+        occurredAt: DateTime(2026, 10, 12),
+        merchantName: 'HDFC Credit Card Bill Payment',
+        userCardId: 'card-mb',
+        entryKind: TxnEntryKind.spend,
+        instrument: TxnInstrument.creditCard,
+        source: 'sms',
+        status: 'active',
+      ),
+      TransactionEntry(
+        id: 't3',
+        amount: Money.fromRupees(15000),
+        occurredAt: DateTime(2026, 10, 14),
+        merchantName: 'AutoPay Mandate Debit',
+        userCardId: 'card-tn',
+        entryKind: TxnEntryKind.spend,
+        instrument: TxnInstrument.creditCard,
+        source: 'sms',
+        status: 'active',
+      ),
+      TransactionEntry(
+        id: 't4',
+        amount: Money.fromRupees(60000),
+        occurredAt: DateTime(2026, 10, 20),
+        userCardId: 'card-tn',
+        entryKind: TxnEntryKind.spend,
+        instrument: TxnInstrument.creditCard,
+        source: 'sms',
+        status: 'active',
+      ),
+    ];
+
+    final ledgers = deriveCardBills(
+      cards: [moneyBack, tataNeu],
+      evidence: [
+        CardBillEvidence(
+          cardLast4: null,
+          family: 'JK-TNBPAY-S',
+          statementDate: DateTime(2026, 10, 21),
+          statementDateExplicit: true,
+          dueDate: DateTime(2026, 11, 8),
+          amountDue: Money.fromRupees(4000),
+          minimumDue: null,
+          confidence: 0.95,
+        ),
+      ],
+      payments: const [],
+      transactions: txns,
+      now: now,
+    );
+
+    expect(ledgers['card-mb'], isNotNull);
+    expect(ledgers['card-mb']!.current!.amountDue, Money.fromRupees(4000));
+    expect(ledgers['card-tn'], isNull);
+  });
 }

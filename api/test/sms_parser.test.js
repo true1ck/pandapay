@@ -1009,6 +1009,11 @@ test('promotional prices and service notices do not become transactions', () => 
     ['VA-SBIBNK-S', 'YONO services is being blocked due to suspicious txns in your account. Visit nearest branch.'],
     ['VZ-ViCARE-S', 'Call Forwarding is now active on your Vodafone idea number.'],
     ['VZ-ViCARE-S', 'Calls are being forwarded to +919876543210. To deactivate this service dial *#62#.'],
+    ['VM-ZERODH', 'Zerodha Broking reported your Fund bal Rs 4500 and securities bal Rs 25000. Balances excludes your Bank.'],
+    ['AD-NSEIND', 'NSE Alert: Beware of dealing in unsolicited tips through SMS. Never trade on unsolicited tips.'],
+    ['VK-POLBZR', 'Your car insurance policy is due for renewal. Renew now with Policybazaar for 50% discount.'],
+    ['VM-PAYTMW', 'Your wallet balance is Rs 0. Add money to wallet now and enjoy instant checkouts.'],
+    ['VM-HDFCBK-S', 'Transaction Check Alert! We tried to contact and confirm txn on HDFC Bank Card 8708'],
   ];
   for (const [sender, body] of noise) {
     const result = parseSmsAgainstPatterns([], { sender, body });
