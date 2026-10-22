@@ -41,6 +41,11 @@ test('a formula-looking value is neutralised', () => {
   assert.strictEqual(csvField('@SUM(A1)'), "'@SUM(A1)");
 });
 
+test('tab and carriage-return formula prefixes are neutralised', () => {
+  assert.strictEqual(csvField('\t=cmd'), "'\t=cmd");
+  assert.strictEqual(csvField('\r=cmd'), '"\'\r=cmd"');
+});
+
 test('a formula that also needs quoting gets both treatments', () => {
   assert.strictEqual(csvField('=HYPERLINK("a","b")'), '"\'=HYPERLINK(""a"",""b"")"');
 });

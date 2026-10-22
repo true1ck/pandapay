@@ -235,6 +235,7 @@ dependencies:
   # Stable file/content identities for privacy-safe idempotent imports. Only
   # the digest is synced; statement PDF bytes remain on-device.
   crypto: ^3.0.7
+  cryptography: ^2.9.0
   google_sign_in: ^6.2.1
   image: 4.10.1
 
