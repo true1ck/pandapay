@@ -15,6 +15,11 @@ import '../../data/needs_review_repository.dart';
 import '../../data/user_cards_repository.dart'
     show TxnEntryKind, TxnInstrument, UserCard;
 
+String _feedbackSourceKey(String reviewId) {
+  final commitment = RegExp(r'^commitment:([a-fA-F0-9]{64})$').firstMatch(reviewId);
+  return commitment?.group(1) ?? reviewId;
+}
+
 TxnInstrument _instrumentFromReviewText(String body) {
   final text = body.toLowerCase();
   final accountLike = RegExp(
@@ -195,6 +200,8 @@ Future<void> _persistSmsFactCorrection(
     factIndex: factIndex,
     patch: patch,
     reason: reason,
+    sampleBody: sampleBody,
+    templateText: templateText,
   );
 
   final repository = ref.read(userCardsRepositoryProvider);
@@ -263,7 +270,7 @@ class NeedsReviewScreen extends ConsumerWidget {
                   }
                   if (repo != null) {
                     repo.dismissSms(
-                      sourceKey: item.id,
+                      sourceKey: _feedbackSourceKey(item.id),
                       sender: item.sender,
                       sampleBody: item.body,
                       reason: 'user_dismissed',
@@ -341,7 +348,7 @@ class _CommitmentNeedsReviewTileState
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo != null) {
         repo.dismissSms(
-          sourceKey: widget.item.id,
+          sourceKey: _feedbackSourceKey(widget.item.id),
           sender: widget.item.sender,
           sampleBody: widget.item.body,
           reason: 'user_dismissed',
@@ -1283,7 +1290,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo != null) {
         repo.dismissSms(
-          sourceKey: widget.item.id,
+          sourceKey: _feedbackSourceKey(widget.item.id),
           sender: widget.item.sender,
           sampleBody: widget.item.body,
           reason: 'user_dismissed',

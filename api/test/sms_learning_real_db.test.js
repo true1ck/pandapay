@@ -5,7 +5,7 @@ const { Client } = require('pg');
 
 const testDbUrl = process.env.PANDAPAY_TEST_DATABASE_URL || process.env.DATABASE_URL;
 
-test('real database: app_user RLS, advisory locks, bundle publish, rollback, and deletion lineage',
+test('real database: app_user RLS, worker separation, advisory locks, and deletion lineage',
   { skip: !testDbUrl }, async (t) => {
     let client;
     try {
@@ -23,6 +23,9 @@ test('real database: app_user RLS, advisory locks, bundle publish, rollback, and
     // Always run inside a transaction that is rolled back at the end
     await client.query('BEGIN');
     try {
+      await client.query('SET LOCAL ROLE app_user');
+      const role = await client.query('SELECT current_user AS role');
+      assert.equal(role.rows[0].role, 'app_user');
       const user1 = crypto.randomUUID();
       const user2 = crypto.randomUUID();
       const hmacKey = 'test_learning_secret_key_32_characters_long';
@@ -38,15 +41,18 @@ test('real database: app_user RLS, advisory locks, bundle publish, rollback, and
 
       // 2. Set RLS context for user1
       await client.query("SELECT set_config('app.user_id', $1, true)", [user1]);
+      await client.query("SELECT set_config('app.sms_learning_hmac_key', $1, true)", [hmacKey]);
+      await client.query('INSERT INTO profiles(id, contributions_opt_in) VALUES ($1, true)', [user1]);
 
       // 3. User 1 inserts a valid learning example
       const insertRes = await client.query(
         `INSERT INTO public.sms_learning_examples (
-           sender_fingerprint, issuer_prefix, fact_family, template_text,
+           profile_id, sender_fingerprint, issuer_prefix, fact_family, template_text,
            sample_body, extracted_fields, is_negative, user_hash
-         ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
          RETURNING id`,
         [
+          user1,
           senderFingerprint,
           'HDFC',
           'posted_movement',
@@ -58,36 +64,30 @@ test('real database: app_user RLS, advisory locks, bundle publish, rollback, and
         ],
       );
       assert.ok(insertRes.rows[0].id);
+      await client.query("SELECT set_config('app.user_id', $1, true)", [user2]);
+      const foreign = await client.query('SELECT id FROM public.sms_learning_examples WHERE id=$1', [insertRes.rows[0].id]);
+      assert.equal(foreign.rowCount, 0);
+      await client.query("SELECT set_config('app.user_id', $1, true)", [user1]);
 
-      // 4. Test bundle publication function under app_user
-      const rules = [
-        {
-          id: 'cand_test_real_db',
-          family: 'posted_movement',
-          senderPattern: 'HDFC',
-          regex: 'debited by (?:₹|Rs\\.?|INR)\\s*([0-9,]+)',
-          fieldMap: { amount: 1 },
-          defaultFields: {},
-          confidence: 0.98,
-        },
-      ];
-      const bundleHash = crypto.createHash('sha256').update(JSON.stringify(rules)).digest('hex');
-      const testBundleVer = 999990;
+      // 4. Autonomous publication and rollback are reserved for the
+      // dedicated worker login, even when the API transaction has a user.
+      const workerSeparation = await client.query(`
+        SELECT
+          has_function_privilege(
+            current_user,
+            'pandapay.sms_publish_bundle(integer,jsonb,text,text)',
+            'EXECUTE'
+          ) AS can_publish,
+          has_function_privilege(
+            current_user,
+            'pandapay.sms_rollback_bundle(integer)',
+            'EXECUTE'
+          ) AS can_rollback
+      `);
+      assert.equal(workerSeparation.rows[0].can_publish, false);
+      assert.equal(workerSeparation.rows[0].can_rollback, false);
 
-      const pubRes = await client.query(
-        'SELECT pandapay.sms_publish_bundle($1, $2::jsonb, $3, $4) AS published',
-        [testBundleVer, JSON.stringify(rules), bundleHash, '1.0.0'],
-      );
-      assert.equal(pubRes.rows[0].published, true);
-
-      // 5. Test bundle rollback function under app_user
-      const rollRes = await client.query(
-        'SELECT pandapay.sms_rollback_bundle($1) AS rolled_back',
-        [testBundleVer],
-      );
-      assert.equal(rollRes.rows[0].rolled_back, true);
-
-      // 6. Test deletion lineage RPC under app_user
+      // 5. Test deletion lineage RPC under app_user
       const delRes = await client.query(
         'SELECT pandapay.sms_delete_learning_examples_for_user($1::uuid, $2) AS deleted',
         [user1, hmacKey],

@@ -62,7 +62,8 @@ cp .env.prod.example .env
 Fill in every `CHANGE_ME` in `.env` — the file itself documents how to
 generate each value (JWT secrets, the stable `PHONE_LOOKUP_HMAC_KEY`,
 `APP_USER_PASSWORD`, the separate
-`REWARD_WORKER_DB_PASSWORD`, webhook secrets,
+`REWARD_WORKER_DB_PASSWORD`, the separate
+`SMS_LEARNING_WORKER_DB_PASSWORD`, webhook secrets,
 `IMAP_ENCRYPTION_KEY`, `ENCRYPTION_KEY`). Don't confuse the last two:
 `IMAP_ENCRYPTION_KEY` is `api/`'s key for stored IMAP app passwords;
 `ENCRYPTION_KEY` is `auth/`'s separate key for field-level PII encryption —
@@ -79,6 +80,13 @@ one value to both services, just don't hand-edit them differently later.
 the separate `rewards_worker_login`. Both target `pandapay`; only the latter
 can assume the narrow worker role. `AUTH_DATABASE_URL` targets the separate
 `pandapay_auth` database.
+
+Autonomous SMS learning uses a third product-database identity. Set
+`SMS_LEARNING_DATABASE_URL` to the `sms_learning_worker` login created with
+`SMS_LEARNING_WORKER_DB_PASSWORD`; never reuse `API_DATABASE_URL`. The worker
+startup check rejects `app_user`, superuser names, and incomplete grants before
+it attempts a cycle. Leave both `SMS_LEARNING_DATABASE_URL` and
+`SMS_LEARNING_HMAC_KEY` blank when the optional worker is disabled.
 
 For JWT rotation, set `JWT_KEYS_JSON` and `JWT_ACTIVE_KEY_ID` together. The
 same key set, active key id, `JWT_ISSUER`, and `JWT_AUDIENCE` must be supplied
@@ -137,8 +145,9 @@ docker compose -f docker-compose.prod.yml --env-file .env run --rm db-migrate
 This applies the product and separate auth database migration ledgers. The
 auth migration connection must have DDL privileges on `pandapay_auth`; the
 example uses the project's `postgres` role. It also creates the `app_user`
-and isolated rewards-worker login roles using the distinct passwords from
-`.env` (`db/scripts/migrate.sh` refuses to run without either password), and
+and isolated rewards-worker and SMS-learning login roles using the distinct
+passwords from `.env` (`db/scripts/migrate.sh` refuses to run without all
+three runtime-role passwords), and
 skips
 `0013_cron_jobs.sql` (pg_cron isn't available unless your managed Postgres
 offers it — apply that one by hand if it does). Re-run this any time you pull

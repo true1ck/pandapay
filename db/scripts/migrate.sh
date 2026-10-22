@@ -12,8 +12,8 @@
 #
 # ADMIN_DATABASE_URL must be a superuser (or equivalently privileged) role —
 # same reason db/setup_app_role.sql's grants need one: creating app_user and
-# granting across the pandapay schema isn't something app_user itself could
-# ever do.
+# granting across the pandapay schema and creating the dedicated worker
+# logins isn't something app_user itself could ever do.
 
 set -Eeuo pipefail
 
@@ -25,7 +25,8 @@ set -Eeuo pipefail
 # here so a staging/prod run can't silently ship the dev password.
 : "${APP_USER_PASSWORD:?APP_USER_PASSWORD must be set to a real generated password — the dev literal is not safe outside docker-compose.yml}"
 : "${REWARD_WORKER_DB_PASSWORD:?REWARD_WORKER_DB_PASSWORD must be set to a distinct generated worker-login password}"
-export APP_USER_PASSWORD REWARD_WORKER_DB_PASSWORD
+: "${SMS_LEARNING_WORKER_DB_PASSWORD:?SMS_LEARNING_WORKER_DB_PASSWORD must be set to a distinct generated SMS-learning worker password}"
+export APP_USER_PASSWORD REWARD_WORKER_DB_PASSWORD SMS_LEARNING_WORKER_DB_PASSWORD
 SEED_DEMO_DATA="${SEED_DEMO_DATA:-false}"
 DB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AUTH_MIGRATIONS_DIR="${AUTH_MIGRATIONS_DIR:-$(cd "$DB_DIR/.." && pwd)/auth/db/migrations}"

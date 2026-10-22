@@ -62,6 +62,7 @@ services:
       PGPASSWORD: postgres
       APP_USER_PASSWORD: app_user_dev_pw
       REWARD_WORKER_DB_PASSWORD: reward_worker_dev_pw
+      SMS_LEARNING_WORKER_DB_PASSWORD: sms_learning_worker_dev_pw
       # Set to false for staging/production-shaped environments.
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-true}"
     volumes:
@@ -186,6 +187,7 @@ services:
       AI_WORKER_TOKEN: "${AI_WORKER_TOKEN:-}"
       GEMINI_REQUESTS_PER_MINUTE: "${GEMINI_REQUESTS_PER_MINUTE:-10}"
       GEMINI_TOKENS_PER_MINUTE: "${GEMINI_TOKENS_PER_MINUTE:-12000}"
+      SMS_LEARNING_HMAC_KEY: "${SMS_LEARNING_HMAC_KEY:-dev_sms_learning_hmac_key_change_me_32_bytes}"
       PRODUCT_TERMS_VERSION: "2026-08-07"
       INBOUND_EMAIL_WEBHOOK_SECRET: dev_inbound_secret_change_me
       PARTNER_WEBHOOK_SECRET: dev_partner_secret_change_me
@@ -223,6 +225,25 @@ services:
       AI_WORKER_BATCH_MAX: "${AI_WORKER_BATCH_MAX:-4}"
       AI_WORKER_BATCH_WINDOW_MS: "${AI_WORKER_BATCH_WINDOW_MS:-300}"
       AI_PROVIDER_TIMEOUT_MS: "${AI_PROVIDER_TIMEOUT_MS:-20000}"
+
+  # Opt-in autonomous learner. It uses the dedicated role created by
+  # db/setup_app_role.sql and therefore exercises the same RLS/grant boundary
+  # as staging and production.
+  sms-learning-worker:
+    profiles: ["sms-learning"]
+    build:
+      context: ./api
+    command: ["node", "src/sms_learning_worker_runner.js"]
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    restart: "on-failure:5"
+    environment:
+      SMS_LEARNING_DATABASE_URL: postgres://sms_learning_worker:sms_learning_worker_dev_pw@db:5432/pandapay
+      SMS_LEARNING_HMAC_KEY: "${SMS_LEARNING_HMAC_KEY:-dev_sms_learning_hmac_key_change_me_32_bytes}"
+      SMS_LEARNING_WORKER_ROLE: sms_learning_worker
+      SMS_AUTONOMOUS_WORKER_INTERVAL_MS: "${SMS_AUTONOMOUS_WORKER_INTERVAL_MS:-300000}"
+      DB_SSL: "false"
 
   rewards-worker:
     build:

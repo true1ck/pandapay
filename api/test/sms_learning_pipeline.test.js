@@ -77,10 +77,11 @@ function createMockDb() {
 
       // 3. Learning Examples Insert
       if (sql.includes('INSERT INTO public.sms_learning_examples')) {
-        const [senderFingerprint, issuerPrefix, factFamily, templateText, sampleBody, extractedFieldsJson, isNegative, negativeReason, userHash] = params;
+        const [profileId, senderFingerprint, issuerPrefix, factFamily, templateText, sampleBody, extractedFieldsJson, isNegative, negativeReason, userHash] = params;
         const id = `ex-${nextId++}`;
         const row = {
           id,
+          profile_id: profileId,
           sender_fingerprint: senderFingerprint,
           issuer_prefix: issuerPrefix,
           fact_family: factFamily,
@@ -373,6 +374,27 @@ test('sms_learning_pipeline: worker refuses wildcard sender patterns when issuer
   // Must skip candidates because wildcard .* is strictly forbidden
   assert.equal(outcome.proposed, 0);
   assert.equal(db.candidates.length, 0);
+});
+
+test('sms_learning_pipeline: a dismissal teaches ignore_noise and penalizes the suspected family', async () => {
+  const db = createMockDb();
+  const outcome = await recordReviewDismissal(db, {
+    profileId: 'user-opted-in-1',
+    sender: 'VM-HDFCBK-S',
+    body: 'Your card ending 8708 was checked for a transaction. Call support if this was not you.',
+    family: 'posted_movement',
+    reason: 'not_a_transaction',
+  });
+
+  assert.equal(outcome.recorded, 2);
+  assert.deepEqual(db.learningExamples.map((example) => ({
+    family: example.fact_family,
+    negative: example.is_negative,
+    reason: example.negative_reason,
+  })), [
+    { family: 'posted_movement', negative: true, reason: 'not_a_transaction' },
+    { family: 'ignore_noise', negative: false, reason: null },
+  ]);
 });
 
 test('sms_learning_pipeline: complete connected loop from review to local execution with changed values', async () => {

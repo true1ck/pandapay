@@ -8,6 +8,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/local_sms_parser.dart';
 import '../../data/needs_review_repository.dart';
 import '../../data/sms_backup_xml_parser.dart';
 import '../../data/user_cards_repository.dart';
@@ -24,7 +25,7 @@ import 'sms_text_hint.dart';
 /// something different (see smsextractionimple.md §0.2). The flow is:
 ///
 ///   1. The XML is read and parsed ON THIS DEVICE.
-///   2. Every message is tested against [looksLikeTransactionSms]. Anything
+///   2. Every message is tested against [capturesFinancialSms]. Anything
 ///      that doesn't look like a bank alert — OTPs, friends, delivery
 ///      notices, the overwhelming majority of a real inbox — is dropped
 ///      here and never leaves the phone.
@@ -144,7 +145,7 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
     final kept = <BackupSmsMessage>[];
     var undated = 0;
     for (final m in all) {
-      if (!looksLikeTransactionSms(m.body)) continue;
+      if (!capturesFinancialSms(m.body, sender: m.sender)) continue;
       // A message with no usable original date can't be imported: the
       // server needs it both to date the transaction and to build the
       // re-import key. Counted and reported rather than dropped in silence.
@@ -253,17 +254,23 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
         // goes to needs-review rather than vanishing.
         for (final localIndex in result.unparsedIndices) {
           final original = sourceMessages[start + localIndex];
-          await ref
-              .read(needsReviewRepositoryProvider)
-              .add(
-                NeedsReviewItem(
-                  id: '${original.sender}_${original.sentAt!.microsecondsSinceEpoch}',
-                  sender: original.sender,
-                  body: original.body,
-                  reason: result.reasonByIndex[localIndex],
-                  receivedAt: original.sentAt!,
-                ),
-              );
+          if (capturesFinancialSms(original.body, sender: original.sender) &&
+              !LocalSmsParser.isNonTransactionNoise(
+                original.sender,
+                original.body,
+              )) {
+            await ref
+                .read(needsReviewRepositoryProvider)
+                .add(
+                  NeedsReviewItem(
+                    id: '${original.sender}_${original.sentAt!.microsecondsSinceEpoch}',
+                    sender: original.sender,
+                    body: original.body,
+                    reason: result.reasonByIndex[localIndex],
+                    receivedAt: original.sentAt!,
+                  ),
+                );
+          }
         }
 
         if (!mounted) return;

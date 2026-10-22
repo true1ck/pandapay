@@ -5,6 +5,8 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:uuid/uuid.dart';
 
 import 'api_exception.dart';
+import 'local/sms_dismissal_outbox.dart';
+import 'local/sms_learning_privacy.dart';
 
 // A report screen must never remain in a loading state because a mobile
 // socket or the API has stopped making progress. Callers that support stale
@@ -931,6 +933,7 @@ class DismissalQueueEntry {
 
 class UserCardsRepository {
   final List<DismissalQueueEntry> _dismissalRetryQueue = [];
+  final Future<SmsDismissalOutbox> Function()? dismissalOutbox;
 
   List<DismissalQueueEntry> get dismissalRetryQueue =>
       List.unmodifiable(_dismissalRetryQueue);
@@ -959,6 +962,7 @@ class UserCardsRepository {
     this.onSmsCaptured,
     this.onSmsBatchCaptured,
     this.onSmsUploaded,
+    this.dismissalOutbox,
   }) : _client = client ?? http.Client();
   Future<void> captureSmsMessages(List<SmsBatchMessage> messages) async {
     if (onSmsBatchCaptured != null) {
@@ -1474,6 +1478,26 @@ class UserCardsRepository {
     return true;
   }
 
+  Future<bool> logSmsRuleExposures({
+    required List<Map<String, dynamic>> exposures,
+  }) async {
+    if (exposures.isEmpty) return true;
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/sms/rule-exposures'),
+          headers: _headers,
+          body: jsonEncode({'exposures': exposures}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 404) return false;
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'POST /sms/rule-exposures failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    return true;
+  }
+
   /// SMS intelligence Phase 4: uploads one structured correction for one
   /// fact slot of one source. A 404 means facts have not arrived yet and is
   /// retryable; a 400 is retained by the local outbox for repair/compatibility.
@@ -1485,6 +1509,8 @@ class UserCardsRepository {
     String? templateText,
     String? sampleBody,
   }) async {
+    final safeTemplate = redactSmsLearningText(templateText);
+    final safeSample = redactSmsLearningText(sampleBody);
     final response = await _client
         .post(
           Uri.parse('$apiBaseUrl/sms/facts/overrides'),
@@ -1494,8 +1520,8 @@ class UserCardsRepository {
             'factIndex': factIndex,
             'patch': patch,
             'reason': ?reason,
-            'templateText': ?templateText,
-            'sampleBody': ?sampleBody,
+            'templateText': ?safeTemplate,
+            'sampleBody': ?safeSample,
           }),
         )
         .timeout(const Duration(seconds: 15));
@@ -1519,15 +1545,26 @@ class UserCardsRepository {
     String? sampleBody,
     String? family,
   }) async {
+    final safeTemplate = redactSmsLearningText(templateText);
+    final safeSample = redactSmsLearningText(sampleBody);
     final entry = DismissalQueueEntry(
       sourceKey: sourceKey,
       sender: sender,
       reason: reason,
-      templateText: templateText,
-      sampleBody: sampleBody,
+      templateText: safeTemplate,
+      sampleBody: safeSample,
       family: family,
       queuedAt: DateTime.now(),
     );
+    final payload = entry.toJson();
+    SmsDismissalOutbox? durable;
+    try {
+      durable = await dismissalOutbox?.call();
+      durable?.enqueue(sourceKey, payload);
+    } catch (_) {
+      // Keep the existing in-process retry as a fallback if local storage is
+      // temporarily unavailable; never block the user's review decision.
+    }
     try {
       final response = await _client
           .post(
@@ -1535,15 +1572,16 @@ class UserCardsRepository {
             headers: _headers,
             body: jsonEncode({
               'sourceKey': sourceKey,
-              if (sender != null) 'sender': sender,
-              if (reason != null) 'reason': reason,
-              if (templateText != null) 'templateText': templateText,
-              if (sampleBody != null) 'sampleBody': sampleBody,
-              if (family != null) 'family': family,
+              'sender': ?sender,
+              'reason': ?reason,
+              'templateText': ?safeTemplate,
+              'sampleBody': ?safeSample,
+              'family': ?family,
             }),
           )
           .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
+        durable?.acknowledge(sourceKey);
         _dismissalRetryQueue.removeWhere((e) => e.sourceKey == sourceKey);
         return true;
       }
@@ -1562,8 +1600,25 @@ class UserCardsRepository {
 
   /// Retries queued dismissals that previously failed due to offline/network issues.
   Future<int> flushDismissalQueue() async {
-    if (_dismissalRetryQueue.isEmpty) return 0;
+    SmsDismissalOutbox? durable;
+    try {
+      durable = await dismissalOutbox?.call();
+    } catch (_) {}
     final toRetry = List<DismissalQueueEntry>.from(_dismissalRetryQueue);
+    for (final payload in durable?.pending() ?? const <Map<String, dynamic>>[]) {
+      final sourceKey = payload['sourceKey'] as String?;
+      if (sourceKey == null || toRetry.any((e) => e.sourceKey == sourceKey)) continue;
+      toRetry.add(DismissalQueueEntry(
+        sourceKey: sourceKey,
+        sender: payload['sender'] as String?,
+        reason: payload['reason'] as String?,
+        templateText: payload['templateText'] as String?,
+        sampleBody: payload['sampleBody'] as String?,
+        family: payload['family'] as String?,
+        queuedAt: DateTime.tryParse(payload['queuedAt'] as String? ?? '') ?? DateTime.now(),
+      ));
+    }
+    if (toRetry.isEmpty) return 0;
     var succeeded = 0;
     for (final entry in toRetry) {
       try {
@@ -1582,6 +1637,7 @@ class UserCardsRepository {
             )
             .timeout(const Duration(seconds: 10));
         if (response.statusCode == 200) {
+          durable?.acknowledge(entry.sourceKey);
           _dismissalRetryQueue.removeWhere((e) => e.sourceKey == entry.sourceKey);
           succeeded++;
         }

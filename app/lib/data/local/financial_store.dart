@@ -856,6 +856,12 @@ class FinancialStore {
           caseSensitive: false,
         ).hasMatch(body);
         if (isBillCandidate) {
+          final existingObs = database.db.select(
+            "SELECT 1 FROM financial_entities WHERE namespace=? AND entity='sms_observations' AND id=?",
+            [ns, sourceKey],
+          );
+          if (existingObs.isNotEmpty) continue;
+
           final obs = LocalSmsParser.parse(
             namespace: ns,
             sender: sender,

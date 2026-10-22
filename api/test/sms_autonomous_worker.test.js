@@ -5,6 +5,7 @@ const {
   evaluateCandidates,
   publishActiveBundle,
   rollbackRegressedBundle,
+  verifyWorkerCapabilities,
 } = require('../src/sms_autonomous_worker');
 const { computeBundleHash } = require('../src/sms_rule_bundle');
 
@@ -112,7 +113,7 @@ test('sms_autonomous_worker: evaluateCandidates advances valid candidate to eval
       if (sql.includes('SELECT') && sql.includes("WHERE state = 'proposed'")) {
         return { rows: candidates };
       }
-      if (sql.includes('SELECT sample_body') && sql.includes('is_negative = false')) {
+      if (sql.includes('SELECT e.sample_body') && sql.includes('e.is_negative = false')) {
         return {
           rows: [
             {
@@ -164,7 +165,7 @@ test('sms_autonomous_worker: evaluateCandidates marks candidate rejected on nega
       if (sql.includes('SELECT') && sql.includes("WHERE state = 'proposed'")) {
         return { rows: [leakyCandidate] };
       }
-      if (sql.includes('SELECT sample_body') && sql.includes('is_negative = false')) {
+      if (sql.includes('SELECT e.sample_body') && sql.includes('e.is_negative = false')) {
         return {
           rows: [{ sample_body: 'code 987654', extracted_fields: {} }],
         };
@@ -189,6 +190,25 @@ test('sms_autonomous_worker: evaluateCandidates marks candidate rejected on nega
   assert.equal(updates[0].params[1], 'cand_leaky');
 });
 
+test('a candidate waits for post-creation holdout examples instead of being rejected', async () => {
+  const candidate = {
+    candidate_id: 'cand_waiting', family: 'posted_movement',
+    sender_pattern: 'HDFC', template: 'debited by {AMOUNT}',
+    compiled_regex: 'debited by Rs\\.?\\s*([0-9]+)', field_map: { amount: 1 },
+    stage_metrics: {}, created_at: new Date().toISOString(), state: 'proposed',
+  };
+  const updates = [];
+  const db = { async query(sql) {
+    if (sql.includes("WHERE state = 'proposed'")) return { rows: [candidate] };
+    if (sql.includes('UPDATE public.sms_rule_candidates')) updates.push(sql);
+    return { rows: [], rowCount: 0 };
+  } };
+  const result = await evaluateCandidates(db, { isProduction: true });
+  assert.equal(result.pending, 1);
+  assert.equal(result.rejected, 0);
+  assert.equal(updates.length, 0);
+});
+
 test('sms_autonomous_worker: publishActiveBundle compiles hash and publishes bundle', async () => {
   const activeCandidates = [
     {
@@ -209,6 +229,7 @@ test('sms_autonomous_worker: publishActiveBundle compiles hash and publishes bun
 
   const mockDb = {
     async query(sql, params) {
+      if (sql.includes('pg_try_advisory_lock')) return { rows: [{ locked: true }] };
       if (sql.includes('SELECT') && sql.includes("WHERE state = 'active'")) {
         return { rows: activeCandidates };
       }
@@ -243,7 +264,8 @@ test('sms_autonomous_worker: publishActiveBundle compiles hash and publishes bun
 
 test('sms_autonomous_worker: publishActiveBundle returns early if no active candidates', async () => {
   const mockDb = {
-    async query() {
+    async query(sql) {
+      if (sql.includes('pg_try_advisory_lock')) return { rows: [{ locked: true }] };
       return { rows: [] };
     },
   };
@@ -259,6 +281,7 @@ test('sms_autonomous_worker: rollbackRegressedBundle calls pandapay.sms_rollback
 
   const mockDb = {
     async query(sql, params) {
+      if (sql.includes('pg_try_advisory_lock')) return { rows: [{ locked: true }] };
       if (sql.includes('pandapay.sms_rollback_bundle')) {
         rollbackCall = params;
         return { rows: [{ rolled_back: true }] };
@@ -280,7 +303,8 @@ test('sms_autonomous_worker: rollbackRegressedBundle calls pandapay.sms_rollback
 
 test('sms_autonomous_worker: rollbackRegressedBundle handles invalid version or inactive bundle', async () => {
   const mockDb = {
-    async query() {
+    async query(sql) {
+      if (sql.includes('pg_try_advisory_lock')) return { rows: [{ locked: true }] };
       return { rows: [{ rolled_back: false }] };
     },
   };
@@ -306,4 +330,68 @@ test('sms_autonomous_worker: startAutonomousWorker and stopAutonomousWorker life
   assert.ok(handle);
   assert.equal(typeof handle.stop, 'function');
   stopAutonomousWorker();
+});
+
+test('sms_autonomous_worker: capability check requires the dedicated role and complete grants', async () => {
+  const capableWorker = {
+    async query(sql) {
+      assert.match(sql, /sms_rule_bundles/);
+      return { rows: [{
+        role: 'sms_learning_worker',
+        is_superuser: false,
+        bypasses_rls: false,
+        can_read_examples: true,
+        can_write_candidates: true,
+        can_read_exposures: true,
+        can_read_bundles: true,
+        can_write_worker_runs: true,
+        can_publish: true,
+        can_rollback: true,
+      }] };
+    },
+  };
+
+  assert.equal(await verifyWorkerCapabilities(capableWorker), 'sms_learning_worker');
+
+  const appUser = {
+    async query() {
+      return { rows: [{
+        role: 'app_user',
+        is_superuser: false,
+        bypasses_rls: false,
+        can_read_examples: true,
+        can_write_candidates: true,
+        can_read_exposures: true,
+        can_read_bundles: true,
+        can_write_worker_runs: true,
+        can_publish: true,
+        can_rollback: true,
+      }] };
+    },
+  };
+  await assert.rejects(
+    verifyWorkerCapabilities(appUser),
+    /lacks required capabilities/,
+  );
+
+  const incompleteWorker = {
+    async query() {
+      return { rows: [{
+        role: 'sms_learning_worker',
+        is_superuser: false,
+        bypasses_rls: false,
+        can_read_examples: true,
+        can_write_candidates: true,
+        can_read_exposures: true,
+        can_read_bundles: false,
+        can_write_worker_runs: true,
+        can_publish: true,
+        can_rollback: true,
+      }] };
+    },
+  };
+  await assert.rejects(
+    verifyWorkerCapabilities(incompleteWorker),
+    /lacks required capabilities/,
+  );
 });

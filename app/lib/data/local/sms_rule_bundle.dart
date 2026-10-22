@@ -76,6 +76,12 @@ class RestrictedSmsRule {
       }
 
       final regExp = RegExp(regexPattern, caseSensitive: false);
+      // Dart's RegExp API does not expose the number of capture groups. Count
+      // only ordinary capturing parentheses so a downloaded rule cannot ask
+      // the parser for a group that does not exist. This is part of the
+      // client-side bundle trust boundary; malformed rules are rejected as a
+      // whole before they can run against an SMS.
+      final captureGroups = _captureGroupCount(regexPattern);
 
       final rawFieldMap = json['fieldMap'];
       final fieldMap = <String, int>{};
@@ -84,6 +90,7 @@ class RestrictedSmsRule {
         for (final entry in rawFieldMap.entries) {
           final val = entry.value;
           if (val is int && val > 0) {
+            if (val > captureGroups) return null;
             fieldMap[entry.key.toString()] = val;
           } else {
             return null;
@@ -118,6 +125,40 @@ class RestrictedSmsRule {
     } catch (_) {
       return false;
     }
+  }
+
+  static int _captureGroupCount(String pattern) {
+    var count = 0;
+    var escaped = false;
+    var inClass = false;
+    for (var i = 0; i < pattern.length; i++) {
+      final code = pattern.codeUnitAt(i);
+      final ch = String.fromCharCode(code);
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch == '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch == '[' && !inClass) {
+        inClass = true;
+        continue;
+      }
+      if (ch == ']' && inClass) {
+        inClass = false;
+        continue;
+      }
+      if (inClass || ch != '(') continue;
+      // (?:...), (?=...), (?!...), (?<=...), (?<!...), and named/flagged
+      // groups beginning with (? are non-capturing for this DSL. Dart does
+      // not support every PCRE form, but treating unknown (? forms as
+      // non-capturing makes validation fail closed.
+      final next = i + 1 < pattern.length ? pattern[i + 1] : '';
+      if (next != '?') count++;
+    }
+    return count;
   }
 }
 
@@ -171,6 +212,7 @@ class SmsRuleBundle {
       if (rawRules == null) return null;
 
       final minClientVersion = (json['minClientVersion'] as String?) ?? '1.0.0';
+      if (!RegExp(r'^\d+(?:\.\d+){0,3}$').hasMatch(minClientVersion)) return null;
 
       if (verifySha) {
         final rawMapList = rawRules.map((r) => Map<String, dynamic>.from(r as Map)).toList();
@@ -210,6 +252,56 @@ class SmsRuleBundle {
         publishedAt: publishedAt,
         minClientVersion: minClientVersion,
         rules: List.unmodifiable(rules),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+/// A server-assigned candidate rule. Shadow candidates are evaluated locally
+/// for comparison only; limited/expanded candidates may supply the primary
+/// classification for the assigned cohort.
+class SmsCandidateRuleBundle {
+  final String candidateId;
+  final String stage;
+  final String mode;
+  /// Server-issued assignment identity. It lets delayed offline exposure
+  /// events be verified against the assignment that was actually delivered.
+  final String? assignmentId;
+  final int stageVersion;
+  final SmsRuleBundle bundle;
+
+  const SmsCandidateRuleBundle({
+    required this.candidateId,
+    required this.stage,
+    required this.mode,
+    this.assignmentId,
+    this.stageVersion = 1,
+    required this.bundle,
+  });
+
+  static SmsCandidateRuleBundle? fromJson(Map<String, dynamic> json) {
+    try {
+      final id = json['candidateId'] as String?;
+      final stage = json['stage'] as String?;
+      final mode = json['mode'] as String?;
+      if (id == null || stage == null || mode == null) return null;
+      if (!const {'shadow', 'limited', 'expanded', 'active'}.contains(stage)) return null;
+      if (!const {'shadow', 'apply'}.contains(mode)) return null;
+      final stageVersion = (json['stageVersion'] ?? json['stage_version'] ?? 1) as int?;
+      if (stageVersion == null || stageVersion < 1) return null;
+      final assignmentId = json['assignmentId'] as String? ?? json['assignment_id'] as String?;
+      if (assignmentId != null && (assignmentId.isEmpty || assignmentId.length > 80)) return null;
+      final bundle = SmsRuleBundle.fromJson(json, verifySha: true);
+      if (bundle == null || bundle.rules.isEmpty) return null;
+      return SmsCandidateRuleBundle(
+        candidateId: id,
+        stage: stage,
+        mode: mode,
+        assignmentId: assignmentId,
+        stageVersion: stageVersion,
+        bundle: bundle,
       );
     } catch (_) {
       return null;

@@ -30,6 +30,7 @@ const { parseSubscriptionMandate } = require('./subscription_parser');
 const importResolvers = require('./import_resolvers');
 const smsFactsRoute = require('./sms_facts_route');
 const smsRuleBundleRoute = require('./sms_rule_bundle');
+const smsLearning = require('./sms_learning');
 const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
@@ -8331,12 +8332,14 @@ app.post('/profile/contributions-opt-in', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'optIn must be a boolean' });
   }
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
+    const result = await withUserClient(req.userId, async (client) => {
+      const updated = await client.query(
         `UPDATE profiles SET contributions_opt_in = $2 WHERE id = $1 RETURNING contributions_opt_in`,
         [req.userId, optIn]
-      )
-    );
+      );
+      if (!optIn) await smsLearning.deleteLearningExamplesForUser(client, req.userId);
+      return updated;
+    });
     res.json({ profile: result.rows[0] || null });
   } catch (err) {
     console.error('POST /profile/contributions-opt-in error', err);

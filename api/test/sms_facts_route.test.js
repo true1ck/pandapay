@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const smsFactsRoute = require('../src/sms_facts_route');
 const smsFacts = require('../src/sms_facts');
 const importResolvers = require('../src/import_resolvers');
+const { importSourceKey } = require('../src/import_source_key');
 
 /**
  * Minimal pg-client double: mirrors the contract test's fake plus the
@@ -23,6 +24,8 @@ function fakeClient({ contributionsOptIn = true } = {}) {
   const facts = new Map();
   const overrides = new Map();
   const learningFeedback = [];
+  const learningExampleKeys = new Set();
+  const exposureWrites = [];
   const cardFitRows = { rows: [{ id: 'uc-1' }] };
   const cardUpdates = [];
   let nextId = 1;
@@ -46,6 +49,9 @@ function fakeClient({ contributionsOptIn = true } = {}) {
     get learningFeedback() {
       return learningFeedback;
     },
+    get exposureWrites() {
+      return exposureWrites;
+    },
     allowCardMatch(value) {
       cardFitRows.rows = value ? [{ id: 'uc-1' }] : [];
     },
@@ -67,6 +73,10 @@ function fakeClient({ contributionsOptIn = true } = {}) {
           contract_version: params[5],
         });
         return { rows: [{ id: newId }] };
+      }
+      if (sql.includes('INSERT INTO public.sms_rule_candidate_exposures')) {
+        exposureWrites.push({ sql, params });
+        return { rowCount: 1 };
       }
       if (sql.startsWith('SELECT id FROM sms_sources')) {
         const key = `${params[0]}|${params[1]}`;
@@ -99,6 +109,11 @@ function fakeClient({ contributionsOptIn = true } = {}) {
         return { rows: [] };
       }
       if (sql.startsWith('INSERT INTO sms_learning_feedback') || sql.includes('sms_learning_examples')) {
+        if (sql.includes('sms_learning_examples')) {
+          const key = [params[0], params[1], params[3], params[4]].join('|');
+          if (learningExampleKeys.has(key)) return { rows: [], rowCount: 0 };
+          learningExampleKeys.add(key);
+        }
         learningFeedback.push(params);
         return { rows: [{ id: 'ex-1' }], rowCount: 1 };
       }
@@ -164,15 +179,23 @@ function harness() {
   const handlers = new Map();
   let requiredAuth = false;
   let currentClient = null;
+  let withUserClientCalls = 0;
   const fakeApp = {
     post: (path, requireAuth, hh) => {
       if (path.startsWith('/sms/facts')) {
         handlers.set(path.endsWith('/overrides') ? 'overrides' : 'facts', hh);
         requiredAuth = requiredAuth || !!requireAuth;
       }
+      if (path === '/sms/rule-exposures') {
+        handlers.set('exposures', hh);
+        requiredAuth = requiredAuth || !!requireAuth;
+      }
       if (path === '/sms/dismiss') {
         handlers.set('dismiss', hh);
         requiredAuth = requiredAuth || !!requireAuth;
+      }
+      if (path === '/admin/sms-learning/cycle') {
+        handlers.set('cycle', hh);
       }
     },
     get: () => {},
@@ -180,7 +203,11 @@ function harness() {
   const mandateCalls = [];
   smsFactsRoute.registerSmsFactsRoutes(fakeApp, {
     requireAuth: () => true,
-    withUserClient: (userId, fn) => fn(currentClient),
+    requireAdmin: () => true,
+    withUserClient: (userId, fn) => {
+      withUserClientCalls += 1;
+      return fn(currentClient);
+    },
     persistSubscriptionMandate: async (client, userId, args) => {
       mandateCalls.push(args);
       return { id: 'series-1', detection_source: 'mandate' };
@@ -211,9 +238,14 @@ function harness() {
   };
   return {
     mandateCalls,
+    get withUserClientCalls() {
+      return withUserClientCalls;
+    },
     call: invoke('facts'),
     overrideCall: invoke('overrides'),
     dismissCall: invoke('dismiss'),
+    exposureCall: invoke('exposures'),
+    cycleCall: invoke('cycle'),
   };
 }
 
@@ -580,27 +612,10 @@ test('overriding an unknown source or fact slot fails explicitly', async () => {
   assert.equal(missing.status, 400);
 });
 
-test('POST /sms/dismiss verifies source ownership and rejects unauthorized sources', async () => {
+test('POST /sms/dismiss preserves owned-source lineage and ignores forged sender/family labels', async () => {
   const client = fakeClient();
   const route = harness();
 
-  // 1. Unknown sourceKey returns 404
-  const unowned = await route.dismissCall(client, {
-    userId: 'user-1',
-    body: { sourceKey: '1'.repeat(64), reason: 'not_a_transaction' },
-  });
-  assert.equal(unowned.status, 404);
-  assert.equal(unowned.body.error, 'source_not_found_or_unauthorized');
-
-  // 2. Missing sender and missing sourceKey returns 400
-  const missingSender = await route.dismissCall(client, {
-    userId: 'user-1',
-    body: { reason: 'not_a_transaction' },
-  });
-  assert.equal(missingSender.status, 400);
-  assert.equal(missingSender.body.error, 'sender_required_when_source_unknown');
-
-  // 3. Valid source owned by user records dismissal and resolves sender
   await route.call(client, {
     userId: 'user-1',
     body: {
@@ -618,15 +633,228 @@ test('POST /sms/dismiss verifies source ownership and rejects unauthorized sourc
       userId: 'user-1',
       body: {
         sourceKey: '2'.repeat(64),
+        sender: 'FORGED-SENDER',
         sampleBody: 'Your loan offer is ready',
         reason: 'not_financial',
+        family: 'promotion',
       },
     });
     assert.equal(validDismiss.status, 200);
     assert.equal(validDismiss.body.dismissed, true);
+    assert.equal(validDismiss.body.sourceVerified, true);
     assert.equal(validDismiss.body.learningRecorded, true);
+    assert.deepEqual(client.learningFeedback.map((params) => [params[3], params[7]]), [
+      ['balance_snapshot', true],
+      ['ignore_noise', false],
+    ]);
+    const expectedCanonicalSender = require('../src/sms_learning')
+      .senderFingerprint('HDFCBK', process.env.SMS_LEARNING_HMAC_KEY);
+    assert.ok(client.learningFeedback.every((params) => params[1] === expectedCanonicalSender));
   } finally {
     if (prevKey === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;
     else process.env.SMS_LEARNING_HMAC_KEY = prevKey;
   }
+});
+
+test('POST /sms/dismiss accepts an unsynced authenticated source as redacted positive-only feedback', async () => {
+  const client = fakeClient();
+  const route = harness();
+  const sender = 'HDFCBK';
+  const body = 'Loan offer for account 1234567890123456 is ready';
+  const sourceKey = importSourceKey('user-1', sender, body);
+  const prevKey = process.env.SMS_LEARNING_HMAC_KEY;
+  process.env.SMS_LEARNING_HMAC_KEY = 'test_learning_secret_key_32_characters_long';
+  try {
+    const result = await route.dismissCall(client, {
+      userId: 'user-1',
+      body: {
+        sourceKey,
+        sender,
+        sampleBody: body,
+        reason: 'not_financial',
+        family: 'posted_movement',
+      },
+    });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.dismissed, true);
+    assert.equal(result.body.sourceVerified, false);
+    assert.equal(result.body.learningRecorded, true);
+    assert.equal(client.learningFeedback.length, 1);
+    assert.equal(client.learningFeedback[0][3], 'ignore_noise');
+    assert.equal(client.learningFeedback[0][7], false);
+    assert.deepEqual(JSON.parse(client.learningFeedback[0][6]), {
+      feedbackProvenance: 'authenticated_unknown_source',
+    });
+    assert.equal(client.learningFeedback[0][5], 'Loan offer for account XXXX3456 is ready');
+  } finally {
+    if (prevKey === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;
+    else process.env.SMS_LEARNING_HMAC_KEY = prevKey;
+  }
+});
+
+test('POST /sms/dismiss handles commitment review IDs and already-durable retries', async () => {
+  const client = fakeClient();
+  const route = harness();
+  const sender = 'TNEUBK';
+  const rawBody = 'Bill for account 1234567890123456 is ready';
+  const sourceKey = importSourceKey('user-1', sender, rawBody);
+  const request = {
+    userId: 'user-1',
+    body: {
+      sourceKey: `commitment:${sourceKey}`,
+      sender,
+      sampleBody: 'Bill for account XXXX3456 is ready',
+      family: 'bill_obligation',
+    },
+  };
+  const prevKey = process.env.SMS_LEARNING_HMAC_KEY;
+  process.env.SMS_LEARNING_HMAC_KEY = 'test_learning_secret_key_32_characters_long';
+  try {
+    const first = await route.dismissCall(client, request);
+    const replay = await route.dismissCall(client, request);
+    assert.equal(first.status, 200);
+    assert.equal(first.body.learningRecorded, true);
+    assert.equal(replay.status, 200);
+    assert.equal(replay.body.learningRecorded, false);
+    assert.equal(replay.body.learningReason, 'already_recorded');
+    assert.equal(client.learningFeedback.length, 1);
+    assert.equal(client.learningFeedback[0][3], 'ignore_noise');
+  } finally {
+    if (prevKey === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;
+    else process.env.SMS_LEARNING_HMAC_KEY = prevKey;
+  }
+});
+
+test('POST /sms/dismiss makes consent opt-out terminal without storing feedback', async () => {
+  const client = fakeClient({ contributionsOptIn: false });
+  const route = harness();
+  const sender = 'HDFCBK';
+  const body = 'A harmless marketing message';
+  const result = await route.dismissCall(client, {
+    userId: 'user-1',
+    body: {
+      sourceKey: importSourceKey('user-1', sender, body),
+      sender,
+      sampleBody: body,
+    },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.dismissed, true);
+  assert.equal(result.body.learningRecorded, false);
+  assert.equal(result.body.learningReason, 'consent_disabled');
+  assert.equal(client.learningFeedback.length, 0);
+});
+
+test('POST /sms/dismiss rejects an explicit foreign source claim and malformed input', async () => {
+  const client = fakeClient();
+  const route = harness();
+  const sender = 'HDFCBK';
+  const body = 'A harmless marketing message';
+  const foreign = await route.dismissCall(client, {
+    userId: 'user-1',
+    body: {
+      sourceKey: importSourceKey('user-2', sender, body),
+      sender,
+      sampleBody: body,
+    },
+  });
+  assert.equal(foreign.status, 403);
+  assert.equal(foreign.body.error, 'source_not_owned');
+  assert.equal(client.learningFeedback.length, 0);
+
+  const missingSender = await route.dismissCall(client, {
+    userId: 'user-1',
+    body: { reason: 'not_a_transaction' },
+  });
+  assert.equal(missingSender.status, 400);
+  assert.equal(missingSender.body.error, 'sender_required_when_source_unknown');
+
+  const malformed = await route.dismissCall(client, {
+    userId: 'user-1',
+    body: { sourceKey: 'commitment:not-hex', sender, sampleBody: body },
+  });
+  assert.equal(malformed.status, 400);
+});
+
+test('POST /sms/dismiss keeps a consented but unpersisted signal retryable', async () => {
+  const client = fakeClient();
+  const route = harness();
+  const sender = 'HDFCBK';
+  const body = 'A harmless marketing message';
+  const prevKey = process.env.SMS_LEARNING_HMAC_KEY;
+  delete process.env.SMS_LEARNING_HMAC_KEY;
+  try {
+    const result = await route.dismissCall(client, {
+      userId: 'user-1',
+      body: {
+        sourceKey: importSourceKey('user-1', sender, body),
+        sender,
+        sampleBody: body,
+      },
+    });
+    assert.equal(result.status, 503);
+    assert.equal(result.body.error, 'dismissal_feedback_unavailable');
+    assert.equal(result.body.learningReason, 'missing_hmac_secret');
+    assert.equal(client.learningFeedback.length, 0);
+  } finally {
+    if (prevKey === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;
+    else process.env.SMS_LEARNING_HMAC_KEY = prevKey;
+  }
+});
+
+test('POST /admin/sms-learning/cycle directs operators to the dedicated worker', async () => {
+  const client = fakeClient();
+  const route = harness();
+  const result = await route.cycleCall(client, { userId: 'admin-1', body: {} });
+  assert.equal(result.status, 409);
+  assert.deepEqual(result.body, { error: 'autonomous_cycle_is_worker_only' });
+  assert.equal(route.withUserClientCalls, 0);
+});
+
+test('rule exposures require consent and preserve assignment epoch comparison data', async () => {
+  const client = fakeClient();
+  const route = harness();
+  const assignmentId = '11111111-1111-4111-8111-111111111111';
+  const response = await route.exposureCall(client, {
+    userId: 'user-1',
+    body: {
+      exposures: [{
+        candidateId: 'candidate_hdfc_01',
+        assignmentId,
+        stage: 'limited',
+        stageVersion: 3,
+        sourceKey: 'a'.repeat(64),
+        matched: true,
+        applied: true,
+        outcome: 'accepted',
+        deltaOutcome: 'improved',
+        baselineFamily: 'unknown',
+        candidateFamily: 'posted_movement',
+        factValid: true,
+        invariantBreach: false,
+      }],
+    },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.recorded, 1);
+  assert.equal(client.exposureWrites.length, 1);
+  assert.equal(client.exposureWrites[0].params[0], assignmentId);
+  assert.equal(client.exposureWrites[0].params[16], 3);
+
+  const optedOut = await route.exposureCall(fakeClient({ contributionsOptIn: false }), {
+    userId: 'user-2',
+    body: {
+      exposures: [{
+        candidateId: 'candidate_hdfc_01',
+        assignmentId,
+        stage: 'limited',
+        stageVersion: 3,
+        sourceKey: 'b'.repeat(64),
+        outcome: 'unresolved',
+      }],
+    },
+  });
+  assert.equal(optedOut.status, 200);
+  assert.equal(optedOut.body.recorded, 0);
+  assert.equal(optedOut.body.consentRequired, true);
 });

@@ -1,3 +1,5 @@
+import 'package:pandapay_domain/pandapay_domain.dart';
+
 import '../../features/sms_import/sms_text_hint.dart';
 import '../local_sms_parser.dart';
 import '../needs_review_repository.dart';
@@ -7,6 +9,7 @@ import 'financial_store.dart';
 import 'sms_facts_outbox.dart';
 import 'sms_intake_repository.dart';
 import 'sms_rule_bundle.dart';
+import 'sms_rule_exposure_outbox.dart';
 
 /// The same capture transaction is used by inbox import, foreground delivery
 /// and the Android background isolate. Upload is deliberately separate.
@@ -15,7 +18,13 @@ class SmsImportStore {
   // Drain profile name into the parser for own-name self-transfer matching.
   final String? ownUserName;
   final SmsRuleBundle? downloadedRules;
-  SmsImportStore(this.store, {this.ownUserName, this.downloadedRules});
+  final List<SmsCandidateRuleBundle> candidateRules;
+  SmsImportStore(
+    this.store, {
+    this.ownUserName,
+    this.downloadedRules,
+    this.candidateRules = const [],
+  });
   void captureBatch(String namespace, List<QueuedSms> messages) {
     store.batch(() {
       final db = store.database.db;
@@ -86,7 +95,10 @@ class SmsImportStore {
       }
 
       final key = intake.capture(namespace, message);
-      final observation = LocalSmsParser.parse(
+      // Always evaluate the built-in/current rule set independently. A
+      // candidate in shadow mode may be wrong, so its observation must never
+      // become the baseline merely because it matched first.
+      final baselineObservation = LocalSmsParser.parse(
         namespace: namespace,
         sender: message.sender,
         body: message.body,
@@ -96,12 +108,78 @@ class SmsImportStore {
             ownUserName ?? store.database.profileDisplayName(namespace),
         downloadedRules: downloadedRules,
       );
+      final candidateResults =
+          <
+            ({
+              SmsCandidateRuleBundle candidate,
+              LocalSmsObservation? observation,
+              bool matched,
+            })
+          >[];
+      for (final candidate in candidateRules) {
+        final candidateObservation = LocalSmsParser.parse(
+          namespace: namespace,
+          sender: message.sender,
+          body: message.body,
+          receivedAt: message.receivedAt,
+          cards: cards,
+          ownUserName:
+              ownUserName ?? store.database.profileDisplayName(namespace),
+          downloadedRules: candidate.bundle,
+        );
+        final matched = _isDownloadedRuleMatch(candidateObservation);
+        candidateResults.add((
+          candidate: candidate,
+          observation: candidateObservation,
+          matched: matched,
+        ));
+      }
+      final appliedCandidate = candidateResults
+          .where((result) => result.candidate.mode == 'apply' && result.matched)
+          .firstOrNull;
+      LocalSmsObservation? observation =
+          appliedCandidate?.observation ?? baselineObservation;
+      final exposureOutbox = SmsRuleExposureOutbox(store.database);
+      for (final result in candidateResults) {
+        final outcome = observation == null
+            ? 'unresolved'
+            : observation.disposition == LocalSmsDisposition.review
+            ? 'review'
+            : observation.disposition == LocalSmsDisposition.localIgnore
+            ? 'ignored'
+            : 'accepted';
+        final comparison = _compareSmsObservations(
+          baselineObservation,
+          result.observation,
+          matched: result.matched,
+        );
+        exposureOutbox.enqueue(
+          namespace,
+          candidateId: result.candidate.candidateId,
+          sourceKey: key,
+          stage: result.candidate.stage,
+          matched: result.matched,
+          applied: result.candidate.mode == 'apply' && result.matched,
+          outcome: outcome,
+          assignmentId: result.candidate.assignmentId,
+          stageVersion: result.candidate.stageVersion,
+          deltaOutcome: comparison.delta,
+          baselineFamily: baselineObservation?.eventType.wireValue,
+          candidateFamily: result.observation?.eventType.wireValue,
+          baselineDisposition: baselineObservation?.disposition.wireValue,
+          candidateDisposition: result.observation?.disposition.wireValue,
+          exactFieldsEqual: comparison.exactFieldsEqual,
+          factValid: comparison.factValid,
+          invariantBreach: comparison.invariantBreach,
+        );
+      }
       if (observation != null) {
-        final decision = observation.disposition == LocalSmsDisposition.localIgnore
+        final decision =
+            observation.disposition == LocalSmsDisposition.localIgnore
             ? 'ignored_noise'
             : (observation.disposition == LocalSmsDisposition.review
-                ? 'financial_review'
-                : 'financial_auto');
+                  ? 'financial_review'
+                  : 'financial_auto');
         intake.recordDecision(
           namespace,
           sourceKey: key,
@@ -169,11 +247,14 @@ class SmsImportStore {
         if (observation.eventType == LocalSmsEventType.bill &&
             observation.confidence >= .85 &&
             observation.statementDate != null) {
-          if (observation.dueDate != null || observation.statementDate != null) {
+          if (observation.dueDate != null ||
+              observation.statementDate != null) {
             for (final card in cards) {
               final matchesLast4 =
-                  observation.cardLast4 != null && card.last4 == observation.cardLast4;
-              final matchesFamily = observation.cardLast4 == null &&
+                  observation.cardLast4 != null &&
+                  card.last4 == observation.cardLast4;
+              final matchesFamily =
+                  observation.cardLast4 == null &&
                   message.sender.toUpperCase().contains('TNEU') &&
                   card.cardName.toLowerCase().contains('tata');
               if (matchesLast4 || matchesFamily) {
@@ -181,7 +262,8 @@ class SmsImportStore {
                 if (card.dueDay == null && observation.dueDate != null) {
                   patch['due_day'] = observation.dueDate!.day;
                 }
-                if (card.statementDay == null && observation.statementDate != null) {
+                if (card.statementDay == null &&
+                    observation.statementDate != null) {
                   patch['statement_day'] = observation.statementDate!.day;
                 }
                 if (patch.isNotEmpty) {
@@ -202,12 +284,9 @@ class SmsImportStore {
             receivedAt: message.receivedAt,
           );
           if (facts.isNotEmpty) {
-            SmsFactsOutbox(store.database).enqueue(
-              namespace,
-              message,
-              facts,
-              sourceKey: key,
-            );
+            SmsFactsOutbox(
+              store.database,
+            ).enqueue(namespace, message, facts, sourceKey: key);
           }
         }
         // High-confidence non-spending classifications are terminal on the
@@ -227,12 +306,9 @@ class SmsImportStore {
             receivedAt: message.receivedAt,
           );
           if (facts.isNotEmpty) {
-            SmsFactsOutbox(store.database).enqueue(
-              namespace,
-              message,
-              facts,
-              sourceKey: key,
-            );
+            SmsFactsOutbox(
+              store.database,
+            ).enqueue(namespace, message, facts, sourceKey: key);
           }
           intake.acknowledge(namespace, key);
         }
@@ -258,3 +334,131 @@ class SmsImportStore {
     }
   }
 }
+
+const _downloadedRuleMatchReasons = {
+  'downloaded_rule_match',
+  'downloaded_rule_balance',
+  'downloaded_rule_bill',
+  'downloaded_rule_mandate',
+  'downloaded_rule_noise_match',
+};
+
+bool _isDownloadedRuleMatch(LocalSmsObservation? observation) =>
+    observation?.reasonCodes.any(_downloadedRuleMatchReasons.contains) == true;
+
+({String delta, bool? exactFieldsEqual, bool factValid, bool invariantBreach})
+_compareSmsObservations(
+  LocalSmsObservation? baseline,
+  LocalSmsObservation? candidate, {
+  required bool matched,
+}) {
+  if (baseline == null && candidate == null) {
+    return (
+      delta: 'unresolved',
+      exactFieldsEqual: null,
+      factValid: false,
+      invariantBreach: false,
+    );
+  }
+  if (candidate == null || !matched) {
+    return (
+      delta: baseline == null ? 'agreement_unresolved' : 'candidate_miss',
+      exactFieldsEqual: false,
+      factValid: false,
+      invariantBreach: false,
+    );
+  }
+  final valid = _observationHasValidFacts(candidate);
+  if (baseline == null ||
+      baseline.disposition == LocalSmsDisposition.localIgnore) {
+    return (
+      delta: candidate.disposition == LocalSmsDisposition.localIgnore
+          ? 'agreement'
+          : 'candidate_extra_financial',
+      exactFieldsEqual:
+          candidate.disposition == LocalSmsDisposition.localIgnore,
+      factValid: valid,
+      invariantBreach:
+          candidate.disposition == LocalSmsDisposition.sync && !valid,
+    );
+  }
+  if (baseline.eventType != candidate.eventType) {
+    return (
+      delta: 'wrong_family',
+      exactFieldsEqual: false,
+      factValid: valid,
+      invariantBreach: false,
+    );
+  }
+  if (baseline.disposition != candidate.disposition) {
+    return (
+      delta: 'disposition_mismatch',
+      exactFieldsEqual: false,
+      factValid: valid,
+      invariantBreach: false,
+    );
+  }
+  if (!_sameObservationFacts(baseline, candidate)) {
+    return (
+      delta: 'field_mismatch',
+      exactFieldsEqual: false,
+      factValid: valid,
+      invariantBreach: false,
+    );
+  }
+  return (
+    delta: 'agreement',
+    exactFieldsEqual: true,
+    factValid: valid,
+    invariantBreach: false,
+  );
+}
+
+bool _observationHasValidFacts(LocalSmsObservation observation) {
+  switch (observation.eventType) {
+    case LocalSmsEventType.transaction:
+      final transaction = observation.transaction;
+      return transaction != null && transaction.amount.paise > 0;
+    case LocalSmsEventType.balance:
+      return observation.availableBalance != null &&
+          observation.availableBalance!.paise >= 0;
+    case LocalSmsEventType.bill:
+      return observation.amountDue != null &&
+          observation.amountDue!.paise > 0 &&
+          observation.dueDate != null;
+    case LocalSmsEventType.autopay:
+      return observation.autopayLimit != null &&
+          observation.autopayLimit!.paise > 0;
+    case LocalSmsEventType.failed:
+    case LocalSmsEventType.promotion:
+    case LocalSmsEventType.security:
+    case LocalSmsEventType.unknown:
+      return true;
+  }
+}
+
+bool _sameObservationFacts(LocalSmsObservation a, LocalSmsObservation b) {
+  if (!_sameMoney(a.transaction?.amount, b.transaction?.amount) ||
+      !_sameMoney(a.availableBalance, b.availableBalance) ||
+      !_sameMoney(a.amountDue, b.amountDue) ||
+      !_sameMoney(a.minimumDue, b.minimumDue) ||
+      !_sameMoney(a.autopayLimit, b.autopayLimit)) {
+    return false;
+  }
+  if (!_sameDay(a.dueDate, b.dueDate) ||
+      !_sameDay(a.statementDate, b.statementDate)) {
+    return false;
+  }
+  return _sameText(a.cardLast4, b.cardLast4) &&
+      _sameText(a.accountLast4, b.accountLast4) &&
+      _sameText(a.billerName, b.billerName) &&
+      _sameText(a.transaction?.merchantName, b.transaction?.merchantName);
+}
+
+bool _sameMoney(Money? a, Money? b) => a?.paise == b?.paise;
+bool _sameDay(DateTime? a, DateTime? b) =>
+    a?.toUtc().year == b?.toUtc().year &&
+    a?.toUtc().month == b?.toUtc().month &&
+    a?.toUtc().day == b?.toUtc().day;
+bool _sameText(String? a, String? b) =>
+    a?.trim().toLowerCase() == b?.trim().toLowerCase();

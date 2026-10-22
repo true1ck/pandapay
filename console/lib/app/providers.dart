@@ -229,6 +229,12 @@ final smsLearningCandidatesProvider = FutureProvider<List<Map<String, dynamic>>>
   return api.fetchSmsLearningCandidates();
 });
 
+final smsLearningOperationsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const {};
+  return api.fetchSmsLearningOperations();
+});
+
 final smsAiJobStatusFilterProvider = StateProvider<String?>((ref) => null);
 
 final smsAiJobsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {

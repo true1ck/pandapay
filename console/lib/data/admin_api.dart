@@ -958,6 +958,43 @@ class AdminApi {
     return (body['candidates'] as List).cast<Map<String, dynamic>>();
   }
 
+  Future<Map<String, dynamic>> fetchSmsLearningOperations({int limit = 100}) async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sms-learning/operations?limit=$limit'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'GET /admin/sms-learning/operations failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<void> pauseSmsLearningCandidate(String id) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/sms-learning/candidates/$id/pause'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'POST /admin/sms-learning/candidates/$id/pause failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
+  Future<void> resumeSmsLearningCandidate(String id) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/sms-learning/candidates/$id/resume'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'POST /admin/sms-learning/candidates/$id/resume failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
   Future<void> decideSmsLearningCandidate(String id, String decision) async {
     if (!const {'manual_pattern_authoring', 'reject'}.contains(decision)) {
       throw ArgumentError.value(decision, 'decision');

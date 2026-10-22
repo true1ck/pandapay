@@ -25,6 +25,7 @@ class SmsAiOperationsScreen extends ConsumerWidget {
               ref.invalidate(smsAiJobsProvider);
               ref.invalidate(smsAiQuotaProvider);
               ref.invalidate(smsLearningCandidatesProvider);
+              ref.invalidate(smsLearningOperationsProvider);
             },
             icon: const Icon(Icons.refresh),
           ),
@@ -38,6 +39,14 @@ class SmsAiOperationsScreen extends ConsumerWidget {
             error: (error, _) => Text('Summary failed: $error'),
             data: (data) => _SummaryCard(data: data),
           ),
+          const SizedBox(height: 16),
+          Text('Autonomous learning monitor', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 4),
+          const Text(
+            'The worker promotes rules only after baseline comparisons and staged safety gates. Pause a candidate here when an operational issue is found.',
+          ),
+          const SizedBox(height: 8),
+          const _AutonomousLearningSection(),
           const SizedBox(height: 16),
           Text('Shared learning candidates', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
@@ -82,6 +91,123 @@ class SmsAiOperationsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+class _AutonomousLearningSection extends ConsumerWidget {
+  const _AutonomousLearningSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final operations = ref.watch(smsLearningOperationsProvider);
+    return operations.when(
+      loading: () => const LinearProgressIndicator(),
+      error: (error, _) => Text('Autonomous learning monitor failed: $error'),
+      data: (data) {
+        final candidates = (data['candidates'] as List?)
+                ?.whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList() ??
+            const <Map<String, dynamic>>[];
+        final activeBundle = (data['activeBundle'] as Map?)?.cast<String, dynamic>();
+        final worker = (data['worker'] as Map?)?.cast<String, dynamic>();
+        final runs = (worker?['runs'] as List?) ?? const [];
+        final latestRun = runs.isNotEmpty && runs.first is Map
+            ? (runs.first as Map).cast<String, dynamic>()
+            : null;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Wrap(
+                  spacing: 24,
+                  runSpacing: 12,
+                  children: [
+                    _Metric(label: 'Candidates', value: '${candidates.length}'),
+                    _Metric(label: 'Active bundle', value: '${activeBundle?['bundle_version'] ?? '—'}'),
+                    _Metric(label: 'Worker last status', value: '${latestRun?['status'] ?? 'unknown'}'),
+                    _Metric(label: 'Worker last run', value: '${latestRun?['finished_at'] ?? '—'}'),
+                  ],
+                ),
+              ),
+            ),
+            if (candidates.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('No autonomous candidates have been proposed.'),
+              )
+            else
+              for (final candidate in candidates)
+                _AutonomousCandidateCard(candidate: candidate),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AutonomousCandidateCard extends ConsumerWidget {
+  final Map<String, dynamic> candidate;
+  const _AutonomousCandidateCard({required this.candidate});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final id = candidate['candidate_id']?.toString();
+    final state = candidate['state']?.toString() ?? 'unknown';
+    final metrics = (candidate['stage_metrics'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final summary = '${candidate['family'] ?? 'unknown'} · ${candidate['issuer'] ?? 'unknown issuer'}\n'
+        'state $state · bundle ${candidate['bundle_version'] ?? '—'} · '
+        '${candidate['exposures'] ?? 0} exposures · ${candidate['comparisons'] ?? 0} comparisons · '
+        '${candidate['distinct_users'] ?? 0} users · ${candidate['corrections'] ?? 0} corrections · '
+        '${candidate['false_discards'] ?? 0} false discards';
+    return Card(
+      child: ListTile(
+        title: Text(id ?? 'candidate'),
+        subtitle: Text('$summary\n${metrics['pause_reason'] == null ? '' : 'pause: ${metrics['pause_reason']}'}'),
+        isThreeLine: true,
+        trailing: id == null
+            ? null
+            : Wrap(
+                spacing: 8,
+                children: [
+                  if (state != 'paused')
+                    OutlinedButton(
+                      onPressed: () => _changeState(context, ref, id, pause: true),
+                      child: const Text('Pause'),
+                    )
+                  else
+                    FilledButton.tonal(
+                      onPressed: () => _changeState(context, ref, id, pause: false),
+                      child: const Text('Resume shadow'),
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Future<void> _changeState(BuildContext context, WidgetRef ref, String id, {required bool pause}) async {
+    final api = ref.read(adminApiProvider);
+    if (api == null) return;
+    try {
+      if (pause) {
+        await api.pauseSmsLearningCandidate(id);
+      } else {
+        await api.resumeSmsLearningCandidate(id);
+      }
+      ref.invalidate(smsLearningOperationsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(pause ? 'Candidate paused.' : 'Candidate resumed in shadow.')),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update candidate: $error')));
+      }
+    }
   }
 }
 

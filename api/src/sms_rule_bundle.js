@@ -143,21 +143,155 @@ function computeBundleHash({ bundleVersion, rules, minClientVersion = '1.0.0' })
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
 
+function cohortBucket(profileId, candidateId) {
+  const digest = crypto.createHash('sha256').update(`${profileId}:${candidateId}`).digest('hex');
+  return Number.parseInt(digest.slice(0, 8), 16) % 100;
+}
+
+function candidateDelivery(row, profileId) {
+  const stage = String(row.state);
+  const percent = stage === 'limited' ? 5 : stage === 'expanded' ? 20 : stage === 'active' ? 100 : 0;
+  const assigned = stage === 'shadow' || stage === 'active' || cohortBucket(profileId, row.candidate_id) < percent;
+  if (!assigned) return null;
+  const rule = {
+    id: row.candidate_id,
+    family: row.family,
+    senderPattern: row.sender_pattern,
+    regex: row.compiled_regex,
+    fieldMap: row.field_map || {},
+    defaultFields: row.default_fields || {},
+    confidence: Number(row.confidence) || 0.98,
+  };
+  const bundleVersion = Number(row.bundle_version) || 1;
+  const minClientVersion = String(row.min_client_ver || '1.0.0');
+  const stageVersion = Number.isInteger(Number(row.stage_version)) && Number(row.stage_version) > 0
+    ? Number(row.stage_version)
+    : 1;
+  return {
+    candidateId: row.candidate_id,
+    stage,
+    stageVersion,
+    mode: stage === 'shadow' ? 'shadow' : 'apply',
+    bundleVersion,
+    minClientVersion,
+    sha256: computeBundleHash({ bundleVersion, rules: [rule], minClientVersion }),
+    rules: [rule],
+  };
+}
+
 function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserClient }) {
   // Mobile client syncs active versioned rule bundle
   app.get('/sms/rules/active', requireAuth, async (req, res) => {
     const sinceVersion = Number.parseInt(req.query?.since_version, 10);
     try {
       const result = await withUserClient(req.userId, async (client) => {
-        return client.query(
+        const consent = await client.query(
+          `SELECT contributions_opt_in
+             FROM public.profiles
+            WHERE id = $1`,
+          [req.userId],
+        );
+        const contributionsOptIn = consent.rows?.[0]?.contributions_opt_in === true;
+        const active = await client.query(
           `SELECT bundle_version, rules, sha256, published_at, min_client_ver
              FROM public.sms_rule_bundles
             WHERE is_active = true
             ORDER BY bundle_version DESC
             LIMIT 1`,
         );
+        const candidates = await client.query(
+          `SELECT candidate_id, family, sender_pattern, compiled_regex,
+                  field_map, default_fields, confidence, state, bundle_version,
+                  min_client_ver, stage_version
+             FROM public.sms_rule_candidates
+            WHERE state IN ('shadow', 'limited', 'expanded', 'active')
+            ORDER BY candidate_id ASC`,
+        );
+        if (!contributionsOptIn) {
+          let revokedCandidateIds = candidates.rows.map((row) => row.candidate_id);
+          try {
+            const issued = await client.query(
+              `SELECT DISTINCT candidate_id
+                 FROM public.sms_rule_candidate_assignments
+                WHERE profile_id = $1`,
+              [req.userId],
+            );
+            revokedCandidateIds = [...new Set([
+              ...revokedCandidateIds,
+              ...(issued.rows || []).map((row) => row.candidate_id),
+            ])];
+          } catch (error) {
+            console.warn('SMS opt-out candidate revocation lookup unavailable:', error.message || error);
+          }
+          return {
+            active,
+            candidateRules: [],
+            revokedCandidateIds,
+          };
+        }
+
+        const candidateRules = [];
+        for (const row of candidates.rows) {
+          const delivery = candidateDelivery(row, req.userId);
+          if (!delivery) continue;
+          let assignment;
+          try {
+            assignment = await client.query(
+              `INSERT INTO public.sms_rule_candidate_assignments
+               (candidate_id, profile_id, stage, stage_version, mode,
+                bundle_version, min_client_version, rule_sha256)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (candidate_id, profile_id, stage_version)
+             DO UPDATE SET revoked_at = NULL,
+                           stage = EXCLUDED.stage,
+                           mode = EXCLUDED.mode,
+                           bundle_version = EXCLUDED.bundle_version,
+                           min_client_version = EXCLUDED.min_client_version,
+                           rule_sha256 = EXCLUDED.rule_sha256
+             RETURNING assignment_id`,
+              [
+                delivery.candidateId,
+                req.userId,
+                delivery.stage,
+                delivery.stageVersion,
+                delivery.mode,
+                delivery.bundleVersion,
+                delivery.minClientVersion,
+                delivery.sha256,
+              ],
+            );
+          } catch (error) {
+            // Roll out the additive migration before the API code. During a
+            // staggered deploy, keep the global bundle usable and withhold
+            // experimental candidates until assignment storage is ready.
+            console.warn('SMS candidate assignment unavailable:', error.message || error);
+            continue;
+          }
+          const assignmentId = assignment.rows?.[0]?.assignment_id;
+          if (!assignmentId) continue;
+          candidateRules.push({ ...delivery, assignmentId });
+        }
+        let revokedCandidateIds = [];
+        try {
+          const issued = await client.query(
+            `SELECT DISTINCT candidate_id
+               FROM public.sms_rule_candidate_assignments
+              WHERE profile_id = $1`,
+            [req.userId],
+          );
+          const deliveredIds = new Set(candidateRules.map((candidate) => candidate.candidateId));
+          revokedCandidateIds = (issued.rows || [])
+            .map((row) => row.candidate_id)
+            .filter((candidateId) => !deliveredIds.has(candidateId));
+        } catch (error) {
+          // Assignment storage is additive. If it is unavailable, do not
+          // guess which cached candidate rules are safe to remove.
+          console.warn('SMS candidate revocation lookup unavailable:', error.message || error);
+        }
+        return { active, candidateRules, revokedCandidateIds };
       });
-      const row = result.rows?.[0];
+      const row = result.active.rows?.[0];
+      const candidateRules = result.candidateRules || [];
       if (!row) {
         // No active bundles: tell device to roll back to version 0
         return res.status(200).json({
@@ -165,12 +299,19 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           rules: [],
           sha256: '',
           rolledBack: true,
+          candidateRules,
+          revokedCandidateIds: result.revokedCandidateIds || [],
         });
       }
 
       // If client has exactly this active version, it is up to date
       if (Number.isInteger(sinceVersion) && sinceVersion === row.bundle_version) {
-        return res.status(200).json({ upToDate: true, bundleVersion: row.bundle_version });
+        return res.status(200).json({
+          upToDate: true,
+          bundleVersion: row.bundle_version,
+          candidateRules,
+          revokedCandidateIds: result.revokedCandidateIds || [],
+        });
       }
 
       // If client has a version GREATER than active version (meaning its version was rolled back!),
@@ -182,6 +323,8 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
         publishedAt: row.published_at,
         minClientVersion: row.min_client_ver,
         rolledBack: Number.isInteger(sinceVersion) && sinceVersion > row.bundle_version,
+        candidateRules,
+        revokedCandidateIds: result.revokedCandidateIds || [],
       });
     } catch (error) {
       console.error('GET /sms/rules/active error', error.message || error);
@@ -268,5 +411,6 @@ module.exports = {
   computeBundleHash,
   countCaptureGroups,
   isSafeRegex,
+  candidateDelivery,
   registerSmsRuleBundleRoutes,
 };

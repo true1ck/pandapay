@@ -26,6 +26,7 @@ services:
       ADMIN_DATABASE_URL: "${ADMIN_DATABASE_URL:?}"
       APP_USER_PASSWORD: "${APP_USER_PASSWORD:?}"
       REWARD_WORKER_DB_PASSWORD: "${REWARD_WORKER_DB_PASSWORD:?}"
+      SMS_LEARNING_WORKER_DB_PASSWORD: "${SMS_LEARNING_WORKER_DB_PASSWORD:?}"
       # Unlike prod, staging genuinely benefits from the demo catalogue —
       # it's what QA/Phase 1+ verification actually exercises against.
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-true}"
@@ -45,6 +46,7 @@ services:
       DB_IDLE_TIMEOUT_MS: "${DB_IDLE_TIMEOUT_MS:-10000}"
       DB_CONNECTION_TIMEOUT_MS: "${DB_CONNECTION_TIMEOUT_MS:-5000}"
       DB_STATEMENT_TIMEOUT_MS: "${DB_STATEMENT_TIMEOUT_MS:-15000}"
+      SMS_LEARNING_HMAC_KEY: "${SMS_LEARNING_HMAC_KEY:-}"
       PORT: "4000"
       JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:?}"
       JWT_KEYS_JSON: "${JWT_KEYS_JSON:-}"
@@ -70,6 +72,7 @@ services:
       - "127.0.0.1:4000:4000"
 
   rewards-worker:
+    # SMS learning has its own worker and DB identity; see sms-learning-worker.
     build:
       context: ./api
     command: ["node", "src/rewards_worker.js"]
@@ -118,6 +121,24 @@ services:
       INBOUND_EMAIL_WEBHOOK_SECRET: "${INBOUND_EMAIL_WEBHOOK_SECRET:?}"
       PARTNER_WEBHOOK_SECRET: "${PARTNER_WEBHOOK_SECRET:?}"
       IMAP_ENCRYPTION_KEY: "${IMAP_ENCRYPTION_KEY:?}"
+
+  sms-learning-worker:
+    profiles: ["sms-learning"]
+    build:
+      context: ./api
+    command: ["node", "src/sms_learning_worker_runner.js"]
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      SMS_LEARNING_DATABASE_URL: "${SMS_LEARNING_DATABASE_URL:-}"
+      SMS_LEARNING_HMAC_KEY: "${SMS_LEARNING_HMAC_KEY:-}"
+      SMS_LEARNING_WORKER_ROLE: "${SMS_LEARNING_WORKER_ROLE:-sms_learning_worker}"
+      SMS_AUTONOMOUS_WORKER_INTERVAL_MS: "${SMS_AUTONOMOUS_WORKER_INTERVAL_MS:-300000}"
+      DB_SSL: "${DB_SSL:-true}"
 
   auth:
     build:

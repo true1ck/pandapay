@@ -86,6 +86,7 @@ fi
 for key in \
   ADMIN_DATABASE_URL \
   APP_USER_PASSWORD \
+  SMS_LEARNING_WORKER_DB_PASSWORD \
   API_DATABASE_URL \
   AUTH_DATABASE_URL \
   JWT_ACCESS_SECRET \
@@ -144,6 +145,8 @@ ensure_optional_env_key() {
 }
 ensure_optional_env_key AI_WORKER_TOKEN
 ensure_optional_env_key GEMINI_API_KEY
+ensure_optional_env_key SMS_LEARNING_DATABASE_URL
+ensure_optional_env_key SMS_LEARNING_HMAC_KEY
 AI_WORKER_TOKEN_VALUE="$(sed -n 's/^AI_WORKER_TOKEN=//p' .env | sed 's/^"//; s/"$//')"
 GEMINI_API_KEY_VALUE="$(sed -n 's/^GEMINI_API_KEY=//p' .env | sed 's/^"//; s/"$//')"
 if { [ -n "$AI_WORKER_TOKEN_VALUE" ] && [ -z "$GEMINI_API_KEY_VALUE" ]; } \
@@ -153,6 +156,17 @@ if { [ -n "$AI_WORKER_TOKEN_VALUE" ] && [ -z "$GEMINI_API_KEY_VALUE" ]; } \
 fi
 if [ -n "$AI_WORKER_TOKEN_VALUE" ] && [ "${#AI_WORKER_TOKEN_VALUE}" -lt 32 ]; then
   echo "FATAL: AI_WORKER_TOKEN must contain at least 32 characters"
+  exit 1
+fi
+SMS_LEARNING_DATABASE_URL_VALUE="$(sed -n 's/^SMS_LEARNING_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
+SMS_LEARNING_HMAC_KEY_VALUE="$(sed -n 's/^SMS_LEARNING_HMAC_KEY=//p' .env | sed 's/^"//; s/"$//')"
+if { [ -n "$SMS_LEARNING_DATABASE_URL_VALUE" ] && [ -z "$SMS_LEARNING_HMAC_KEY_VALUE" ]; } \
+  || { [ -z "$SMS_LEARNING_DATABASE_URL_VALUE" ] && [ -n "$SMS_LEARNING_HMAC_KEY_VALUE" ]; }; then
+  echo "FATAL: SMS_LEARNING_DATABASE_URL and SMS_LEARNING_HMAC_KEY must both be set or both be blank"
+  exit 1
+fi
+if [ -n "$SMS_LEARNING_HMAC_KEY_VALUE" ] && [ "${#SMS_LEARNING_HMAC_KEY_VALUE}" -lt 32 ]; then
+  echo "FATAL: SMS_LEARNING_HMAC_KEY must contain at least 32 characters"
   exit 1
 fi
 

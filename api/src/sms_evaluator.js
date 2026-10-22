@@ -693,8 +693,8 @@ function evaluateHoldout(candidate, holdoutDataset, options = {}) {
  *
  * @param {object} candidate - { state, stage_metrics }
  * @param {object} metrics - { exposures, corrections, false_discards, window_start, window_end }
- * @param {object} [options] - { minObservationMs, minExposures, maxCorrectionRate, maxFalseDiscardRate, now }
- * @returns {{ passed: boolean, shouldRollback: boolean, reason?: string, correctionRate?: number, falseDiscardRate?: number }}
+ * @param {object} [options] - { minObservationMs, minExposures, maxCorrectionRate, maxFalseDiscardRate, requireComparableEvidence, maxComparisonErrorRate, now }
+ * @returns {{ passed: boolean, shouldRollback: boolean, reason?: string, correctionRate?: number, falseDiscardRate?: number, comparisonErrorRate?: number }}
  */
 function evaluateCanaryMetrics(candidate, metrics, options = {}) {
   const DEFAULT_MIN_OBSERVATION_MS = 24 * 60 * 60 * 1000; // 24 hours (86,400,000 ms)
@@ -710,11 +710,21 @@ function evaluateCanaryMetrics(candidate, metrics, options = {}) {
   const minObservationMs = options.minObservationMs !== undefined ? options.minObservationMs : DEFAULT_MIN_OBSERVATION_MS;
   const maxCorrectionRate = options.maxCorrectionRate !== undefined ? options.maxCorrectionRate : 0.01;
   const maxFalseDiscardRate = options.maxFalseDiscardRate !== undefined ? options.maxFalseDiscardRate : 0.005;
+  // A production promotion must compare the candidate with the built-in
+  // baseline on the same message.  Keep this gate opt-in for callers that
+  // only evaluate legacy aggregate metrics, while the autonomous worker
+  // always enables it.
+  const requireComparableEvidence = options.requireComparableEvidence === true;
+  const maxComparisonErrorRate = options.maxComparisonErrorRate !== undefined
+    ? options.maxComparisonErrorRate
+    : 0.01;
 
   const m = metrics || {};
   const exposures = Number(m.exposures) || 0;
   const corrections = Number(m.corrections) || 0;
   const falseDiscards = Number(m.false_discards ?? m.falseDiscards) || 0;
+  const comparisons = Number(m.comparisons ?? m.comparable_outcomes ?? m.comparison_count) || 0;
+  const comparisonErrors = Number(m.comparison_errors ?? m.comparisonErrors ?? m.comparison_error_count) || 0;
 
   const now = options.now !== undefined ? new Date(options.now).getTime() : Date.now();
   const rawStart = m.window_start ?? m.windowStart;
@@ -723,9 +733,31 @@ function evaluateCanaryMetrics(candidate, metrics, options = {}) {
 
   const correctionRate = exposures > 0 ? (corrections / exposures) : 0;
   const falseDiscardRate = exposures > 0 ? (falseDiscards / exposures) : 0;
+  const comparisonErrorRate = comparisons > 0 ? (comparisonErrors / comparisons) : 0;
+
+  // Never promote a rule from exposure volume alone.  Without a comparable
+  // baseline outcome, a low correction count can simply mean that nobody
+  // reviewed the affected messages yet.
+  if (requireComparableEvidence && comparisons < minExposures) {
+    return {
+      passed: false,
+      shouldRollback: false,
+      reason: 'insufficient_comparison_evidence',
+      correctionRate,
+      falseDiscardRate,
+      comparisonErrorRate,
+      comparisons,
+      comparisonErrors,
+      exposures,
+      minExposures,
+      elapsedMs,
+      minObservationMs,
+    };
+  }
 
   // 1. High error rate triggers rollback
   if ((exposures > 0 && (correctionRate > maxCorrectionRate || falseDiscardRate > maxFalseDiscardRate)) ||
+      (requireComparableEvidence && comparisons > 0 && comparisonErrorRate > maxComparisonErrorRate) ||
       (exposures === 0 && (corrections > 0 || falseDiscards > 0))) {
     return {
       passed: false,
@@ -733,6 +765,9 @@ function evaluateCanaryMetrics(candidate, metrics, options = {}) {
       reason: 'high_error_rate',
       correctionRate,
       falseDiscardRate,
+      comparisonErrorRate,
+      comparisons,
+      comparisonErrors,
       exposures,
       elapsedMs,
     };
@@ -749,6 +784,9 @@ function evaluateCanaryMetrics(candidate, metrics, options = {}) {
       reason: 'insufficient_observation',
       correctionRate,
       falseDiscardRate,
+      comparisonErrorRate,
+      comparisons,
+      comparisonErrors,
       exposures,
       minExposures,
       elapsedMs,
@@ -763,6 +801,9 @@ function evaluateCanaryMetrics(candidate, metrics, options = {}) {
     reason: null,
     correctionRate,
     falseDiscardRate,
+    comparisonErrorRate,
+    comparisons,
+    comparisonErrors,
     exposures,
     elapsedMs,
   };

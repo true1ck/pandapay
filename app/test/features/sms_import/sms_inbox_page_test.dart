@@ -67,4 +67,28 @@ void main() {
     expect(native.columns, [SmsColumn.ID]);
     expect(native.limit, 1);
   });
+
+  test('readInboxSms filters using capturesFinancialSms with sender', () async {
+    final native = _Telephony();
+    const columns = [
+      SmsColumn.ID,
+      SmsColumn.ADDRESS,
+      SmsColumn.BODY,
+      SmsColumn.DATE,
+    ];
+    SmsMessage row(int id, String address, String body) => SmsMessage.fromMap({
+      '_id': '$id',
+      'address': address,
+      'body': body,
+      'date': '1792281600000',
+    }, columns);
+    native.rows = [
+      row(1, 'VM-HDFCBK', 'INR 500 purchase declined on credit card XX4321.'),
+      row(2, 'TX-PROMO', 'Flat 50% off on your next order! Shop now.'),
+      row(3, 'VM-OTPSMS', '123456 is your one-time password. Valid for 10 minutes.'),
+      row(4, 'AX-AxisBk', 'INR 1250.00 debited from Axis Bank Card XX5678 at SWIGGY'),
+    ];
+    final result = await SmsListenerService(telephony: native).readInboxSms();
+    expect(result.map((m) => m.id), [1, 4]);
+  });
 }

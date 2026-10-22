@@ -11,6 +11,7 @@ const { evaluateCandidate, evaluateCanaryMetrics, ACTION_THRESHOLDS } = require(
 const { computeBundleHash, validateRule } = require('./sms_rule_bundle');
 
 const AUTONOMOUS_WORKER_ADVISORY_LOCK_ID = 749281;
+const DEFAULT_SMS_LEARNING_WORKER_ROLE = 'sms_learning_worker';
 
 /**
  * Clusters learning examples with >= 5 distinct users, generates candidates using
@@ -134,7 +135,7 @@ async function evaluateCandidates(dbClient, options = {}) {
   const selectQuery = `
     SELECT
       candidate_id, family, issuer, sender_pattern, template,
-      compiled_regex, field_map, default_fields, confidence, state, stage_metrics
+      compiled_regex, field_map, default_fields, confidence, state, stage_metrics, created_at
     FROM public.sms_rule_candidates
     WHERE state = 'proposed'
     ORDER BY created_at ASC
@@ -145,6 +146,7 @@ async function evaluateCandidates(dbClient, options = {}) {
 
   let passedCount = 0;
   let rejectedCount = 0;
+  let pendingCount = 0;
   const results = [];
 
   for (const candidate of candidates) {
@@ -152,14 +154,24 @@ async function evaluateCandidates(dbClient, options = {}) {
 
     if (!dataset) {
       // Query positive examples matching this candidate template
+      // A candidate was synthesized from all examples available at created_at.
+      // Only later users can certify it; replaying its training rows is not a holdout.
       const posQuery = `
-        SELECT sample_body, extracted_fields, is_negative, negative_reason
-          FROM public.sms_learning_examples
-         WHERE template_text = $1
-           AND fact_family = $2
-           AND is_negative = false
+        SELECT e.sample_body, e.extracted_fields, e.user_hash, e.created_at
+          FROM public.sms_learning_examples e
+         WHERE e.template_text = $1
+           AND e.fact_family = $2
+           AND e.is_negative = false
+           AND e.created_at > $3
+           AND NOT EXISTS (
+             SELECT 1 FROM public.sms_learning_examples training
+              WHERE training.user_hash = e.user_hash
+                AND training.template_text = $1
+                AND training.fact_family = $2
+                AND training.created_at <= $3
+           )
       `;
-      const posRes = await dbClient.query(posQuery, [candidate.template, candidate.family]);
+      const posRes = await dbClient.query(posQuery, [candidate.template, candidate.family, candidate.created_at]);
 
       // Query negative examples
       const negQuery = `
@@ -176,7 +188,14 @@ async function evaluateCandidates(dbClient, options = {}) {
       };
     }
 
-    const evalResult = evaluateCandidate(candidate, dataset, options);
+    // The operational path always applies the calibrated family gates. Test
+    // fixtures may inject a dataset, but HTTP callers cannot supply one.
+    const evalResult = evaluateCandidate(candidate, dataset, {
+      ...options,
+      isProduction: options.isProduction === true,
+      includeStandardNegatives: true,
+      requireConcreteSender: true,
+    });
 
     if (evalResult.pass) {
       passedCount += 1;
@@ -189,6 +208,7 @@ async function evaluateCandidates(dbClient, options = {}) {
       await dbClient.query(
         `UPDATE public.sms_rule_candidates
             SET state = $1,
+                stage_version = stage_version + 1,
                 stage_metrics = $2::jsonb,
                 updated_at = now()
           WHERE candidate_id = $3`,
@@ -201,6 +221,18 @@ async function evaluateCandidates(dbClient, options = {}) {
         evalResult,
       });
     } else {
+      // A new candidate cannot have an independent post-creation holdout on
+      // its first cycle. Wait for later users instead of rejecting it forever.
+      const waitForEvidence = new Set([
+        'no_positive_examples',
+        'insufficient_positive_samples',
+        'error_bound_exceeded',
+      ]);
+      if (waitForEvidence.has(evalResult.failureReason)) {
+        pendingCount += 1;
+        results.push({ candidateId: candidate.candidate_id, state: 'proposed', evalResult });
+        continue;
+      }
       rejectedCount += 1;
       const metricsUpdate = {
         ...candidate.stage_metrics,
@@ -211,6 +243,7 @@ async function evaluateCandidates(dbClient, options = {}) {
       await dbClient.query(
         `UPDATE public.sms_rule_candidates
             SET state = 'rejected',
+                stage_version = stage_version + 1,
                 stage_metrics = $1::jsonb,
                 updated_at = now()
           WHERE candidate_id = $2`,
@@ -229,6 +262,7 @@ async function evaluateCandidates(dbClient, options = {}) {
     evaluated: candidates.length,
     passed: passedCount,
     rejected: rejectedCount,
+    pending: pendingCount,
     results,
   };
 }
@@ -246,10 +280,28 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
   const query = `
     SELECT
       candidate_id, family, issuer, sender_pattern, template,
-      compiled_regex, field_map, default_fields, confidence, state, stage_metrics
-    FROM public.sms_rule_candidates
-    WHERE state IN ('evaluated', 'shadow', 'limited', 'expanded')
-    ORDER BY created_at ASC
+      compiled_regex, field_map, default_fields, confidence, state, stage_metrics, bundle_version, stage_version,
+      COALESCE((SELECT count(*) FROM public.sms_rule_candidate_exposures e
+                 WHERE e.candidate_id = c.candidate_id AND e.stage = c.state), 0) AS exposure_count,
+      COALESCE((SELECT count(*) FROM public.sms_rule_candidate_exposures e
+                 WHERE e.candidate_id = c.candidate_id AND e.stage = c.state AND e.correction), 0) AS correction_count,
+      COALESCE((SELECT count(*) FROM public.sms_rule_candidate_exposures e
+                 WHERE e.candidate_id = c.candidate_id AND e.stage = c.state AND e.false_discard), 0) AS false_discard_count,
+      COALESCE((SELECT count(DISTINCT e.profile_id) FROM public.sms_rule_candidate_exposures e
+                 WHERE e.candidate_id = c.candidate_id AND e.stage = c.state), 0) AS exposure_users
+      ,COALESCE((SELECT count(*) FROM public.sms_rule_candidate_exposures e
+                 WHERE e.candidate_id = c.candidate_id AND e.stage = c.state
+                   AND e.baseline_family IS NOT NULL
+                   AND e.candidate_family IS NOT NULL
+                   AND e.delta_outcome IS NOT NULL
+                   AND e.delta_outcome NOT IN ('unresolved', 'agreement_unresolved', 'unknown')
+                   AND e.outcome <> 'unresolved'), 0) AS comparison_count
+      ,COALESCE((SELECT count(*) FROM public.sms_rule_candidate_exposures e
+                 WHERE e.candidate_id = c.candidate_id AND e.stage = c.state
+                   AND (e.invariant_breach = true OR e.delta_outcome NOT IN ('same', 'improved', 'agreement'))), 0) AS comparison_error_count
+    FROM public.sms_rule_candidates c
+    WHERE state IN ('evaluated', 'shadow', 'limited', 'expanded', 'active')
+    ORDER BY c.created_at ASC
   `;
 
   const res = await dbClient.query(query);
@@ -261,7 +313,15 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
 
   for (const c of candidates) {
     const currentState = c.state;
-    const metrics = c.stage_metrics || {};
+    const metrics = {
+      ...(c.stage_metrics || {}),
+      ...(c.exposure_count !== undefined ? { exposures: Number(c.exposure_count) } : {}),
+      ...(c.correction_count !== undefined ? { corrections: Number(c.correction_count) } : {}),
+      ...(c.false_discard_count !== undefined ? { false_discards: Number(c.false_discard_count) } : {}),
+      ...(c.exposure_users !== undefined ? { distinct_users: Number(c.exposure_users) } : {}),
+      ...(c.comparison_count !== undefined ? { comparisons: Number(c.comparison_count) } : {}),
+      ...(c.comparison_error_count !== undefined ? { comparison_errors: Number(c.comparison_error_count) } : {}),
+    };
     const familyThreshold = ACTION_THRESHOLDS[c.family] || {};
     const distinctUsers = Number(metrics.distinct_users) || 1;
 
@@ -269,7 +329,24 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
     let advancementReason = null;
     let updatedStageMetrics = null;
 
-    if (currentState === 'evaluated') {
+    if (currentState === 'active') {
+      const activeCheck = evaluateCanaryMetrics(c, metrics, {
+        minObservationMs: options.minObservationMs,
+        minExposures: options.minExposures !== undefined ? options.minExposures : 100,
+        maxCorrectionRate: options.maxCorrectionRate,
+        maxFalseDiscardRate: options.maxFalseDiscardRate,
+        requireComparableEvidence: true,
+        now: options.now,
+      });
+      if (activeCheck.shouldRollback && c.bundle_version) {
+        const rollback = await rollbackRegressedBundle(
+          dbClient,
+          c.bundle_version,
+          activeCheck.reason || 'active_rule_regression',
+        );
+        if (rollback.rolledBack) pausedCount += 1;
+      }
+    } else if (currentState === 'evaluated') {
       // Evaluated candidates enter shadow comparison
       nextState = 'shadow';
       advancementReason = 'passed_independent_evaluation';
@@ -290,6 +367,7 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
         minExposures: options.minExposures !== undefined ? options.minExposures : 10,
         maxCorrectionRate: options.maxCorrectionRate,
         maxFalseDiscardRate: options.maxFalseDiscardRate,
+        requireComparableEvidence: options.requireComparableEvidence === true,
         now: options.now,
       });
 
@@ -298,6 +376,7 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
         await dbClient.query(
           `UPDATE public.sms_rule_candidates
               SET state = 'paused',
+                  stage_version = stage_version + 1,
                   stage_metrics = stage_metrics || jsonb_build_object('pause_reason', $1::text, 'paused_at', now()),
                   updated_at = now()
             WHERE candidate_id = $2`,
@@ -327,6 +406,7 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
         minExposures: options.minExposures !== undefined ? options.minExposures : 25,
         maxCorrectionRate: options.maxCorrectionRate,
         maxFalseDiscardRate: options.maxFalseDiscardRate,
+        requireComparableEvidence: options.requireComparableEvidence === true,
         now: options.now,
       });
 
@@ -335,6 +415,7 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
         await dbClient.query(
           `UPDATE public.sms_rule_candidates
               SET state = 'paused',
+                  stage_version = stage_version + 1,
                   stage_metrics = stage_metrics || jsonb_build_object('pause_reason', $1::text, 'paused_at', now()),
                   updated_at = now()
             WHERE candidate_id = $2`,
@@ -364,6 +445,7 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
         minExposures: options.minExposures !== undefined ? options.minExposures : 50,
         maxCorrectionRate: options.maxCorrectionRate,
         maxFalseDiscardRate: options.maxFalseDiscardRate,
+        requireComparableEvidence: options.requireComparableEvidence === true,
         now: options.now,
       });
 
@@ -372,6 +454,7 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
         await dbClient.query(
           `UPDATE public.sms_rule_candidates
               SET state = 'paused',
+                  stage_version = stage_version + 1,
                   stage_metrics = stage_metrics || jsonb_build_object('pause_reason', $1::text, 'paused_at', now()),
                   updated_at = now()
             WHERE candidate_id = $2`,
@@ -407,6 +490,7 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
       await dbClient.query(
         `UPDATE public.sms_rule_candidates
             SET state = $1,
+                stage_version = stage_version + 1,
                 stage_metrics = $2::jsonb,
                 updated_at = now()
           WHERE candidate_id = $3`,
@@ -428,17 +512,13 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
  * @returns {Promise<{ published: boolean, bundleVersion?: number, sha256?: string, ruleCount?: number, reason?: string, upToDate?: boolean }>}
  */
 async function publishActiveBundle(dbClient, minClientVer = '1.0.0') {
-  // 1. Acquire advisory lock to prevent race conditions across workers
-  let locked = true;
-  try {
-    const lockRes = await dbClient.query(
-      'SELECT pg_try_advisory_lock($1) AS locked',
-      [AUTONOMOUS_WORKER_ADVISORY_LOCK_ID],
-    );
-    locked = lockRes.rows?.[0]?.locked !== false;
-  } catch (_) {
-    // Graceful fallback if mock or pooled connection doesn't support advisory locks
-  }
+  // Publication must use a pinned pg Client, never pool.query: advisory locks
+  // are session-scoped. A failed lock check must fail closed.
+  const lockRes = await dbClient.query(
+    'SELECT pg_try_advisory_lock($1) AS locked',
+    [AUTONOMOUS_WORKER_ADVISORY_LOCK_ID],
+  );
+  const locked = lockRes.rows?.[0]?.locked === true;
   if (!locked) {
     return { published: false, reason: 'concurrency_lock_held' };
   }
@@ -554,16 +634,11 @@ async function rollbackRegressedBundle(dbClient, bundleVersion, reason = 'regres
     return { rolledBack: false, reason: 'invalid_bundle_version' };
   }
 
-  let locked = true;
-  try {
-    const lockRes = await dbClient.query(
-      'SELECT pg_try_advisory_lock($1) AS locked',
-      [AUTONOMOUS_WORKER_ADVISORY_LOCK_ID],
-    );
-    locked = lockRes.rows?.[0]?.locked !== false;
-  } catch (_) {
-    // Graceful fallback
-  }
+  const lockRes = await dbClient.query(
+    'SELECT pg_try_advisory_lock($1) AS locked',
+    [AUTONOMOUS_WORKER_ADVISORY_LOCK_ID],
+  );
+  const locked = lockRes.rows?.[0]?.locked === true;
   if (!locked) {
     return { rolledBack: false, reason: 'concurrency_lock_held' };
   }
@@ -582,6 +657,7 @@ async function rollbackRegressedBundle(dbClient, bundleVersion, reason = 'regres
     await dbClient.query(
       `UPDATE public.sms_rule_candidates
           SET state = 'rolled_back',
+              stage_version = stage_version + 1,
               stage_metrics = stage_metrics || jsonb_build_object('rollback_reason', $2::text, 'rolled_back_at', now()),
               updated_at = now()
         WHERE bundle_version = $1`,
@@ -610,8 +686,13 @@ async function rollbackRegressedBundle(dbClient, bundleVersion, reason = 'regres
  */
 async function runAutonomousCycle(dbClient, options = {}) {
   const proposeRes = await proposeCandidates(dbClient, options);
-  const evalRes = await evaluateCandidates(dbClient, options);
-  const advanceRes = await advanceCandidatePipelines(dbClient, options);
+  const productionOptions = {
+    ...options,
+    isProduction: true,
+    requireComparableEvidence: true,
+  };
+  const evalRes = await evaluateCandidates(dbClient, productionOptions);
+  const advanceRes = await advanceCandidatePipelines(dbClient, productionOptions);
   const publishRes = await publishActiveBundle(dbClient, options.minClientVer);
 
   return {
@@ -626,6 +707,50 @@ async function runAutonomousCycle(dbClient, options = {}) {
 
 let scheduledWorkerTimer = null;
 let isWorkerRunning = false;
+
+async function verifyWorkerCapabilities(client, configuredRole) {
+  const result = await client.query(`
+    SELECT
+      current_user AS role,
+      coalesce((SELECT rolsuper FROM pg_roles WHERE rolname = current_user), true) AS is_superuser,
+      coalesce((SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user), true) AS bypasses_rls,
+      has_table_privilege(current_user, 'public.sms_learning_examples', 'SELECT') AS can_read_examples,
+      (has_table_privilege(current_user, 'public.sms_rule_candidates', 'SELECT')
+       AND has_table_privilege(current_user, 'public.sms_rule_candidates', 'INSERT')
+       AND has_table_privilege(current_user, 'public.sms_rule_candidates', 'UPDATE')) AS can_write_candidates,
+      has_table_privilege(current_user, 'public.sms_rule_candidate_exposures', 'SELECT') AS can_read_exposures,
+      has_table_privilege(current_user, 'public.sms_rule_bundles', 'SELECT') AS can_read_bundles,
+      has_table_privilege(current_user, 'public.sms_learning_worker_runs', 'INSERT') AS can_write_worker_runs,
+      has_function_privilege(current_user, 'pandapay.sms_publish_bundle(integer,jsonb,text,text)', 'EXECUTE') AS can_publish,
+      has_function_privilege(current_user, 'pandapay.sms_rollback_bundle(integer)', 'EXECUTE') AS can_rollback
+  `);
+  const row = result.rows?.[0] || {};
+  const role = String(row.role || '');
+  const expectedRole = configuredRole || process.env.SMS_LEARNING_WORKER_ROLE || DEFAULT_SMS_LEARNING_WORKER_ROLE;
+  const allowed = role && role !== 'app_user' && role === expectedRole &&
+    row.is_superuser === false && row.bypasses_rls === false &&
+    row.can_read_examples === true && row.can_write_candidates === true &&
+    row.can_read_exposures === true && row.can_read_bundles === true &&
+    row.can_write_worker_runs === true &&
+    row.can_publish === true && row.can_rollback === true;
+  if (!allowed) {
+    throw new Error('SMS learning worker database role lacks required capabilities');
+  }
+  return role;
+}
+
+async function recordWorkerRun(client, status, details = {}) {
+  try {
+    await client.query(
+      `INSERT INTO public.sms_learning_worker_runs
+         (status, started_at, finished_at, details)
+       VALUES ($1, COALESCE($2::timestamptz, now()), now(), $3::jsonb)`,
+      [status, details.startedAt || null, JSON.stringify(details.safe || {})],
+    );
+  } catch (_) {
+    // Health telemetry is additive and must never prevent the learning cycle.
+  }
+}
 
 /**
  * Starts the durable autonomous learning worker loop.
@@ -650,15 +775,30 @@ function startAutonomousWorker(dbPool, options = {}) {
     isWorkerRunning = true;
     let attempt = 0;
     while (attempt < maxRetries) {
+      let client;
+      let locked = false;
+      const startedAt = new Date().toISOString();
       try {
-        await runAutonomousCycle(dbPool, options);
+        client = await dbPool.connect();
+        await verifyWorkerCapabilities(client, options.workerRole);
+        const lock = await client.query('SELECT pg_try_advisory_lock($1) AS locked', [AUTONOMOUS_WORKER_ADVISORY_LOCK_ID]);
+        if (lock.rows?.[0]?.locked !== true) break;
+        locked = true;
+        const result = await runAutonomousCycle(client, options);
+        await recordWorkerRun(client, 'succeeded', { startedAt, safe: result });
         break;
       } catch (err) {
         attempt += 1;
+        if (client) await recordWorkerRun(client, 'failed', { startedAt, safe: { reason: String(err.message || err).slice(0, 200), attempt } });
         const backoffMs = Math.min(1000 * Math.pow(2, attempt), 30000);
         console.warn(`[SMS_AUTONOMOUS_WORKER] cycle error (attempt ${attempt}/${maxRetries}):`, err.message || err);
         if (attempt < maxRetries) {
           await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        }
+      } finally {
+        if (client) {
+          if (locked) await client.query('SELECT pg_advisory_unlock($1)', [AUTONOMOUS_WORKER_ADVISORY_LOCK_ID]).catch(() => {});
+          client.release();
         }
       }
     }
@@ -687,12 +827,14 @@ function stopAutonomousWorker() {
 
 module.exports = {
   AUTONOMOUS_WORKER_ADVISORY_LOCK_ID,
+  DEFAULT_SMS_LEARNING_WORKER_ROLE,
   proposeCandidates,
   evaluateCandidates,
   advanceCandidatePipelines,
   publishActiveBundle,
   rollbackRegressedBundle,
   runAutonomousCycle,
+  verifyWorkerCapabilities,
   startAutonomousWorker,
   stopAutonomousWorker,
 };

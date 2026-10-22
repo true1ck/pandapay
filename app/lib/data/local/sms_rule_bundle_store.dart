@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../app_status_repository.dart';
 import 'app_database.dart';
 import 'sms_rule_bundle.dart';
 
@@ -21,12 +22,34 @@ class SmsRuleBundleStore {
           cached_at INTEGER NOT NULL
         );
       ''');
+      database.db.execute('''
+        CREATE TABLE IF NOT EXISTS sms_candidate_rule_bundles (
+          namespace TEXT NOT NULL DEFAULT '__legacy__',
+          candidate_id TEXT PRIMARY KEY,
+          stage TEXT NOT NULL,
+          mode TEXT NOT NULL,
+          assignment_id TEXT,
+          stage_version INTEGER NOT NULL DEFAULT 1,
+          raw_json TEXT NOT NULL,
+          cached_at INTEGER NOT NULL
+        );
+      ''');
+      // Additive upgrades for databases created by an earlier app build.
+      for (final statement in [
+        "ALTER TABLE sms_candidate_rule_bundles ADD COLUMN namespace TEXT NOT NULL DEFAULT '__legacy__'",
+        'ALTER TABLE sms_candidate_rule_bundles ADD COLUMN assignment_id TEXT',
+        'ALTER TABLE sms_candidate_rule_bundles ADD COLUMN stage_version INTEGER NOT NULL DEFAULT 1',
+      ]) {
+        try {
+          database.db.execute(statement);
+        } catch (_) {}
+      }
     } catch (_) {
       // Database might be closed during disposal
     }
   }
 
-  SmsRuleBundle? loadActiveBundleSync() {
+  SmsRuleBundle? loadActiveBundleSync({String clientVersion = '1.0.0'}) {
     _ensureTable();
     try {
       final rows = database.db.select('''
@@ -40,9 +63,15 @@ class SmsRuleBundleStore {
       final raw = rows.first['raw_json'] as String;
       final decoded = jsonDecode(raw);
       if (decoded is Map<String, dynamic>) {
-        return SmsRuleBundle.fromJson(decoded, verifySha: true);
+        final bundle = SmsRuleBundle.fromJson(decoded, verifySha: true);
+        return bundle == null || !_compatible(bundle.minClientVersion, clientVersion)
+            ? null
+            : bundle;
       } else if (decoded is Map) {
-        return SmsRuleBundle.fromJson(decoded.cast<String, dynamic>(), verifySha: true);
+        final bundle = SmsRuleBundle.fromJson(decoded.cast<String, dynamic>(), verifySha: true);
+        return bundle == null || !_compatible(bundle.minClientVersion, clientVersion)
+            ? null
+            : bundle;
       }
       return null;
     } catch (_) {
@@ -50,14 +79,32 @@ class SmsRuleBundleStore {
     }
   }
 
-  Future<SmsRuleBundle?> loadActiveBundle() async {
-    return loadActiveBundleSync();
+  Future<SmsRuleBundle?> loadActiveBundle({String clientVersion = '1.0.0'}) async {
+    return loadActiveBundleSync(clientVersion: clientVersion);
   }
 
-  Future<bool> saveBundle(Map<String, dynamic> json) async {
+  List<SmsCandidateRuleBundle> loadCandidateBundlesSync({String clientVersion = '1.0.0', String namespace = '__legacy__'}) {
+    _ensureTable();
+    try {
+      return database.db.select(
+        'SELECT raw_json FROM sms_candidate_rule_bundles WHERE namespace=?',
+        [namespace],
+      ).map((row) {
+        final value = jsonDecode(row['raw_json'] as String);
+        return value is Map<String, dynamic>
+            ? SmsCandidateRuleBundle.fromJson(value)
+            : SmsCandidateRuleBundle.fromJson(value.cast<String, dynamic>());
+      }).whereType<SmsCandidateRuleBundle>().where((candidate) =>
+          _compatible(candidate.bundle.minClientVersion, clientVersion)).toList(growable: false);
+    } catch (_) {
+      return const <SmsCandidateRuleBundle>[];
+    }
+  }
+
+  Future<bool> saveBundle(Map<String, dynamic> json, {String clientVersion = '1.0.0'}) async {
     _ensureTable();
     final bundle = SmsRuleBundle.fromJson(json, verifySha: true);
-    if (bundle == null) return false;
+    if (bundle == null || !_compatible(bundle.minClientVersion, clientVersion)) return false;
 
     try {
       database.db.execute(
@@ -97,9 +144,11 @@ class SmsRuleBundleStore {
     http.Client client, {
     required String apiBaseUrl,
     String? bearerToken,
+    String clientVersion = '1.0.0',
+    String namespace = '__legacy__',
   }) async {
     try {
-      final active = loadActiveBundleSync();
+      final active = loadActiveBundleSync(clientVersion: clientVersion);
       final sinceVersion = active?.bundleVersion ?? 0;
       final uri = Uri.parse('$apiBaseUrl/sms/rules/active?since_version=$sinceVersion');
 
@@ -120,29 +169,105 @@ class SmsRuleBundleStore {
         final newVersion = decoded['bundleVersion'] as int? ?? 0;
         if (newVersion == 0) {
           await rollback();
+          await _saveCandidateBundles(decoded['candidateRules'], clientVersion: clientVersion, namespace: namespace, revokedCandidateIds: decoded['revokedCandidateIds']);
           return true;
         } else {
           // Deactivate newer local bundles and save the lower active version
           await rollback();
           if (decoded is Map<String, dynamic>) {
-            return await saveBundle(decoded);
+            final saved = await saveBundle(decoded, clientVersion: clientVersion);
+            await _saveCandidateBundles(decoded['candidateRules'], clientVersion: clientVersion, namespace: namespace, revokedCandidateIds: decoded['revokedCandidateIds']);
+            return saved;
           }
           return true;
         }
       }
 
       if (decoded['upToDate'] == true) {
+        // Older compatible servers may omit candidate metadata from a 304
+        // style response. Preserve the last verified assignment cache in
+        // that case; explicit metadata remains authoritative.
+        if (decoded.containsKey('candidateRules') ||
+            decoded.containsKey('revokedCandidateIds')) {
+          await _saveCandidateBundles(
+            decoded['candidateRules'],
+            clientVersion: clientVersion,
+            namespace: namespace,
+            revokedCandidateIds: decoded['revokedCandidateIds'],
+          );
+        }
         return false;
       }
 
       if (decoded is Map<String, dynamic>) {
-        return await saveBundle(decoded);
+        final saved = await saveBundle(decoded, clientVersion: clientVersion);
+        await _saveCandidateBundles(decoded['candidateRules'], clientVersion: clientVersion, namespace: namespace, revokedCandidateIds: decoded['revokedCandidateIds']);
+        return saved;
       } else {
-        return await saveBundle(decoded.cast<String, dynamic>());
+        final mapped = decoded.cast<String, dynamic>();
+        final saved = await saveBundle(mapped, clientVersion: clientVersion);
+        await _saveCandidateBundles(mapped['candidateRules'], clientVersion: clientVersion, namespace: namespace, revokedCandidateIds: mapped['revokedCandidateIds']);
+        return saved;
       }
     } catch (_) {
       // Offline or network timeout fails open without crashing
       return false;
     }
   }
+
+  Future<void> _saveCandidateBundles(dynamic raw, {String clientVersion = '1.0.0', String namespace = '__legacy__', dynamic revokedCandidateIds}) async {
+    _ensureTable();
+    final parsed = <SmsCandidateRuleBundle>[];
+    if (raw is List) {
+      for (final item in raw) {
+        final candidate = item is Map<String, dynamic>
+            ? SmsCandidateRuleBundle.fromJson(item)
+            : item is Map
+                ? SmsCandidateRuleBundle.fromJson(item.cast<String, dynamic>())
+                : null;
+        if (candidate != null && _compatible(candidate.bundle.minClientVersion, clientVersion)) {
+          parsed.add(candidate);
+        }
+      }
+    }
+    final revoked = revokedCandidateIds is List
+        ? revokedCandidateIds.map((value) => value.toString()).toSet()
+        : const <String>{};
+    try {
+      database.db.execute('DELETE FROM sms_candidate_rule_bundles WHERE namespace=?', [namespace]);
+      for (final candidate in parsed) {
+        if (revoked.contains(candidate.candidateId)) continue;
+        final json = {
+          'candidateId': candidate.candidateId,
+          'stage': candidate.stage,
+          'mode': candidate.mode,
+          'assignmentId': candidate.assignmentId,
+          'stageVersion': candidate.stageVersion,
+          'bundleVersion': candidate.bundle.bundleVersion,
+          'sha256': candidate.bundle.sha256,
+          'publishedAt': candidate.bundle.publishedAt.toUtc().toIso8601String(),
+          'minClientVersion': candidate.bundle.minClientVersion,
+          'rules': [
+            for (final rule in candidate.bundle.rules)
+              {
+                'id': rule.id,
+                'family': rule.family.wireValue,
+                'senderPattern': rule.senderPattern,
+                'regex': rule.regexPattern,
+                'fieldMap': rule.fieldMap,
+                'defaultFields': rule.defaultFields,
+                'confidence': rule.confidence,
+              },
+          ],
+        };
+        database.db.execute(
+          'INSERT OR REPLACE INTO sms_candidate_rule_bundles(namespace,candidate_id,stage,mode,assignment_id,stage_version,raw_json,cached_at) VALUES (?,?,?,?,?,?,?,?)',
+          [namespace, '$namespace::${candidate.candidateId}', candidate.stage, candidate.mode, candidate.assignmentId, candidate.stageVersion, jsonEncode(json), DateTime.now().millisecondsSinceEpoch],
+        );
+      }
+    } catch (_) {}
+  }
+
+  bool _compatible(String minimum, String current) =>
+      !isVersionOlderThan(current, minimum);
 }

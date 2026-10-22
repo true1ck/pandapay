@@ -36,6 +36,8 @@ import '../data/local/financial_store.dart';
 import '../data/local/sms_rule_bundle.dart';
 import '../data/local/sms_rule_bundle_store.dart';
 import '../data/local/sms_facts_outbox.dart';
+import '../data/local/sms_dismissal_outbox.dart';
+import '../data/local/sms_rule_exposure_outbox.dart';
 import '../data/local/sms_intake_repository.dart';
 import '../data/local/sms_import_store.dart';
 import '../data/local_sms_parser.dart';
@@ -580,10 +582,16 @@ Future<void> recoverLegacyPendingChanges(WidgetRef ref) async {
     for (final entry in intake.pending('legacy', limit: 100000)) {
       final bundle = SmsRuleBundleStore(
         cache.financialStore.database,
-      ).loadActiveBundleSync();
+      ).loadActiveBundleSync(
+        clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+      );
       SmsImportStore(
         cache.financialStore,
         downloadedRules: bundle,
+        candidateRules: SmsRuleBundleStore(cache.financialStore.database).loadCandidateBundlesSync(
+          clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+          namespace: namespace,
+        ),
       ).capture(namespace, entry.message);
       intake.acknowledge('legacy', entry.id);
     }
@@ -1243,6 +1251,13 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
     apiBaseUrl: _apiBaseUrl,
     accessToken: token,
     client: ref.read(authenticatedHttpClientProvider),
+    dismissalOutbox: () async {
+      if (ref.read(cacheNamespaceProvider) != namespace) {
+        throw StateError('Account changed before dismissal sync');
+      }
+      final cache = await ref.read(responseCacheProvider.future);
+      return SmsDismissalOutbox(cache.financialStore.database, namespace);
+    },
     onTransactionSaved: (mutationId, transactionId) {
       if (ref.read(cacheNamespaceProvider) != namespace) return;
       ref
@@ -1259,10 +1274,16 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       cache.financialStore.migrateLegacy(namespace);
       final bundle = SmsRuleBundleStore(
         cache.financialStore.database,
-      ).loadActiveBundleSync();
+      ).loadActiveBundleSync(
+        clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+      );
       SmsImportStore(
         cache.financialStore,
         downloadedRules: bundle,
+        candidateRules: SmsRuleBundleStore(cache.financialStore.database).loadCandidateBundlesSync(
+          clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+          namespace: namespace,
+        ),
       ).capture(
         namespace,
         QueuedSms(
@@ -1283,10 +1304,16 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
         final end = (start + 100).clamp(0, messages.length);
         final bundle = SmsRuleBundleStore(
           cache.financialStore.database,
-        ).loadActiveBundleSync();
+        ).loadActiveBundleSync(
+          clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+        );
         SmsImportStore(
           cache.financialStore,
           downloadedRules: bundle,
+          candidateRules: SmsRuleBundleStore(cache.financialStore.database).loadCandidateBundlesSync(
+            clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+            namespace: namespace,
+          ),
         ).captureBatch(namespace, [
           for (final message in messages.sublist(start, end))
             QueuedSms(
@@ -1404,32 +1431,45 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
             intake.acknowledge(namespace, key);
           });
         } else if (outcome == 'needs_review' || outcome == 'unparsed') {
-          // Preserve unsupported input for review without silently retrying it
-          // forever or treating an unconfirmed local parse as final spending.
-          // Best-effort submit to the server AI queue for background classification.
-          repository
-              .submitAiJob(
-                sourceKey: key,
-                sender: message.sender,
-                body: message.body,
-                occurredAt: message.occurredAt,
-              )
-              .ignore();
-          await ref
-              .read(needsReviewRepositoryProvider)
-              .add(
-                NeedsReviewItem(
-                  id: key,
+          final isFinancialCandidate =
+              capturesFinancialSms(message.body, sender: message.sender) &&
+              !LocalSmsParser.isNonTransactionNoise(
+                message.sender,
+                message.body,
+              );
+          if (outcome == 'unparsed' && !isFinancialCandidate) {
+            acknowledgements.add(() {
+              store.discardProvisional(namespace, key);
+              intake.acknowledge(namespace, key);
+            });
+          } else {
+            // Preserve unsupported input for review without silently retrying it
+            // forever or treating an unconfirmed local parse as final spending.
+            // Best-effort submit to the server AI queue for background classification.
+            repository
+                .submitAiJob(
+                  sourceKey: key,
                   sender: message.sender,
                   body: message.body,
-                  receivedAt: message.occurredAt,
-                  reason: result['reason'] as String?,
-                ),
-              );
-          acknowledgements.add(() {
-            store.discardProvisional(namespace, key);
-            intake.acknowledge(namespace, key);
-          });
+                  occurredAt: message.occurredAt,
+                )
+                .ignore();
+            await ref
+                .read(needsReviewRepositoryProvider)
+                .add(
+                  NeedsReviewItem(
+                    id: key,
+                    sender: message.sender,
+                    body: message.body,
+                    receivedAt: message.occurredAt,
+                    reason: result['reason'] as String?,
+                  ),
+                );
+            acknowledgements.add(() {
+              store.discardProvisional(namespace, key);
+              intake.acknowledge(namespace, key);
+            });
+          }
         }
       }
       if (ref.read(cacheNamespaceProvider) != namespace) return;
@@ -1443,6 +1483,7 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       }
     },
   );
+  repository.flushDismissalQueue().ignore();
   return repository;
 });
 
@@ -5364,6 +5405,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
             ref.read(authenticatedHttpClientProvider),
             apiBaseUrl: _apiBaseUrl,
             bearerToken: ref.read(accessTokenProvider),
+            clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+            namespace: ref.read(cacheNamespaceProvider),
           );
           if (updated) {
             ref.invalidate(activeSmsRuleBundleProvider);
@@ -5654,7 +5697,10 @@ class SmsAutoImportController {
       // In-memory test databases cannot be reopened by another isolate.
       SmsImportStore(store).captureBatch(namespace, messages);
     } else {
-      final worker = _captureWorker ??= SmsCaptureWorker(path);
+      final worker = _captureWorker ??= SmsCaptureWorker(
+        path,
+        clientVersion: _ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+      );
       final changed = await worker.capture(namespace, messages);
       if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
         throw StateError('Account changed during SMS capture');
@@ -5889,6 +5935,8 @@ class SmsAutoImportController {
           factIndex: correction.factIndex,
           patch: correction.patch,
           reason: correction.reason,
+          sampleBody: correction.sampleBody,
+          templateText: correction.templateText,
         );
         if (accepted) {
           factsOutbox.acknowledgeOverride(
@@ -5902,6 +5950,24 @@ class SmsAutoImportController {
             correction.sourceKey,
             correction.factIndex,
           );
+        }
+      }
+      final exposureOutbox = SmsRuleExposureOutbox(cache.financialStore.database);
+      final pendingExposures = exposureOutbox.pending(namespace);
+      if (pendingExposures.isNotEmpty &&
+          _ref.read(isOnlineProvider).valueOrNull != false &&
+          _ref.read(cacheNamespaceProvider) == namespace) {
+        final accepted = await repo.logSmsRuleExposures(exposures: pendingExposures);
+        for (final exposure in pendingExposures) {
+          final candidateId = exposure['candidateId'] as String;
+          final sourceKey = exposure['sourceKey'] as String;
+          final stage = exposure['stage'] as String;
+          final stageVersion = (exposure['stageVersion'] as int?) ?? 1;
+          if (accepted) {
+            exposureOutbox.acknowledge(namespace, candidateId, sourceKey, stage, stageVersion: stageVersion);
+          } else {
+            exposureOutbox.failed(namespace, candidateId, sourceKey, stage, stageVersion: stageVersion);
+          }
         }
       }
     } catch (_) {

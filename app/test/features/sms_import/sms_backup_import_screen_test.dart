@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/import_repository.dart';
+import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_import/sms_backup_import_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -57,9 +58,10 @@ class _FakeXmlFilePickerPlatform extends FilePickerPlatform {
 }
 
 class _RecordingUserCardsRepository extends UserCardsRepository {
-  _RecordingUserCardsRepository() : super(apiBaseUrl: 'http://test', accessToken: 'tok');
+  _RecordingUserCardsRepository({this.customBatchResult}) : super(apiBaseUrl: 'http://test', accessToken: 'tok');
 
   final List<List<SmsBatchMessage>> batches = [];
+  final SmsBatchImportResult? customBatchResult;
 
   @override
   Future<SmsBatchImportResult> logTransactionsFromSmsBatch({
@@ -69,13 +71,14 @@ class _RecordingUserCardsRepository extends UserCardsRepository {
     bool notifyNewTransactions = false,
   }) async {
     batches.add(messages);
-    return SmsBatchImportResult(
-      imported: messages.length,
-      duplicate: 0,
-      unparsed: 0,
-      invalid: 0,
-      errored: 0,
-    );
+    return customBatchResult ??
+        SmsBatchImportResult(
+          imported: messages.length,
+          duplicate: 0,
+          unparsed: 0,
+          invalid: 0,
+          errored: 0,
+        );
   }
 }
 
@@ -123,6 +126,7 @@ Future<void> _pumpScreen(
   required List<UserCard> cards,
   required UserCardsRepository userCards,
   required ImportRepository imports,
+  NeedsReviewRepository? needsReview,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -130,6 +134,7 @@ Future<void> _pumpScreen(
         userCardsProvider.overrideWith((ref) async => cards),
         userCardsRepositoryProvider.overrideWithValue(userCards),
         importRepositoryProvider.overrideWithValue(imports),
+        if (needsReview != null) needsReviewRepositoryProvider.overrideWithValue(needsReview),
       ],
       child: const MaterialApp(home: SmsBackupImportScreen()),
     ),
@@ -257,5 +262,41 @@ void main() {
     // here, which is the D4 dead end. There must be no import affordance.
     expect(find.textContaining('Import 1 message'), findsNothing);
     expect(find.text('Pick a card to continue'), findsNothing);
+  });
+
+  testWidgets('adds genuine unparsed financial candidate to Needs Review and ignores noise', (
+    tester,
+  ) async {
+    final repo = _RecordingUserCardsRepository(
+      customBatchResult: const SmsBatchImportResult(
+        imported: 0,
+        duplicate: 0,
+        unparsed: 1,
+        invalid: 0,
+        errored: 0,
+        unparsedIndices: [0],
+        reasonByIndex: {0: 'unmatched_pattern'},
+      ),
+    );
+    final reviewRepo = NeedsReviewRepository();
+    await _pumpScreen(
+      tester,
+      cards: const [_hdfc, _axis],
+      userCards: repo,
+      imports: _RecordingImportRepository(),
+      needsReview: reviewRepo,
+    );
+
+    await _tapScrolled(tester, find.byKey(const ValueKey('sms-group-1234')));
+    await tester.tap(find.text('HDFC Millennia').last);
+    await tester.pumpAndSettle();
+    await _tapScrolled(tester, find.byKey(const ValueKey('sms-group-5678')));
+    await tester.tap(find.text('Skip these').last);
+    await tester.pumpAndSettle();
+    await _tapScrolled(tester, find.textContaining('Import 1 message'));
+
+    final items = await reviewRepo.fetchAll();
+    expect(items, hasLength(1));
+    expect(items.single.body, contains('x1234 at AMAZON'));
   });
 }

@@ -374,6 +374,46 @@ test('sms_evaluator: evaluateCanaryMetrics - respects custom options overrides',
   assert.equal(result.shouldRollback, false);
 });
 
+test('sms_evaluator: production promotion waits for candidate versus baseline comparisons', () => {
+  const candidate = { state: 'shadow' };
+  const now = Date.now();
+  const windowStart = new Date(now - 30 * 60 * 60 * 1000).toISOString();
+  const result = evaluateCanaryMetrics(candidate, {
+    exposures: 20,
+    comparisons: 2,
+    comparison_errors: 0,
+    window_start: windowStart,
+  }, {
+    now,
+    minExposures: 10,
+    minObservationMs: 0,
+    requireComparableEvidence: true,
+  });
+  assert.equal(result.passed, false);
+  assert.equal(result.shouldRollback, false);
+  assert.equal(result.reason, 'insufficient_comparison_evidence');
+});
+
+test('sms_evaluator: production promotion rolls back on baseline regression comparisons', () => {
+  const candidate = { state: 'limited' };
+  const now = Date.now();
+  const result = evaluateCanaryMetrics(candidate, {
+    exposures: 20,
+    comparisons: 20,
+    comparison_errors: 1,
+    window_start: new Date(now - 30 * 60 * 60 * 1000).toISOString(),
+  }, {
+    now,
+    minExposures: 10,
+    minObservationMs: 0,
+    requireComparableEvidence: true,
+  });
+  assert.equal(result.passed, false);
+  assert.equal(result.shouldRollback, true);
+  assert.equal(result.reason, 'high_error_rate');
+  assert.equal(result.comparisonErrorRate, 0.05);
+});
+
 // --- Holdout dataset splitting & holdout evaluation tests ---
 
 test('sms_evaluator: splitHoldoutDataset partitions examples by distinct user_hash', () => {

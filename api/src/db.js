@@ -43,6 +43,9 @@ async function withUserClient(userId, fn) {
     if (userId) {
       await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
     }
+    if (process.env.SMS_LEARNING_HMAC_KEY?.length >= 32) {
+      await client.query("SELECT set_config('app.sms_learning_hmac_key', $1, true)", [process.env.SMS_LEARNING_HMAC_KEY]);
+    }
     const result = await fn(client);
     await client.query('COMMIT');
     return result;

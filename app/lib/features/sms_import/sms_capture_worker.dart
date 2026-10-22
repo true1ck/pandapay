@@ -10,6 +10,7 @@ import 'sms_background_queue.dart';
 /// isolates; UI providers retain their own connection and receive commit events.
 class SmsCaptureWorker {
   final String databasePath;
+  final String clientVersion;
   final _responses = ReceivePort();
   final _pending = <int, Completer<List<String>>>{};
   Completer<SendPort>? _ready;
@@ -19,7 +20,7 @@ class SmsCaptureWorker {
   var _sequence = 0;
   var _disposed = false;
 
-  SmsCaptureWorker(this.databasePath) {
+  SmsCaptureWorker(this.databasePath, {this.clientVersion = '1.0.0'}) {
     _responses.listen((message) {
       if (message is SendPort) {
         _commands = message;
@@ -57,7 +58,7 @@ class SmsCaptureWorker {
     unawaited(
       Isolate.spawn(
         _run,
-        [_responses.sendPort, databasePath],
+        [_responses.sendPort, databasePath, clientVersion],
         onError: _responses.sendPort,
         debugName: 'pandapay-sms-capture',
       ).then<void>(
@@ -155,8 +156,16 @@ class SmsCaptureWorker {
                 receivedAt: DateTime.fromMillisecondsSinceEpoch(row[2] as int),
               ),
           ];
-          final rules = SmsRuleBundleStore(database).loadActiveBundleSync();
-          SmsImportStore(store, downloadedRules: rules).captureBatch(namespace, messages);
+          final ruleStore = SmsRuleBundleStore(database);
+          final clientVersion = arguments.length > 2
+              ? arguments[2] as String
+              : '1.0.0';
+          final rules = ruleStore.loadActiveBundleSync(clientVersion: clientVersion);
+          SmsImportStore(
+            store,
+            downloadedRules: rules,
+            candidateRules: ruleStore.loadCandidateBundlesSync(clientVersion: clientVersion, namespace: namespace),
+          ).captureBatch(namespace, messages);
           replies.send([id, changed.toList(), null]);
         } catch (error) {
           // Never return raw message bodies in diagnostics.

@@ -229,6 +229,9 @@ jobs:
       - name: Verify SMS AI RLS, worker leasing, and provider capacity
         run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021230000_sms_ai_permissions_test.sql
 
+      - name: Verify autonomous SMS learner role separation and grants
+        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261022143500_sms_learning_worker_permissions_test.sql
+
       # The deploy runs the role script as an admin that has CREATEROLE but
       # not SUPERUSER. Restating a role's SUPERUSER attribute is refused for
       # that admin ("permission denied to alter role"), so the second and
@@ -258,6 +261,7 @@ jobs:
               -e PGPASSWORD=deploy_admin_ci_pw \
               -e APP_USER_PASSWORD=app_user_ci_pw \
               -e REWARD_WORKER_DB_PASSWORD=reward_worker_ci_pw \
+              -e SMS_LEARNING_WORKER_DB_PASSWORD=sms_learning_worker_ci_pw \
               db psql -U deploy_admin_ci -d role_setup_ci -v ON_ERROR_STOP=1 \
               -f - < db/setup_app_role.sql
             echo "role setup pass $pass ok"
@@ -270,13 +274,13 @@ jobs:
             r record;
           BEGIN
             FOR r IN SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
-                      WHERE rolname IN ('app_user', 'rewards_worker_login') LOOP
+                      WHERE rolname IN ('app_user', 'rewards_worker_login', 'sms_learning_worker') LOOP
               IF r.rolsuper OR r.rolbypassrls THEN
                 RAISE EXCEPTION 'role % must not be superuser or bypass rls', r.rolname;
               END IF;
             END LOOP;
             IF (SELECT count(*) FROM pg_roles
-                 WHERE rolname IN ('app_user', 'rewards_worker_login')) <> 2 THEN
+                 WHERE rolname IN ('app_user', 'rewards_worker_login', 'sms_learning_worker')) <> 3 THEN
               RAISE EXCEPTION 'the app roles must exist';
             END IF;
             IF NOT has_table_privilege('app_user', 'public.role_setup_fixture', 'SELECT')

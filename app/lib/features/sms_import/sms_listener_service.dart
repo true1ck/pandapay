@@ -12,6 +12,7 @@ import '../../data/local/sms_intake_repository.dart';
 import '../../data/local/financial_store.dart';
 import '../../data/local_sms_parser.dart';
 import '../../data/local/sms_import_store.dart';
+import '../../data/local/sms_rule_bundle_store.dart';
 
 /// The background-isolate entry point for an SMS that arrives while the app
 /// is closed or backgrounded.
@@ -63,7 +64,17 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
             : DateTime.fromMillisecondsSinceEpoch(messageTimestamp),
       );
       final store = FinancialStore(database);
-      SmsImportStore(store).capture(namespace, queued);
+      // Background isolates still have access to the verified SQLite rule
+      // cache. Apply the same active and assigned candidate rules that the
+      // foreground worker uses so a message is classified once consistently;
+      // the next foreground flush only uploads durable outbox evidence.
+      final ruleStore = SmsRuleBundleStore(database);
+      final bundle = ruleStore.loadActiveBundleSync();
+      SmsImportStore(
+        store,
+        downloadedRules: bundle,
+        candidateRules: ruleStore.loadCandidateBundlesSync(namespace: namespace),
+      ).capture(namespace, queued);
       store.dispose();
     } finally {
       database.close();
@@ -262,7 +273,7 @@ class SmsListenerService {
             );
           })
           .whereType<InboxSms>()
-          .where((m) => looksLikeTransactionSms(m.body))
+          .where((m) => capturesFinancialSms(m.body, sender: m.sender))
           .toList();
       return limit > 0 ? filtered.take(limit).toList() : filtered;
     } catch (error) {

@@ -4,6 +4,7 @@ import '../../features/sms_import/sms_background_queue.dart';
 import '../local_sms_parser.dart';
 import '../sms_fact_contract.dart';
 import 'app_database.dart';
+import 'sms_learning_privacy.dart';
 
 /// SMS intelligence Phase 2: a durable outbox of TYPED FACTS for recognized
 /// non-spend financial messages.
@@ -36,11 +37,20 @@ class SmsFactsOutbox {
     database.db.execute('''
       CREATE TABLE IF NOT EXISTS sms_fact_override_outbox (
         namespace TEXT NOT NULL, source_key TEXT NOT NULL, fact_index INTEGER NOT NULL,
-        patch TEXT NOT NULL, reason TEXT, attempts INTEGER NOT NULL DEFAULT 0,
+        patch TEXT NOT NULL, reason TEXT, sample_body TEXT, template_text TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0,
         next_attempt INTEGER NOT NULL DEFAULT 0, last_error TEXT,
         PRIMARY KEY(namespace, source_key, fact_index)
       );
     ''');
+    for (final statement in [
+      'ALTER TABLE sms_fact_override_outbox ADD COLUMN sample_body TEXT',
+      'ALTER TABLE sms_fact_override_outbox ADD COLUMN template_text TEXT',
+    ]) {
+      try {
+        database.db.execute(statement);
+      } catch (_) {}
+    }
   }
 
   /// Validates and queues one envelope. Facts are pre-indexed
@@ -119,15 +129,19 @@ class SmsFactsOutbox {
     required int factIndex,
     required Map<String, dynamic> patch,
     String? reason,
+    String? sampleBody,
+    String? templateText,
   }) {
     if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sourceKey) || factIndex < 0 || patch.isEmpty) {
       throw ArgumentError('Invalid SMS fact correction');
     }
     database.db.execute(
-      '''INSERT INTO sms_fact_override_outbox(namespace,source_key,fact_index,patch,reason)
-         VALUES(?,?,?,?,?) ON CONFLICT(namespace,source_key,fact_index) DO UPDATE SET
-           patch=excluded.patch,reason=excluded.reason,attempts=0,next_attempt=0,last_error=NULL''',
-      [namespace, sourceKey, factIndex, jsonEncode(patch), reason],
+      '''INSERT INTO sms_fact_override_outbox(namespace,source_key,fact_index,patch,reason,sample_body,template_text)
+         VALUES(?,?,?,?,?,?,?) ON CONFLICT(namespace,source_key,fact_index) DO UPDATE SET
+           patch=excluded.patch,reason=excluded.reason,sample_body=excluded.sample_body,
+           template_text=excluded.template_text,attempts=0,next_attempt=0,last_error=NULL''',
+      [namespace, sourceKey, factIndex, jsonEncode(patch), reason,
+        redactSmsLearningText(sampleBody), redactSmsLearningText(templateText)],
     );
   }
 
@@ -143,6 +157,8 @@ class SmsFactsOutbox {
                 factIndex: row['fact_index'] as int,
                 patch: jsonDecode(row['patch'] as String) as Map<String, dynamic>,
                 reason: row['reason'] as String?,
+                sampleBody: row['sample_body'] as String?,
+                templateText: row['template_text'] as String?,
               ))
           .toList();
 
@@ -190,11 +206,15 @@ class SmsFactOverrideOutboxEntry {
   final int factIndex;
   final Map<String, dynamic> patch;
   final String? reason;
+  final String? sampleBody;
+  final String? templateText;
   const SmsFactOverrideOutboxEntry({
     required this.sourceKey,
     required this.factIndex,
     required this.patch,
     this.reason,
+    this.sampleBody,
+    this.templateText,
   });
 }
 

@@ -207,6 +207,36 @@ test('ambiguous_suffix_two_banks: no automatic pairing anywhere', () => {
   assert.notEqual(credit.fields.merchant, 'Sujay Kumar');
 });
 
+test('call_forwarding_vicare: nonfinancial service alert is non_transaction_message', () => {
+  const r = parse('call_forwarding_vicare');
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'non_transaction_message');
+});
+
+test('cashback_offer_only: conditional offer is non_transaction_message', () => {
+  const r = parse('cashback_offer_only');
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'non_transaction_message');
+});
+
+test('otp_security: safety veto rejects with security_message', () => {
+  const r = parse('otp_security');
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'security_message');
+});
+
+test('declined_attempt: declined attempt is not a successful spend', () => {
+  const r = parse('declined_attempt');
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'not_a_successful_spend');
+});
+
+test('outstanding_reminder: outstanding statement reminder has no transaction match', () => {
+  const r = parse('outstanding_reminder');
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'no_transaction_match');
+});
+
 // Phase 2/3 device routing: the shapes the device minter
 // (buildSmsFactsForObservation) produces for recognized non-spend families
 // must be accepted by the server contract verbatim. Pinning both sides of

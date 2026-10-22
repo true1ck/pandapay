@@ -156,6 +156,30 @@ test('computeBundleHash: returns deterministic SHA-256 checksum', () => {
   assert.match(hash1, /^[0-9a-f]{64}$/);
 });
 
+test('candidate delivery carries the stage epoch and hashes the advertised client version', () => {
+  const delivery = smsRuleBundle.candidateDelivery({
+    candidate_id: 'candidate_hdfc_01',
+    state: 'active',
+    stage_version: 7,
+    bundle_version: 12,
+    min_client_ver: '2.4.0',
+    family: 'posted_movement',
+    sender_pattern: 'HDFCBK',
+    compiled_regex: 'spent Rs\\.?\\s*([0-9.]+)',
+    field_map: { amount: 1 },
+    default_fields: {},
+    confidence: 0.99,
+  }, 'profile-1');
+  assert.equal(delivery.stageVersion, 7);
+  assert.equal(delivery.minClientVersion, '2.4.0');
+  assert.equal(delivery.bundleVersion, 12);
+  assert.equal(delivery.sha256, smsRuleBundle.computeBundleHash({
+    bundleVersion: 12,
+    minClientVersion: '2.4.0',
+    rules: delivery.rules,
+  }));
+});
+
 test('routes: GET /sms/rules/active, publish, immutability, and rollback', async () => {
   const handlers = new Map();
   const app = {

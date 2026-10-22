@@ -123,10 +123,11 @@ test('strict fail-closed when SMS_LEARNING_HMAC_KEY is missing or < 32 chars (no
       assert.deepEqual(corrRes, { recorded: 0, disabled: true });
       assert.equal(dbTouched, false, 'DB should not be touched when HMAC key is missing/<32 chars');
 
-      // deleteLearningExamplesForUser must return 0 or fail closed without error if key is missing
+      // New rows retain profile lineage, so consent revocation must still erase
+      // them even when the historical HMAC key is unavailable.
       const delRes = await learning.deleteLearningExamplesForUser(fakeClient, '00000000-0000-0000-0000-000000000001');
       assert.equal(delRes, 0);
-      assert.equal(dbTouched, false, 'DB should not be touched when HMAC key is missing/<32 chars');
+      assert.equal(dbTouched, true, 'erasure must run even when the HMAC key is missing');
     }
   } finally {
     if (original === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;
@@ -277,13 +278,16 @@ test('user deletion lineage via deleteLearningExamplesForUser', async () => {
     assert.equal(customDeleted, 4);
     assert.equal(calls[0].params[1], explicitKey);
 
-    // 3. Explicit key too short (< 32 chars) fails closed without error or DB call
+    // 3. An invalid explicit key cannot erase legacy hash-only rows, but the
+    // profile-linked erasure still runs without using an invalid key.
     calls.length = 0;
     const shortKeyDeleted = await learning.deleteLearningExamplesForUser(client, userId, 'too-short');
-    assert.equal(shortKeyDeleted, 0);
-    assert.equal(calls.length, 0);
+    assert.equal(shortKeyDeleted, 4);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].params[1], null);
 
     // 4. Missing profileId returns 0 without DB call
+    calls.length = 0;
     const noUserDeleted = await learning.deleteLearningExamplesForUser(client, null);
     assert.equal(noUserDeleted, 0);
     assert.equal(calls.length, 0);
