@@ -1098,3 +1098,46 @@ test('security and service check alerts are recognized as non-transaction noise'
   const realSpend = 'Spent Rs.85781 On HDFC Bank Card 8708 At Flipkart On 2026-10-20:22:35:07. Not You? Call 1800';
   assert.equal(isNonTransactionNoise('AD-HDFCBK-S', realSpend), false);
 });
+
+test('wallet debit parses as instrument wallet and entryKind spend', () => {
+  const mobikwik = parseSmsAgainstPatterns([], {
+    sender: 'VM-MBKWIK',
+    body: 'Rs.10.0 has been debited from your MobiKwik wallet. Remaining balance: Rs.12.17',
+  });
+  assert.equal(mobikwik.ok, true);
+  assert.equal(mobikwik.fields.instrument, 'wallet');
+  assert.equal(mobikwik.fields.entryKind, 'spend');
+  assert.equal(mobikwik.fields.amountInr, 10.0);
+  assert.equal(mobikwik.fields.accountLast4, 'MobiKwik');
+  assert.equal(mobikwik.fields.availableBalanceInr, 12.17);
+
+  const paytm = parseSmsAgainstPatterns([], {
+    sender: 'Paytm',
+    body: 'Rs.50.0 debited from your Paytm wallet',
+  });
+  assert.equal(paytm.ok, true);
+  assert.equal(paytm.fields.instrument, 'wallet');
+  assert.equal(paytm.fields.entryKind, 'spend');
+  assert.equal(paytm.fields.amountInr, 50.0);
+  assert.equal(paytm.fields.accountLast4, 'Paytm');
+});
+
+test('card setting updates and delivery memos are recognized as non-transaction noise', () => {
+  const cardSetting = 'Modification Success! Card usage settings for Credit Card ending with XX8708 modified';
+  assert.equal(isNonTransactionNoise('HDFCBK', cardSetting), true);
+  const cardSettingParse = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: cardSetting,
+  });
+  assert.equal(cardSettingParse.ok, false);
+  assert.equal(cardSettingParse.reason, 'non_transaction_message');
+
+  const deliveryMemo = 'Bharatgas cylinder is out for delivery with Cash Memo Amount Rs 926.5. Pls share Delivery Code 734900';
+  assert.equal(isNonTransactionNoise('BP-BHARAT', deliveryMemo), true);
+  const deliveryMemoParse = parseSmsAgainstPatterns([], {
+    sender: 'BP-BHARAT',
+    body: deliveryMemo,
+  });
+  assert.equal(deliveryMemoParse.ok, false);
+  assert.equal(deliveryMemoParse.reason, 'non_transaction_message');
+});

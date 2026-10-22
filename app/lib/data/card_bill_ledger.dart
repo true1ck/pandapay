@@ -26,6 +26,7 @@ class CardBillEvidence {
   final Money? amountDue;
   final Money? minimumDue;
   final double confidence;
+  final bool isAutopay;
 
   const CardBillEvidence({
     required this.cardLast4,
@@ -36,6 +37,7 @@ class CardBillEvidence {
     required this.minimumDue,
     required this.confidence,
     this.family,
+    this.isAutopay = false,
   });
 }
 
@@ -53,6 +55,7 @@ class CardBill {
   final Money paidToward;
   final DateTime? lastPaymentAt;
   final double confidence;
+  final bool isAutopay;
 
   /// True when any bill SMS in this cycle explicitly stated the generated /
   /// statement date. A received-date anchor is an approximation, and a due
@@ -69,6 +72,7 @@ class CardBill {
     required this.lastPaymentAt,
     required this.confidence,
     this.statementDateVerified = false,
+    this.isAutopay = false,
   });
 
   Money? get outstanding {
@@ -431,7 +435,8 @@ List<CardBill> _mergeCycles(List<CardBillEvidence> rows, {required DateTime now}
   final cycles = <List<CardBillEvidence>>[[ordered.first]];
   for (final row in ordered.skip(1)) {
     final inCycle = cycles.last.any(
-      (r) => r.statementDate.difference(row.statementDate).abs() <=
+      (r) => (r.dueDate != null && row.dueDate != null && r.dueDate == row.dueDate) ||
+          r.statementDate.difference(row.statementDate).abs() <=
           const Duration(days: 7),
     );
     if (inCycle) {
@@ -455,6 +460,7 @@ CardBill _mergeOne(List<CardBillEvidence> cycle) {
       break;
     }
   }
+  due ??= ordered.firstWhereOrNull((e) => e.dueDate != null)?.dueDate;
   Money? amount;
   for (final e in ordered) {
     if (e.amountDue != null &&
@@ -476,7 +482,8 @@ CardBill _mergeOne(List<CardBillEvidence> cycle) {
     paidToward: const Money.zero(),
     lastPaymentAt: null,
     confidence: confidence,
-    statementDateVerified: cycle.any((e) => e.statementDateExplicit),
+    isAutopay: cycle.any((e) => e.isAutopay),
+    statementDateVerified: cycle.any((e) => e.statementDateExplicit || e.isAutopay),
   );
 }
 

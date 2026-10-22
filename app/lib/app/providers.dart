@@ -3248,6 +3248,7 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
         amountDue: _moneyFromPaise(obs['amount_due_paise']),
         minimumDue: _moneyFromPaise(obs['minimum_due_paise']),
         confidence: (obs['confidence'] as num?)?.toDouble() ?? 0.5,
+        isAutopay: obs['is_autopay'] == true,
       ),
     );
   }
@@ -4556,6 +4557,41 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
         cardName: latest.cardDisplayName,
         paymentMethod: latest.instrumentKnown ? latest.instrument.label : null,
         detectionSource: 'local_cache',
+      ),
+    );
+  }
+  final cache = await _cacheOrNull(ref);
+  final ns = ref.watch(cacheNamespaceProvider);
+  final obsRows = cache?.financialStore.entities(ns, 'sms_observations') ?? const [];
+  for (final obs in obsRows) {
+    if (obs['card_last4'] != null) continue;
+    final isMandate = obs['disposition'] == 'local_commitment' ||
+        (obs['reason_codes'] as List?)?.contains('mandate_notice') == true;
+    if (!isMandate) continue;
+    final biller = (obs['biller_name'] as String?)?.trim();
+    final title = biller != null && biller.isNotEmpty
+        ? biller
+        : (obs['sender_bank'] as String? ?? 'Subscription');
+    final amountPaise = (obs['amount_due_paise'] as num?)?.toInt() ?? 0;
+    final typical = Money.fromPaise(amountPaise);
+    final dueDateStr = obs['due_date'] as String?;
+    final dueDate = dueDateStr != null ? DateTime.tryParse(dueDateStr) : null;
+    final cadenceStr = obs['cadence_hint'] as String?;
+    final cadence = cadenceStr == 'annual' ? 365 : 30;
+    final annual = Money.fromPaise((typical.paise * _chargesPerYear(cadence)).round());
+    series.add(
+      RecurringSeries(
+        id: 'mandate:${obs['id']}',
+        displayName: title,
+        typicalAmount: typical,
+        cadenceDays: cadence,
+        occurrenceCount: 1,
+        annualCost: annual,
+        nextExpectedOn: dueDate,
+        isMandate: true,
+        autopayStatus: 'active',
+        detectionSource: 'mandate',
+        engineStatus: 'confirmed',
       ),
     );
   }

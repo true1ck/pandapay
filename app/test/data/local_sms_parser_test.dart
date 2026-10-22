@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
-import 'package:pandapay/data/user_cards_repository.dart' show TxnEntryKind;
+import 'package:pandapay/data/user_cards_repository.dart' show TxnEntryKind, TxnInstrument;
+import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 
 void main() {
@@ -743,6 +744,10 @@ void main() {
     expect(result?.cardLast4, '8708');
     expect(result?.amountDue?.rupees, 10944);
     expect(result?.dueDate, DateTime(2026, 10, 9));
+    expect(result?.disposition, LocalSmsDisposition.localObservation);
+    expect(result?.isAutopay, isTrue);
+    expect(result?.reasonCodes, containsAll(['due_date_detected', 'autopay_notice']));
+    expect(result?.billerName, contains('Credit Card 8708'));
   });
 
   test('classifies AutoPay reminder deduction as a bill observation without creating spend', () {
@@ -758,6 +763,48 @@ void main() {
     expect(result?.cardLast4, '8708');
     expect(result?.amountDue?.rupees, 4150);
     expect(result?.dueDate, DateTime(2026, 7, 9));
+  });
+
+  test('classifies Atal Pension Yojana contribution notice as a local commitment', () {
+    const body =
+        'Dear customer, your Atal Pension Yojana contribution amount for the Month April is Rs 46/-, Kindly maintain sufficient bal in your account for auto debit on 15/04/2026.';
+    expect(LocalSmsParser.isAutoPayNotice(body), isTrue);
+    expect(LocalSmsParser.isNonTransactionNoise('AD-ATALPY', body), isFalse);
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'AD-ATALPY',
+      body: body,
+      receivedAt: DateTime(2026, 4, 10),
+    );
+    expect(result?.transaction, isNull);
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.disposition, LocalSmsDisposition.localCommitment);
+    expect(result?.reasonCodes, containsAll(['commitment_detected', 'mandate_notice']));
+    expect(result?.isAutopay, isTrue);
+    expect(result?.billerName, 'Atal Pension Yojana');
+    expect(result?.amountDue?.rupees, 46);
+    expect(result?.dueDate, DateTime(2026, 4, 15));
+    expect(result?.cadenceHint, 'monthly');
+  });
+
+  test('classifies Broadband payment due alert as a local commitment', () {
+    const body = 'Alegra Broadband ... Payment of Rs.800/- is due on 24-10-2026.';
+    expect(LocalSmsParser.isAutoPayNotice(body), isTrue);
+    expect(LocalSmsParser.isNonTransactionNoise('TNBPAY', body), isFalse);
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'TNBPAY',
+      body: body,
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.transaction, isNull);
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.disposition, LocalSmsDisposition.localCommitment);
+    expect(result?.reasonCodes, containsAll(['commitment_detected', 'mandate_notice']));
+    expect(result?.isAutopay, isTrue);
+    expect(result?.billerName, 'Alegra Broadband');
+    expect(result?.amountDue?.rupees, 800);
+    expect(result?.dueDate, DateTime(2026, 10, 24));
   });
 
   test('review draft pre-fills unresolved transaction suggestions', () {
@@ -793,5 +840,60 @@ void main() {
     expect(bill.merchantName, isNull);
     expect(promotion.amount, isNull);
     expect(promotion.merchantName, isNull);
+  });
+  test('MobiKwik wallet debit parses as TxnInstrument.wallet and TxnEntryKind.spend', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-MBKWIK',
+      body: 'Rs.10.0 has been debited from your MobiKwik wallet. Remaining balance: Rs.12.17',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.transaction, isNotNull);
+    expect(result?.transaction?.instrument, TxnInstrument.wallet);
+    expect(result?.transaction?.entryKind, TxnEntryKind.spend);
+    expect(result?.transaction?.amount.rupees, 10.0);
+    expect(result?.transaction?.accountLast4, 'MobiKwik');
+    expect(result?.availableBalance?.rupees, 12.17);
+  });
+
+  test('Generic wallet debit parses as wallet spend', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'Paytm',
+      body: 'Rs.50.0 debited from your Paytm wallet',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.transaction, isNotNull);
+    expect(result?.transaction?.instrument, TxnInstrument.wallet);
+    expect(result?.transaction?.entryKind, TxnEntryKind.spend);
+    expect(result?.transaction?.amount.rupees, 50.0);
+    expect(result?.transaction?.accountLast4, 'Paytm');
+  });
+
+  test('Card setting update is identified as noise and service alert', () {
+    const body = 'Modification Success! Card usage settings for Credit Card ending with XX8708 modified';
+    expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', body), isTrue);
+    expect(NeedsReviewRepository.isSecurityOrServiceAlert(body), isTrue);
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'HDFCBK',
+      body: body,
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.disposition, LocalSmsDisposition.localIgnore);
+    expect(result?.transaction, isNull);
+  });
+
+  test('Delivery memo alert is identified as non-transaction noise', () {
+    const body = 'Bharatgas cylinder is out for delivery with Cash Memo Amount Rs 926.5. Pls share Delivery Code 734900';
+    expect(LocalSmsParser.isNonTransactionNoise('BP-BHARAT', body), isTrue);
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'BP-BHARAT',
+      body: body,
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.disposition, LocalSmsDisposition.localIgnore);
+    expect(result?.transaction, isNull);
   });
 }

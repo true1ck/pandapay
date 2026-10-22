@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:pandapay_domain/pandapay_domain.dart';
+
+import '../commitments_repository.dart';
 
 import '../../features/sms_import/sms_text_hint.dart';
 import '../local_sms_parser.dart';
@@ -222,12 +226,40 @@ class SmsImportStore {
           'disposition': observation.disposition.wireValue,
           'reason_codes': observation.reasonCodes,
           'confidence': observation.confidence,
+          if (observation.isAutopay) 'is_autopay': true,
         });
         if (observation.transaction != null) {
           store.saveProvisional(namespace, observation.transaction!);
         }
+        if (observation.disposition == LocalSmsDisposition.localCommitment ||
+            (observation.reasonCodes.contains('mandate_notice') &&
+                observation.cardLast4 == null)) {
+          final title = observation.billerName ?? 'Subscription';
+          final category = CommitmentCategory.fromText('$title ${message.sender}');
+          final commitment = Commitment(
+            id: 'commitment:$key',
+            title: title,
+            category: category,
+            amount: observation.amountDue,
+            dueOn: observation.dueDate ?? message.receivedAt,
+            cadence: observation.cadenceHint == 'annual'
+                ? CommitmentCadence.annual
+                : CommitmentCadence.monthly,
+            source: CommitmentSource.sms,
+            status: CommitmentStatus.due,
+          );
+          store.database.db.execute(
+            'CREATE TABLE IF NOT EXISTS local_commitments (namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY (namespace, id))',
+          );
+          store.database.db.execute(
+            'INSERT OR REPLACE INTO local_commitments VALUES (?, ?, ?)',
+            [namespace, commitment.id, jsonEncode(commitment.toJson())],
+          );
+        }
         if (observation.eventType == LocalSmsEventType.bill &&
             observation.cardLast4 == null &&
+            observation.disposition != LocalSmsDisposition.localCommitment &&
+            !observation.reasonCodes.contains('mandate_notice') &&
             (observation.dueDate == null || observation.confidence < .85)) {
           addNeedsReviewSync(
             store.database,

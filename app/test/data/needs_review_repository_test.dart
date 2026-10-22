@@ -386,4 +386,95 @@ void main() {
     expect(rows.map((r) => r['id']), ['src-1', 'src-2']);
     db.close();
   });
+
+  test('fetchAll auto-resolves merchant e-bill receipts when a matching spend transaction exists in SQLite', () async {
+    final db = openInMemoryForTesting();
+    const ns = 'user:test';
+    final repo = NeedsReviewRepository(
+      namespace: ns,
+      loadDatabase: () async => db,
+    );
+
+    // 1. Existing spend transaction of ₹177.98 at Wellness forever goa recorded in SQLite
+    final txnTime = DateTime(2026, 10, 13, 14, 0);
+    db.db.execute('''
+      CREATE TABLE IF NOT EXISTS financial_entities (
+        namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,
+        payload TEXT NOT NULL, observed_at INTEGER NOT NULL,
+        pending INTEGER NOT NULL DEFAULT 0, source_key TEXT,
+        occurred_at INTEGER, amount_paise INTEGER,
+        PRIMARY KEY(namespace, entity, id)
+      );
+    ''');
+    db.db.execute(
+      '''
+      INSERT INTO financial_entities(namespace, entity, id, payload, observed_at, occurred_at, amount_paise)
+      VALUES (?, 'transactions', 'txn-wellness-1', ?, ?, ?, ?)
+      ''',
+      [
+        ns,
+        jsonEncode({
+          'id': 'txn-wellness-1',
+          'amount_inr': 177.98,
+          'occurred_at': txnTime.toIso8601String(),
+          'merchant_name': 'Wellness forever goa',
+          'entry_kind': 'spend',
+        }),
+        txnTime.millisecondsSinceEpoch,
+        txnTime.millisecondsSinceEpoch,
+        17798,
+      ],
+    );
+
+    // 2. Wellness Forever e-bill SMS received within 24 hours (5 minutes later)
+    final ebillWellness = NeedsReviewItem(
+      id: 'ebill-wellness-1',
+      sender: 'VM-WLFRIN',
+      body: 'Thank you for choosing Wellness Forever. View e-bill of Rs 177.98 - https://b.wlfr.in/c/xyz',
+      receivedAt: txnTime.add(const Duration(minutes: 5)),
+    );
+
+    // 3. Another merchant e-bill SMS with NO matching spend transaction
+    final ebillUnmatched = NeedsReviewItem(
+      id: 'ebill-unmatched',
+      sender: 'VM-PHARMA',
+      body: 'Thank you for choosing Apollo Pharmacy. View e-bill of Rs 450.00 - https://apollopharmacy.in/b/123',
+      receivedAt: txnTime.add(const Duration(hours: 1)),
+    );
+
+    // Queue both in Needs Review
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+    );
+    db.db.execute(
+      'INSERT INTO local_needs_review VALUES (?,?,?)',
+      [ns, ebillWellness.id, jsonEncode(ebillWellness.toJson())],
+    );
+    db.db.execute(
+      'INSERT INTO local_needs_review VALUES (?,?,?)',
+      [ns, ebillUnmatched.id, jsonEncode(ebillUnmatched.toJson())],
+    );
+
+    // Fetch review items
+    final remainingItems = await repo.fetchAll();
+
+    // Verify Wellness Forever e-bill is auto-resolved and removed because ₹177.98 spend exists
+    expect(remainingItems.map((i) => i.id).toList(), ['ebill-unmatched']);
+    expect(remainingItems.single.body, contains('450.00'));
+
+    // Verify Wellness Forever e-bill was automatically deleted from SQLite local_needs_review
+    final storedRows = db.db.select('SELECT id FROM local_needs_review WHERE namespace=?', [ns]);
+    expect(storedRows.map((r) => r['id']).toList(), ['ebill-unmatched']);
+
+    // Also verify that add() and addNeedsReviewSync() skip adding if matching spend exists
+    await repo.add(ebillWellness);
+    final afterAdd = db.db.select('SELECT id FROM local_needs_review WHERE namespace=?', [ns]);
+    expect(afterAdd.map((r) => r['id']).toList(), ['ebill-unmatched']);
+
+    addNeedsReviewSync(db, ns, ebillWellness);
+    final afterSync = db.db.select('SELECT id FROM local_needs_review WHERE namespace=?', [ns]);
+    expect(afterSync.map((r) => r['id']).toList(), ['ebill-unmatched']);
+
+    db.close();
+  });
 }

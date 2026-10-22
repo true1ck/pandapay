@@ -129,6 +129,9 @@ enum CommitmentCategory {
     if (has('RENT') || has('MYGATE') || has('NOBROKER')) {
       return CommitmentCategory.rent;
     }
+    if (has('PENSION') || has('YOJANA') || has('TAX') || has('GOVT')) {
+      return CommitmentCategory.tax;
+    }
     return CommitmentCategory.other;
   }
 }

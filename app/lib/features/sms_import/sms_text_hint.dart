@@ -278,11 +278,19 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
     return const SmsTriageResult(SmsTriageKind.promotion, 'promotional_noise');
   }
 
+  if (LocalSmsParser.isMerchantReceiptOrEbill(smsBody)) {
+    return const SmsTriageResult(
+      SmsTriageKind.financialCandidate,
+      'merchant_ebill_receipt',
+    );
+  }
+
   if (strongFinancialEvidence) {
     return const SmsTriageResult(SmsTriageKind.financialCandidate, 'financial_evidence');
   }
 
-  if (RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate|auto[-\s]?debit|sip\b|standing\s+instruction)\b').hasMatch(lower)) {
+  if (RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate|auto[-\s]?debit|sip\b|standing\s+instruction)\b').hasMatch(lower) ||
+      LocalSmsParser.isAutoPayNotice(smsBody)) {
     return const SmsTriageResult(SmsTriageKind.financialCandidate, 'mandate_lifecycle');
   }
 

@@ -48,7 +48,19 @@ function isNonTransactionNoise(sender, body) {
   if (completed || (/\b(?:cashback|refund)\b/i.test(text) && /\b(?:credited|received|deposited)\b/i.test(text)) || /\b(?:debit|credit)\s+hua\b/i.test(text)) return false;
   if (/\bautopay\s+(?:alert|reminder)\b/i.test(text)) return false;
   return /\b(?:offer|sale|discount|cashback|voucher|coupon|rewarding|shop\s+at|grab|buy\s+now|apply\s+now|prices?\s+slashed|treat\s+yourself|festive\s+shopping|eligible\s+for\s+conversion|convert\s+(?:to|into)\s+emi|international\s+roaming\s+pack)\b|\b(?:get|earn|save)\b[\s\S]{0,45}\b(?:reward|cashback|off|free|voucher)\b/i.test(text)
-    || /\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service|transaction\s+check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|sim\s+swap|reported\s+(?:your\s+)?fund\s+bal(?:ance)?|securities\s+bal(?:ance)?|excludes\s+your\s+bank|beware\s+(?:of\s+)?dealing\s+(?:in|on)\s+unsolicited\s+tips|unsolicited\s+tips|due\s+for\s+renewal|renew\s+now\s+with\s+policybazaar|wallet\s+balance\s+is\s+(?:rs\.?|inr)\s*0|add\s+money\s+to\s+wallet|report\s+spam|trai\s+dnd|telecommunications\s+act|sanchar\s+saathi|chakshu|online\s+investment\s+scams|traded\s+value\s+for\b|has\s+been\s+dispatched|has\s+been\s+delivered)\b/i.test(text)
+    || /\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service|transaction\s+check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|sim\s+swap|reported\s+(?:your\s+)?fund\s+bal(?:ance)?|securities\s+bal(?:ance)?|excludes\s+your\s+bank|beware\s+(?:of\s+)?dealing\s+(?:in|on)\s+unsolicited\s+tips|unsolicited\s+tips|due\s+for\s+renewal|renew\s+now\s+with\s+policybazaar|wallet\s+balance\s+is\s+(?:rs\.?|inr)\s*0|add\s+money\s+to\s+wallet|report\s+spam|trai\s+dnd|telecommunications\s+act|sanchar\s+saathi|chakshu|online\s+investment\s+scams|traded\s+value\s+for\b|has\s+been\s+dispatched|has\s+been\s+delivered|card\s+usage\s+settings?|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated|ckyc\s+record|central\s+kyc\s+registry|out\s+for\s+delivery\s+with\s+cash\s+memo|pls\s+share\s+delivery\s+code|delivery\s+code\s+\d+)\b/i.test(text)
+    || /\b(?:will\s+remain\s+open\s+and\s+fully\s+operational|available\s+at\s+our\s+branches\s+during\s+normal\s+working\s+hours|submission\s+of\s+positive\s+pay\s+details\s+is\s+mandatory)\b/i.test(text)
+    || /\bdone\s+\d+\s+out\s+of\s+\d+\s+free\s+transactions\s+at\s+[\w\s]+atms\b/i.test(text)
+    || /\b(?:cdsl|nsdl)\s*:\s*(?:debit|credit)\s+in\s+a\/c\b[\s\S]{0,40}\b(?:etf|bees|shares?|units?|mf)\b/i.test(text)
+    || /\b(?:track\s+it\s+using\s+this\s+ticket\s+id|ticket\s+id\s*:\s*\d+\s+on\s+the\s+help\s+section|we're\s+on\s+it\s+and\s+will\s+get\s+back\s+to\s+you\s+in\s+\d+[-–]\d+\s+hours)\b/i.test(text)
+    || /\benable\s+online,\s+international\s+(?:and|&)\s+contactless\s+transactions\b/i.test(text)
+    || /\byour\s+ekyc\s+has\s+been\s+successfully\s+completed\b/i.test(text)
+    || /\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,60}\bwill\s+be\s+paused\b/i.test(text)
+    || /\b(?:bse\s+trade\s+confirmation|welcome\s+to\s+nse,\s+you\s+have\s+been\s+registered\b|registered\s+with\s+[\w\s]+in\s+segment(?:\(s\))?|registered\s+with\s+[\w\s]+in\s+segment\(s\))\b/i.test(text)
+    || /\b(?:puc\s+certificate\s+for\s+vehicle\b|your\s+itr\s+for\s+ay\b[\s\S]{0,30}\bawaits\s+at\s+the\s+e[- ]?filing\s+portal)\b/i.test(text)
+    || /\b(?:renew\s+your\s+expired\s+(?:two\s+wheeler|car|motor|vehicle|health)?\s*insurance\b|will\s+expire\s+on\b[\s\S]{0,50}\b(?:premium\s+starts?\s+(?:just\s+)?(?:at\s+)?(?:rs\.?|inr)|instant\s+renewal,\s+visit|renew\s+before\s+expiry))\b/i.test(text)
+    || /\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+card\s+with\s+limit\s+upto|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application)\b/i.test(text)
+    || /\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b/i.test(text)
     || (/-p\s*$/i.test(String(sender || '')) && !/\b(?:txn|transaction|debited|credited|spent|paid|charged|received|refund|statement|bill\s+due)\b/i.test(text));
 }
 
@@ -531,8 +543,76 @@ function parseBuiltInAccountDebit(sms) {
   };
 }
 
+function parseBuiltInWalletSpend(sms) {
+  const body = String(sms?.body || '');
+  const sender = String(sms?.sender || '');
+  if (isSecurityOrOtpMessage(body)) return { ok: false, reason: 'security_message' };
+  if (isWalletLoadMessage(body)) return { ok: false, reason: 'wallet_load' };
+
+  const walletDebit = body.match(
+    /\b(?:debited\s+from|paid\s+from|deducted\s+from|spent\s+from|debited\s+using)\b[\s\S]{0,35}\b([a-zA-Z0-9]+)\s+wallet\b|\b([a-zA-Z0-9]+)\s+wallet\b[\s\S]{0,35}\b(?:debited|paid|deducted)\b/i
+  );
+  const isWalletDebit = Boolean(walletDebit) || /\bfrom\s+(?:your\s+)?wallet\b|\bwallet\s+balance\b/i.test(body);
+  if (!isWalletDebit) return { ok: false, reason: 'no_wallet_spend_match' };
+  if (!isSuccessfulSpend(body)) return { ok: false, reason: 'not_a_successful_spend' };
+
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return { ok: false, reason: 'no_wallet_spend_amount' };
+
+  const amazonPay = body.match(/\b(Amazon\s+Pay)\s+wallet\b/i)?.[1];
+  let rawProvider = walletDebit?.[1] || walletDebit?.[2];
+  if (rawProvider && ['your', 'the', 'my', 'a', 'an', 'our'].includes(rawProvider.toLowerCase())) {
+    rawProvider = null;
+  }
+  let walletProvider = amazonPay || rawProvider;
+  if (!walletProvider) {
+    const senderClean = sender.replace(/^[A-Za-z]{2}-|-[A-Za-z]$/g, '').trim();
+    if (/mobikw|mbkwik/i.test(senderClean)) {
+      walletProvider = 'MobiKwik';
+    } else if (/paytm/i.test(senderClean)) {
+      walletProvider = 'Paytm';
+    } else if (/amzn|amazon/i.test(senderClean)) {
+      walletProvider = 'Amazon Pay';
+    } else if (/phonepe/i.test(senderClean)) {
+      walletProvider = 'PhonePe';
+    } else if (senderClean && senderClean.length <= 12 && !/^\d+$/.test(senderClean)) {
+      walletProvider = senderClean;
+    } else {
+      walletProvider = 'Wallet';
+    }
+  }
+
+  const merchantMatch = body.match(/\b(?:at|to|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|\s*\(|[.,]|$)/i);
+  let merchant = merchantMatch ? merchantMatch[1].trim() : null;
+  if (merchant && /^(?:your\s+)?(?:\w+\s+)?wallet$/i.test(merchant)) {
+    merchant = null;
+  }
+
+  const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
+  const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
+
+  return {
+    ok: true,
+    patternId: null,
+    parserKind: 'builtin_wallet_spend',
+    fields: withAvailableBalance({
+      amountInr: Number(amountMatch[1].replace(/,/g, '')),
+      ...(merchant ? { merchant } : {}),
+      accountLast4: walletProvider,
+      ...(dateMatch ? { date: dateMatch[1] } : {}),
+      ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
+      instrument: 'wallet',
+      entryKind: 'spend',
+    }, body),
+  };
+}
+
 function inferInstrument(body, hasLast4) {
   const text = String(body || '').toLowerCase();
+  const walletDebit = /\b(?:debited\s+from|paid\s+from|deducted\s+from|spent\s+from|debited\s+using)\b[\s\S]{0,35}\b([a-zA-Z0-9]+)\s+wallet\b|\b([a-zA-Z0-9]+)\s+wallet\b[\s\S]{0,35}\b(?:debited|paid|deducted)\b/i.test(text);
+  if (walletDebit || /\bfrom\s+(?:your\s+)?wallet\b|\bwallet\s+balance\b/i.test(text)) {
+    return 'wallet';
+  }
   // An account/UPI debit wins before any generic "debit" wording. The
   // suffix after A/c is an account suffix, never a card last-4.
   if (isBankAccountUpiMessage(text)) return 'upi_bank';
@@ -1068,6 +1148,8 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (cardCredit.ok) return cardCredit;
   const accountCredit = parseBuiltInAccountCredit(sms);
   if (accountCredit.ok) return accountCredit;
+  const walletSpend = parseBuiltInWalletSpend(sms);
+  if (walletSpend.ok) return walletSpend;
   if (isRejectedTransaction(sms?.body)) {
     return { ok: false, reason: 'not_a_successful_spend' };
   }
@@ -1239,6 +1321,7 @@ module.exports = {
   parseBuiltInCardBillPayment,
   parseBuiltInAccountTransfer,
   parseBuiltInAccountCredit,
+  parseBuiltInWalletSpend,
   senderMatches,
   redactSmsShape,
   parseTransactionDate,

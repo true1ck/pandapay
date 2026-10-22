@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'local/app_database.dart';
 import 'local_sms_parser.dart';
+import 'user_cards_repository.dart';
 
 enum NeedsReviewKind {
   transaction,
@@ -107,9 +108,19 @@ const _needsReviewKey = 'pandapay_app.needs_review_queue_v1';
 void addNeedsReviewSync(
   AppDatabase database,
   String namespace,
-  NeedsReviewItem item,
-) {
+  NeedsReviewItem item, {
+  List<TransactionEntry>? existingTransactions,
+}) {
   if (NeedsReviewRepository.isNoiseItem(item)) return;
+  if (NeedsReviewRepository.isMerchantReceiptOrEbill(item.body) &&
+      NeedsReviewRepository.hasMatchingSpendTransactionSync(
+        database,
+        namespace,
+        item,
+        transactions: existingTransactions,
+      )) {
+    return;
+  }
   final resolved = NeedsReviewRepository.resolveItemKind(item);
   database.db.execute(
     'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
@@ -154,7 +165,12 @@ void addNeedsReviewSync(
 class NeedsReviewRepository {
   final String namespace;
   final Future<AppDatabase> Function()? loadDatabase;
-  NeedsReviewRepository({this.namespace = 'legacy', this.loadDatabase});
+  final List<TransactionEntry>? existingTransactions;
+  NeedsReviewRepository({
+    this.namespace = 'legacy',
+    this.loadDatabase,
+    this.existingTransactions,
+  });
   Future<AppDatabase> _database() async {
     final db = await loadDatabase!();
     db.db.execute(
@@ -196,7 +212,10 @@ class NeedsReviewRepository {
     return db;
   }
 
-  Future<List<NeedsReviewItem>> fetchAll() async {
+  Future<List<NeedsReviewItem>> fetchAll({
+    List<TransactionEntry>? transactions,
+  }) async {
+    final txns = transactions ?? existingTransactions;
     if (loadDatabase != null) {
       final db = await _database();
       final items = db.db
@@ -213,8 +232,21 @@ class NeedsReviewRepository {
           .toList();
       final noise = items.where(_isNoise).map((item) => item.id).toList();
       if (noise.isNotEmpty) await removeAll(noise);
-      return items.where((item) => !_isNoise(item)).toList()
-        ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+      final nonNoise = items.where((item) => !_isNoise(item)).toList();
+      final kept = <NeedsReviewItem>[];
+      for (final item in nonNoise) {
+        if (isMerchantReceiptOrEbill(item.body) &&
+            _hasMatchingSpendTransaction(
+              item,
+              database: db,
+              transactions: txns,
+            )) {
+          await remove(item.id);
+        } else {
+          kept.add(item);
+        }
+      }
+      return kept..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
     }
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
@@ -227,14 +259,38 @@ class NeedsReviewRepository {
         .toList();
     final noise = items.where(_isNoise).map((item) => item.id).toList();
     if (noise.isNotEmpty) await removeAll(noise);
-    return items.where((item) => !_isNoise(item)).toList()
-      ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+    final nonNoise = items.where((item) => !_isNoise(item)).toList();
+    final kept = <NeedsReviewItem>[];
+    for (final item in nonNoise) {
+      if (isMerchantReceiptOrEbill(item.body) &&
+          _hasMatchingSpendTransaction(
+            item,
+            transactions: txns,
+          )) {
+        await remove(item.id);
+      } else {
+        kept.add(item);
+      }
+    }
+    return kept..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
   }
 
   static bool isSecurityOrServiceAlert(String body) {
     final text = body.toLowerCase();
     return RegExp(
-      r'\b(?:transaction\s+check\s+alert|check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|call\s+forwarding\b|sim\s+swap|service\s+alert|fraud\s+alert|suspicious\s+activity)\b',
+      r'\b(?:transaction\s+check\s+alert|check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|call\s+forwarding\b|sim\s+swap|service\s+alert|fraud\s+alert|suspicious\s+activity|card\s+usage\s+settings?|usage\s+(?:&|and)\s+transaction\s+limit)\b|'
+      r'\b(?:will\s+remain\s+open\s+and\s+fully\s+operational|available\s+at\s+our\s+branches\s+during\s+normal\s+working\s+hours|submission\s+of\s+positive\s+pay\s+details\s+is\s+mandatory)\b|'
+      r'\bdone\s+\d+\s+out\s+of\s+\d+\s+free\s+transactions\s+at\s+[\w\s]+atms\b|'
+      r'\b(?:cdsl|nsdl)\s*:\s*(?:debit|credit)\s+in\s+a/c\b[\s\S]{0,40}\b(?:etf|bees|shares?|units?|mf)\b|'
+      r"\b(?:track\s+it\s+using\s+this\s+ticket\s+id|ticket\s+id\s*:\s*\d+\s+on\s+the\s+help\s+section|we're\s+on\s+it\s+and\s+will\s+get\s+back\s+to\s+you\s+in\s+\d+[-–]\d+\s+hours)\b|"
+      r'\benable\s+online,\s+international\s+(?:and|&)\s+contactless\s+transactions\b|'
+      r'\byour\s+ekyc\s+has\s+been\s+successfully\s+completed\b|'
+      r'\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,60}\bwill\s+be\s+paused\b|'
+      r'\b(?:bse\s+trade\s+confirmation|welcome\s+to\s+nse,\s+you\s+have\s+been\s+registered\b|registered\s+with\s+[\w\s]+in\s+segment(?:\(s\))?|registered\s+with\s+[\w\s]+in\s+segment\(s\))\b|'
+      r'\b(?:puc\s+certificate\s+for\s+vehicle\b|your\s+itr\s+for\s+ay\b[\s\S]{0,30}\bawaits\s+at\s+the\s+e[- ]?filing\s+portal)\b|'
+      r'\b(?:renew\s+your\s+expired\s+(?:two\s+wheeler|car|motor|vehicle|health)?\s*insurance\b|will\s+expire\s+on\b[\s\S]{0,50}\b(?:premium\s+starts?\s+(?:just\s+)?(?:at\s+)?(?:rs\.?|inr)|instant\s+renewal,\s+visit|renew\s+before\s+expiry))\b|'
+      r'\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+card\s+with\s+limit\s+upto|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application)\b|'
+      r'\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b',
     ).hasMatch(text);
   }
 
@@ -266,6 +322,116 @@ class NeedsReviewRepository {
     return item;
   }
 
+  static bool isMerchantReceiptOrEbill(String body) =>
+      LocalSmsParser.isMerchantReceiptOrEbill(body);
+
+  static bool hasMatchingSpendTransactionSync(
+    AppDatabase database,
+    String namespace,
+    NeedsReviewItem item, {
+    List<TransactionEntry>? transactions,
+  }) {
+    final extracted = LocalSmsParser.extractReceiptAmount(item.body);
+    if (extracted == null || extracted.paise <= 0) return false;
+
+    if (transactions != null && transactions.isNotEmpty) {
+      for (final txn in transactions) {
+        if (txn.entryKind != TxnEntryKind.spend) continue;
+        if (txn.amount.paise != extracted.paise) continue;
+        if (txn.occurredAt.difference(item.receivedAt).abs() <=
+            const Duration(hours: 24)) {
+          return true;
+        }
+      }
+    }
+
+    try {
+      database.db.execute('''
+        CREATE TABLE IF NOT EXISTS financial_entities (
+          namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,
+          payload TEXT NOT NULL, observed_at INTEGER NOT NULL,
+          pending INTEGER NOT NULL DEFAULT 0, source_key TEXT,
+          occurred_at INTEGER, amount_paise INTEGER,
+          PRIMARY KEY(namespace, entity, id)
+        );
+      ''');
+      final rows = database.db.select(
+        "SELECT payload, occurred_at, amount_paise FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
+        [namespace],
+      );
+      for (final row in rows) {
+        final payloadJson = row['payload'] as String?;
+        if (payloadJson == null) continue;
+        final data = jsonDecode(payloadJson) as Map<String, dynamic>;
+
+        final entryKind = data['entry_kind'] as String?;
+        if (entryKind != null && entryKind.toLowerCase() != 'spend') continue;
+
+        final paiseCol = row['amount_paise'] as int?;
+        final amountInr = data['amount_inr'] as num?;
+        var amountMatched = false;
+        if (paiseCol != null) {
+          amountMatched = paiseCol == extracted.paise;
+        } else if (amountInr != null) {
+          amountMatched = (amountInr * 100).round() == extracted.paise;
+        } else if (data['amount'] is Map && (data['amount'] as Map)['paise'] is int) {
+          amountMatched = (data['amount'] as Map)['paise'] == extracted.paise;
+        }
+        if (!amountMatched) continue;
+
+        DateTime? occurredAt;
+        final occurredCol = row['occurred_at'] as int?;
+        if (occurredCol != null) {
+          occurredAt = DateTime.fromMillisecondsSinceEpoch(occurredCol);
+        } else if (data['occurred_at'] != null) {
+          final rawOccurred = data['occurred_at'];
+          if (rawOccurred is String) {
+            occurredAt = DateTime.tryParse(rawOccurred);
+          } else if (rawOccurred is int) {
+            occurredAt = DateTime.fromMillisecondsSinceEpoch(rawOccurred);
+          }
+        }
+        if (occurredAt == null) continue;
+
+        if (occurredAt.difference(item.receivedAt).abs() <=
+            const Duration(hours: 24)) {
+          return true;
+        }
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
+  bool _hasMatchingSpendTransaction(
+    NeedsReviewItem item, {
+    AppDatabase? database,
+    List<TransactionEntry>? transactions,
+  }) {
+    final txns = transactions ?? existingTransactions;
+    if (database != null) {
+      return hasMatchingSpendTransactionSync(
+        database,
+        namespace,
+        item,
+        transactions: txns,
+      );
+    }
+    final extracted = LocalSmsParser.extractReceiptAmount(item.body);
+    if (extracted == null || extracted.paise <= 0) return false;
+    if (txns != null) {
+      for (final txn in txns) {
+        if (txn.entryKind != TxnEntryKind.spend) continue;
+        if (txn.amount.paise != extracted.paise) continue;
+        if (txn.occurredAt.difference(item.receivedAt).abs() <=
+            const Duration(hours: 24)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   static bool isNoiseItem(NeedsReviewItem item) {
     final resolved = resolveItemKind(item);
     if (resolved.kind == NeedsReviewKind.securityOrServiceAlert) {
@@ -275,13 +441,30 @@ class NeedsReviewRepository {
         resolved.kind == NeedsReviewKind.mandate) {
       return false;
     }
+    if (isMerchantReceiptOrEbill(resolved.body)) {
+      return false;
+    }
     return LocalSmsParser.isNonTransactionNoise(resolved.sender, resolved.body);
   }
 
   bool _isNoise(NeedsReviewItem item) => isNoiseItem(item);
 
-  Future<void> add(NeedsReviewItem item) async {
+  Future<void> add(
+    NeedsReviewItem item, {
+    List<TransactionEntry>? transactions,
+  }) async {
     if (isNoiseItem(item)) return;
+    final txns = transactions ?? existingTransactions;
+    if (isMerchantReceiptOrEbill(item.body)) {
+      if (loadDatabase != null) {
+        final db = await _database();
+        if (_hasMatchingSpendTransaction(item, database: db, transactions: txns)) {
+          return;
+        }
+      } else if (_hasMatchingSpendTransaction(item, transactions: txns)) {
+        return;
+      }
+    }
     final resolved = resolveItemKind(item);
     if (loadDatabase != null) {
       final db = await _database();
