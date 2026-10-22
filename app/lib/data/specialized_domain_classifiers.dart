@@ -1,4 +1,3 @@
-import 'package:pandapay_domain/pandapay_domain.dart';
 import 'user_cards_repository.dart';
 
 /// Classification of investment and brokerage messages.

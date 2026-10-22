@@ -5,7 +5,6 @@ import 'user_cards_repository.dart';
 import 'local/sms_intake_repository.dart';
 import 'local/sms_rule_bundle.dart';
 import 'indian_narration_sanitizer.dart';
-import 'flashtext_merchant_extractor.dart';
 
 enum LocalSmsEventType {
   transaction,
@@ -1282,7 +1281,7 @@ class LocalSmsParser {
         !loanRepayment &&
         !feeCharge &&
         !_re(
-          r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b',
+          r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred|txn|transaction)\b',
         ).hasMatch(body)) {
       return observation();
     }
@@ -1370,7 +1369,7 @@ class LocalSmsParser {
         ? TxnEntryKind.income
         : TxnEntryKind.spend;
     var merchant = _re(
-      r'\b(?:at|to|for|from|by)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|\s*\(|[.,;]|$)',
+      r'\b(?:at|to|for|from|by)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body)?.group(1)?.trim();
     // "by Mob Bk" describes the banking channel, not the recipient.
     if (merchant != null &&
