@@ -24,7 +24,12 @@
 -- role` statement itself stays a plain top-level statement.
 \set app_user_password `echo "${APP_USER_PASSWORD:-app_user_dev_pw}"`
 \set rewards_worker_password `echo "${REWARD_WORKER_DB_PASSWORD:-reward_worker_dev_pw}"`
-\set sms_learning_worker_password `echo "${SMS_LEARNING_WORKER_DB_PASSWORD:-sms_learning_worker_dev_pw}"`
+-- The autonomous SMS learner is opt-in: when SMS_LEARNING_WORKER_DB_PASSWORD
+-- is unset the dedicated login is neither created nor rotated (a blank password
+-- must never become a role credential), and the grants to it below are skipped.
+-- Dev and CI compose always set the variable; a production host sets it when
+-- actually enabling the sms-learning worker profile.
+\set sms_learning_worker_password `echo "${SMS_LEARNING_WORKER_DB_PASSWORD:-}"`
 
 select exists (select 1 from pg_roles where rolname = 'app_user') as app_user_exists \gset
 \if :app_user_exists
@@ -62,11 +67,13 @@ create role rewards_worker_login login password :'rewards_worker_password'
 \endif
 
 select exists (select 1 from pg_roles where rolname = 'sms_learning_worker') as sms_learning_worker_exists \gset
-\if :sms_learning_worker_exists
+select length(:'sms_learning_worker_password') > 0 as sms_learning_worker_password_set \gset
+\if :sms_learning_worker_password_set
 -- Keep the deployment idempotent and rotate the dedicated login credential
 -- when the administering role owns it. Managed Postgres deploy roles may have
 -- CREATEROLE without being allowed to alter a role created by a superuser, so
 -- retain the same safe retry behavior as rewards_worker_login above.
+\if :sms_learning_worker_exists
 select set_config('pandapay.sms_learning_worker_password', :'sms_learning_worker_password', false);
 do $$
 begin
@@ -83,9 +90,15 @@ end $$;
 create role sms_learning_worker login password :'sms_learning_worker_password'
   nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls;
 \endif
+\else
+\echo 'SMS_LEARNING_WORKER_DB_PASSWORD not set; skipping sms_learning_worker bootstrap (learner disabled)'
+\endif
+
+\if :sms_learning_worker_exists
+grant usage on schema public to sms_learning_worker;
+\endif
 
 grant usage on schema public to app_user;
-grant usage on schema public to sms_learning_worker;
 grant select, insert, update, delete on all tables in schema public to app_user;
 grant usage, select on all sequences in schema public to app_user;
 grant execute on all functions in schema public to app_user;
@@ -140,22 +153,33 @@ end $$;
 -- same flaw. Skipping quietly here is correct — the second run does the work,
 -- and a fresh database legitimately has nothing to grant on yet.
 do $$
+declare
+  -- Newer plans may run with the learner disabled (no dedicated login);
+  -- granting to an absent role would be fatal, so gate every sms_learning_worker
+  -- grant on its existence while keeping the app_user side unconditional.
+  worker_role_exists boolean := exists (select 1 from pg_roles where rolname = 'sms_learning_worker');
 begin
   if exists (select 1 from pg_namespace where nspname = 'pandapay') then
     execute 'grant usage on schema pandapay to app_user';
     execute 'grant execute on all functions in schema pandapay to app_user';
-    execute 'grant usage on schema pandapay to sms_learning_worker';
+    if worker_role_exists then
+      execute 'grant usage on schema pandapay to sms_learning_worker';
+    end if;
 
     -- Publishing and autonomous rollback are worker-only operations. The API
     -- keeps its user-scoped ingestion and manual admin endpoints, but its
     -- app_user connection cannot execute the cross-user learning cycle.
     if to_regprocedure('pandapay.sms_publish_bundle(integer,jsonb,text,text)') is not null then
       execute 'revoke execute on function pandapay.sms_publish_bundle(integer, jsonb, text, text) from app_user';
-      execute 'grant execute on function pandapay.sms_publish_bundle(integer, jsonb, text, text) to sms_learning_worker';
+      if worker_role_exists then
+        execute 'grant execute on function pandapay.sms_publish_bundle(integer, jsonb, text, text) to sms_learning_worker';
+      end if;
     end if;
     if to_regprocedure('pandapay.sms_rollback_bundle(integer)') is not null then
       execute 'revoke execute on function pandapay.sms_rollback_bundle(integer) from app_user';
-      execute 'grant execute on function pandapay.sms_rollback_bundle(integer) to sms_learning_worker';
+      if worker_role_exists then
+        execute 'grant execute on function pandapay.sms_rollback_bundle(integer) to sms_learning_worker';
+      end if;
     end if;
   else
     raise notice 'schema "pandapay" not present yet — re-run this script after the migrations';
@@ -164,9 +188,16 @@ end $$;
 
 -- These objects arrive in the later SMS-learning migrations. Keeping their
 -- grants in the rerunnable role setup repairs an installation where a prior
--- conditional migration ran before the worker role existed.
+-- conditional migration ran before the worker role existed. When the learner
+-- is disabled (no password), re-running this script after enabling it does
+-- the same repair.
 do $$
 begin
+  -- No dedicated login -> nothing to grant to; granting to an absent role is
+  -- fatal, so bail out early.
+  if not exists (select 1 from pg_roles where rolname = 'sms_learning_worker') then
+    return;
+  end if;
   if to_regclass('public.sms_learning_examples') is not null then
     execute 'grant select on table public.sms_learning_examples to sms_learning_worker';
   end if;

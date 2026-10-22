@@ -26,7 +26,8 @@ services:
       ADMIN_DATABASE_URL: "${ADMIN_DATABASE_URL:?}"
       APP_USER_PASSWORD: "${APP_USER_PASSWORD:?}"
       REWARD_WORKER_DB_PASSWORD: "${REWARD_WORKER_DB_PASSWORD:?}"
-      SMS_LEARNING_WORKER_DB_PASSWORD: "${SMS_LEARNING_WORKER_DB_PASSWORD:?}"
+      # Opt-in blank (same policy as docker-compose.prod.yml).
+      SMS_LEARNING_WORKER_DB_PASSWORD: "${SMS_LEARNING_WORKER_DB_PASSWORD:-}"
       # Unlike prod, staging genuinely benefits from the demo catalogue —
       # it's what QA/Phase 1+ verification actually exercises against.
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-true}"

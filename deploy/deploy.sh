@@ -86,7 +86,6 @@ fi
 for key in \
   ADMIN_DATABASE_URL \
   APP_USER_PASSWORD \
-  SMS_LEARNING_WORKER_DB_PASSWORD \
   API_DATABASE_URL \
   AUTH_DATABASE_URL \
   JWT_ACCESS_SECRET \
@@ -147,6 +146,7 @@ ensure_optional_env_key AI_WORKER_TOKEN
 ensure_optional_env_key GEMINI_API_KEY
 ensure_optional_env_key SMS_LEARNING_DATABASE_URL
 ensure_optional_env_key SMS_LEARNING_HMAC_KEY
+ensure_optional_env_key SMS_LEARNING_WORKER_DB_PASSWORD
 AI_WORKER_TOKEN_VALUE="$(sed -n 's/^AI_WORKER_TOKEN=//p' .env | sed 's/^"//; s/"$//')"
 GEMINI_API_KEY_VALUE="$(sed -n 's/^GEMINI_API_KEY=//p' .env | sed 's/^"//; s/"$//')"
 if { [ -n "$AI_WORKER_TOKEN_VALUE" ] && [ -z "$GEMINI_API_KEY_VALUE" ]; } \
@@ -167,6 +167,19 @@ if { [ -n "$SMS_LEARNING_DATABASE_URL_VALUE" ] && [ -z "$SMS_LEARNING_HMAC_KEY_V
 fi
 if [ -n "$SMS_LEARNING_HMAC_KEY_VALUE" ] && [ "${#SMS_LEARNING_HMAC_KEY_VALUE}" -lt 32 ]; then
   echo "FATAL: SMS_LEARNING_HMAC_KEY must contain at least 32 characters"
+  exit 1
+fi
+SMS_LEARNING_WORKER_DB_PASSWORD_VALUE="$(sed -n 's/^SMS_LEARNING_WORKER_DB_PASSWORD=//p' .env | sed 's/^"//; s/"$//')"
+# Enabling the learner means configuring its dedicated DB URL (which embeds
+# the login password) together with the bootstrap password — both set, or the
+# worker stays disabled and both stay blank.
+if { [ -n "$SMS_LEARNING_DATABASE_URL_VALUE" ] && [ -z "$SMS_LEARNING_WORKER_DB_PASSWORD_VALUE" ]; } \
+  || { [ -z "$SMS_LEARNING_DATABASE_URL_VALUE" ] && [ -n "$SMS_LEARNING_WORKER_DB_PASSWORD_VALUE" ]; }; then
+  echo "FATAL: SMS_LEARNING_DATABASE_URL and SMS_LEARNING_WORKER_DB_PASSWORD must both be set or both be blank"
+  exit 1
+fi
+if [ -n "$SMS_LEARNING_WORKER_DB_PASSWORD_VALUE" ] && [ "${#SMS_LEARNING_WORKER_DB_PASSWORD_VALUE}" -lt 32 ]; then
+  echo "FATAL: SMS_LEARNING_WORKER_DB_PASSWORD must contain at least 32 characters"
   exit 1
 fi
 

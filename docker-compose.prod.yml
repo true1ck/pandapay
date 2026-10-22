@@ -43,7 +43,9 @@ services:
       AUTH_MIGRATIONS_DIR: /auth-migrations
       APP_USER_PASSWORD: "${APP_USER_PASSWORD:?}"
       REWARD_WORKER_DB_PASSWORD: "${REWARD_WORKER_DB_PASSWORD:?}"
-      SMS_LEARNING_WORKER_DB_PASSWORD: "${SMS_LEARNING_WORKER_DB_PASSWORD:?}"
+      # Opt-in: blank keeps the autonomous SMS learner disabled (no dedicated
+      # login is bootstrapped — see db/setup_app_role.sql).
+      SMS_LEARNING_WORKER_DB_PASSWORD: "${SMS_LEARNING_WORKER_DB_PASSWORD:-}"
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-false}"
     volumes:
       - ./db:/db:ro

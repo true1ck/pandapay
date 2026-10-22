@@ -61,12 +61,10 @@ cp .env.prod.example .env
 
 Fill in every `CHANGE_ME` in `.env` — the file itself documents how to
 generate each value (JWT secrets, the stable `PHONE_LOOKUP_HMAC_KEY`,
-`APP_USER_PASSWORD`, the separate
-`REWARD_WORKER_DB_PASSWORD`, the separate
-`SMS_LEARNING_WORKER_DB_PASSWORD`, webhook secrets,
-`IMAP_ENCRYPTION_KEY`, `ENCRYPTION_KEY`). Don't confuse the last two:
-`IMAP_ENCRYPTION_KEY` is `api/`'s key for stored IMAP app passwords;
-`ENCRYPTION_KEY` is `auth/`'s separate key for field-level PII encryption —
+`APP_USER_PASSWORD`, the separate `REWARD_WORKER_DB_PASSWORD`, webhook
+secrets, `IMAP_ENCRYPTION_KEY`, `ENCRYPTION_KEY`). Don't confuse the last
+two: `IMAP_ENCRYPTION_KEY` is `api/`'s key for stored IMAP app passwords;
+`ENCRYPTION_KEY` is `auth/`'s separate key for field-level PII encryption. —
 both are required, and leaving `ENCRYPTION_KEY` unset doesn't fail the
 deploy, it just makes auth/ silently store that PII unencrypted (a stderr
 warning, nothing else), which is why `docker-compose.prod.yml` requires it
@@ -81,12 +79,14 @@ the separate `rewards_worker_login`. Both target `pandapay`; only the latter
 can assume the narrow worker role. `AUTH_DATABASE_URL` targets the separate
 `pandapay_auth` database.
 
-Autonomous SMS learning uses a third product-database identity. Set
-`SMS_LEARNING_DATABASE_URL` to the `sms_learning_worker` login created with
-`SMS_LEARNING_WORKER_DB_PASSWORD`; never reuse `API_DATABASE_URL`. The worker
-startup check rejects `app_user`, superuser names, and incomplete grants before
-it attempts a cycle. Leave both `SMS_LEARNING_DATABASE_URL` and
-`SMS_LEARNING_HMAC_KEY` blank when the optional worker is disabled.
+Autonomous SMS learning is opt-in. Leave `SMS_LEARNING_WORKER_DB_PASSWORD`,
+`SMS_LEARNING_DATABASE_URL`, and `SMS_LEARNING_HMAC_KEY` blank (all three —
+the deploy script enforces the pairing) and no `sms_learning_worker` login is
+bootstrapped at all. When enabling the worker, set
+`SMS_LEARNING_DATABASE_URL` to the `sms_learning_worker` login that
+`SMS_LEARNING_WORKER_DB_PASSWORD` bootstraps with a distinct generated
+password; never reuse `API_DATABASE_URL`. The worker startup check rejects
+`app_user`, superuser names, and incomplete grants before it attempts a cycle.
 
 For JWT rotation, set `JWT_KEYS_JSON` and `JWT_ACTIVE_KEY_ID` together. The
 same key set, active key id, `JWT_ISSUER`, and `JWT_AUDIENCE` must be supplied

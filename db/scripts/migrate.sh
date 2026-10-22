@@ -25,7 +25,11 @@ set -Eeuo pipefail
 # here so a staging/prod run can't silently ship the dev password.
 : "${APP_USER_PASSWORD:?APP_USER_PASSWORD must be set to a real generated password — the dev literal is not safe outside docker-compose.yml}"
 : "${REWARD_WORKER_DB_PASSWORD:?REWARD_WORKER_DB_PASSWORD must be set to a distinct generated worker-login password}"
-: "${SMS_LEARNING_WORKER_DB_PASSWORD:?SMS_LEARNING_WORKER_DB_PASSWORD must be set to a distinct generated SMS-learning worker password}"
+# The autonomous SMS learner is opt-in (compose profile "sms-learning"): leave
+# SMS_LEARNING_WORKER_DB_PASSWORD unset to skip its dedicated login entirely
+# (db/setup_app_role.sql then skips create/rotate/grant). Dev and CI compose
+# always set it; a host enabling the profile must set a distinct generated one.
+: "${SMS_LEARNING_WORKER_DB_PASSWORD-}"
 export APP_USER_PASSWORD REWARD_WORKER_DB_PASSWORD SMS_LEARNING_WORKER_DB_PASSWORD
 SEED_DEMO_DATA="${SEED_DEMO_DATA:-false}"
 DB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
