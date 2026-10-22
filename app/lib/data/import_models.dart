@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import 'statement_reconciler.dart';
 import 'user_cards_repository.dart' show TxnInstrument;
 
 enum ImportDateOrder { dayFirst, monthFirst }
@@ -161,11 +162,13 @@ class ParsedStatement {
   final Money? closingBalance;
   final List<String> warnings;
   final List<ImportRejectedRow> rejectedRows;
+  final StatementReconciliationResult? reconciliation;
   const ParsedStatement({
     required this.transactions,
     this.closingBalance,
     this.warnings = const [],
     this.rejectedRows = const [],
+    this.reconciliation,
   });
 }
 

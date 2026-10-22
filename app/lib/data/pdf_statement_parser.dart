@@ -5,6 +5,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import 'import_models.dart';
 import 'investment_classifier.dart';
+import 'statement_reconciler.dart';
 export 'import_models.dart';
 
 class StatementParseException implements Exception {
@@ -358,9 +359,18 @@ ParsedStatement parseStatementText(
   }
   flush();
 
+  final reconciliation = StatementReconciler.reconcile(
+    lines: transactions,
+    closingBalance: closingBalance,
+  );
+
   return ParsedStatement(
     transactions: transactions,
     closingBalance: closingBalance,
+    warnings: [
+      ...reconciliation.findings.where((f) => !reconciliation.isBalanced),
+    ],
     rejectedRows: rejected,
+    reconciliation: reconciliation,
   );
 }
