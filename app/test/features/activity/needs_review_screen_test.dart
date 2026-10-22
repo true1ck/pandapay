@@ -296,7 +296,7 @@ void main() {
   });
 
   testWidgets(
-    'screenshot security case (HDFC Transaction Check Alert) shows Dismiss alert and not Review transaction',
+    'screenshot security case (HDFC Transaction Check Alert) is filtered out and not shown',
     (tester) async {
       await reviews.add(
         NeedsReviewItem(
@@ -309,20 +309,14 @@ void main() {
       );
       await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
-      expect(find.text('Security or service alert'), findsOneWidget);
-      expect(find.text('Review transaction'), findsNothing);
-      expect(find.text('Dismiss alert'), findsOneWidget);
-
-      await tester.tap(find.text('Dismiss alert'));
-      await tester.pumpAndSettle();
-
+      expect(find.text('Security or service alert'), findsNothing);
       expect(find.text('Nothing needs review'), findsOneWidget);
       expect(await reviews.fetchAll(), isEmpty);
     },
   );
 
   testWidgets(
-    'screenshot service case (ViCARE call forwarding) shows Dismiss alert and not Review transaction',
+    'pure service alerts (ViCARE call forwarding) are filtered out and not shown',
     (tester) async {
       await reviews.add(
         NeedsReviewItem(
@@ -334,14 +328,14 @@ void main() {
       );
       await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
-      expect(find.text('Security or service alert'), findsOneWidget);
-      expect(find.text('Review transaction'), findsNothing);
-      expect(find.text('Dismiss alert'), findsOneWidget);
+      expect(find.text('Security or service alert'), findsNothing);
+      expect(find.text('Nothing needs review'), findsOneWidget);
+      expect(await reviews.fetchAll(), isEmpty);
     },
   );
 
   testWidgets(
-    'screenshot investment settlement case (Kotak Neo) shows Review transfer and not Review transaction',
+    'screenshot investment settlement case (Kotak Neo) shows Review transfer and is actionable',
     (tester) async {
       await reviews.add(
         NeedsReviewItem(
@@ -357,6 +351,12 @@ void main() {
       expect(find.text('Investment settlement payout'), findsOneWidget);
       expect(find.text('Review transaction'), findsNothing);
       expect(find.text('Review transfer'), findsOneWidget);
+
+      await tester.tap(find.text('Review transfer'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review this transaction'), findsOneWidget);
+      expect(find.text('Save transaction'), findsOneWidget);
     },
   );
 

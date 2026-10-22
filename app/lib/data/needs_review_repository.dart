@@ -109,14 +109,39 @@ void addNeedsReviewSync(
   String namespace,
   NeedsReviewItem item,
 ) {
+  if (NeedsReviewRepository.isNoiseItem(item)) return;
   final resolved = NeedsReviewRepository.resolveItemKind(item);
-  if (resolved.kind == NeedsReviewKind.transaction &&
-      LocalSmsParser.isNonTransactionNoise(resolved.sender, resolved.body)) {
-    return;
-  }
   database.db.execute(
     'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
   );
+  final existingRows = database.db.select(
+    'SELECT payload FROM local_needs_review WHERE namespace = ?',
+    [namespace],
+  );
+  final normalizedSender = resolved.sender.trim().toLowerCase();
+  final normalizedBody = NeedsReviewRepository.normalizeBody(resolved.body);
+  for (final row in existingRows) {
+    try {
+      final payload = row['payload'] as String?;
+      if (payload == null) continue;
+      final existing = NeedsReviewItem.fromJson(
+        jsonDecode(payload) as Map<String, dynamic>,
+      );
+      if (existing.id == resolved.id) {
+        return;
+      }
+      final sameSender =
+          existing.sender.trim().toLowerCase() == normalizedSender;
+      final sameBody =
+          NeedsReviewRepository.normalizeBody(existing.body) == normalizedBody;
+      final closeInTime =
+          existing.receivedAt.difference(resolved.receivedAt).abs() <=
+          const Duration(minutes: 5);
+      if (sameSender && sameBody && closeInTime) {
+        return;
+      }
+    } catch (_) {}
+  }
   database.db.execute(
     'INSERT OR REPLACE INTO local_needs_review VALUES (?,?,?)',
     [namespace, resolved.id, jsonEncode(resolved.toJson())],
@@ -241,17 +266,23 @@ class NeedsReviewRepository {
     return item;
   }
 
-  bool _isNoise(NeedsReviewItem item) {
+  static bool isNoiseItem(NeedsReviewItem item) {
     final resolved = resolveItemKind(item);
-    if (resolved.kind != NeedsReviewKind.transaction) {
+    if (resolved.kind == NeedsReviewKind.securityOrServiceAlert) {
+      return true;
+    }
+    if (resolved.kind == NeedsReviewKind.investmentSettlement ||
+        resolved.kind == NeedsReviewKind.mandate) {
       return false;
     }
     return LocalSmsParser.isNonTransactionNoise(resolved.sender, resolved.body);
   }
 
+  bool _isNoise(NeedsReviewItem item) => isNoiseItem(item);
+
   Future<void> add(NeedsReviewItem item) async {
+    if (isNoiseItem(item)) return;
     final resolved = resolveItemKind(item);
-    if (_isNoise(resolved)) return;
     if (loadDatabase != null) {
       final db = await _database();
       final current = await fetchAll();
@@ -342,8 +373,10 @@ class NeedsReviewRepository {
     return changed;
   }
 
-  String _normalizeBody(String body) =>
+  static String normalizeBody(String body) =>
       body.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+  String _normalizeBody(String body) => normalizeBody(body);
 
   /// "Not a transaction" dismiss, or a successful one-tap-fill resolution —
   /// either way, the item leaves the queue. Which one happened is the

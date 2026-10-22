@@ -6,6 +6,7 @@ const {
   parseConservativeBankSpend,
   redactSmsShape,
   isBankAccountMessage,
+  isNonTransactionNoise,
 } = require('../src/sms_parser');
 
 // Realistic synthetic (not real customer) Indian bank SMS formats.
@@ -1080,4 +1081,15 @@ test('a real card purchase is still a purchase', () => {
   assert.equal(spend.fields.entryKind, 'spend');
   assert.equal(spend.fields.amountInr, 85781);
   assert.equal(spend.fields.last4, '8708');
+});
+
+test('security and service check alerts are recognized as non-transaction noise', () => {
+  const checkAlert = 'Transaction Check Alert!\\nWe tried to contact and confirm txn on HDFC Bank Card 8708\\nAmt: 85781\\nOn: 20-10-2026 22:35:07.160\\nNot you? Call 18001600/18002600';
+  assert.equal(isNonTransactionNoise('VM-HDFCBK-S', checkAlert), true);
+
+  const callForwarding = 'Alert: Call Forwarding is now active on your mobile number. All incoming calls are being forwarded to +91-2271346602. To deactivate this service, dial ##002# from your phone.';
+  assert.equal(isNonTransactionNoise('VZ-ViCARE-S', callForwarding), true);
+
+  const realSpend = 'Spent Rs.85781 On HDFC Bank Card 8708 At Flipkart On 2026-10-20:22:35:07. Not You? Call 1800';
+  assert.equal(isNonTransactionNoise('AD-HDFCBK-S', realSpend), false);
 });

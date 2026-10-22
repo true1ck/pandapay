@@ -93,10 +93,17 @@ const _authBaseUrl = Env.authBaseUrl;
 /// credits. Those are expected negative matches, not parser failures, so they
 /// must never become a user-facing review item. Successful formats are
 /// recorded by the server as transactions; card attribution is optional.
+bool _isIgnorableSmsReason(String? reason) {
+  final r = (reason ?? '').trim().toLowerCase();
+  return r == 'security_message' ||
+      r == 'not_a_successful_spend' ||
+      r == 'non_transaction_message' ||
+      r == 'not_a_transaction_alert' ||
+      r == 'non_transaction_alert';
+}
+
 bool _isIgnorableSmsResult(SmsImportResult result) =>
-    result.reason == 'security_message' ||
-    result.reason == 'not_a_successful_spend' ||
-    result.reason == 'non_transaction_message';
+    _isIgnorableSmsReason(result.reason);
 
 /// Determines whether an error during startup review replay is fatal to the pass.
 /// Server refusals on specific messages (4xx) should skip that message and continue,
@@ -536,8 +543,6 @@ final pendingRecoveryStatusProvider = FutureProvider<Map<String, int>>((
   final namespace = ref.watch(cacheNamespaceProvider);
   final cache = await ref.watch(responseCacheProvider.future);
   final db = cache.financialStore.database;
-  SmsIntakeRepository(db);
-  await ref.read(needsReviewRepositoryProvider).fetchAll();
   int count(String table, String where, List<Object?> args) =>
       db.db
               .select('SELECT COUNT(*) AS n FROM $table WHERE $where', args)
@@ -1049,7 +1054,11 @@ final needsReviewCountProvider = Provider<int>((ref) {
 });
 
 final commitmentsRepositoryProvider = Provider<CommitmentsRepository>((ref) {
-  return CommitmentsRepository(namespace: ref.watch(cacheNamespaceProvider));
+  final ns = ref.watch(cacheNamespaceProvider);
+  return CommitmentsRepository(
+    namespace: ns,
+    loadDatabase: () async => (await ref.watch(responseCacheProvider.future)).financialStore.database,
+  );
 });
 
 final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
@@ -1396,11 +1405,7 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
         }
         final negative =
             outcome == 'unparsed' &&
-            [
-              'security_message',
-              'not_a_successful_spend',
-              'non_transaction_alert',
-            ].contains(result['reason']);
+            _isIgnorableSmsReason(result['reason'] as String?);
         final returned = result['transaction'] as Map?;
         final inactive =
             serverId != null &&
@@ -1431,13 +1436,16 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
             intake.acknowledge(namespace, key);
           });
         } else if (outcome == 'needs_review' || outcome == 'unparsed') {
-          final isFinancialCandidate =
-              capturesFinancialSms(message.body, sender: message.sender) &&
-              !LocalSmsParser.isNonTransactionNoise(
+          final isNoise =
+              LocalSmsParser.isNonTransactionNoise(
                 message.sender,
                 message.body,
-              );
-          if (outcome == 'unparsed' && !isFinancialCandidate) {
+              ) ||
+              NeedsReviewRepository.isSecurityOrServiceAlert(message.body);
+          final isFinancialCandidate =
+              capturesFinancialSms(message.body, sender: message.sender) &&
+              !isNoise;
+          if (isNoise || (outcome == 'unparsed' && !isFinancialCandidate)) {
             acknowledgements.add(() {
               store.discardProvisional(namespace, key);
               intake.acknowledge(namespace, key);
@@ -5319,40 +5327,46 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     final reviewRepo = ref.read(needsReviewRepositoryProvider);
     final items = await reviewRepo.fetchAll();
     var changed = false;
-    for (final item in items.take(20)) {
+    for (final item in items) {
       if (ref.read(cacheNamespaceProvider) != namespace) break;
       if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(item.id) ||
           LocalSmsParser.sensitive(item.body) ||
           !capturesFinancialSms(item.body, sender: item.sender)) {
         continue;
       }
-      final status = await repo.fetchAiJobStatus(item.id);
-      if (status == null) {
-        await repo.submitAiJob(
-          sourceKey: item.id,
-          sender: item.sender,
-          body: item.body,
-          occurredAt: item.receivedAt,
-        );
+      try {
+        final status = await repo.fetchAiJobStatus(item.id);
+        if (status == null) {
+          await repo.submitAiJob(
+            sourceKey: item.id,
+            sender: item.sender,
+            body: item.body,
+            occurredAt: item.receivedAt,
+          );
+          continue;
+        }
+        final rawSuggestions = status['suggestions'];
+        if (status['status'] == 'done' && rawSuggestions is List) {
+          // The classifier's structured suggestions belong to the review item
+          // so the user sees what the model proposed before deciding.
+          final suggestions = rawSuggestions
+              .whereType<Map>()
+              .map((value) => Map<String, dynamic>.from(value))
+              .toList();
+          changed =
+              await reviewRepo.updateAiSuggestions(item.id, suggestions) ||
+              changed;
+        }
+        final result = status['result'];
+        if (status['status'] == 'done' && result is Map &&
+            result['reviewRequired'] == false) {
+          await reviewRepo.remove(item.id);
+          changed = true;
+        }
+      } catch (_) {
+        // AI Gemini fallback: network or quota failure must never break
+        // the background worker; item remains safely reviewable manually.
         continue;
-      }
-      final rawSuggestions = status['suggestions'];
-      if (status['status'] == 'done' && rawSuggestions is List) {
-        // The classifier's structured suggestions belong to the review item
-        // so the user sees what the model proposed before deciding.
-        final suggestions = rawSuggestions
-            .whereType<Map>()
-            .map((value) => Map<String, dynamic>.from(value))
-            .toList();
-        changed =
-            await reviewRepo.updateAiSuggestions(item.id, suggestions) ||
-            changed;
-      }
-      final result = status['result'];
-      if (status['status'] == 'done' && result is Map &&
-          result['reviewRequired'] == false) {
-        await reviewRepo.remove(item.id);
-        changed = true;
       }
     }
     if (changed) {

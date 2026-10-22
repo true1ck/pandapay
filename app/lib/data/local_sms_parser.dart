@@ -193,7 +193,7 @@ class LocalSmsParser {
       r'\b(?:offer|sale|discount|cashback|voucher|coupon|rewarding|shop\s+at|grab|buy\s+now|apply\s+now|prices?\s+slashed|treat\s+yourself|festive\s+shopping|eligible\s+for\s+conversion|convert\s+(?:to|into)\s+emi|international\s+roaming\s+pack)\b|\b(?:get|earn|save)\b[\s\S]{0,45}\b(?:reward|cashback|off|free|voucher)\b',
     ).hasMatch(text);
     final serviceNotice = _re(
-      r'\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service)\b',
+      r'\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service|transaction\s+check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|sim\s+swap)\b',
     ).hasMatch(text);
     final balance = (_re(
           r'\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b',
@@ -209,7 +209,7 @@ class LocalSmsParser {
       return false;
     }
 
-    final promotionalSender = _re(r'-p\s*$').hasMatch(cleanSender);
+    final promotionalSender = _re(r'-p\s*$').hasMatch(cleanSender) && !isCompletedTransactionOrBill(body);
     return offer ||
         serviceNotice ||
         promotionalSender;
@@ -887,14 +887,6 @@ class LocalSmsParser {
         _re(
           r'\b(?:will|shall|to|scheduled to)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)\b',
         ).hasMatch(body);
-    if (isNonTransactionNoise(sender, body)) {
-      return observation(
-        null,
-        LocalSmsEventType.promotion,
-        LocalSmsDisposition.localIgnore,
-        ['non_transaction_message'],
-      );
-    }
     if (hasBillMarker &&
         !autopaySetup &&
         (!hasCompletedMovement || futureDebit)) {

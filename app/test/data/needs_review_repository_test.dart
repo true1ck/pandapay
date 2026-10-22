@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -149,5 +150,153 @@ void main() {
     ));
 
     expect(await repo.fetchAll(), hasLength(2));
+  });
+
+  test('isNoiseItem returns true for security/service alerts and false for investments/mandates', () {
+    final vicareAlert = NeedsReviewItem(
+      id: 'vicare',
+      sender: 'ViCARE',
+      body: 'Call Forwarding is now active',
+      receivedAt: DateTime(2026, 1, 1),
+    );
+    final hdfcCheckAlert = NeedsReviewItem(
+      id: 'check-alert',
+      sender: 'VM-HDFCBK-S',
+      body:
+          'Transaction Check Alert! We tried to contact you twice to confirm the following txn: Rs.2,000.00 on Card XX4321 at AMAZON on 16-10-26. If this was not you, call 1860-266-2661',
+      receivedAt: DateTime(2026, 1, 1),
+    );
+    final kotakNeo = NeedsReviewItem(
+      id: 'kotak-neo',
+      sender: 'KOTAKN',
+      body:
+          'Kotak Neo: Running A/c settlement payout of INR 15,500.00 initiated for your demat account. You should receive funds in A/c XX1234 by EOD.',
+      receivedAt: DateTime(2026, 1, 1),
+    );
+    final mandate = NeedsReviewItem(
+      id: 'mandate',
+      sender: 'HDFCBK',
+      body: 'AutoPay mandate successfully created for Rs.500.00',
+      receivedAt: DateTime(2026, 1, 1),
+    );
+
+    expect(NeedsReviewRepository.isNoiseItem(vicareAlert), isTrue);
+    expect(NeedsReviewRepository.isNoiseItem(hdfcCheckAlert), isTrue);
+    expect(NeedsReviewRepository.isNoiseItem(kotakNeo), isFalse);
+    expect(NeedsReviewRepository.isNoiseItem(mandate), isFalse);
+  });
+
+  test('fetchAll cleans out legacy security/service alerts from storage while keeping investment settlements', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final vicareAlert = NeedsReviewItem(
+      id: 'legacy-vicare',
+      sender: 'ViCARE',
+      body: 'Call Forwarding is now active',
+      receivedAt: DateTime(2026, 1, 1),
+    );
+    final checkAlert = NeedsReviewItem(
+      id: 'legacy-check-alert',
+      sender: 'VM-HDFCBK-S',
+      body:
+          'Transaction Check Alert! We tried to contact you twice to confirm the following txn: Rs.2,000.00 on Card XX4321',
+      receivedAt: DateTime(2026, 1, 2),
+    );
+    final kotakNeo = NeedsReviewItem(
+      id: 'legacy-kotak',
+      sender: 'KOTAKN',
+      body:
+          'Kotak Neo: Running A/c settlement payout of INR 15,500.00 initiated for your demat account.',
+      receivedAt: DateTime(2026, 1, 3),
+    );
+    await prefs.setStringList('pandapay_app.needs_review_queue_v1', [
+      jsonEncode(vicareAlert.toJson()),
+      jsonEncode(checkAlert.toJson()),
+      jsonEncode(kotakNeo.toJson()),
+    ]);
+
+    final repo = NeedsReviewRepository();
+    final items = await repo.fetchAll();
+
+    expect(items.map((i) => i.id), ['legacy-kotak']);
+    final remaining = prefs.getStringList('pandapay_app.needs_review_queue_v1');
+    expect(remaining, hasLength(1));
+    expect(jsonDecode(remaining!.single)['id'], 'legacy-kotak');
+  });
+
+  test('fetchAll cleans out legacy security/service alerts from SQLite storage while keeping investment settlements', () async {
+    final db = openInMemoryForTesting();
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+    );
+    final vicareAlert = NeedsReviewItem(
+      id: 'sql-vicare',
+      sender: 'ViCARE',
+      body: 'Call Forwarding is now active',
+      receivedAt: DateTime(2026, 1, 1),
+    );
+    final checkAlert = NeedsReviewItem(
+      id: 'sql-check-alert',
+      sender: 'VM-HDFCBK-S',
+      body: 'Transaction Check Alert! Confirm txn: Rs.2,000.00 on Card XX4321',
+      receivedAt: DateTime(2026, 1, 2),
+    );
+    final kotakNeo = NeedsReviewItem(
+      id: 'sql-kotak',
+      sender: 'KOTAKN',
+      body: 'Kotak Neo: Running A/c settlement payout of INR 15,500.00 initiated for your demat account.',
+      receivedAt: DateTime(2026, 1, 3),
+    );
+
+    for (final item in [vicareAlert, checkAlert, kotakNeo]) {
+      db.db.execute(
+        'INSERT INTO local_needs_review VALUES (?,?,?)',
+        ['user:test', item.id, jsonEncode(item.toJson())],
+      );
+    }
+
+    final repo = NeedsReviewRepository(
+      namespace: 'user:test',
+      loadDatabase: () async => db,
+    );
+    final items = await repo.fetchAll();
+
+    expect(items.map((i) => i.id), ['sql-kotak']);
+    final remainingRows = db.db.select(
+      'SELECT id FROM local_needs_review WHERE namespace=?',
+      ['user:test'],
+    );
+    expect(remainingRows.map((r) => r['id']), ['sql-kotak']);
+    db.close();
+  });
+
+  test('addNeedsReviewSync deduplicates exact id and fuzzy sender/body/time matches', () async {
+    final db = openInMemoryForTesting();
+    const ns = 'user:test';
+    final item1 = NeedsReviewItem(
+      id: 'src-1',
+      sender: 'VM-HDFCBK',
+      body: 'Your electricity bill of Rs. 1,450 is due on 25-Oct',
+      receivedAt: DateTime(2026, 10, 20, 10, 0),
+    );
+    final fuzzyDuplicate = NeedsReviewItem(
+      id: 'commitment:src-1',
+      sender: 'vm-hdfcbk ',
+      body: 'Your  electricity bill of Rs. 1,450 is due on 25-Oct ',
+      receivedAt: DateTime(2026, 10, 20, 10, 2), // 2 min apart
+    );
+    final differentItem = NeedsReviewItem(
+      id: 'src-2',
+      sender: 'VM-HDFCBK',
+      body: 'Your gas bill of Rs. 850 is due on 28-Oct',
+      receivedAt: DateTime(2026, 10, 20, 10, 1),
+    );
+
+    addNeedsReviewSync(db, ns, item1);
+    addNeedsReviewSync(db, ns, fuzzyDuplicate); // should be skipped due to fuzzy dedup
+    addNeedsReviewSync(db, ns, differentItem);
+
+    final rows = db.db.select('SELECT id FROM local_needs_review WHERE namespace=?', [ns]);
+    expect(rows.map((r) => r['id']), ['src-1', 'src-2']);
+    db.close();
   });
 }

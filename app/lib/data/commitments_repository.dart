@@ -4,6 +4,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app/design/app_theme.dart';
+import 'local/app_database.dart';
 
 enum CommitmentCategory {
   utility,
@@ -339,14 +340,60 @@ const _commitmentsStorageKey = 'pandapay_app.commitments_v1';
 /// Saves to durable on-device storage so commitments survive app reboots.
 class CommitmentsRepository {
   final String namespace;
+  final Future<AppDatabase> Function()? loadDatabase;
 
-  CommitmentsRepository({this.namespace = 'legacy'});
+  CommitmentsRepository({this.namespace = 'legacy', this.loadDatabase});
 
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
 
   String get _storageKey => '$_commitmentsStorageKey:$namespace';
 
+  Future<AppDatabase?> _database() async {
+    if (loadDatabase == null) return null;
+    final db = await loadDatabase!();
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_commitments ('
+      'namespace TEXT NOT NULL, '
+      'id TEXT NOT NULL, '
+      'payload TEXT NOT NULL, '
+      'PRIMARY KEY (namespace, id)'
+      ')',
+    );
+    final prefs = await _prefs;
+    final raw = prefs.getString(_storageKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final list = jsonDecode(raw) as List;
+        for (final item in list) {
+          final c = Commitment.fromJson(item as Map<String, dynamic>);
+          db.db.execute(
+            'INSERT OR REPLACE INTO local_commitments VALUES (?, ?, ?)',
+            [namespace, c.id, jsonEncode(c.toJson())],
+          );
+        }
+        await prefs.remove(_storageKey);
+      } catch (_) {}
+    }
+    return db;
+  }
+
   Future<List<Commitment>> fetchAll() async {
+    if (loadDatabase != null) {
+      final db = await _database();
+      if (db != null) {
+        final rows = db.db.select(
+          'SELECT payload FROM local_commitments WHERE namespace = ?',
+          [namespace],
+        );
+        return rows
+            .map(
+              (r) => Commitment.fromJson(
+                jsonDecode(r['payload'] as String) as Map<String, dynamic>,
+              ),
+            )
+            .toList();
+      }
+    }
     final prefs = await _prefs;
     final raw = prefs.getString(_storageKey);
     if (raw == null || raw.isEmpty) return const [];
@@ -433,6 +480,16 @@ class CommitmentsRepository {
   }
 
   Future<void> delete(String id) async {
+    if (loadDatabase != null) {
+      final db = await _database();
+      if (db != null) {
+        db.db.execute(
+          'DELETE FROM local_commitments WHERE namespace = ? AND id = ?',
+          [namespace, id],
+        );
+        return;
+      }
+    }
     final list = await fetchAll();
     final updated = list.where((c) => c.id != id).toList();
     await _persist(updated);
@@ -452,6 +509,22 @@ class CommitmentsRepository {
   }
 
   Future<void> _persist(List<Commitment> items) async {
+    if (loadDatabase != null) {
+      final db = await _database();
+      if (db != null) {
+        db.db.execute(
+          'DELETE FROM local_commitments WHERE namespace = ?',
+          [namespace],
+        );
+        for (final item in items) {
+          db.db.execute(
+            'INSERT OR REPLACE INTO local_commitments VALUES (?, ?, ?)',
+            [namespace, item.id, jsonEncode(item.toJson())],
+          );
+        }
+        return;
+      }
+    }
     final prefs = await _prefs;
     final encoded = jsonEncode(items.map((i) => i.toJson()).toList());
     await prefs.setString(_storageKey, encoded);

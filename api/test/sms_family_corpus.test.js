@@ -131,13 +131,10 @@ test('kotak_settlement: investment payout vocabulary missing', () => {
   assert.equal(r.reason, 'no_transaction_match');
 });
 
-test('hdfc_txn_check_alert: KNOWN baseline gap - verification alert parses as a spend', () => {
+test('hdfc_txn_check_alert: verification alert rejected as non-transaction noise', () => {
   const r = parse('hdfc_txn_check_alert');
-  assert.equal(r.ok, true);
-  assert.equal(r.fields.entryKind, 'spend');
-  assert.equal(r.fields.amountInr, 2000);
-  // Garbage merchant proving the false positive.
-  assert.match(r.fields.merchant, /contact you twice/);
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'non_transaction_message');
 });
 
 test('reversed_credit: transfer/reversal', () => {

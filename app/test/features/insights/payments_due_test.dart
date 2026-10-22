@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/commitments_repository.dart';
+import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/features/insights/payments_due_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -389,5 +390,54 @@ void main() {
         expect((await repo.fetchAll()).single.dueOn, DateTime(2026, 3, 31));
       },
     );
+
+    test('SQLite storage: saves, loads, and migrates from legacy SharedPreferences', () async {
+      final prefs = await SharedPreferences.getInstance();
+      const ns = 'user:sqlite-test';
+      // Put a legacy item in SharedPreferences
+      await prefs.setString(
+        'pandapay_app.commitments_v1:$ns',
+        '[{"id":"legacy-c1","title":"Electricity","category":"utility","due_on":"2026-10-25T00:00:00.000","cadence":"monthly","status":"due","source":"manual"}]',
+      );
+
+      final db = openInMemoryForTesting();
+      final repo = CommitmentsRepository(
+        namespace: ns,
+        loadDatabase: () async => db,
+      );
+
+      // fetchAll should migrate the legacy item into SQLite
+      final items = await repo.fetchAll();
+      expect(items, hasLength(1));
+      expect(items.single.id, 'legacy-c1');
+      expect(items.single.title, 'Electricity');
+
+      // SharedPreferences key should be cleaned up
+      expect(prefs.getString('pandapay_app.commitments_v1:$ns'), isNull);
+
+      // Verify row exists directly in local_commitments table
+      final rows = db.db.select('SELECT id FROM local_commitments WHERE namespace=?', [ns]);
+      expect(rows.map((r) => r['id']), ['legacy-c1']);
+
+      // Add a new commitment via SQLite
+      await repo.save(Commitment(
+        id: 'new-c2',
+        title: 'Water Bill',
+        category: CommitmentCategory.utility,
+        dueOn: DateTime(2026, 11, 5),
+        cadence: CommitmentCadence.monthly,
+      ));
+
+      final allItems = await repo.fetchAll();
+      expect(allItems, hasLength(2));
+      expect(allItems.map((c) => c.id).toSet(), {'legacy-c1', 'new-c2'});
+
+      // Delete one item
+      await repo.delete('legacy-c1');
+      final remaining = await repo.fetchAll();
+      expect(remaining.map((c) => c.id), ['new-c2']);
+
+      db.close();
+    });
   });
 }
