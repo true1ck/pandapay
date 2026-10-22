@@ -19,6 +19,7 @@
 library;
 
 import '../../data/local_sms_parser.dart';
+import '../../data/sms_gate_filter.dart';
 
 /// Returns a bare 4-digit string if [smsBody] contains a "ending NNNN" /
 /// "XXNNNN" / "card NNNN" style last-4 mention, else null. Deliberately
@@ -210,43 +211,33 @@ class SmsTriageResult {
 }
 
 SmsTriageResult classifySmsTriage(String sender, String smsBody) {
-  if (smsBody.trim().isEmpty) {
-    return const SmsTriageResult(SmsTriageKind.unrelated, 'empty_body');
+  final verdict = SmsGateFilter.evaluate(sender, smsBody);
+  if (!verdict.passed) {
+    switch (verdict.dropReason!) {
+      case SmsGateDropReason.emptyOrMalformed:
+        return const SmsTriageResult(SmsTriageKind.unrelated, 'empty_body');
+      case SmsGateDropReason.otpOrSecurity:
+        return const SmsTriageResult(SmsTriageKind.sensitive, 'security_message');
+      case SmsGateDropReason.telemarketingOrP2p:
+        final is10DigitP2p =
+            RegExp(r'^(?:\+?91[\-\s]?|0)?[6-9]\d{9}$').hasMatch(sender.trim());
+        if (is10DigitP2p) {
+          return const SmsTriageResult(SmsTriageKind.unrelated, 'p2p_mobile_number');
+        }
+        return const SmsTriageResult(SmsTriageKind.promotion, 'numeric_promotional_sender');
+      case SmsGateDropReason.dematOrSecuritiesAlert:
+        return const SmsTriageResult(SmsTriageKind.unrelated, 'demat_depository_alert');
+      case SmsGateDropReason.promotionalNoise:
+        if (RegExp(r'-[Pp]$').hasMatch(sender.trim())) {
+          return const SmsTriageResult(SmsTriageKind.promotion, 'promotional_route_sender');
+        }
+        return const SmsTriageResult(SmsTriageKind.promotion, 'promotional_noise');
+      case SmsGateDropReason.noFinancialKeywords:
+        return const SmsTriageResult(SmsTriageKind.unrelated, 'no_financial_signal');
+    }
   }
+
   final lower = smsBody.toLowerCase();
-  if (_looksOtpOrSecurity(lower) || LocalSmsParser.sensitive(smsBody)) {
-    return const SmsTriageResult(SmsTriageKind.sensitive, 'security_message');
-  }
-
-  final cleanSender = sender.trim();
-  if (cleanSender.isNotEmpty) {
-    // 10-digit mobile numbers are P2P chats or smishing fraud; Indian banks never send transaction alerts from them.
-    final is10DigitP2p = RegExp(r'^(?:\+?91[\-\s]?|0)?[6-9]\d{9}$').hasMatch(cleanSender);
-    if (is10DigitP2p) {
-      return const SmsTriageResult(SmsTriageKind.unrelated, 'p2p_mobile_number');
-    }
-
-    // TRAI 140-series telemarketing CLI (10 digits starting with 140)
-    final isTrai140Promo = RegExp(r'^(?:\+?91[\-\s]?|0)?140\d{7}$').hasMatch(cleanSender);
-    if (isTrai140Promo) {
-      return const SmsTriageResult(SmsTriageKind.promotion, 'numeric_promotional_sender');
-    }
-
-    // 6-digit numeric headers where digit 1-8 is bulk promotional SMS (TRAI DLT)
-    final isNumericPromo = RegExp(r'^(?:[A-Za-z]{2}-)?\d{6}(?:-[A-Za-z])?$').hasMatch(cleanSender);
-    if (isNumericPromo) {
-      return const SmsTriageResult(SmsTriageKind.promotion, 'numeric_promotional_sender');
-    }
-
-    // Suffix -P / -p: Treat as promotional route. Discard unless it contains an unambiguous completed card/account transaction alert.
-    final isPromotionalRoute = RegExp(r'-[Pp]$').hasMatch(cleanSender);
-    if (isPromotionalRoute) {
-      final isCompletedOrBill = LocalSmsParser.isCompletedTransactionOrBill(smsBody);
-      if (!isCompletedOrBill) {
-        return const SmsTriageResult(SmsTriageKind.promotion, 'promotional_route_sender');
-      }
-    }
-  }
 
   final emiSolicitation = RegExp(
     r'\b(?:eligible\s+for\s+(?:[\w\s]{0,20}\s+)?(?:conversion|emis?)|convert(?:ed|ing)?\b[\s\S]{0,60}?\b(?:in)?to\b[\s\S]{0,20}?\b(?:smart\s+|flexipay\s+|easy\s+)?emis?|can\s+(?:now\s+)?be\s+converted\s+(?:in)?to\s+emis?|flexipay\s+emis?)\b',
