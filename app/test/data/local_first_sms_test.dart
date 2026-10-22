@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/authenticated_http_client.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
@@ -65,20 +66,22 @@ void main() {
   test(
     'high-confidence promotion and AutoPay messages stop locally without spending',
     () {
-      SmsImportStore(cache.financialStore).captureBatch('user:account-a', [
-        QueuedSms(
-          sender: 'JM-JIOINF-P',
-          body:
-              'Want to keep your number active? Recharge with Rs.349 today and get an additional Rs.349 recharge FREE. Offer valid today.',
-          receivedAt: DateTime(2026, 10, 18),
-        ),
-        QueuedSms(
-          sender: 'VM-AXISBK-S',
-          body:
-              'AutoPay activation successful. Txn amt: INR 0.00 Merchant: OpenAI LLC Axis Bank Card no.: XX7105 Max limit: INR 1999.00.',
-          receivedAt: DateTime(2026, 10, 18),
-        ),
-      ]);
+      final jio = QueuedSms(
+        sender: 'JM-JIOINF-P',
+        body:
+            'Want to keep your number active? Recharge with Rs.349 today and get an additional Rs.349 recharge FREE. Offer valid today.',
+        receivedAt: DateTime(2026, 10, 18),
+      );
+      final axis = QueuedSms(
+        sender: 'VM-AXISBK-S',
+        body:
+            'AutoPay activation successful. Txn amt: INR 0.00 Merchant: OpenAI LLC Axis Bank Card no.: XX7105 Max limit: INR 1999.00.',
+        receivedAt: DateTime(2026, 10, 18),
+      );
+      SmsImportStore(cache.financialStore).captureBatch(
+        'user:account-a',
+        [jio, axis],
+      );
 
       expect(SmsIntakeRepository(db).pending('user:account-a'), isEmpty);
       expect(
@@ -88,13 +91,26 @@ void main() {
         ),
         isNull,
       );
+      // The promotion is recorded as a decided observation — no raw body is
+      // retained, no spending, no pending intake — per the SMS intelligence
+      // contract (see sms_intelligence_scenarios_test.dart Scenario 1).
+      final intake = SmsIntakeRepository(db);
+      final promoKey = smsSourceKey(
+        'user:account-a',
+        jio.sender,
+        jio.body,
+      );
+      final promoDecision = intake.decision('user:account-a', promoKey);
+      expect(promoDecision, isNotNull);
+      expect(promoDecision!.decision, 'ignored_promotion');
+      expect(promoDecision.state, 'final');
       final observations = cache.financialStore.entities(
         'user:account-a',
         'sms_observations',
       );
       expect(
         observations.map((row) => row['event_type']),
-        containsAll(<String>['promotion', 'autopay']),
+        contains('autopay'),
       );
     },
   );
