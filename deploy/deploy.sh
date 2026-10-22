@@ -201,17 +201,7 @@ docker compose -f docker-compose.prod.yml --env-file .env \
   up --build --abort-on-container-exit --exit-code-from db-migrate db-migrate
 
 echo "==> Rebuilding and restarting services"
-if [ -n "$AI_WORKER_TOKEN_VALUE" ]; then
-  docker compose --profile sms-ai -f docker-compose.prod.yml --env-file .env \
-    up -d --build api auth backup rewards-worker gemini-worker
-else
-  # Explicitly stop a worker from an earlier enabled deploy. Supplying blank
-  # credentials closes API worker routes as well as stopping provider calls.
-  docker compose --profile sms-ai -f docker-compose.prod.yml --env-file .env \
-    stop gemini-worker >/dev/null 2>&1 || true
-  docker compose -f docker-compose.prod.yml --env-file .env \
-    up -d --build api auth backup rewards-worker
-fi
+bash deploy/restart-services.sh
 
 echo "==> Waiting for health"
 for i in $(seq 1 30); do

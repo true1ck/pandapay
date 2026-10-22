@@ -1,47 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  UA-8.2 (Chunk 32): home-screen widget layout skeleton — structurally
-  present, never rendered/verified on a real device or emulator in this
-  sandbox (no Android SDK/emulator here, same gap as UA-4/UA-5.3's other
-  native plumbing). See PROGRESS.md.
--->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
     android:orientation="vertical"
-    android:padding="14dp"
-    android:background="@drawable/widget_background">
+    android:padding="12dp">
 
-    <TextView
-        android:id="@+id/widget_label"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="PandaPay • Best card right now"
-        android:textSize="11sp"
-        android:textStyle="bold"
-        android:textColor="#6B7280" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="22dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/widget_brand_mark"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:contentDescription="PandaPay"
+            android:scaleType="fitCenter" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:text="HOME PICK"
+            android:textColor="#8B8F94"
+            android:textSize="9sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/widget_card_art"
+        android:layout_width="match_parent"
+        android:layout_height="92dp"
+        android:layout_marginTop="8dp"
+        android:contentDescription="Recommended card artwork"
+        android:scaleType="fitCenter" />
 
     <TextView
         android:id="@+id/widget_card_name"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:text="—"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:maxLines="2"
+        android:layout_marginTop="7dp"
         android:ellipsize="end"
-        android:textColor="#111827" />
+        android:maxLines="1"
+        android:text="Card recommendation"
+        android:textColor="#2B313A"
+        android:textSize="14sp"
+        android:textStyle="bold" />
 
     <TextView
         android:id="@+id/widget_card_value"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text=""
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:textColor="#059669" />
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#12805C"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_card_reason"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#8B8F94"
+        android:textSize="10sp" />
 
 </LinearLayout>

@@ -133,10 +133,25 @@
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_notification" />
 
-        <!-- UA-8.2 (Chunk 32): home-screen widget provider. Fully-qualified
-             class name ensures flavor applicationIdSuffix (.dev2, .staging)
-             does not misroute the class lookup. -->
-        <receiver android:name="app.pandapay.pandapay.BestCardWidgetProvider" android:exported="false">
+        <!-- Launcher widgets. Providers are exported so Android's widget host
+             can send APPWIDGET_UPDATE and open each item in the picker. -->
+        <receiver android:name="app.pandapay.pandapay.CombinedHomeWidgetProvider" android:label="PandaPay: Spending + Card" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/combined_home_widget_info" />
+        </receiver>
+        <receiver android:name="app.pandapay.pandapay.SpendingHomeWidgetProvider" android:label="PandaPay: Spending" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/spending_home_widget_info" />
+        </receiver>
+        <receiver android:name="app.pandapay.pandapay.BestCardWidgetProvider" android:label="PandaPay: Card Pick" android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

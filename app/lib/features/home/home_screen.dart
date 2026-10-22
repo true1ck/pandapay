@@ -14,7 +14,7 @@ import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
 import '../../data/spend_by_category_repository.dart' show CategorySpend;
 import '../../data/spend_reports_repository.dart'
-    show SpendPeriod, SpendReportQuery;
+    show SpendBreakdownRow, SpendPeriod, SpendReportQuery;
 import '../../data/user_cards_repository.dart'
     show BankAccountSummary, TransactionEntry, TxnEntryKind, UserCard;
 import '../../main.dart' show MoneyText;
@@ -114,87 +114,110 @@ class HomeScreen extends ConsumerWidget {
     // then the purchase controls and the recommendation they drive.
     // Context, warnings, category detail, dues and account data continue below.
     return AppBackground(
-      child: CustomScrollView(
-        slivers: [
-          // Build Home sections lazily as they approach the viewport. The
-          // former SingleChildScrollView/Column laid out the whole dashboard
-          // on each refresh, even when only its first cards were visible.
-          SliverPadding(
-            // 58pt top / 128pt bottom, the mockup's own scroll padding — the
-            // top inset stands in for the status bar now that the shell has no
-            // AppBar, and the shell reserves the bottom 128 for the nav pill.
-            padding: EdgeInsets.only(
-              top: MediaQuery.paddingOf(context).top + AppSpace.sm,
-              bottom: AppShell.navClearance,
-            ),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 0),
-                  child: _BrandHeader(greeting: _greetingFor(now)),
-                ),
-                const _HomeSpendHeadline(),
-                const _HomeQuickActions(),
-                const _HomeSectionDivider(),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 0),
-                  child: Text(
-                    'What are you paying for?',
-                    style: BambooFonts.heading(
-                      18,
-                      color: BambooInk.ink900,
-                      height: 1.15,
-                    ),
+      child: Column(
+        children: [
+          const _HomeWidgetSync(),
+          Expanded(
+            child: CustomScrollView(
+              slivers: [
+                // Build Home sections lazily as they approach the viewport. The
+                // former SingleChildScrollView/Column laid out the whole dashboard
+                // on each refresh, even when only its first cards were visible.
+                SliverPadding(
+                  // 58pt top / 128pt bottom, the mockup's own scroll padding — the
+                  // top inset stands in for the status bar now that the shell has no
+                  // AppBar, and the shell reserves the bottom 128 for the nav pill.
+                  padding: EdgeInsets.only(
+                    top: MediaQuery.paddingOf(context).top + AppSpace.sm,
+                    bottom: AppShell.navClearance,
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          _gutter,
+                          0,
+                          _gutter,
+                          0,
+                        ),
+                        child: _BrandHeader(greeting: _greetingFor(now)),
+                      ),
+                      const _HomeSpendHeadline(),
+                      const _HomeQuickActions(),
+                      const _HomeSectionDivider(),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          _gutter,
+                          0,
+                          _gutter,
+                          0,
+                        ),
+                        child: Text(
+                          'What are you paying for?',
+                          style: BambooFonts.heading(
+                            18,
+                            color: BambooInk.ink900,
+                            height: 1.15,
+                          ),
+                        ),
+                      ),
+                      // B5's geofence context ("you look like you're at X") reads as
+                      // the answer-in-progress to the heading above it, so it sits
+                      // directly under the question rather than in its own strip.
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          _gutter,
+                          AppSpace.xs,
+                          _gutter,
+                          0,
+                        ),
+                        child: HomeContextLine(),
+                      ),
+                      const SizedBox(height: AppSpace.sm),
+                      Padding(
+                        key: tutorialKeys.categoryChips,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: _gutter,
+                        ),
+                        child: _PurchaseTypeSelector(
+                          selectedCategory: selectedCategory,
+                          onChanged: (slug) =>
+                              ref
+                                      .read(selectedCategoryProvider.notifier)
+                                      .state =
+                                  slug,
+                        ),
+                      ),
+                      Padding(
+                        key: tutorialKeys.amountField,
+                        padding: const EdgeInsets.fromLTRB(
+                          _gutter,
+                          AppSpace.md,
+                          _gutter,
+                          0,
+                        ),
+                        child: const _AmountCard(),
+                      ),
+                      const SizedBox(height: AppSpace.sm),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: _gutter,
+                        ),
+                        child: _RankedSection(
+                          ranked: ranked,
+                          tutorialKeys: tutorialKeys,
+                        ),
+                      ),
+                      const _AlertsStrip(),
+                      const _UtilizationWarningBanner(),
+                      const _HomeCategories(),
+                      const _HomeDuesAndReminders(),
+                      const _HomeAccountSnapshot(),
+                      const SizedBox(height: AppSpace.lg),
+                    ]),
                   ),
                 ),
-                // B5's geofence context ("you look like you're at X") reads as
-                // the answer-in-progress to the heading above it, so it sits
-                // directly under the question rather than in its own strip.
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    _gutter,
-                    AppSpace.xs,
-                    _gutter,
-                    0,
-                  ),
-                  child: HomeContextLine(),
-                ),
-                const SizedBox(height: AppSpace.sm),
-                Padding(
-                  key: tutorialKeys.categoryChips,
-                  padding: const EdgeInsets.symmetric(horizontal: _gutter),
-                  child: _PurchaseTypeSelector(
-                    selectedCategory: selectedCategory,
-                    onChanged: (slug) =>
-                        ref.read(selectedCategoryProvider.notifier).state =
-                            slug,
-                  ),
-                ),
-                Padding(
-                  key: tutorialKeys.amountField,
-                  padding: const EdgeInsets.fromLTRB(
-                    _gutter,
-                    AppSpace.md,
-                    _gutter,
-                    0,
-                  ),
-                  child: const _AmountCard(),
-                ),
-                const SizedBox(height: AppSpace.sm),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: _gutter),
-                  child: _RankedSection(
-                    ranked: ranked,
-                    tutorialKeys: tutorialKeys,
-                  ),
-                ),
-                const _AlertsStrip(),
-                const _UtilizationWarningBanner(),
-                const _HomeCategories(),
-                const _HomeDuesAndReminders(),
-                const _HomeAccountSnapshot(),
-                const SizedBox(height: AppSpace.lg),
-              ]),
+              ],
             ),
           ),
         ],
@@ -396,6 +419,75 @@ class _HomeQuickActionTile extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Keeps launcher widgets aligned with the same month report and card ranking
+/// that Home is currently showing. Rebuilds are fingerprinted so an ordinary
+/// Home animation or scroll never re-renders the widget images.
+class _HomeWidgetSync extends ConsumerStatefulWidget {
+  const _HomeWidgetSync();
+
+  @override
+  ConsumerState<_HomeWidgetSync> createState() => _HomeWidgetSyncState();
+}
+
+class _HomeWidgetSyncState extends ConsumerState<_HomeWidgetSync> {
+  String? _lastScheduledFingerprint;
+  Future<void> _syncQueue = Future<void>.value();
+
+  @override
+  Widget build(BuildContext context) {
+    final reportState = ref.watch(
+      spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
+    );
+    final recommendationState = ref.watch(rankedRecommendationsProvider);
+    if (!reportState.hasValue || !recommendationState.hasValue) {
+      return const SizedBox.shrink();
+    }
+
+    final report = reportState.valueOrNull;
+    final recommendations = recommendationState.valueOrNull ?? const [];
+    Recommendation? recommendation;
+    for (final candidate in recommendations) {
+      if (!candidate.isExcluded) {
+        recommendation = candidate;
+        break;
+      }
+    }
+    final fingerprint = [
+      report?.spend.total.paise ?? 0,
+      report?.spend.rewards.paise ?? 0,
+      for (final row in report?.byCategory ?? const <SpendBreakdownRow>[]) ...[
+        row.label,
+        row.total.paise,
+      ],
+      recommendation?.card.id ?? '',
+      recommendation?.expectedValue.paise ?? 0,
+      recommendation == null || recommendation.reasonLines.isEmpty
+          ? ''
+          : recommendation.reasonLines.first,
+    ].join('|');
+    if (fingerprint != _lastScheduledFingerprint) {
+      _lastScheduledFingerprint = fingerprint;
+      final clock = ref.read(clockProvider);
+      final service = ref.read(homeWidgetServiceProvider);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _syncQueue = _syncQueue
+            .then(
+              (_) => service.updateHomeWidgets(
+                report: report,
+                recommendation: recommendation,
+                nowIso: clock.now().toIso8601String(),
+              ),
+            )
+            .catchError((Object error, StackTrace stackTrace) {
+              debugPrint('Could not refresh PandaPay home widgets: $error');
+            });
+      });
+    }
+    return const SizedBox.shrink();
+  }
 }
 
 class _HomeSpendHeadline extends ConsumerStatefulWidget {
@@ -3318,9 +3410,7 @@ class _HomeDuesAndReminders extends ConsumerWidget {
                 child: Row(
                   children: [
                     Text(
-                      rows.any(
-                            (row) => row.bill?.amountDue != null,
-                          )
+                      rows.any((row) => row.bill?.amountDue != null)
                           ? 'Outstanding on these cards'
                           : 'Tracked spend on these cards',
                       style: BambooFonts.ui(12, color: BambooInk.ink500),
@@ -3433,7 +3523,9 @@ class _HomeDueCard extends StatelessWidget {
                 style: BambooFonts.ui(11, color: BambooInk.ink500),
               ),
               MoneyText(
-                bill.isPaid ? bill.amountDue! : (outstanding ?? bill.paidToward),
+                bill.isPaid
+                    ? bill.amountDue!
+                    : (outstanding ?? bill.paidToward),
                 confidence: Confidence.estimated,
                 style: BambooFonts.money(18, color: BambooInk.ink900),
                 hidePaise: true,
@@ -3494,10 +3586,7 @@ class _BillStateChip extends StatelessWidget {
         style: BambooFonts.ui(11, color: BambooInk.ink500),
       );
     }
-    return Text(
-      'Unpaid',
-      style: BambooFonts.ui(11, color: BambooInk.ink500),
-    );
+    return Text('Unpaid', style: BambooFonts.ui(11, color: BambooInk.ink500));
   }
 }
 

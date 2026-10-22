@@ -146,8 +146,13 @@ a commit with new migrations; it's ledgered and only applies what's new.
 
 ## 5. Bring up the stack
 
+On the 1 GB production VM, build and restart services sequentially. The helper
+builds each image before replacing any containers, then waits for auth, API,
+rewards worker, and backup readiness in that order. A failed readiness check
+stops the rollout before the next service is replaced.
+
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+bash deploy/restart-services.sh
 docker compose -f docker-compose.prod.yml ps
 ```
 

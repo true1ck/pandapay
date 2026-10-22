@@ -3,11 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/features/home_widget/home_widget_service.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
-/// UA-8.2: `home_widget`'s actual native side (does a real widget redraw)
-/// can't be exercised in this sandbox — see PROGRESS.md — but the Dart-side
-/// contract (which keys get written, with what values, and that a redraw
-/// is requested) is genuinely verifiable by intercepting the plugin's
-/// MethodChannel, which is exactly what this test does.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -18,22 +13,22 @@ void main() {
     calls.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-      calls.add(call);
-      if (call.method == 'saveWidgetData') return true;
-      if (call.method == 'updateWidget') return true;
-      if (call.method == 'isRequestPinWidgetSupported') return true;
-      if (call.method == 'requestPinWidget') return null;
-      if (call.method == 'getInstalledWidgets') {
-        return [
-          {
-            'widgetId': 1,
-            'androidClassName': '.BestCardWidgetProvider',
-            'label': 'PandaPay',
+          calls.add(call);
+          if (call.method == 'saveWidgetData') return true;
+          if (call.method == 'updateWidget') return true;
+          if (call.method == 'isRequestPinWidgetSupported') return true;
+          if (call.method == 'requestPinWidget') return null;
+          if (call.method == 'getInstalledWidgets') {
+            return [
+              {
+                'widgetId': 1,
+                'androidClassName': '.BestCardWidgetProvider',
+                'label': 'PandaPay',
+              },
+            ];
           }
-        ];
-      }
-      return null;
-    });
+          return null;
+        });
   });
 
   tearDown(() {
@@ -42,77 +37,178 @@ void main() {
   });
 
   CardProduct card(String id, double rate) => CardProduct(
-        id: id,
-        name: id,
-        network: CardNetwork.rupay,
-        isUpiLinkable: true,
-        rewardRules: [RewardRule(id: '$id-rule', unit: RewardUnit.cashbackPercent, rate: rate)],
-      );
+    id: id,
+    name: id,
+    network: CardNetwork.rupay,
+    isUpiLinkable: true,
+    rewardRules: [
+      RewardRule(id: '$id-rule', unit: RewardUnit.cashbackPercent, rate: rate),
+    ],
+  );
 
-  test('writes the recommendation\'s card name/value and triggers an update with qualifiedAndroidName', () async {
-    final engine = RecommendationEngine();
-    final rec = engine
-        .rank(
-          RecommendationContext(amount: Money.fromRupees(1000), rail: TxnRail.swipe),
-          [CardSnapshot(product: card('best-card', 5))],
-        )
-        .first;
+  HomeWidgetService service() => HomeWidgetService(
+    renderer: (widget, {required key, required logicalSize}) async =>
+        '/test/$key.png',
+  );
 
-    final service = HomeWidgetService();
-    await service.updateBestCardWidget(recommendation: rec, nowIso: '2026-08-06T00:00:00.000Z');
+  test('writes card assets and refreshes all three provider types', () async {
+    final rec = RecommendationEngine().rank(
+      RecommendationContext(
+        amount: Money.fromRupees(1000),
+        rail: TxnRail.swipe,
+      ),
+      [CardSnapshot(product: card('best-card', 5))],
+    ).first;
 
-    final saveCalls = calls.where((c) => c.method == 'saveWidgetData').toList();
-    final updateCalls = calls.where((c) => c.method == 'updateWidget').toList();
+    await service().updateBestCardWidget(
+      recommendation: rec,
+      nowIso: '2026-08-06T00:00:00.000Z',
+    );
 
-    expect(updateCalls, hasLength(1));
-    expect(updateCalls.single.arguments['qualifiedAndroidName'], HomeWidgetService.qualifiedAndroidName);
-    expect(updateCalls.single.arguments['android'], HomeWidgetService.androidWidgetName);
+    final saveCalls = calls.where((call) => call.method == 'saveWidgetData');
+    final updateCalls = calls.where((call) => call.method == 'updateWidget');
+    expect(updateCalls, hasLength(3));
+    expect(
+      updateCalls.map((call) => call.arguments['qualifiedAndroidName']),
+      containsAll([
+        HomeWidgetService.combinedQualifiedAndroidName,
+        HomeWidgetService.spendingQualifiedAndroidName,
+        HomeWidgetService.recommendationQualifiedAndroidName,
+      ]),
+    );
 
     final saved = <String, dynamic>{
-      for (final c in saveCalls) c.arguments['id'] as String: c.arguments['data'],
+      for (final call in saveCalls)
+        call.arguments['id'] as String: call.arguments['data'],
     };
     expect(saved[HomeWidgetService.cardNameKey], 'best-card');
-    expect(saved[HomeWidgetService.cardValueKey], rec.expectedValue.format());
+    expect(
+      saved[HomeWidgetService.cardValueKey],
+      rec.expectedValue.format(compact: true, hidePaise: true),
+    );
+    expect(
+      saved[HomeWidgetService.cardArtPathKey],
+      '/test/pandapay_best_card.png',
+    );
+    expect(
+      saved[HomeWidgetService.spendChartPathKey],
+      '/test/pandapay_spend_chart.png',
+    );
+    expect(
+      saved[HomeWidgetService.brandMarkPathKey],
+      '/test/pandapay_widget_mark.png',
+    );
+    expect(
+      saved[HomeWidgetService.compactDetailsPathKey],
+      '/test/pandapay_widget_compact.png',
+    );
+    expect(
+      saved[HomeWidgetService.compactWideDetailsPathKey],
+      '/test/pandapay_widget_compact_wide.png',
+    );
+    expect(
+      saved[HomeWidgetService.spendingCompactDetailsPathKey],
+      '/test/pandapay_widget_spending_compact.png',
+    );
+    expect(
+      saved[HomeWidgetService.spendingCompactWideDetailsPathKey],
+      '/test/pandapay_widget_spending_compact_wide.png',
+    );
+    expect(
+      saved[HomeWidgetService.expandedDetailsPathKey],
+      '/test/pandapay_widget_expanded.png',
+    );
+    expect(
+      saved[HomeWidgetService.expandedPortraitDetailsPathKey],
+      '/test/pandapay_widget_expanded_portrait.png',
+    );
+    expect(
+      saved[HomeWidgetService.expandedWideDetailsPathKey],
+      '/test/pandapay_widget_expanded_wide.png',
+    );
+    expect(
+      saved[HomeWidgetService.expandedMediumDetailsPathKey],
+      '/test/pandapay_widget_expanded_medium.png',
+    );
+    expect(
+      saved[HomeWidgetService.expandedLargeDetailsPathKey],
+      '/test/pandapay_widget_expanded_large.png',
+    );
+    expect(
+      saved[HomeWidgetService.spendingDetailsPathKey],
+      '/test/pandapay_widget_spending_expanded.png',
+    );
+    expect(
+      saved[HomeWidgetService.spendingPortraitDetailsPathKey],
+      '/test/pandapay_widget_spending_portrait_expanded.png',
+    );
+    expect(
+      saved[HomeWidgetService.spendingWideDetailsPathKey],
+      '/test/pandapay_widget_spending_wide_expanded.png',
+    );
+    expect(
+      saved[HomeWidgetService.spendingMediumDetailsPathKey],
+      '/test/pandapay_widget_spending_medium_expanded.png',
+    );
+    expect(
+      saved[HomeWidgetService.spendingLargeDetailsPathKey],
+      '/test/pandapay_widget_spending_large_expanded.png',
+    );
     expect(saved[HomeWidgetService.noCardKey], false);
     expect(saved[HomeWidgetService.updatedAtKey], '2026-08-06T00:00:00.000Z');
   });
 
-  test('writes a "no card" marker when the recommendation is null', () async {
-    final service = HomeWidgetService();
-    await service.updateBestCardWidget(recommendation: null, nowIso: '2026-08-06T00:00:00.000Z');
+  test('writes a no-card marker when the recommendation is null', () async {
+    await service().updateBestCardWidget(
+      recommendation: null,
+      nowIso: '2026-08-06T00:00:00.000Z',
+    );
 
-    final saveCalls = calls.where((c) => c.method == 'saveWidgetData').toList();
     final saved = <String, dynamic>{
-      for (final c in saveCalls) c.arguments['id'] as String: c.arguments['data'],
+      for (final call in calls.where((call) => call.method == 'saveWidgetData'))
+        call.arguments['id'] as String: call.arguments['data'],
     };
     expect(saved[HomeWidgetService.noCardKey], true);
     expect(saved[HomeWidgetService.cardNameKey], '');
+    expect(saved[HomeWidgetService.cardArtPathKey], '');
   });
 
-  test('configures the iOS App Group id exactly once before the first update', () async {
-    final service = HomeWidgetService();
-    await service.updateBestCardWidget(recommendation: null, nowIso: '2026-08-06T00:00:00.000Z');
-    await service.updateBestCardWidget(recommendation: null, nowIso: '2026-08-06T00:01:00.000Z');
+  test('configures the iOS App Group once before writing', () async {
+    final widgetService = service();
+    await widgetService.updateBestCardWidget(
+      recommendation: null,
+      nowIso: '2026-08-06T00:00:00.000Z',
+    );
+    await widgetService.updateBestCardWidget(
+      recommendation: null,
+      nowIso: '2026-08-06T00:01:00.000Z',
+    );
 
-    final setAppGroupCalls = calls.where((c) => c.method == 'setAppGroupId').toList();
-    expect(setAppGroupCalls, hasLength(1));
-    expect(setAppGroupCalls.single.arguments['groupId'], HomeWidgetService.iosAppGroupId);
+    final callsToSetAppGroup = calls.where(
+      (call) => call.method == 'setAppGroupId',
+    );
+    expect(callsToSetAppGroup, hasLength(1));
+    expect(
+      callsToSetAppGroup.single.arguments['groupId'],
+      HomeWidgetService.iosAppGroupId,
+    );
   });
 
-  test('checks pin support and requests pin with qualifiedAndroidName', () async {
-    final service = HomeWidgetService();
-    final supported = await service.isPinWidgetSupported();
-    expect(supported, isTrue);
+  test('checks pin support and pins the selected variant', () async {
+    final widgetService = service();
+    expect(await widgetService.isPinWidgetSupported(), isTrue);
 
-    await service.pinBestCardWidget();
-    final pinCalls = calls.where((c) => c.method == 'requestPinWidget').toList();
-    expect(pinCalls, hasLength(1));
-    expect(pinCalls.single.arguments['qualifiedAndroidName'], HomeWidgetService.qualifiedAndroidName);
+    await widgetService.pinWidget(HomeWidgetVariant.spending);
+    final pinCall = calls.singleWhere(
+      (call) => call.method == 'requestPinWidget',
+    );
+    expect(
+      pinCall.arguments['qualifiedAndroidName'],
+      HomeWidgetService.spendingQualifiedAndroidName,
+    );
   });
 
-  test('detects if widget is installed on home screen', () async {
-    final service = HomeWidgetService();
-    final installed = await service.isWidgetInstalled();
-    expect(installed, isTrue);
+  test('detects an installed PandaPay widget', () async {
+    expect(await service().isWidgetInstalled(), isTrue);
   });
 }
