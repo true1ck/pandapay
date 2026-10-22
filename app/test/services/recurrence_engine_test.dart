@@ -147,6 +147,15 @@ void main() {
       );
       expect(demat.eventType, equals(BrokerEventType.depositoryCustodyAlert));
       expect(demat.suggestedKind, isNull);
+
+      // 5. ASBA / IPO Application Lien Block
+      final asba = SpecializedDomainClassifiers.classifyBrokerMessage(
+        'Kotak Bank',
+        'Dear Customer, your request for ASBA application no. 1789027578CB90FY for RENTOMOJO LIMITED of Rs. 2,09,272.00 has been accepted successfully on 10/09/2026. - Kotak Bank',
+      );
+      expect(asba.eventType, equals(BrokerEventType.ipoLienOrAsbaBlock));
+      expect(asba.suggestedKind, equals(TxnEntryKind.investment));
+      expect(asba.entityName, equals('RENTOMOJO'));
     });
 
     test('Loan & EMI lifecycle classifications', () {

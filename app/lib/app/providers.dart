@@ -1437,11 +1437,14 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
           });
         } else if (outcome == 'needs_review' || outcome == 'unparsed') {
           final isNoise =
-              LocalSmsParser.isNonTransactionNoise(
-                message.sender,
-                message.body,
-              ) ||
-              NeedsReviewRepository.isSecurityOrServiceAlert(message.body);
+              NeedsReviewRepository.isNoiseItem(
+                NeedsReviewItem(
+                  id: key,
+                  sender: message.sender,
+                  body: message.body,
+                  receivedAt: message.occurredAt,
+                ),
+              );
           final isFinancialCandidate =
               capturesFinancialSms(message.body, sender: message.sender) &&
               !isNoise;
@@ -5324,6 +5327,11 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     var dueDayUpdated = false;
     var statementDayUpdated = false;
     for (final item in items) {
+      if (NeedsReviewRepository.isNoiseItem(item)) {
+        await reviewRepo.remove(item.id);
+        changed = true;
+        continue;
+      }
       try {
         final result = await repo.logTransactionFromSms(
           sender: item.sender,

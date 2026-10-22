@@ -477,4 +477,184 @@ void main() {
 
     db.close();
   });
+  test('fetchAll auto-resolves legacy wallet spends, bill reminders, and AutoPay alerts from SQLite local_needs_review', () async {
+    final db = openInMemoryForTesting();
+    const ns = 'user-test-retriage';
+    final repo = NeedsReviewRepository(
+      namespace: ns,
+      loadDatabase: () async => db,
+    );
+
+    final walletItem = NeedsReviewItem(
+      id: 'wallet-item-1',
+      sender: 'VM-MOBIKW',
+      body: 'Rs.10.0 has been debited from your MobiKwik wallet. Remaining balance: Rs.12.17',
+      receivedAt: DateTime(2026, 10, 1),
+    );
+
+    final billReminder = NeedsReviewItem(
+      id: 'bill-reminder-1',
+      sender: 'AX-AxisBk',
+      body: 'Payment of INR 132 for Axis Bank Credit Card no. XX7105 is due on 03-10-26 with minimum amount due of INR 100. Ignore if paid.',
+      receivedAt: DateTime(2026, 10, 2),
+    );
+
+    final mandateItem = NeedsReviewItem(
+      id: 'mandate-item-1',
+      sender: 'CP-GOVT',
+      body: 'Dear customer, your Atal Pension Yojana contribution amount for the Month April is Rs 46/-, Kindly maintain sufficient bal',
+      receivedAt: DateTime(2026, 10, 3),
+    );
+
+    final unknownCardSpend = NeedsReviewItem(
+      id: 'unknown-card-spend',
+      sender: 'AD-HDFCBK',
+      body: 'Spent Rs. 1,500 on Unknown Bank Card 9999 at Store.',
+      receivedAt: DateTime(2026, 10, 4),
+    );
+
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+    );
+    for (final item in [walletItem, billReminder, mandateItem, unknownCardSpend]) {
+      db.db.execute(
+        'INSERT INTO local_needs_review VALUES (?,?,?)',
+        [ns, item.id, jsonEncode(item.toJson())],
+      );
+    }
+
+    final remaining = await repo.fetchAll();
+
+    // 1. Only the unknown card spend remains in Needs Review
+    expect(remaining.map((i) => i.id).toList(), ['unknown-card-spend']);
+
+    // 2. Wallet spend was persisted to financial_entities as spend transaction
+    final txnRows = db.db.select(
+      "SELECT payload, amount_paise FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
+      [ns],
+    );
+    expect(txnRows, hasLength(1));
+    expect(txnRows.single['amount_paise'], 1000); // Rs 10.00 = 1000 paise
+
+    // 3. Bill reminder was persisted to financial_entities as sms_observations
+    final obsRows = db.db.select(
+      "SELECT payload FROM financial_entities WHERE namespace = ? AND entity = 'sms_observations'",
+      [ns],
+    );
+    expect(obsRows, hasLength(1));
+    expect(obsRows.single['payload'], contains('7105'));
+
+    // 4. Mandate alert was persisted to local_commitments
+    final commitmentRows = db.db.select(
+      'SELECT payload FROM local_commitments WHERE namespace = ?',
+      [ns],
+    );
+    expect(commitmentRows, hasLength(1));
+    expect(commitmentRows.single['payload'], contains('Atal Pension Yojana'));
+
+    db.close();
+  });
+  test('isSecurityOrServiceAlert and isNoiseItem catch card usage settings, expired insurance quotes (+ taxes*), and unsolicited loan/card offers', () {
+    final cardUsageAlert = NeedsReviewItem(
+      id: 'card-usage-1',
+      sender: 'VM-HDFCBK',
+      body: 'Modification Success! Card usage settings for Credit Card ending with XX1366 modified. If this was not done by you, please call customer care.',
+      receivedAt: DateTime(2026, 10, 1),
+    );
+    final expiredInsurance = NeedsReviewItem(
+      id: 'insurance-quote-1',
+      sender: 'CP-POLBAZ',
+      body: 'Last Chance: renew your expired Two Wheeler Insurance... Premium: Rs.1245.00 + taxes*. Visit policybazaar.com',
+      receivedAt: DateTime(2026, 10, 2),
+    );
+    final carInsuranceExpiry = NeedsReviewItem(
+      id: 'car-insurance-1',
+      sender: 'VM-RELGEN-S',
+      body: 'Your car insurance will expire on 28-Oct-26. Renew today to avoid vehicle inspection: https://relgen.in/c',
+      receivedAt: DateTime(2026, 10, 3),
+    );
+    final loanOffer = NeedsReviewItem(
+      id: 'loan-offer-1',
+      sender: 'AD-BAJAJA',
+      body: 'Congratulations! You are eligible for loan of Rs. 5,00,000 at low interest rates. Instant disbursal.',
+      receivedAt: DateTime(2026, 10, 4),
+    );
+    final cardLimitOffer = NeedsReviewItem(
+      id: 'card-limit-1',
+      sender: 'AX-AxisBk',
+      body: 'Avail card with limit of Rs. 1,50,000 with zero joining fee. Click here to claim your credit card.',
+      receivedAt: DateTime(2026, 10, 5),
+    );
+
+    final noiseItems = [
+      cardUsageAlert,
+      expiredInsurance,
+      carInsuranceExpiry,
+      loanOffer,
+      cardLimitOffer,
+    ];
+
+    for (final item in noiseItems) {
+      expect(NeedsReviewRepository.isSecurityOrServiceAlert(item.body), isTrue, reason: item.body);
+      expect(NeedsReviewRepository.isNoiseItem(item), isTrue, reason: item.body);
+    }
+  });
+
+  test('ASBA and IPO lien blocks are recognized as investmentSettlement and kept in queue', () async {
+    final db = openInMemoryForTesting();
+    const ns = 'user-test-asba';
+    final repo = NeedsReviewRepository(
+      namespace: ns,
+      loadDatabase: () async => db,
+    );
+
+    final asbaItem = NeedsReviewItem(
+      id: 'asba-1',
+      sender: 'VM-HDFCBK',
+      body: 'request for ASBA application no. 1234567 for RENTOMOJO LIMITED of Rs. 14950.00 has been accepted successfully.',
+      receivedAt: DateTime(2026, 10, 10),
+    );
+    final ipoLienItem = NeedsReviewItem(
+      id: 'ipo-lien-1',
+      sender: 'AX-AxisBk',
+      body: 'Dear Customer, lien of Rs. 14850.00 marked on your account for ASBA application no. 987654 for SWIGGY LIMITED.',
+      receivedAt: DateTime(2026, 10, 11),
+    );
+
+    expect(NeedsReviewRepository.isSecurityOrServiceAlert(asbaItem.body), isFalse);
+    expect(NeedsReviewRepository.isInvestmentSettlement(asbaItem.body), isTrue);
+    expect(NeedsReviewRepository.isNoiseItem(asbaItem), isFalse);
+    expect(NeedsReviewRepository.resolveItemKind(asbaItem).kind, NeedsReviewKind.investmentSettlement);
+
+    expect(NeedsReviewRepository.isSecurityOrServiceAlert(ipoLienItem.body), isFalse);
+    expect(NeedsReviewRepository.isInvestmentSettlement(ipoLienItem.body), isTrue);
+    expect(NeedsReviewRepository.isNoiseItem(ipoLienItem), isFalse);
+    expect(NeedsReviewRepository.resolveItemKind(ipoLienItem).kind, NeedsReviewKind.investmentSettlement);
+
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+    );
+    // Insert with default kind (transaction) as legacy items would have been stored
+    db.db.execute(
+      'INSERT INTO local_needs_review VALUES (?,?,?)',
+      [ns, asbaItem.id, jsonEncode(asbaItem.toJson())],
+    );
+    db.db.execute(
+      'INSERT INTO local_needs_review VALUES (?,?,?)',
+      [ns, ipoLienItem.id, jsonEncode(ipoLienItem.toJson())],
+    );
+
+    final items = await repo.fetchAll();
+    expect(items, hasLength(2));
+    expect(items.map((i) => i.kind), [NeedsReviewKind.investmentSettlement, NeedsReviewKind.investmentSettlement]);
+
+    // Verify database row payload was updated to investmentSettlement
+    final storedRows = db.db.select('SELECT payload FROM local_needs_review WHERE namespace=?', [ns]);
+    for (final row in storedRows) {
+      final json = jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+      expect(json['kind'], 'investmentSettlement');
+    }
+
+    db.close();
+  });
 }

@@ -180,7 +180,11 @@ class LocalSmsParser {
     final completed = _re(
       r'\b(?:your\s+(?:txn|transaction)\s+of|(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[*xX]*[\d,.]+|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)(?:\s+(?:by|with|for|towards|of|amounting\s+to))?\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[*xX]*\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:sent|cash\s+withdrawal|withdrawal|auto[-\s]?debit)\s*(?:of|by)?\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase|settlement|payout)\b[\s\S]{0,45}\b(?:successful|completed|initiated|processed))',
     ).hasMatch(text);
+    final asbaIpo = _re(
+      r'\b(?:asba\s+application|asba\s+(?:req(?:uest)?|bid|block|lien)|towards\s+asba|for\s+asba|asba\b[\s\S]{0,50}\b(?:accepted|blocked|lien|created)|(?:blocked|lien\s+marked)\b[\s\S]{0,50}\b(?:for|towards)?\s*(?:ipo|asba|rights\s+issue)|(?:ipo\s+(?:application|bid|mandate|block|lien)))\b',
+    ).hasMatch(text);
     if (completed ||
+        asbaIpo ||
         (_re(r'\b(?:cashback|refund)\b').hasMatch(text) &&
             _re(r'\b(?:credited|received|deposited)\b').hasMatch(text)) ||
         _re(r'\b(?:debit|credit)\s+hua\b').hasMatch(text)) {
@@ -247,7 +251,11 @@ class LocalSmsParser {
     final completed = _re(
       r'\b(?:your\s+(?:txn|transaction)\s+of|(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[\d,.]+|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)(?:\s+(?:by|with|for|towards|of|amounting\s+to))?\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[*xX]*\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:sent|cash\s+withdrawal|withdrawal|auto[-\s]?debit)\s*(?:of|by)?\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase|settlement|payout)\b[\s\S]{0,45}\b(?:successful|completed|initiated|processed))',
     ).hasMatch(text);
+    final asbaIpo = _re(
+      r'\b(?:asba\s+application|asba\s+(?:req(?:uest)?|bid|block|lien)|towards\s+asba|for\s+asba|asba\b[\s\S]{0,50}\b(?:accepted|blocked|lien|created)|(?:blocked|lien\s+marked)\b[\s\S]{0,50}\b(?:for|towards)?\s*(?:ipo|asba|rights\s+issue)|(?:ipo\s+(?:application|bid|mandate|block|lien)))\b',
+    ).hasMatch(text);
     if (completed ||
+        asbaIpo ||
         (_re(r'\b(?:cashback|refund)\b').hasMatch(text) &&
             _re(r'\b(?:credited|received|deposited)\b').hasMatch(text)) ||
         _re(r'\b(?:debit|credit)\s+hua\b').hasMatch(text)) {
@@ -260,7 +268,7 @@ class LocalSmsParser {
       r'\b(?:offer|sale|discount|cashback|voucher|coupon|rewarding|shop\s+at|grab|buy\s+now|apply\s+now|prices?\s+slashed|treat\s+yourself|festive\s+shopping|eligible\s+for\s+conversion|convert\s+(?:to|into)\s+emi|international\s+roaming\s+pack)\b|\b(?:get|earn|save)\b[\s\S]{0,45}\b(?:reward|cashback|off|free|voucher)\b',
     ).hasMatch(text);
     final serviceNotice = _re(
-      r'\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service|transaction\s+check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|sim\s+swap|reported\s+(?:your\s+)?fund\s+bal(?:ance)?|securities\s+bal(?:ance)?|excludes\s+your\s+bank|beware\s+(?:of\s+)?dealing\s+(?:in|on)\s+unsolicited\s+tips|unsolicited\s+tips|due\s+for\s+renewal|renew\s+now\s+with\s+policybazaar|wallet\s+balance\s+is\s+(?:rs\.?|inr)\s*0|add\s+money\s+to\s+wallet|report\s+spam|trai\s+dnd|telecommunications\s+act|sanchar\s+saathi|chakshu|online\s+investment\s+scams|traded\s+value\s+for\b|has\s+been\s+dispatched|has\s+been\s+delivered|card\s+usage\s+settings?|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated|ckyc\s+record|central\s+kyc\s+registry|out\s+for\s+delivery\s+with\s+cash\s+memo|pls\s+share\s+delivery\s+code|delivery\s+code\s+\d+)\b',
+      r'\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service|transaction\s+check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|sim\s+swap|reported\s+(?:your\s+)?fund\s+bal(?:ance)?|securities\s+bal(?:ance)?|excludes\s+your\s+bank|beware\s+(?:of\s+)?dealing\s+(?:in|on)\s+unsolicited\s+tips|unsolicited\s+tips|due\s+for\s+renewal|renew\s+now\s+with\s+policybazaar|wallet\s+balance\s+is\s+(?:rs\.?|inr)\s*0|add\s+money\s+to\s+wallet|report\s+spam|trai\s+dnd|telecommunications\s+act|sanchar\s+saathi|chakshu|online\s+investment\s+scams|traded\s+value\s+for\b|has\s+been\s+dispatched|has\s+been\s+delivered|modification\s+success!?|card\s+usage\s+settings?|card\s+(?:usage\s+)?settings?\s+(?:for|modified|updated)|card\s+controls?\s+(?:modified|updated)|card\s+usage\s+(?:limits?|controls?|preferences?)|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated|ckyc\s+record|central\s+kyc\s+registry|out\s+for\s+delivery\s+with\s+cash\s+memo|pls\s+share\s+delivery\s+code|delivery\s+code\s+\d+)\b',
     ).hasMatch(text);
     final balance = (_re(
           r'\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b',
@@ -287,8 +295,8 @@ class LocalSmsParser {
       r'\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,60}\bwill\s+be\s+paused\b|'
       r'\b(?:bse\s+trade\s+confirmation|welcome\s+to\s+nse,\s+you\s+have\s+been\s+registered\b|registered\s+with\s+[\w\s]+in\s+segment(?:\(s\))?|registered\s+with\s+[\w\s]+in\s+segment\(s\))\b|'
       r'\b(?:puc\s+certificate\s+for\s+vehicle\b|your\s+itr\s+for\s+ay\b[\s\S]{0,30}\bawaits\s+at\s+the\s+e[- ]?filing\s+portal)\b|'
-      r'\b(?:renew\s+your\s+expired\s+(?:two\s+wheeler|car|motor|vehicle|health)?\s*insurance\b|will\s+expire\s+on\b[\s\S]{0,50}\b(?:premium\s+starts?\s+(?:just\s+)?(?:at\s+)?(?:rs\.?|inr)|instant\s+renewal,\s+visit|renew\s+before\s+expiry))\b|'
-      r'\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+card\s+with\s+limit\s+upto|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application)\b|'
+      r'\b(?:(?:last\s+chance\s*:?\s*)?renew\s+(?:your\s+)?expired\b|(?:(?:car|motor|two[ -]?wheeler|vehicle|bike|health)\s+)?insurance\s+will\s+expire\s+on\b|will\s+expire\s+on\b[\s\S]{0,80}\b(?:premium|insurance|renew|policy|visit|starts?\s+(?:just\s+)?(?:at\s+)?(?:rs\.?|inr)|instant\s+renewal)\b|\+\s*taxes\*?)\b|'
+      r'\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+(?:credit\s+)?card\s+with\s+limit|eligible\s+for\s+(?:a\s+)?(?:[\w\s]{0,20}\s+)?loan\b|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application|pre[-\s]?approved\s+loan)\b|'
       r'\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b',
     ).hasMatch(text);
     return offer ||
@@ -312,14 +320,14 @@ class LocalSmsParser {
       return false;
     }
     final accountMarker = RegExp(
-      r'\b(?:bank|a\/?c\.?|account|savings|current|upi|imps|neft|rtgs|atm)\b',
+      r'\b(?:bank|a\/?c\.?|account|savings|current|upi|imps|neft|rtgs|atm|co-?op(?:erative)?|sahakari|ucb)\b',
     ).hasMatch(text);
     final bankIdentityMarker =
         RegExp(
-          r'\b(?:bank|a\/?c\.?|savings|current|upi|imps|neft|rtgs|atm)\b',
+          r'\b(?:bank|a\/?c\.?|savings|current|upi|imps|neft|rtgs|atm|co-?op(?:erative)?|sahakari|ucb)\b',
         ).hasMatch(text) ||
         RegExp(
-          r'(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)',
+          r'(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb|gucb|cosmos|svc|tjsb|nkgsb|kccb|coop|ucb)',
         ).hasMatch(sender.toLowerCase());
     final balanceMarker = RegExp(
       r'\b(?:available|avail|avl|current|closing|clr|new)\s*(?:balance|bal)\b',
@@ -633,7 +641,10 @@ class LocalSmsParser {
     final cardLast4 =
         parsed?.cardLast4 ??
         _re(
-          r'\b(?:credit|debit)\s+card\b[\s\S]{0,45}?\b(?:ending|last\s*4|no\.?)\D{0,8}(\d{4})\b',
+          r'\b(?:credit\s+|debit\s+)?card\b[\s\S]{0,45}?(?:ending(?:\s+with)?\s*|x{1,4}|\*{1,4}|\.{3,}|last\s*4\s*|no\.?\s*)\D{0,5}(\d{4})\b',
+        ).firstMatch(body)?.group(1) ??
+        _re(
+          r'\b(?:credit\s+|debit\s+|bank\s+)?card\s+(?:no\.?\s*)?(\d{4})\b',
         ).firstMatch(body)?.group(1);
     final dateMatch = _re(dateToken).firstMatch(body);
     final parsedDate = dateMatch == null
@@ -645,11 +656,39 @@ class LocalSmsParser {
             !parsedDate.isAfter(receivedAt.add(const Duration(days: 1)))
         ? parsedDate
         : receivedAt;
-    final merchant = localOnly
-        ? null
-        : _re(
-            r'\b(?:at|to|for|from|by)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|\s*\(|[.,;]|$)',
-          ).firstMatch(body)?.group(1)?.trim();
+    final asbaOrIpoBlock = _re(
+      r'\b(?:asba\s+application|asba\s+(?:req(?:uest)?|bid|block|lien)|towards\s+asba|for\s+asba|asba\b[\s\S]{0,50}\b(?:accepted|blocked|lien|created)|(?:blocked|lien\s+marked)\b[\s\S]{0,50}\b(?:for|towards)?\s*(?:ipo|asba|rights\s+issue)|(?:ipo\s+(?:application|bid|mandate|block|lien)))\b',
+    ).hasMatch(body);
+    final fvgMatch = _re(
+      r'\b(?:fvg|fav|favouring|favoring|infvo|in\s+fav(?:ou?r)?\s+of)\s*[:.\-]?\s*([A-Za-z0-9_][A-Za-z0-9 ._&@*\x27/-]{0,80}?)(?=\s+(?:avl|avail|available|bal(?:ance)?|ref(?:erence|\s*no)?|txn|transaction|if\s+not|not\s+you|call|sms\s+block|on|dated)\b|\s*\(|[.,;]|$)',
+    ).firstMatch(body);
+    var merchant = localOnly ? null : fvgMatch?.group(1)?.trim();
+    if (!localOnly && (merchant == null || merchant.isEmpty) && asbaOrIpoBlock) {
+      final ipoCompanyMatch = _re(
+        r'\b(?:asba|ipo)\b[\s\S]{0,60}?\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)(?=\s+(?:of\s+(?:₹|rs\.?|inr)|application|has\s+been|is\s+accepted)|[.,;]|$)',
+      ).firstMatch(body) ??
+      _re(
+        r'\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)\s+of\s+(?:₹|rs\.?|inr)',
+      ).firstMatch(body);
+      merchant = ipoCompanyMatch?.group(1)?.trim();
+    }
+    if (!localOnly && (merchant == null || merchant.isEmpty)) {
+      final merchantMatch = _re(
+        r'\b(?:at|to|for|from|by)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|\s*\(|[.,;]|$)',
+      ).firstMatch(body);
+      merchant = merchantMatch?.group(1)?.trim();
+    }
+    if (merchant != null &&
+        (_re(r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking|upi|imps|neft|rtgs)$').hasMatch(merchant) ||
+         _re(r'^(?:rs\.?|inr|re\.?|\d+)$').hasMatch(merchant))) {
+      merchant = fvgMatch?.group(1)?.trim();
+    }
+    if (merchant != null) {
+      final sanitized = IndianNarrationSanitizer.sanitize(merchant);
+      if (sanitized.isNotEmpty) {
+        merchant = sanitized;
+      }
+    }
     final accountLike = _re(
       r'\b(?:a/c|account|upi|imps|neft)\b',
     ).hasMatch(body);
@@ -662,9 +701,12 @@ class LocalSmsParser {
         ? TxnInstrument.debitCard
         : _re(r'\bcredit\s+card\b|\bcard\b').hasMatch(body)
         ? TxnInstrument.creditCard
+        : asbaOrIpoBlock
+        ? TxnInstrument.upiBank
         : TxnInstrument.other;
-    final entryKind =
-        _ownAccountTransfer(body) ||
+    final entryKind = asbaOrIpoBlock
+        ? TxnEntryKind.investment
+        : _ownAccountTransfer(body) ||
             _accountToAccountTransfer(body) ||
             _brokerSettlement(body) ||
             _walletLoad(body) ||
@@ -1064,6 +1106,9 @@ class LocalSmsParser {
       RegExp(r'\b(?:ignore|disregard|plz\s+ignore)\s+if\s+(?:already\s+)?paid\b', caseSensitive: false),
       '',
     );
+    final asbaOrIpoBlock = _re(
+      r'\b(?:asba\s+application|asba\s+(?:req(?:uest)?|bid|block|lien)|towards\s+asba|for\s+asba|asba\b[\s\S]{0,50}\b(?:accepted|blocked|lien|created)|(?:blocked|lien\s+marked)\b[\s\S]{0,50}\b(?:for|towards)?\s*(?:ipo|asba|rights\s+issue)|(?:ipo\s+(?:application|bid|mandate|block|lien)))\b',
+    ).hasMatch(body);
     final hasCompletedMovement =
         !_re(r'\b(?:no\s+money\s+(?:was|is)?\s*(?:debited|deducted)|not\s+(?:debited|deducted|charged))\b')
                 .hasMatch(body) &&
@@ -1071,6 +1116,7 @@ class LocalSmsParser {
               r'\b(?:spent|debited|debit|paid|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed)\b',
             ).hasMatch(movementBody) ||
             (!failed && _re(r'\b(?:purchase|purchased)\b').hasMatch(movementBody)) ||
+            asbaOrIpoBlock ||
             _re(
               r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred)\b[\s\S]{0,40}\b(?:successful|successfully|completed)\b',
             ).hasMatch(movementBody) || _re(r'\b(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[*xX]*[\d,.]+\b').hasMatch(movementBody));
@@ -1251,11 +1297,12 @@ class LocalSmsParser {
     final feeCharge = !cashWithdrawal && !loanRepayment && _feeCharge(body);
     final brokerSettlement = _brokerSettlement(body);
     final investmentDebit =
-        !cashWithdrawal &&
-        !loanRepayment &&
-        !feeCharge &&
-        !brokerSettlement &&
-        isInvestmentMovementDescription(body);
+        asbaOrIpoBlock ||
+        (!cashWithdrawal &&
+            !loanRepayment &&
+            !feeCharge &&
+            !brokerSettlement &&
+            isInvestmentMovementDescription(body));
     final walletLoad = _walletLoad(body) && !brokerSettlement;
     final refundCredit = _re(
       r'\b(?:refund(?:ed)?|chargeback)\b',
@@ -1280,6 +1327,7 @@ class LocalSmsParser {
         !walletLoad &&
         !loanRepayment &&
         !feeCharge &&
+        !asbaOrIpoBlock &&
         !_re(
           r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred|txn|transaction)\b',
         ).hasMatch(body)) {
@@ -1308,7 +1356,7 @@ class LocalSmsParser {
         ? TxnInstrument.wallet
         : isWalletDebit
         ? TxnInstrument.wallet
-        : bankDebit || credit
+        : bankDebit || credit || asbaOrIpoBlock
         ? TxnInstrument.upiBank
         : _re(
             r'\bdebit\s+card\b|\b(?:atm|withdrawn|cash\s+withdrawal|block\s+dc)\b',
@@ -1368,15 +1416,37 @@ class LocalSmsParser {
         : credit
         ? TxnEntryKind.income
         : TxnEntryKind.spend;
-    var merchant = _re(
-      r'\b(?:at|to|for|from|by)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|\s*\(|[.,;]|$)',
-    ).firstMatch(body)?.group(1)?.trim();
-    // "by Mob Bk" describes the banking channel, not the recipient.
+    final fvgMatch = _re(
+      r'\b(?:fvg|fav|favouring|favoring|infvo|in\s+fav(?:ou?r)?\s+of)\s*[:.\-]?\s*([A-Za-z0-9_][A-Za-z0-9 ._&@*\x27/-]{0,80}?)(?=\s+(?:avl|avail|available|bal(?:ance)?|ref(?:erence|\s*no)?|txn|transaction|if\s+not|not\s+you|call|sms\s+block|on|dated)\b|\s*\(|[.,;]|$)',
+    ).firstMatch(body);
+    final upiSlashMatch = _re(
+      r'\bupi/(?:\d+/)?([a-zA-Z0-9 ._&@*\x27/-]{2,50}?)(?=[.,;\s]|$)',
+    ).firstMatch(body);
+
+    var merchant = fvgMatch?.group(1)?.trim() ?? upiSlashMatch?.group(1)?.trim();
+
+    if (asbaOrIpoBlock && (merchant == null || merchant.isEmpty)) {
+      final ipoCompanyMatch = _re(
+        r'\b(?:asba|ipo)\b[\s\S]{0,60}?\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)(?=\s+(?:of\s+(?:₹|rs\.?|inr)|application|has\s+been|is\s+accepted)|[.,;]|$)',
+      ).firstMatch(body) ??
+      _re(
+        r'\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)\s+of\s+(?:₹|rs\.?|inr)',
+      ).firstMatch(body);
+      merchant = ipoCompanyMatch?.group(1)?.trim() ?? 'IPO Application';
+    }
+
+    if (merchant == null || merchant.isEmpty) {
+      final merchantMatch = _re(
+        r'\b(?:at|to|for|from|by)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|\s*\(|[.,;]|$)',
+      ).firstMatch(body);
+      merchant = merchantMatch?.group(1)?.trim();
+    }
+
+    // Banking channels / currency tokens are not recipients.
     if (merchant != null &&
-        _re(
-          r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking)$',
-        ).hasMatch(merchant)) {
-      merchant = null;
+        (_re(r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking|upi|imps|neft|rtgs)$').hasMatch(merchant) ||
+         _re(r'^(?:rs\.?|inr|re\.?|\d+)$').hasMatch(merchant))) {
+      merchant = fvgMatch?.group(1)?.trim();
     }
     if (isWalletDebit &&
         merchant != null &&
@@ -1435,7 +1505,9 @@ class LocalSmsParser {
     } else if (feeCharge) {
       merchant = 'Bank or service fee';
     } else if (investmentDebit) {
-      merchant = 'Investment contribution';
+      merchant = (asbaOrIpoBlock && merchant != null && merchant.isNotEmpty)
+          ? merchant
+          : 'Investment contribution';
     } else if (credit && refundCredit) {
       merchant = 'Refund';
     } else if (credit && reversalCredit) {

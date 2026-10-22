@@ -12,11 +12,11 @@ bool isInvestmentMovementDescription(String value) {
     caseSensitive: false,
   ).hasMatch(text);
   final explicitIntent = RegExp(
-    r'\b(?:sip|systematic\s+investment|mutual\s+fund|investment|invested|investment\s+account|add(?:ing|ed)?\s+(?:money|funds?)|funds?\s+(?:added|credited|transferred|deposited)|top[- ]?up|fund(?:ed|ing)|buy|bought|purchase(?:d)?|units?|stocks?|shares?|equity)\b',
+    r'\b(?:sip|systematic\s+investment|mutual\s+fund|investment|invested|investment\s+account|asba|ipo|add(?:ing|ed)?\s+(?:money|funds?)|funds?\s+(?:added|credited|transferred|deposited)|top[- ]?up|fund(?:ed|ing)|buy|bought|purchase(?:d)?|units?|stocks?|shares?|equity)\b',
     caseSensitive: false,
   ).hasMatch(text);
   final movement = RegExp(
-    r'\b(?:debit(?:ed)?|paid|sent|transferred|withdrawn|invested|purchased|bought|credited|received|deposited|add(?:ing|ed)?|funded|top[- ]?up)\b',
+    r'\b(?:debit(?:ed)?|paid|sent|transferred|withdrawn|invested|purchased|bought|credited|received|deposited|add(?:ing|ed)?|funded|top[- ]?up|blocked|lien|accepted)\b',
     caseSensitive: false,
   ).hasMatch(text);
   if (!movement) return false;

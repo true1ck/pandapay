@@ -80,6 +80,9 @@ String _reviewTypeLabel(NeedsReviewItem item) {
   }
   if (item.kind == NeedsReviewKind.investmentSettlement ||
       _isInvestmentSettlement(item.body)) {
+    if (RegExp(r'\b(?:asba|ipo|lien)\b', caseSensitive: false).hasMatch(item.body)) {
+      return 'ASBA / IPO lien block';
+    }
     return 'Investment settlement payout';
   }
   if (item.kind == NeedsReviewKind.mandate || _isMandateReview(item.body)) {
@@ -96,6 +99,9 @@ String _reviewReasonLabel(String? reason, String body) {
     return 'Verification or service notice — not a spending transaction.';
   }
   if (_isInvestmentSettlement(body)) {
+    if (RegExp(r'\b(?:asba|ipo|lien)\b', caseSensitive: false).hasMatch(body)) {
+      return 'Funds blocked or lien marked for ASBA / IPO application.';
+    }
     return 'Funds settlement from broker or demat account.';
   }
   if (_isMandateReview(body)) {

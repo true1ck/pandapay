@@ -19,13 +19,20 @@ class IndianNarrationSanitizer {
     caseSensitive: false,
   );
 
+  // Beneficiary prefixes in bank narrations (e.g. Fvg: gaudeshi -> gaudeshi)
+  static final _beneficiaryPrefixRe = RegExp(
+    r'^(?:FVG|FAVOURING|FAVORING|FAV|INFVO|IN\s+FAV(?:OU?R)?\s+OF)\s*[:.\-]?\s*',
+    caseSensitive: false,
+  );
+
   // NPCI UPI reference string patterns
   // Examples:
   // UPI/P2M/3294829384/AMAZON SELLER/BARB0...
   // UPI/P2P/4293849283/SURESH KUMAR/OKAXIS
   // UPI/REV/123456789/SWIGGY/HDFC
+  // UPI/629453274545/TeaStall
   static final _npciUpiRe = RegExp(
-    r'^UPI\s*[/:\-]\s*(?:P2[MP]|REV|CR|DR|PAY)?\s*[/:\-]?\s*(?:\d+)?\s*[/:\-]\s*([^/]+?)\s*[/:\-]',
+    r'^UPI\s*[/:\-]\s*(?:P2[MP]|REV|CR|DR|PAY)?\s*[/:\-]?\s*(?:\d+)?\s*[/:\-]\s*([^/]+?)(?:\s*[/:\-]|\s*$)',
     caseSensitive: false,
   );
 
@@ -62,7 +69,9 @@ class IndianNarrationSanitizer {
     final upiMatch = _npciUpiRe.firstMatch(text);
     if (upiMatch != null) {
       final payeeToken = upiMatch.group(1);
-      if (payeeToken != null && payeeToken.trim().isNotEmpty) {
+      if (payeeToken != null &&
+          payeeToken.trim().isNotEmpty &&
+          !RegExp(r'^\d+$').hasMatch(payeeToken.trim())) {
         text = payeeToken.trim();
       }
     }
@@ -74,6 +83,9 @@ class IndianNarrationSanitizer {
     if (RegExp(r'^bharatpe\w*@\w+$', caseSensitive: false).hasMatch(text)) {
       return 'BharatPe QR';
     }
+
+    // 1c. Beneficiary Prefix Strip (e.g. Fvg: gaudeshi -> gaudeshi)
+    text = text.replaceFirst(_beneficiaryPrefixRe, '');
 
     // 2. Aggregator Shield: Strip gateway prefixes (e.g. RAZORPAY*SWIGGY -> SWIGGY)
     text = text.replaceFirst(_aggregatorPrefixRe, '');

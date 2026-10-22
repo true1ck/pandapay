@@ -896,4 +896,65 @@ void main() {
     expect(result?.disposition, LocalSmsDisposition.localIgnore);
     expect(result?.transaction, isNull);
   });
+
+  test('Union Bank of India SMS parses payee from Fvg clause', () {
+    const body = 'Union Bank of India A/c *8565 Debited Rs:2900.00 on 21-10-2026 19:28:42 by Mob Bk ref no 629453274545, Fvg: gaudeshi Avl Bal Rs:594.92. Not you?Call 18002333/SMS BLOCK 8565 to 8879365472';
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VK-UBIN',
+      body: body,
+      receivedAt: DateTime(2026, 10, 21),
+    );
+    expect(result?.transaction, isNotNull);
+    expect(result?.transaction?.amount.rupees, 2900.0);
+    expect(result?.transaction?.merchantName, 'gaudeshi');
+    expect(result?.transaction?.accountLast4, '8565');
+    expect(result?.transaction?.entryKind, TxnEntryKind.spend);
+    expect(result?.availableBalance?.rupees, 594.92);
+  });
+
+  test('Slice credit card transaction parses correctly', () {
+    const body = 'Rs. 859 spent on your credit card xx9080 at slice on 22-Oct-26 (UPI Ref: 629534133759). Not you? Call 080-4832-9999 - slice';
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'AD-SLICE',
+      body: body,
+      receivedAt: DateTime(2026, 10, 22),
+    );
+    expect(result?.transaction, isNotNull);
+    expect(result?.transaction?.cardLast4, '9080');
+    expect(result?.transaction?.amount.rupees, 859.0);
+    expect(result?.transaction?.merchantName, 'slice');
+    expect(result?.transaction?.instrument, TxnInstrument.creditCard);
+    expect(result?.transaction?.entryKind, TxnEntryKind.spend);
+  });
+
+  test('Co-operative bank debit parses account and payee', () {
+    const body = 'Dear Customer, A/c *1234 is debited for Rs. 1500.00 on 20-10-2026 by UPI/629453274545/TeaStall. Avl Bal Rs. 8500.00. - Goa Urban Co-op Bank';
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'JX-GUCBNK-S',
+      body: body,
+      receivedAt: DateTime(2026, 10, 20),
+    );
+    expect(result?.transaction, isNotNull);
+    expect(result?.transaction?.amount.rupees, 1500.0);
+    expect(result?.transaction?.accountLast4, '1234');
+    expect(result?.transaction?.merchantName, 'TeaStall');
+    expect(result?.transaction?.instrument, TxnInstrument.upiBank);
+    expect(result?.transaction?.entryKind, TxnEntryKind.spend);
+  });
+
+  test('ASBA / IPO application block is classified as investment lien', () {
+    const body = 'Dear Customer, your request for ASBA application no. 1789027578CB90FY for RENTOMOJO LIMITED of Rs. 2,09,272.00 has been accepted successfully on 10/09/2026. - Kotak Bank';
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'Kotak Bank',
+      body: body,
+      receivedAt: DateTime(2026, 9, 10),
+    );
+    expect(result?.transaction, isNotNull);
+    expect(result?.transaction?.amount.rupees, 209272.0);
+    expect(result?.transaction?.entryKind, TxnEntryKind.investment);
+  });
 }

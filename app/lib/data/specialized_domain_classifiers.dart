@@ -1,3 +1,4 @@
+import 'indian_narration_sanitizer.dart';
 import 'user_cards_repository.dart';
 
 /// Classification of investment and brokerage messages.
@@ -7,6 +8,7 @@ enum BrokerEventType {
   dividendIncome,
   depositoryCustodyAlert,
   brokerageFee,
+  ipoLienOrAsbaBlock,
   none,
 }
 
@@ -98,11 +100,36 @@ class SpecializedDomainClassifiers {
     caseSensitive: false,
   );
 
+  static final _asbaOrIpoRe = RegExp(
+    r'\b(?:asba\s+application|asba\s+(?:req(?:uest)?|bid|block|lien)|towards\s+asba|for\s+asba|asba\b[\s\S]{0,50}\b(?:accepted|blocked|lien|created)|(?:blocked|lien\s+marked)\b[\s\S]{0,50}\b(?:for|towards)?\s*(?:ipo|asba|rights\s+issue)|(?:ipo\s+(?:application|bid|mandate|block|lien)))\b',
+    caseSensitive: false,
+  );
+
   /// Classifies investment, broker, dividend, and demat depository alerts.
   static BrokerClassificationResult classifyBrokerMessage(String sender, String text) {
     final lower = text.toLowerCase();
 
-    // 1. Depository non-cash share alerts (CDSL / NSDL)
+    // 1. ASBA / IPO Application Lien Block
+    if (_asbaOrIpoRe.hasMatch(lower)) {
+      final ipoCompanyMatch = RegExp(
+        r'\b(?:asba|ipo)\b[\s\S]{0,60}?\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)(?=\s+(?:of\s+(?:₹|rs\.?|inr)|application|has\s+been|is\s+accepted)|[.,;]|$)',
+        caseSensitive: false,
+      ).firstMatch(text) ??
+      RegExp(
+        r'\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)\s+of\s+(?:₹|rs\.?|inr)',
+        caseSensitive: false,
+      ).firstMatch(text);
+      final rawEntity = ipoCompanyMatch?.group(1)?.trim();
+      final entity = rawEntity != null ? IndianNarrationSanitizer.sanitize(rawEntity) : null;
+      return BrokerClassificationResult(
+        eventType: BrokerEventType.ipoLienOrAsbaBlock,
+        suggestedKind: TxnEntryKind.investment,
+        entityName: entity?.isNotEmpty == true ? entity : 'IPO Application',
+        reason: 'ASBA / IPO application investment lien block',
+      );
+    }
+
+    // 2. Depository non-cash share alerts (CDSL / NSDL)
     if (_depositoryRe.hasMatch(lower) || RegExp(r'\b(?:cdsl|nsdl)\b').hasMatch(sender.toLowerCase())) {
       if (RegExp(r'\b(?:shares?|units?|etf|bees)\b').hasMatch(lower)) {
         return const BrokerClassificationResult(
@@ -113,7 +140,7 @@ class SpecializedDomainClassifiers {
       }
     }
 
-    // 2. Dividend Inflow
+    // 3. Dividend Inflow
     if (_dividendRe.hasMatch(lower)) {
       return const BrokerClassificationResult(
         eventType: BrokerEventType.dividendIncome,
