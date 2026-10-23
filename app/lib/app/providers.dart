@@ -1750,9 +1750,11 @@ recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
           ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['series']
                   as List)
               .cast<Map<String, dynamic>>()
-              .map((item) => _normalizeLegacyServiceMandate(
-                    RecurringSeries.fromJson(item),
-                  ))
+              .map(
+                (item) => _normalizeLegacyServiceMandate(
+                  RecurringSeries.fromJson(item),
+                ),
+              )
               .toList(),
       totalAnnual: Money.fromRupees(
         (((jsonDecode(snapshot.rawJson)
@@ -4193,6 +4195,7 @@ RecurringSeries _normalizeLegacyServiceMandate(RecurringSeries item) {
     lifecycleStatus: item.lifecycleStatus,
     autopayStatus: item.autopayStatus,
     mandateReference: item.mandateReference,
+    sourceKey: item.sourceKey,
     cadenceConfirmed: false,
     setupConfirmed: true,
     engineStatus: lifecycle.isEmpty || lifecycle == 'active'
@@ -4684,7 +4687,7 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
       const <Map<String, dynamic>>[];
   final existing = {
     for (final item in series)
-      item.displayName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')
+      item.displayName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), ''),
   };
   for (final observation in observations) {
     if (observation['event_type'] != 'autopay' ||
@@ -4700,6 +4703,7 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
     series.add(
       RecurringSeries(
         id: 'local-setup:${observation['id'] ?? key}',
+        sourceKey: observation['id'] as String?,
         displayName: service,
         typicalAmount: Money.zero(),
         amountKnown: false,

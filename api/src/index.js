@@ -8189,7 +8189,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
         await client.query('SAVEPOINT recurring_central_projection');
         centralSavepoint = true;
         let projectionRows = await client.query(
-          `SELECT projection_key, status, projection
+          `SELECT projection_key, status, projection, source_key
              FROM financial_projections
             WHERE profile_id = $1
               AND projection_kind = 'subscription'
@@ -8203,7 +8203,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
         const backfilled = await centralProjection.backfillFinancialProjections(client, req.userId);
         if (backfilled > 0) {
           projectionRows = await client.query(
-            `SELECT projection_key, status, projection
+            `SELECT projection_key, status, projection, source_key
                FROM financial_projections
               WHERE profile_id = $1
                 AND projection_kind = 'subscription'
@@ -8377,6 +8377,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
           lifecycleStatus: status,
           autopayStatus: 'unknown',
           mandateReference: projection.mandateKey || null,
+          sourceKey: row.source_key || null,
           cadenceConfirmed: cadenceKnown,
           setupConfirmed: projection.setupConfirmed === true,
           engineStatus: status === 'active' && (oneTime || cadenceKnown) ? 'confirmed' : status,

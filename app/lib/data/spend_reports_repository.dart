@@ -802,6 +802,7 @@ class RecurringSeries {
   final String id;
   final String displayName;
   final Money typicalAmount;
+
   /// Distinguishes an explicitly free service from an unstated price.
   final bool amountKnown;
 
@@ -825,7 +826,11 @@ class RecurringSeries {
   final String lifecycleStatus;
   final String autopayStatus;
   final String? mandateReference;
+
+  /// Local capture key for the SMS that produced this subscription fact.
+  final String? sourceKey;
   final bool cadenceConfirmed;
+
   /// A named service AutoPay setup was confirmed without proving a charge or
   /// recurring terms. Such a row is presence only and has no paid estimate.
   final bool setupConfirmed;
@@ -858,6 +863,7 @@ class RecurringSeries {
     this.lifecycleStatus = 'active',
     this.autopayStatus = 'unknown',
     this.mandateReference,
+    this.sourceKey,
     this.cadenceConfirmed = true,
     this.setupConfirmed = false,
     this.engineStatus,
@@ -900,7 +906,8 @@ class RecurringSeries {
     if (anchor == null) return 'confirmed';
     final age = dayOnly.difference(anchor).inDays;
     if (age > (cadenceDays * 1.5).round()) {
-      final isUnused = detectionSource == 'mandate' && (occurrenceCount ?? 0) <= 1;
+      final isUnused =
+          detectionSource == 'mandate' && (occurrenceCount ?? 0) <= 1;
       return isUnused ? 'unused' : 'at_risk';
     }
     return 'confirmed';
@@ -995,6 +1002,7 @@ class RecurringSeries {
               ? 'active'
               : 'unknown'),
       mandateReference: json['mandateReference'] as String?,
+      sourceKey: json['sourceKey'] as String?,
       cadenceConfirmed: cadenceConfirmed,
       setupConfirmed: setupConfirmed,
       engineStatus: engine,
@@ -1021,6 +1029,7 @@ class RecurringSeries {
     'lifecycleStatus': lifecycleStatus,
     'autopayStatus': autopayStatus,
     'mandateReference': mandateReference,
+    'sourceKey': sourceKey,
     'cadenceConfirmed': cadenceConfirmed,
     'setupConfirmed': setupConfirmed,
     if (engineStatus != null) 'engineStatus': engineStatus,

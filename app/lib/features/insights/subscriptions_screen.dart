@@ -7,6 +7,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart';
+import 'subscription_detail_screen.dart';
 import '../cards/card_summary.dart';
 import '../../main.dart' show MoneyText;
 
@@ -1220,7 +1221,10 @@ class _TotalCard extends StatelessWidget {
                   else ...[
                     Text(
                       'Estimated annual cost',
-                      style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+                      style: BambooFonts.ui(
+                        12.5,
+                        color: BambooInk.onSlateMuted,
+                      ),
                     ),
                     const SizedBox(height: AppSpace.xs),
                     Row(
@@ -1389,295 +1393,307 @@ class _SeriesCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final next = series.nextExpectedOn;
     final icon = _subscriptionIcons[toneIndex % _subscriptionIcons.length];
-    return Container(
-      decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D2B313A),
-            blurRadius: 14,
-            offset: Offset(0, 6),
-          ),
-        ],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SubscriptionDetailScreen(series: series),
+        ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 14, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: _subscriptionTint,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: _subscriptionAccent, size: 19),
-                ),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 1),
-                    child: Text(
-                      series.displayName,
-                      style: BambooFonts.heading(
-                        16,
-                        color: BambooInk.ink900,
-                        height: 1.15,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpace.sm),
-                if (series.typicalAmount.paise > 0)
-                  Flexible(
-                    child: MoneyText(
-                      series.typicalAmount,
-                      confidence: Confidence.estimated,
-                      style: BambooFonts.money(16, color: BambooInk.ink900),
-                    ),
-                  )
-                else
-                  Text(
-                    series.amountKnown ? 'Free' : 'Amount not stated',
-                    style: BambooFonts.ui(12, color: BambooInk.ink500),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.md),
-            Wrap(
-              spacing: AppSpace.xs,
-              runSpacing: AppSpace.xs,
-              children: [
-                if (_setupOnly)
-                  const _InfoPill(
-                    icon: Icons.verified_outlined,
-                    label: 'Setup confirmed',
-                    color: _subscriptionAccent,
-                    background: _subscriptionTint,
-                  )
-                else
-                  _InfoPill(
-                    icon: Icons.bolt_rounded,
-                    label: _frequencyLabel,
-                    color: _subscriptionAccent,
-                    background: _subscriptionTint,
-                  ),
-                if (series.detectionSource == 'manual')
-                  const _InfoPill(
-                    icon: Icons.edit_outlined,
-                    label: 'Added by you',
-                    color: _subscriptionAccent,
-                    background: _subscriptionTint,
-                  ),
-                if ((series.hasActiveAutoPay || series.isMandate) &&
-                    !_frequencyLabel.toLowerCase().contains('autopay'))
-                  const _InfoPill(
-                    icon: Icons.bolt_rounded,
-                    label: 'AutoPay Active',
-                    color: BambooInk.jade,
-                    background: BambooInk.rankBadgeBg,
-                  ),
-                if (_subscriptionStatus(series) == 'at_risk' ||
-                    _subscriptionStatus(series) == 'renewal_unverified')
-                  const _InfoPill(
-                    icon: Icons.warning_amber_rounded,
-                    label: 'Needs review',
-                    color: Color(0xFF9B6500),
-                    background: Color(0xFFFFF3D6),
-                  ),
-                if (_subscriptionStatus(series) == 'unused')
-                  const _InfoPill(
-                    icon: Icons.bolt_rounded,
-                    label: 'No charges yet',
-                    color: Color(0xFF9B6500),
-                    background: Color(0xFFFFF3D6),
-                  ),
-                if (_subscriptionStatus(series) == 'payment_issue')
-                  const _InfoPill(
-                    icon: Icons.error_outline_rounded,
-                    label: 'Payment issue',
-                    color: Color(0xFF9B3D00),
-                    background: Color(0xFFFFE9DF),
-                  ),
-                if (_subscriptionStatus(series) == 'ended')
-                  const _InfoPill(
-                    icon: Icons.stop_circle_outlined,
-                    label: 'Ended',
-                    color: BambooInk.ink500,
-                    background: BambooInk.paperMuted,
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.xs),
-            Text(_costLine, style: BambooFonts.ui(12, color: BambooInk.ink500)),
-            if (next != null && _subscriptionStatus(series) == 'confirmed') ...[
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  Icon(
-                    Icons.event_available_outlined,
-                    size: 16,
-                    color: _subscriptionAccent,
-                  ),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      '${series.detectionSource == 'central_projection'
-                          ? 'Next payment'
-                          : series.detectionSource == 'manual'
-                          ? 'Next payment'
-                          : 'Renews'} around ${next.day} ${_months[next.month - 1]} ${next.year}',
-                      style: BambooFonts.ui(
-                        12,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if ((_subscriptionStatus(series) == 'at_risk' ||
-                    _subscriptionStatus(series) == 'renewal_unverified') &&
-                !series.hasPastRenewal &&
-                series.lastSeenOn != null) ...[
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.history_toggle_off_rounded,
-                    size: 16,
-                    color: Color(0xFF9B6500),
-                  ),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      'No recent charge detected since ${_formatDate(series.lastSeenOn!)}',
-                      style: BambooFonts.ui(
-                        12,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (_subscriptionStatus(series) == 'unused') ...[
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.pause_circle_outline_rounded,
-                    size: 16,
-                    color: Color(0xFF9B6500),
-                  ),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      series.lastSeenOn == null
-                          ? 'No posted charge detected yet'
-                          : 'No posted charge since '
-                                '${_formatDate(series.lastSeenOn!)}',
-                      style: BambooFonts.ui(
-                        12,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if ((_subscriptionStatus(series) == 'at_risk' ||
-                    _subscriptionStatus(series) == 'renewal_unverified') &&
-                series.hasPastRenewal) ...[
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.event_busy_outlined,
-                    size: 16,
-                    color: Color(0xFF9B6500),
-                  ),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      'Saved renewal date has passed; please review it',
-                      style: BambooFonts.ui(
-                        12,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (series.cardName != null) ...[
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.credit_card_outlined,
-                    size: 16,
-                    color: BambooInk.ink500,
-                  ),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      series.cardName!,
-                      style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: AppSpace.md),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _edit(context, ref),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(42),
-                      foregroundColor: BambooInk.ink900,
-                      side: BorderSide(color: BambooInk.hairlineOnPaper),
-                      backgroundColor: Colors.white.withValues(alpha: 0.52),
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                      ),
-                    ),
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text('Edit'),
-                  ),
-                ),
-                const SizedBox(width: AppSpace.sm),
-                Expanded(
-                  child: TextButton.icon(
-                    onPressed: () => _dismiss(context, ref),
-                    style: TextButton.styleFrom(
-                      minimumSize: const Size.fromHeight(42),
-                      foregroundColor: BambooInk.ink700,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    icon: const Icon(Icons.visibility_off_outlined, size: 16),
-                    label: const Text('Ignore'),
-                  ),
-                ),
-              ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0D2B313A),
+              blurRadius: 14,
+              offset: Offset(0, 6),
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 14, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: _subscriptionTint,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: _subscriptionAccent, size: 19),
+                  ),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Text(
+                        series.displayName,
+                        style: BambooFonts.heading(
+                          16,
+                          color: BambooInk.ink900,
+                          height: 1.15,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  if (series.typicalAmount.paise > 0)
+                    Flexible(
+                      child: MoneyText(
+                        series.typicalAmount,
+                        confidence: Confidence.estimated,
+                        style: BambooFonts.money(16, color: BambooInk.ink900),
+                      ),
+                    )
+                  else
+                    Text(
+                      series.amountKnown ? 'Free' : 'Amount not stated',
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpace.md),
+              Wrap(
+                spacing: AppSpace.xs,
+                runSpacing: AppSpace.xs,
+                children: [
+                  if (_setupOnly)
+                    const _InfoPill(
+                      icon: Icons.verified_outlined,
+                      label: 'Setup confirmed',
+                      color: _subscriptionAccent,
+                      background: _subscriptionTint,
+                    )
+                  else
+                    _InfoPill(
+                      icon: Icons.bolt_rounded,
+                      label: _frequencyLabel,
+                      color: _subscriptionAccent,
+                      background: _subscriptionTint,
+                    ),
+                  if (series.detectionSource == 'manual')
+                    const _InfoPill(
+                      icon: Icons.edit_outlined,
+                      label: 'Added by you',
+                      color: _subscriptionAccent,
+                      background: _subscriptionTint,
+                    ),
+                  if ((series.hasActiveAutoPay || series.isMandate) &&
+                      !_frequencyLabel.toLowerCase().contains('autopay'))
+                    const _InfoPill(
+                      icon: Icons.bolt_rounded,
+                      label: 'AutoPay Active',
+                      color: BambooInk.jade,
+                      background: BambooInk.rankBadgeBg,
+                    ),
+                  if (_subscriptionStatus(series) == 'at_risk' ||
+                      _subscriptionStatus(series) == 'renewal_unverified')
+                    const _InfoPill(
+                      icon: Icons.warning_amber_rounded,
+                      label: 'Needs review',
+                      color: Color(0xFF9B6500),
+                      background: Color(0xFFFFF3D6),
+                    ),
+                  if (_subscriptionStatus(series) == 'unused')
+                    const _InfoPill(
+                      icon: Icons.bolt_rounded,
+                      label: 'No charges yet',
+                      color: Color(0xFF9B6500),
+                      background: Color(0xFFFFF3D6),
+                    ),
+                  if (_subscriptionStatus(series) == 'payment_issue')
+                    const _InfoPill(
+                      icon: Icons.error_outline_rounded,
+                      label: 'Payment issue',
+                      color: Color(0xFF9B3D00),
+                      background: Color(0xFFFFE9DF),
+                    ),
+                  if (_subscriptionStatus(series) == 'ended')
+                    const _InfoPill(
+                      icon: Icons.stop_circle_outlined,
+                      label: 'Ended',
+                      color: BambooInk.ink500,
+                      background: BambooInk.paperMuted,
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpace.xs),
+              Text(
+                _costLine,
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
+              if (next != null &&
+                  _subscriptionStatus(series) == 'confirmed') ...[
+                const SizedBox(height: AppSpace.xs),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.event_available_outlined,
+                      size: 16,
+                      color: _subscriptionAccent,
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Expanded(
+                      child: Text(
+                        '${series.detectionSource == 'central_projection'
+                            ? 'Next payment'
+                            : series.detectionSource == 'manual'
+                            ? 'Next payment'
+                            : 'Renews'} around ${next.day} ${_months[next.month - 1]} ${next.year}',
+                        style: BambooFonts.ui(
+                          12,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if ((_subscriptionStatus(series) == 'at_risk' ||
+                      _subscriptionStatus(series) == 'renewal_unverified') &&
+                  !series.hasPastRenewal &&
+                  series.lastSeenOn != null) ...[
+                const SizedBox(height: AppSpace.xs),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.history_toggle_off_rounded,
+                      size: 16,
+                      color: Color(0xFF9B6500),
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Expanded(
+                      child: Text(
+                        'No recent charge detected since ${_formatDate(series.lastSeenOn!)}',
+                        style: BambooFonts.ui(
+                          12,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (_subscriptionStatus(series) == 'unused') ...[
+                const SizedBox(height: AppSpace.xs),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.pause_circle_outline_rounded,
+                      size: 16,
+                      color: Color(0xFF9B6500),
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Expanded(
+                      child: Text(
+                        series.lastSeenOn == null
+                            ? 'No posted charge detected yet'
+                            : 'No posted charge since '
+                                  '${_formatDate(series.lastSeenOn!)}',
+                        style: BambooFonts.ui(
+                          12,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if ((_subscriptionStatus(series) == 'at_risk' ||
+                      _subscriptionStatus(series) == 'renewal_unverified') &&
+                  series.hasPastRenewal) ...[
+                const SizedBox(height: AppSpace.xs),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.event_busy_outlined,
+                      size: 16,
+                      color: Color(0xFF9B6500),
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Expanded(
+                      child: Text(
+                        'Saved renewal date has passed; please review it',
+                        style: BambooFonts.ui(
+                          12,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (series.cardName != null) ...[
+                const SizedBox(height: AppSpace.xs),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.credit_card_outlined,
+                      size: 16,
+                      color: BambooInk.ink500,
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Expanded(
+                      child: Text(
+                        series.cardName!,
+                        style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: AppSpace.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _edit(context, ref),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(42),
+                        foregroundColor: BambooInk.ink900,
+                        side: BorderSide(color: BambooInk.hairlineOnPaper),
+                        backgroundColor: Colors.white.withValues(alpha: 0.52),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                      ),
+                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      label: const Text('Edit'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: () => _dismiss(context, ref),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size.fromHeight(42),
+                        foregroundColor: BambooInk.ink700,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      icon: const Icon(Icons.visibility_off_outlined, size: 16),
+                      label: const Text('Ignore'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
