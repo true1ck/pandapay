@@ -62,9 +62,10 @@ void main() {
       );
 
       final router = GoRouter(
+        initialLocation: AppRoute.home,
         routes: [
           GoRoute(
-            path: '/',
+            path: AppRoute.home,
             builder: (context, state) => const Scaffold(body: HomeScreen()),
           ),
           GoRoute(

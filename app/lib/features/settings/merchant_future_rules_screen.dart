@@ -8,6 +8,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart';
 import '../../data/merchant_category_rules_repository.dart';
+import '../../data/merchant_issue_rules_repository.dart';
 
 /// Lists the user's future-only merchant rules. Existing transactions are
 /// intentionally absent from this screen: disabling or editing a rule never
