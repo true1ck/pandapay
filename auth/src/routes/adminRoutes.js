@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/routes/adminRoutes.js
 // === ADMIN SECURITY VISUALIZER ===
 // Admin API endpoints for security event monitoring
@@ -8,6 +9,10 @@ const db = require('../db');
 const { logAuthEvent, RISK_LEVELS } = require('../services/auditLogger');
 
 const router = express.Router();
+
+function logAdminRouteError(event, error) {
+  console.error(`[admin] ${event}`, safeErrorCode(error));
+}
 
 // === SECURITY HARDENING: INPUT VALIDATION ===
 // Valid risk levels for filtering
@@ -212,7 +217,7 @@ router.get('/security-events', async (req, res) => {
       },
     }).catch(err => {
       // Don't break the response if logging fails
-      console.error('Failed to log admin access:', err);
+      logAdminRouteError('access audit write failed', err);
     });
 
     return res.json({
@@ -233,7 +238,7 @@ router.get('/security-events', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[adminRoutes] Error fetching security events:', err);
+    logAdminRouteError('security event query failed', err);
     
     // === SECURITY HARDENING: AUDIT LOGGING ===
     // Log admin access error

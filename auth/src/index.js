@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('./utils/safeErrorCode');
 // src/index.js
 const express = require('express');
 const cors = require('cors');
@@ -17,8 +18,16 @@ const securityHeaders = require('./middleware/securityHeaders');
 // === SECURITY HARDENING: CORS VALIDATION ===
 const { validateCorsConfig, checkCorsAtRuntime } = require('./utils/corsValidator');
 const { requestLogger, errorHandler } = require('./observability');
+const { resolveTrustProxyHops, rejectMalformedClientIp } = require('./utils/proxyTrust');
+const { mountTestHarness } = require('./utils/testHarnessAccess');
+const { createReadinessHandler } = require('./services/authReadiness');
 
 const app = express();
+
+// Trust only the explicitly configured number of proxy hops. Local
+// development defaults to no forwarded-header trust; staging/production set
+// one hop for their loopback-bound Nginx ingress.
+app.set('trust proxy', resolveTrustProxyHops());
 
 // Correlation id + structured request log for every route below, including
 // requests CORS goes on to reject. Registered before the CORS setup below,
@@ -31,20 +40,14 @@ const app = express();
 // a log line. Registering first means every request gets both, including
 // the ones CORS goes on to block.
 app.use(requestLogger);
-
-// === ADDED FOR RATE LIMITING ===
-// Trust proxy to get correct client IP (important for rate limiting by IP)
-// Set this if your app is behind a reverse proxy (nginx, load balancer, etc.)
-if (process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1') {
-  app.set('trust proxy', true);
-}
+app.use(rejectMalformedClientIp);
 
 // === SECURITY HARDENING: CORS VALIDATION ===
 // Validate CORS configuration at startup
 try {
   validateCorsConfig();
 } catch (error) {
-  console.error('❌ CORS Configuration Error:', error.message);
+  console.error('CORS configuration failed', safeErrorCode(error));
   process.exit(1);
 }
 
@@ -74,7 +77,7 @@ if (allowAllOrigins) {
       // Check for misconfiguration or suspicious patterns
       const runtimeCheck = checkCorsAtRuntime(origin);
       if (runtimeCheck && runtimeCheck.suspicious) {
-        console.warn(`⚠️  CORS Runtime Warning: ${runtimeCheck.reason}`);
+        console.warn('CORS runtime policy detected a suspicious origin');
       }
       
       // Check if origin is in whitelist
@@ -83,7 +86,7 @@ if (allowAllOrigins) {
       }
       
       // Origin not allowed
-      console.warn(`CORS: Blocked origin: ${origin}`);
+      console.warn('CORS blocked an unapproved origin');
       return callback(new Error('Not allowed by CORS'));
     },
     credentials: true, // Allow cookies/credentials
@@ -105,36 +108,22 @@ app.use(express.json());
 // Apply security headers to all routes (not just admin)
 app.use(securityHeaders);
 
-// 👇 This must be here to serve test.html
-app.use(express.static('public'));
-
-// Routes for test page (multiple aliases for convenience)
-app.get('/test', (req, res) => {
-  res.sendFile('test.html', { root: 'public' });
-});
-
-app.get('/testpage', (req, res) => {
-  res.sendFile('test.html', { root: 'public' });
-});
+// The public static mount includes test.html and is only enabled outside
+// hosted production/staging. The protected admin dashboard below serves its
+// own file through the existing authenticated route.
+mountTestHarness(app, express);
 
 app.get('/health', (req, res) => {
   res.json({ ok: true });
 });
 
-// Liveness is dependency-free; readiness proves this instance can reach the
-// auth database before a load balancer sends it authenticated traffic.
-app.get('/ready', async (req, res) => {
-  try {
-    // Use the database module's public query API rather than reaching into
-    // its private pool initializer. This also keeps readiness consistent with
-    // the same pool/configuration used by request handlers.
-    await db.query('SELECT 1');
-    res.json({ ok: true, database: 'ready' });
-  } catch (err) {
-    console.error('GET /ready error', err.message);
-    res.status(503).json({ ok: false, database: 'unavailable' });
-  }
-});
+// Readiness verifies ordinary DB queries and, in hosted PostgreSQL mode, the
+// runtime identity's actual auth abuse-bucket access without writing buckets.
+app.get('/ready', createReadinessHandler({
+  query: (...args) => db.query(...args),
+  env: process.env,
+  logger: console,
+}));
 
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
@@ -146,7 +135,7 @@ app.use('/internal', internalRoutes);
 const ENABLE_ADMIN_DASHBOARD = process.env.ENABLE_ADMIN_DASHBOARD === 'true' || process.env.ENABLE_ADMIN_DASHBOARD === '1';
 
 if (ENABLE_ADMIN_DASHBOARD) {
-  console.log('✅ Admin dashboard enabled');
+  console.info('Admin dashboard enabled');
   
   // === SECURITY HARDENING: ADMIN ROUTES PROTECTION ===
   // All admin routes require:
@@ -175,13 +164,13 @@ if (ENABLE_ADMIN_DASHBOARD) {
     }
   );
 } else {
-  console.log('⚠️ Admin dashboard disabled (set ENABLE_ADMIN_DASHBOARD=true to enable)');
+  console.info('Admin dashboard disabled');
 }
 
 // === ADDED FOR RATE LIMITING ===
 // Initialize Redis connection (falls back gracefully if not available)
 initRedis().catch((err) => {
-  console.warn('Redis initialization warning:', err.message);
+  console.warn('Redis initialization failed', safeErrorCode(err));
 });
 
 // Terminal error handler — must be registered after every route (and after
@@ -192,14 +181,14 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
-  console.log(`Auth service running at http://localhost:${PORT}`);
+  console.info('Auth service started');
 });
 
 let shuttingDown = false;
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`Auth service shutting down (${signal})`);
+  console.info('Auth service shutting down');
 
   const forceExit = setTimeout(() => process.exit(1), 10000);
   forceExit.unref();
@@ -212,7 +201,7 @@ async function shutdown(signal) {
     clearTimeout(forceExit);
     process.exit(0);
   } catch (err) {
-    console.error('Auth service graceful shutdown failed', err.message);
+    console.error('Auth service shutdown failed', safeErrorCode(err));
     process.exit(1);
   }
 }

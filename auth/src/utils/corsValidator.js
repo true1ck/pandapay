@@ -45,7 +45,7 @@ function validateCorsConfig() {
   });
 
   if (invalidOrigins.length > 0) {
-    console.warn('⚠️  CORS WARNING: Some origins have invalid format:', invalidOrigins);
+    console.warn(`CORS configuration contains ${invalidOrigins.length} invalid origin value(s)`);
     console.warn('   Origins should be full URLs (e.g., https://app.example.com)');
   }
 
@@ -57,10 +57,7 @@ function validateCorsConfig() {
     );
   }
 
-  console.log(`✅ CORS validation passed: ${config.corsAllowedOrigins.length} origin(s) configured`);
-  config.corsAllowedOrigins.forEach((origin) => {
-    console.log(`   - ${origin}`);
-  });
+  console.info(`CORS validation passed: ${config.corsAllowedOrigins.length} origin(s) configured`);
 }
 
 /**

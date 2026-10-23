@@ -18,12 +18,21 @@ const { signAccessToken } = require('../src/services/tokenService');
 const { validateTokenClaims } = require('../src/services/jwtKeys');
 
 test('new access tokens satisfy the protected-route claim contract', () => {
-  const token = signAccessToken({
-    id: '0f5a6e46-5a88-41f0-a3a0-6de00688cc17',
-    phone_number: null,
-    role: 'user',
-    token_version: 1,
-  });
+  const emitted = [];
+  const originalLog = console.log;
+  console.log = (...args) => emitted.push(args.join(' '));
+  let token;
+  try {
+    token = signAccessToken({
+      id: '0f5a6e46-5a88-41f0-a3a0-6de00688cc17',
+      phone_number: null,
+      role: 'user',
+      token_version: 1,
+    });
+  } finally {
+    console.log = originalLog;
+  }
+  assert.deepEqual(emitted, [], 'token minting must not log user or token details');
 
   const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET, {
     issuer: 'pandapay-auth',

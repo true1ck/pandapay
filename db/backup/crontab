@@ -1,14 +1,10 @@
-# Loaded as /etc/crontabs/root inside the backup container (see Dockerfile).
-#
-# BACKUP_DIR/RETENTION_DAYS/DATABASE_URL come from the container's
-# environment (set in docker-compose.prod.yml); busybox crond, unlike some
-# cron implementations, does inherit the environment it was started with, so
-# no extra env-forwarding wrapper is needed.
-#
-# Backup nightly at 02:15 UTC — off the hour, so it doesn't stack with
-# whatever else a host commonly schedules at :00.
+# The backup container runs scheduled encrypted paired exports only.
+# It needs PRODUCT_DATABASE_URL, AUTH_DATABASE_URL, BACKUP_AGE_RECIPIENTS_FILE,
+# BACKUP_DESTINATION_A/B, BACKUP_DIR and RETENTION_DAYS from its environment.
+# The mounted destinations must be separate off-host storage locations.
 15 2 * * * /backup/backup.sh >> /proc/1/fd/1 2>> /proc/1/fd/2
 
-# Restore drill weekly, Sunday 03:00 UTC, after that night's backup — an
-# untested backup is not a backup (see restore_drill.sh's own header).
-0 3 * * 0 /backup/restore_drill.sh >> /proc/1/fd/1 2>> /proc/1/fd/2
+# Restore drills intentionally run from a separately controlled recovery host
+# that holds RESTORE_AGE_IDENTITY_FILE and explicit RESTORE_* database URLs.
+# Do not mount a private age identity or source DB credentials into this cron
+# container. Schedule restore_drill.sh on that recovery host instead.

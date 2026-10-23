@@ -59,6 +59,9 @@ class _AuthGate extends ConsumerWidget {
     if (sessionInit.isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    if (sessionInit.hasError) {
+      return const _SessionResumeRetry();
+    }
 
     final token = ref.watch(accessTokenProvider);
     if (token == null) return const LoginScreen();
@@ -78,6 +81,36 @@ class _AuthGate extends ConsumerWidget {
         }
         return const _ConsoleHome();
       },
+    );
+  }
+}
+
+class _SessionResumeRetry extends ConsumerWidget {
+  const _SessionResumeRetry();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Your saved session could not be checked right now.',
+              ),
+              const SizedBox(height: 8),
+              const Text('Your sign-in is still saved. Try again in a moment.'),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () => ref.invalidate(sessionInitProvider),
+                child: const Text('Retry session'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 'use strict';
 
 const express = require('express');
@@ -39,7 +40,7 @@ router.post('/session/verify', async (req, res) => {
   } catch (error) {
     // Invalid token details and any contact data stay out of responses/logs.
     if (error.message !== 'invalid_token') {
-      console.error('Internal session verification unavailable:', error.code || error.name || 'verification_error');
+      console.error('Internal session verification unavailable:', safeErrorCode(error, 'verification_error'));
       return res.status(503).json({ error: 'Session verification is temporarily unavailable' });
     }
     return res.json({

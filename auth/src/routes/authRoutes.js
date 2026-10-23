@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/routes/authRoutes.js
 const express = require('express');
 const crypto = require('crypto');
@@ -8,6 +9,8 @@ const auth = require('../middleware/authMiddleware');
 const { sendOtpSms } = require('../services/smsService');
 const { sendOtpEmail } = require('../services/emailService');
 const { verifyGoogleToken } = require('../services/googleAuthService');
+const { verifyAccessToken } = require('../services/accessTokenVerification');
+const { verifyCurrentSession } = require('../services/currentSessionVerification');
 const {
   createOtp,
   verifyOtp,
@@ -34,6 +37,8 @@ const {
   checkEnumerationRateLimit,
   blockIpForEnumeration,
   isIpBlockedForEnumeration,
+  RateLimitStorageError,
+  ActiveOtpError,
 } = require('../middleware/rateLimitMiddleware');
 // === SECURITY HARDENING: INPUT VALIDATION ===
 const {
@@ -71,6 +76,30 @@ const { executeOtpRequestWithTiming, otpRequestDelay, executeOtpVerifyWithTiming
 const { detectAndLogEnumeration } = require('../utils/enumerationDetection');
 
 const router = express.Router();
+const ABUSE_STORE_UNAVAILABLE_MESSAGE = 'Authentication is temporarily unavailable. Please try again shortly.';
+
+function isRateLimitStorageError(error) {
+  return typeof RateLimitStorageError === 'function' && error instanceof RateLimitStorageError;
+}
+
+function respondAbuseStoreUnavailable(res) {
+  return res.status(503).json({ error: ABUSE_STORE_UNAVAILABLE_MESSAGE });
+}
+
+function isActiveOtpError(error) {
+  return typeof ActiveOtpError === 'function' && error instanceof ActiveOtpError;
+}
+
+function respondActiveOtp(res) {
+  return res.status(429).json({
+    success: false,
+    message: 'An OTP is already active. Please wait a moment before requesting a new one.',
+  });
+}
+
+function logAuthError(event, error) {
+  console.error(`[auth] ${event}`, safeErrorCode(error));
+}
 
 // helper: normalize phone
 function normalizePhone(phone) {
@@ -99,7 +128,6 @@ function isValidPhoneNumber(phone) {
 
   return true;
 }
-
 
 function sanitizeDeviceId(deviceId) {
   if (!deviceId || typeof deviceId !== 'string') {
@@ -151,14 +179,13 @@ router.post(
 
     // === SECURITY HARDENING: ENUMERATION PROTECTION ===
     // Check if IP is blocked for enumeration attempts
-    if (await isIpBlockedForEnumeration(clientIp)) {
-      return res.status(429).json({
-        success: false,
-        message: 'Too many requests. Please try again later.',
-      });
-    }
-
     try {
+      if (await isIpBlockedForEnumeration(clientIp)) {
+        return res.status(429).json({
+          success: false,
+          message: 'Too many requests. Please try again later.',
+        });
+      }
       // === SECURITY HARDENING: TIMING ATTACK PROTECTION ===
       // Execute all work with timing protection to prevent enumeration
       // This ensures all requests take similar time regardless of phone existence
@@ -248,7 +275,9 @@ router.post(
       return res.json({ ok: true });
 
     } catch (err) {
-      console.error('request-otp error', err);
+      logAuthError('request-otp failed', err);
+      if (isActiveOtpError(err)) return respondActiveOtp(res);
+      if (isRateLimitStorageError(err)) return respondAbuseStoreUnavailable(res);
       // === SECURITY HARDENING: TIMING ATTACK PROTECTION ===
       // Even on error, ensure minimum delay to prevent timing leaks
       await otpRequestDelay();
@@ -340,7 +369,7 @@ router.post(
       }
 
     } catch (err) {
-      console.error('check-user error', err);
+      logAuthError('check-user failed', err);
       return res.status(500).json({
         success: false,
         message: 'Internal server error'
@@ -397,14 +426,6 @@ router.post('/guest-login', async (req, res) => {
     const refreshToken = null;
 
     // === GUEST LOGIN SUPPORT ===
-    // Skip audit logging for guests - auth_audit table has FK constraint on user_id
-    // Guests don't have user records, so we can't log with user_id
-    // Log to console instead for debugging
-    console.log(`[AUTH] Guest login event - guestId=${guestId}, deviceId=${device_id || 'none'}, ip=${clientIp}`);
-    // Note: We could log with userId=null if the FK constraint allows it, but safer to skip
-
-    console.log(`[AUTH] Guest login successful - guestId=${guestId}, deviceId=${device_id || 'none'}, ip=${clientIp}`);
-
     return res.json({
       success: true,
       access_token: accessToken,
@@ -420,7 +441,7 @@ router.post('/guest-login', async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('guest-login error', err);
+    logAuthError('guest-login failed', err);
     return res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -482,12 +503,7 @@ router.post(
         // Use generic error message to avoid leaking information
         if (!result.ok) {
           // Increment failed verification counter
-          try {
-            await incrementFailedVerify(normalizedPhone, recovery_only === true ? 'recovery' : 'signin');
-          } catch (err) {
-            console.error('Failed to increment failed verify counter:', err);
-            // Don't fail the request if counter increment fails
-          }
+          await incrementFailedVerify(normalizedPhone, recovery_only === true ? 'recovery' : 'signin');
 
           // Log suspicious OTP attempt
           await logSuspiciousOtpAttempt(
@@ -633,20 +649,6 @@ router.post(
         ]
       );
 
-      // Additional debug: Log what was actually saved
-      const savedDeviceResult = await db.query(
-        `SELECT fcm_token FROM user_devices WHERE user_id = $1 AND device_identifier = $2`,
-        [user.id, devId]
-      );
-      if (savedDeviceResult.rows.length > 0) {
-        const savedFcmToken = savedDeviceResult.rows[0].fcm_token;
-        if (savedFcmToken) {
-          console.log(`[verify-otp] FCM token successfully saved to DB: ${savedFcmToken.substring(0, 20)}...`);
-        } else {
-          console.log(`[verify-otp] WARNING: FCM token is NULL in database after save`);
-        }
-      }
-
       // === SECURITY HARDENING: IP/DEVICE RISK ===
       // Calculate risk score for this login
       const previousAuth = await getPreviousAuthInfo(user.id, devId);
@@ -719,7 +721,8 @@ router.post(
         active_devices_count: activeDevicesCount,
       });
     } catch (err) {
-      console.error('verify-otp error', err);
+      logAuthError('verify-otp failed', err);
+      if (isRateLimitStorageError(err)) return respondAbuseStoreUnavailable(res);
       // === SECURITY HARDENING: TIMING ATTACK PROTECTION ===
       // Even on error, ensure minimum delay to prevent timing leaks
       await otpVerifyDelay();
@@ -745,11 +748,10 @@ router.post(
       return res.status(403).json({ success: false, message: 'Access denied from this location.' });
     }
 
-    if (await isIpBlockedForEnumeration(clientIp)) {
-      return res.status(429).json({ success: false, message: 'Too many requests. Please try again later.' });
-    }
-
     try {
+      if (await isIpBlockedForEnumeration(clientIp)) {
+        return res.status(429).json({ success: false, message: 'Too many requests. Please try again later.' });
+      }
       const result = await executeOtpRequestWithTiming(async () => {
         const { email, phone_number, is_signup, recovery_only } = req.body;
         const normalizedEmail = email.trim().toLowerCase();
@@ -769,20 +771,21 @@ router.post(
           await blockIpForEnumeration(clientIp);
           return { error: 'Too many requests. IP blocked due to enumeration attempts.', status: 429 };
         }
-        
+
         // Ensure email and phone aren't linked to different accounts before sending OTP
         if (normalizedPhone) {
           const phoneSearchParams = preparePhoneSearchParams(normalizedPhone);
           const usersResult = await db.query(
             `SELECT id, email, phone_number, phone_lookup_hash, is_phone_verified
              FROM users
-             WHERE lower(email) = $1 OR phone_lookup_hash = $2`,
+             WHERE (lower(email) = $1 OR phone_lookup_hash = $2)
+               AND deleted = FALSE`,
             [normalizedEmail, phoneSearchParams[0]]
           );
           const users = usersResult.rows;
-          
+
           if (users && users.length > 0) {
-            const sameEmailUser = users.find(u => String(u.email || '').toLowerCase() === normalizedEmail);
+            const sameEmailUser = users.find(u => String(u.email || '').trim().toLowerCase() === normalizedEmail);
             const samePhoneUser = users.find(u => u.phone_lookup_hash === phoneSearchParams[0]);
 
             if (is_signup === true || is_signup === 'true') {
@@ -797,7 +800,8 @@ router.post(
                 return { error: 'This email is registered with a different phone number.', status: 409 };
               }
 
-              if (samePhoneUser && samePhoneUser.email && samePhoneUser.email !== normalizedEmail) {
+              if (samePhoneUser && samePhoneUser.email &&
+                  String(samePhoneUser.email).trim().toLowerCase() !== normalizedEmail) {
                 return { error: 'This phone number is registered with a different email.', status: 409 };
               }
             }
@@ -837,7 +841,9 @@ router.post(
       if (result.error) return res.status(result.status || 500).json({ error: result.error });
       return res.json({ ok: true });
     } catch (err) {
-      console.error('request-email-otp error', err);
+      logAuthError('request-email-otp failed', err);
+      if (isActiveOtpError(err)) return respondActiveOtp(res);
+      if (isRateLimitStorageError(err)) return respondAbuseStoreUnavailable(res);
       await otpRequestDelay();
       return res.status(500).json({ error: 'Internal server error' });
     }
@@ -875,7 +881,7 @@ router.post(
       // link/update it. Calling the helper with undefined is harmless when
       // encryption is disabled, but makes the recovery branch ambiguous.
       const encryptedPhone = hasPhone ? encryptPhoneNumber(normalizedPhone) : null;
-      
+
       const verificationResult = await executeOtpVerifyWithTiming(async () => {
         // CRITICAL FIX: verifyOtp() resolves to an object — {ok: true} or
         // {ok: false, reason: ...} — never null/undefined. `!isValid` on a
@@ -915,7 +921,7 @@ router.post(
          FROM users WHERE lower(email) = $1 AND deleted = FALSE`,
         [normalizedEmail]
       );
-      
+
       const foundByPhone = hasPhone
         ? await db.query(
             `SELECT id, email, phone_number, phone_lookup_hash, is_phone_verified,
@@ -1046,7 +1052,7 @@ router.post(
         `SELECT COUNT(*) as count FROM user_devices WHERE user_id = $1 AND is_active = true`,
         [user.id]
       );
-      
+
       return res.json({
         user,
         access_token: accessToken,
@@ -1057,8 +1063,12 @@ router.post(
         active_devices_count: parseInt(deviceCountResult.rows[0].count, 10),
       });
     } catch (err) {
-      console.error('verify-email-otp error', err);
+      logAuthError('verify-email-otp failed', err);
+      if (isRateLimitStorageError(err)) return respondAbuseStoreUnavailable(res);
       await otpVerifyDelay();
+      if (err.code === '23505' && err.constraint === 'uq_users_active_email_lower') {
+        return res.status(409).json({ error: 'An account with this email already exists. Please sign in instead.' });
+      }
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -1077,20 +1087,24 @@ router.post(
 
     try {
       const { id_token, device_id, device_info } = req.body;
-      
+
       const googleUser = await verifyGoogleToken(id_token);
       if (!googleUser) {
         return res.status(400).json({ error: 'Invalid Google token' });
       }
 
       const { email, name, picture, googleId } = googleUser;
+      const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      if (!normalizedEmail) {
+        return res.status(400).json({ error: 'Invalid Google token' });
+      }
       const devId = sanitizeDeviceId(device_id);
 
       let user;
       const found = await db.query(
         `SELECT id, email, name, role, COALESCE(token_version, 1) as token_version
-         FROM users WHERE email = $1 AND deleted = FALSE`,
-        [email]
+         FROM users WHERE lower(email) = $1 AND deleted = FALSE`,
+        [normalizedEmail]
       );
 
       if (found.rows.length === 0) {
@@ -1098,7 +1112,7 @@ router.post(
           `INSERT INTO users (email, name, avatar_url, google_id, language, timezone, is_email_verified)
            VALUES ($1, $2, $3, $4, $5, $6, TRUE)
            RETURNING id, email, name, role, COALESCE(token_version, 1) as token_version`,
-          [email, name, picture, googleId, device_info?.language_code || null, device_info?.timezone || null]
+          [normalizedEmail, name, picture, googleId, device_info?.language_code || null, device_info?.timezone || null]
         );
         user = newUserResult.rows[0];
       } else {
@@ -1177,7 +1191,7 @@ router.post(
         `SELECT COUNT(*) as count FROM user_devices WHERE user_id = $1 AND is_active = true`,
         [user.id]
       );
-      
+
       return res.json({
         user,
         access_token: accessToken,
@@ -1188,7 +1202,10 @@ router.post(
         active_devices_count: parseInt(deviceCountResult.rows[0].count, 10),
       });
     } catch (err) {
-      console.error('google login error', err);
+      logAuthError('google login failed', err);
+      if (err.code === '23505' && err.constraint === 'uq_users_active_email_lower') {
+        return res.status(409).json({ error: 'An account with this email already exists. Please sign in instead.' });
+      }
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -1215,14 +1232,12 @@ router.post(
         return res.status(403).json({ error: 'Access denied from this location.' });
       }
 
-      console.log(`[AUTH] Refresh token request received: ip=${clientIp}, userAgent=${req.headers['user-agent']}`);
       const requestId = req.body.refresh_request_id;
       const verification = await verifyRefreshToken(refresh_token, { requestId });
       if (!verification || verification.reuseDetected) {
-        console.log(`[AUTH] Refresh token verification failed: reuseDetected=${verification?.reuseDetected || false}`);
+
         return res.status(401).json({ error: 'Invalid refresh token' });
       }
-      console.log(`[AUTH] Refresh token verified: userId=${verification.userId}, deviceId=${verification.deviceId}`);
 
       const { userId, deviceId, row: tokenRow } = verification;
 
@@ -1236,7 +1251,7 @@ router.post(
       let user;
       if (rows.length === 0) {
         // Guest user - create guest user object (no DB record)
-        console.log(`[AUTH] Refresh token for guest user: userId=${userId}`);
+
         user = {
           id: userId,
           phone_number: null,
@@ -1311,10 +1326,7 @@ router.post(
         hasRecentOtp = recentOtpCheck.rows.length > 0;
       }
 
-      console.log(`[AUTH] Token refresh: userId=${userId}, deviceId=${deviceId}, ip=${clientIp}`);
-
       const newAccess = signAccessToken(user, { highAssurance: hasRecentOtp, deviceId });
-      console.log(`[AUTH] New access token generated: userId=${userId}, expiresIn=${config.jwtAccessTtl}`);
 
       const newRefresh = await rotateRefreshToken({
         tokenRow,
@@ -1322,7 +1334,6 @@ router.post(
         ip: clientIp,
         requestId,
       });
-      console.log(`[AUTH] New refresh token generated and rotated: userId=${userId}, deviceId=${deviceId}`);
 
       // === SECURITY HARDENING: AUDIT LOGS & ANOMALY FLAGS ===
       // Log refresh event
@@ -1350,18 +1361,17 @@ router.post(
             [userId, deviceId]
           );
         } catch (deviceErr) {
-          console.error('Failed to update device last_seen_at', deviceErr);
+          logAuthError('refresh device timestamp update failed', deviceErr);
           // Don't fail the refresh if device update fails
         }
       }
 
-      console.log(`[AUTH] Token refresh successful: userId=${userId}, deviceId=${deviceId}`);
       return res.json({ access_token: newAccess, refresh_token: newRefresh });
     } catch (err) {
       if (err.statusCode === 401) {
         return res.status(401).json({ error: 'Invalid refresh token' });
       }
-      console.error('[AUTH] refresh error', err);
+      logAuthError('refresh failed', err);
       return res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -1386,7 +1396,7 @@ router.post(
       // === SECURITY HARDENING: VERIFY USER MATCH ===
       // Ensure the authenticated user matches the refresh token's user
       if (info.userId !== authenticatedUserId) {
-        console.error(`[AUTH] Logout user mismatch: authenticated=${authenticatedUserId}, refreshToken=${info.userId}`);
+        console.error('[auth] logout subject mismatch');
         return res.status(403).json({ error: 'Refresh token does not belong to authenticated user' });
       }
 
@@ -1399,7 +1409,7 @@ router.post(
           [info.userId, info.deviceId]
         );
       } catch (deviceErr) {
-        console.error('[AUTH] Failed to mark device as inactive on logout', deviceErr);
+        logAuthError('logout device update failed', deviceErr);
       }
 
       // === SECURITY HARDENING: AUDIT LOGS & ANOMALY FLAGS ===
@@ -1415,7 +1425,7 @@ router.post(
 
       return res.json({ ok: true });
     } catch (err) {
-      console.error('logout error', err);
+      logAuthError('logout failed', err);
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -1662,13 +1672,7 @@ router.post(
       return res.status(404).json({ success: false, message: 'Verified account not found.' });
 
     } catch (err) {
-      console.error('[signup] Error details:', {
-        message: err.message,
-        stack: err.stack,
-        code: err.code,
-        constraint: err.constraint,
-        detail: err.detail,
-      });
+      logAuthError('signup failed', err);
 
       // Handle unique constraint violation (phone number already exists)
       if (err.code === '23505' && err.constraint === 'users_phone_number_key') {
@@ -1683,14 +1687,13 @@ router.post(
       if (err.code === '23505') {
         return res.status(400).json({
           success: false,
-          message: `Database constraint violation: ${err.detail || err.message}`,
+          message: 'Unable to complete signup. Please try again.',
         });
       }
 
       return res.status(500).json({
         success: false,
         message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined,
       });
     }
   }
@@ -1700,230 +1703,35 @@ router.post(
 // Endpoint for other services (like BuySellService) to validate JWT tokens
 // This allows centralized token validation
 router.post('/validate-token', async (req, res) => {
-  const clientIp = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || 'unknown';
-  const userAgent = req.headers['user-agent'] || 'unknown';
-
-  console.log(`[Auth Service] POST /auth/validate-token - Request received`);
-  console.log(`[Auth Service] Client IP: ${clientIp}`);
-  console.log(`[Auth Service] User-Agent: ${userAgent.substring(0, 80)}`);
-  console.log(`[Auth Service] Request body contains token: ${!!req.body?.token}`);
-
   try {
     const { token } = req.body;
-
     if (!token) {
-      console.log(`[Auth Service] ❌ FAILED: Token is missing in request body`);
-      return res.status(400).json({
-        valid: false,
-        error: 'Token is required'
-      });
+      return res.status(400).json({ valid: false, error: 'Token is required' });
     }
 
-    console.log(`[Auth Service] Token received (length: ${token.length} characters)`);
-
-    // Use the auth middleware logic to validate token
-    const jwt = require('jsonwebtoken');
-    const {
-      getKeySecret,
-      getAllKeys,
-      getIssuer,
-      getAudience,
-      validateTokenClaims,
-    } = require('../services/jwtKeys');
-    const db = require('../db');
-
-    // Decode token to get key ID from header
-    let decoded;
+    let payload;
     try {
-      decoded = jwt.decode(token, { complete: true });
-      if (!decoded || !decoded.header) {
-        console.log(`[Auth Service] ❌ FAILED: Invalid token format - unable to decode header`);
-        return res.json({ valid: false, error: 'Invalid token format' });
-      }
-      console.log(`[Auth Service] Token decoded successfully`);
-      console.log(`[Auth Service] Token header:`, {
-        alg: decoded.header.alg,
-        kid: decoded.header.kid || 'NOT SET',
-        typ: decoded.header.typ,
-      });
-    } catch (err) {
-      console.log(`[Auth Service] ❌ FAILED: Error decoding token - ${err.message}`);
-      return res.json({ valid: false, error: 'Invalid token' });
-    }
-
-    // Get secret for the key ID (if present) or try all keys
-    const keyId = decoded.header.kid;
-    let payload = null;
-    let verified = false;
-    let verificationMethod = null;
-
-    if (keyId) {
-      console.log(`[Auth Service] Key ID found in token: ${keyId}`);
-      const secret = getKeySecret(keyId);
-      if (secret) {
-        console.log(`[Auth Service] Attempting verification with key ID: ${keyId}`);
-        try {
-          payload = jwt.verify(token, secret, {
-            issuer: getIssuer(),
-            audience: getAudience(),
-          });
-          verified = true;
-          verificationMethod = `keyId: ${keyId}`;
-          console.log(`[Auth Service] ✅ Token verified successfully using key ID: ${keyId}`);
-        } catch (err) {
-          console.log(`[Auth Service] ❌ Verification failed with key ID ${keyId}: ${err.message}`);
-          return res.json({ valid: false, error: 'Invalid or expired token' });
-        }
-      } else {
-        console.log(`[Auth Service] ⚠️ Key ID ${keyId} not found in available keys, will try all keys`);
-      }
-    } else {
-      console.log(`[Auth Service] ⚠️ No key ID in token header, trying all available keys`);
-    }
-
-    // If key ID not found or not specified, try all keys (for rotation support)
-    if (!verified) {
-      const allKeys = getAllKeys();
-      console.log(`[Auth Service] Attempting verification with ${Object.keys(allKeys).length} available keys`);
-      for (const [kid, keySecret] of Object.entries(allKeys)) {
-        try {
-          payload = jwt.verify(token, keySecret, {
-            issuer: getIssuer(),
-            audience: getAudience(),
-          });
-          verified = true;
-          verificationMethod = `allKeys: ${kid}`;
-          console.log(`[Auth Service] ✅ Token verified successfully using key: ${kid}`);
-          break;
-        } catch (err) {
-          // Try next key silently
-          continue;
-        }
-      }
-      if (!verified) {
-        console.log(`[Auth Service] ❌ FAILED: Token verification failed with all available keys`);
-      }
-    }
-
-    if (!verified || !payload) {
-      console.log(`[Auth Service] ❌ FINAL RESULT: Token is invalid or expired`);
+      payload = verifyAccessToken(token);
+    } catch (_) {
       return res.json({ valid: false, error: 'Invalid or expired token' });
     }
 
-    console.log(`[Auth Service] Token payload extracted:`, {
-      userId: payload.sub,
-      role: payload.role,
-      userType: payload.user_type,
-      exp: payload.exp ? new Date(payload.exp * 1000).toISOString() : 'NOT SET',
-      iat: payload.iat ? new Date(payload.iat * 1000).toISOString() : 'NOT SET',
-      tokenVersion: payload.token_version || 1,
-    });
-
-    // Validate JWT claims (iss, aud, exp, iat, nbf)
-    console.log(`[Auth Service] Validating JWT claims...`);
-    const claimsValidation = validateTokenClaims(payload);
-    if (!claimsValidation.valid) {
-      console.log(`[Auth Service] ❌ FAILED: Claims validation failed - ${claimsValidation.reason}`);
-      return res.json({ valid: false, error: 'Invalid token claims' });
-    }
-    console.log(`[Auth Service] ✅ Claims validation passed`);
-
-    // === GUEST LOGIN SUPPORT ===
-    // Check if guest token FIRST (before database lookup)
-    if (payload.is_guest === true) {
-      console.log(`[Auth Service] Guest token detected - skipping database lookup for guestId=${payload.sub}`);
-      // For guests: Skip database lookup, just validate token signature/expiry
-      // This is safe because guest tokens don't have user records
-      return res.json({
-        valid: true,
-        payload: {
-          sub: payload.sub,
-          role: payload.role || 'user',
-          user_type: payload.user_type || null,
-          token_version: payload.token_version || 1,
-          high_assurance: payload.high_assurance || false,
-          is_guest: true,
-        },
-      });
-    }
-
-    // EXISTING LOGIC BELOW - DO NOT MODIFY
-    // For regular users: Check database (existing logic - UNCHANGED)
-    // Validate token_version to ensure token hasn't been invalidated by logout-all-devices
-    console.log(`[Auth Service] Checking token version in database for user: ${payload.sub}`);
     try {
-      const { rows } = await db.query(
-        `SELECT COALESCE(token_version, 1) as token_version FROM users WHERE id = $1`,
-        [payload.sub]
-      );
-
-      if (rows.length === 0) {
-        console.log(`[Auth Service] ❌ FAILED: User not found in database: ${payload.sub}`);
-        return res.json({ valid: false, error: 'User not found' });
+      const session = await verifyCurrentSession(token);
+      if (payload.is_guest === true || !session.valid || !session.session?.active ||
+          session.session?.revoked || session.subject !== payload.sub) {
+        return res.json({ valid: false, error: 'Invalid or expired token' });
       }
-
-      const userTokenVersion = rows[0].token_version;
-      const tokenVersion = payload.token_version || 1;
-
-      console.log(`[Auth Service] Token version check:`, {
-        tokenVersion,
-        userTokenVersion,
-        match: tokenVersion === userTokenVersion,
+    } catch (error) {
+      if (error?.message === 'invalid_token') {
+        return res.json({ valid: false, error: 'Invalid or expired token' });
+      }
+      logAuthError('validate-token session verification unavailable', error);
+      return res.status(503).json({
+        valid: false,
+        error: 'Session verification is temporarily unavailable',
       });
-
-      // If token version doesn't match, token has been invalidated
-      if (tokenVersion !== userTokenVersion) {
-        console.log(`[Auth Service] ❌ FAILED: Token version mismatch - token has been invalidated`);
-        return res.json({ valid: false, error: 'Token has been invalidated' });
-      }
-      console.log(`[Auth Service] ✅ Token version check passed`);
-    } catch (dbErr) {
-      // Handle missing token_version column gracefully
-      if (dbErr.code === '42703' && dbErr.message && dbErr.message.includes('token_version')) {
-        console.warn('[Auth Service] ⚠️ token_version column not found in database, skipping version check');
-        // Continue without token version validation
-      } else {
-        console.error('[Auth Service] ❌ Error validating token version:', dbErr);
-        return res.status(500).json({ valid: false, error: 'Internal server error' });
-      }
     }
-
-    // Optional per-device invalidation based on device_id claim
-    if (payload.device_id) {
-      console.log(
-        `[Auth Service] Checking device status for user ${payload.sub}, device ${payload.device_id}`
-      );
-      try {
-        const deviceResult = await db.query(
-          `SELECT is_active FROM user_devices WHERE user_id = $1 AND device_identifier = $2 LIMIT 1`,
-          [payload.sub, payload.device_id]
-        );
-
-        if (deviceResult.rows.length === 0) {
-          console.log('[Auth Service] ❌ FAILED: Device not found or already logged out');
-          return res.json({ valid: false, error: 'Device is logged out' });
-        }
-
-        if (deviceResult.rows[0].is_active === false) {
-          console.log('[Auth Service] ❌ FAILED: Device is inactive - token has been logged out');
-          return res.json({ valid: false, error: 'Token has been logged out for this device' });
-        }
-
-        console.log('[Auth Service] ✅ Device is active for this token');
-      } catch (deviceErr) {
-        console.error('[Auth Service] ❌ Error validating device status:', deviceErr);
-        return res.status(500).json({ valid: false, error: 'Internal server error' });
-      }
-    }
-
-    // Token is valid - return user info
-    console.log(`[Auth Service] ✅ FINAL RESULT: Token is VALID`);
-    console.log(`[Auth Service] Returning user info:`, {
-      userId: payload.sub,
-      role: payload.role,
-      userType: payload.user_type,
-      verificationMethod,
-    });
 
     return res.json({
       valid: true,
@@ -1937,9 +1745,8 @@ router.post('/validate-token', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[Auth Service] ❌ UNEXPECTED ERROR in validate-token:', err);
-    console.error('[Auth Service] Error stack:', err.stack);
-    return res.status(500).json({ valid: false, error: 'Internal server error' });
+    logAuthError('validate-token failed', err);
+    return res.status(503).json({ valid: false, error: 'Session verification is temporarily unavailable' });
   }
 });
 

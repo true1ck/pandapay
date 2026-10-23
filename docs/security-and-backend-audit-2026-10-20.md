@@ -2,6 +2,8 @@
 
 Audit date: 20 October 2026. Source: HEAD `c2e41d8` plus the current working tree. Other application edits were occurring during this review, so this is a dated working-tree assessment, not certification of a frozen release binary.
 
+Implementation follow-up, 22 October: use the [reviewed security and portability plan](security-implementation-plan-2026-10-22.md) and [six Luna work packages](security-luna-handoff-2026-10-22.md). They account for fixes added since this audit, current free hosting, both-database/key recovery and future full-data PostgreSQL rehosting. This report remains the dated finding record; the follow-up is a plan, not a production clearance.
+
 ## Decision summary
 
 There are genuine issues to fix; this is **not an all-clear for release**. The highest-priority findings are two conditional account-takeover paths in legacy/contact-linking authentication, broken encrypted-phone lookups, OTP codes appearing in production logs, and inconsistent session revocation between the auth and product services.

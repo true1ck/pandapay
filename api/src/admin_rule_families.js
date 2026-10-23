@@ -24,6 +24,8 @@
  *    separate create/delete route needed.
  */
 
+const { safeErrorCode } = require('./safeErrorCode');
+
 function validateField(spec, value) {
   if (value === undefined || value === null) {
     if (spec.required) return `${spec.name} is required`;
@@ -124,7 +126,7 @@ function registerRuleFamilyRoutes(app, { withUserClient, requireAdmin }, spec) {
         });
         res.json({ [auditEntity]: result });
       } catch (err) {
-        console.error(`PUT /admin/${urlSegment}/by-card/:cardProductId error`, err);
+        console.error(`PUT /admin/${urlSegment}/by-card/:cardProductId error`, safeErrorCode(err));
         res.status(500).json({ error: 'internal_error' });
       }
     });
@@ -157,7 +159,7 @@ function registerRuleFamilyRoutes(app, { withUserClient, requireAdmin }, spec) {
       });
       res.status(201).json({ [auditEntity]: result });
     } catch (err) {
-      console.error(`POST /admin/${urlSegment} error`, err);
+      console.error(`POST /admin/${urlSegment} error`, safeErrorCode(err));
       res.status(500).json({ error: 'internal_error' });
     }
   });
@@ -197,7 +199,7 @@ function registerRuleFamilyRoutes(app, { withUserClient, requireAdmin }, spec) {
       if (!result) return res.status(404).json({ error: `${auditEntity} not found` });
       res.json({ [auditEntity]: result });
     } catch (err) {
-      console.error(`PUT /admin/${urlSegment}/:id error`, err);
+      console.error(`PUT /admin/${urlSegment}/:id error`, safeErrorCode(err));
       res.status(500).json({ error: 'internal_error' });
     }
   });
@@ -219,7 +221,7 @@ function registerRuleFamilyRoutes(app, { withUserClient, requireAdmin }, spec) {
       if (!result) return res.status(404).json({ error: `${auditEntity} not found` });
       res.status(204).send();
     } catch (err) {
-      console.error(`DELETE /admin/${urlSegment}/:id error`, err);
+      console.error(`DELETE /admin/${urlSegment}/:id error`, safeErrorCode(err));
       res.status(500).json({ error: 'internal_error' });
     }
   });

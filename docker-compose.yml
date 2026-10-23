@@ -53,110 +53,40 @@ services:
       retries: 20
 
   # One-shot. Applies the schema in the correct order, then exits.
+  # On an already-running local stack, stop auth/api (and any writer workers)
+  # before invoking db-migrate manually; the old auth binary does not bind OTP
+  # verification to purpose. A fresh `docker compose up` runs this dependency
+  # before starting dependent services.
   db-migrate:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: db/migrate/Dockerfile
     depends_on:
       db:
         condition: service_healthy
     environment:
-      PGPASSWORD: postgres
+      NODE_ENV: development
+      DB_SSL: "false"
+      ADMIN_DATABASE_URL: postgresql://postgres:postgres@db:5432/pandapay
+      AUTH_MIGRATION_DATABASE_URL: postgresql://postgres:postgres@db:5432/pandapay_auth
+      AUTH_RUNTIME_ROLE: "${AUTH_RUNTIME_ROLE:-}"
       APP_USER_PASSWORD: app_user_dev_pw
       REWARD_WORKER_DB_PASSWORD: reward_worker_dev_pw
       SMS_LEARNING_WORKER_DB_PASSWORD: sms_learning_worker_dev_pw
       # Set to false for staging/production-shaped environments.
+      PHONE_LOOKUP_HMAC_KEY: dev_phone_lookup_hmac_key_change_me_32_bytes
+      ENCRYPTION_ENABLED: "false"
+      MIGRATION_LEGACY_BASELINE_FILE: "${MIGRATION_LEGACY_BASELINE_FILE:-}"
+      MIGRATION_ADOPT_LEGACY_CHECKSUMS: "${MIGRATION_ADOPT_LEGACY_CHECKSUMS:-false}"
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-true}"
     volumes:
       - ./db:/db:ro
-      - ./auth/db/migrations:/auth-migrations:ro
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        PSQL="psql -h db -U postgres -d pandapay -v ON_ERROR_STOP=1 -q"
-
-        # A migration LEDGER, not a blind re-run. The individual migrations are
-        # not idempotent — 0001 does a bare `create type`, so replaying it
-        # against an existing database fails with "type card_network already
-        # exists" and takes the whole stack down. Without this table, `docker
-        # compose up` worked exactly once per volume and errored on every run
-        # after, which is not a usable dev loop.
-        $$PSQL -c "create table if not exists schema_migrations (
-                     filename text primary key,
-                     applied_at timestamptz not null default now())"
-
-        # Creates the role. The pandapay-schema grants inside are guarded and
-        # skip on a fresh database (the schema arrives with 0001); this runs
-        # first only because migration 0024 ends with a GRANT to app_user.
-        $$PSQL -f /db/setup_app_role.sql
-
-        for f in /db/supabase/migrations/*.sql; do
-          name=$$(basename "$$f")
-          case "$$name" in
-            0013_cron_jobs.sql)
-              # pg_cron isn't in the stock postgres image. Same known gap as
-              # CI and local dev — every other migration must still apply.
-              echo "skip    $$name (pg_cron unavailable)"; continue;;
-          esac
-          already=$$($$PSQL -tAc "select 1 from schema_migrations where filename = '$$name'")
-          if [ "$$already" = "1" ]; then
-            echo "skip    $$name (already applied)"
-            continue
-          fi
-          echo "apply   $$name"
-          $$PSQL -f "$$f"
-          $$PSQL -c "insert into schema_migrations (filename) values ('$$name')"
-        done
-
-        # Second pass: grants over everything the migrations just created,
-        # including the pandapay schema and its SECURITY DEFINER functions.
-        $$PSQL -f /db/setup_app_role.sql
-
-        # Demo catalogue. Without it `GET /catalogue` returns an empty list on
-        # a fresh stack, and the app's entire reason to exist — "which of my
-        # cards should I use here" — has nothing to rank. The seeds have been
-        # in db/seed/ all along and nothing ever applied them, so bringing the
-        # backend up produced a technically-working API that could not answer
-        # the product's core question.
-        #
-        # Opt-out via SEED_DEMO_DATA=false for anything resembling a real
-        # environment; tracked in the same ledger so it is applied once.
-        if [ "$${SEED_DEMO_DATA:-true}" = "true" ]; then
-          for f in /db/seed/*.sql; do
-            name="seed:$$(basename "$$f")"
-            already=$$($$PSQL -tAc "select 1 from schema_migrations where filename = '$$name'")
-            if [ "$$already" = "1" ]; then
-              echo "skip    $$name (already applied)"
-              continue
-            fi
-            echo "seed    $$name"
-            $$PSQL -f "$$f"
-            $$PSQL -c "insert into schema_migrations (filename) values ('$$name')"
-          done
-        else
-          echo "skip    demo seeds (SEED_DEMO_DATA=false)"
-        fi
-
-        # The auth service uses a separate database and has its own migration
-        # ledger. Init SQL only runs for a brand-new volume, so apply auth
-        # migrations here as well to upgrade long-lived local/test volumes.
-        AUTH_PSQL="psql -h db -U postgres -d pandapay_auth -v ON_ERROR_STOP=1 -q"
-        $$AUTH_PSQL -c "create table if not exists auth_schema_migrations (
-                        version text primary key,
-                        applied_at timestamptz not null default now())"
-        for f in /auth-migrations/*.sql; do
-          name=$$(basename "$$f")
-          version=$${name%.sql}
-          already=$$($$AUTH_PSQL -tAc "select 1 from auth_schema_migrations where version = '$$version'")
-          if [ "$$already" = "1" ]; then
-            echo "skip    auth/$$name (already applied)"
-            continue
-          fi
-          echo "apply   auth/$$name"
-          $$AUTH_PSQL -f "$$f"
-          $$AUTH_PSQL -c "insert into auth_schema_migrations (version) values ('$$version')"
-        done
-
-        echo "migrations complete"
+      - type: bind
+        source: "${MIGRATION_BASELINES_DIR:-./deploy/migration-baselines}"
+        target: /run/migration-baselines
+        read_only: true
+        bind:
+          create_host_path: false
 
   api:
     build:
@@ -165,6 +95,8 @@ services:
       db-migrate:
         condition: service_completed_successfully
     environment:
+      NODE_ENV: development
+      TRUST_PROXY_HOPS: "0"
       # app_user, never postgres: a superuser BYPASSES row level security
       # entirely, which silently turns every policy in 0011 into a no-op.
       # db/setup_app_role.sql's header documents this being discovered the
@@ -301,6 +233,7 @@ services:
       DB_SSL: "false"
       PORT: "3210"
       NODE_ENV: development
+      TRUST_PROXY_HOPS: "0"
       JWT_ACCESS_SECRET: dev_access_secret_change_me
       AUTH_INTERNAL_SERVICE_SECRET: dev_internal_service_secret_change_me_32_bytes
       JWT_REFRESH_SECRET: dev_refresh_secret_change_me

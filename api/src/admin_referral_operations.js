@@ -1,5 +1,7 @@
 'use strict';
 
+const { safeErrorCode } = require('./safeErrorCode');
+
 const HOLD_SCOPES = new Set(['admission', 'enrollment', 'fulfillment', 'redemption']);
 
 function registerAdminReferralOperationsRoutes(app, { withUserClient, requireAdmin }) {
@@ -10,7 +12,7 @@ function registerAdminReferralOperationsRoutes(app, { withUserClient, requireAdm
       );
       return res.json({ operations: result.rows[0].operations });
     } catch (err) {
-      console.error('GET /admin/referrals/operations error', err.code || err.message);
+      console.error('GET /admin/referrals/operations error', safeErrorCode(err));
       return res.status(500).json({ error: 'referral_operations_unavailable' });
     }
   });
@@ -39,7 +41,7 @@ function registerAdminReferralOperationsRoutes(app, { withUserClient, requireAdm
       if (err.code === 'P0001' && err.message === 'campaign_unavailable') {
         return res.status(409).json({ error: 'campaign_unavailable' });
       }
-      console.error('PUT /admin/referrals/holds/:scope error', err.code || err.message);
+      console.error('PUT /admin/referrals/holds/:scope error', safeErrorCode(err));
       return res.status(500).json({ error: 'referral_hold_unavailable' });
     }
   });

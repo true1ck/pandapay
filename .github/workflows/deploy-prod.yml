@@ -5,9 +5,9 @@
 # five migrations behind (stopped at 0035) and nobody could tell by looking,
 # because there was no commit on the box to compare against.
 #
-# The deploy is intentionally boring and idempotent: fetch, hard-reset to the
-# pushed commit, run migrations, rebuild, restart, health-check. Running it
-# twice on the same commit changes nothing.
+# The deploy only accepts the exact current master tip, refuses server
+# rollback/divergent ancestry, then runs migrations, rebuilds, restarts and
+# health-checks. Replaying the same tip is idempotent.
 #
 # TRIGGER: `workflow_run`, not `push`.
 # A `push`-triggered job that polls for the test checks races them — the
@@ -19,6 +19,8 @@
 #
 # Note `workflow_run` always runs the workflow file from the DEFAULT branch,
 # so edits to this file only take effect once merged to master.
+# Manual dispatch is also master-only and verifies a successful Build and test
+# run for the exact commit through the Actions API before any SSH setup/deploy.
 #
 # WHAT IT WILL NOT DO
 # -------------------
@@ -44,12 +46,16 @@ concurrency:
   group: deploy-prod
   cancel-in-progress: false
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   deploy:
     name: Migrate and restart backend
     runs-on: ubuntu-latest
-    # Deploy only a green build. On workflow_dispatch there is no upstream
-    # run to inspect, so that path is allowed through explicitly.
+    # Manual dispatch is branch-checked in its first step and must find a
+    # successful exact-SHA Build and test run before deployment.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
@@ -57,10 +63,54 @@ jobs:
     steps:
       - name: Resolve the commit to deploy
         id: sha
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
-          SHA="${{ github.event.workflow_run.head_sha }}"
-          # workflow_dispatch has no upstream run; deploy the current master.
-          echo "sha=${SHA:-${{ github.sha }}}" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF" != refs/heads/master ]; then
+            echo 'FATAL: production can only be manually dispatched from master' >&2
+            exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ] && [ "${{ github.event.workflow_run.head_branch }}" != master ]; then
+            echo 'FATAL: refusing a Build and test run from a non-master branch' >&2
+            exit 1
+          fi
+          [[ "$DEPLOY_SHA" =~ ^[a-fA-F0-9]{40}$ ]] || {
+            echo 'FATAL: deployment event did not provide a full commit SHA' >&2
+            exit 1
+          }
+          echo "sha=$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Verify exact commit passed Build and test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.sha.outputs.sha }}
+          UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$UPSTREAM_RUN_ID")"
+            jq -e --arg sha "$SHA" '
+              .head_sha == $sha and
+              .head_branch == "master" and
+              .conclusion == "success" and
+              .path == ".github/workflows/build-and-test.yml"
+            ' <<< "$run_json" >/dev/null || {
+              echo 'FATAL: triggering Build and test run does not verify this master commit' >&2
+              exit 1
+            }
+          else
+            runs_json="$(gh api --paginate --slurp \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/build-and-test.yml/runs?head_sha=$SHA&status=success&per_page=100")"
+            matching_runs="$(jq -r --arg sha "$SHA" '
+              [.[].workflow_runs[] |
+                select(.head_sha == $sha and .head_branch == "master" and .conclusion == "success") |
+                .id] | length
+            ' <<< "$runs_json")"
+            [ "$matching_runs" -gt 0 ] || {
+              echo 'FATAL: this exact master commit has no successful Build and test run' >&2
+              exit 1
+            }
+          fi
 
       - name: Check out the deploy script at that commit
         uses: actions/checkout@v4
@@ -77,6 +127,18 @@ jobs:
           # holds a key with shell access to production.
           echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
+
+      - name: Confirm the tested target is still current master
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          current_master_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/master" --jq '.object.sha')"
+          if [ "$current_master_sha" != "$SHA" ]; then
+            echo 'FATAL: tested target is no longer the current master tip; refusing a stale deploy.' >&2
+            exit 1
+          fi
 
       - name: Deploy
         env:
@@ -107,57 +169,20 @@ jobs:
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
             'curl -fsS -m 10 http://127.0.0.1:4000/ready && echo && curl -fsS -m 10 http://127.0.0.1:3210/ready'
 
-      - name: Smoke test authenticated nearby discovery API
+      - name: Smoke test readiness and anonymous auth denial
         env:
           HOST: ${{ secrets.PROD_HOST }}
           DEPLOY_USER: ${{ secrets.PROD_USER }}
         run: |
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
-            'cd /home/ubuntu/apps/pandapay && docker compose --env-file .env -f docker-compose.prod.yml exec -T api node -' <<'NODE'
-          const jwt = require('jsonwebtoken');
-          const config = require('./src/config');
-
-          async function main() {
-            const secret = Object.values(config.jwtKeys)[0];
-            const token = jwt.sign(
-              { sub: 'production-smoke-test', role: 'authenticated', token_version: 1 },
-              secret,
-              { issuer: config.jwtIssuer, audience: config.jwtAudience, expiresIn: '60s' },
-            );
-            const response = await fetch('http://127.0.0.1:4000/merchants/nearby/google', {
-              method: 'POST',
-              headers: {
-                authorization: `Bearer ${token}`,
-                'content-type': 'application/json',
-              },
-              body: JSON.stringify({ lat: 18.5204, lng: 73.8567, radiusM: 2000 }),
-              signal: AbortSignal.timeout(25000),
-            });
-            const payload = await response.json();
-            const count = Array.isArray(payload.merchants) ? payload.merchants.length : -1;
-            console.log(JSON.stringify({
-              http_status: response.status,
-              source: payload.source || null,
-              merchant_count: count,
-              degraded: payload.degraded === true,
-              partial: payload.partial === true,
-              // The provider's own reason, so a failing gate explains itself
-              // (expired Places key, provider outage, blocked egress) instead
-              // of only showing a status code.
-              error: payload.error || null,
-              detail: payload.detail || null,
-            }));
-            if (!response.ok || count < 0
-              || !['google_places', 'google_maps', 'openstreetmap_fallback'].includes(payload.source)) {
-              process.exitCode = 1;
-            }
-          }
-
-          main().catch((error) => {
-            console.error('Nearby API smoke test failed:', error.name);
-            process.exitCode = 1;
-          });
-          NODE
+            'set -eu
+            api_status="$(curl -sS -o /dev/null -w "%{http_code}" -m 10 -X POST \
+              -H "content-type: application/json" --data "{}" \
+              http://127.0.0.1:4000/merchants/nearby/google)"
+            auth_status="$(curl -sS -o /dev/null -w "%{http_code}" -m 10 \
+              http://127.0.0.1:3210/users/me)"
+            printf "anonymous API denial: %s; anonymous auth denial: %s\\n" "$api_status" "$auth_status"
+            [ "$api_status" = 401 ] && [ "$auth_status" = 401 ]'
 
       - name: Show sanitized API diagnostics
         if: failure()

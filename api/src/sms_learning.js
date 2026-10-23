@@ -19,6 +19,7 @@ function getHmacKey(explicitKey) {
   }
   return null;
 }
+const { safeErrorCode } = require('./safeErrorCode');
 
 const SAFE_FIELDS = new Set([
   'entryKind', 'instrument', 'amountInr', 'availableBalanceInr',
@@ -302,7 +303,7 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
       });
       res.status(200).json(result);
     } catch (error) {
-      console.error('GET /admin/sms-learning/operations error', error.message || error);
+      console.error('GET /admin/sms-learning/operations error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to fetch SMS learning operations' });
     }
   });
@@ -314,7 +315,7 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
         client.query('SELECT pandapay.sms_learning_candidates($1) AS candidates', [limit]));
       res.status(200).json({ candidates: result.rows[0]?.candidates || [] });
     } catch (error) {
-      console.error('GET /admin/sms-learning/candidates error', error.message || error);
+      console.error('GET /admin/sms-learning/candidates error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to fetch SMS learning candidates' });
     }
   });
@@ -336,7 +337,7 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
       if (!outcome?.ok) return res.status(outcome?.reason === 'not_eligible' ? 409 : 404).json({ error: outcome?.reason || 'candidate unavailable' });
       res.status(200).json({ ok: true, decision: outcome.decision });
     } catch (error) {
-      console.error('POST /admin/sms-learning/candidates/:id/decision error', error.message || error);
+      console.error('POST /admin/sms-learning/candidates/:id/decision error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to record SMS learning decision' });
     }
   });
@@ -364,7 +365,7 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
       if (!outcome) return res.status(404).json({ error: 'candidate not found or already terminal' });
       res.status(200).json({ ok: true, candidate: outcome });
     } catch (error) {
-      console.error('POST /admin/sms-learning/candidates/:id/pause error', error.message || error);
+      console.error('POST /admin/sms-learning/candidates/:id/pause error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to pause SMS learning candidate' });
     }
   });
@@ -391,7 +392,7 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
       if (!outcome) return res.status(404).json({ error: 'paused candidate not found' });
       res.status(200).json({ ok: true, candidate: outcome });
     } catch (error) {
-      console.error('POST /admin/sms-learning/candidates/:id/resume error', error.message || error);
+      console.error('POST /admin/sms-learning/candidates/:id/resume error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to resume SMS learning candidate' });
     }
   });

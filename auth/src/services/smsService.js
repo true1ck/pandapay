@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/services/smsService.js
 const twilio = require('twilio');
 // === SECURITY HARDENING: OTP LOGGING ===
@@ -54,12 +55,12 @@ async function sendOtpSms(toPhone, code) {
 
   try {
     const msg = await client.messages.create(msgConfig);
-    console.log('✅ Twilio SMS sent, SID:', msg.sid);
+    console.info('OTP SMS delivery succeeded');
     logOtpEvent(toPhone, true);
     return { success: true, sid: msg.sid };
   } catch (err) {
     const errorMessage = err.message || 'Unknown error';
-    console.error('❌ Failed to send SMS via Twilio:', err.code || err.name || 'delivery_error');
+    console.error('❌ Failed to send SMS via Twilio:', safeErrorCode(err, 'delivery_error'));
     
     // Check for specific Twilio error types
     const isShortCodeError = errorMessage.includes('Short Code');

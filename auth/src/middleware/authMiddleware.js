@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/middleware/authMiddleware.js
 const { verifyAccessToken } = require('../services/accessTokenVerification');
 
@@ -65,11 +66,11 @@ async function authMiddleware(req, res, next) {
           return res.status(401).json({ error: 'Invalid or expired token' });
         }
       } catch (statusErr) {
-        console.error('Error validating account status:', statusErr.message);
+        console.error('Account status validation failed', safeErrorCode(statusErr));
         return res.status(500).json({ error: 'Internal server error' });
       }
     } else {
-      console.error('Error validating token version:', dbErr);
+      console.error('Token version validation failed', safeErrorCode(dbErr));
       return res.status(500).json({ error: 'Internal server error' });
     }
   }

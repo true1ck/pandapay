@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/middleware/stepUpAuth.js
 // === SECURITY HARDENING: ACCESS TOKEN REPLAY MITIGATION ===
 // Step-up authentication middleware for sensitive operations
@@ -76,12 +77,11 @@ async function requireRecentOtpOrReauth(req, res, next) {
       
       if (userCheck.rows.length > 0 && (!userCheck.rows[0].name || userCheck.rows[0].name.trim() === '')) {
         // User has no name, this is initial profile completion - allow it
-        console.log(`[STEP_UP_AUTH] Allowing initial profile completion for user ${userId}`);
         return next();
       }
     } catch (err) {
       // If check fails, continue with step-up requirement
-      console.error('Error checking user profile:', err);
+      console.error('Step-up profile check failed', safeErrorCode(err));
     }
 
     // No recent OTP or high assurance token
@@ -99,7 +99,7 @@ async function requireRecentOtpOrReauth(req, res, next) {
       requires_otp: true,
     });
   } catch (err) {
-    console.error('Error in requireRecentOtpOrReauth:', err);
+    console.error('Step-up authorization check failed', safeErrorCode(err));
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

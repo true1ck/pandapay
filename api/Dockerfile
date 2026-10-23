@@ -2,23 +2,18 @@
 # no Dockerfile, no compose file, no Terraform — so nothing was deployable and
 # every base URL in the app pointed at localhost.
 #
-# Pinned to a digest-less but explicit minor (`22-alpine` rather than `node` or
-# `latest`): a floating tag means the image that passed CI is not necessarily
-# the image that ships, which is the whole class of "works on the runner"
-# failure that container builds exist to prevent.
+# Use the Node 22 release line for both stages. The build gate must verify the
+# exact release source and resulting image before deployment.
 FROM node:22-alpine AS deps
 
 WORKDIR /app
 
 # Copied on their own, before the source, so a source-only change reuses the
 # cached dependency layer instead of reinstalling on every build.
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 
-# `npm ci` when a lockfile is present — it installs exactly what's pinned and
-# fails on drift, unlike `npm install` which will happily resolve something
-# newer. Falls back to `npm install` only because this repo does not currently
-# commit a lockfile; committing one is the right follow-up.
-RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
+# Preserve the reviewed dependency versions and fail if the manifest drifts.
+RUN npm ci --omit=dev
 
 FROM node:22-alpine AS runtime
 

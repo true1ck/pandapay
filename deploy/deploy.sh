@@ -29,10 +29,90 @@ set -euo pipefail
 SHA="${1:?usage: deploy.sh <commit-sha>}"
 APP_DIR="/home/ubuntu/apps/pandapay"
 REPO="https://github.com/true1ck/pandapay.git"
-BACKUP_DIR="/home/ubuntu/backups"
-STAMP="$(date +%Y%m%d-%H%M%S)"
 
 cd "$APP_DIR"
+
+# API/auth and data-writing workers stay fenced from the paired final backup
+# until the new migrations and service health checks pass. The window covers
+# the stopped-service work
+# as a whole; a timeout after source replacement intentionally leaves them
+# stopped for forward recovery rather than starting an old binary on a new DB.
+MAINTENANCE_WINDOW_SECONDS="${DEPLOY_MAINTENANCE_WINDOW_SECONDS:-1800}"
+[[ "$MAINTENANCE_WINDOW_SECONDS" =~ ^[1-9][0-9]*$ ]] && (( MAINTENANCE_WINDOW_SECONDS >= 300 && MAINTENANCE_WINDOW_SECONDS <= 7200 )) || {
+  echo 'FATAL: DEPLOY_MAINTENANCE_WINDOW_SECONDS must be 300..7200 seconds'
+  exit 1
+}
+command -v timeout >/dev/null || { echo 'FATAL: timeout is required for the bounded maintenance window' >&2; exit 1; }
+MAINTENANCE_DEADLINE=0
+SERVICES_FENCED=0
+SOURCE_REPLACEMENT_STARTED=0
+DEPLOY_BACKUP_STAGE=''
+DEPLOY_TARGET_STAGE=''
+OLD_WRITER_CONTAINER_IDS=()
+
+remaining_maintenance_seconds() {
+  local remaining=$((MAINTENANCE_DEADLINE - SECONDS))
+  (( remaining > 0 )) || return 1
+  printf '%s' "$remaining"
+}
+
+run_in_maintenance_window() {
+  local label="$1" seconds
+  shift
+  seconds="$(remaining_maintenance_seconds)" || {
+    echo "FATAL: deployment maintenance window expired before $label" >&2
+    return 124
+  }
+  echo "==> $label (maintenance time remaining: ${seconds}s)"
+  timeout --kill-after=10s --foreground "${seconds}s" "$@"
+}
+
+stop_writer_services_best_effort() {
+  local compose_stop_failed=0 query_failed=0 container_id active_output
+  if ! timeout --kill-after=10s --foreground 60s docker compose --profile sms-ai --profile sms-learning \
+    -f docker-compose.prod.yml --env-file .env stop --timeout 30 "${WRITE_SERVICES[@]}"; then
+    compose_stop_failed=1
+  fi
+
+  # If Compose timed out or failed after starting part of the rollout, query
+  # any still-running target containers and stop them directly by ID.
+  local -a active_ids=()
+  if active_output="$(timeout --kill-after=10s --foreground 20s docker compose --profile sms-ai --profile sms-learning \
+    -f docker-compose.prod.yml --env-file .env ps -q "${WRITE_SERVICES[@]}" 2>/dev/null)"; then
+    while IFS= read -r container_id; do
+      [ -n "$container_id" ] && active_ids+=("$container_id")
+    done <<< "$active_output"
+  else
+    query_failed=1
+  fi
+  if (( ${#active_ids[@]} > 0 )); then
+    if ! timeout --kill-after=10s --foreground 60s docker stop --time 10 "${active_ids[@]}"; then
+      return 1
+    fi
+  fi
+  (( compose_stop_failed == 0 || query_failed == 0 ))
+}
+
+on_exit() {
+  local status=$?
+  trap - EXIT
+  if (( status != 0 && SERVICES_FENCED == 1 && SOURCE_REPLACEMENT_STARTED == 0 )); then
+    echo 'Deployment stopped before source replacement; attempting to resume the original writer containers.' >&2
+    if (( ${#OLD_WRITER_CONTAINER_IDS[@]} > 0 )) && ! timeout --kill-after=10s --foreground 60s docker start "${OLD_WRITER_CONTAINER_IDS[@]}"; then
+      echo 'FATAL: could not resume the old services; inspect Docker and restore service availability manually.' >&2
+    fi
+  elif (( status != 0 && SERVICES_FENCED == 1 && SOURCE_REPLACEMENT_STARTED == 1 )); then
+    echo 'FATAL: source replacement began; stopping all writer services before reporting failure.' >&2
+    if ! stop_writer_services_best_effort; then
+      echo 'FATAL: Compose could not confirm all writers stopped; inspect Docker and stop any remaining writer containers before proceeding.' >&2
+    fi
+    echo 'Recover forward with this commit after resolving the failure; do not start the old images.' >&2
+  fi
+  if [ -n "$DEPLOY_BACKUP_STAGE" ]; then rm -rf -- "$DEPLOY_BACKUP_STAGE"; fi
+  if [ -n "$DEPLOY_TARGET_STAGE" ]; then rm -rf -- "$DEPLOY_TARGET_STAGE"; fi
+  exit "$status"
+}
+trap on_exit EXIT
 
 echo "==> Preflight: .env must exist (it is gitignored and host-only)"
 test -s .env || { echo "FATAL: $APP_DIR/.env missing — refusing to deploy"; exit 1; }
@@ -95,7 +175,10 @@ for key in \
   PARTNER_WEBHOOK_SECRET \
   IMAP_ENCRYPTION_KEY \
   CORS_ALLOWED_ORIGINS \
-  ENCRYPTION_KEY; do
+  ENCRYPTION_KEY \
+  BACKUP_AGE_RECIPIENTS_FILE \
+  BACKUP_DESTINATION_A \
+  BACKUP_DESTINATION_B; do
   check_single_env_key "$key"
 done
 
@@ -183,30 +266,8 @@ if [ -n "$SMS_LEARNING_WORKER_DB_PASSWORD_VALUE" ] && [ "${#SMS_LEARNING_WORKER_
   exit 1
 fi
 
-echo "==> Backing up the database before migrating"
-mkdir -p "$BACKUP_DIR"
-DBURL="$(grep -E '^ADMIN_DATABASE_URL=' .env | cut -d= -f2- | tr -d '"'"'"'')"
-if [ -n "$DBURL" ]; then
-  # Client major version must be >= the server's or pg_dump refuses. Read
-  # the server version and pull the matching image rather than pinning a
-  # number here that silently rots — that pin is exactly what left twelve
-  # consecutive nightly backups as 0-byte files.
-  SERVER_MAJOR="$(docker run --rm -e U="$DBURL" postgres:17-alpine \
-      sh -lc 'psql "$U" -tAc "show server_version;"' 2>/dev/null | cut -d. -f1 | tr -d '[:space:]')"
-  IMG="postgres:${SERVER_MAJOR:-17}-alpine"
-  docker pull -q "$IMG" >/dev/null
-  docker run --rm -e U="$DBURL" "$IMG" \
-    sh -lc 'pg_dump "$U" --no-owner --no-acl -Fc' > "$BACKUP_DIR/predeploy-$STAMP.dump"
-  # A dump that cannot be listed is not a backup. Fail the deploy rather
-  # than migrate with no way back.
-  docker run --rm -v "$BACKUP_DIR:/b" "$IMG" pg_restore -l "/b/predeploy-$STAMP.dump" > /dev/null
-  echo "    backup ok: $(du -h "$BACKUP_DIR/predeploy-$STAMP.dump" | cut -f1)"
-else
-  echo "FATAL: ADMIN_DATABASE_URL not found in .env — refusing to migrate without a backup"
-  exit 1
-fi
-
-echo "==> Syncing working tree to $SHA"
+echo "==> Fetching the reviewed deployment commit"
+[[ "$SHA" =~ ^[a-fA-F0-9]{7,40}$ ]] || { echo 'FATAL: expected a commit SHA'; exit 1; }
 if [ ! -d .git ]; then
   # First run converts the copied directory into a real checkout in place.
   # `git init` + fetch + reset (rather than a fresh clone) is what preserves
@@ -217,33 +278,125 @@ if [ ! -d .git ]; then
 fi
 git remote set-url origin "$REPO"
 git fetch -q --depth=50 origin "$SHA" 2>/dev/null || git fetch -q origin master
+# A delayed Actions run or manual rerun must never reset a newer deployment to
+# an older, though once-tested, master commit. Refresh origin/master now and
+# require the reviewed SHA to be its exact tip before building anything.
+git fetch -q origin master
+TARGET_COMMIT="$(git rev-parse --verify "${SHA}^{commit}")" || {
+  echo 'FATAL: reviewed target commit is unavailable locally.' >&2
+  exit 1
+}
+MASTER_COMMIT="$(git rev-parse --verify refs/remotes/origin/master)" || {
+  echo 'FATAL: could not resolve the current origin/master tip.' >&2
+  exit 1
+}
+if [ "$TARGET_COMMIT" != "$MASTER_COMMIT" ]; then
+  echo 'FATAL: refusing a stale deployment target; it must equal current origin/master.' >&2
+  exit 1
+fi
+# A copied legacy directory has no verifiable ancestry. Reconcile it to a
+# reviewed commit before deploying; do not use this script to bootstrap an
+# unknown running source tree or to roll a server backwards.
+SERVER_HEAD="$(git rev-parse --verify HEAD 2>/dev/null)" || {
+  echo 'FATAL: server checkout has no verifiable HEAD; reconcile source history before deploying.' >&2
+  exit 1
+}
+if ! git merge-base --is-ancestor "$SERVER_HEAD" "$TARGET_COMMIT"; then
+  echo 'FATAL: target is not a descendant of the server HEAD; rollback or divergent source is blocked.' >&2
+  exit 1
+fi
+SHA="$TARGET_COMMIT"
+# Build every target image before downtime from the reviewed commit archive.
+# This avoids doing Docker builds inside the bounded write-fencing window.
+DEPLOY_TARGET_STAGE="$(mktemp -d)"
+git archive "$SHA" | tar -x -C "$DEPLOY_TARGET_STAGE"
+TARGET_COMPOSE=(docker compose --profile sms-ai --profile sms-learning -f "$DEPLOY_TARGET_STAGE/docker-compose.prod.yml" --env-file "$APP_DIR/.env")
+# Reviewed JSON files are deliberately gitignored. Use the host's protected
+# directory for the archived target as well as after the source replacement.
+export MIGRATION_BASELINES_DIR="$APP_DIR/deploy/migration-baselines"
+echo "==> Building target images before the maintenance window"
+"${TARGET_COMPOSE[@]}" build api auth rewards-worker backup db-migrate gemini-worker sms-learning-worker
+
+echo "==> Read-only product migration and auth contact preflight before downtime"
+timeout --kill-after=10s --foreground 240s "${TARGET_COMPOSE[@]}" run --rm --no-deps \
+  --entrypoint node db-migrate /db/scripts/product_migrate.js --check
+timeout --kill-after=10s --foreground 120s "${TARGET_COMPOSE[@]}" run --rm --no-deps \
+  --entrypoint node db-migrate /workspace/auth/scripts/auditContactUniqueness.js --require-unique
+
+WRITE_SERVICES=(auth api rewards-worker gemini-worker sms-learning-worker)
+echo "==> Checking the running Compose service inventory against this release"
+active_services="$(timeout --kill-after=10s --foreground 20s docker ps \
+  --filter label=com.docker.compose.project=pandapay-prod \
+  --format '{{.ID}} {{.Label "com.docker.compose.project"}} {{.Label "com.docker.compose.service"}}')" || {
+  echo 'FATAL: could not inventory the production project; refusing to fence services.' >&2
+  exit 1
+}
+while read -r container_id live_project live_service extra; do
+  [ -n "$container_id" ] || continue
+  if [ "$live_project" != "pandapay-prod" ] || [ -z "$live_service" ] || [ -n "${extra:-}" ]; then
+    echo 'FATAL: a production container has missing or mismatched Compose labels; refusing to fence services.' >&2
+    exit 1
+  fi
+  case "$live_service" in
+    auth|api|rewards-worker|gemini-worker|sms-learning-worker|backup|db-migrate|maps-scraper) ;;
+    *)
+      echo 'FATAL: an unreviewed production service is running; reconcile the deployed release and all writers before downtime.' >&2
+      exit 1
+      ;;
+  esac
+done <<< "$active_services"
+
+echo "==> Fencing API/auth and background writer services before the paired backup"
+for service in "${WRITE_SERVICES[@]}"; do
+  container_ids="$(docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env ps -q "$service")" || {
+    echo "FATAL: could not inventory the existing $service container; refusing to fence writers without a recovery list." >&2
+    exit 1
+  }
+  while IFS= read -r container_id; do
+    [ -n "$container_id" ] && OLD_WRITER_CONTAINER_IDS+=("$container_id")
+  done <<< "$container_ids"
+done
+MAINTENANCE_DEADLINE=$((SECONDS + MAINTENANCE_WINDOW_SECONDS))
+SERVICES_FENCED=1
+run_in_maintenance_window 'Stopping writer services with a 30-second graceful timeout' \
+  docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env \
+    stop --timeout 30 "${WRITE_SERVICES[@]}"
+
+echo "==> Creating and verifying the paired encrypted product/auth backup"
+run_in_maintenance_window 'Paired backup' \
+  "${TARGET_COMPOSE[@]}" \
+    run --rm --no-deps backup /backup/backup.sh
+echo "==> Backup copies verified; syncing working source"
+SOURCE_REPLACEMENT_STARTED=1
 git reset -q --hard "$SHA"
 git clean -qfd -e .env -e .env.prod -e node_modules
 echo "    now at: $(git log --oneline -1)"
 
-echo "==> Applying migrations"
 # db-migrate is a one-shot service; --exit-code-from surfaces a failed
 # migration as a failed deploy instead of a container that quietly exited 1.
-docker compose -f docker-compose.prod.yml --env-file .env \
-  up --build --abort-on-container-exit --exit-code-from db-migrate db-migrate
+run_in_maintenance_window 'Applying migrations' \
+  docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env \
+    up --no-build --abort-on-container-exit --exit-code-from db-migrate db-migrate
 
 echo "==> Rebuilding and restarting services"
-bash deploy/restart-services.sh
+run_in_maintenance_window 'Starting prebuilt target images with readiness checks' \
+  env DEPLOY_IMAGES_PREBUILT=1 bash deploy/restart-services.sh
 
-echo "==> Waiting for health"
+run_in_maintenance_window 'Final API/auth health verification' bash -s <<'FINAL_HEALTH_CHECK'
+echo "==> Waiting for final API/auth health"
 for i in $(seq 1 30); do
   if curl -fsS -m 5 http://127.0.0.1:4000/ready >/dev/null 2>&1 \
      && curl -fsS -m 5 http://127.0.0.1:3210/ready >/dev/null 2>&1; then
     echo "    healthy after ${i}0s"
-    break
+    exit 0
   fi
-  if [ "$i" -eq 30 ]; then
-    echo "FATAL: services did not become healthy"
-    docker compose -f docker-compose.prod.yml logs --tail=40 api auth
-    exit 1
-  fi
-  sleep 10
+  if [ "$i" -lt 30 ]; then sleep 10; fi
 done
+echo "FATAL: services did not become healthy"
+docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env logs --tail=40 api auth
+exit 1
+FINAL_HEALTH_CHECK
+SERVICES_FENCED=0
 
 echo "==> Pruning dangling images"
 docker image prune -f >/dev/null 2>&1 || true

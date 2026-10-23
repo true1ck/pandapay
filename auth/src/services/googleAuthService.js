@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/services/googleAuthService.js
 const { OAuth2Client } = require('google-auth-library');
 const config = require('../config');
@@ -6,7 +7,7 @@ let client = null;
 
 if (config.googleClientId) {
   client = new OAuth2Client(config.googleClientId);
-  console.log('✅ Google Auth service initialized');
+  console.info('Google authentication service initialized');
 } else {
   console.warn('⚠️  GOOGLE_CLIENT_ID missing. Google authentication will not work.');
 }
@@ -56,7 +57,7 @@ async function verifyGoogleToken(idToken) {
       googleId: payload['sub'], // We also return googleId explicitly
     };
   } catch (error) {
-    console.error('[Google Auth] Token verification failed:', error.message);
+    console.error('Google token verification failed', safeErrorCode(error));
     throw new Error('Invalid Google token');
   }
 }

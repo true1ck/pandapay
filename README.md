@@ -44,8 +44,11 @@ SMS/notification permissions.
 
 ## Implementation plans
 
+- [`docs/security-completion-checklist-2026-10-23.md`](./docs/security-completion-checklist-2026-10-23.md) — verified implementation status and remaining P0–P7/release gates.
+- [`docs/security-secrets-inventory-2026-10-23.md`](./docs/security-secrets-inventory-2026-10-23.md) — protected key, credential and backup locations, recovery procedure and current storage limits; contains no secret values.
+- [`docs/security-implementation-plan-2026-10-22.md`](./docs/security-implementation-plan-2026-10-22.md) — reviewed security rollout for the current free hosting, preserving existing behavior and full-data portability across PostgreSQL hosts; includes encryption, both-database recovery, migration and rollback gates. [`Six Luna work packages`](./docs/security-luna-handoff-2026-10-22.md) provide the implementation handoff.
 - [`Userappimplementation_plan.md`](./Userappimplementation_plan.md) — detailed build plan for the **Flutter** user app: 14 workstreams broken into tasks and sub-engineering tasks, each with deliverables, dependencies, and definitions of done.
 - [`adminimplementation_plan.md`](./adminimplementation_plan.md) — detailed build plan for the **Flutter Web** internal console, including the Python/Playwright scraper worker and the unified policy-change alert pipeline.
-- [`database.sql`](./database.sql) — the single shared PostgreSQL schema backing **both** applications, with the database workstream plan, migration split, RLS policies, propagation RPCs, the anonymization audit, and the on-device SQLite mirror.
+- [`database.sql`](./database.sql) — historical consolidated schema and database workstream reference. Current deployment uses separate product and auth databases; use the maintained migration directories and security portability plan for upgrades and rehosting.
 
-Both applications are built in Flutter and share one Dart domain package (`pandapay_domain`) and one database, so the console validates card data with the exact code the app ranks with.
+Both applications are built in Flutter and share one Dart domain package (`pandapay_domain`), so the console validates card data with the exact code the app ranks with. The product API and separate auth service use their respective PostgreSQL databases; the mobile app also keeps local SQLite data.

@@ -13,12 +13,16 @@ sudo apt update && sudo apt upgrade -y
 
 # Install Node.js
 echo "📦 Installing Node.js..."
-if ! command -v node &> /dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+if ! command -v node &> /dev/null || [ "$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)" -lt 22 ]; then
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
     sudo apt install -y nodejs
-else
-    echo "✅ Node.js already installed: $(node --version)"
 fi
+node_major="$(node -p 'Number(process.versions.node.split(".")[0])')"
+if [ "$node_major" -lt 22 ]; then
+    echo "❌ Node.js 22 or higher is required (found $(node --version))"
+    exit 1
+fi
+echo "✅ Node.js supported version: $(node --version)"
 
 # Install Nginx
 echo "📦 Installing Nginx..."

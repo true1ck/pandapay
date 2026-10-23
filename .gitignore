@@ -29,6 +29,9 @@ scraper/.env
 /.env.prod
 /.env.staging
 
+# Reviewed migration manifests describe private deployment schema/history.
+deploy/migration-baselines/*.json
+
 # Python
 scraper/.venv/
 __pycache__/

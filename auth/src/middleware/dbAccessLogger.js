@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/middleware/dbAccessLogger.js
 // === SECURITY HARDENING: DATABASE ACCESS LOGGING ===
 // Logs all database access for security auditing and compliance
@@ -177,7 +178,7 @@ async function logDbAccess(logData, executor) {
     );
   } catch (err) {
     // Don't throw - logging failures should not break the application
-    console.error('[dbAccessLogger] Failed to log database access:', err.message);
+    console.error('Database access audit write failed', safeErrorCode(err));
   }
 }
 
@@ -249,7 +250,7 @@ async function loggedQuery(query, params = [], context = {}, executor) {
       userAgent: context.userAgent || null,
       duration,
     }, executor).catch(err => {
-      console.error('[dbAccessLogger] Failed to log (non-blocking):', err.message);
+    console.error('Non-blocking database audit write failed', safeErrorCode(err));
     });
 
     return result;

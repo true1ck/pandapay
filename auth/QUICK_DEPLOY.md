@@ -1,5 +1,11 @@
 # Quick Deployment Reference - auth.livingai.app
 
+**Historical standalone guide.** Do not use this recipe to upgrade the current
+PandaPay security release. Use [combined deployment](../deploy/DEPLOY.md) and
+the [controlled rollout runbook](../docs/security-rollout-runbook-2026-10-23.md)
+for paired backups, writer fencing, migrations and readiness verification.
+Keep all existing encryption/HMAC/JWT keys during a hosting migration.
+
 ## TL;DR - Quick Steps
 
 ### 1. Lightsail Setup
@@ -18,7 +24,7 @@ bash setup-server.sh
 
 # OR manually:
 sudo apt update && sudo apt upgrade -y
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs nginx git certbot python3-certbot-nginx
 sudo npm install -g pm2
 ```
@@ -28,7 +34,7 @@ sudo npm install -g pm2
 cd ~/apps
 git clone <your-repo-url> farm-auth-service
 cd farm-auth-service
-npm install --production
+npm ci --omit=dev
 cp example.env .env
 nano .env  # Configure environment variables
 ```
@@ -70,7 +76,7 @@ sudo ufw enable
 ```env
 NODE_ENV=production
 PORT=3000
-TRUST_PROXY=true
+TRUST_PROXY_HOPS=1 # one direct Nginx hop; preferred over deprecated TRUST_PROXY=true
 DATABASE_MODE=aws
 AWS_REGION=ap-south-1
 AWS_ACCESS_KEY_ID=your_key

@@ -37,8 +37,9 @@ final tokenStoreProvider = FutureProvider<TokenStore>(
 final accessTokenProvider = StateProvider<String?>((ref) => null);
 
 /// Runs once on startup: if a refresh token is stored, exchange it for a
-/// fresh access token and seed accessTokenProvider; otherwise (or on
-/// failure — expired/reused/invalid) clear storage and stay signed out.
+/// fresh access token and seed accessTokenProvider. A definitive 401 clears
+/// the invalid/revoked session; transient failures preserve stored tokens and
+/// are surfaced by the auth gate for retry.
 /// _AuthGate waits on this before deciding whether to show the login screen,
 /// so a valid stored session never flashes the login screen first.
 final sessionInitProvider = FutureProvider<void>((ref) async {
@@ -54,8 +55,13 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
       refreshToken: tokens.refreshToken,
     );
     ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
-  } catch (_) {
-    await store.clear();
+  } on AdminApiException catch (error) {
+    if (error.statusCode == 401) {
+      await store.clear();
+      ref.read(accessTokenProvider.notifier).state = null;
+      return;
+    }
+    rethrow;
   }
 });
 

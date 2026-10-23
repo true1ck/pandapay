@@ -1,4 +1,5 @@
 const { fetchRecentMessages } = require('./imap_client');
+const { safeErrorCode } = require('./safeErrorCode');
 
 /**
  * The background IMAP poller — the thing `imap_connections` was built for
@@ -169,8 +170,8 @@ async function runPollCycle(deps) {
       let outcome;
       try {
         outcome = await pollConnection(connection, deps);
-      } catch (err) {
-        outcome = { ok: false, reason: `unexpected: ${err.message}` };
+      } catch (_) {
+        outcome = { ok: false, reason: 'unexpected_error' };
       }
 
       const status = outcome.ok
@@ -218,7 +219,7 @@ function startImapPoller(deps, { intervalMinutes, logger = console } = {}) {
       const summary = await runPollCycle(deps);
       if (summary.polled) logger.log(`[imap-poller] polled ${summary.polled} connection(s)`);
     } catch (err) {
-      logger.error('[imap-poller] cycle failed', err);
+      logger.error('[imap-poller] cycle failed', safeErrorCode(err));
     } finally {
       running = false;
     }

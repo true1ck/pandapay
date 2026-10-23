@@ -1,248 +1,70 @@
-# Rate Limiting & OTP Throttling Implementation
+# Rate Limiting and OTP Throttling
 
-## Overview
+This document describes the OTP-related rate limits and their storage behavior in the auth service. Redis remains in use by other legacy admin, user, and general-purpose rate limiters; those paths are outside this OTP storage change.
 
-This document explains the secure rate limiting and OTP throttling implementation added to the authentication service.
+## OTP limits
 
-## Architecture
+`POST /auth/request-otp` applies the configured phone or email limits and IP limits:
 
-### Components Added
+| Scope | Window | Default |
+| --- | --- | ---: |
+| Phone or email | 10 minutes | 3 requests |
+| Phone or email | 24 hours | 10 requests |
+| IP address | 10 minutes | 20 requests |
+| IP address | 24 hours | 100 requests |
 
-1. **Redis Client** (`src/services/redisClient.js`)
-   - Manages Redis connection with graceful fallback to in-memory storage
-   - Supports `REDIS_URL` or `REDIS_HOST`/`REDIS_PORT` configuration
+An active OTP marker also prevents another challenge for the same identifier and purpose. The marker is claimed atomically before the OTP row is changed or inserted. A competing request receives HTTP 429. If the abuse store is unavailable, the request receives a controlled HTTP 503 before the OTP provider is called. Storage errors never fail open.
 
-2. **Rate Limiting Middleware** (`src/middleware/rateLimitMiddleware.js`)
-   - Per-phone rate limiting for OTP requests
-   - Per-IP rate limiting for OTP requests
-   - Active OTP checking (2-minute no-resend rule)
-   - Failed verification attempt tracking
+Each OTP has a 2-minute default lifetime and at most 5 verification attempts. The failed-verification quota is 10 attempts per identifier and purpose per hour. Replacement-contact requests also consume stable per-account quotas: the configured phone/email request limits per 10 minutes and day, and the failed-verification limit per hour. These replacement buckets use the authenticated account ID and channel, so creating another replacement identifier does not reset the quota.
 
-3. **Updated OTP Service** (`src/services/otpService.js`)
-   - Changed OTP expiry from 10 minutes to 2 minutes (120 seconds)
-   - Enhanced attempt tracking with generic error responses
+Quota refusals use HTTP 429. Storage or capacity failures use HTTP 503. A successfully verified OTP is consumed by the OTP service; its active marker is cleared by a compare-delete operation tied to that OTP's request ID. Delivery cleanup can clear only the marker created by that request, so a late failure cannot clear a newer challenge.
 
-4. **Updated Auth Routes** (`src/routes/authRoutes.js`)
-   - Integrated all rate limiting middleware
-   - Updated error responses to be generic
+## OTP abuse store
 
-## Rate Limiting Rules
+In production and staging, OTP rate counters, active markers, and replacement quotas use the PostgreSQL `auth_abuse_buckets` table. `AUTH_ABUSE_STORE` cannot select memory storage in hosted environments. Development and tests can explicitly set `AUTH_ABUSE_STORE=memory`; the default in those environments is the process-local memory store.
 
-### POST /auth/request-otp
+PostgreSQL keys are domain-separated HMAC-SHA256 digests using the existing `PHONE_LOOKUP_HMAC_KEY`. Raw phone numbers, email addresses, IP addresses, and account IDs are not stored in the bucket key column. TTL comparisons and expiry updates use the database clock. Counter updates saturate at the configured limit plus one, enough to keep returning a refusal without unbounded counter growth.
 
-**Per Phone Number:**
-- Max 3 requests per 10 minutes
-- Max 10 requests per 24 hours
-- **No resend if active OTP exists** (within 2 minutes of generation)
+The default `AUTH_ABUSE_BUCKET_CAPACITY` is 100000 rows. It bounds live bucket records, not physical database bytes. When creating a new bucket at capacity, the store deletes at most 200 expired rows using bounded cleanup; if capacity remains exhausted, it refuses the operation with HTTP 503. Monitor database disk usage and table/index bloat separately: PostgreSQL may retain dead tuples and free-space overhead after expired rows are deleted, so this row cap is not a physical storage cap.
 
-**Per IP Address:**
-- Max 20 requests per 10 minutes
-- Max 100 requests per 24 hours
-
-**Response on Limit Exceeded:**
-```json
-{
-  "success": false,
-  "message": "Too many OTP requests. Please try again later."
-}
-```
-HTTP Status: `429 Too Many Requests`
-
-**Response if Active OTP Exists:**
-```json
-{
-  "success": false,
-  "message": "An OTP is already active. Please wait a moment before requesting a new one."
-}
-```
-HTTP Status: `429 Too Many Requests`
-
-### POST /auth/verify-otp
-
-**Per OTP:**
-- Max 5 verification attempts per OTP
-- After 5 failed attempts, OTP is invalidated
-
-**Per Phone Number:**
-- Max 10 failed verifications per hour
-- If exceeded, all verification attempts are blocked temporarily
-
-**Response on Failure:**
-```json
-{
-  "success": false,
-  "message": "OTP invalid or expired. Please request a new one."
-}
-```
-HTTP Status: `400 Bad Request`
-
-**Response on Too Many Failed Attempts:**
-```json
-{
-  "success": false,
-  "message": "Too many attempts. Please try again later."
-}
-```
-HTTP Status: `429 Too Many Requests`
-
-## OTP Validity
-
-- **OTP expires after 2 minutes (120 seconds)** from generation
-- **No new OTP can be sent** to the same phone number while an active OTP exists
-- Once verified successfully, OTP is immediately deleted
-
-## Redis Setup
-
-### Configuration
-
-The system uses Redis for rate limiting counters with automatic TTL expiration. If Redis is not available, it falls back to in-memory storage.
-
-**Environment Variables:**
-
-```bash
-# Option 1: Full Redis URL
-REDIS_URL=redis://localhost:6379
-# or with password
-REDIS_URL=redis://:password@localhost:6379
-
-# Option 2: Separate host/port
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=your_password  # Optional
-```
-
-### Redis Keys Used
-
-- `otp_req:phone:{phone}:10min` - Phone requests (10 min window)
-- `otp_req:phone:{phone}:day` - Phone requests (24 hour window)
-- `otp_req:ip:{ip}:10min` - IP requests (10 min window)
-- `otp_req:ip:{ip}:day` - IP requests (24 hour window)
-- `otp_active:phone:{phone}` - Active OTP marker (2 min TTL)
-- `otp_verify_failed:phone:{phone}:hour` - Failed verifications (1 hour window)
-
-All keys automatically expire based on their TTL.
+The runtime database role needs `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on `auth_abuse_buckets`. Use the canonical migration setup or provision those narrow privileges explicitly for a distinct runtime role. Keep `PUBLIC` access revoked. The readiness check should report missing table privileges before accepting OTP traffic.
 
 ## Configuration
 
-All limits are configurable via environment variables:
+```dotenv
+OTP_REQ_PHONE_10MIN_LIMIT=3
+OTP_REQ_PHONE_DAY_LIMIT=10
+OTP_REQ_EMAIL_10MIN_LIMIT=3
+OTP_REQ_EMAIL_DAY_LIMIT=10
+OTP_REQ_IP_10MIN_LIMIT=20
+OTP_REQ_IP_DAY_LIMIT=100
+OTP_VERIFY_MAX_ATTEMPTS=5
+OTP_VERIFY_FAILED_PER_HOUR_LIMIT=10
+OTP_TTL_SECONDS=120
 
-```bash
-# OTP Request Limits
-OTP_REQ_PHONE_10MIN_LIMIT=3        # Default: 3
-OTP_REQ_PHONE_DAY_LIMIT=10        # Default: 10
-OTP_REQ_IP_10MIN_LIMIT=20          # Default: 20
-OTP_REQ_IP_DAY_LIMIT=100           # Default: 100
+# Maximum number of abuse-bucket rows; default 100000. This is not a byte cap.
+AUTH_ABUSE_BUCKET_CAPACITY=100000
 
-# OTP Verification Limits
-OTP_VERIFY_MAX_ATTEMPTS=5          # Default: 5
-OTP_VERIFY_FAILED_PER_HOUR_LIMIT=10 # Default: 10
-
-# OTP Validity
-OTP_TTL_SECONDS=120                # Default: 120 (2 minutes)
-
-# Proxy Support (for correct IP detection)
-TRUST_PROXY=true                    # Set if behind reverse proxy
+# Local development/test only. Hosted environments always require PostgreSQL.
+# AUTH_ABUSE_STORE=memory
 ```
 
-## Implementation Details
+`PHONE_LOOKUP_HMAC_KEY` must remain stable across auth instances and restarts. It must contain at least 32 bytes. Rotating it changes bucket digests and effectively starts new rate-limit buckets; coordinate rotation rather than changing it casually.
 
-### Redis Client Initialization
+`REDIS_URL` and `REDIS_HOST`/`REDIS_PORT` remain relevant to other legacy limiter components. They do not select the OTP abuse store.
 
-The Redis client is initialized in `src/index.js`:
+## Request path and failure behavior
 
-```javascript
-const { initRedis } = require('./services/redisClient');
-initRedis().catch((err) => {
-  console.warn('Redis initialization warning:', err.message);
-});
-```
+For ordinary OTP requests, the phone/email active-marker check and phone/email/IP request limits run before OTP creation. OTP creation then atomically claims the active marker before retiring or inserting OTP rows. If database writes fail after claiming, cleanup compare-deletes only that request's marker. An active marker belonging to a different request remains untouched.
 
-If Redis is unavailable, the system logs a warning and continues with in-memory fallback.
+Replacement OTP requests and verification attempts consume account-scoped quota before proceeding. These increments are atomic and occur before each attempt, including when the request is later refused. Stable account IDs and channels are bounded before key construction; the HMAC store prevents those identifiers from appearing in database keys.
 
-### Rate Limiting Logic
+If PostgreSQL is unavailable, the pool times out, the table is full, or a required permission is missing, affected OTP operations fail closed with a generic 503. They do not send an OTP through email or SMS while storage is unavailable. Other limiter implementations that still use Redis are not covered by this guarantee.
 
-1. **Request Flow for `/auth/request-otp`:**
-   ```
-   Request → checkActiveOtpForPhone → rateLimitRequestOtpByPhone → rateLimitRequestOtpByIp → createOtp
-   ```
+## Operational checks
 
-2. **Request Flow for `/auth/verify-otp`:**
-   ```
-   Request → rateLimitVerifyOtpByPhone → verifyOtp → (on failure) incrementFailedVerify
-   ```
-
-### Memory Store Fallback
-
-When Redis is not available, the system uses an in-memory store that:
-- Maintains counters with expiration timestamps
-- Automatically cleans up expired entries every minute
-- Works identically to Redis for rate limiting purposes
-- **Note:** In-memory store is per-process and doesn't persist across restarts
-
-### Error Handling
-
-All rate limiting middleware uses a "fail open" strategy:
-- If Redis errors occur, the request is allowed to proceed
-- Errors are logged but don't block legitimate users
-- This ensures availability even if rate limiting infrastructure fails
-
-## Security Features
-
-1. **Generic Error Messages:** All error responses use generic messages to avoid information leakage
-2. **No Information Leakage:** Errors don't distinguish between "wrong OTP", "expired OTP", or "max attempts"
-3. **Automatic Cleanup:** Expired OTPs and rate limit counters are automatically cleaned up
-4. **IP-based Protection:** Prevents abuse from single IP addresses
-5. **Phone-based Protection:** Prevents abuse targeting specific phone numbers
-
-## Testing
-
-To test the rate limiting:
-
-1. **Test Active OTP Rule:**
-   ```bash
-   # Request OTP
-   curl -X POST http://localhost:3000/auth/request-otp \
-     -H "Content-Type: application/json" \
-     -d '{"phone_number": "+1234567890"}'
-   
-   # Immediately try again (should be blocked)
-   curl -X POST http://localhost:3000/auth/request-otp \
-     -H "Content-Type: application/json" \
-     -d '{"phone_number": "+1234567890"}'
-   ```
-
-2. **Test Rate Limits:**
-   ```bash
-   # Send multiple requests quickly (should hit limit after 3)
-   for i in {1..5}; do
-     curl -X POST http://localhost:3000/auth/request-otp \
-       -H "Content-Type: application/json" \
-       -d '{"phone_number": "+1234567890"}'
-     sleep 1
-   done
-   ```
-
-## Dependencies
-
-Added to `package.json`:
-- `redis`: ^4.7.0
-
-Install with:
-```bash
-npm install
-```
-
-## Notes
-
-- The system gracefully degrades if Redis is unavailable
-- All rate limits are enforced independently (phone and IP limits both apply)
-- OTP expiry time changed from 10 minutes to 2 minutes
-- SMS message updated to reflect 2-minute expiry
-- Existing JWT and user creation logic remains unchanged
-
-
-
-
-
-
-
+- Confirm the auth migration has created `auth_abuse_buckets` before enabling OTP traffic.
+- Confirm the runtime role has the four narrow DML privileges and `PUBLIC` has none.
+- Monitor `auth_abuse_buckets` row count, database storage, and table/index bloat. The configured row cap does not cap physical bytes.
+- Treat changes to `PHONE_LOOKUP_HMAC_KEY` as rate-limit state rotation.
+- Test OTP request and verification flows with synthetic identities in development or a disposable test database. Do not put real contact values in logs or test output.

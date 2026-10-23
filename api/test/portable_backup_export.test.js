@@ -9,7 +9,10 @@ const {
   exportSnapshot,
   sqlForSection,
 } = require('../src/portable_backup');
-const { registerPortableBackupRoutes } = require('../src/portable_backup/routes');
+const {
+  createPortableBackupExportHandler,
+  registerPortableBackupRoutes,
+} = require('../src/portable_backup/routes');
 
 class ResponseStub extends EventEmitter {
   constructor() {
@@ -18,6 +21,11 @@ class ResponseStub extends EventEmitter {
     this.headersSent = false;
     this.destroyed = false;
     this.statusCode = 200;
+    this.headers = {};
+  }
+
+  setHeader(name, value) {
+    this.headers[name] = value;
   }
 
   write(chunk) {
@@ -78,9 +86,33 @@ test('each section query has an explicit owner filter and bounded batch', () => 
     assert.match(query.text, /LIMIT \$2/);
     assert.equal(query.values[0], null);
     assert.match(query.text, /profile_id|p\.id/);
+    assert.equal(query.values.length, section.cursor ? 2 : 3);
   }
   const transactionSplit = PORTABLE_SECTIONS.find((section) => section.name === 'transaction_splits');
   assert.match(sqlForSection(transactionSplit, 17, null).text, /owner_txn\.profile_id = \$1/);
+});
+
+test('settings pagination advances on profile_id and cursor parameters match SQL placeholders', async () => {
+  const profileId = '11111111-1111-4111-8111-111111111111';
+  const settingsQueries = [];
+  const client = {
+    async query(query) {
+      if (typeof query === 'object' && query.text.includes('txid_current')) {
+        return { rows: [{ snapshot_revision: '123', snapshot_at: '2026-10-23T00:00:00.000Z', account_id: profileId }] };
+      }
+      if (typeof query === 'object' && query.text.includes('FROM public.user_settings')) {
+        settingsQueries.push(query);
+        return settingsQueries.length === 1
+          ? { rows: [{ record: { profile_id: profileId, settings: {} } }] }
+          : { rows: [] };
+      }
+      return { rows: [] };
+    },
+  };
+  await exportSnapshot({ client, res: new ResponseStub(), profileId, batchSize: 1 });
+  assert.deepEqual(settingsQueries[0].values, [profileId, 1]);
+  assert.deepEqual(settingsQueries[1].values, [profileId, 1, profileId]);
+  assert.match(settingsQueries[1].text, /t\.profile_id > \$3/);
 });
 
 test('empty snapshot emits one header, all sections, and a complete footer', async () => {
@@ -131,6 +163,46 @@ test('route mount uses repeatable read, app user context, rollback cleanup, and 
   assert.equal(res.destroyed, false);
 });
 
+test('pre-stream failures use JSON content type and never reflect database error text', async () => {
+  let handler;
+  const app = { get(_path, _middleware, mountedHandler) { handler = mountedHandler; } };
+  registerPortableBackupRoutes(app, {
+    requireAuth: (_req, _res, next) => next(),
+    pool: { async connect() { throw new Error('sensitive SQL and contact text'); } },
+  });
+  const res = new ResponseStub();
+  await handler({ userId: '11111111-1111-4111-8111-111111111111' }, res);
+  assert.equal(res.headers['Content-Type'], 'application/json; charset=utf-8');
+  assert.deepEqual(res.body, { error: 'export_failed' });
+});
+
+test('only one export runs at a time and the admission slot releases on completion', async () => {
+  let releaseFirstConnection;
+  let connectCount = 0;
+  const pool = {
+    connect() {
+      connectCount += 1;
+      if (connectCount === 1) return new Promise((resolve) => { releaseFirstConnection = resolve; });
+      return Promise.resolve(emptyClient());
+    },
+  };
+  const handler = createPortableBackupExportHandler({ pool });
+  const firstResponse = new ResponseStub();
+  const first = handler({ userId: '11111111-1111-4111-8111-111111111111' }, firstResponse);
+  const busyResponse = new ResponseStub();
+  await handler({ userId: '22222222-2222-4222-8222-222222222222' }, busyResponse);
+  assert.equal(busyResponse.statusCode, 503);
+  assert.deepEqual(busyResponse.body, { error: 'export_busy' });
+  assert.equal(connectCount, 1, 'busy request must be refused before pool.connect');
+
+  releaseFirstConnection(emptyClient());
+  await first;
+  const nextResponse = new ResponseStub();
+  await handler({ userId: '22222222-2222-4222-8222-222222222222' }, nextResponse);
+  assert.equal(nextResponse.ended, true, 'admission slot must be released after completion');
+  assert.equal(connectCount, 2);
+});
+
 test('disconnect aborts before the next batch and leaves no successful footer', async () => {
   const client = emptyClient();
   const res = new ResponseStub();
@@ -145,4 +217,86 @@ test('disconnect aborts before the next batch and leaves no successful footer', 
   res.emit('close');
   await assert.rejects(pending, (error) => error.code === 'export_cancelled');
   assert.equal(res.chunks.some((chunk) => chunk.includes('"complete":true')), false);
+});
+
+test('stalled response backpressure times out and fails the export', async () => {
+  const client = emptyClient();
+  const res = new ResponseStub();
+  res.write = () => false;
+  await assert.rejects(exportSnapshot({
+    client,
+    res,
+    profileId: '11111111-1111-4111-8111-111111111111',
+    backpressureTimeoutMs: 5,
+  }), (error) => error.code === 'export_backpressure_timeout');
+  assert.equal(res.listenerCount('drain'), 0);
+  assert.equal(res.listenerCount('close'), 0);
+});
+
+test('overall export deadline is checked between snapshot queries', async () => {
+  const profileId = '11111111-1111-4111-8111-111111111111';
+  const client = emptyClient();
+  const times = [0, 0, 11];
+  await assert.rejects(exportSnapshot({
+    client,
+    res: new ResponseStub(),
+    profileId,
+    maxDurationMs: 10,
+    now: () => times.shift() ?? 11,
+  }), (error) => error.code === 'export_timeout');
+  assert.equal(client.calls.length, 1, 'expired export must not begin section queries');
+});
+
+test('record and byte caps abort without writing a complete footer', async () => {
+  const profileId = '11111111-1111-4111-8111-111111111111';
+  const recordsClient = {
+    async query(query) {
+      if (typeof query === 'object' && query.text.includes('txid_current')) {
+        return { rows: [{ snapshot_revision: '123', snapshot_at: '2026-10-23T00:00:00.000Z', account_id: profileId }] };
+      }
+      if (typeof query === 'object' && query.text.includes('FROM public.profiles')) {
+        return { rows: [
+          { record: { id: profileId, note: 'first' } },
+          { record: { id: '33333333-3333-4333-8333-333333333333', note: 'second' } },
+        ] };
+      }
+      return { rows: [] };
+    },
+  };
+
+  const recordResponse = new ResponseStub();
+  await assert.rejects(exportSnapshot({
+    client: recordsClient,
+    res: recordResponse,
+    profileId,
+    batchSize: 2,
+    maxRecords: 1,
+  }), (error) => error.code === 'export_limit_exceeded');
+  assert.equal(recordResponse.chunks.some((chunk) => chunk.includes('"complete":true')), false);
+
+  const byteClient = {
+    async query(query) {
+      if (typeof query === 'object' && query.text.includes('txid_current')) {
+        return { rows: [{ snapshot_revision: '123', snapshot_at: '2026-10-23T00:00:00.000Z', account_id: profileId }] };
+      }
+      if (typeof query === 'object' && query.text.includes('FROM public.profiles')) {
+        return { rows: [
+          { record: { id: profileId, note: 'x'.repeat(600) } },
+          { record: { id: '33333333-3333-4333-8333-333333333333', note: 'y'.repeat(600) } },
+        ] };
+      }
+      return { rows: [] };
+    },
+  };
+  const byteResponse = new ResponseStub();
+  await assert.rejects(exportSnapshot({
+    client: byteClient,
+    res: byteResponse,
+    profileId,
+    batchSize: 2,
+    maxOutputBytes: 1_500,
+  }), (error) => error.code === 'export_limit_exceeded');
+  assert.ok(byteResponse.chunks.length >= 2, 'first record should be streamed before the cap is reached');
+  assert.equal(byteResponse.chunks.some((chunk) => chunk.includes('"complete":true')), false);
+  assert.equal(byteResponse.ended, undefined);
 });

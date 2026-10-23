@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { randomUUID, createHash } = require('crypto');
@@ -5,6 +6,12 @@ const db = require('../db');
 const config = require('../config');
 const auth = require('../middleware/authMiddleware');
 const { userRateLimitSensitive } = require('../middleware/userRateLimit');
+const {
+  RateLimitStorageError,
+  RateLimitExceededError,
+  ActiveOtpError,
+  consumeReplacementBudget,
+} = require('../middleware/rateLimitMiddleware');
 const { getActiveKey, getKeySecret, getIssuer, getAudience } = require('../services/jwtKeys');
 const { createOtp, verifyOtp, discardUndeliveredOtp } = require('../services/otpService');
 const { sendOtpEmail } = require('../services/emailService');
@@ -16,6 +23,23 @@ const { maskEmail, maskPhone } = require('../utils/recoveryContacts');
 const router = express.Router();
 const fingerprint = value => createHash('sha256').update(value || '').digest('hex');
 const audience = () => `${getAudience()}:contact-replacement`;
+const ABUSE_STORE_UNAVAILABLE_MESSAGE = 'Authentication is temporarily unavailable. Please try again shortly.';
+
+function isRateLimitStorageError(error) {
+  return typeof RateLimitStorageError === 'function' && error instanceof RateLimitStorageError;
+}
+
+function isActiveOtpError(error) {
+  return typeof ActiveOtpError === 'function' && error instanceof ActiveOtpError;
+}
+
+function isRateLimitExceededError(error) {
+  return typeof RateLimitExceededError === 'function' && error instanceof RateLimitExceededError;
+}
+
+function respondReplacementBudgetExceeded(res) {
+  return res.status(429).json({ error: 'Too many contact replacement attempts. Please try again later.' });
+}
 
 // Only a recent, signed recovery OTP proof can replace the OTHER contact.
 // A normal session or a client-provided channel is insufficient.
@@ -49,8 +73,8 @@ function normalize(value, channel) {
 
 async function contactAvailable(value, channel, userId) {
   const query = channel === 'email'
-    ? ['SELECT id FROM users WHERE lower(email) = $1 AND id <> $2', [value, userId]]
-    : ['SELECT id FROM users WHERE phone_lookup_hash = $1 AND id <> $2',
+    ? ['SELECT id FROM users WHERE lower(email) = $1 AND deleted = FALSE AND id <> $2', [value, userId]]
+    : ['SELECT id FROM users WHERE phone_lookup_hash = $1 AND deleted = FALSE AND id <> $2',
       [...preparePhoneSearchParams(value), userId]];
   return (await db.query(...query)).rows.length === 0;
 }
@@ -68,6 +92,7 @@ router.post('/request', async (req, res) => {
     if (!await contactAvailable(value, channel, user.id)) {
       return res.status(409).json({ error: 'This contact cannot be linked. Use another contact.' });
     }
+    await consumeReplacementBudget(user.id, channel, 'request');
     // Keep replacement OTPs separate from sign-in OTPs and bind the code
     // to this account through a short-lived, signed challenge.
     const otpIdentifier = `replacement-${randomUUID()}@recovery.invalid`;
@@ -84,7 +109,10 @@ router.post('/request', async (req, res) => {
     }, active.secret, { issuer: getIssuer(), audience: audience(), expiresIn: '2m', keyid: active.keyId });
     return res.json({ challenge, contact_hint: channel === 'email' ? maskEmail(value) : maskPhone(value) });
   } catch (error) {
-    console.error('Recovery contact request failed:', error.code || error.name);
+    console.error('Recovery contact request failed:', safeErrorCode(error));
+    if (isRateLimitExceededError(error)) return respondReplacementBudgetExceeded(res);
+    if (isActiveOtpError(error)) return res.status(429).json({ error: 'An OTP is already active. Please wait a moment before requesting a new one.' });
+    if (isRateLimitStorageError(error)) return res.status(503).json({ error: ABUSE_STORE_UNAVAILABLE_MESSAGE });
     return res.status(500).json({ error: 'Unable to request verification. Please try again.' });
   }
 });
@@ -117,6 +145,7 @@ router.post('/verify', async (req, res) => {
     if (!await contactAvailable(proof.value, channel, user.id)) {
       return res.status(409).json({ error: 'This contact cannot be linked. Use another contact.' });
     }
+    await consumeReplacementBudget(user.id, channel, 'verify');
     const verified = await verifyOtp(proof.otp_identifier, String(code), 'email', 'replacement');
     if (!verified.ok) return res.status(400).json({ error: 'Invalid or expired code. Your contact has not been changed.' });
     const column = channel === 'email' ? 'email' : 'phone_number';
@@ -149,7 +178,9 @@ router.post('/verify', async (req, res) => {
     });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ error: 'This contact cannot be linked. Use another contact.' });
-    console.error('Recovery contact verification failed:', error.code || error.name);
+    console.error('Recovery contact verification failed:', safeErrorCode(error));
+    if (isRateLimitExceededError(error)) return respondReplacementBudgetExceeded(res);
+    if (isRateLimitStorageError(error)) return res.status(503).json({ error: ABUSE_STORE_UNAVAILABLE_MESSAGE });
     return res.status(500).json({ error: 'Unable to update the contact. Please try again.' });
   }
 });

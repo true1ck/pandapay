@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/routes/userRoutes.js
 const express = require('express');
 const db = require('../db');
@@ -23,6 +24,10 @@ const {
 } = require('../middleware/validation');
 
 const router = express.Router();
+
+function logUserRouteError(event, error) {
+  console.error(`[user] ${event}`, safeErrorCode(error));
+}
 
 // GET /users/me
 // Rate limited: Read operation (100 requests per 15 minutes per user)
@@ -69,7 +74,7 @@ router.get('/me', auth, userRateLimitRead, async (req, res) => {
       active_devices_count: activeDevicesCount,
     });
   } catch (err) {
-    console.error('get me error', err);
+    logUserRouteError('profile read failed', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -130,7 +135,7 @@ router.get('/me/recovery-status', auth, userRateLimitRead, async (req, res) => {
       phone_hint: phonePlain ? maskPhone(phonePlain) : null,
     });
   } catch (err) {
-    console.error('recovery status error', err);
+    logUserRouteError('recovery status read failed', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -174,7 +179,7 @@ router.post('/me/recovery-contact-check', auth, userRateLimitSensitive, async (r
 
     return res.json({ ok: true });
   } catch (error) {
-    console.error('recovery contact check failed', error.code || error.name);
+    console.error('recovery contact check failed', safeErrorCode(error));
     return res.status(500).json({ error: 'Unable to verify the linked contact. Please try again.' });
   }
 });
@@ -215,7 +220,7 @@ router.put(
 
       return res.json(updatedUser);
     } catch (err) {
-      console.error('update me error', err);
+    logUserRouteError('profile update failed', err);
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -248,7 +253,7 @@ router.get('/me/devices', auth, userRateLimitRead, async (req, res) => {
 
     return res.json({ devices: rows });
   } catch (err) {
-    console.error('get devices error', err);
+    logUserRouteError('device list read failed', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -294,12 +299,12 @@ router.delete(
           ]
         );
       } catch (auditErr) {
-        console.error('Failed to log device revocation', auditErr);
+        logUserRouteError('device revocation audit write failed', auditErr);
       }
 
       return res.json({ ok: true, message: 'Device logged out successfully' });
     } catch (err) {
-      console.error('revoke device error', err);
+      logUserRouteError('device revocation failed', err);
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -358,7 +363,7 @@ router.post(
           ]
         );
       } catch (auditErr) {
-        console.error('Failed to log logout all action', auditErr);
+        logUserRouteError('logout-all audit write failed', auditErr);
       }
 
       return res.json({
@@ -367,7 +372,7 @@ router.post(
         revoked_devices_count: revokedDevices.length,
       });
     } catch (err) {
-      console.error('logout all other devices error', err);
+      logUserRouteError('logout other devices failed', err);
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -414,7 +419,7 @@ router.post(
         revoked_tokens_count: result.revokedTokensCount,
       });
     } catch (err) {
-      console.error('logout all devices error', err);
+      logUserRouteError('logout all devices failed', err);
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -504,7 +509,7 @@ router.put(
         message: 'FCM token updated successfully'
       });
     } catch (err) {
-      console.error('update-fcm-token error', err);
+      logUserRouteError('device notification token update failed', err);
       return res.status(500).json({
         success: false,
         message: 'Internal server error'

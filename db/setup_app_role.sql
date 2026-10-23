@@ -109,6 +109,11 @@ alter default privileges in schema public grant select, insert, update, delete o
 -- otherwise restore direct profile insertion every time this script runs.
 do $$
 begin
+  -- Setup runs before and after migrations; the broad public-table grants
+  -- above must never restore runtime access to the migration control plane.
+  if to_regclass('public.schema_migrations') is not null then
+    execute 'revoke all on table public.schema_migrations from public, app_user';
+  end if;
   if to_regclass('public.profiles') is not null then
     execute 'revoke insert, update, delete on table public.profiles from app_user';
     execute 'grant update (contributions_opt_in, deletion_requested_at, deletion_due_at) on table public.profiles to app_user';

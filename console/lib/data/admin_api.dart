@@ -95,6 +95,7 @@ class AuthApi {
     if (response.statusCode != 200) {
       throw AdminApiException(
         'Refresh failed: ${response.statusCode} ${response.body}',
+        statusCode: response.statusCode,
       );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -1064,7 +1065,8 @@ class AdminApi {
 
 class AdminApiException implements Exception {
   final String message;
-  AdminApiException(this.message);
+  final int? statusCode;
+  AdminApiException(this.message, {this.statusCode});
   @override
   String toString() => message;
 }

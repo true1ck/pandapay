@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/middleware/userRateLimit.js
 // === SECURITY HARDENING: USER ROUTES RATE LIMITING ===
 // Rate limiting middleware for user routes
@@ -49,7 +50,7 @@ async function incrementCounter(key, ttlSeconds) {
       }
       return count;
     } catch (err) {
-      console.error('Redis increment error in user rate limit, falling back to memory:', err);
+      console.error('User rate limit increment failed; using memory fallback', safeErrorCode(err));
       // Fall through to memory store
     }
   }
@@ -78,7 +79,7 @@ async function getCounter(key) {
       const count = await redis.get(key);
       return count ? parseInt(count, 10) : 0;
     } catch (err) {
-      console.error('Redis get error in user rate limit, falling back to memory:', err);
+      console.error('User rate limit read failed; using memory fallback', safeErrorCode(err));
       // Fall through to memory store
     }
   }
@@ -157,7 +158,7 @@ function createUserRateLimit(type) {
 
       next();
     } catch (err) {
-      console.error('User rate limit error:', err);
+      console.error('User rate limit check failed', safeErrorCode(err));
       // On error, allow the request to proceed (fail open)
       // This ensures legitimate users aren't blocked if rate limiting fails
       next();

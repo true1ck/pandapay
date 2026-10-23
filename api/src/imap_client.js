@@ -1,4 +1,10 @@
 const tls = require('tls');
+const {
+  createPinnedTlsOptions,
+  hasImapControlChars,
+  imapHostFailureReason,
+  resolvePublicImapHost,
+} = require('./imap_network');
 
 /**
  * A minimal IMAP reader: connect, LOGIN, SELECT INBOX, SEARCH, FETCH, done.
@@ -49,7 +55,9 @@ function imapDate(d) {
  * the rest of the value into commands — the IMAP equivalent of an injection.
  */
 function quoted(value) {
-  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  const text = String(value);
+  if (hasImapControlChars(text)) throw new Error('invalid_imap_argument');
+  return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
 /**
@@ -60,7 +68,19 @@ function quoted(value) {
  * since untagged responses and literal blocks can contain anything,
  * newlines included.
  */
-function runImapSession({ host, port = 993, email, password, timeoutMs = 20000, onReady }) {
+function runImapSession({
+  host,
+  port = 993,
+  email,
+  password,
+  timeoutMs = 20000,
+  onReady,
+  tlsConnect = tls.connect,
+  resolveHost = resolvePublicImapHost,
+}) {
+  if ([email, password].some(hasImapControlChars)) {
+    return Promise.resolve({ ok: false, reason: 'invalid_imap_argument' });
+  }
   return new Promise((resolve) => {
     let settled = false;
     let buffer = '';
@@ -68,17 +88,21 @@ function runImapSession({ host, port = 993, email, password, timeoutMs = 20000, 
     let tagCounter = 0;
     let pending = null;
 
-    const socket = tls.connect({ host, port, servername: host }, () => {});
+    let socket;
 
     const done = (result) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      const failedCommand = pending;
+      pending = null;
       try {
-        socket.end();
+        if (result.ok) socket?.end();
+        else socket?.destroy?.();
       } catch (_) {
         /* already closed */
       }
+      failedCommand?.rejectCmd(errorWithCode(result.reason || 'imap_error'));
       resolve(result);
     };
 
@@ -93,62 +117,93 @@ function runImapSession({ host, port = 993, email, password, timeoutMs = 20000, 
         socket.write(`${tag} ${command}\r\n`);
       });
 
-    socket.setEncoding('utf8');
-    socket.on('data', (chunk) => {
-      bytesRead += chunk.length;
-      if (bytesRead > MAX_RESPONSE_BYTES) {
-        done({ ok: false, reason: 'response_too_large' });
-        return;
-      }
-      buffer += chunk;
-
-      // Greeting: anything before the first command completes.
-      if (!pending) {
-        if (buffer.includes('\r\n')) buffer = '';
-        return;
-      }
-
-      const lines = buffer.split('\r\n');
-      // The last element is a partial line unless the buffer ended on CRLF.
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        if (line.startsWith(`${pending.tag} `)) {
-          const status = line.slice(pending.tag.length + 1).split(' ')[0];
-          const { chunks, resolveCmd, rejectCmd } = pending;
-          pending = null;
-          if (status === 'OK') resolveCmd(chunks.join('\r\n'));
-          else rejectCmd(new Error(line));
+    const attachSocketHandlers = () => {
+      socket.setEncoding('utf8');
+      socket.on('data', (chunk) => {
+        bytesRead += Buffer.byteLength(chunk, 'utf8');
+        if (bytesRead > MAX_RESPONSE_BYTES) {
+          done({ ok: false, reason: 'response_too_large' });
           return;
         }
-        pending.chunks.push(line);
-      }
-    });
+        buffer += chunk;
 
-    socket.on('error', (err) => done({ ok: false, reason: `socket_error: ${err.message}` }));
-    socket.on('end', () => done({ ok: false, reason: 'connection_closed' }));
-
-    socket.once('secureConnect', async () => {
-      try {
-        // The greeting arrives unprompted; give it a moment to land before
-        // the first command so it isn't mistaken for that command's reply.
-        await new Promise((r) => setTimeout(r, 150));
-        await send(`LOGIN ${quoted(email)} ${quoted(password)}`);
-        const result = await onReady(send);
-        try {
-          await send('LOGOUT');
-        } catch (_) {
-          /* the server may close first; not a failure */
+        // Greeting: anything before the first command completes.
+        if (!pending) {
+          if (buffer.includes('\r\n')) buffer = '';
+          return;
         }
-        done({ ok: true, ...result });
-      } catch (err) {
-        // Auth failures arrive as a tagged NO and land here. Reported as a
-        // reason rather than thrown: a wrong app password is an expected
-        // outcome for this route, not a server error.
-        done({ ok: false, reason: `imap_error: ${err.message}` });
+
+        const lines = buffer.split('\r\n');
+        // The last element is a partial line unless the buffer ended on CRLF.
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (line.startsWith(`${pending.tag} `)) {
+            const status = line.slice(pending.tag.length + 1).split(' ')[0];
+            const { chunks, resolveCmd, rejectCmd, tag } = pending;
+            pending = null;
+            if (status === 'OK') resolveCmd(chunks.join('\r\n'));
+            else {
+              const error = errorWithCode(status === 'NO' && tag === 'a1'
+                ? 'authentication_failed'
+                : 'imap_command_failed');
+              rejectCmd(error);
+            }
+            return;
+          }
+          pending.chunks.push(line);
+        }
+      });
+
+      socket.on('error', () => done({ ok: false, reason: 'socket_error' }));
+      socket.on('end', () => done({ ok: false, reason: 'connection_closed' }));
+
+      socket.once('secureConnect', async () => {
+        try {
+          // The greeting arrives unprompted; give it a moment to land before
+          // the first command so it isn't mistaken for that command's reply.
+          await new Promise((r) => setTimeout(r, 150));
+          await send(`LOGIN ${quoted(email)} ${quoted(password)}`);
+          const result = await onReady(send);
+          try {
+            await send('LOGOUT');
+          } catch (_) {
+            /* the server may close first; not a failure */
+          }
+          done({ ok: true, ...result });
+        } catch (err) {
+          done({ ok: false, reason: err?.code === 'authentication_failed'
+            ? 'authentication_failed'
+            : err?.code === 'imap_command_failed' ? 'imap_command_failed' : 'imap_error' });
+        }
+      });
+    };
+
+    const connect = async () => {
+      let resolution;
+      try {
+        resolution = await resolveHost(host);
+      } catch (error) {
+        done({ ok: false, reason: imapHostFailureReason(error) });
+        return;
       }
-    });
+      if (settled) return;
+      try {
+        socket = tlsConnect(createPinnedTlsOptions(resolution, port), () => {});
+      } catch (_) {
+        done({ ok: false, reason: 'socket_error' });
+        return;
+      }
+      attachSocketHandlers();
+    };
+    connect().catch(() => done({ ok: false, reason: 'socket_error' }));
   });
+}
+
+function errorWithCode(code) {
+  const error = new Error(code);
+  error.code = code;
+  return error;
 }
 
 /**
@@ -209,13 +264,18 @@ function parseFetchResponse(text) {
  * not just an optimisation: the poller should never pull a user's personal
  * correspondence into this process at all.
  */
-async function fetchRecentMessages({ host, port, email, password, since, senderFilter, timeoutMs }) {
+async function fetchRecentMessages({ host, port, email, password, since, senderFilter, timeoutMs, tlsConnect, resolveHost }) {
+  if ([email, password, senderFilter].some(hasImapControlChars)) {
+    return { ok: false, reason: 'invalid_imap_argument' };
+  }
   return runImapSession({
     host,
     port,
     email,
     password,
     timeoutMs,
+    tlsConnect,
+    resolveHost,
     onReady: async (send) => {
       // EXAMINE, not SELECT: read-only, so polling can never mark a user's
       // mail as read or otherwise alter their mailbox.

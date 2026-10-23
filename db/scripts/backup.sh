@@ -1,95 +1,75 @@
 #!/usr/bin/env bash
-#
-# Plan Phase 0.1 — a real logical backup, replacing the stub.
-#
-# `POST /backup-runs` in api/src/index.js declares in its own doc comment that
-# it is a stub: it inserts a `backup_runs` row claiming success and performs no
-# backup. For a personal-finance app that is the single highest-severity gap in
-# the whole system — a lost database today is permanent, total user data loss,
-# and the `backup_runs` table would show a clean history of successes right up
-# until the moment someone tried to restore.
-#
-# This script is the thing that was missing. It is deliberately a plain
-# pg_dump + verify + record + prune, not a bespoke backup system:
-#
-#   * A managed Postgres with point-in-time recovery is still the primary
-#     protection and this does not replace it. PITR covers "the database was
-#     corrupted eleven minutes ago"; a logical dump covers "a migration
-#     dropped the wrong column last Tuesday" and "we need to move providers",
-#     which PITR windows typically do not.
-#   * It writes an honest `backup_runs` row — status 'failed' on failure,
-#     with the real error — so the table stops being a record of a stub.
-#
-# Usage:
-#   DATABASE_URL=postgres://... BACKUP_DIR=/var/backups/pandapay ./backup.sh
-#
-# Exit codes: 0 success, non-zero failure (so a cron/systemd unit can alert).
-
+# Paired logical backups: stream ciphertext only to persistent backup storage.
 set -Eeuo pipefail
-
-: "${DATABASE_URL:?DATABASE_URL must be set}"
+umask 077
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/backup_common.sh"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/pandapay}"
-RETENTION_DAYS="${RETENTION_DAYS:-30}"
-STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-ARCHIVE="${BACKUP_DIR}/pandapay-${STAMP}.dump"
-
+RETENTION_DAYS="${RETENTION_DAYS:-7}"
+export RETENTION_DAYS BACKUP_DIR
+BACKUP_MODE="${BACKUP_MODE:-offhost}"
+export BACKUP_MODE
+require_env PRODUCT_DATABASE_URL AUTH_DATABASE_URL BACKUP_AGE_RECIPIENTS_FILE
+case "$BACKUP_MODE" in
+  offhost) require_env BACKUP_DESTINATION_A BACKUP_DESTINATION_B ;;
+  local) ;;
+  *) echo 'BACKUP_MODE must be offhost or local' >&2; exit 2 ;;
+esac
+require_commands pg_dump psql age python3 sha256sum
+validate_backup_inputs
 mkdir -p "$BACKUP_DIR"
-
-# Records the outcome in `backup_runs` whatever happens. Deliberately runs on
-# the failure path too: a backup system whose failures are invisible is worse
-# than none, because it manufactures confidence.
-# Column names checked against the real table, not assumed: backup_runs has
-# `size_bytes` and `error_text` (0009_platform_ops.sql), NOT a `notes` column.
-# An INSERT naming a column that doesn't exist fails silently under the
-# `|| echo WARN` below, which would have left this script appearing to work
-# while recording nothing at all.
-record_run() {
-  local status="$1" location="$2" size="${3:-NULL}" err="${4:-}"
-  local err_sql="NULL"
-  [ -n "$err" ] && err_sql="\$\$${err}\$\$"
-  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
-    "INSERT INTO backup_runs (kind, status, location, size_bytes, error_text)
-     VALUES ('logical', '${status}', '${location}', ${size}, ${err_sql})" \
-    >/dev/null 2>&1 || echo "WARN: could not write backup_runs row" >&2
-}
-
-on_error() {
-  local line="$1"
-  record_run 'failed' "${ARCHIVE}" NULL "backup.sh failed at line ${line}"
-  echo "BACKUP FAILED at line ${line}" >&2
-}
-trap 'on_error $LINENO' ERR
-
-echo "==> Dumping to ${ARCHIVE}"
-# --format=custom so pg_restore can do selective/parallel restores; a plain SQL
-# dump can only be replayed whole, which is the wrong tool when the incident is
-# "one table needs rolling back".
-pg_dump "$DATABASE_URL" \
-  --format=custom \
-  --compress=9 \
-  --no-owner \
-  --no-privileges \
-  --file="$ARCHIVE"
-
-echo "==> Verifying"
-# A dump that cannot be listed cannot be restored. `pg_restore --list` parses
-# the archive's table of contents and fails on a truncated or corrupt file —
-# catching the "disk filled up halfway through" case that otherwise only
-# surfaces during an actual emergency.
-pg_restore --list "$ARCHIVE" >/dev/null
-
-SIZE="$(wc -c < "$ARCHIVE" | tr -d ' ')"
-if [ "$SIZE" -lt 1024 ]; then
-  echo "Dump is implausibly small (${SIZE} bytes) — treating as a failure" >&2
-  exit 1
+if [ "${BACKUP_STORAGE_LOCK_HELD:-}" != 1 ]; then
+  LOCK_ROOTS=("$BACKUP_DIR")
+  if [ "$BACKUP_MODE" = offhost ]; then
+    LOCK_ROOTS+=("$BACKUP_DESTINATION_A" "$BACKUP_DESTINATION_B")
+  fi
+  exec python3 "$SCRIPT_DIR/backup_storage.py" lock-many "${LOCK_ROOTS[0]}" \
+    "${LOCK_ROOTS[@]:1}" cmd: bash "$SCRIPT_DIR/backup.sh"
 fi
-echo "==> OK (${SIZE} bytes)"
-
-record_run 'success' "${ARCHIVE}" "${SIZE}"
-
-echo "==> Pruning backups older than ${RETENTION_DAYS} days"
-# Pruning runs only after a verified success, so a run of failures can never
-# delete the last good backup.
-find "$BACKUP_DIR" -name 'pandapay-*.dump' -type f -mtime "+${RETENTION_DAYS}" -delete
-
-echo "==> Done"
+DESTINATIONS=("$BACKUP_DIR")
+if [ "$BACKUP_MODE" = offhost ]; then DESTINATIONS+=("$BACKUP_DESTINATION_A" "$BACKUP_DESTINATION_B"); fi
+for destination in "${DESTINATIONS[@]}"; do
+  python3 "$SCRIPT_DIR/backup_storage.py" prepare "$destination"
+done
+# Snapshot metadata and libpq credentials are temporary, never part of the
+# durable backup directory. Dumps themselves are never written in plaintext.
+BACKUP_PRIVATE_WORK="$(mktemp -d "${TMPDIR:-/tmp}/pandapay-backup.XXXXXXXX")"
+BACKUP_SET_ID="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+BACKUP_ENCRYPTED_WORK="$BACKUP_DIR/.pending-$BACKUP_SET_ID"
+FINAL="$BACKUP_DIR/$BACKUP_SET_ID"
+mkdir -m 700 "$BACKUP_ENCRYPTED_WORK"
+cleanup() {
+  rm -rf -- "$BACKUP_PRIVATE_WORK" "$BACKUP_ENCRYPTED_WORK"
+  # A failed upload must not leave accumulating ineligible generations.
+  for destination in "${DESTINATIONS[@]}"; do
+    rm -rf -- "$destination/.pending-$BACKUP_SET_ID"
+    if [ ! -f "$destination/$BACKUP_SET_ID/OFFSITE_COMPLETE" ] && [ ! -f "$destination/$BACKUP_SET_ID/LOCAL_COMPLETE" ]; then
+      rm -rf -- "$destination/$BACKUP_SET_ID"
+    fi
+  done
+}
+trap cleanup EXIT
+trap 'echo "Paired backup failed; incomplete sets are not restore eligible" >&2; exit 1' ERR INT TERM
+python3 "$SCRIPT_DIR/pg_connection.py" --output "$BACKUP_PRIVATE_WORK/urls.json" --pgpass "$BACKUP_PRIVATE_WORK/pgpass" \
+  --url-env PRODUCT_DATABASE_URL --url-env AUTH_DATABASE_URL
+export PGPASSFILE="$BACKUP_PRIVATE_WORK/pgpass"
+PRODUCT_DATABASE_URL="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["PRODUCT_DATABASE_URL"])' "$BACKUP_PRIVATE_WORK/urls.json")"
+AUTH_DATABASE_URL="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["AUTH_DATABASE_URL"])' "$BACKUP_PRIVATE_WORK/urls.json")"
+export PRODUCT_DATABASE_URL AUTH_DATABASE_URL BACKUP_PRIVATE_WORK BACKUP_SET_ID BACKUP_ENCRYPTED_WORK
+python3 "$SCRIPT_DIR/backup_snapshot.py" bash "$SCRIPT_DIR/backup_payload.sh"
+mv "$BACKUP_ENCRYPTED_WORK" "$FINAL"
+if [ "$BACKUP_MODE" = offhost ]; then
+  publish_backup_set "$FINAL" "$BACKUP_DESTINATION_A" "$BACKUP_SET_ID"
+  publish_backup_set "$FINAL" "$BACKUP_DESTINATION_B" "$BACKUP_SET_ID"
+fi
+for destination in "${DESTINATIONS[@]}"; do
+  write_complete_marker "$destination/$BACKUP_SET_ID" "$BACKUP_SET_ID"
+done
+if [ "$BACKUP_MODE" = offhost ]; then
+  echo "BACKUP_SET_STATUS=set=$BACKUP_SET_ID status=offsite_uploaded copies=2"
+else
+  echo "BACKUP_SET_STATUS=set=$BACKUP_SET_ID status=local_saved copies=1"
+fi
+for destination in "${DESTINATIONS[@]}"; do
+  prune_complete_backup_sets "$destination" "$RETENTION_DAYS"
+done

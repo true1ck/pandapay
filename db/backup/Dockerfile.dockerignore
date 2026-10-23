@@ -1,0 +1,15 @@
+**
+!scripts/
+!scripts/backup.sh
+!scripts/restore_drill.sh
+!scripts/backup_common.sh
+!scripts/backup_manifest.py
+!scripts/restore_urls.py
+!scripts/pg_connection.py
+!scripts/backup_snapshot.py
+!scripts/backup_payload.sh
+!backup/
+!backup/Dockerfile
+!backup/crontab
+
+!scripts/backup_storage.py

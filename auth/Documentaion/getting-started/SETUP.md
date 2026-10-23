@@ -59,6 +59,9 @@ OTP_MAX_ATTEMPTS=5                          # Max OTP verification attempts (def
 
 ## Quick Setup
 
+Use Node.js 22 or later for local and standalone installs. The service uses
+Nodemailer 10 and the built-in `node --watch` development runner.
+
 1. **Copy the example file:**
    ```bash
    cp .env.example .env

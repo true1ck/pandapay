@@ -7,6 +7,7 @@
  */
 
 const crypto = require('crypto');
+const { safeErrorCode } = require('./safeErrorCode');
 
 const SUPPORTED_FAMILIES = new Set([
   'posted_movement',
@@ -221,7 +222,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
               ...(issued.rows || []).map((row) => row.candidate_id),
             ])];
           } catch (error) {
-            console.warn('SMS opt-out candidate revocation lookup unavailable:', error.message || error);
+            console.warn('SMS opt-out candidate revocation lookup unavailable:', safeErrorCode(error));
           }
           return {
             active,
@@ -264,7 +265,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
             // Roll out the additive migration before the API code. During a
             // staggered deploy, keep the global bundle usable and withhold
             // experimental candidates until assignment storage is ready.
-            console.warn('SMS candidate assignment unavailable:', error.message || error);
+            console.warn('SMS candidate assignment unavailable:', safeErrorCode(error));
             continue;
           }
           const assignmentId = assignment.rows?.[0]?.assignment_id;
@@ -286,7 +287,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
         } catch (error) {
           // Assignment storage is additive. If it is unavailable, do not
           // guess which cached candidate rules are safe to remove.
-          console.warn('SMS candidate revocation lookup unavailable:', error.message || error);
+          console.warn('SMS candidate revocation lookup unavailable:', safeErrorCode(error));
         }
         return { active, candidateRules, revokedCandidateIds };
       });
@@ -327,7 +328,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
         revokedCandidateIds: result.revokedCandidateIds || [],
       });
     } catch (error) {
-      console.error('GET /sms/rules/active error', error.message || error);
+      console.error('GET /sms/rules/active error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to fetch active SMS rules' });
     }
   });
@@ -372,7 +373,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
 
       res.status(200).json({ ok: true, bundleVersion: versionNum, sha256 });
     } catch (error) {
-      console.error('POST /admin/sms-rules/publish error', error.message || error);
+      console.error('POST /admin/sms-rules/publish error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to publish SMS rule bundle' });
     }
   });
@@ -398,7 +399,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
       }
       res.status(200).json({ ok: true, rolledBack: true, bundleVersion: versionNum });
     } catch (error) {
-      console.error('POST /admin/sms-rules/:bundleVersion/rollback error', error.message || error);
+      console.error('POST /admin/sms-rules/:bundleVersion/rollback error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to rollback SMS rule bundle' });
     }
   });

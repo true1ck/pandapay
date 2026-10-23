@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('./safeErrorCode');
 // src/utils/awsSsm.js
 // AWS Systems Manager Parameter Store integration for fetching secrets
 const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
@@ -45,10 +46,9 @@ async function getDbCredentials(environment = null) {
     const response = await client.send(command);
     const credentials = JSON.parse(response.Parameter.Value);
     
-    console.log(`✅ Successfully fetched DB credentials from SSM: ${paramPath}`);
     return credentials;
   } catch (error) {
-    console.error(`❌ Failed to fetch DB credentials from SSM (${paramPath}):`, error.message);
+    console.error('SSM database credential lookup failed', safeErrorCode(error));
     
     // If SSM is not available (local dev), return null to use DATABASE_URL fallback
     if (error.name === 'UnrecognizedClientException' || 

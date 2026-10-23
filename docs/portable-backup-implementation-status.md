@@ -1,67 +1,49 @@
 # Portable backup implementation status
 
-Started 23 October 2026 by the parent integration task.
+Status reviewed 23 October 2026. This document tracks the portable, user-account export work. It does not describe or replace the separate paired PostgreSQL disaster-recovery backups.
 
-## Baseline
+## Current status
 
-- Working directory: `C:\Users\sujay\CKProjects\PandaPay`
-- Pre-existing modified files at start: `docs/portable-backup-export-import-plan.md`
-- Pre-existing untracked path at start: `scratch/` (preserved; not part of this feature)
-- No backup/restore implementation files existed before this wave.
-- Contract owner: parent Luna integration task.
-- Current wave: Wave 1 — complete export.
+The implementation currently provides **server export primitives**, not a complete account backup or restore flow. The authenticated `/portable-backups/export-v1` route streams selected product-database sections as NDJSON. The API does not create an encrypted archive by itself.
 
-## Ownership
+The portable backup feature is incomplete:
 
-| Owner | Scope | Status |
-| --- | --- | --- |
-| Parent | Contract, `api/src/index.js`, providers/routes/dependencies, integration and final verification | Active |
-| Agent A | `api/src/portable_backup/`, focused API tests, legacy CSV hardening/tests | Active |
-| Agent B | `app/lib/data/portable_backup/`, focused archive/local snapshot tests | Active |
-| Agent C | Export UI, independent inspector/fixtures and focused widget tests | Active |
+- `PortableLocalSnapshotSource` is an interface; there is no adapter that captures the app's existing SQLite database. Local financial state, captured SMS and decisions, pending queues, and other local records are therefore not covered by the API export.
+- There is no integrated client flow that joins the server stream, local snapshot, and attachments into a user backup.
+- There is no restore API or end-to-end restore flow.
+- User-linked referral and credit data in the `promotions` schema is explicitly excluded from this export and remains a recovery gap.
+- Cross-runtime encryption vectors and device compatibility/large-account acceptance remain open.
 
-## Gates
+The archive's passphrase encryption work, where used by the separate portable archive format, is not the user's account-recovery method. It does not replace or complete the existing phone/email OTP recovery, and no additional recovery-password prompt is part of the approved recovery path.
 
-- [x] Investigation and implementation handoff written.
-- [x] v1 policy fixed: same account, fresh target, online queue drain, encrypted complete archive, missing-row recovery, divergent-row conflict.
-- [x] Contract artifacts and golden fixture reviewed (this wave rewrote the Wave-0 contract docs; golden fixture still pending — see gaps).
-- [x] Wave 1 agent diffs inspected and integrated (encryption now real, routes mounted, coverage registry added).
-- [x] Independent archive self-check passes (see commands below).
-- [x] API and Flutter targeted tests pass (see commands below; full device gates remain open).
-- [ ] Full export and restore waves complete.
+## PostgreSQL migration-table inventory
 
-## Verified this session (23 October 2026, Windows 11 / PowerShell 5.1)
+`api/src/portable_backup/coverage.json` classifies **132 persistent PostgreSQL tables** declared in the 92 `db/supabase/migrations/*.sql` files:
 
-Commands and results, run inside `C:\Users\sujay\CKProjects\PandaPay`:
+| Disposition | Count | Meaning |
+| --- | ---: | --- |
+| `exported_v1` | 26 | Included in the account-scoped server export |
+| `global_catalog` | 32 | Shared catalog/configuration, not exported per account |
+| `platform_ops` | 45 | Platform, worker, telemetry, or operational state |
+| `excluded_with_intent` | 29 | Explicitly omitted; reasons identify scope gaps and recovery implications |
+
+Public-schema keys remain unqualified for compatibility. Non-public schema keys are fully qualified, so `promotions` tables cannot be confused with public tables. Migration-only temporary tables are excluded from this persistent-schema count. The coverage test strips SQL comments and string literals before scanning, and includes a fixture for same-named tables in `public` and `promotions`.
+
+This registry covers server migration tables only. It does **not** inventory SQLite tables, individual columns, or all user state, and it is not a full database disaster-recovery manifest. The separate paired PostgreSQL backup/restore path is responsible for database disaster recovery.
+
+## Implemented pieces
+
+- `api/src/portable_backup/contract.js` defines the static section allow-list and canonicalization rules.
+- `api/src/portable_backup/export.js` streams profile-filtered sections in batches and emits counts/digests in a completion footer.
+- `api/src/portable_backup/routes.js` mounts the authenticated, repeatable-read, read-only export transaction.
+- Security integration corrected first-page bind parameters and settings pagination. Exports now have a 10-minute deadline, 30-second stalled-response bound, 64 MiB total NDJSON cap and one-million-record cap. Each API process admits one export at a time; excess requests receive `503 export_busy`. These are per-process limits, not a distributed budget. Limit failures abort without a successful completion footer. The paired PostgreSQL backups are separate and do not use these account-export limits.
+- The app has portable archive, encryption, attachment-collection, and snapshot-coordination components, but the snapshot source remains an interface and they are not yet integrated into a complete backup flow.
+- `api/src/portable_backup/coverage.json` records all 132 persistent migration tables and explicitly records the referral/credit export gap.
+
+## Verification recorded for this review
 
 | Command | Result |
 | --- | --- |
-| `cd app; flutter test test/data/portable_backup` | 31 tests, all pass (~8 s; Argon2id v1h/16384KiB dominates) |
-| `cd app; flutter test test/features/import/portable_backup_inspector_test.dart` | 4 tests, all pass |
-| `cd app; flutter analyze lib/data/portable_backup test/data/portable_backup` | No issues found |
-| `cd api; node --test test/portable_backup_export.test.js` | 5 tests, all pass (144 ms) |
-| `cd api; node --test test/portable_backup_coverage.test.js` | 3 tests, all pass (61 ms); inventory = 102 migration tables |
-| `cd api; node --test test/portable_backup_export.test.js test/csv.test.js` | 16 tests, all pass (csv hardening re-verified) |
-| `cd api; npm run check` | pass (`node --check` over 47 modules incl. index.js) |
+| `cd api; node --test test/portable_backup_coverage.test.js` | 4 tests passed, including schema collision and SQL comment/string regression fixtures |
 
-Implemented in this session (Wave 1 scope, no UI changes):
-
-- `app/lib/data/portable_backup/portable_crypto.dart`: real encryption replacing the stub encryptor — 68-byte v1 header, Argon2id (16384 KiB / 1 / 2 / 32), chunked XChaCha20-Poly1305 (64 KiB frames, 16-byte MAC), frame nonce `19 random + 5-byte BE counter`, frame AAD `header || 8-byte BE counter || final flag`. Decrypt maps wrong passphrase/tamper/truncate/trailing/magic/KDF mismatch to the typed errors above; `readPortableBackupArchive` returns the plaintext ZIP in staging.
-- `app/lib/data/portable_backup/portable_archive.dart`: staged-file self-check now verifies the manifest digest of every file it writes; streaming `sha256Checksum` helper.
-- `app/lib/data/portable_backup/canonical_ndjson.dart`: `PortableSha256Accumulator` moved to `package:crypto` chunked hashing after `package:cryptography`'s `Hash.toString()` proved non-hex (extra `64` prefix observed in digests).
-- `app/lib/data/portable_backup/portable_snapshot.dart`, `portable_attachments.dart`: cancellation and digest plumbing fixes; fake-source ordering tests now assert call ordering (drain → sections → attachments) and pre-work cancellation.
-- `app/pubspec.yaml`: added `cryptography ^2.9.0`.
-- `api/src/index.js`: `registerPortableBackupRoutes(app, { requireAuth, pool })` mounted after `registerReferralRoutes(app)`; export route is live behind auth with the module's rate limit (3/min/IP).
-- `api/src/portable_backup/coverage.json`: Wave-0 table registry — every one of the 102 migration tables classified (`exported_v1` 26 / `global_catalog` / `platform_ops` / `excluded_with_intent` with reasons).
-- `api/test/portable_backup_coverage.test.js`: fails when a migration table is unclassified and when exported tables diverge from `PORTABLE_SECTIONS`.
-- `docs/portable-backup-format-v1.md`: wire layout (header table + frame/AAD/nonce spec + failure semantics) appended under "Encryption envelope".
-
-## Remaining Wave-1 gaps (recorded, not blocking what shipped)
-
-1. `PortableLocalSnapshotSource` has no concrete drift-database implementation yet — the coordinator type only has the interface; a follow-up should implement it against the existing SQLite schema without touching outbox semantics.
-2. Not a single device benchmark exists for Argon2id v1 params (16384 KiB mobile budget); on-device runtime remains an acceptance item.
-3. Cross-runtime encryption test vectors (Android/iOS/JS) not yet generated.
-4. Titanium/`import` UI is untouched by contract; the independent inspector exists and passes, but the streaming HTTP consumer of `/portable-backups/export-v1` in Dart is not written (Wave-1 accepted export path is local-first).
-5. Golden fixture: `app/test/fixtures/portable_backup_fixture.dart` covers inspector shapes; a full end-to-end archive binary fixture suitable for all three inspectors is still open.
-
-Agents must append exact commands, counts, failures and unresolved risks here when reporting. This file must not claim completion from mocked or skipped database/device gates.
+The broader API, Flutter, device, encryption interoperability, and restore gates have not been run as part of this review. Passing the coverage test verifies the migration-table classification inventory; it does not prove completeness of local app data or a working restore.

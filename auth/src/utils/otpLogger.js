@@ -9,14 +9,10 @@
  * @param {boolean} smsSent - Whether SMS was successfully sent
  */
 function logOtpEvent(phone, smsSent) {
-  const maskedPhone = phone.length > 4 
-    ? phone.slice(0, -4).replace(/\d/g, '*') + phone.slice(-4)
-    : '****';
-
   if (smsSent) {
-    console.log('OTP sent via SMS:', maskedPhone);
+    console.info('OTP sent via SMS');
   } else {
-    console.warn('OTP generated but SMS failed:', maskedPhone);
+    console.warn('OTP delivery failed');
   }
 }
 

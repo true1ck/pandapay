@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "description": "PandaPay identity service — phone/email OTP, Google Sign-In, JWT access+refresh, device tracking, audit log",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "dev": "node --watch src/index.js",
     "migrate": "node scripts/migrate.js",
     "test": "node --test test/*.test.js"
   },
@@ -20,12 +23,9 @@
     "express": "^5.1.0",
     "google-auth-library": "^10.6.2",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^8.0.9",
+    "nodemailer": "^10.2.1",
     "pg": "^8.16.3",
     "redis": "^4.7.0",
     "twilio": "^5.10.6"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.11"
   }
 }

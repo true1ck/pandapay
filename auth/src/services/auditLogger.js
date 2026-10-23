@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/services/auditLogger.js
 // === SECURITY HARDENING: AUDIT LOGS & ANOMALY FLAGS ===
 // Enhanced audit logging with risk levels and anomaly detection
@@ -143,12 +144,12 @@ async function logAuthEvent({
       if (shouldTrigger) {
         // Fire and forget - don't await to avoid blocking main request flow
         sendSecurityAlert(eventRecord, anomalyAlert).catch(err => {
-          console.error('[auditLogger] Alert trigger failed (non-blocking):', err.message);
+          console.error('Non-blocking security alert trigger failed', safeErrorCode(err));
         });
       }
     }
   } catch (err) {
-    console.error('Failed to log auth event:', err);
+    console.error('Auth audit event write failed', safeErrorCode(err));
     // Don't throw - audit logging should not break the main flow
   }
 }
@@ -298,7 +299,7 @@ async function checkAnomalies(userId, action, ipAddress) {
           count: failedCount,
           window: '1 hour',
         };
-        console.warn(`[ANOMALY] User ${userId} has ${failedCount} failed OTP attempts in last hour`);
+        console.warn('Repeated failed OTP pattern detected');
       }
     }
 
@@ -322,13 +323,13 @@ async function checkAnomalies(userId, action, ipAddress) {
           high_risk_count: highRiskCount,
           ip_address: ipAddress,
         };
-        console.warn(`[ANOMALY] IP ${ipAddress} has ${highRiskCount} HIGH_RISK events in last 15 minutes`);
+        console.warn('Repeated high-risk authentication pattern detected');
       }
     }
 
     return shouldAlert ? { shouldAlert: true, details: anomalyDetails } : null;
   } catch (err) {
-    console.error('Error checking anomalies:', err);
+    console.error('Authentication anomaly check failed', safeErrorCode(err));
     return null;
   }
 }
@@ -506,19 +507,19 @@ async function sendSecurityAlert(eventRecord, anomalyAlert = null, retryCount = 
       req.end();
     });
 
-    console.log(`[auditLogger] Security alert sent for ${eventRecord.riskLevel} event: ${eventRecord.action}`);
+    console.info('Security alert sent');
   } catch (err) {
     // === SECURITY HARDENING: ACTIVE ALERTING ===
     // Global FAILSAFE: Retry once after 3 seconds if webhook fails
     if (retryCount === 0) {
-      console.warn(`[auditLogger] Webhook failed, retrying in 3 seconds... (${err.message})`);
+      console.warn('Security alert delivery failed; retrying once');
       
       // Wait 3 seconds then retry once
       setTimeout(async () => {
         try {
           await sendSecurityAlert(eventRecord, anomalyAlert, 1);
         } catch (retryErr) {
-          console.error('[auditLogger] Webhook retry also failed:', retryErr.message);
+          console.error('Security alert retry failed', safeErrorCode(retryErr));
         }
       }, 3000);
       
@@ -526,11 +527,7 @@ async function sendSecurityAlert(eventRecord, anomalyAlert = null, retryCount = 
     }
     
     // If retry also failed, log error but don't throw - alerting failures should not break the main flow
-    console.error('[auditLogger] Failed to send security alert (after retry):', err.message);
-    // Optionally log full error in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('[auditLogger] Alert error details:', err);
-    }
+    console.error('Security alert delivery failed after retry', safeErrorCode(err));
   }
 }
 

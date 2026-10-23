@@ -1,3 +1,5 @@
+const { safeErrorCode } = require('./safeErrorCode');
+
 // Validate before writing NUMERIC(…, 2): rounding each stored row after
 // comparing an unrounded sum can otherwise create an over-allocation.
 function validateSplits(splits) {
@@ -72,7 +74,7 @@ app.get('/transactions/:id/splits', requireAuth, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'transaction not found' });
     res.json({ splits: result.rows, fingerprint: splitFingerprint(result.rows) });
   } catch (err) {
-    console.error('GET /transactions/:id/splits error', err);
+    console.error('GET /transactions/:id/splits error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -175,7 +177,7 @@ app.put('/transactions/:id/splits', requireAuth, async (req, res) => {
     if (result.error) return res.status(result.status).json({ error: result.error });
     res.json({ splits: result.splits, fingerprint: splitFingerprint(result.splits) });
   } catch (err) {
-    console.error('PUT /transactions/:id/splits error', err);
+    console.error('PUT /transactions/:id/splits error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });

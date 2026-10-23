@@ -64,9 +64,6 @@ function signAccessToken(user, options = {}) {
     audience: getAudience(),
     keyid: activeKey.keyId,
   });
-  console.log(
-    `[TOKEN_SERVICE] signAccessToken: Generated access token - userId=${user.id}, tokenVersion=${payload.token_version}, deviceId=${payload.device_id || 'none'}, isGuest=${payload.is_guest}, expiresIn=${expiresIn}`
-  );
   return token;
 }
 
@@ -150,19 +147,15 @@ async function storeRefreshToken({
 }
 
 async function verifyRefreshToken(rawToken, { requestId } = {}) {
-  console.log('[TOKEN_SERVICE] verifyRefreshToken: Starting verification');
   let payload;
   try {
     payload = jwt.verify(rawToken, REFRESH_SECRET);
-    console.log(`[TOKEN_SERVICE] verifyRefreshToken: JWT verified - userId=${payload.sub}, deviceId=${payload.device_id}, tokenId=${payload.jti}`);
   } catch (err) {
-    console.log(`[TOKEN_SERVICE] verifyRefreshToken: JWT verification failed - ${err.message}`);
     return null;
   }
 
   const { sub: userId, device_id: deviceId, jti: tokenId } = payload;
   if (!tokenId) {
-    console.log('[TOKEN_SERVICE] verifyRefreshToken: No tokenId in payload');
     return null;
   }
 
@@ -172,22 +165,18 @@ async function verifyRefreshToken(rawToken, { requestId } = {}) {
   );
 
   if (rows.length === 0) {
-    console.log(`[TOKEN_SERVICE] verifyRefreshToken: Token not found in database - tokenId=${tokenId}`);
     return null;
   }
 
   const tokenRow = rows[0];
-  console.log(`[TOKEN_SERVICE] verifyRefreshToken: Token found in DB - userId=${tokenRow.user_id}, deviceId=${tokenRow.device_id}, revoked=${!!tokenRow.revoked_at}`);
 
   if (tokenRow.user_id !== userId || tokenRow.device_id !== deviceId) {
-    console.log(`[TOKEN_SERVICE] verifyRefreshToken: User/device mismatch - expected userId=${userId}, deviceId=${deviceId}, got userId=${tokenRow.user_id}, deviceId=${tokenRow.device_id}`);
     await handleReuse(tokenRow);
     return { reuseDetected: true };
   }
 
   const match = await bcrypt.compare(rawToken, tokenRow.token_hash);
   if (!match) {
-    console.log('[TOKEN_SERVICE] verifyRefreshToken: Token hash mismatch - possible reuse');
     await handleReuse(tokenRow);
     return { reuseDetected: true };
   }
@@ -195,14 +184,12 @@ async function verifyRefreshToken(rawToken, { requestId } = {}) {
   if (tokenRow.revoked_at) {
     const recovered = await recoverRotation(tokenRow, requestId, db);
     if (recovered) return { userId, deviceId, row: tokenRow, recovered };
-    console.log(`[TOKEN_SERVICE] verifyRefreshToken: Token revoked at ${tokenRow.revoked_at}`);
     await handleReuse(tokenRow);
     return { reuseDetected: true };
   }
 
   const now = new Date();
   if (tokenRow.expires_at <= now) {
-    console.log(`[TOKEN_SERVICE] verifyRefreshToken: Token expired - expiresAt=${tokenRow.expires_at}, now=${now}`);
     await revokeToken(tokenRow.id);
     return null;
   }
@@ -211,7 +198,6 @@ async function verifyRefreshToken(rawToken, { requestId } = {}) {
     tokenRow.last_used_at &&
     now.getTime() - new Date(tokenRow.last_used_at).getTime() > REFRESH_MAX_IDLE_MS
   ) {
-    console.log(`[TOKEN_SERVICE] verifyRefreshToken: Token idle timeout exceeded - lastUsedAt=${tokenRow.last_used_at}`);
     await revokeToken(tokenRow.id);
     return null;
   }
@@ -220,8 +206,6 @@ async function verifyRefreshToken(rawToken, { requestId } = {}) {
     `UPDATE refresh_tokens SET last_used_at = NOW() WHERE id = $1`,
     [tokenRow.id]
   );
-  console.log(`[TOKEN_SERVICE] verifyRefreshToken: Token verified successfully - userId=${userId}, deviceId=${deviceId}`);
-
   return { userId, deviceId, row: tokenRow };
 }
 

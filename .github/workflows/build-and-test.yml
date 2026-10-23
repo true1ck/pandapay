@@ -27,6 +27,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  security-recovery:
+    name: Security migrations and encrypted PostgreSQL recovery
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install recovery test tools and auth driver
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql postgresql-contrib age
+          ls -d /usr/lib/postgresql/*/bin | sort -V | tail -n 1 >> "$GITHUB_PATH"
+          npm ci --omit=dev --prefix auth
+      - name: Migration and backup failure tests
+        run: |
+          node --test db/tests/*.test.js
+          python3 -m unittest discover -s db/tests -p '*_test.py' -v
+          python3 -m unittest discover -s deploy/tests -p 'test_*.py' -v
+      - name: Synthetic encrypted database move rehearsal
+        run: python3 db/tests/security_recovery_integration.py
+
   api:
     name: API and auth (Node)
     runs-on: ubuntu-latest
@@ -38,7 +60,7 @@ jobs:
 
       - name: Install api dependencies
         working-directory: api
-        run: npm install
+        run: npm ci
 
       # Runs `node --check` on every source file, then the unit tests.
       - name: Test api
@@ -52,7 +74,7 @@ jobs:
 
       - name: Install auth dependencies
         working-directory: auth
-        run: npm install
+        run: npm ci
 
       - name: Test auth
         working-directory: auth
@@ -148,7 +170,7 @@ jobs:
     # itself (push: false path, PR runs) still runs unconditionally — only
     # the push gate needs every validation, including the integration smoke
     # test and anonymization audit, before publishing a deployable image.
-    needs: [api, flutter, smoke, anonymization-audit]
+    needs: [api, flutter, smoke, anonymization-audit, security-recovery]
     # Needed to push to GHCR under GITHUB_TOKEN — this repo's default token
     # permissions may be read-only, so this is explicit rather than assumed.
     permissions:

@@ -21,7 +21,7 @@ function adminAuth(req, res, next) {
   // Check if user has admin role
   if (req.user.role !== 'security_admin') {
     // Log unauthorized access attempt
-    console.warn(`[ADMIN_AUTH] Unauthorized admin access attempt by user ${req.user.id} (role: ${req.user.role})`);
+    console.warn('[admin] Unauthorized admin access attempt');
     return res.status(403).json({ 
       error: 'Forbidden',
       message: 'Admin access required' 

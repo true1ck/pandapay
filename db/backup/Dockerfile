@@ -1,12 +1,6 @@
-# Runs db/scripts/backup.sh and restore_drill.sh on a schedule.
-#
-# Those two scripts already exist and are correct (pg_dump + verify + record +
-# prune; restore into a throwaway DB + verify) — this is only the missing
-# runner. pg_cron (db/supabase/migrations/0013_cron_jobs.sql) can't do it: it
-# runs SQL inside Postgres, not shell commands against pg_dump/pg_restore, and
-# is skipped entirely in this stack's compose db-migrate step because the
-# stock postgres image doesn't ship the extension. There's also no Node-side
-# scheduler anywhere in api/ or auth/. A tiny cron container is the whole gap.
+# Runs the paired encrypted backup on a schedule. Restore drills run on a
+# separately controlled recovery host, which alone receives the private age
+# identity and explicit RESTORE_* PostgreSQL URLs.
 #
 # Base is a postgres image, not a bare alpine + apk-installed client, so
 # pg_dump/pg_restore are a known major version rather than whatever the
@@ -32,15 +26,22 @@
 # existing scripts/ directory — Docker COPY can't reach outside its context
 # with `../`. See docker-compose.prod.yml's `backup` service for the
 # `context: ./db, dockerfile: backup/Dockerfile` pairing that makes this work.
-FROM postgres:17-alpine
+ARG POSTGRES_CLIENT_MAJOR=17
+FROM postgres:${POSTGRES_CLIENT_MAJOR}-alpine
 
-RUN apk add --no-cache dcron bash
+RUN apk add --no-cache dcron bash age python3 coreutils
 
 WORKDIR /backup
 COPY scripts/backup.sh ./backup.sh
 COPY scripts/restore_drill.sh ./restore_drill.sh
+COPY scripts/backup_common.sh ./backup_common.sh
+COPY scripts/backup_manifest.py ./backup_manifest.py
+COPY scripts/restore_urls.py ./restore_urls.py
+COPY scripts/pg_connection.py ./pg_connection.py
+COPY scripts/backup_snapshot.py ./backup_snapshot.py
+COPY scripts/backup_payload.sh ./backup_payload.sh
 COPY backup/crontab /etc/crontabs/root
-RUN chmod +x ./backup.sh ./restore_drill.sh
+RUN chmod +x ./backup.sh ./restore_drill.sh ./backup_manifest.py ./restore_urls.py ./pg_connection.py
 
 # Requires the container to be started with an init process (docker run
 # --init, or `init: true` in compose — both wire up Docker's built-in tini)
@@ -56,3 +57,5 @@ RUN chmod +x ./backup.sh ./restore_drill.sh
 # -f: stay in the foreground so tini can supervise crond as a real child,
 # instead of crond daemonizing and the container exiting immediately.
 CMD ["crond", "-f", "-l", "2"]
+
+COPY scripts/backup_storage.py ./backup_storage.py

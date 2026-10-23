@@ -5,6 +5,12 @@ const { canonicalJson, EXCLUDED_FIELDS, FORMAT_VERSION, MEDIA_TYPE, PORTABLE_SEC
 
 const DEFAULT_BATCH_SIZE = 256;
 const DEFAULT_STATEMENT_TIMEOUT_MS = 120_000;
+const DEFAULT_MAX_EXPORT_DURATION_MS = 10 * 60_000;
+const DEFAULT_BACKPRESSURE_TIMEOUT_MS = 30_000;
+// These caps bound total unencrypted NDJSON response bytes and record count.
+// The separate encrypted paired SQL backup path is not governed here.
+const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
+const DEFAULT_MAX_RECORDS = 1_000_000;
 const MAX_BATCH_SIZE = 2_000;
 
 class PortableBackupExportError extends Error {
@@ -28,7 +34,7 @@ function sqlForSection(section, batchSize, cursor, offset = 0) {
             WHERE ${section.filter}${cursorClause}
             ORDER BY ${section.orderBy}
             LIMIT $2${offsetClause}`,
-    values: cursorClause ? [null, batchSize, cursor] : [null, batchSize, offset],
+    values: cursorClause ? [null, batchSize, cursor] : section.cursor ? [null, batchSize] : [null, batchSize, offset],
   };
 }
 
@@ -39,11 +45,24 @@ function setProfileValue(query, profileId) {
 
 async function writeChunk(res, chunk, state) {
   if (state.cancelled) throw new PortableBackupExportError('export_cancelled');
+  const chunkBytes = Buffer.byteLength(chunk);
+  if (state.outputBytes + chunkBytes > state.maxOutputBytes) {
+    throw new PortableBackupExportError('export_limit_exceeded');
+  }
+  state.outputBytes += chunkBytes;
+  const remainingMs = state.deadline - state.now();
+  if (remainingMs <= 0) throw new PortableBackupExportError('export_timeout');
   if (res.write(chunk)) return;
   await new Promise((resolve, reject) => {
+    const timeoutMs = Math.min(state.backpressureTimeoutMs, remainingMs);
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new PortableBackupExportError(state.deadline - state.now() <= 0 ? 'export_timeout' : 'export_backpressure_timeout'));
+    }, timeoutMs);
     const onDrain = () => { cleanup(); resolve(); };
     const onClose = () => { cleanup(); reject(new PortableBackupExportError('export_cancelled')); };
     const cleanup = () => {
+      clearTimeout(timer);
       res.off('drain', onDrain);
       res.off('close', onClose);
     };
@@ -70,18 +89,40 @@ async function readSnapshotMetadata(client, profileId) {
   return row;
 }
 
-async function exportSnapshot({ client, res, profileId, batchSize = DEFAULT_BATCH_SIZE, backupId = crypto.randomUUID() }) {
+async function exportSnapshot({ client, res, profileId, batchSize = DEFAULT_BATCH_SIZE,
+  maxDurationMs = DEFAULT_MAX_EXPORT_DURATION_MS,
+  backpressureTimeoutMs = DEFAULT_BACKPRESSURE_TIMEOUT_MS,
+  maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
+  maxRecords = DEFAULT_MAX_RECORDS,
+  now = () => Date.now(), backupId = crypto.randomUUID() }) {
   if (!client || typeof client.query !== 'function') throw new TypeError('client is required');
   if (!res || typeof res.write !== 'function') throw new TypeError('writable response is required');
   if (typeof profileId !== 'string' || !profileId) throw new PortableBackupExportError('account_required');
   if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > MAX_BATCH_SIZE) {
     throw new PortableBackupExportError('invalid_batch_size');
   }
+  if (!Number.isSafeInteger(maxDurationMs) || maxDurationMs < 1 ||
+      !Number.isSafeInteger(backpressureTimeoutMs) || backpressureTimeoutMs < 1 ||
+      !Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1 ||
+      !Number.isSafeInteger(maxRecords) || maxRecords < 1) {
+    throw new PortableBackupExportError('invalid_export_timeout');
+  }
 
-  const state = { cancelled: false, finished: false };
+  const startedAt = now();
+  const state = {
+    cancelled: false,
+    finished: false,
+    startedAt,
+    deadline: startedAt + maxDurationMs,
+    backpressureTimeoutMs,
+    maxOutputBytes,
+    maxRecords,
+    outputBytes: 0,
+    totalRecords: 0,
+    now,
+  };
   const onClose = () => { if (!state.finished) state.cancelled = true; };
   res.once?.('close', onClose);
-  const startedAt = Date.now();
   const sectionStats = {};
   try {
     const metadata = await readSnapshotMetadata(client, profileId);
@@ -106,10 +147,13 @@ async function exportSnapshot({ client, res, profileId, batchSize = DEFAULT_BATC
       let offset = 0;
       for (;;) {
         if (state.cancelled) throw new PortableBackupExportError('export_cancelled');
+        if (now() >= state.deadline) throw new PortableBackupExportError('export_timeout');
         const query = setProfileValue(sqlForSection(section, batchSize, cursor, offset), profileId);
         const result = await client.query(query);
         if (!Array.isArray(result.rows)) throw new PortableBackupExportError('section_query_invalid');
         for (const row of result.rows) {
+          if (now() >= state.deadline) throw new PortableBackupExportError('export_timeout');
+          if (state.totalRecords >= state.maxRecords) throw new PortableBackupExportError('export_limit_exceeded');
           const record = row?.record ?? row;
           if (!record || typeof record !== 'object' || Array.isArray(record)) {
             throw new PortableBackupExportError('section_record_invalid');
@@ -119,8 +163,12 @@ async function exportSnapshot({ client, res, profileId, batchSize = DEFAULT_BATC
           hash.update(line);
           bytes += bytesForLine;
           count += 1;
+          state.totalRecords += 1;
           await writeChunk(res, line, state);
-          if (section.cursor) cursor = record?.id ?? row?.id ?? null;
+          if (section.cursor) {
+            const cursorField = section.cursor.slice(section.cursor.lastIndexOf('.') + 1);
+            cursor = record?.[cursorField] ?? row?.[cursorField] ?? null;
+          }
         }
         if (result.rows.length < batchSize) break;
         if (section.cursor && cursor === null) throw new PortableBackupExportError('section_cursor_missing');
@@ -139,7 +187,7 @@ async function exportSnapshot({ client, res, profileId, batchSize = DEFAULT_BATC
       sections: sectionStats,
       total_records: Object.values(sectionStats).reduce((sum, section) => sum + section.count, 0),
       total_plaintext_bytes: Object.values(sectionStats).reduce((sum, section) => sum + section.plaintext_bytes, 0),
-      duration_ms: Date.now() - startedAt,
+      duration_ms: now() - startedAt,
     };
     await writeChunk(res, envelopeLine(footer), state);
     state.finished = true;
@@ -164,6 +212,10 @@ function databaseErrorCode(error) {
 module.exports = {
   DEFAULT_BATCH_SIZE,
   DEFAULT_STATEMENT_TIMEOUT_MS,
+  DEFAULT_MAX_EXPORT_DURATION_MS,
+  DEFAULT_BACKPRESSURE_TIMEOUT_MS,
+  DEFAULT_MAX_OUTPUT_BYTES,
+  DEFAULT_MAX_RECORDS,
   MAX_BATCH_SIZE,
   PortableBackupExportError,
   databaseErrorCode,

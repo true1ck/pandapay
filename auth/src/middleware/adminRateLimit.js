@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/middleware/adminRateLimit.js
 // === ADMIN SECURITY VISUALIZER ===
 // Light rate limiting for admin endpoints
@@ -47,7 +48,7 @@ async function adminRateLimit(req, res, next) {
           await redis.expire(key, ADMIN_RATE_LIMIT.windowSeconds);
         }
       } catch (err) {
-        console.error('Redis error in admin rate limit, falling back to memory:', err);
+        console.error('Admin rate limit update failed; using memory fallback', safeErrorCode(err));
         // Fall through to memory store
         count = (memoryStore[key]?.count || 0) + 1;
         memoryStore[key] = {
@@ -86,7 +87,7 @@ async function adminRateLimit(req, res, next) {
 
     next();
   } catch (err) {
-    console.error('Admin rate limit error:', err);
+    console.error('Admin rate limit check failed', safeErrorCode(err));
     // On error, allow the request (fail open for admin access)
     next();
   }

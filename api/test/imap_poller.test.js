@@ -130,10 +130,10 @@ test('the sender filter is passed through so only bank mail crosses the wire', a
 
 test('a connection error is reported, not thrown', async () => {
   const { deps } = fakeDeps({ messages: [] });
-  deps.fetchMessages = async () => ({ ok: false, reason: 'imap_error: NO invalid credentials' });
+  deps.fetchMessages = async () => ({ ok: false, reason: 'authentication_failed' });
   const result = await pollConnection(CONNECTION, deps);
   assert.strictEqual(result.ok, false);
-  assert.match(result.reason, /invalid credentials/);
+  assert.strictEqual(result.reason, 'authentication_failed');
 });
 
 test('IMAP quoting neutralises characters that would end the argument early', () => {
@@ -141,6 +141,7 @@ test('IMAP quoting neutralises characters that would end the argument early', ()
   // LOGIN argument and turn the rest of the value into commands.
   assert.strictEqual(quoted('pa"ss'), '"pa\\"ss"');
   assert.strictEqual(quoted('back\\slash'), '"back\\\\slash"');
+  assert.throws(() => quoted('bank@example.com\r\nNOOP'), /invalid_imap_argument/);
 });
 
 test('IMAP dates are formatted the way the protocol requires', () => {

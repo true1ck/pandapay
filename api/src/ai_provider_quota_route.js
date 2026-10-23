@@ -1,3 +1,5 @@
+const { safeErrorCode } = require('./safeErrorCode');
+
 /** Server-only endpoint for globally reserving Gemini request/token capacity. */
 
 function boundedEnvInt(name, fallback, minimum, maximum) {
@@ -23,7 +25,7 @@ function registerProviderQuotaRoute(app, { requireWorkerAuth, withUserClient }) 
       });
       res.status(200).json(reservation);
     } catch (error) {
-      console.error('POST /ai/provider/reserve error', error.message || error);
+      console.error('POST /ai/provider/reserve error', safeErrorCode(error));
       res.status(503).json({ error: 'provider capacity reservation unavailable' });
     }
   });

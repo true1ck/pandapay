@@ -4,10 +4,14 @@
 # different topology that happens to also run the app. Meant to run on its
 # own VM/Postgres, entirely separate from prod's.
 #
-# Usage:
-#   cp .env.staging.example .env.staging
-#   docker compose -f docker-compose.staging.yml --env-file .env.staging run --rm db-migrate
-#   docker compose -f docker-compose.staging.yml --env-file .env.staging up -d
+# Migration sequencing: stop auth, API, rewards-worker and optional
+# gemini-worker before the final paired backup and `db-migrate`. Keep them
+# stopped until migrations finish, then start only the reviewed target images.
+# The previous auth binary cannot enforce OTP purpose binding. See
+# deploy/DEPLOY.md for the production sequence; staging must follow the same
+# writer fence and forward-only failure behavior.
+# Usage: follow the bounded writer-fence, paired-backup, migration, and
+# reviewed-image startup sequence documented in deploy/DEPLOY.md.
 
 name: pandapay-staging
 
@@ -20,10 +24,15 @@ x-logging: &default-logging
 services:
   db-migrate:
     build:
-      context: ./db
-      dockerfile: migrate/Dockerfile
+      context: .
+      dockerfile: db/migrate/Dockerfile
+      args:
+        POSTGRES_CLIENT_MAJOR: "${POSTGRES_CLIENT_MAJOR:-17}"
     environment:
+      NODE_ENV: staging
       ADMIN_DATABASE_URL: "${ADMIN_DATABASE_URL:?}"
+      AUTH_MIGRATION_DATABASE_URL: "${AUTH_MIGRATION_DATABASE_URL:-${AUTH_DATABASE_URL:?}}"
+      AUTH_RUNTIME_ROLE: "${AUTH_RUNTIME_ROLE:-}"
       APP_USER_PASSWORD: "${APP_USER_PASSWORD:?}"
       REWARD_WORKER_DB_PASSWORD: "${REWARD_WORKER_DB_PASSWORD:?}"
       # Opt-in blank (same policy as docker-compose.prod.yml).
@@ -31,8 +40,21 @@ services:
       # Unlike prod, staging genuinely benefits from the demo catalogue —
       # it's what QA/Phase 1+ verification actually exercises against.
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-true}"
+      PHONE_LOOKUP_HMAC_KEY: "${PHONE_LOOKUP_HMAC_KEY:?}"
+      ENCRYPTION_ENABLED: "${ENCRYPTION_ENABLED:-true}"
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?}"
+      DB_SSL: "${DB_SSL:-true}"
+      DB_SSL_CA: "${DB_SSL_CA:-}"
+      MIGRATION_LEGACY_BASELINE_FILE: "${MIGRATION_LEGACY_BASELINE_FILE:-}"
+      MIGRATION_ADOPT_LEGACY_CHECKSUMS: "${MIGRATION_ADOPT_LEGACY_CHECKSUMS:-false}"
     volumes:
       - ./db:/db:ro
+      - type: bind
+        source: "${MIGRATION_BASELINES_DIR:-./deploy/migration-baselines}"
+        target: /run/migration-baselines
+        read_only: true
+        bind:
+          create_host_path: false
 
   api:
     build:
@@ -41,8 +63,10 @@ services:
     logging: *default-logging
     environment:
       NODE_ENV: "${API_NODE_ENV:-staging}"
+      TRUST_PROXY_HOPS: "1"
       DATABASE_URL: "${API_DATABASE_URL:?}"
       DB_SSL: "${DB_SSL:-true}"
+      DB_SSL_CA: "${DB_SSL_CA:-}"
       DB_POOL_MAX: "${DB_POOL_MAX:-10}"
       DB_IDLE_TIMEOUT_MS: "${DB_IDLE_TIMEOUT_MS:-10000}"
       DB_CONNECTION_TIMEOUT_MS: "${DB_CONNECTION_TIMEOUT_MS:-5000}"
@@ -101,6 +125,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: "${REWARD_WORKER_DATABASE_URL:?}"
       DB_SSL: "${DB_SSL:-true}"
+      DB_SSL_CA: "${DB_SSL_CA:-}"
       DB_POOL_MAX: "${DB_POOL_MAX:-10}"
       DB_IDLE_TIMEOUT_MS: "${DB_IDLE_TIMEOUT_MS:-10000}"
       DB_CONNECTION_TIMEOUT_MS: "${DB_CONNECTION_TIMEOUT_MS:-5000}"
@@ -140,6 +165,7 @@ services:
       SMS_LEARNING_WORKER_ROLE: "${SMS_LEARNING_WORKER_ROLE:-sms_learning_worker}"
       SMS_AUTONOMOUS_WORKER_INTERVAL_MS: "${SMS_AUTONOMOUS_WORKER_INTERVAL_MS:-300000}"
       DB_SSL: "${DB_SSL:-true}"
+      DB_SSL_CA: "${DB_SSL_CA:-}"
 
   auth:
     build:
@@ -148,8 +174,10 @@ services:
     logging: *default-logging
     environment:
       NODE_ENV: production
+      TRUST_PROXY_HOPS: "1"
       DATABASE_URL: "${AUTH_DATABASE_URL:?}"
       DB_SSL: "${DB_SSL:-true}"
+      DB_SSL_CA: "${DB_SSL_CA:-}"
       DB_POOL_MAX: "${DB_POOL_MAX:-10}"
       DB_IDLE_TIMEOUT_MS: "${DB_IDLE_TIMEOUT_MS:-10000}"
       DB_CONNECTION_TIMEOUT_MS: "${DB_CONNECTION_TIMEOUT_MS:-5000}"
@@ -162,6 +190,7 @@ services:
       JWT_AUDIENCE: "${JWT_AUDIENCE:-mobile-app}"
       AUTH_INTERNAL_SERVICE_SECRET: "${AUTH_INTERNAL_SERVICE_SECRET:?}"
       PHONE_LOOKUP_HMAC_KEY: "${PHONE_LOOKUP_HMAC_KEY:?}"
+      AUTH_ABUSE_BUCKET_CAPACITY: "${AUTH_ABUSE_BUCKET_CAPACITY:-100000}"
       JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-15m}"
       JWT_REFRESH_TTL: "${JWT_REFRESH_TTL:-180d}"
       REFRESH_MAX_IDLE_MINUTES: "${REFRESH_MAX_IDLE_MINUTES:-129600}"
@@ -185,15 +214,46 @@ services:
     build:
       context: ./db
       dockerfile: backup/Dockerfile
+      args:
+        POSTGRES_CLIENT_MAJOR: "${POSTGRES_CLIENT_MAJOR:-17}"
     init: true
+    tmpfs:
+      - /tmp:mode=1777,size=32m
     restart: unless-stopped
     logging: *default-logging
     environment:
-      DATABASE_URL: "${ADMIN_DATABASE_URL:?}"
+      NODE_ENV: staging
+      PRODUCT_DATABASE_URL: "${ADMIN_DATABASE_URL:?}"
+      AUTH_DATABASE_URL: "${AUTH_MIGRATION_DATABASE_URL:-${AUTH_DATABASE_URL:?}}"
+      DB_SSL: "${DB_SSL:-true}"
+      DB_SSL_CA: "${DB_SSL_CA:-}"
       BACKUP_DIR: /var/backups/pandapay-staging
+      BACKUP_AGE_RECIPIENTS_FILE: /run/secrets/backup-recipients.txt
+      BACKUP_DESTINATION_A: /offhost/a
+      BACKUP_DESTINATION_B: /offhost/b
       RETENTION_DAYS: "${BACKUP_RETENTION_DAYS:-7}"
+      BACKUP_MAX_SETS: "${BACKUP_MAX_SETS:-7}"
+      BACKUP_MAX_BYTES: "${BACKUP_MAX_BYTES:-1073741824}"
+      BACKUP_MIN_FREE_BYTES: "${BACKUP_MIN_FREE_BYTES:-536870912}"
+      BACKUP_MAX_USAGE_PERCENT: "${BACKUP_MAX_USAGE_PERCENT:-85}"
     volumes:
       - staging_backups:/var/backups/pandapay-staging
+      - type: bind
+        source: "${BACKUP_AGE_RECIPIENTS_FILE:?}"
+        target: /run/secrets/backup-recipients.txt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${BACKUP_DESTINATION_A:?}"
+        target: /offhost/a
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${BACKUP_DESTINATION_B:?}"
+        target: /offhost/b
+        bind:
+          create_host_path: false
 
 volumes:
   staging_backups:

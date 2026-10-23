@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/services/riskScoring.js
 // === SECURITY HARDENING: IP/DEVICE RISK ===
 // Basic risk scoring for IP addresses and device fingerprinting
@@ -245,7 +246,7 @@ async function getPreviousAuthInfo(userId, deviceId) {
       previousDeviceId: null,
     };
   } catch (err) {
-    console.error('Error getting previous auth info:', err);
+    console.error('Previous authentication context lookup failed', safeErrorCode(err));
     return {
       previousIp: null,
       previousUserAgent: null,

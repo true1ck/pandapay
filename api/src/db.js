@@ -1,9 +1,16 @@
 const { Pool } = require('pg');
 const config = require('./config');
+const { resolveDatabaseTls } = require('./db_tls');
+const { safeErrorCode } = require('./safeErrorCode');
+
+// Resolve and validate TLS before the pool can be created. This also removes
+// pg connection-string TLS parameters only after translating supported CA
+// settings, so sslmode cannot replace the verified ssl object below.
+const databaseTls = resolveDatabaseTls(config.databaseUrl);
 
 const pool = new Pool({
-  connectionString: config.databaseUrl,
-  ssl: config.dbSslEnabled ? { rejectUnauthorized: false } : false,
+  connectionString: databaseTls.connectionString,
+  ssl: databaseTls.ssl,
   max: config.dbPoolMax,
   idleTimeoutMillis: config.dbIdleTimeoutMs,
   connectionTimeoutMillis: config.dbConnectionTimeoutMs,
@@ -14,7 +21,7 @@ pool.on('error', (err) => {
   // transient idle-client failure. In-flight requests still receive their
   // own database error and the supervisor can restart only if readiness stays
   // unavailable.
-  console.error('Unexpected PG pool error', err.message);
+  console.error('Unexpected PG pool error', safeErrorCode(err));
 });
 
 /**

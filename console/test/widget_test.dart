@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -471,6 +472,7 @@ void main() {
   testWidgets('Chunk 10: an invalid stored refresh token falls back to the login screen',
       (tester) async {
     SharedPreferences.setMockInitialValues({
+      'pandapay_console.access_token': 'stored-access-token',
       'pandapay_console.refresh_token': 'expired-refresh-token',
     });
 
@@ -490,6 +492,113 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Send OTP'), findsOneWidget);
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('pandapay_console.refresh_token'), isNull);
+    expect(preferences.getString('pandapay_console.access_token'), isNull);
+  });
+
+  testWidgets('transient refresh failure preserves tokens and retry resumes the session',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'pandapay_console.access_token': 'stored-access-token',
+      'pandapay_console.refresh_token': 'stored-refresh-token',
+    });
+    var attempts = 0;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authApiProvider.overrideWithValue(
+            AuthApi(
+              authBaseUrl: 'http://test',
+              client: MockClient((request) async {
+                attempts += 1;
+                if (attempts == 1) {
+                  return http.Response('{"error":"temporarily unavailable"}', 503);
+                }
+                return http.Response(
+                  jsonEncode({'access_token': 'retried-access-token', 'refresh_token': 'rotated-refresh-token'}),
+                  200,
+                );
+              }),
+            ),
+          ),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'retried-access-token',
+              client: _mockClient((uri) {
+                if (uri.path == '/admin/me') return {'isAdmin': true};
+                return {'cards': <Map<String, dynamic>>[]};
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your sign-in is still saved. Try again in a moment.'), findsOneWidget);
+    expect(find.text('Send OTP'), findsNothing);
+    var preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('pandapay_console.refresh_token'), 'stored-refresh-token');
+    expect(preferences.getString('pandapay_console.access_token'), 'stored-access-token');
+
+    await tester.tap(find.text('Retry session'));
+    await tester.pumpAndSettle();
+
+    expect(attempts, 2);
+    expect(find.text('Your sign-in is still saved. Try again in a moment.'), findsNothing);
+    expect(find.text('Catalogue'), findsOneWidget);
+    preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('pandapay_console.refresh_token'), 'rotated-refresh-token');
+    expect(preferences.getString('pandapay_console.access_token'), 'retried-access-token');
+  });
+
+  testWidgets('network and access-denied refresh failures preserve the saved token',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'pandapay_console.refresh_token': 'stored-refresh-token',
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authApiProvider.overrideWithValue(
+            AuthApi(
+              authBaseUrl: 'http://test',
+              client: MockClient((request) async {
+                throw const SocketException('synthetic offline state');
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Retry session'), findsOneWidget);
+    var preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('pandapay_console.refresh_token'), 'stored-refresh-token');
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authApiProvider.overrideWithValue(
+            AuthApi(
+              authBaseUrl: 'http://test',
+              client: MockClient((request) async => http.Response('{"error":"Access denied"}', 403)),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Retry session'), findsOneWidget);
+    preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('pandapay_console.refresh_token'), 'stored-refresh-token');
   });
 
   testWidgets('AD-6: admin sees crowdsourced merchants and can override a name', (tester) async {

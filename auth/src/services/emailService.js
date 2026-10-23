@@ -1,22 +1,34 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/services/emailService.js
 const nodemailer = require('nodemailer');
+const net = require('node:net');
 const config = require('../config');
-const { maskEmail } = require('../utils/recoveryContacts');
 
 // Initialize Nodemailer transporter
 let transporter = null;
 
 if (config.emailHost && config.emailUser && config.emailPass) {
+  const port = parseInt(config.emailPort || '587', 10);
+  const hosted = config.isProduction || process.env.NODE_ENV === 'staging';
+  const tlsOptions = { rejectUnauthorized: true };
+  if (typeof config.emailHost === 'string' && net.isIP(config.emailHost) === 0) {
+    tlsOptions.servername = config.emailHost;
+  }
   transporter = nodemailer.createTransport({
     host: config.emailHost,
-    port: parseInt(config.emailPort || '587', 10),
-    secure: parseInt(config.emailPort || '587', 10) === 465, // true for 465, false for other ports
+    port,
+    secure: port === 465,
+    requireTLS: hosted && port !== 465,
+    tls: tlsOptions,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: {
       user: config.emailUser,
       pass: config.emailPass,
     },
   });
-  console.log('✅ Email service initialized');
+  console.info('Email delivery service initialized');
 } else {
   console.warn('Email SMTP credentials missing. Email authentication delivery is unavailable.');
 }
@@ -32,6 +44,8 @@ async function sendOtpEmail(email, code) {
     from: config.emailFrom || '"PandaPal.Ai" <noreply@example.com>',
     to: email,
     subject: 'Your PandaPal.Ai Verification Code',
+    disableFileAccess: true,
+    disableUrlAccess: true,
     text: `Your PandaPal.Ai verification code is: ${code}\nThis code will expire in 2 minutes. Do not share it with anyone.`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
@@ -56,11 +70,11 @@ async function sendOtpEmail(email, code) {
       console.error('[Email Service] SMTP did not accept the OTP recipient');
       return { success: false, error: 'Email recipient was not accepted' };
     }
-    console.log(`[Email Service] OTP sent to ${maskEmail(email)} (Message ID: ${info.messageId})`);
+    console.info('OTP email delivery succeeded');
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('[Email Service] Failed to send OTP:', error.code || error.name || 'delivery_error');
-    return { success: false, error: error.message };
+    console.error('[Email Service] Failed to send OTP:', safeErrorCode(error, 'delivery_error'));
+    return { success: false, error: 'Email delivery failed' };
   }
 }
 

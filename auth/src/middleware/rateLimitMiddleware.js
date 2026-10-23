@@ -1,22 +1,19 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/middleware/rateLimitMiddleware.js
 // === ADDED FOR RATE LIMITING ===
 // Rate limiting middleware for OTP requests and verification
 
-const { getRedisClient, isRedisReady } = require('../services/redisClient');
+const {
+  RateLimitStorageError,
+  RateLimitExceededError,
+  ActiveOtpError,
+  createRateLimitStore,
+} = require('../services/authAbuseStore');
+const rateLimitStore = createRateLimitStore();
 
-// In-memory fallback store (used when Redis is not available)
-// Unified store for all rate limiting keys
-const memoryStore = {};
-
-// Clean up expired entries from memory store periodically
-setInterval(() => {
-  const now = Date.now();
-  Object.keys(memoryStore).forEach((key) => {
-    if (memoryStore[key].expiresAt && memoryStore[key].expiresAt < now) {
-      delete memoryStore[key];
-    }
-  });
-}, 60000).unref(); // Clean up every minute without keeping a stopped service alive
+function logRateLimitError(event, error) {
+  console.error(`[rate-limit] ${event}`, safeErrorCode(error));
+}
 
 // Configuration from environment variables
 const config = {
@@ -42,110 +39,63 @@ const config = {
   ENUMERATION_BLOCK_DURATION: parseInt(process.env.ENUMERATION_BLOCK_DURATION || '3600', 10), // 1 hour block
 };
 
-/**
- * Helper: Increment counter in Redis or memory store
- */
-async function incrementCounter(key, ttlSeconds) {
-  const redis = await getRedisClient();
-  
-  if (isRedisReady() && redis) {
-    try {
-      const count = await redis.incr(key);
-      if (count === 1) {
-        // First increment, set TTL
-        await redis.expire(key, ttlSeconds);
-      }
-      return count;
-    } catch (err) {
-      console.error('Redis increment error, falling back to memory:', err);
-      // Fall through to memory store
-    }
-  }
-  
-  // Memory store fallback
-  const now = Date.now();
-  if (!memoryStore[key]) {
-    memoryStore[key] = {
-      count: 0,
-      expiresAt: now + ttlSeconds * 1000,
-    };
-  }
-  
-  memoryStore[key].count++;
-  return memoryStore[key].count;
+function serviceUnavailable(res) {
+  return res.status(503).json({
+    success: false,
+    message: 'Authentication is temporarily unavailable. Please try again shortly.',
+  });
 }
 
-/**
- * Helper: Get counter value from Redis or memory store
- */
+async function incrementCounter(key, ttlSeconds, saturation) {
+  return rateLimitStore.increment(key, ttlSeconds, saturation);
+}
+
 async function getCounter(key) {
-  const redis = await getRedisClient();
-  
-  if (isRedisReady() && redis) {
-    try {
-      const count = await redis.get(key);
-      return count ? parseInt(count, 10) : 0;
-    } catch (err) {
-      console.error('Redis get error, falling back to memory:', err);
-      // Fall through to memory store
-    }
-  }
-  
-  // Memory store fallback
-  if (memoryStore[key] && memoryStore[key].expiresAt > Date.now()) {
-    return memoryStore[key].count || 0;
-  }
-  
-  return 0;
+  return rateLimitStore.get(key);
 }
 
-/**
- * Helper: Check if key exists in Redis or memory store
- */
 async function exists(key) {
-  const redis = await getRedisClient();
-  
-  if (isRedisReady() && redis) {
-    try {
-      const result = await redis.exists(key);
-      return result === 1;
-    } catch (err) {
-      console.error('Redis exists error, falling back to memory:', err);
-      // Fall through to memory store
-    }
-  }
-  
-  // Memory store fallback
-  if (memoryStore[key] && memoryStore[key].expiresAt > Date.now()) {
-    return true;
-  }
-  
-  return false;
+  return rateLimitStore.exists(key);
 }
 
-/**
- * Helper: Set key with TTL in Redis or memory store
- */
 async function setWithTTL(key, value, ttlSeconds) {
-  const redis = await getRedisClient();
-  
-  if (isRedisReady() && redis) {
-    try {
-      await redis.setEx(key, ttlSeconds, value);
-      return true;
-    } catch (err) {
-      console.error('Redis setEx error, falling back to memory:', err);
-      // Fall through to memory store
-    }
+  return rateLimitStore.setWithTTL(key, value, ttlSeconds);
+}
+
+function validateReplacementBudgetInput(userId, channel, action) {
+  if (typeof userId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(userId)) {
+    throw new TypeError('Replacement budget user ID is invalid');
   }
-  
-  // Memory store fallback
-  memoryStore[key] = {
-    value,
-    expiresAt: Date.now() + ttlSeconds * 1000,
-  };
-  
-  return true;
+  if (channel !== 'phone' && channel !== 'email') {
+    throw new TypeError('Replacement budget channel is invalid');
+  }
+  if (action !== 'request' && action !== 'verify') {
+    throw new TypeError('Replacement budget action is invalid');
+  }
+}
+
+/** Consume an account-scoped budget before a replacement OTP attempt. */
+async function consumeReplacementBudget(userId, channel, action = 'request') {
+  validateReplacementBudgetInput(userId, channel, action);
+  if (action === 'verify') {
+    const key = `replacement:verify:user:${userId}:${channel}:hour`;
+    const count = await incrementCounter(key, 3600, config.OTP_VERIFY_FAILED_PER_HOUR_LIMIT + 1);
+    if (count > config.OTP_VERIFY_FAILED_PER_HOUR_LIMIT) throw new RateLimitExceededError();
+    return count;
+  }
+
+  const shortLimit = channel === 'phone'
+    ? config.OTP_REQ_PHONE_10MIN_LIMIT : config.OTP_REQ_EMAIL_10MIN_LIMIT;
+  const dayLimit = channel === 'phone'
+    ? config.OTP_REQ_PHONE_DAY_LIMIT : config.OTP_REQ_EMAIL_DAY_LIMIT;
+  const shortKey = `replacement:request:user:${userId}:${channel}:hour`;
+  const dayKey = `replacement:request:user:${userId}:${channel}:day`;
+  // Use the same limits as ordinary requests while applying them to the
+  // stable authenticated account ID instead of the mutable replacement ID.
+  const shortCount = await incrementCounter(shortKey, 600, shortLimit + 1);
+  const dayCount = await incrementCounter(dayKey, 86400, dayLimit + 1);
+  if (shortCount > shortLimit || dayCount > dayLimit) throw new RateLimitExceededError();
+  return { shortCount, dayCount };
 }
 
 /**
@@ -190,7 +140,6 @@ async function checkActiveOtpForPhone(req, res, next) {
     const hasActiveOtp = await exists(activeOtpKey);
 
     if (hasActiveOtp) {
-      console.log(`[Rate Limit] Blocked OTP request for ${normalizedPhone.replace(/\d(?=\d{4})/g, '*')} - Active OTP exists`);
       return res.status(429).json({
         success: false,
         message: 'An OTP is already active. Please wait a moment before requesting a new one.',
@@ -199,9 +148,8 @@ async function checkActiveOtpForPhone(req, res, next) {
 
     next();
   } catch (err) {
-    console.error('checkActiveOtpForPhone error:', err);
-    // On error, allow the request to proceed (fail open)
-    next();
+    logRateLimitError('phone active challenge check failed', err);
+    return serviceUnavailable(res);
   }
 }
 
@@ -225,7 +173,7 @@ async function rateLimitRequestOtpByPhone(req, res, next) {
     // Check 10-minute limit
     const purpose = otpPurpose(req);
     const key10min = `otp_req:phone:${phone}:${purpose}:10min`;
-    const count10min = await incrementCounter(key10min, 600); // 10 minutes = 600 seconds
+    const count10min = await incrementCounter(key10min, 600, config.OTP_REQ_PHONE_10MIN_LIMIT + 1);
 
     if (count10min > config.OTP_REQ_PHONE_10MIN_LIMIT) {
       return res.status(429).json({
@@ -236,7 +184,7 @@ async function rateLimitRequestOtpByPhone(req, res, next) {
 
     // Check 24-hour limit
     const keyDay = `otp_req:phone:${phone}:${purpose}:day`;
-    const countDay = await incrementCounter(keyDay, 86400); // 24 hours = 86400 seconds
+    const countDay = await incrementCounter(keyDay, 86400, config.OTP_REQ_PHONE_DAY_LIMIT + 1);
 
     if (countDay > config.OTP_REQ_PHONE_DAY_LIMIT) {
       return res.status(429).json({
@@ -247,9 +195,8 @@ async function rateLimitRequestOtpByPhone(req, res, next) {
 
     next();
   } catch (err) {
-    console.error('rateLimitRequestOtpByPhone error:', err);
-    // On error, allow the request to proceed (fail open)
-    next();
+    logRateLimitError('phone request quota check failed', err);
+    return serviceUnavailable(res);
   }
 }
 
@@ -274,8 +221,8 @@ async function checkActiveOtpForEmail(req, res, next) {
 
     next();
   } catch (err) {
-    console.error('checkActiveOtpForEmail error:', err);
-    next();
+    logRateLimitError('email active challenge check failed', err);
+    return serviceUnavailable(res);
   }
 }
 
@@ -292,7 +239,7 @@ async function rateLimitRequestOtpByEmail(req, res, next) {
     // Check 10-minute limit
     const purpose = otpPurpose(req);
     const key10min = `otp_req:email:${normalizedEmail}:${purpose}:10min`;
-    const count10min = await incrementCounter(key10min, 600); 
+    const count10min = await incrementCounter(key10min, 600, config.OTP_REQ_EMAIL_10MIN_LIMIT + 1);
 
     if (count10min > config.OTP_REQ_EMAIL_10MIN_LIMIT) {
       return res.status(429).json({
@@ -303,7 +250,7 @@ async function rateLimitRequestOtpByEmail(req, res, next) {
 
     // Check 24-hour limit
     const keyDay = `otp_req:email:${normalizedEmail}:${purpose}:day`;
-    const countDay = await incrementCounter(keyDay, 86400);
+    const countDay = await incrementCounter(keyDay, 86400, config.OTP_REQ_EMAIL_DAY_LIMIT + 1);
 
     if (countDay > config.OTP_REQ_EMAIL_DAY_LIMIT) {
       return res.status(429).json({
@@ -314,8 +261,8 @@ async function rateLimitRequestOtpByEmail(req, res, next) {
 
     next();
   } catch (err) {
-    console.error('rateLimitRequestOtpByEmail error:', err);
-    next();
+    logRateLimitError('email request quota check failed', err);
+    return serviceUnavailable(res);
   }
 }
 
@@ -331,7 +278,7 @@ async function rateLimitRequestOtpByIp(req, res, next) {
 
     // Check 10-minute limit
     const key10min = `otp_req:ip:${ip}:10min`;
-    const count10min = await incrementCounter(key10min, 600); // 10 minutes = 600 seconds
+    const count10min = await incrementCounter(key10min, 600, config.OTP_REQ_IP_10MIN_LIMIT + 1);
 
     if (count10min > config.OTP_REQ_IP_10MIN_LIMIT) {
       return res.status(429).json({
@@ -342,7 +289,7 @@ async function rateLimitRequestOtpByIp(req, res, next) {
 
     // Check 24-hour limit
     const keyDay = `otp_req:ip:${ip}:day`;
-    const countDay = await incrementCounter(keyDay, 86400); // 24 hours = 86400 seconds
+    const countDay = await incrementCounter(keyDay, 86400, config.OTP_REQ_IP_DAY_LIMIT + 1);
 
     if (countDay > config.OTP_REQ_IP_DAY_LIMIT) {
       return res.status(429).json({
@@ -353,9 +300,8 @@ async function rateLimitRequestOtpByIp(req, res, next) {
 
     next();
   } catch (err) {
-    console.error('rateLimitRequestOtpByIp error:', err);
-    // On error, allow the request to proceed (fail open)
-    next();
+    logRateLimitError('IP request quota check failed', err);
+    return serviceUnavailable(res);
   }
 }
 
@@ -389,9 +335,8 @@ async function rateLimitVerifyOtpByPhone(req, res, next) {
 
     next();
   } catch (err) {
-    console.error('rateLimitVerifyOtpByPhone error:', err);
-    // On error, allow the request to proceed (fail open)
-    next();
+    logRateLimitError('phone verification quota check failed', err);
+    return serviceUnavailable(res);
   }
 }
 
@@ -416,14 +361,13 @@ async function rateLimitVerifyOtpByEmail(req, res, next) {
 
     next();
   } catch (err) {
-    console.error('rateLimitVerifyOtpByEmail error:', err);
-    next();
+    logRateLimitError('email verification quota check failed', err);
+    return serviceUnavailable(res);
   }
 }
 
 /**
- * Helper: Mark active OTP (called after OTP is created)
- * This marks the identifier as having an active OTP for its purpose
+ * Helper: Claim the active OTP marker before creating an OTP row.
  * @param {string} identifier - Phone number or email
  * @param {number} ttlSeconds - Time to live in seconds
  */
@@ -438,7 +382,8 @@ async function markActiveOtp(identifier, ttlSeconds, requestId = '1', purpose = 
   
   const type = isEmail ? 'email' : 'phone';
   const key = `otp_active:${type}:${normalized}:${purpose}`;
-  await setWithTTL(key, String(requestId), ttlSeconds);
+  const claimed = await rateLimitStore.claimMarker(key, String(requestId), ttlSeconds);
+  if (!claimed) throw new ActiveOtpError();
 }
 
 /** Clear an active OTP marker when delivery failed and the code was discarded. */
@@ -453,20 +398,12 @@ async function clearActiveOtp(identifier, requestId, purpose = 'signin') {
 
   const type = isEmail ? 'email' : 'phone';
   const key = `otp_active:${type}:${normalized}:${purpose}`;
-  const redis = await getRedisClient();
-  if (isRedisReady() && redis) {
-    try {
-      // Compare and delete atomically: a late failure must not clear the
-      // cooldown for a newer code that has already been sent.
-      await redis.eval(
-        'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end',
-        { keys: [key], arguments: [String(requestId)] }
-      );
-    } catch (err) {
-      console.error('Redis delete error while clearing active OTP:', err);
-    }
+  try {
+    await rateLimitStore.compareDelete(key, requestId);
+  } catch (err) {
+    logRateLimitError('active challenge marker deletion failed', err);
+    throw err;
   }
-  if (memoryStore[key]?.value === String(requestId)) delete memoryStore[key];
 }
 
 /**
@@ -483,7 +420,7 @@ async function incrementFailedVerify(identifier, purpose = 'signin') {
   
   const type = isEmail ? 'email' : 'phone';
   const key = `otp_verify_failed:${type}:${normalized}:${purpose}:hour`;
-  await incrementCounter(key, 3600); // 1 hour = 3600 seconds
+  await incrementCounter(key, 3600, config.OTP_VERIFY_FAILED_PER_HOUR_LIMIT + 1);
 }
 
 /**
@@ -510,7 +447,7 @@ async function blockIpForEnumeration(ip, durationSeconds = null) {
   const key = `enumeration:blocked:ip:${ip}`;
   const duration = durationSeconds || config.ENUMERATION_BLOCK_DURATION;
   await setWithTTL(key, '1', duration);
-  console.warn(`[ENUMERATION PROTECTION] Blocked IP ${ip} for ${duration} seconds due to enumeration attempts`);
+  console.warn(`Enumeration protection blocked an IP for ${duration} seconds`);
 }
 
 /**
@@ -534,8 +471,8 @@ async function checkEnumerationRateLimit(ip) {
   const key10min = `enumeration:rate_limit:ip:${ip}:10min`;
   const keyHour = `enumeration:rate_limit:ip:${ip}:hour`;
   
-  const count10min = await incrementCounter(key10min, 600); // 10 minutes
-  const countHour = await incrementCounter(keyHour, 3600); // 1 hour
+  const count10min = await incrementCounter(key10min, 600, config.ENUMERATION_IP_10MIN_LIMIT + 1);
+  const countHour = await incrementCounter(keyHour, 3600, config.ENUMERATION_IP_HOUR_LIMIT + 1);
 
   // Check stricter limits
   if (count10min > config.ENUMERATION_IP_10MIN_LIMIT) {
@@ -574,5 +511,9 @@ module.exports = {
   blockIpForEnumeration,
   checkEnumerationRateLimit,
   config,
+  RateLimitStorageError,
+  RateLimitExceededError,
+  ActiveOtpError,
+  consumeReplacementBudget,
 };
 

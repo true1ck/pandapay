@@ -10,6 +10,7 @@
 require('dotenv').config();
 
 const crypto = require('crypto');
+const { safeErrorCode } = require('./safeErrorCode');
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 const DEFAULT_INTERVAL_MS = Number(process.env.AI_WORKER_INTERVAL_MS || 2000);
 const DEFAULT_API_BASE_URL = process.env.AI_WORKER_API_BASE_URL || `http://127.0.0.1:${process.env.PORT || 4000}`;
@@ -361,7 +362,7 @@ function startWorker(options = {}) {
         console.warn(`Gemini worker throttled (429/quota), sleeping for ${Math.round(nextDelay / 1000)}s`);
       }
     } catch (error) {
-      console.error('Gemini worker tick failed:', error.message || error);
+      console.error('Gemini worker tick failed:', safeErrorCode(error));
       if (error?.status === 429 || error?.retryable) {
         nextDelay = Math.max(intervalMs, error?.retryAfterMs || 30000);
         console.warn(`Gemini worker throttled, sleeping for ${Math.round(nextDelay / 1000)}s`);

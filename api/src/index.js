@@ -1,4 +1,5 @@
 const { createStatementImportHandler } = require('./statement_import');
+const { safeErrorCode } = require('./safeErrorCode');
 require('dotenv').config();
 const crypto = require('crypto');
 const express = require('express');
@@ -33,6 +34,7 @@ const smsFactsRoute = require('./sms_facts_route');
 const smsRuleBundleRoute = require('./sms_rule_bundle');
 const smsLearning = require('./sms_learning');
 const { testImapLogin } = require('./imap_test');
+const { hasImapControlChars, isValidImapHost } = require('./imap_network');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
 const nearbyGoogle = require('./nearby_google');
@@ -45,6 +47,7 @@ const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
 const { AMOUNT_TOLERANCE_INR, MAX_TIME_DISTANCE_MS, bestDuplicate } = require('./transaction_dedup');
 const { emailSourceKey } = require('./source_identity');
+const { resolveTrustProxyHops, rejectMalformedClientIp } = require('./proxyTrust');
 const spendReports = require('./spend_reports');
 const { buildAssistantSpendingSummary } = require('./assistant_spending');
 const {
@@ -225,16 +228,17 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
 }
 
 const app = express();
-// Staging/production expose this process only through one nginx hop bound to
-// loopback. Trust exactly that hop so IP-based abuse controls see the client
-// address without trusting arbitrary forwarded chains from the internet.
-app.set('trust proxy', 1);
+// Trust only the explicitly configured proxy-hop count. Local development
+// defaults to no forwarded-header trust; staging/production set one hop for
+// their loopback-bound Nginx ingress.
+app.set('trust proxy', resolveTrustProxyHops());
 app.use(cors());
 app.use(express.json());
 // optionalAuth first so the request log can record which user a line belongs
 // to; requestLogger only writes on `finish`, so ordering costs nothing.
 app.use(optionalAuth);
 app.use(requestLogger);
+app.use(rejectMalformedClientIp);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
@@ -246,7 +250,7 @@ app.get('/ready', async (req, res) => {
     await pool.query('SELECT 1');
     res.json({ ok: true, database: 'ready' });
   } catch (err) {
-    console.error('GET /ready error', err.message);
+    console.error('GET /ready error', safeErrorCode(err));
     res.status(503).json({ ok: false, database: 'unavailable' });
   }
 });
@@ -266,7 +270,7 @@ app.get('/profile', requireAuth, async (req, res) => {
     );
     res.json({ profile: result.rows[0] || null });
   } catch (err) {
-    console.error('GET /profile error', err);
+    console.error('GET /profile error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -372,7 +376,7 @@ app.post('/profile', requireVerifiedSession, async (req, res) => {
         ? err.message : 'activation_unavailable';
       return res.status(code === 'invitation_required' ? 403 : 409).json({ error: code });
     }
-    console.error('POST /profile activation failed', { code: err.code || null });
+    console.error('POST /profile activation failed', { code: safeErrorCode(err) });
     return res.status(503).json({ error: 'profile_activation_unavailable' });
   }
 });
@@ -389,7 +393,7 @@ app.get('/catalogue', async (req, res) => {
     );
     res.json({ cards: result.rows });
   } catch (err) {
-    console.error('GET /catalogue error', err);
+    console.error('GET /catalogue error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -422,7 +426,7 @@ async function requireAdmin(req, res, next) {
     if (err instanceof SessionVerificationError) {
       return res.status(err.status).json({ error: err.code });
     }
-    console.error('requireAdmin error', err);
+    console.error('requireAdmin error', safeErrorCode(err));
     res.status(503).json({ error: 'access_check_unavailable' });
   }
 }
@@ -435,7 +439,7 @@ app.get('/admin/me', requireAuth, async (req, res) => {
     });
     res.json({ isAdmin });
   } catch (err) {
-    console.error('GET /admin/me error', err);
+    console.error('GET /admin/me error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -453,7 +457,7 @@ app.get('/admin/cards', requireAdmin, async (req, res) => {
     );
     res.json({ cards: result.rows });
   } catch (err) {
-    console.error('GET /admin/cards error', err);
+    console.error('GET /admin/cards error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -499,7 +503,7 @@ app.post('/admin/issuers', requireAdmin, async (req, res) => {
     });
     res.status(result.created ? 201 : 200).json({ issuer: result.issuer });
   } catch (err) {
-    console.error('POST /admin/issuers error', err);
+    console.error('POST /admin/issuers error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -589,7 +593,7 @@ app.post('/admin/cards', requireAdmin, async (req, res) => {
     }
     res.status(201).json({ card: result.card });
   } catch (err) {
-    console.error('POST /admin/cards error', err);
+    console.error('POST /admin/cards error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -640,7 +644,7 @@ app.put('/admin/reward-rules/:id', requireAdmin, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'reward_rule not found' });
     res.json({ rewardRule: result });
   } catch (err) {
-    console.error('PUT /admin/reward-rules/:id error', err);
+    console.error('PUT /admin/reward-rules/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -810,7 +814,7 @@ app.get('/admin/parser-patterns', requireAdmin, async (req, res) => {
     );
     res.json({ parserPatterns: result.rows });
   } catch (err) {
-    console.error('GET /admin/parser-patterns error', err);
+    console.error('GET /admin/parser-patterns error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -857,7 +861,7 @@ app.post('/admin/parser-patterns', requireAdmin, async (req, res) => {
     });
     res.status(201).json({ parserPattern: result });
   } catch (err) {
-    console.error('POST /admin/parser-patterns error', err);
+    console.error('POST /admin/parser-patterns error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -932,7 +936,7 @@ app.put('/admin/parser-patterns/:id', requireAdmin, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'parser_pattern not found' });
     res.json({ parserPattern: result });
   } catch (err) {
-    console.error('PUT /admin/parser-patterns/:id error', err);
+    console.error('PUT /admin/parser-patterns/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -964,7 +968,7 @@ app.delete('/admin/parser-patterns/:id', requireAdmin, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'parser_pattern not found' });
     res.json(result);
   } catch (err) {
-    console.error('DELETE /admin/parser-patterns/:id error', err);
+    console.error('DELETE /admin/parser-patterns/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1039,7 +1043,7 @@ app.post('/admin/cards/:id/status', requireAdmin, async (req, res) => {
     }
     res.json(result);
   } catch (err) {
-    console.error('POST /admin/cards/:id/status error', err);
+    console.error('POST /admin/cards/:id/status error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1058,7 +1062,7 @@ app.get('/categories', async (req, res) => {
     );
     res.json({ categories: result.rows });
   } catch (err) {
-    console.error('GET /categories error', err);
+    console.error('GET /categories error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1078,7 +1082,7 @@ app.get('/user-categories', requireAuth, async (req, res) => {
     );
     res.json({ categories: result.rows });
   } catch (err) {
-    console.error('GET /user-categories error', err);
+    console.error('GET /user-categories error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1112,7 +1116,7 @@ app.get('/app-status', async (req, res) => {
       smsBackupImportEnabled: row?.sms_backup_import_enabled ?? true,
     });
   } catch (err) {
-    console.error('GET /app-status error', err);
+    console.error('GET /app-status error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1183,7 +1187,7 @@ app.get('/merchants/nearby', async (req, res) => {
 
     res.json({ merchants: result.rows });
   } catch (err) {
-    console.error('GET /merchants/nearby error', err);
+    console.error('GET /merchants/nearby error', safeErrorCode(err));
     // Nearby is an optional discovery surface. Keep the public contract
     // usable during a database/provider outage so the app can render an
     // honest empty state and retry instead of showing a generic exception.
@@ -1229,8 +1233,8 @@ app.post('/merchants/nearby/google', requireValidJwt, async (req, res) => {
   } catch (err) {
     console.warn('POST /merchants/nearby/google unavailable', {
       requestId: req.requestId,
-      googleFailure: err.googleFailure?.name || 'unavailable',
-      fallbackFailure: err.cause?.name || 'unavailable',
+      googleFailure: safeErrorCode(err.googleFailure),
+      fallbackFailure: safeErrorCode(err.cause),
     });
     res.status(503).json({
       error: 'nearby_discovery_unavailable',
@@ -1304,7 +1308,7 @@ const nearbyDiscoveryHandler = async (req, res) => {
     });
   } catch (err) {
     // Do not turn a provider outage into a false "no merchants nearby" result.
-    console.warn('Nearby place discovery unavailable', err.message);
+    console.warn('Nearby place discovery unavailable', safeErrorCode(err));
     res.status(503).json({
       error: 'nearby_discovery_unavailable',
       message: 'The public nearby-place provider is temporarily unavailable',
@@ -1372,7 +1376,7 @@ const nearbyPlaceSearchHandler = async (req, res) => {
     } catch (directoryError) {
       // Map search is still useful when the directory is temporarily down.
       // The outer route catch should only represent failure of every source.
-      console.warn('Nearby search directory unavailable', directoryError.message);
+      console.warn('Nearby search directory unavailable', safeErrorCode(directoryError));
     }
     if (directoryRows.length > 0) {
       return res.json({
@@ -1392,7 +1396,7 @@ const nearbyPlaceSearchHandler = async (req, res) => {
       merchants,
     });
   } catch (err) {
-    console.warn('Nearby place search unavailable', err.message);
+    console.warn('Nearby place search unavailable', safeErrorCode(err));
     // Returning a valid empty payload is deliberate: this endpoint is a
     // best-effort place search, not a payment-critical operation. The app
     // can now always complete the request and present a retryable empty state
@@ -1466,7 +1470,7 @@ app.post('/card-requests', requireAuth, async (req, res) => {
     });
     res.status(201).json({ cardRequest: result });
   } catch (err) {
-    console.error('POST /card-requests error', err);
+    console.error('POST /card-requests error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1515,7 +1519,7 @@ app.post('/data-error-reports', requireAuth, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'card_product not found' });
     res.status(201).json({ errorReport: result });
   } catch (err) {
-    console.error('POST /data-error-reports error', err);
+    console.error('POST /data-error-reports error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1561,7 +1565,7 @@ app.post('/sync/register-device', requireAuth, async (req, res) => {
     );
     res.status(201).json({ deviceId: result.rows[0].device_id });
   } catch (err) {
-    console.error('POST /sync/register-device error', err);
+    console.error('POST /sync/register-device error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1597,7 +1601,7 @@ app.post('/notification-devices', requireAuth, async (req, res) => {
     }
     res.status(201).json(result);
   } catch (err) {
-    console.error('POST /notification-devices error', err);
+    console.error('POST /notification-devices error', safeErrorCode(err));
     if (err?.code === 'notification_service_timeout') {
       return res.status(504).json({
         error: 'notification_service_timeout',
@@ -1665,7 +1669,7 @@ app.post('/notifications/test', requireAuth, async (req, res) => {
       message: 'Push notification accepted for delivery to your registered devices',
     });
   } catch (err) {
-    console.error('POST /notifications/test error', err);
+    console.error('POST /notifications/test error', safeErrorCode(err));
     if (err?.code === 'notification_no_devices') {
       return res.status(409).json({
         error: 'notification_device_not_registered',
@@ -1817,7 +1821,7 @@ app.post('/sync/push', requireAuth, async (req, res) => {
       appliedCount: results.filter((r) => r.applied).length,
     });
   } catch (err) {
-    console.error('POST /sync/push error', err);
+    console.error('POST /sync/push error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1863,7 +1867,7 @@ app.get('/sync/pull', requireAuth, async (req, res) => {
       latestServerSeq: rows.length > 0 ? Number(rows[rows.length - 1].server_seq) : since,
     });
   } catch (err) {
-    console.error('GET /sync/pull error', err);
+    console.error('GET /sync/pull error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1880,7 +1884,7 @@ app.post('/sync/ack', requireAuth, async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    console.error('POST /sync/ack error', err);
+    console.error('POST /sync/ack error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1898,7 +1902,7 @@ app.post('/sync/conflicts/:id/acknowledge', requireAuth, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'not_found' });
     res.json({ ok: true });
   } catch (err) {
-    console.error('POST /sync/conflicts/:id/acknowledge error', err);
+    console.error('POST /sync/conflicts/:id/acknowledge error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1955,7 +1959,7 @@ app.post('/analytics/events', async (req, res) => {
     });
     res.status(202).json({ accepted, received: batch.length });
   } catch (err) {
-    console.error('POST /analytics/events error', err);
+    console.error('POST /analytics/events error', safeErrorCode(err));
     // Still 202. A telemetry outage must not turn into client-visible errors
     // or a retry storm against an already-struggling database.
     res.status(202).json({ accepted: 0, received: batch.length });
@@ -1996,7 +2000,7 @@ app.post('/partner-clicks', requireAuth, async (req, res) => {
     if (!row) return res.status(404).json({ error: 'no_apply_url' });
     res.status(201).json({ url: row.out_url, clickToken: row.out_click_token });
   } catch (err) {
-    console.error('POST /partner-clicks error', err);
+    console.error('POST /partner-clicks error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2073,7 +2077,7 @@ app.post('/partner-conversions/webhook', async (req, res) => {
     );
     res.status(202).json({ ok: true, matched: true });
   } catch (err) {
-    console.error('POST /partner-conversions/webhook error', err);
+    console.error('POST /partner-conversions/webhook error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2151,7 +2155,7 @@ app.post('/acceptance-reports', requireAuth, async (req, res) => {
     }
     res.status(201).json({ merchantId: row.out_merchant_id });
   } catch (err) {
-    console.error('POST /acceptance-reports error', err);
+    console.error('POST /acceptance-reports error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2239,7 +2243,7 @@ app.get('/merchants/search', async (req, res) => {
     );
     res.json({ merchants: result.rows });
   } catch (err) {
-    console.error('GET /merchants/search error', err);
+    console.error('GET /merchants/search error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2274,7 +2278,7 @@ app.get('/merchants/resolve', async (req, res) => {
     );
     res.json({ merchant: result.rows[0] || null });
   } catch (err) {
-    console.error('GET /merchants/resolve error', err);
+    console.error('GET /merchants/resolve error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2306,7 +2310,7 @@ app.get('/admin/card-requests', requireAdmin, async (req, res) => {
     );
     res.json({ requestGroups: result.rows });
   } catch (err) {
-    console.error('GET /admin/card-requests error', err);
+    console.error('GET /admin/card-requests error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2359,7 +2363,7 @@ app.post('/admin/card-requests/start-scraping', requireAdmin, async (req, res) =
     });
     res.status(201).json(result);
   } catch (err) {
-    console.error('POST /admin/card-requests/start-scraping error', err);
+    console.error('POST /admin/card-requests/start-scraping error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2385,7 +2389,7 @@ app.get('/admin/error-reports', requireAdmin, async (req, res) => {
     );
     res.json({ errorReports: result.rows });
   } catch (err) {
-    console.error('GET /admin/error-reports error', err);
+    console.error('GET /admin/error-reports error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2479,7 +2483,7 @@ app.post('/admin/error-reports/:id/approve', requireAdmin, async (req, res) => {
     if (result.status !== 200) return res.status(result.status).json({ error: result.error || 'not_found' });
     res.json({ changeId: result.changeId });
   } catch (err) {
-    console.error('POST /admin/error-reports/:id/approve error', err);
+    console.error('POST /admin/error-reports/:id/approve error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2502,7 +2506,7 @@ app.post('/admin/error-reports/:id/reject', requireAdmin, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'not found or already resolved' });
     res.json({ ok: true });
   } catch (err) {
-    console.error('POST /admin/error-reports/:id/reject error', err);
+    console.error('POST /admin/error-reports/:id/reject error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2526,7 +2530,7 @@ app.get('/admin/alerts', requireAdmin, async (req, res) => {
     );
     res.json({ alerts: result.rows });
   } catch (err) {
-    console.error('GET /admin/alerts error', err);
+    console.error('GET /admin/alerts error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2569,7 +2573,7 @@ app.get('/admin/alerts/:id', requireAdmin, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'alert not found' });
     res.json(result);
   } catch (err) {
-    console.error('GET /admin/alerts/:id error', err);
+    console.error('GET /admin/alerts/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2612,7 +2616,7 @@ app.post('/admin/alerts/:id/decide', requireAdmin, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'alert not found or not open' });
     res.json({ ok: true });
   } catch (err) {
-    console.error('POST /admin/alerts/:id/decide error', err);
+    console.error('POST /admin/alerts/:id/decide error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2706,14 +2710,14 @@ app.get('/user-cards', requireAuth, async (req, res) => {
       } catch (enrichmentError) {
         await client.query('ROLLBACK TO SAVEPOINT user_cards_enrichment');
         await client.query('RELEASE SAVEPOINT user_cards_enrichment');
-        console.warn('GET /user-cards enrichment unavailable', enrichmentError.message);
+        console.warn('GET /user-cards enrichment unavailable', safeErrorCode(enrichmentError));
       }
 
       return cards.rows;
     });
     res.json({ userCards: result });
   } catch (err) {
-    console.error('GET /user-cards error', err);
+    console.error('GET /user-cards error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2835,7 +2839,7 @@ app.post('/user-cards', requireAuth, async (req, res) => {
         message: 'This physical card is already in your wallet.',
       });
     }
-    console.error('POST /user-cards error', err);
+    console.error('POST /user-cards error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3030,7 +3034,7 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
       importedCount: results.filter((r) => r.status === 'imported').length,
     });
   } catch (err) {
-    console.error('POST /user-cards/import error', err);
+    console.error('POST /user-cards/import error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3058,11 +3062,11 @@ app.post('/user-cards/:id/archive', requireAuth, async (req, res) => {
     try {
       await withUserClient(req.userId, (client) => repairSmsHistory(client, req.userId));
     } catch (repairError) {
-      console.error('POST /user-cards/:id/archive repair warning', repairError);
+      console.error('POST /user-cards/:id/archive repair warning', safeErrorCode(repairError));
     }
     res.json({ ok: true });
   } catch (err) {
-    console.error('POST /user-cards/:id/archive error', err);
+    console.error('POST /user-cards/:id/archive error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3093,7 +3097,7 @@ app.post('/user-cards/:id/default', requireAuth, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'user_card not found' });
     res.json({ userCard: result.rows[0] });
   } catch (err) {
-    console.error('POST /user-cards/:id/default error', err);
+    console.error('POST /user-cards/:id/default error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3123,7 +3127,7 @@ app.get('/card-overrides', requireAuth, async (req, res) => {
     );
     res.json({ overrides: result.rows });
   } catch (err) {
-    console.error('GET /card-overrides error', err);
+    console.error('GET /card-overrides error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3173,7 +3177,7 @@ app.post('/card-overrides', requireAuth, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'user_card not found or not owned by you' });
     res.status(201).json({ override: result });
   } catch (err) {
-    console.error('POST /card-overrides error', err);
+    console.error('POST /card-overrides error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3230,7 +3234,7 @@ app.patch('/card-overrides/:id', requireAuth, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'override not found' });
     res.json({ override: result });
   } catch (err) {
-    console.error('PATCH /card-overrides/:id error', err);
+    console.error('PATCH /card-overrides/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3253,7 +3257,7 @@ app.delete('/card-overrides/:id', requireAuth, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'override not found' });
     res.json({ ok: true });
   } catch (err) {
-    console.error('DELETE /card-overrides/:id error', err);
+    console.error('DELETE /card-overrides/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3311,7 +3315,7 @@ app.post('/user-cards/:id/unarchive', requireAuth, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'user_card not found' });
     res.json({ ok: true });
   } catch (err) {
-    console.error('POST /user-cards/:id/unarchive error', err);
+    console.error('POST /user-cards/:id/unarchive error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3341,7 +3345,7 @@ app.post('/user-cards/reorder', requireAuth, async (req, res) => {
     });
     res.json({ ok: true });
   } catch (err) {
-    console.error('POST /user-cards/reorder error', err);
+    console.error('POST /user-cards/reorder error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3452,7 +3456,7 @@ app.patch('/user-cards/:id', requireAuth, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'user_card not found' });
     res.json({ userCard: result.rows[0] });
   } catch (err) {
-    console.error('PATCH /user-cards/:id error', err);
+    console.error('PATCH /user-cards/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3484,7 +3488,7 @@ app.get('/user-cards/:id/points-ledger', requireAuth, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'user_card not found' });
     res.json({ pointsLedger: result.rows });
   } catch (err) {
-    console.error('GET /user-cards/:id/points-ledger error', err);
+    console.error('GET /user-cards/:id/points-ledger error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3535,7 +3539,7 @@ app.post('/user-cards/:id/points-adjustment', requireAuth, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'user_card not found' });
     res.status(201).json({ pointsLedgerEntry: result });
   } catch (err) {
-    console.error('POST /user-cards/:id/points-adjustment error', err);
+    console.error('POST /user-cards/:id/points-adjustment error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -5231,7 +5235,7 @@ app.post('/transactions', requireAuth, async (req, res) => {
     }
     res.status(result.status).json(result);
   } catch (err) {
-    console.error('POST /transactions error', err);
+    console.error('POST /transactions error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -5472,7 +5476,7 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
     }
     res.status(result.status).json(result);
   } catch (err) {
-    console.error('POST /transactions/from-sms error', err);
+    console.error('POST /transactions/from-sms error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -5740,7 +5744,7 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
 
     res.status(200).json(payload);
   } catch (err) {
-    console.error('POST /transactions/from-sms/batch error', err);
+    console.error('POST /transactions/from-sms/batch error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -5756,7 +5760,7 @@ app.post('/transactions/reconcile-sms', requireAuth, async (req, res) => {
     const result = await withUserClient(req.userId, (client) => repairSmsHistory(client, req.userId));
     res.json(result);
   } catch (err) {
-    console.error('POST /transactions/reconcile-sms error', err);
+    console.error('POST /transactions/reconcile-sms error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -5787,7 +5791,7 @@ app.get('/transactions/sms-import-state', requireAuth, async (req, res) => {
       latestSmsObservedAt: row.latest_sms_observed_at ?? null,
     });
   } catch (err) {
-    console.error('GET /transactions/sms-import-state error', err);
+    console.error('GET /transactions/sms-import-state error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -5990,7 +5994,7 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
       })),
     });
   } catch (err) {
-    console.error('GET /account-summaries error', err);
+    console.error('GET /account-summaries error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6153,7 +6157,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
     const rows = await withUserClient(req.userId, (client) => transactionTags.attachTags(client, req.userId, result.rows));
     res.json({ transactions: rows });
   } catch (err) {
-    console.error('GET /transactions error', err);
+    console.error('GET /transactions error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6238,7 +6242,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
     const [transaction] = await withUserClient(req.userId, (client) => transactionTags.attachTags(client, req.userId, result.rows));
     res.json({ transaction });
   } catch (err) {
-    console.error('GET /transactions/:id error', err);
+    console.error('GET /transactions/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6287,7 +6291,7 @@ app.get('/duplicate-candidates', requireAuth, async (req, res) => {
     });
     res.json({ duplicateCandidates: result });
   } catch (err) {
-    console.error('GET /duplicate-candidates error', err);
+    console.error('GET /duplicate-candidates error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6432,7 +6436,7 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     res.json(result);
   } catch (err) {
-    console.error('POST /duplicate-candidates/:id/resolve error', err);
+    console.error('POST /duplicate-candidates/:id/resolve error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6625,7 +6629,7 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     res.json(result);
   } catch (err) {
-    console.error('PATCH /transactions/:id error', err);
+    console.error('PATCH /transactions/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6666,7 +6670,7 @@ app.patch('/transactions/:id/note', requireAuth, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'transaction not found' });
     res.json({ transaction: result.rows[0] });
   } catch (err) {
-    console.error('PATCH /transactions/:id/note error', err);
+    console.error('PATCH /transactions/:id/note error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6738,7 +6742,7 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     res.json(result);
   } catch (err) {
-    console.error('POST /transactions/:id/ignore error', err);
+    console.error('POST /transactions/:id/ignore error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6794,7 +6798,7 @@ app.post('/transactions/:id/restore', requireAuth, async (req, res) => {
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     res.json(result);
   } catch (err) {
-    console.error('POST /transactions/:id/restore error', err);
+    console.error('POST /transactions/:id/restore error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6820,7 +6824,7 @@ app.get('/lounge-usage', requireAuth, async (req, res) => {
     );
     res.json({ loungeUsage: result.rows });
   } catch (err) {
-    console.error('GET /lounge-usage error', err);
+    console.error('GET /lounge-usage error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6848,7 +6852,7 @@ app.post('/lounge-usage', requireAuth, async (req, res) => {
     );
     res.status(201).json({ loungeUsage: result.rows[0] });
   } catch (err) {
-    console.error('POST /lounge-usage error', err);
+    console.error('POST /lounge-usage error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7006,7 +7010,7 @@ app.get('/monthly-reports', requireAuth, async (req, res) => {
     });
     res.json({ monthlyReport: result });
   } catch (err) {
-    console.error('GET /monthly-reports error', err);
+    console.error('GET /monthly-reports error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7073,7 +7077,7 @@ app.get('/spend-by-category', requireAuth, async (req, res) => {
     });
     res.json({ months, categories: result });
   } catch (err) {
-    console.error('GET /spend-by-category error', err);
+    console.error('GET /spend-by-category error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7175,7 +7179,7 @@ app.get('/spend-report', requireAuth, async (req, res) => {
     });
     res.json(payload);
   } catch (err) {
-    console.error('GET /spend-report error', err);
+    console.error('GET /spend-report error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7233,7 +7237,7 @@ app.get('/assistant/spending-summary', requireAuth, async (req, res) => {
     });
     res.json({ assistantSpendingSummary: summary });
   } catch (err) {
-    console.error('GET /assistant/spending-summary error', err);
+    console.error('GET /assistant/spending-summary error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7303,7 +7307,7 @@ app.get('/export/transactions.csv', requireAuth, async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="pandapay-transactions.csv"');
     res.send(csvDocument(header, body));
   } catch (err) {
-    console.error('GET /export/transactions.csv error', err);
+    console.error('GET /export/transactions.csv error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7387,7 +7391,7 @@ app.get('/budgets', requireAuth, async (req, res) => {
     });
     res.json({ budgets: payload });
   } catch (err) {
-    console.error('GET /budgets error', err);
+    console.error('GET /budgets error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7465,7 +7469,7 @@ app.post('/budgets', requireAuth, async (req, res) => {
     if (result.status !== 201) return res.status(result.status).json({ error: result.error });
     res.status(201).json({ budget: result.budget });
   } catch (err) {
-    console.error('POST /budgets error', err);
+    console.error('POST /budgets error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7489,7 +7493,7 @@ app.delete('/budgets/:id', requireAuth, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'budget not found' });
     res.json({ ok: true });
   } catch (err) {
-    console.error('DELETE /budgets/:id error', err);
+    console.error('DELETE /budgets/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7689,7 +7693,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
     });
     res.json(payload);
   } catch (err) {
-    console.error('GET /recurring error', err);
+    console.error('GET /recurring error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7743,7 +7747,7 @@ app.post('/recurring', requireAuth, async (req, res) => {
     ));
     res.status(201).json({ id: result.rows[0].id });
   } catch (err) {
-    console.error('POST /recurring error', err);
+    console.error('POST /recurring error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7770,7 +7774,7 @@ app.patch('/recurring/:id', requireAuth, async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ error: 'not_found' });
     res.json({ ok: true });
   } catch (err) {
-    console.error('PATCH /recurring error', err);
+    console.error('PATCH /recurring error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7796,7 +7800,7 @@ app.post('/recurring/:id/dismiss', requireAuth, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'not_found' });
     res.json({ ok: true });
   } catch (err) {
-    console.error('POST /recurring/:id/dismiss error', err);
+    console.error('POST /recurring/:id/dismiss error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7915,7 +7919,7 @@ app.post('/card-discovery', requireAuth, async (req, res) => {
     });
     res.json(payload);
   } catch (err) {
-    console.error('POST /card-discovery error', err);
+    console.error('POST /card-discovery error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7956,7 +7960,7 @@ app.get('/referrals', requireAuth, async (req, res) => {
     });
     res.json(payload);
   } catch (err) {
-    console.error('GET /referrals error', err);
+    console.error('GET /referrals error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7985,7 +7989,7 @@ app.get('/notifications', requireAuth, async (req, res) => {
     const unread = rows.rows.filter((r) => r.read_at === null).length;
     res.json({ notifications: rows.rows, unreadCount: unread });
   } catch (err) {
-    console.error('GET /notifications error', err);
+    console.error('GET /notifications error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8015,7 +8019,7 @@ app.post('/notifications/read', requireAuth, async (req, res) => {
     );
     res.json({ updated: result.rowCount });
   } catch (err) {
-    console.error('POST /notifications/read error', err);
+    console.error('POST /notifications/read error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8106,11 +8110,11 @@ app.post('/notifications', requireAuth, async (req, res) => {
           deepLink: inserted.deep_link,
           dedupeKey: inserted.dedupe_key,
         })
-        .catch((err) => console.error('remote notification delivery failed', err));
+        .catch((err) => console.error('remote notification delivery failed', safeErrorCode(err)));
     }
     res.status(201).json({ notification: inserted });
   } catch (err) {
-    console.error('POST /notifications error', err);
+    console.error('POST /notifications error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8167,7 +8171,7 @@ app.post('/admin/notifications/broadcast', requireAdmin, async (req, res) => {
       transactionId: result?.transactionId || idempotencyKey,
     });
   } catch (err) {
-    console.error('POST /admin/notifications/broadcast error', err);
+    console.error('POST /admin/notifications/broadcast error', safeErrorCode(err));
     if (err?.code === 'notification_service_auth_failed') {
       return res.status(503).json({
         error: 'notification_service_auth_failed',
@@ -8283,7 +8287,7 @@ app.get('/home-summary', requireAuth, async (req, res) => {
     });
     res.json({ homeSummary: summary });
   } catch (err) {
-    console.error('GET /home-summary error', err);
+    console.error('GET /home-summary error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8316,7 +8320,7 @@ app.get('/my-contributions', requireAuth, async (req, res) => {
     );
     res.json({ networkStats: result.rows[0] });
   } catch (err) {
-    console.error('GET /my-contributions error', err);
+    console.error('GET /my-contributions error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8344,7 +8348,7 @@ app.post('/profile/contributions-opt-in', requireAuth, async (req, res) => {
     });
     res.json({ profile: result.rows[0] || null });
   } catch (err) {
-    console.error('POST /profile/contributions-opt-in error', err);
+    console.error('POST /profile/contributions-opt-in error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8389,7 +8393,7 @@ app.get('/consents', requireAuth, async (req, res) => {
     );
     res.json({ consents: result.rows });
   } catch (err) {
-    console.error('GET /consents error', err);
+    console.error('GET /consents error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8411,7 +8415,7 @@ app.get('/consents/history', requireAuth, async (req, res) => {
     );
     res.json({ consents: result.rows });
   } catch (err) {
-    console.error('GET /consents/history error', err);
+    console.error('GET /consents/history error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8445,7 +8449,7 @@ app.post('/consents', requireAuth, async (req, res) => {
     );
     res.status(201).json({ consent: result.rows[0] });
   } catch (err) {
-    console.error('POST /consents error', err);
+    console.error('POST /consents error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8494,7 +8498,7 @@ app.get('/notification-preferences', requireAuth, async (req, res) => {
     const row = result.rows[0];
     res.json({ preferences: row ? row : { profile_id: req.userId, ...NOTIFICATION_PREF_DEFAULTS } });
   } catch (err) {
-    console.error('GET /notification-preferences error', err);
+    console.error('GET /notification-preferences error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8533,7 +8537,7 @@ app.put('/notification-preferences', requireAuth, async (req, res) => {
     });
     res.json({ preferences: result.rows[0] });
   } catch (err) {
-    console.error('PUT /notification-preferences error', err);
+    console.error('PUT /notification-preferences error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8552,7 +8556,7 @@ app.get('/notification-preferences/muted-merchants', requireAuth, async (req, re
     );
     res.json({ mutedMerchants: result.rows });
   } catch (err) {
-    console.error('GET /notification-preferences/muted-merchants error', err);
+    console.error('GET /notification-preferences/muted-merchants error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8570,7 +8574,7 @@ app.post('/notification-preferences/muted-merchants', requireAuth, async (req, r
     );
     res.status(201).json({ ok: true });
   } catch (err) {
-    console.error('POST /notification-preferences/muted-merchants error', err);
+    console.error('POST /notification-preferences/muted-merchants error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8585,7 +8589,7 @@ app.delete('/notification-preferences/muted-merchants/:merchantId', requireAuth,
     );
     res.json({ ok: true });
   } catch (err) {
-    console.error('DELETE /notification-preferences/muted-merchants/:merchantId error', err);
+    console.error('DELETE /notification-preferences/muted-merchants/:merchantId error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8614,7 +8618,7 @@ app.get('/user-settings', requireAuth, async (req, res) => {
       updatedAt: row ? row.updated_at : null,
     });
   } catch (err) {
-    console.error('GET /user-settings error', err);
+    console.error('GET /user-settings error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8687,7 +8691,7 @@ app.put('/user-settings', requireAuth, async (req, res) => {
       updatedAt: result.updated_at,
     });
   } catch (err) {
-    console.error('PUT /user-settings error', err);
+    console.error('PUT /user-settings error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8714,7 +8718,7 @@ app.post('/account/delete-request', requireAuth, async (req, res) => {
     );
     res.json({ profile: result.rows[0] || null });
   } catch (err) {
-    console.error('POST /account/delete-request error', err);
+    console.error('POST /account/delete-request error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8732,7 +8736,7 @@ app.delete('/account/delete-request', requireAuth, async (req, res) => {
     );
     res.json({ profile: result.rows[0] || null });
   } catch (err) {
-    console.error('DELETE /account/delete-request error', err);
+    console.error('DELETE /account/delete-request error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8764,7 +8768,7 @@ app.post('/support-tickets', requireAuth, async (req, res) => {
     );
     res.status(201).json({ ticket: result.rows[0] });
   } catch (err) {
-    console.error('POST /support-tickets error', err);
+    console.error('POST /support-tickets error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8784,7 +8788,7 @@ app.get('/changelog', async (req, res) => {
     );
     res.json({ entries: result.rows });
   } catch (err) {
-    console.error('GET /changelog error', err);
+    console.error('GET /changelog error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8843,7 +8847,7 @@ app.get('/admin/merchants', requireAdmin, async (req, res) => {
     );
     res.json({ merchants: result.rows });
   } catch (err) {
-    console.error('GET /admin/merchants error', err);
+    console.error('GET /admin/merchants error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8894,7 +8898,7 @@ app.get('/admin/merchants/:id', requireAdmin, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'merchant not found' });
     res.json(result);
   } catch (err) {
-    console.error('GET /admin/merchants/:id error', err);
+    console.error('GET /admin/merchants/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8943,7 +8947,7 @@ app.post('/admin/merchants/:id/override', requireAdmin, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'merchant not found' });
     res.json({ merchant: result });
   } catch (err) {
-    console.error('POST /admin/merchants/:id/override error', err);
+    console.error('POST /admin/merchants/:id/override error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8974,7 +8978,7 @@ app.post('/admin/merchants/:id/unpublish', requireAdmin, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'merchant not found' });
     res.json({ merchant: result });
   } catch (err) {
-    console.error('POST /admin/merchants/:id/unpublish error', err);
+    console.error('POST /admin/merchants/:id/unpublish error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -8999,7 +9003,7 @@ app.get('/admin/merchant-conflicts', requireAdmin, async (req, res) => {
     );
     res.json({ conflicts: result.rows });
   } catch (err) {
-    console.error('GET /admin/merchant-conflicts error', err);
+    console.error('GET /admin/merchant-conflicts error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9067,7 +9071,7 @@ app.post('/admin/merchant-conflicts/:id/resolve', requireAdmin, async (req, res)
     if (!result) return res.status(404).json({ error: 'conflict not found' });
     res.json({ conflict: result });
   } catch (err) {
-    console.error('POST /admin/merchant-conflicts/:id/resolve error', err);
+    console.error('POST /admin/merchant-conflicts/:id/resolve error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9082,7 +9086,7 @@ app.get('/admin/abuse-signals', requireAdmin, async (req, res) => {
     );
     res.json({ abuseSignals: result.rows });
   } catch (err) {
-    console.error('GET /admin/abuse-signals error', err);
+    console.error('GET /admin/abuse-signals error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9129,7 +9133,7 @@ app.post('/admin/abuse-signals/:id/block', requireAdmin, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'abuse signal not found' });
     res.json(result);
   } catch (err) {
-    console.error('POST /admin/abuse-signals/:id/block error', err);
+    console.error('POST /admin/abuse-signals/:id/block error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9176,7 +9180,7 @@ app.get('/admin/acceptance-summary', requireAdmin, async (req, res) => {
     );
     res.json({ acceptanceSummary: result.rows });
   } catch (err) {
-    console.error('GET /admin/acceptance-summary error', err);
+    console.error('GET /admin/acceptance-summary error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9213,7 +9217,7 @@ app.get('/admin/acceptance-summary/:merchantId', requireAdmin, async (req, res) 
     if (!result) return res.status(404).json({ error: 'acceptance summary not found' });
     res.json(result);
   } catch (err) {
-    console.error('GET /admin/acceptance-summary/:merchantId error', err);
+    console.error('GET /admin/acceptance-summary/:merchantId error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9261,7 +9265,7 @@ app.post('/admin/acceptance-summary/publish', requireAdmin, async (req, res) => 
     if (!result) return res.status(404).json({ error: 'acceptance summary not found' });
     res.json({ acceptanceSummary: result });
   } catch (err) {
-    console.error('POST /admin/acceptance-summary/publish error', err);
+    console.error('POST /admin/acceptance-summary/publish error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9316,7 +9320,7 @@ app.get('/admin/effective-rate-summary', requireAdmin, async (req, res) => {
     );
     res.json({ effectiveRateSummary: result.rows });
   } catch (err) {
-    console.error('GET /admin/effective-rate-summary error', err);
+    console.error('GET /admin/effective-rate-summary error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9338,7 +9342,7 @@ app.get('/admin/effective-rate-summary/:cardProductId/:categoryId/samples', requ
     );
     res.json({ samples: result.rows });
   } catch (err) {
-    console.error('GET /admin/effective-rate-summary/:cardProductId/:categoryId/samples error', err);
+    console.error('GET /admin/effective-rate-summary/:cardProductId/:categoryId/samples error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9388,7 +9392,7 @@ app.get('/admin/sources', requireAdmin, async (req, res) => {
     );
     res.json({ sources: result.rows });
   } catch (err) {
-    console.error('GET /admin/sources error', err);
+    console.error('GET /admin/sources error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9431,7 +9435,7 @@ app.post('/admin/sources', requireAdmin, async (req, res) => {
     });
     res.status(201).json({ source: result });
   } catch (err) {
-    console.error('POST /admin/sources error', err);
+    console.error('POST /admin/sources error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9490,7 +9494,7 @@ app.patch('/admin/sources/:id', requireAdmin, async (req, res) => {
     if (result.error) return res.status(400).json({ error: result.error });
     res.json(result);
   } catch (err) {
-    console.error('PATCH /admin/sources/:id error', err);
+    console.error('PATCH /admin/sources/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9509,7 +9513,7 @@ app.get('/admin/scrape-runs', requireAdmin, async (req, res) => {
     );
     res.json({ scrapeRuns: result.rows });
   } catch (err) {
-    console.error('GET /admin/scrape-runs error', err);
+    console.error('GET /admin/scrape-runs error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9535,7 +9539,7 @@ app.get('/admin/source-pages/:id/snapshots', requireAdmin, async (req, res) => {
     );
     res.json({ snapshots: result.rows });
   } catch (err) {
-    console.error('GET /admin/source-pages/:id/snapshots error', err);
+    console.error('GET /admin/source-pages/:id/snapshots error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9552,7 +9556,7 @@ app.get('/admin/sources/:id/pages', requireAdmin, async (req, res) => {
     );
     res.json({ sourcePages: result.rows });
   } catch (err) {
-    console.error('GET /admin/sources/:id/pages error', err);
+    console.error('GET /admin/sources/:id/pages error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9564,7 +9568,7 @@ app.get('/admin/data-quality-dashboard', requireAdmin, async (req, res) => {
     );
     res.json({ dashboard: result.rows[0] });
   } catch (err) {
-    console.error('GET /admin/data-quality-dashboard error', err);
+    console.error('GET /admin/data-quality-dashboard error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9586,7 +9590,7 @@ app.get('/admin/anonymization-audit-runs', requireAdmin, async (req, res) => {
     );
     res.json({ auditRuns: result.rows });
   } catch (err) {
-    console.error('GET /admin/anonymization-audit-runs error', err);
+    console.error('GET /admin/anonymization-audit-runs error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9603,7 +9607,7 @@ app.get('/admin/anonymization-audit-runs/latest', requireAdmin, async (req, res)
     );
     res.json({ latestRun: result.rows[0] || null });
   } catch (err) {
-    console.error('GET /admin/anonymization-audit-runs/latest error', err);
+    console.error('GET /admin/anonymization-audit-runs/latest error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9628,7 +9632,7 @@ app.post('/admin/anonymization-audit-runs/run', requireAdmin, async (req, res) =
     });
     res.status(201).json({ auditRun: result });
   } catch (err) {
-    console.error('POST /admin/anonymization-audit-runs/run error', err);
+    console.error('POST /admin/anonymization-audit-runs/run error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9697,7 +9701,7 @@ app.post('/forwarding-addresses', requireAuth, async (req, res) => {
     });
     res.status(201).json({ forwardingAddress: result });
   } catch (err) {
-    console.error('POST /forwarding-addresses error', err);
+    console.error('POST /forwarding-addresses error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9713,7 +9717,7 @@ app.get('/forwarding-addresses/me', requireAuth, async (req, res) => {
     );
     res.json({ forwardingAddress: result.rows[0] || null });
   } catch (err) {
-    console.error('GET /forwarding-addresses/me error', err);
+    console.error('GET /forwarding-addresses/me error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9857,13 +9861,13 @@ app.post('/inbound-emails/webhook', async (req, res) => {
           }
         });
       } catch (err) {
-        console.error('POST /inbound-emails/webhook: auto-create transaction failed', err);
+        console.error('POST /inbound-emails/webhook: auto-create transaction failed', safeErrorCode(err));
       }
     }
 
     res.status(202).json({ accepted: true, parsed: classified.ok });
   } catch (err) {
-    console.error('POST /inbound-emails/webhook error', err);
+    console.error('POST /inbound-emails/webhook error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9930,7 +9934,7 @@ app.get('/forwarding-addresses/verification', requireAuth, async (req, res) => {
     });
     res.json(payload);
   } catch (err) {
-    console.error('GET /forwarding-addresses/verification error', err);
+    console.error('GET /forwarding-addresses/verification error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9947,7 +9951,7 @@ app.get('/inbound-emails/me', requireAuth, async (req, res) => {
     );
     res.json({ inboundEmails: result.rows });
   } catch (err) {
-    console.error('GET /inbound-emails/me error', err);
+    console.error('GET /inbound-emails/me error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10032,7 +10036,7 @@ app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res)
     }
     res.status(result.status).json(result);
   } catch (err) {
-    console.error('POST /inbound-emails/:id/create-transaction error', err);
+    console.error('POST /inbound-emails/:id/create-transaction error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10061,7 +10065,7 @@ app.get('/statement-imports', requireAuth, async (req, res) => {
     );
     res.json({ statementImports: result.rows });
   } catch (err) {
-    console.error('GET /statement-imports error', err);
+    console.error('GET /statement-imports error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10087,7 +10091,7 @@ app.post('/sms-import-batches', requireAuth, async (req, res) => {
     );
     res.status(201).json({ smsImportBatch: result.rows[0] });
   } catch (err) {
-    console.error('POST /sms-import-batches error', err);
+    console.error('POST /sms-import-batches error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10103,7 +10107,7 @@ app.get('/sms-import-batches', requireAuth, async (req, res) => {
     );
     res.json({ smsImportBatches: result.rows });
   } catch (err) {
-    console.error('GET /sms-import-batches error', err);
+    console.error('GET /sms-import-batches error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10138,7 +10142,7 @@ app.get('/backup-status', requireAuth, async (req, res) => {
     });
     res.json(result);
   } catch (err) {
-    console.error('GET /backup-status error', err);
+    console.error('GET /backup-status error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10180,7 +10184,7 @@ app.post('/backup-runs', requireAuth, async (req, res) => {
       lastSuccessfulBackup: latest.rows[0] || null,
     });
   } catch (err) {
-    console.error('POST /backup-runs error', err);
+    console.error('POST /backup-runs error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10266,7 +10270,7 @@ app.get('/export', requireAuth, async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="pandapay-export-${scope}.csv"`);
     res.send(sections.join('\n\n'));
   } catch (err) {
-    console.error('GET /export error', err);
+    console.error('GET /export error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10283,6 +10287,8 @@ app.get('/export', requireAuth, async (req, res) => {
  * encryption/KMS-managed key rotation, flagged explicitly as a follow-up
  * (see the migration's own comment and this chunk's PROGRESS.md entry) —
  * do not treat this as the final answer for credential-at-rest storage.
+ * Both connectors restrict TLS destinations to public IP addresses; this
+ * policy reports private destinations without rewriting saved settings.
  * The password itself is never logged anywhere in this route.
  */
 app.post('/imap-connections', requireAuth, async (req, res) => {
@@ -10295,6 +10301,19 @@ app.post('/imap-connections', requireAuth, async (req, res) => {
   }
   if (!imapHost || typeof imapHost !== 'string') {
     return res.status(400).json({ error: 'imapHost is required' });
+  }
+  if ([email, appPassword, imapHost, senderFilter].some(hasImapControlChars) ||
+      (senderFilter != null && typeof senderFilter !== 'string')) {
+    return res.status(400).json({ error: 'IMAP fields contain unsupported characters' });
+  }
+  if (!isValidImapHost(imapHost)) {
+    return res.status(400).json({ error: 'imapHost is invalid' });
+  }
+  const parsedImapPort = typeof imapPort === 'string' && /^\d{1,5}$/.test(imapPort)
+    ? Number(imapPort)
+    : imapPort;
+  if (parsedImapPort != null && (!Number.isInteger(parsedImapPort) || parsedImapPort < 1 || parsedImapPort > 65535)) {
+    return res.status(400).json({ error: 'imapPort is invalid' });
   }
   const encryptionKey = config.imapEncryptionKey;
   if (!encryptionKey) {
@@ -10320,7 +10339,7 @@ app.post('/imap-connections', requireAuth, async (req, res) => {
     // Never echo app_password_encrypted (or the plaintext) back to the client.
     res.status(201).json({ imapConnection: result.rows[0] });
   } catch (err) {
-    console.error('POST /imap-connections error', err);
+    console.error('POST /imap-connections error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10337,7 +10356,7 @@ app.get('/imap-connections/me', requireAuth, async (req, res) => {
     );
     res.json({ imapConnection: result.rows[0] || null });
   } catch (err) {
-    console.error('GET /imap-connections/me error', err);
+    console.error('GET /imap-connections/me error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10350,8 +10369,9 @@ app.get('/imap-connections/me', requireAuth, async (req, res) => {
  * never logged, never echoed back to the client, and the query that
  * decrypts it is scoped to this user's own row (RLS + explicit
  * profile_id match). On success marks `verified_at`; on failure leaves it
- * untouched and returns the (non-sensitive) reason string from the IMAP
- * server or socket layer.
+ * untouched and returns a fixed user-facing reason for expected IMAP
+ * failures. Server response text and socket exception details are never
+ * returned.
  *
  * Falls back to a format-only check when IMAP_ENCRYPTION_KEY isn't set,
  * so local/dev environments without the key configured don't hard-fail —
@@ -10371,7 +10391,7 @@ app.post('/imap-connections/:id/test', requireAuth, async (req, res) => {
       const conn = existing.rows[0];
       if (!conn) return null;
 
-      const hostLooksValid = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(conn.imap_host);
+      const hostLooksValid = isValidImapHost(conn.imap_host);
       const portLooksValid = Number.isInteger(conn.imap_port) && conn.imap_port > 0 && conn.imap_port < 65536;
       const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(conn.email);
       const formatOk = hostLooksValid && portLooksValid && emailLooksValid;
@@ -10406,7 +10426,7 @@ app.post('/imap-connections/:id/test', requireAuth, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'not_found' });
     res.json(result);
   } catch (err) {
-    console.error('POST /imap-connections/:id/test error', err);
+    console.error('POST /imap-connections/:id/test error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10435,7 +10455,7 @@ app.get('/issuer-emergency-contacts', async (req, res) => {
     );
     res.json({ contacts: result.rows });
   } catch (err) {
-    console.error('GET /issuer-emergency-contacts error', err);
+    console.error('GET /issuer-emergency-contacts error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10491,7 +10511,7 @@ async function shutdown(signal) {
     clearTimeout(forceExit);
     process.exit(0);
   } catch (err) {
-    console.error('pandapay-api graceful shutdown failed', err.message);
+    console.error('pandapay-api graceful shutdown failed', safeErrorCode(err));
     process.exit(1);
   }
 }

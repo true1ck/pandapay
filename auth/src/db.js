@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('./utils/safeErrorCode');
 // src/db.js
 // === SECURITY HARDENING: DATABASE ACCESS LOGGING ===
 // === AWS SSM INTEGRATION ===
@@ -5,6 +6,7 @@ const { Pool } = require('pg');
 const config = require('./config');
 const { loggedQuery } = require('./middleware/dbAccessLogger');
 const { getDbCredentials, buildDatabaseUrl } = require('./utils/awsSsm');
+const { resolveDatabaseTls } = require('./utils/dbTls');
 
 // Initialize database connection
 let pool = null;
@@ -35,27 +37,23 @@ async function initializeDb() {
         credentials = await getDbCredentials();
         if (credentials) {
           connectionString = buildDatabaseUrl(credentials);
-          console.log('✅ Using database credentials from AWS SSM Parameter Store');
-          console.log(`   📊 Database: ${credentials.dbname || credentials.database || 'unknown'}`);
-          console.log(`   🌐 Hostname: ${credentials.host || 'unknown'}`);
-          console.log(`   👤 User: ${credentials.user || 'unknown'}`);
         } else {
-          console.log('⚠️  AWS SSM not available, using DATABASE_URL from environment');
+          console.warn('AWS SSM credentials unavailable; using configured database URL');
         }
       } catch (error) {
-        console.error('❌ Error fetching credentials from SSM, using DATABASE_URL:', error.message);
+        console.error('Database credential lookup failed; using configured database URL', safeErrorCode(error));
         // Fall back to DATABASE_URL
       }
     } else {
-      console.log('ℹ️  Using DATABASE_URL from environment (USE_AWS_SSM not enabled)');
     }
 
-    // Local Postgres (docker-compose / dev machine) has no TLS listener at all;
-    // only require SSL when talking to a managed instance (AWS SSM path).
-    const useSsl = process.env.USE_AWS_SSM === 'true' || process.env.USE_AWS_SSM === '1';
+    // Apply the same verified TLS policy to SSM and ordinary DATABASE_URL
+    // connections. Resolve before constructing a pool so bad production trust
+    // settings fail closed during startup.
+    const databaseTls = resolveDatabaseTls(connectionString);
     pool = new Pool({
-      connectionString,
-      ssl: useSsl ? { rejectUnauthorized: false } : false,
+      connectionString: databaseTls.connectionString,
+      ssl: databaseTls.ssl,
       max: config.dbPoolMax,
       idleTimeoutMillis: config.dbIdleTimeoutMs,
       connectionTimeoutMillis: config.dbConnectionTimeoutMs,
@@ -65,37 +63,15 @@ async function initializeDb() {
       // A failure on an idle pooled connection is recoverable: pg removes
       // that client and creates another on demand. Readiness and request
       // errors report an actual outage without terminating healthy workers.
-      console.error('Unexpected PG pool error', err.message);
+      console.error('Unexpected PostgreSQL pool error', safeErrorCode(err));
     });
 
     // Test connection and log current user
     try {
       await pool.query('SELECT 1');
-      console.log('✅ Database connection established');
-
-      // Try to get connection details (may fail if user lacks permissions)
-      try {
-        const userResult = await pool.query('SELECT current_user, current_database(), inet_server_addr() as server_ip');
-        const dbInfo = userResult.rows[0];
-        console.log(`   👤 Connected as: ${dbInfo.current_user}`);
-        console.log(`   📊 Database: ${dbInfo.current_database}`);
-        // Show hostname from SSM (what we connected to) and server IP (actual server)
-        if (credentials && credentials.host) {
-          console.log(`   🌐 Hostname (from SSM): ${credentials.host}`);
-        }
-        if (dbInfo.server_ip) {
-          console.log(`   🖥️  Server IP: ${dbInfo.server_ip}`);
-        }
-      } catch (infoErr) {
-        // If we can't get user info, at least show what we know from credentials
-        if (credentials) {
-          console.log(`   👤 User: ${credentials.user || 'unknown'}`);
-          console.log(`   📊 Database: ${credentials.dbname || credentials.database || 'unknown'}`);
-          console.log(`   🌐 Hostname (from SSM): ${credentials.host || 'unknown'}`);
-        }
-      }
+      console.info('Auth database connection established');
     } catch (err) {
-      console.error('❌ Database connection failed:', err.message);
+      console.error('Auth database connection failed', safeErrorCode(err));
       throw err;
     }
 
@@ -112,16 +88,15 @@ if (isTestEnvironment) {
   // failure. Tests that need SQL should inject/mock the pool explicitly.
 } else if (process.env.USE_AWS_SSM === 'true' || process.env.USE_AWS_SSM === '1') {
   initializeDb().catch((err) => {
-    console.error('Failed to initialize database:', err);
+    console.error('Auth database initialization failed', safeErrorCode(err));
     process.exit(1);
   });
 } else {
   // For Supabase/direct DATABASE_URL connections
-  console.log('ℹ️  Using DATABASE_URL from environment');
-
+  const databaseTls = resolveDatabaseTls(config.databaseUrl);
   pool = new Pool({
-    connectionString: config.databaseUrl,
-    ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
+    connectionString: databaseTls.connectionString,
+    ssl: databaseTls.ssl,
     max: config.dbPoolMax,
     idleTimeoutMillis: config.dbIdleTimeoutMs,
     connectionTimeoutMillis: config.dbConnectionTimeoutMs,
@@ -130,20 +105,16 @@ if (isTestEnvironment) {
   pool.on('error', (err) => {
     // Match the SSM-backed pool behavior above. An idle client failure should
     // not take down the whole auth service; /ready reports database outages.
-    console.error('Unexpected PG pool error', err.message);
+    console.error('Unexpected PostgreSQL pool error', safeErrorCode(err));
   });
 
   // Test connection on startup
-  pool.query('SELECT current_user, current_database(), inet_server_addr() as host, inet_server_port() as port')
+  pool.query('SELECT 1')
     .then((result) => {
-      const { current_user, current_database, host, port } = result.rows[0];
-      console.log('✅ Database connection established');
-      console.log(`   👤 Connected as: ${current_user}`);
-      console.log(`   📊 Database: ${current_database}`);
-      if (host) console.log(`   🌐 Host: ${host}:${port}`);
+      console.info('Auth database connection established');
     })
     .catch((err) => {
-      console.error('❌ Database connection failed:', err.message);
+      console.error('Auth database connection failed', safeErrorCode(err));
       process.exit(1);
     });
 }

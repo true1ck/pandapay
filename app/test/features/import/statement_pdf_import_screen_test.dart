@@ -107,23 +107,29 @@ class _RecordingImportRepository extends ImportRepository {
   }
 }
 
-Future<void> waitForParsing(WidgetTester tester) async {
+Future<void> waitForParsing(
+  WidgetTester tester, {
+  required Finder completedState,
+}) async {
   for (var i = 0; i < 150; i++) {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
     );
     await tester.pump();
-    if (find.text('Reading on-device…').evaluate().isEmpty) {
+    if (completedState.evaluate().isNotEmpty) {
       await tester.pumpAndSettle();
       return;
     }
   }
-  fail('Import did not finish parsing');
+  fail('Import did not reach the expected completed state: $completedState');
 }
 
 void main() {
   setUpAll(() => BambooFonts.useSystemFontsForTests = true);
   tearDownAll(() => BambooFonts.useSystemFontsForTests = false);
+  late FilePickerPlatform originalFilePickerPlatform;
+  setUp(() => originalFilePickerPlatform = FilePickerPlatform.instance);
+  tearDown(() => FilePickerPlatform.instance = originalFilePickerPlatform);
 
   testWidgets(
     'mixed-account PDF auto-suggests sources and supports non-card spending',
@@ -147,7 +153,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose file'));
-      await waitForParsing(tester);
+      await waitForParsing(
+        tester,
+        completedState: find.byType(DropdownButtonFormField<String>),
+      );
       expect(
         tester.widget<FilledButton>(find.byType(FilledButton).last).onPressed,
         isNotNull,
@@ -205,7 +214,10 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Choose file'));
-      await waitForParsing(tester);
+      await waitForParsing(
+        tester,
+        completedState: find.text('Columns and formats'),
+      );
 
       await tester.ensureVisible(find.text('Columns and formats'));
       await tester.pumpAndSettle();
@@ -216,7 +228,10 @@ void main() {
       await tester.tap(find.text('Day / Month / Year').last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Apply formats'));
-      await waitForParsing(tester);
+      await waitForParsing(
+        tester,
+        completedState: find.text('1 transactions found'),
+      );
 
       expect(find.text('1 transactions found'), findsOneWidget);
       await tester.scrollUntilVisible(
@@ -262,14 +277,20 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Choose file'));
-      await waitForParsing(tester);
+      await waitForParsing(
+        tester,
+        completedState: find.text('Statement password (optional)'),
+      );
 
       await tester.enterText(
         find.widgetWithText(TextField, 'Statement password (optional)'),
         'wrong-password',
       );
       await tester.tap(find.text('Unlock & parse'));
-      await waitForParsing(tester);
+      await waitForParsing(
+        tester,
+        completedState: find.text("That password didn't work for this statement."),
+      );
 
       expect(
         find.text("That password didn't work for this statement."),

@@ -14,6 +14,7 @@
  */
 
 const geminiQueue = require('./gemini_queue');
+const { safeErrorCode } = require('./safeErrorCode');
 const { applyFactSpecialists } = require('./sms_facts_route');
 const smsFacts = require('./sms_facts');
 const smsObservationMigration = require('./sms_observation_migration');
@@ -94,7 +95,7 @@ function registerAiQueueRoutes(app, {
       }
       res.status(200).json({ jobId: outcome.jobId, reused: outcome.reused === true });
     } catch (error) {
-      console.error('POST /ai/jobs error', error.message || error);
+      console.error('POST /ai/jobs error', safeErrorCode(error));
       res.status(500).json({ error: 'ai job accept failed' });
     }
   });
@@ -140,7 +141,7 @@ function registerAiQueueRoutes(app, {
         updatedAt: job.updated_at,
       });
     } catch (error) {
-      console.error('GET /ai/jobs/source/:sourceKey error', error.message || error);
+      console.error('GET /ai/jobs/source/:sourceKey error', safeErrorCode(error));
       res.status(500).json({ error: 'ai job status failed' });
     }
   });
@@ -152,7 +153,7 @@ function registerAiQueueRoutes(app, {
       );
       res.status(200).json(outcome);
     } catch (error) {
-      console.error('POST /ai/jobs/lease error', error.message || error);
+      console.error('POST /ai/jobs/lease error', safeErrorCode(error));
       res.status(500).json({ error: 'lease failed' });
     }
   });
@@ -174,7 +175,7 @@ function registerAiQueueRoutes(app, {
       if (!outcome.renewed) return res.status(409).json({ error: 'lease is stale' });
       return res.status(200).json({ renewed: true, leaseExpiresAt: outcome.leaseExpiresAt });
     } catch (error) {
-      console.error('POST /ai/jobs/:id/heartbeat error', error.message || error);
+      console.error('POST /ai/jobs/:id/heartbeat error', safeErrorCode(error));
       return res.status(500).json({ error: 'lease heartbeat failed' });
     }
   });
@@ -225,7 +226,7 @@ function registerAiQueueRoutes(app, {
       });
       res.status(outcome.status).json(outcome);
     } catch (error) {
-      console.error('POST /ai/jobs/:id/result error', error.message || error);
+      console.error('POST /ai/jobs/:id/result error', safeErrorCode(error));
       res.status(500).json({ error: 'result write failed' });
     }
   });
@@ -259,7 +260,7 @@ function registerAiQueueRoutes(app, {
       });
       res.status(outcome.status).json(outcome);
     } catch (error) {
-      console.error('POST /ai/jobs/:id/retry error', error.message || error);
+      console.error('POST /ai/jobs/:id/retry error', safeErrorCode(error));
       res.status(500).json({ error: 'retry release failed' });
     }
   });
@@ -285,7 +286,7 @@ function registerAiQueueRoutes(app, {
       });
       res.status(outcome.status).json(outcome);
     } catch (error) {
-      console.error('POST /ai/jobs/:id/fail error', error.message || error);
+      console.error('POST /ai/jobs/:id/fail error', safeErrorCode(error));
       res.status(500).json({ error: 'failure write failed' });
     }
   });
@@ -308,7 +309,7 @@ function registerAiQueueRoutes(app, {
       });
       res.status(200).json(summary);
     } catch (error) {
-      console.error('GET /admin/sms-ai/summary error', error.message || error);
+      console.error('GET /admin/sms-ai/summary error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to fetch summary' });
     }
   });
@@ -323,7 +324,7 @@ function registerAiQueueRoutes(app, {
       });
       res.status(200).json({ jobs });
     } catch (error) {
-      console.error('GET /admin/sms-ai/jobs error', error.message || error);
+      console.error('GET /admin/sms-ai/jobs error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to fetch jobs' });
     }
   });
@@ -336,7 +337,7 @@ function registerAiQueueRoutes(app, {
       });
       res.status(200).json({ events });
     } catch (error) {
-      console.error('GET /admin/sms-ai/jobs/:id/events error', error.message || error);
+      console.error('GET /admin/sms-ai/jobs/:id/events error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to fetch events' });
     }
   });
@@ -349,7 +350,7 @@ function registerAiQueueRoutes(app, {
       });
       res.status(200).json({ quota });
     } catch (error) {
-      console.error('GET /admin/sms-ai/quota error', error.message || error);
+      console.error('GET /admin/sms-ai/quota error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to fetch quota' });
     }
   });
@@ -363,7 +364,7 @@ function registerAiQueueRoutes(app, {
       const report = smsObservationMigration.dryRunObservations(observations);
       res.status(200).json({ report });
     } catch (error) {
-      console.error('POST /admin/sms-ai/dry-run error', error.message || error);
+      console.error('POST /admin/sms-ai/dry-run error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to run dry-run' });
     }
   });
@@ -380,7 +381,7 @@ function registerAiQueueRoutes(app, {
       });
       res.status(200).json({ rollout: config });
     } catch (error) {
-      console.error('GET /admin/sms-ai/rollout error', error.message || error);
+      console.error('GET /admin/sms-ai/rollout error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to fetch rollout' });
     }
   });

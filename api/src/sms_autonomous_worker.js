@@ -6,6 +6,7 @@
  */
 
 const crypto = require('crypto');
+const { safeErrorCode } = require('./safeErrorCode');
 const { compileTemplate, deriveSenderPattern } = require('./sms_template_compiler');
 const { evaluateCandidate, evaluateCanaryMetrics, ACTION_THRESHOLDS } = require('./sms_evaluator');
 const { computeBundleHash, validateRule } = require('./sms_rule_bundle');
@@ -789,9 +790,9 @@ function startAutonomousWorker(dbPool, options = {}) {
         break;
       } catch (err) {
         attempt += 1;
-        if (client) await recordWorkerRun(client, 'failed', { startedAt, safe: { reason: String(err.message || err).slice(0, 200), attempt } });
+        if (client) await recordWorkerRun(client, 'failed', { startedAt, safe: { reason: safeErrorCode(err), attempt } });
         const backoffMs = Math.min(1000 * Math.pow(2, attempt), 30000);
-        console.warn(`[SMS_AUTONOMOUS_WORKER] cycle error (attempt ${attempt}/${maxRetries}):`, err.message || err);
+        console.warn(`[SMS_AUTONOMOUS_WORKER] cycle error (attempt ${attempt}/${maxRetries}):`, safeErrorCode(err));
         if (attempt < maxRetries) {
           await new Promise((resolve) => setTimeout(resolve, backoffMs));
         }

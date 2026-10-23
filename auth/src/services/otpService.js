@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/services/otpService.js
 const bcrypt = require('bcrypt');
 const db = require('../db');
@@ -5,12 +6,13 @@ const config = require('../config');
 const {
   markActiveOtp,
   clearActiveOtp,
+  ActiveOtpError,
 } = require('../middleware/rateLimitMiddleware');
 const { TEST_OTP_CODE, isTestOtpIdentifier } = require('../utils/testOtp');
 // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
 const { encryptPhoneNumber } = require('../utils/fieldEncryption');
 const { phoneLookupHash } = require('../utils/encryptedPhoneSearch');
-const { randomInt } = require('node:crypto');
+const { randomInt, randomUUID } = require('node:crypto');
 
 // === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY ===
 // These fixed identifiers + code "1234" exist solely so local development
@@ -30,6 +32,21 @@ const { randomInt } = require('node:crypto');
 const OTP_TTL_SECONDS = parseInt(process.env.OTP_TTL_SECONDS || '120', 10); // 2 minutes
 const OTP_EXPIRY_MS = OTP_TTL_SECONDS * 1000;
 const MAX_OTP_ATTEMPTS = Number(process.env.OTP_VERIFY_MAX_ATTEMPTS || process.env.OTP_MAX_ATTEMPTS || 5);
+const OTP_TYPES = new Set(['phone', 'email']);
+const OTP_PURPOSES = new Set(['signin', 'recovery', 'replacement']);
+
+function validateOtpScope(type, purpose) {
+  if (!OTP_TYPES.has(type)) throw new TypeError('OTP type must be phone or email');
+  if (!OTP_PURPOSES.has(purpose)) throw new TypeError('OTP purpose is invalid');
+}
+
+// Rows written before purpose binding have NULL purpose. They remain usable
+// only for ordinary sign-in and can never prove recovery or replacement.
+function purposePredicate(purpose, parameterIndex) {
+  return purpose === 'signin'
+    ? `(purpose = $${parameterIndex} OR purpose IS NULL)`
+    : `purpose = $${parameterIndex}`;
+}
 
 // === SECURITY HARDENING: TIMING ATTACK PROTECTION ===
 // Pre-computed dummy hash for constant-time comparison when OTP not found
@@ -73,13 +90,15 @@ function generateOtpCode() {
  * @returns {Promise<{code: string}>} - The generated OTP code
  */
 async function createOtp(identifier, type = 'phone', purpose = 'signin') {
+  validateOtpScope(type, purpose);
+  if (typeof identifier !== 'string' || !identifier.trim()) throw new TypeError('OTP identifier is required');
   // === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY, see constants above ===
   const normalizedIdentifier = identifier.trim().toLowerCase();
   const isTestIdentifier = isTestOtpIdentifier(normalizedIdentifier);
 
   const code = isTestIdentifier ? TEST_OTP_CODE : generateOtpCode();
 
-  
+  const requestId = randomUUID();
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
   const otpHash = await bcrypt.hash(code, 10);
 
@@ -96,39 +115,53 @@ async function createOtp(identifier, type = 'phone', purpose = 'signin') {
     email = normalizedIdentifier;
   }
 
-  // Mark existing OTPs as deleted using the canonical keyed phone digest.
-  if (type === 'phone') {
-    await db.query(
-      `UPDATE otp_requests 
-       SET deleted = TRUE 
-       WHERE phone_lookup_hash = $1 AND deleted = FALSE`,
-      [phoneHash]
-    );
-  } else if (type === 'email') {
-    await db.query(
-      `UPDATE otp_requests 
-       SET deleted = TRUE 
-       WHERE email = $1 AND deleted = FALSE`,
-      [email]
-    );
+  // Atomically reserve this identifier/purpose before touching OTP rows. A
+  // concurrent request sees the live claim and cannot send a second code.
+  const claimed = await markActiveOtp(identifier, OTP_TTL_SECONDS, requestId, purpose);
+  if (claimed === false) {
+    throw typeof ActiveOtpError === 'function'
+      ? new ActiveOtpError()
+      : Object.assign(new Error('An OTP is already active'), { code: 'OTP_ACTIVE' });
   }
 
-  // Insert new OTP with type and identifier
-  const inserted = await db.query(
-    `INSERT INTO otp_requests (phone_number, phone_lookup_hash, email, type, country_code, otp_hash, expires_at, attempt_count, deleted)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 0, FALSE)
-     RETURNING id`,
-    [encryptedPhone, phoneHash, email, type, countryCode, otpHash, expiresAt]
-  );
-
-  // Mark OTP as active in Redis/memory store
   try {
-    await markActiveOtp(identifier, OTP_TTL_SECONDS, inserted.rows[0].id, purpose);
-  } catch (err) {
-    console.error('Failed to mark active OTP in rate limiter:', err);
+    // Mark existing OTPs as deleted using the canonical keyed phone digest.
+    if (type === 'phone') {
+      await db.query(
+        `UPDATE otp_requests
+         SET deleted = TRUE
+         WHERE phone_lookup_hash = $1 AND type = 'phone' AND deleted = FALSE
+           AND ${purposePredicate(purpose, 2)}`,
+        [phoneHash, purpose]
+      );
+    } else {
+      await db.query(
+        `UPDATE otp_requests
+         SET deleted = TRUE
+         WHERE email = $1 AND type = 'email' AND deleted = FALSE
+           AND ${purposePredicate(purpose, 2)}`,
+        [email, purpose]
+      );
+    }
+
+    // Append the generated UUID as $9 so historical parameter positions stay
+    // stable for existing SQL instrumentation and integration fixtures.
+    await db.query(
+      `INSERT INTO otp_requests (phone_number, phone_lookup_hash, email, type, country_code, otp_hash, expires_at, attempt_count, deleted, purpose, id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 0, FALSE, $8, $9)
+       RETURNING id`,
+      [encryptedPhone, phoneHash, email, type, countryCode, otpHash, expiresAt, purpose, requestId]
+    );
+  } catch (error) {
+    try {
+      await clearActiveOtp(identifier, requestId, purpose);
+    } catch (cleanupError) {
+      console.error('Failed to clear OTP marker after database write failure', safeErrorCode(cleanupError));
+    }
+    throw error;
   }
 
-  return { code, requestId: inserted.rows[0].id };
+  return { code, requestId };
 }
 
 /**
@@ -139,6 +172,8 @@ async function createOtp(identifier, type = 'phone', purpose = 'signin') {
  * @returns {Promise<{ok: boolean, reason?: string}>} - Whether the OTP is valid
  */
 async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
+  validateOtpScope(type, purpose);
+  if (typeof identifier !== 'string' || !identifier.trim()) throw new TypeError('OTP identifier is required');
   const codeStr = String(code).trim();
   const normalizedIdentifier = identifier.trim().toLowerCase();
 
@@ -153,9 +188,10 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
          AND deleted = FALSE
          AND consumed_at IS NULL
          AND type = 'phone'
+         AND ${purposePredicate(purpose, 2)}
        ORDER BY created_at DESC
        LIMIT 1`,
-      [lookupHash]
+      [lookupHash, purpose]
     );
   } else if (type === 'email') {
     result = await db.query(
@@ -165,9 +201,10 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
          AND deleted = FALSE
          AND consumed_at IS NULL
          AND type = 'email'
+         AND ${purposePredicate(purpose, 2)}
        ORDER BY created_at DESC
        LIMIT 1`,
-      [normalizedIdentifier]
+      [normalizedIdentifier, purpose]
     );
   }
 
@@ -220,8 +257,9 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
   if (isExpired) {
     // Expired OTPs are consumed only if another request has not already won.
     await db.query(
-      'UPDATE otp_requests SET consumed_at = NOW() WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE',
-      [otpRecord.id]
+      `UPDATE otp_requests SET consumed_at = NOW() WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE
+         AND ${purposePredicate(purpose, 2)}`,
+      [otpRecord.id, purpose]
     );
     return { ok: false, reason: 'expired' };
   }
@@ -229,8 +267,9 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
   if (isMaxAttempts) {
     // Max attempts exceeded - mark as consumed (but we already did bcrypt.compare for constant time)
     await db.query(
-      'UPDATE otp_requests SET consumed_at = NOW() WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE',
-      [otpRecord.id]
+      `UPDATE otp_requests SET consumed_at = NOW() WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE
+         AND ${purposePredicate(purpose, 2)}`,
+      [otpRecord.id, purpose]
     );
     return { ok: false, reason: 'max_attempts' };
   }
@@ -241,16 +280,19 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
     // Increment attempt count
     if (otpRecord.id) {
       const updateResult = await db.query(
-        'UPDATE otp_requests SET attempt_count = attempt_count + 1 WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE RETURNING attempt_count',
-        [otpRecord.id]
+        `UPDATE otp_requests SET attempt_count = attempt_count + 1
+         WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE
+           AND ${purposePredicate(purpose, 2)} RETURNING attempt_count`,
+        [otpRecord.id, purpose]
       );
       const newAttemptCount = updateResult.rows[0]?.attempt_count || 0;
       
       // If max attempts reached, mark as consumed
       if (newAttemptCount >= MAX_OTP_ATTEMPTS) {
         await db.query(
-          'UPDATE otp_requests SET consumed_at = NOW() WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE',
-          [otpRecord.id]
+          `UPDATE otp_requests SET consumed_at = NOW() WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE
+             AND ${purposePredicate(purpose, 2)}`,
+          [otpRecord.id, purpose]
         );
       }
     }
@@ -264,8 +306,9 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
     `UPDATE otp_requests SET consumed_at = NOW()
      WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE
        AND expires_at > NOW() AND attempt_count < $2
+       AND ${purposePredicate(purpose, 3)}
      RETURNING id`,
-    [otpRecord.id, MAX_OTP_ATTEMPTS],
+    [otpRecord.id, MAX_OTP_ATTEMPTS, purpose],
   );
   if (consumed.rows.length !== 1) return { ok: false, reason: 'consumed_or_expired' };
   // Clear only this code's resend marker. The helper compares the stored
@@ -275,9 +318,9 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
     await clearActiveOtp(identifier, otpRecord.id, purpose);
   } catch (error) {
     // Authentication already consumed the OTP atomically. Cleanup is
-    // best-effort; a cache outage must not turn a successful sign-in into a
+    // best-effort; an abuse-store outage must not turn a successful sign-in into a
     // client-visible failure. The cooldown marker still expires by TTL.
-    console.error('Failed to clear OTP resend marker', error.code || error.name || 'Error');
+    console.error('Failed to clear OTP resend marker', safeErrorCode(error));
   }
   return { ok: true };
 }
@@ -298,23 +341,27 @@ async function cleanupExpiredOtps() {
 
 /** Discard an OTP that could not be delivered so the user can retry at once. */
 async function discardUndeliveredOtp(identifier, type, requestId, purpose = 'signin') {
+  validateOtpScope(type, purpose);
+  if (typeof identifier !== 'string' || !identifier.trim()) throw new TypeError('OTP identifier is required');
   if (!requestId) throw new Error('OTP request id is required for delivery cleanup');
   const normalizedIdentifier = identifier.trim().toLowerCase();
   if (type === 'email') {
     await db.query(
       `UPDATE otp_requests
        SET deleted = TRUE
-       WHERE id = $1 AND email = $2 AND deleted = FALSE AND consumed_at IS NULL`,
-      [requestId, normalizedIdentifier]
+       WHERE id = $1 AND email = $2 AND type = 'email' AND deleted = FALSE AND consumed_at IS NULL
+         AND ${purposePredicate(purpose, 3)}`,
+      [requestId, normalizedIdentifier, purpose]
     );
   } else {
     const lookupHash = phoneLookupHash(identifier);
     await db.query(
       `UPDATE otp_requests
        SET deleted = TRUE
-       WHERE id = $1 AND phone_lookup_hash = $2
-         AND deleted = FALSE AND consumed_at IS NULL`,
-      [requestId, lookupHash]
+       WHERE id = $1 AND phone_lookup_hash = $2 AND type = 'phone'
+         AND deleted = FALSE AND consumed_at IS NULL
+         AND ${purposePredicate(purpose, 3)}`,
+      [requestId, lookupHash, purpose]
     );
   }
   await clearActiveOtp(identifier, requestId, purpose);

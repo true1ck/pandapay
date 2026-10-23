@@ -1,15 +1,14 @@
-# db-migrate's runner image. A code review of docker-compose.prod.yml/
-# staging.yml caught that their db-migrate service ran `apk add --no-cache
-# bash` in the container's entrypoint, at every single migration invocation
-# — a network fetch from Alpine's package mirror on every deploy, not once
-# at build time. db/backup/Dockerfile already shows the right pattern
-# (bash baked in via `RUN apk add`); this is the same fix applied here.
-#
-# No COPY of db/scripts — those arrive via the `./db:/db:ro` volume mount in
-# docker-compose.prod.yml/staging.yml, same as before. This image only needs
-# to provide bash + the postgres client tools (already in the base image).
-FROM postgres:16-alpine
-
-RUN apk add --no-cache bash
-
+# Build from the repository root; the scoped ignore file excludes credentials.
+ARG POSTGRES_CLIENT_MAJOR=17
+FROM postgres:${POSTGRES_CLIENT_MAJOR}-alpine
+RUN apk add --no-cache bash nodejs npm
+WORKDIR /workspace/auth
+COPY auth/package.json auth/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts
+COPY auth/scripts ./scripts
+COPY auth/src/utils/fieldEncryption.js auth/src/utils/encryptedPhoneSearch.js auth/src/utils/dbTls.js auth/src/utils/safeErrorCode.js ./src/utils/
+COPY auth/db/pandapay-auth/init.sql ./db/pandapay-auth/init.sql
+COPY auth/db/migrations ./db/migrations
+ENV AUTH_APP_DIR=/workspace/auth
+WORKDIR /db
 ENTRYPOINT ["bash", "/db/scripts/migrate.sh"]

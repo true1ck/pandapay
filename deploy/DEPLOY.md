@@ -1,14 +1,66 @@
 # Deploying api/ and auth/
 
+## Security foundation deployment requirements — 22 October 2026
+
+The current security batch requires paired encrypted product/auth backups
+before deployment. Follow [backup/recovery setup](../db/backup/README.md) and
+[reviewed legacy migration baselines](migration-baselines/README.md) before
+deploying it to an existing database. Configure public age recipients, two
+independent off-host mounted destinations, separately held recovery identities,
+the hosted PostgreSQL client major and verified database CA trust. Existing
+encryption, HMAC and session keys must be retained exactly across rehosting.
+
+Restore the deployed data and retained keys on an independent PostgreSQL host
+and review its schema/history baseline before adopting legacy checksums. The
+local synthetic rehearsal does not replace that release gate. All services
+still use PostgreSQL; the destination hosting provider may change.
+
+Database TLS now verifies certificates/hostnames. Use system trust or supply an
+additional public PEM CA with `DB_SSL_CA` (native tools also accept
+`DB_SSL_CA_FILE`). Production/staging cannot use `DB_SSL=false`. Required field
+encryption cannot silently disable itself when the key is missing or invalid.
+
+`deploy/deploy.sh` builds the target service and migration images from the
+reviewed commit in a temporary directory before downtime. It then stops API,
+auth, the rewards worker, and the optional Gemini and SMS-learning workers to
+fence database writes, and verifies the paired encrypted copies before replacing working
+source or starting migrations. The default bounded maintenance window is 30 minutes;
+set `DEPLOY_MAINTENANCE_WINDOW_SECONDS` to 300–7200 seconds when a reviewed
+backup or migration needs a different limit. If backup fails before source
+replacement, the script attempts to resume the original stopped containers by
+ID, even though target image tags have already been built. If source
+replacement or migration fails, writer services remain stopped so old auth
+cannot run against the new schema; resolve the failure and deploy forward.
+The scheduled production container holds public recipients only. Restore
+drills run on the separate recovery host with explicit `RESTORE_*` URLs and a
+private identity.
+
+The release gate requires the tested commit to equal the current `master` tip
+at dispatch and again on the host immediately before any image build. The host
+also requires that target to descend from its existing Git `HEAD`; stale
+workflow runs, rollbacks, divergent history, and a copied checkout without a
+verifiable `HEAD` are blocked before downtime. Reconcile the source history to
+a reviewed commit before using the automated upgrade path.
+
+The deployment preflight inventories containers carrying the exact
+`pandapay-prod` Compose project label and requires a known service label before
+fencing. The retired `maps-scraper` container is allowed only under that exact
+project/service identity because its reviewed source is a stateless scraper
+with no database configuration; this rollout leaves it running. Unknown or
+unlabeled project containers stop the release before downtime. The optional
+`sms-learning-worker` remains a database writer: deployments fence it even
+when its opt-in configuration is blank, and restart it only when its dedicated
+database URL, HMAC key, and bootstrap password are all configured.
+
 Docker-based, works on any Linux VM with Docker installed — Oracle Cloud,
 Lightsail, a bare-metal box, whatever ends up hosting this. Nothing below is
 vendor-specific; the only Oracle Cloud step is provisioning the VM itself
 (step 1).
 
-This supersedes nothing that already exists: `auth/QUICK_DEPLOY.md` documents
-a different, older path (PM2 + a bare Node process, no Docker) for `auth/`
-alone. This guide is the one to follow for a fresh deploy of both services
-together.
+Use this combined guide and the reviewed security rollout runbook for this
+release. `auth/QUICK_DEPLOY.md` and `auth/DEPLOYMENT_GUIDE.md` describe the
+historical standalone PM2 service; they do not perform the required paired
+backup, writer fence or coordinated migrations.
 
 ## 0. What you need before starting
 
@@ -23,14 +75,15 @@ together.
 
 ### Using Supabase's free tier for Postgres
 
-Live-verified end to end (full migration chain, `app_user` creation, a real
-`api/` request, a real `auth/` OTP write) against a real Supabase free
-project — see `.env.prod.example`'s Database section for the exact gotchas
-(session pooler required for IPv4, `<role>.<project-ref>` username format,
-free tier's 2-active-project cap — solved here by putting both databases in
-ONE project via `CREATE DATABASE pandapay_auth;` rather than two projects).
-Free tier has no automated backups, so `docker-compose.prod.yml`'s `backup`
-service isn't optional in this setup — it's the only backup that exists.
+The existing deployment uses both databases in one Supabase project and the
+session pooler for IPv4. See `.env.prod.example` for connection details and
+`<role>.<project-ref>` usernames. Historical live API/auth verification is not
+acceptance evidence for this security branch. Its current read-only live
+checks and disposable full-data restore/upgrade results are recorded in the
+[progress report](../docs/security-implementation-progress-2026-10-22.md).
+Confirm current provider quotas and backup entitlements before release.
+Keep the reviewed encrypted backup service configured; the owner's temporary
+PC recovery copy does not satisfy the independent off-host deployment gate.
 
 ## 1. Provision the VM
 
@@ -61,14 +114,14 @@ cp .env.prod.example .env
 
 Fill in every `CHANGE_ME` in `.env` — the file itself documents how to
 generate each value (JWT secrets, the stable `PHONE_LOOKUP_HMAC_KEY`,
-`APP_USER_PASSWORD`, the separate `REWARD_WORKER_DB_PASSWORD`, webhook
-secrets, `IMAP_ENCRYPTION_KEY`, `ENCRYPTION_KEY`). Don't confuse the last
-two: `IMAP_ENCRYPTION_KEY` is `api/`'s key for stored IMAP app passwords;
-`ENCRYPTION_KEY` is `auth/`'s separate key for field-level PII encryption. —
-both are required, and leaving `ENCRYPTION_KEY` unset doesn't fail the
-deploy, it just makes auth/ silently store that PII unencrypted (a stderr
-warning, nothing else), which is why `docker-compose.prod.yml` requires it
-with `:?` rather than defaulting it. `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET`
+`APP_USER_PASSWORD`, the separate
+`REWARD_WORKER_DB_PASSWORD`, webhook secrets,
+`IMAP_ENCRYPTION_KEY`, `ENCRYPTION_KEY`). Don't confuse the last two:
+`IMAP_ENCRYPTION_KEY` is `api/`'s key for stored IMAP app passwords;
+`ENCRYPTION_KEY` is `auth/`'s separate key for field-level PII encryption —
+both are required. Auth startup rejects missing, malformed or disabled
+encryption in production/staging; Compose also requires the key with `:?`.
+`JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET`
 **must** be
 the same values `api/` and `auth/` both read — the compose file already wires
 one value to both services, just don't hand-edit them differently later.
@@ -138,9 +191,32 @@ ingestion: local detection and review continue when the queue flag is off.
 
 ## 4. Run migrations
 
+Applying auth migrations while an old auth process is serving requests is
+unsafe: it can create OTP rows without purpose binding or phone lookup hashes.
+Fence both API and auth writes first, then take the final paired backup, run
+migrations, and start only the new service images. The `deploy/deploy.sh`
+workflow performs this order automatically and preserves the backup-before-
+source-replacement gate. Use the manual sequence below only for a first
+install with no old service processes to resume. For upgrades to an existing
+deployment, use `deploy/deploy.sh`; it preserves stopped container IDs and
+handles failure before/after source replacement differently. Build all target
+images before the manual window, then run the remaining sequence under one
+bounded 30-minute window:
+
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env run --rm db-migrate
+docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env build api auth rewards-worker backup db-migrate gemini-worker sms-learning-worker
+timeout --foreground 1800s bash -euo pipefail -c '
+  docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env stop --timeout 30 auth api rewards-worker gemini-worker sms-learning-worker
+  docker compose -f docker-compose.prod.yml --env-file .env run --rm --no-deps backup /backup/backup.sh
+  docker compose -f docker-compose.prod.yml --env-file .env run --rm db-migrate
+  DEPLOY_IMAGES_PREBUILT=1 bash deploy/restart-services.sh
+'
 ```
+
+Continue past the backup only after it confirms both copies. A timeout or
+migration error ends the sequence without starting services. Do not start old
+images after a migration failure; fix the migration/configuration issue and
+rerun the forward migration path from the same or a later reviewed commit.
 
 This applies the product and separate auth database migration ledgers. The
 auth migration connection must have DDL privileges on `pandapay_auth`; the
@@ -153,6 +229,15 @@ skips
 offers it — apply that one by hand if it does). Re-run this any time you pull
 a commit with new migrations; it's ledgered and only applies what's new.
 
+By default, `AUTH_DATABASE_URL` is also the migration principal, and no new
+auth-table grants are issued. If the auth service uses a different restricted
+database role, set `AUTH_RUNTIME_ROLE` to that exact existing PostgreSQL role
+name (not its URL-encoded username). The migration grants only `SELECT`,
+`INSERT`, `UPDATE`, and `DELETE` on `public.auth_abuse_buckets`; it does not
+grant schema-wide access. Migration and auth readiness both verify that role's
+required permissions. If unset, pre-existing grants must already permit the
+runtime role to use the bucket table.
+
 ## 5. Bring up the stack
 
 On the 1 GB production VM, build and restart services sequentially. The helper
@@ -161,18 +246,29 @@ rewards worker, and backup readiness in that order. A failed readiness check
 stops the rollout before the next service is replaced.
 
 ```bash
-bash deploy/restart-services.sh
-docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml --env-file .env ps
 ```
 
 `api`/`auth` bind to `127.0.0.1` only — nginx is the only way in from
-outside the VM. `backup` starts running the nightly/weekly schedule
-immediately (`db/backup/crontab`); check it landed a row after the first
+outside the VM. Both services trust exactly one proxy hop, and the supplied
+Nginx configs replace `X-Forwarded-For` with the peer address they observed.
+If a CDN or load balancer is added in front of Nginx, configure and review that
+full proxy chain explicitly before changing the trust depth. `backup` runs the daily paired backup at 02:15 UTC
+(`db/backup/crontab`); check its completion marker after the first
 night:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec backup crontab -l
 ```
+
+The automated production smoke checks verify API/auth readiness and that
+protected API and auth routes reject anonymous requests. They do not create a
+synthetic account, mint a fake protected token, or call nearby-discovery
+providers. An authorized supported-client smoke remains a release gate: verify
+sign-in, refresh/session continuity, and the currently supported authenticated
+read/write/sync flows with an authorized account before declaring the release
+accepted. This is the compatibility check for real client behavior and older
+supported app versions.
 
 The `rewards-worker` service runs separately from the API. It claims outbox
 events with bounded leases, records attempt history and heartbeats, retries
@@ -275,10 +371,15 @@ change.)
 
 ## Updating a running deploy
 
+Do not `git pull`, run `db-migrate`, then start Compose manually: that leaves
+old writers running across the schema update and breaks the backup-before-
+source-replacement gate. Upgrade with the reviewed commit SHA through the
+deployment script, which builds the target images before downtime, fences all
+writers, takes the final paired backup, migrates, and starts only the target
+images:
+
 ```bash
-git pull
-docker compose -f docker-compose.prod.yml --env-file .env run --rm db-migrate
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+bash deploy/deploy.sh <reviewed-commit-sha>
 ```
 
 ## What this does NOT cover

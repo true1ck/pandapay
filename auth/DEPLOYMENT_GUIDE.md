@@ -1,5 +1,10 @@
 # Deployment Guide: Farm Auth Service on AWS Lightsail
 
+**Historical standalone guide.** Current PandaPay security upgrades must follow
+[combined deployment](../deploy/DEPLOY.md) and the
+[controlled rollout runbook](../docs/security-rollout-runbook-2026-10-23.md).
+This PM2 recipe does not implement their paired backups or writer fence.
+
 This guide will help you deploy the Farm Auth Service on AWS Lightsail Ubuntu server with the domain `auth.livingai.app`.
 
 ## Prerequisites
@@ -72,10 +77,10 @@ This guide will help you deploy the Farm Auth Service on AWS Lightsail Ubuntu se
    sudo apt update && sudo apt upgrade -y
    ```
 
-3. **Install Node.js (v18 or higher)**
+3. **Install Node.js 22 or higher**
    ```bash
    # Install Node.js using NodeSource repository
-   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
    sudo apt install -y nodejs
    
    # Verify installation
@@ -175,7 +180,8 @@ This guide will help you deploy the Farm Auth Service on AWS Lightsail Ubuntu se
    # Application Configuration
    NODE_ENV=production
    PORT=3000
-   TRUST_PROXY=true
+   TRUST_PROXY_HOPS=1 # direct internet -> Nginx -> loopback-bound auth service
+   # Deprecated TRUST_PROXY=true maps to one hop only; prefer TRUST_PROXY_HOPS.
    
    # CORS Configuration (REQUIRED for production)
    CORS_ALLOWED_ORIGINS=https://your-mobile-app-domain.com,https://app.livingai.app
@@ -207,6 +213,16 @@ This guide will help you deploy the Farm Auth Service on AWS Lightsail Ubuntu se
    existing `ENCRYPTION_KEY` whenever stored contacts are encrypted. The
    `AUTH_INTERNAL_SERVICE_SECRET` is for trusted backend callers only; do not
    put it in the mobile application or expose it to browsers.
+
+   Before enabling active contact uniqueness, run the count-only audit with the
+   retained encryption and lookup keys and require zero active duplicate email
+   or phone groups, zero undefined deletion flags, and zero missing or malformed
+   phone digests. The `9001_active_contact_uniqueness` phase intentionally fails
+   closed on any conflict; it does not merge accounts or rewrite contacts. The
+   latest count-only audit found two duplicate active phone groups across
+   four accounts, so resolve their ownership through the approved account
+   process and rerun the audit before scheduling the maintenance window. Run the
+   preflight before fencing writers to avoid a predictable failed deployment.
 
 5. **Secure .env File**
    ```bash

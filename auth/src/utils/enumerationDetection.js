@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('./safeErrorCode');
 // src/utils/enumerationDetection.js
 // === SECURITY HARDENING: ENUMERATION DETECTION ===
 // Detects and monitors phone number enumeration attempts
@@ -52,7 +53,7 @@ async function getCounter(key) {
       const count = await redis.get(key);
       return count ? parseInt(count, 10) : 0;
     } catch (err) {
-      console.error('Redis get error, falling back to memory:', err);
+      console.error('Enumeration counter read failed; using memory fallback', safeErrorCode(err));
       // Fall through to memory store
     }
   }
@@ -80,7 +81,7 @@ async function incrementCounter(key, ttlSeconds) {
       }
       return count;
     } catch (err) {
-      console.error('Redis increment error, falling back to memory:', err);
+      console.error('Enumeration counter increment failed; using memory fallback', safeErrorCode(err));
       // Fall through to memory store
     }
   }
@@ -127,7 +128,7 @@ async function addToSetAndGetCount(key, value, ttlSeconds) {
         throw new Error('Redis client does not have set methods available');
       }
     } catch (err) {
-      console.error('Redis set operation error, falling back to memory:', err.message);
+      console.error('Enumeration set operation failed; using memory fallback', safeErrorCode(err));
       // Fall through to memory store
     }
   }
@@ -198,7 +199,7 @@ async function checkEnumerationAttempt(ipAddress, identifier, type = 'phone') {
       details,
     };
   } catch (err) {
-    console.error('Error checking enumeration attempt:', err);
+    console.error('Enumeration check failed', safeErrorCode(err));
     // On error, return safe default (no enumeration detected)
     return {
       isEnumeration: false,
@@ -242,7 +243,7 @@ async function logEnumerationAttempt(ipAddress, identifier, riskLevel, details, 
       },
     });
   } catch (err) {
-    console.error('Error logging enumeration attempt:', err);
+    console.error('Enumeration audit write failed', safeErrorCode(err));
     // Don't throw - logging failures shouldn't break the flow
   }
 }

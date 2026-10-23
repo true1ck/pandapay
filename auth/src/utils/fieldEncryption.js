@@ -1,190 +1,74 @@
-// src/utils/fieldEncryption.js
-// === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
-// Field-level encryption for PII (Personally Identifiable Information)
-// Encrypts sensitive fields like phone numbers before storing in database
+'use strict';
 
-/**
- * Field-Level Encryption for PII
- * 
- * Uses AES-256-GCM for authenticated encryption
- * 
- * Configuration:
- * - ENCRYPTION_KEY: 32-byte (256-bit) key for AES-256, base64 encoded
- *   Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
- * - ENCRYPTION_ENABLED: Set to 'true' to enable encryption (default: false for backward compatibility)
- * 
- * Security Notes:
- * - Encryption key should be stored in secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.)
- * - Never commit encryption keys to version control
- * - Rotate keys periodically (requires re-encryption of existing data)
- * 
- * TODO: In production, load encryption key from secrets manager
- */
-
-const crypto = require('crypto');
-
-const ENCRYPTION_ENABLED = process.env.ENCRYPTION_ENABLED === 'true' || process.env.ENCRYPTION_ENABLED === '1';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-
-// Algorithm: AES-256-GCM (Galois/Counter Mode) for authenticated encryption
-const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 12; // 96 bits for GCM
-const AUTH_TAG_LENGTH = 16; // 128 bits for authentication tag
-const SALT_LENGTH = 32; // For key derivation (if needed in future)
-
-let encryptionKey = null;
-
-/**
- * Initialize encryption key from environment
- */
-function initializeEncryptionKey() {
-  if (!ENCRYPTION_ENABLED) {
-    return null;
+// Preserve existing iv:tag:ciphertext and key bytes across provider moves.
+const crypto = require('node:crypto');
+const enabled = ['true', '1'].includes(process.env.ENCRYPTION_ENABLED);
+const hosted = ['production', 'staging'].includes(process.env.NODE_ENV);
+function failure(message) {
+  const error = new Error(message);
+  error.code = 'FIELD_ENCRYPTION_ERROR';
+  return error;
+}
+function decodeBase64(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
+    throw failure('Invalid encrypted field encoding');
   }
-
-  if (!ENCRYPTION_KEY) {
-    console.warn('⚠️ ENCRYPTION_ENABLED is true but ENCRYPTION_KEY is not set. Encryption disabled.');
-    return null;
+  const bytes = Buffer.from(value, 'base64');
+  if (bytes.toString('base64').replace(/=+$/, '') !== value.replace(/=+$/, '')) {
+    throw failure('Invalid encrypted field encoding');
   }
-
+  return bytes;
+}
+function initializeKey() {
+  if (!enabled) {
+    if (hosted) throw failure('Field encryption must be enabled in production and staging');
+    return null; // Explicit legacy local development mode.
+  }
   try {
-    // Decode base64 key
-    const keyBuffer = Buffer.from(ENCRYPTION_KEY, 'base64');
-    
-    // Validate key length (AES-256 requires 32 bytes)
-    if (keyBuffer.length !== 32) {
-      throw new Error(`ENCRYPTION_KEY must be 32 bytes (256 bits). Got ${keyBuffer.length} bytes.`);
-    }
-
-    encryptionKey = keyBuffer;
-    console.log('✅ Field-level encryption enabled');
-    return encryptionKey;
-  } catch (err) {
-    console.error('❌ Failed to initialize encryption key:', err.message);
-    console.warn('⚠️ Encryption disabled. Set valid ENCRYPTION_KEY to enable.');
-    return null;
+    const key = decodeBase64(process.env.ENCRYPTION_KEY);
+    if (key.length !== 32) throw new Error('invalid length');
+    return key;
+  } catch (_) {
+    throw failure('ENCRYPTION_KEY must be a base64-encoded 32-byte key');
   }
 }
-
-// Initialize on module load
-initializeEncryptionKey();
-
-/**
- * Encrypt a plaintext value (e.g., phone number)
- * @param {string} plaintext - The value to encrypt
- * @returns {string} - Encrypted value in format: iv:authTag:encryptedData (all base64)
- */
-function encryptField(plaintext) {
-  // If encryption is disabled, return plaintext (for backward compatibility)
-  if (!ENCRYPTION_ENABLED || !encryptionKey) {
-    return plaintext;
+const key = initializeKey();
+function encryptField(value) {
+  if (!value || typeof value !== 'string') return value;
+  if (!key) return value;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+  return [iv, cipher.getAuthTag(), ciphertext].map(bytes => bytes.toString('base64')).join(':');
+}
+function decryptField(value) {
+  if (!value || typeof value !== 'string') return value;
+  // Recognized legacy plaintext remains readable during additive migration.
+  if (!value.includes(':')) {
+    // Only known legacy phone forms qualify as plaintext. A damaged envelope
+    // with lost separators must not be emitted as a user's phone number.
+    const normalized = value.trim().replace(/[\s().-]/g, '');
+    if (/^\d{10}$/.test(normalized) || /^\+[1-9]\d{1,14}$/.test(normalized)) return value;
+    throw failure('Unrecognized legacy phone encoding');
   }
-
-  if (!plaintext || typeof plaintext !== 'string') {
-    return plaintext;
-  }
-
+  if (!key) throw failure('A valid encryption key is required to read encrypted fields');
   try {
-    // Generate random IV for each encryption
-    const iv = crypto.randomBytes(IV_LENGTH);
-    
-    // Create cipher
-    const cipher = crypto.createCipheriv(ALGORITHM, encryptionKey, iv);
-    
-    // Encrypt
-    let encrypted = cipher.update(plaintext, 'utf8', 'base64');
-    encrypted += cipher.final('base64');
-    
-    // Get authentication tag
-    const authTag = cipher.getAuthTag();
-    
-    // Return format: iv:authTag:encryptedData (all base64)
-    return `${iv.toString('base64')}:${authTag.toString('base64')}:${encrypted}`;
-  } catch (err) {
-    console.error('Encryption error:', err);
-    throw new Error('Failed to encrypt field');
+    const parts = value.split(':');
+    if (parts.length !== 3) throw new Error('unsupported format');
+    const [iv, tag, ciphertext] = parts.map(decodeBase64);
+    if (iv.length !== 12 || tag.length !== 16) throw new Error('invalid length');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  } catch (_) {
+    // Neither log the secret-bearing exception nor return damaged ciphertext
+    // as plaintext. The caller must preserve the row and report a repair need.
+    throw failure('Encrypted field authentication failed');
   }
 }
-
-/**
- * Decrypt an encrypted value
- * @param {string} encryptedValue - The encrypted value in format: iv:authTag:encryptedData
- * @returns {string} - Decrypted plaintext
- */
-function decryptField(encryptedValue) {
-  // If encryption is disabled, return as-is (for backward compatibility)
-  if (!ENCRYPTION_ENABLED || !encryptionKey) {
-    return encryptedValue;
-  }
-
-  if (!encryptedValue || typeof encryptedValue !== 'string') {
-    return encryptedValue;
-  }
-
-  // Check if value is encrypted (format: iv:authTag:encryptedData)
-  // If not in this format, assume it's plaintext (for backward compatibility with existing data)
-  const parts = encryptedValue.split(':');
-  if (parts.length !== 3) {
-    // Not encrypted, return as-is (backward compatibility)
-    return encryptedValue;
-  }
-
-  try {
-    const [ivBase64, authTagBase64, encrypted] = parts;
-    
-    // Decode base64 components
-    const iv = Buffer.from(ivBase64, 'base64');
-    const authTag = Buffer.from(authTagBase64, 'base64');
-    
-    // Create decipher
-    const decipher = crypto.createDecipheriv(ALGORITHM, encryptionKey, iv);
-    decipher.setAuthTag(authTag);
-    
-    // Decrypt
-    let decrypted = decipher.update(encrypted, 'base64', 'utf8');
-    decrypted += decipher.final('utf8');
-    
-    return decrypted;
-  } catch (err) {
-    console.error('Decryption error:', err);
-    // If decryption fails, it might be plaintext (backward compatibility)
-    // Return as-is but log warning
-    console.warn('⚠️ Failed to decrypt field, assuming plaintext (backward compatibility)');
-    return encryptedValue;
-  }
-}
-
-/**
- * Encrypt phone number before storing in database
- * @param {string} phoneNumber - Plaintext phone number
- * @returns {string} - Encrypted phone number
- */
-function encryptPhoneNumber(phoneNumber) {
-  return encryptField(phoneNumber);
-}
-
-/**
- * Decrypt phone number after reading from database
- * @param {string} encryptedPhoneNumber - Encrypted phone number
- * @returns {string} - Plaintext phone number
- */
-function decryptPhoneNumber(encryptedPhoneNumber) {
-  return decryptField(encryptedPhoneNumber);
-}
-
-/**
- * Check if encryption is enabled
- * @returns {boolean}
- */
-function isEncryptionEnabled() {
-  return ENCRYPTION_ENABLED && encryptionKey !== null;
-}
-
 module.exports = {
-  encryptField,
-  decryptField,
-  encryptPhoneNumber,
-  decryptPhoneNumber,
-  isEncryptionEnabled,
+  encryptField, decryptField,
+  encryptPhoneNumber: encryptField,
+  decryptPhoneNumber: decryptField,
+  isEncryptionEnabled: () => key !== null,
 };
-

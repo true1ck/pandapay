@@ -22,36 +22,23 @@
 
 const crypto = require('crypto');
 
-/** Query-string keys whose VALUES must never be logged, even in a URL. */
-const SENSITIVE_QUERY_KEYS = new Set([
-  'token',
-  'access_token',
-  'refresh_token',
-  'otp',
-  'code',
-  'secret',
-  'password',
-  'signature',
-  'subid',
-]);
-
-/**
- * Strips the query string down to its keys, replacing every value with
- * `[redacted]` for anything sensitive.
- *
- * Path parameters are left alone: they're ids, and an id is what makes a log
- * line useful for support. Query VALUES are a different matter — this is where
- * OTP codes and click tokens actually appear.
- */
+// Query values include contacts, locations and arbitrary provider tokens.
+// Drop the query entirely; a denylist cannot cover future or encoded keys.
 function safeUrl(originalUrl) {
-  const [path, query] = String(originalUrl).split('?');
-  if (!query) return path;
-  const parts = query.split('&').map((pair) => {
-    const [key, ...rest] = pair.split('=');
-    if (rest.length === 0) return key;
-    return SENSITIVE_QUERY_KEYS.has(key.toLowerCase()) ? `${key}=[redacted]` : pair;
-  });
-  return `${path}?${parts.join('&')}`;
+  return String(originalUrl).split('?')[0];
+}
+
+function requestPath(req) {
+  return typeof req.route?.path === 'string'
+    ? safeUrl(`${req.baseUrl || ''}${req.route.path}`)
+    : '[unmatched]';
+}
+
+function correlationId(req) {
+  const supplied = req.get('x-request-id');
+  return typeof supplied === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(supplied)
+    ? supplied
+    : crypto.randomUUID();
 }
 
 function log(level, fields) {
@@ -74,7 +61,7 @@ function log(level, fields) {
  * error be matched to the exact server-side line.
  */
 function requestLogger(req, res, next) {
-  const requestId = req.get('x-request-id') || crypto.randomUUID();
+  const requestId = correlationId(req);
   req.requestId = requestId;
   res.setHeader('x-request-id', requestId);
 
@@ -86,7 +73,7 @@ function requestLogger(req, res, next) {
       msg: 'request',
       requestId,
       method: req.method,
-      path: safeUrl(req.originalUrl),
+      path: requestPath(req),
       status: res.statusCode,
       durationMs: Math.round(durationMs * 10) / 10,
       // The authenticated user id, never the token. Support needs "which
@@ -103,18 +90,16 @@ function requestLogger(req, res, next) {
  *
  * Express 5 forwards a rejected async handler here, which the per-route
  * try/catch blocks in index.js would otherwise be the only thing standing
- * between and a hung request. Logs the stack server-side and returns the
- * request id to the caller — never the stack, which routinely contains query
- * fragments and parameter values.
+ * between and a hung request. Logs a fixed error code and returns the request
+ * id to the caller; exception content can contain query and parameter values.
  */
 function errorHandler(err, req, res, _next) {
   log('error', {
     msg: 'unhandled',
     requestId: req.requestId || null,
     method: req.method,
-    path: safeUrl(req.originalUrl),
-    error: err && err.message,
-    stack: err && err.stack,
+    path: requestPath(req),
+    error: 'request_failed',
   });
   if (res.headersSent) return;
   // body-parser reports malformed JSON as a SyntaxError with a 400 status.
@@ -126,4 +111,4 @@ function errorHandler(err, req, res, _next) {
   res.status(500).json({ error: 'internal_error', requestId: req.requestId });
 }
 
-module.exports = { requestLogger, errorHandler, log, safeUrl };
+module.exports = { requestLogger, errorHandler, log, safeUrl, correlationId };

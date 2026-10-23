@@ -4,7 +4,7 @@
 set -euo pipefail
 
 export COMPOSE_PARALLEL_LIMIT=1
-COMPOSE=(docker compose --profile sms-ai -f docker-compose.prod.yml --env-file .env)
+COMPOSE=(docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env)
 ATTEMPTS="${DEPLOY_HEALTH_ATTEMPTS:-30}"
 INTERVAL="${DEPLOY_HEALTH_INTERVAL_SECONDS:-5}"
 [[ "$ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || { echo 'FATAL: invalid health attempts'; exit 1; }
@@ -12,12 +12,38 @@ INTERVAL="${DEPLOY_HEALTH_INTERVAL_SECONDS:-5}"
 
 # Keep the optional AI worker behavior from deploy.sh. Read the token only to
 # decide whether to start the worker; never print or pass the secret onward.
-AI_WORKER_TOKEN_VALUE="$(sed -n 's/^AI_WORKER_TOKEN=//p' .env 2>/dev/null | sed 's/^"//; s/"$//')"
+AI_WORKER_TOKEN_VALUE=""
+if [ -r .env ]; then
+  AI_WORKER_TOKEN_VALUE="$(sed -n 's/^AI_WORKER_TOKEN=//p' .env | sed 's/^"//; s/"$//')"
+fi
 SERVICES=(auth api rewards-worker backup)
 if [ -n "$AI_WORKER_TOKEN_VALUE" ]; then
   SERVICES+=(gemini-worker)
 fi
 unset AI_WORKER_TOKEN_VALUE
+
+# SMS learning is an opt-in database writer. Its dedicated login URL, HMAC
+# key, and bootstrap password must all be present before starting it. A fully
+# disabled configuration stops a worker left by an earlier opt-in deploy.
+SMS_LEARNING_DATABASE_URL_VALUE=""
+SMS_LEARNING_HMAC_KEY_VALUE=""
+SMS_LEARNING_WORKER_DB_PASSWORD_VALUE=""
+if [ -r .env ]; then
+  SMS_LEARNING_DATABASE_URL_VALUE="$(sed -n 's/^SMS_LEARNING_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
+  SMS_LEARNING_HMAC_KEY_VALUE="$(sed -n 's/^SMS_LEARNING_HMAC_KEY=//p' .env | sed 's/^"//; s/"$//')"
+  SMS_LEARNING_WORKER_DB_PASSWORD_VALUE="$(sed -n 's/^SMS_LEARNING_WORKER_DB_PASSWORD=//p' .env | sed 's/^"//; s/"$//')"
+fi
+if { [ -n "$SMS_LEARNING_DATABASE_URL_VALUE" ] || [ -n "$SMS_LEARNING_HMAC_KEY_VALUE" ] \
+     || [ -n "$SMS_LEARNING_WORKER_DB_PASSWORD_VALUE" ]; } \
+   && { [ -z "$SMS_LEARNING_DATABASE_URL_VALUE" ] || [ -z "$SMS_LEARNING_HMAC_KEY_VALUE" ] \
+        || [ -z "$SMS_LEARNING_WORKER_DB_PASSWORD_VALUE" ]; }; then
+  echo 'FATAL: SMS learning requires SMS_LEARNING_DATABASE_URL, SMS_LEARNING_HMAC_KEY, and SMS_LEARNING_WORKER_DB_PASSWORD together.' >&2
+  exit 1
+fi
+if [ -n "$SMS_LEARNING_DATABASE_URL_VALUE" ]; then
+  SERVICES+=(sms-learning-worker)
+fi
+unset SMS_LEARNING_DATABASE_URL_VALUE SMS_LEARNING_HMAC_KEY_VALUE SMS_LEARNING_WORKER_DB_PASSWORD_VALUE
 
 wait_for_service() {
   local service="$1" url="$2" id status attempt
@@ -43,18 +69,27 @@ wait_for_service() {
   return 1
 }
 
-# Finish all image builds before replacing any running service. A failed build
-# therefore leaves the current containers running. Single-service builds also
-# avoid overlapping npm installs and their memory spikes.
-for service in "${SERVICES[@]}"; do
-  echo "==> Building $service"
-  "${COMPOSE[@]}" build "$service"
-done
+# Finish all image builds before replacing any running service. The normal
+# standalone path builds here; deploy.sh can prebuild the reviewed target
+# archive before fencing database writers and set this flag to keep builds
+# outside the maintenance window.
+if [ "${DEPLOY_IMAGES_PREBUILT:-0}" = "1" ]; then
+  echo '==> Using target images prebuilt before the maintenance window'
+else
+  for service in "${SERVICES[@]}"; do
+    echo "==> Building $service"
+    "${COMPOSE[@]}" build "$service"
+  done
+fi
 
 if [[ ! " ${SERVICES[*]} " =~ ' gemini-worker ' ]]; then
   # Disable a worker left by a previous opt-in deployment after all builds
   # have succeeded, so a failed build leaves the running stack untouched.
   "${COMPOSE[@]}" stop gemini-worker >/dev/null 2>&1 || true
+fi
+if [[ ! " ${SERVICES[*]} " =~ ' sms-learning-worker ' ]]; then
+  # Preserve the opt-in contract when standalone restarts disable SMS learning.
+  "${COMPOSE[@]}" stop sms-learning-worker >/dev/null 2>&1 || true
 fi
 
 for service in "${SERVICES[@]}"; do

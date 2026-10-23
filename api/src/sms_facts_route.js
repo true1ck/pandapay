@@ -26,6 +26,7 @@
  */
 
 const smsFacts = require('./sms_facts');
+const { safeErrorCode } = require('./safeErrorCode');
 const importResolvers = require('./import_resolvers');
 const { importSourceKey } = require('./import_source_key');
 const smsLearning = require('./sms_learning');
@@ -241,7 +242,7 @@ function registerSmsFactsRoutes(app, {
       });
       return res.status(200).json({ recorded: recorded.count, consentRequired: !recorded.consentEnabled });
     } catch (error) {
-      console.error('POST /sms/rule-exposures error', error.message || error);
+      console.error('POST /sms/rule-exposures error', safeErrorCode(error));
       return res.status(503).json({ error: 'rule exposure sync unavailable' });
     }
   });
@@ -301,7 +302,7 @@ function registerSmsFactsRoutes(app, {
       });
       res.status(result.status).json(result);
     } catch (error) {
-      console.error('POST /sms/facts error', error.message || error);
+      console.error('POST /sms/facts error', safeErrorCode(error));
       res.status(500).json({ error: 'sms facts upsert failed' });
     }
   });
@@ -357,7 +358,7 @@ function registerSmsFactsRoutes(app, {
         ).catch((error) => {
           // The exposure table is additive and may lag an API rollout. A
           // user's correction must remain successful without it.
-          console.warn('SMS candidate correction telemetry skipped:', error.message || error);
+          console.warn('SMS candidate correction telemetry skipped:', safeErrorCode(error));
         });
         // Re-resolve with the stored override (not the merged copy) so the
         // specialists consume exactly what future readers will see.
@@ -386,7 +387,7 @@ function registerSmsFactsRoutes(app, {
         } catch (learningError) {
           // Learning is auxiliary. A learning-table outage must never undo
           // the user's correction or prevent the existing fact specialists.
-          console.warn('SMS learning feedback skipped:', learningError.message || learningError);
+          console.warn('SMS learning feedback skipped:', safeErrorCode(learningError));
         }
         const specialists = await applyFactSpecialists(client, req.userId, resolution, {
           userCardId: null,
@@ -397,7 +398,7 @@ function registerSmsFactsRoutes(app, {
       });
       res.status(result.status).json(result);
     } catch (error) {
-      console.error('POST /sms/facts/overrides error', error.message || error);
+      console.error('POST /sms/facts/overrides error', safeErrorCode(error));
       res.status(500).json({ error: 'override write failed' });
     }
   });
@@ -484,7 +485,7 @@ function registerSmsFactsRoutes(app, {
                 .find((value) => smsLearning.ALLOWED_FAMILIES.has(value) && value !== 'ignore_noise');
               if (observed) resolvedFamily = observed;
             } catch (error) {
-              console.warn('SMS dismissal family lookup skipped:', error.message || error);
+              console.warn('SMS dismissal family lookup skipped:', safeErrorCode(error));
             }
           }
         }
@@ -502,7 +503,7 @@ function registerSmsFactsRoutes(app, {
                               WHERE p.id = $1 AND p.contributions_opt_in)`,
             [req.userId, normalizedSourceKey],
           ).catch((error) => {
-            console.warn('SMS candidate dismissal telemetry skipped:', error.message || error);
+            console.warn('SMS candidate dismissal telemetry skipped:', safeErrorCode(error));
           });
         }
 
@@ -547,7 +548,7 @@ function registerSmsFactsRoutes(app, {
             };
           }
         } catch (learningError) {
-          console.warn('SMS dismissal learning feedback skipped:', learningError.message || learningError);
+          console.warn('SMS dismissal learning feedback skipped:', safeErrorCode(learningError));
           return { status: 503, error: 'dismissal_feedback_unavailable' };
         }
 
@@ -577,7 +578,7 @@ function registerSmsFactsRoutes(app, {
       });
       res.status(outcome.status).json(outcome);
     } catch (error) {
-      console.error('POST /sms/dismiss error', error.message || error);
+      console.error('POST /sms/dismiss error', safeErrorCode(error));
       res.status(500).json({ error: 'dismissal record failed' });
     }
   });

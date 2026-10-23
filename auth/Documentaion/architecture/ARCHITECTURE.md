@@ -45,7 +45,7 @@ The Farm Auth Service is a Node.js + Express authentication and security service
 5. Route-specific middleware (validation, rate limiting, auth)
 
 **Key Configuration:**
-- `TRUST_PROXY`: Set to `'true'` if behind reverse proxy (nginx, load balancer)
+- `TRUST_PROXY_HOPS`: Numeric Express trust depth; local defaults to `0`, the current direct Nginx deployment uses `1`. Deprecated `TRUST_PROXY=true/false` remains temporarily compatible as bounded `1/0` hops; it never enables unrestricted trust.
 - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed origins (required in production)
 - `ENABLE_ADMIN_DASHBOARD`: Set to `'true'` to enable admin routes
 
@@ -783,7 +783,7 @@ sequenceDiagram
 |----------|-------------|---------|---------|
 | `PORT` | Server port | `3000` | `3000` |
 | `NODE_ENV` | Environment | - | `development`, `production` |
-| `TRUST_PROXY` | Trust proxy headers | `false` | `true` |
+| `TRUST_PROXY_HOPS` | Number of trusted proxy hops; deprecated `TRUST_PROXY=true/false` maps to `1/0` | `0` | `1` for direct Nginx ingress |
 | `ENABLE_ADMIN_DASHBOARD` | Enable admin routes | `false` | `true` |
 
 ---

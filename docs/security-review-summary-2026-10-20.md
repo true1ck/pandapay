@@ -17,6 +17,8 @@ The report's results describe the reviewed checkout on the review date. They sho
 
 ## Recommended remediation areas
 
+The [22 October implementation plan](security-implementation-plan-2026-10-22.md) rechecks these areas against newer source and defines the staged rollout, free-hosting constraints, complete two-database recovery, future host migration and supported-client gates. Use its [Luna handoff](security-luna-handoff-2026-10-22.md) for implementation assignments. It does not mark this dated review's findings resolved without new evidence.
+
 1. Require proof of control over the existing identity before linking a new contact or completing recovery.
 2. Remove or strictly isolate legacy authentication routes that bypass the current verified sign-in flow.
 3. Repair encrypted contact lookup behavior and verify uniqueness and account-linking rules.

@@ -1,3 +1,4 @@
+const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/services/redisClient.js
 // === ADDED FOR RATE LIMITING ===
 // Redis client setup for rate limiting and OTP tracking
@@ -55,9 +56,7 @@ async function initRedis() {
     // Track if we've logged the error to avoid spam
     redisClient.on('error', (err) => {
       if (!errorLogged) {
-        console.warn('⚠️ Redis not available. Rate limiting will use in-memory fallback.');
-        console.warn('   To enable Redis, set REDIS_URL or REDIS_HOST/REDIS_PORT');
-        console.warn('   Error:', err.message);
+        console.warn('Redis unavailable; rate limiting is using the in-memory fallback', safeErrorCode(err));
         errorLogged = true;
       }
       redisClientReady = false;
@@ -66,12 +65,12 @@ async function initRedis() {
 
     redisClient.on('connect', () => {
       if (!errorLogged) {
-        console.log('Redis Client: Connecting...');
+        console.info('Redis connection starting');
       }
     });
 
     redisClient.on('ready', () => {
-      console.log('✅ Redis Client: Ready');
+      console.info('Redis connection ready');
       redisClientReady = true;
       redisInitFailed = false;
       errorLogged = false; // Reset error flag on successful connection
@@ -79,7 +78,7 @@ async function initRedis() {
 
     redisClient.on('end', () => {
       if (redisClientReady) {
-        console.log('Redis Client: Connection ended');
+        console.info('Redis connection ended');
       }
       redisClientReady = false;
     });
@@ -88,8 +87,7 @@ async function initRedis() {
     return redisClient;
   } catch (err) {
     if (!errorLogged) {
-      console.warn('⚠️ Redis not available. Rate limiting will use in-memory fallback.');
-      console.warn('   To enable Redis, set REDIS_URL or REDIS_HOST/REDIS_PORT');
+      console.warn('Redis unavailable; rate limiting is using the in-memory fallback', safeErrorCode(err));
       errorLogged = true;
     }
     redisClientReady = false;
@@ -139,7 +137,7 @@ async function closeRedis() {
       redisClient = null;
       redisClientReady = false;
     } catch (err) {
-      console.error('Error closing Redis connection:', err);
+      console.error('Redis shutdown failed', safeErrorCode(err));
     }
   }
 }
