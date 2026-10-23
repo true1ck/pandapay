@@ -158,9 +158,13 @@ async function exportSnapshot({ client, res, profileId, batchSize = DEFAULT_BATC
           if (!record || typeof record !== 'object' || Array.isArray(record)) {
             throw new PortableBackupExportError('section_record_invalid');
           }
+          // The footer digest describes the canonical section plaintext the
+          // client stages, while the transport line carries the type/section
+          // envelope needed to demultiplex one stream.
+          const sectionLine = `${canonicalJson(record)}\n`;
           const line = envelopeLine({ type: 'record', section: section.name, record });
-          const bytesForLine = Buffer.byteLength(line);
-          hash.update(line);
+          const bytesForLine = Buffer.byteLength(sectionLine);
+          hash.update(sectionLine);
           bytes += bytesForLine;
           count += 1;
           state.totalRecords += 1;

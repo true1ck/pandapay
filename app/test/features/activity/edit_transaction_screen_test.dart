@@ -31,6 +31,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     String? userCardId,
     TxnInstrument? instrument,
     TxnEntryKind? entryKind,
+    bool clearCategory = false,
   }) async {
     lastEditArgs = {
       'id': id,

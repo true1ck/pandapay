@@ -12,7 +12,8 @@ param(
   [string]$AuthBaseUrl,
   [string]$LegalBaseUrl,
   [string]$NearbyRadiusMeters,
-  [switch]$AllowDebugSigningForDeviceTest
+  [switch]$AllowDebugSigningForDeviceTest,
+  [switch]$ProductionBackend
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,6 +31,10 @@ if ($AllowDebugSigningForDeviceTest -and $Environment -ne 'prod') {
 
 if ($AllowDebugSigningForDeviceTest -and (Test-Path -LiteralPath $keyProperties)) {
   throw "The release keystore is available; do not override it with debug signing for a device test."
+}
+
+if ($ProductionBackend -and $Environment -ne 'dev') {
+  throw "-ProductionBackend is only valid with the dev flavor so the existing Dev package can be updated in place."
 }
 
 if ($Environment -eq 'prod' -and [string]::IsNullOrWhiteSpace($BuildNumber)) {
@@ -74,10 +79,21 @@ if ($Environment -eq 'dev') {
   }
 }
 
+$backendEnvironment = $Environment
+if ($ProductionBackend) {
+  if ($ApiBaseUrl -match '^(?i)http://(localhost|127\.0\.0\.1|10\.0\.2\.2)') {
+    throw "-ProductionBackend requires a hosted API URL: $ApiBaseUrl"
+  }
+  if ($AuthBaseUrl -match '^(?i)http://(localhost|127\.0\.0\.1|10\.0\.2\.2)') {
+    throw "-ProductionBackend requires a hosted auth URL: $AuthBaseUrl"
+  }
+  $backendEnvironment = 'dev_hosted'
+}
+
 $flutterArgs = @(
   'build', $Target,
   '--flavor', $Environment,
-  "--dart-define=PANDAPAY_ENV=$Environment",
+  "--dart-define=PANDAPAY_ENV=$backendEnvironment",
   "--dart-define=PANDAPAY_API_BASE_URL=$ApiBaseUrl",
   "--dart-define=PANDAPAY_AUTH_BASE_URL=$AuthBaseUrl",
   "--dart-define=PANDAPAY_LEGAL_BASE_URL=$LegalBaseUrl"
@@ -88,7 +104,7 @@ if (-not [string]::IsNullOrWhiteSpace($NearbyRadiusMeters)) {
   $flutterArgs += "--dart-define=PANDAPAY_NEARBY_RADIUS_METERS=$NearbyRadiusMeters"
 }
 
-Write-Host "Building $Environment $Target with hosted endpoints:" -ForegroundColor Cyan
+Write-Host "Building $Environment $Target with backend environment ${backendEnvironment}:" -ForegroundColor Cyan
 Write-Host "  API:   $ApiBaseUrl"
 Write-Host "  Auth:  $AuthBaseUrl"
 Write-Host "  Legal: $LegalBaseUrl"

@@ -8,6 +8,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
+import '../../domain/cycle_engine.dart';
 import '../cards/card_visual.dart';
 import 'payments_due_screen.dart';
 
@@ -190,11 +191,8 @@ class _CardDateTile extends StatelessWidget {
     );
   }
 
-  static DateTime _nextOccurrence(int day, DateTime now) {
-    var next = DateTime(now.year, now.month, day);
-    if (!next.isAfter(now)) next = DateTime(now.year, now.month + 1, day);
-    return next;
-  }
+  static DateTime _nextOccurrence(int day, DateTime now) =>
+      CycleEngine.nextOccurrence(day, now);
 }
 
 class _MissingDateRow extends StatelessWidget {

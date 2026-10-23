@@ -97,7 +97,14 @@ enum CommitmentCategory {
         has('SPOTIFY') ||
         has('APPLE.COM') ||
         has('AMAZON PRIME') ||
-        has('OPENAI')) {
+        has('OPENAI') ||
+        s.contains('OPENAI') ||
+        s.contains('CHATGPT') ||
+        s.contains('CLAUDE') ||
+        s.contains('ANTHROPIC') ||
+        s.contains('MIDJOURNEY') ||
+        s.contains('CURSOR') ||
+        s.contains('GITHUB')) {
       return CommitmentCategory.subscription;
     }
     if (has('AIRTEL') ||

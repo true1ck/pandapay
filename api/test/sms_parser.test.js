@@ -7,6 +7,7 @@ const {
   redactSmsShape,
   isBankAccountMessage,
   isNonTransactionNoise,
+  isInvestmentFolioAllotment,
 } = require('../src/sms_parser');
 
 // Realistic synthetic (not real customer) Indian bank SMS formats.
@@ -1140,4 +1141,111 @@ test('card setting updates and delivery memos are recognized as non-transaction 
   });
   assert.equal(deliveryMemoParse.ok, false);
   assert.equal(deliveryMemoParse.reason, 'non_transaction_message');
+});
+
+test('new noise patterns are identified as non-transaction noise in parity with Dart', () => {
+  const noiseAlerts = [
+    ['CDSLIN', 'CDSL: Unpledge confirmed for 100 shares in demat account.'],
+    ['NSDLIN', 'NSDL: Pledge setup request initiated for a/c 1234.'],
+    ['KFINTECH', 'Updated your address under folio 98765432 based on feed received from KRA.'],
+    ['CAMS', 'Address in folio 12345/6 is updated based on feed received from KRA.'],
+    ['HDFCBK', 'Due to scheduled maintenance NetBanking services will be unavailable from 02:00 to 05:00.'],
+    ['ICICIB', 'Registration alert: device name iPhone 15 was registered on iMobile Pay.'],
+    ['AMAZON', 'Reminder: 5 cashback coupons expire at midnight. Use code FESTIVE.'],
+    ['DELHIV', 'Order is dispatched through Delhivery with tracking 123456789.'],
+    ['BLUEDART', 'Your order is dispatched through Blue Dart express logistics.'],
+    ['FLIPKT', 'We have received your order ID OD123456789. We are preparing it for shipment.'],
+    ['AXISBK', 'Lifetime-free credit card facility has been enabled for your account. Limit Rs. 2,00,000.'],
+    ['BAJAJA', 'Two wheeler insurance for MH01AB1234 has expired. Renew today at Rs. 1499.'],
+    ['ACKOIN', 'Car insurance expired! Renew before midnight to protect your NCB.'],
+    ['HDFCER', 'Vehicle insurance for DL01CD5678 will expire tomorrow. Premium Rs 2150.'],
+  ];
+
+  for (const [sender, body] of noiseAlerts) {
+    assert.equal(isNonTransactionNoise(sender, body), true, 'Expected noise for: ' + body);
+  }
+});
+
+test('mutual fund folio unit allotment does not create a cash spend or duplicate investment transaction', () => {
+  const amcMessages = [
+    'Folio 12345/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',
+    'Dear Investor, 45.123 units allotted under Folio 9876543/21 in Nippon India Small Cap Fund - Reg (G) for your investment of Rs 5,000 at NAV 110.8123 on 05-Oct-2026.',
+    'Units: 25.432, NAV: 196.50 allotted for your investment of Rs. 5000 in Parag Parikh Flexi Cap Fund, Folio: 123456789.',
+    'Units allotted under folio 11223344 for Rs 10000 in ICICI Prudential Bluechip Fund. NAV: 85.25.',
+  ];
+
+  for (const body of amcMessages) {
+    assert.equal(isInvestmentFolioAllotment(body), true);
+    assert.equal(isNonTransactionNoise('HDFCMF', body), false);
+    const result = parseSmsAgainstPatterns([], { sender: 'HDFCMF', body });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'mf_folio_unit_allotment');
+    assert.equal(result.isObservation, true);
+    assert.ok(result.fields.amountInr > 0);
+  }
+});
+
+test('AutoPay activation and mandate notices are not flagged as noise and do not mint fake cash spend', () => {
+  const autoPaySetupMessages = [
+    'AutoPay activation successful.\nTxn amt: INR 0.00\nMerchant: OpenAILLC\nAxis Bank Card no.: XX7105\nMax limit: INR 1999.00\n...',
+    'AutoPay activation successful. Txn amt: INR 0.00 Merchant: OpenAI LLC Axis Bank Card no.: XX7105 Max limit: INR 1999.00.',
+    'AutoPay e-mandate successfully registered for NETFLIX with maximum limit of INR 2,000.00 on Axis Bank Card no.: XX7105',
+    'Standing Instruction created towards AGIONE TEC. Max limit: INR 500.00 on card ending 1234.',
+  ];
+
+  for (const body of autoPaySetupMessages) {
+    assert.equal(isNonTransactionNoise('VM-AXISBK-S', body), false, 'Should not be flagged as noise: ' + body);
+    const result = parseSmsAgainstPatterns([], { sender: 'VM-AXISBK-S', body });
+    assert.equal(result.ok, false, 'Should not mint a spend transaction: ' + body);
+    assert.equal(result.reason, 'card_bill_notice');
+  }
+});
+
+test('completed AutoPay debit of a real purchase still parses as spend', () => {
+  const body = 'AutoPay debit of INR 1000 on credit card XX7105 at NETFLIX was successful on 18-Oct-2026.';
+  assert.equal(isNonTransactionNoise('VM-AXISBK-S', body), false);
+  const result = parseSmsAgainstPatterns([], { sender: 'VM-AXISBK-S', body });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 1000);
+  assert.equal(result.fields.last4, '7105');
+  assert.equal(result.fields.merchant, 'NETFLIX');
+  assert.equal(result.fields.entryKind, 'spend');
+});
+
+test('merchant name extraction extracts Merchant: <Name> and created towards <Name>', () => {
+  // 1. Card spend with Merchant: <Name>
+  const cardWithMerchantLabel = parseSmsAgainstPatterns([], {
+    sender: 'AD-AXISBK',
+    body: 'Spent INR 500.00 on Axis Bank Card XX7105 on 20-Oct-2026. Merchant: OpenAILLC. Avl limit: INR 45000.',
+  });
+  assert.equal(cardWithMerchantLabel.ok, true);
+  assert.equal(cardWithMerchantLabel.fields.merchant, 'OpenAILLC');
+  assert.equal(cardWithMerchantLabel.fields.amountInr, 500);
+
+  // 2. Card spend with created towards <Name>
+  const cardWithCreatedTowards = parseSmsAgainstPatterns([], {
+    sender: 'AD-AXISBK',
+    body: 'INR 250.00 debited from card XX7105 created towards AGIONE TEC on 20-Oct-2026.',
+  });
+  assert.equal(cardWithCreatedTowards.ok, true);
+  assert.equal(cardWithCreatedTowards.fields.merchant, 'AGIONE TEC');
+  assert.equal(cardWithCreatedTowards.fields.amountInr, 250);
+
+  // 3. UPI debit with Merchant: <Name>
+  const upiWithMerchantLabel = parseSmsAgainstPatterns([], {
+    sender: 'AX-AXISBK',
+    body: 'INR 350.00 debited from A/C XX1234 on 20-Oct-2026. Merchant: OpenAILLC. UPI Ref: 123456789012.',
+  });
+  assert.equal(upiWithMerchantLabel.ok, true);
+  assert.equal(upiWithMerchantLabel.fields.merchant, 'OpenAILLC');
+  assert.equal(upiWithMerchantLabel.fields.amountInr, 350);
+
+  // 4. UPI debit with created towards <Name>
+  const upiWithCreatedTowards = parseSmsAgainstPatterns([], {
+    sender: 'AX-AXISBK',
+    body: 'INR 450.00 debited from A/C XX1234 on 20-Oct-2026 created towards AGIONE TEC. UPI Ref: 123456789012.',
+  });
+  assert.equal(upiWithCreatedTowards.ok, true);
+  assert.equal(upiWithCreatedTowards.fields.transferParty || upiWithCreatedTowards.fields.merchant, 'AGIONE TEC');
+  assert.equal(upiWithCreatedTowards.fields.amountInr, 450);
 });

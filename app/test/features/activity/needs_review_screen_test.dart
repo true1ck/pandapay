@@ -760,4 +760,82 @@ void main() {
         expect(repo.dismissalRetryQueue, isEmpty);
       },
     );
+
+  testWidgets('displays formatted timestamps and orders latest-first by default', (tester) async {
+    final olderDate = DateTime(2026, 8, 15, 10, 30);
+    final newerDate = DateTime(2026, 10, 4, 9, 53);
+
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'old-1',
+        sender: 'VM-WELFOR',
+        body: 'Rs.200 spent on card',
+        receivedAt: olderDate,
+      ),
+    );
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'new-1',
+        sender: 'AD-HDFCBK',
+        body: 'Rs.500 spent on card',
+        receivedAt: newerDate,
+      ),
+    );
+
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+    expect(find.text('Oct 4, 2026 • 9:53 AM'), findsOneWidget);
+    expect(find.text('Aug 15, 2026 • 10:30 AM'), findsOneWidget);
+
+    final newPos = tester.getTopLeft(find.text('AD-HDFCBK')).dy;
+    final oldPos = tester.getTopLeft(find.text('VM-WELFOR')).dy;
+    expect(newPos, lessThan(oldPos));
+  });
+
+  testWidgets('filter chips filter by month and show clean empty state when no items in month', (tester) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'oct-1',
+        sender: 'AD-HDFCBK',
+        body: 'Rs.500 spent on card',
+        reason: 'unparseable_amount',
+        receivedAt: DateTime(2026, 10, 4, 9, 53),
+      ),
+    );
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'sep-1',
+        sender: 'VA-CANBNK',
+        body: 'Rs.300 spent on card',
+        reason: 'unparseable_amount',
+        receivedAt: DateTime(2026, 9, 10, 14, 0),
+      ),
+    );
+
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+    expect(find.text('All time'), findsOneWidget);
+    expect(find.text('Oct 2026 (1)'), findsOneWidget);
+    expect(find.text('Sep 2026 (1)'), findsOneWidget);
+
+    await tester.tap(find.text('Oct 2026 (1)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('AD-HDFCBK'), findsOneWidget);
+    expect(find.text('VA-CANBNK'), findsNothing);
+
+    await tester.tap(find.text('Bills & Mandates'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No review items in Oct 2026'), findsOneWidget);
+
+    await tester.tap(find.text('All types'));
+    await tester.pumpAndSettle();
+    expect(find.text('AD-HDFCBK'), findsOneWidget);
+
+    await tester.tap(find.text('All time'));
+    await tester.pumpAndSettle();
+    expect(find.text('AD-HDFCBK'), findsOneWidget);
+    expect(find.text('VA-CANBNK'), findsOneWidget);
+  });
 }

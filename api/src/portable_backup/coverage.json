@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "label": "portable-backup-table-coverage-v1",
   "updated": "2026-10-23",
-  "comment": "Schema-aware inventory of PostgreSQL CREATE TABLE objects in db/supabase/migrations. Public-schema keys remain unqualified for contract compatibility; non-public schemas are qualified. This registry covers server migration tables only, not SQLite tables or individual fields, and is not a full database disaster-recovery manifest. The portable feature currently contains server export primitives only: excluded user-linked rows are explicit gaps and restore is not implemented.",
+  "comment": "Schema-aware inventory of PostgreSQL CREATE TABLE objects in db/supabase/migrations. Public-schema keys remain unqualified for contract compatibility; non-public schemas are qualified. This registry covers server migration tables only, not SQLite tables or individual fields, and is not a full database disaster-recovery manifest. Portable export and restore services have separate device, integration and recovery acceptance gates; excluded user-linked rows remain explicit coverage gaps.",
   "tables": {
     "profiles": {"disposition": "exported_v1", "section": "profile"},
     "user_settings": {"disposition": "exported_v1", "section": "settings"},
@@ -135,6 +135,17 @@
     "promotions.reward_outbox_attempts": {"disposition": "platform_ops", "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."},
     "promotions.reward_worker_heartbeats": {"disposition": "platform_ops", "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."},
     "promotions.referral_operator_holds": {"disposition": "platform_ops", "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."},
-    "promotions.referral_operator_audit": {"disposition": "platform_ops", "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."}
+    "promotions.referral_operator_audit": {"disposition": "platform_ops", "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."},
+    "user_merchant_category_rules": {"disposition": "exported_v1", "section": "user_merchant_category_rules"},
+    "user_merchant_category_rule_audit": {"disposition": "excluded_with_intent", "reason": "append-only audit is operational history; the user-owned rule state is exported in user_merchant_category_rules"},
+    "user_merchant_category_rule_idempotency": {"disposition": "excluded_with_intent", "reason": "ephemeral request replay keys are not portable user intent"},
+    "financial_projections": {"disposition": "excluded_with_intent", "reason": "rebuildable domain projections derived from typed SMS facts and transaction history; source facts remain portable"},
+    "portable_restore_sessions": {"disposition": "excluded_with_intent", "reason": "restore protocol staging metadata; never included in a portable archive"},
+    "portable_restore_sections": {"disposition": "excluded_with_intent", "reason": "restore protocol upload declarations; ephemeral until commit or expiry"},
+    "portable_restore_records": {"disposition": "excluded_with_intent", "reason": "untrusted restore rows; applied atomically and then discarded with the session"},
+    "portable_backup_ledger": {"disposition": "excluded_with_intent", "reason": "idempotent committed-restore receipt; never included in a portable archive"},
+    "transaction_category_bulk_previews": {"disposition": "excluded_with_intent", "reason": "short-lived category review snapshots; expired after the apply window and rebuilt on demand"},
+    "transaction_category_bulk_operations": {"disposition": "excluded_with_intent", "reason": "category bulk operation receipts are server audit/idempotency state, not portable user data"},
+    "transaction_category_bulk_operation_items": {"disposition": "excluded_with_intent", "reason": "category bulk audit details are derived operation history and are not restored into a new account"}
   }
 }

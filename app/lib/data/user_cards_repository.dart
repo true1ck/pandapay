@@ -931,6 +931,395 @@ class DismissalQueueEntry {
   };
 }
 
+/// The server-owned identity used to find transactions related to a category
+/// edit.  Keep this as an enum so a newly introduced match policy can be
+/// displayed or logged without breaking older clients.
+enum RelatedTransactionMatchBasis {
+  vpa,
+  canonicalMerchant,
+  strictName,
+  unknown;
+
+  static RelatedTransactionMatchBasis fromJson(dynamic value) {
+    final normalized = value?.toString().trim().toLowerCase();
+    return switch (normalized) {
+      'vpa' => RelatedTransactionMatchBasis.vpa,
+      'canonical_merchant' ||
+      'canonicalmerchant' => RelatedTransactionMatchBasis.canonicalMerchant,
+      'strict_name' || 'strictname' => RelatedTransactionMatchBasis.strictName,
+      _ => RelatedTransactionMatchBasis.unknown,
+    };
+  }
+}
+
+/// How the server classified a related transaction in a preview.
+enum RelatedTransactionSelectionTier {
+  defaultSelected,
+  manualReview,
+  ineligible,
+  unknown;
+
+  static RelatedTransactionSelectionTier fromJson(dynamic value) {
+    final normalized = value?.toString().trim().toLowerCase();
+    return switch (normalized) {
+      'default_selected' ||
+      'defaultselected' ||
+      'selected' => RelatedTransactionSelectionTier.defaultSelected,
+      'manual_review' ||
+      'manualreview' ||
+      'review' => RelatedTransactionSelectionTier.manualReview,
+      'ineligible' || 'excluded' => RelatedTransactionSelectionTier.ineligible,
+      _ => RelatedTransactionSelectionTier.unknown,
+    };
+  }
+}
+
+/// A transaction returned by the category-related preview endpoint.
+///
+/// The client treats the IDs, selection tier and row version as server-owned
+/// data. It must send selected IDs back unchanged instead of reconstructing a
+/// merchant match locally.
+class RelatedTransactionCandidate {
+  final String id;
+  final DateTime occurredAt;
+  final Money amount;
+  final String? paymentSource;
+  final String? currentCategoryId;
+  final String? currentUserCategoryId;
+  final String? currentCategoryName;
+  final String? currentSubcategoryName;
+  final RelatedTransactionSelectionTier selectionTier;
+  final String? reason;
+  final DateTime? updatedAt;
+  final String? rowVersion;
+
+  const RelatedTransactionCandidate({
+    required this.id,
+    required this.occurredAt,
+    required this.amount,
+    this.paymentSource,
+    this.currentCategoryId,
+    this.currentUserCategoryId,
+    this.currentCategoryName,
+    this.currentSubcategoryName,
+    required this.selectionTier,
+    this.reason,
+    this.updatedAt,
+    this.rowVersion,
+  });
+
+  bool get isDefaultSelected =>
+      selectionTier == RelatedTransactionSelectionTier.defaultSelected;
+  bool get isSelectable =>
+      selectionTier != RelatedTransactionSelectionTier.ineligible;
+
+  String get currentCategoryLabel =>
+      currentSubcategoryName == null || currentCategoryName == null
+      ? (currentCategoryName ?? 'Other')
+      : '$currentCategoryName · $currentSubcategoryName';
+
+  factory RelatedTransactionCandidate.fromJson(Map<String, dynamic> json) {
+    final rawCategoryId = _firstString(json, const [
+      'currentCategoryId',
+      'current_category_id',
+      'categoryId',
+      'category_id',
+    ]);
+    final userCategoryId = _firstString(json, const [
+      'currentUserCategoryId',
+      'current_user_category_id',
+      'userCategoryId',
+      'user_category_id',
+    ]);
+    return RelatedTransactionCandidate(
+      id: _requiredString(json, const [
+        'id',
+        'transactionId',
+        'transaction_id',
+      ]),
+      occurredAt: _requiredDateTime(json, const [
+        'occurredAt',
+        'occurred_at',
+        'date',
+      ]),
+      amount: Money.fromRupees(
+        _num(_firstValue(json, const ['amountInr', 'amount_inr', 'amount'])),
+      ),
+      paymentSource: _firstString(json, const [
+        'paymentSource',
+        'payment_source',
+        'cardDisplayName',
+        'card_display_name',
+        'accountLabel',
+        'account_label',
+        'merchantName',
+        'merchant_name',
+      ]),
+      currentCategoryId: rawCategoryId,
+      currentUserCategoryId: userCategoryId,
+      currentCategoryName: _firstString(json, const [
+        'currentCategoryName',
+        'current_category_name',
+        'categoryName',
+        'category_name',
+      ]),
+      currentSubcategoryName: _firstString(json, const [
+        'currentSubcategoryName',
+        'current_subcategory_name',
+        'subcategoryName',
+        'subcategory_name',
+      ]),
+      selectionTier: RelatedTransactionSelectionTier.fromJson(
+        _firstValue(json, const ['selectionTier', 'selection_tier', 'tier']),
+      ),
+      reason: _firstString(json, const [
+        'reason',
+        'ineligibleReason',
+        'ineligible_reason',
+      ]),
+      updatedAt: _optionalDateTime(json, const ['updatedAt', 'updated_at']),
+      rowVersion: _firstString(json, const [
+        'rowVersion',
+        'row_version',
+        'version',
+      ]),
+    );
+  }
+}
+
+/// The server snapshot used to render and later validate the review sheet.
+class RelatedCategoryPreview {
+  final String previewId;
+  final String sourceTransactionId;
+  final String? targetCategoryId;
+  final String? targetUserCategoryId;
+  final String? targetCategoryName;
+  final RelatedTransactionMatchBasis matchBasis;
+  final int totalCandidateCount;
+  final int selectableCandidateCount;
+  final int defaultSelectedCount;
+  final bool overflow;
+  final List<RelatedTransactionCandidate> candidates;
+  final DateTime? createdAt;
+  final DateTime? expiresAt;
+
+  const RelatedCategoryPreview({
+    required this.previewId,
+    required this.sourceTransactionId,
+    this.targetCategoryId,
+    this.targetUserCategoryId,
+    this.targetCategoryName,
+    required this.matchBasis,
+    required this.totalCandidateCount,
+    required this.selectableCandidateCount,
+    required this.defaultSelectedCount,
+    required this.overflow,
+    required this.candidates,
+    this.createdAt,
+    this.expiresAt,
+  });
+
+  List<String> get defaultSelectedTransactionIds => [
+    for (final candidate in candidates)
+      if (candidate.isDefaultSelected) candidate.id,
+  ];
+
+  factory RelatedCategoryPreview.fromJson(Map<String, dynamic> json) {
+    final rawCandidates = _firstValue(json, const [
+      'candidates',
+      'transactions',
+      'relatedTransactions',
+      'related_transactions',
+    ]);
+    final candidates = rawCandidates is List
+        ? rawCandidates
+              .whereType<Map>()
+              .map(
+                (item) => RelatedTransactionCandidate.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList(growable: false)
+        : const <RelatedTransactionCandidate>[];
+    final defaultCount =
+        _firstInt(json, const [
+          'defaultSelectedCount',
+          'default_selected_count',
+        ]) ??
+        candidates.where((candidate) => candidate.isDefaultSelected).length;
+    return RelatedCategoryPreview(
+      previewId: _requiredString(json, const ['previewId', 'preview_id', 'id']),
+      sourceTransactionId: _requiredString(json, const [
+        'sourceTransactionId',
+        'source_transaction_id',
+        'transactionId',
+        'transaction_id',
+      ]),
+      targetCategoryId: _firstString(json, const [
+        'targetCategoryId',
+        'target_category_id',
+        'categoryId',
+        'category_id',
+      ]),
+      targetUserCategoryId: _firstString(json, const [
+        'targetUserCategoryId',
+        'target_user_category_id',
+        'userCategoryId',
+        'user_category_id',
+      ]),
+      targetCategoryName: _firstString(json, const [
+        'targetCategoryName',
+        'target_category_name',
+        'categoryName',
+        'category_name',
+      ]),
+      matchBasis: RelatedTransactionMatchBasis.fromJson(
+        _firstValue(json, const ['matchBasis', 'match_basis']),
+      ),
+      totalCandidateCount:
+          _firstInt(json, const [
+            'totalCandidateCount',
+            'total_candidate_count',
+            'totalCount',
+            'total_count',
+          ]) ??
+          candidates.length,
+      selectableCandidateCount:
+          _firstInt(json, const [
+            'selectableCandidateCount',
+            'selectable_candidate_count',
+            'selectableCount',
+            'selectable_count',
+          ]) ??
+          candidates.where((candidate) => candidate.isSelectable).length,
+      defaultSelectedCount: defaultCount,
+      overflow:
+          _firstBool(json, const ['overflow', 'hasOverflow', 'has_overflow']) ??
+          false,
+      candidates: candidates,
+      createdAt: _optionalDateTime(json, const ['createdAt', 'created_at']),
+      expiresAt: _optionalDateTime(json, const ['expiresAt', 'expires_at']),
+    );
+  }
+}
+
+/// Result returned after an atomic category bulk apply.
+class CategoryBulkApplyResult {
+  final String operationId;
+  final int changedCount;
+  final int unchangedCount;
+  final String? targetCategoryId;
+  final String? targetUserCategoryId;
+  final List<String> affectedTransactionIds;
+
+  const CategoryBulkApplyResult({
+    required this.operationId,
+    required this.changedCount,
+    required this.unchangedCount,
+    this.targetCategoryId,
+    this.targetUserCategoryId,
+    this.affectedTransactionIds = const [],
+  });
+
+  factory CategoryBulkApplyResult.fromJson(Map<String, dynamic> json) {
+    final ids = _firstValue(json, const [
+      'affectedTransactionIds',
+      'affected_transaction_ids',
+      'changedTransactionIds',
+      'changed_transaction_ids',
+      'transactionIds',
+      'transaction_ids',
+    ]);
+    return CategoryBulkApplyResult(
+      operationId: _requiredString(json, const [
+        'operationId',
+        'operation_id',
+        'id',
+      ]),
+      changedCount:
+          _firstInt(json, const ['changedCount', 'changed_count']) ?? 0,
+      unchangedCount:
+          _firstInt(json, const ['unchangedCount', 'unchanged_count']) ?? 0,
+      targetCategoryId: _firstString(json, const [
+        'targetCategoryId',
+        'target_category_id',
+        'categoryId',
+        'category_id',
+      ]),
+      targetUserCategoryId: _firstString(json, const [
+        'targetUserCategoryId',
+        'target_user_category_id',
+        'userCategoryId',
+        'user_category_id',
+      ]),
+      affectedTransactionIds: ids is List
+          ? ids.whereType<String>().toList(growable: false)
+          : const [],
+    );
+  }
+}
+
+/// A 409 means the review snapshot is stale and the caller should fetch a
+/// fresh preview. It is intentionally distinct from a generic API failure so
+/// the UI can retain its selection/retry affordance.
+class CategoryBulkConflictException extends ApiException {
+  CategoryBulkConflictException(String debugMessage)
+    : super(
+        debugMessage,
+        userMessage:
+            'Some transactions changed since this list was shown. Review the refreshed list.',
+      );
+}
+
+dynamic _firstValue(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    if (json.containsKey(key) && json[key] != null) return json[key];
+  }
+  return null;
+}
+
+String? _firstString(Map<String, dynamic> json, List<String> keys) {
+  final value = _firstValue(json, keys);
+  if (value is! String) return null;
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+String _requiredString(Map<String, dynamic> json, List<String> keys) {
+  final value = _firstString(json, keys);
+  if (value == null) {
+    throw const FormatException('Missing required string in API response');
+  }
+  return value;
+}
+
+int? _firstInt(Map<String, dynamic> json, List<String> keys) {
+  final value = _firstValue(json, keys);
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return value is String ? int.tryParse(value) : null;
+}
+
+bool? _firstBool(Map<String, dynamic> json, List<String> keys) {
+  final value = _firstValue(json, keys);
+  if (value is bool) return value;
+  if (value is String) return value.toLowerCase() == 'true';
+  return null;
+}
+
+DateTime _requiredDateTime(Map<String, dynamic> json, List<String> keys) {
+  final value = _firstString(json, keys);
+  if (value == null) {
+    throw const FormatException('Missing required date in API response');
+  }
+  return DateTime.parse(value);
+}
+
+DateTime? _optionalDateTime(Map<String, dynamic> json, List<String> keys) {
+  final value = _firstString(json, keys);
+  return value == null ? null : DateTime.tryParse(value);
+}
+
 class UserCardsRepository {
   final List<DismissalQueueEntry> _dismissalRetryQueue = [];
   final Future<SmsDismissalOutbox> Function()? dismissalOutbox;
@@ -1605,18 +1994,24 @@ class UserCardsRepository {
       durable = await dismissalOutbox?.call();
     } catch (_) {}
     final toRetry = List<DismissalQueueEntry>.from(_dismissalRetryQueue);
-    for (final payload in durable?.pending() ?? const <Map<String, dynamic>>[]) {
+    for (final payload
+        in durable?.pending() ?? const <Map<String, dynamic>>[]) {
       final sourceKey = payload['sourceKey'] as String?;
-      if (sourceKey == null || toRetry.any((e) => e.sourceKey == sourceKey)) continue;
-      toRetry.add(DismissalQueueEntry(
-        sourceKey: sourceKey,
-        sender: payload['sender'] as String?,
-        reason: payload['reason'] as String?,
-        templateText: payload['templateText'] as String?,
-        sampleBody: payload['sampleBody'] as String?,
-        family: payload['family'] as String?,
-        queuedAt: DateTime.tryParse(payload['queuedAt'] as String? ?? '') ?? DateTime.now(),
-      ));
+      if (sourceKey == null || toRetry.any((e) => e.sourceKey == sourceKey))
+        continue;
+      toRetry.add(
+        DismissalQueueEntry(
+          sourceKey: sourceKey,
+          sender: payload['sender'] as String?,
+          reason: payload['reason'] as String?,
+          templateText: payload['templateText'] as String?,
+          sampleBody: payload['sampleBody'] as String?,
+          family: payload['family'] as String?,
+          queuedAt:
+              DateTime.tryParse(payload['queuedAt'] as String? ?? '') ??
+              DateTime.now(),
+        ),
+      );
     }
     if (toRetry.isEmpty) return 0;
     var succeeded = 0;
@@ -1630,7 +2025,8 @@ class UserCardsRepository {
                 'sourceKey': entry.sourceKey,
                 if (entry.sender != null) 'sender': entry.sender,
                 if (entry.reason != null) 'reason': entry.reason,
-                if (entry.templateText != null) 'templateText': entry.templateText,
+                if (entry.templateText != null)
+                  'templateText': entry.templateText,
                 if (entry.sampleBody != null) 'sampleBody': entry.sampleBody,
                 if (entry.family != null) 'family': entry.family,
               }),
@@ -1638,7 +2034,9 @@ class UserCardsRepository {
             .timeout(const Duration(seconds: 10));
         if (response.statusCode == 200) {
           durable?.acknowledge(entry.sourceKey);
-          _dismissalRetryQueue.removeWhere((e) => e.sourceKey == entry.sourceKey);
+          _dismissalRetryQueue.removeWhere(
+            (e) => e.sourceKey == entry.sourceKey,
+          );
           succeeded++;
         }
       } catch (_) {
@@ -1872,12 +2270,18 @@ class UserCardsRepository {
     DateTime? occurredAt,
     String? categoryId,
     String? userCategoryId,
+    bool clearCategory = false,
     String? merchantName,
     TxnRail? rail,
     String? userCardId,
     TxnInstrument? instrument,
     TxnEntryKind? entryKind,
   }) async {
+    if (clearCategory && (categoryId != null || userCategoryId != null)) {
+      throw ArgumentError(
+        'clearCategory cannot be combined with categoryId or userCategoryId',
+      );
+    }
     final customCategoryId =
         userCategoryId ??
         (categoryId != null && categoryId.startsWith('custom:')
@@ -1890,8 +2294,10 @@ class UserCardsRepository {
     final body = <String, dynamic>{
       'amountInr': ?amountInr,
       if (occurredAt != null) 'occurredAt': occurredAt.toIso8601String(),
-      'categoryId': ?serverCategoryId,
-      'userCategoryId': ?customCategoryId,
+      if (clearCategory) 'categoryId': null,
+      if (clearCategory) 'userCategoryId': null,
+      if (!clearCategory) 'categoryId': ?serverCategoryId,
+      if (!clearCategory) 'userCategoryId': ?customCategoryId,
       'merchantName': ?merchantName,
       if (rail != null) 'rail': _railToJson(rail),
       'userCardId': ?userCardId,
@@ -1908,6 +2314,125 @@ class UserCardsRepository {
         'PATCH /transactions/:id failed: ${response.statusCode} ${response.body}',
       );
     }
+  }
+
+  /// Explicitly clears both built-in and custom category identities. This is
+  /// also available as a dedicated operation for callers that do not already
+  /// have an edit payload.
+  Future<void> clearTransactionCategory(String id) async {
+    final response = await _client.patch(
+      Uri.parse('$apiBaseUrl/transactions/$id'),
+      headers: _headers,
+      body: jsonEncode(const {'categoryId': null, 'userCategoryId': null}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'PATCH /transactions/:id (clear category) failed: '
+        '${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
+  /// Fetches the server-owned candidate set for applying a category to other
+  /// transactions related to [transactionId]. The server derives merchant
+  /// identity and eligibility from the source row; the client never supplies
+  /// a merchant name or VPA for matching.
+  Future<RelatedCategoryPreview> fetchCategoryRelatedPreview(
+    String transactionId, {
+    String? categoryId,
+    String? userCategoryId,
+    String? targetCategoryId,
+    String? targetUserCategoryId,
+  }) async {
+    final resolvedCategoryId = targetCategoryId ?? categoryId;
+    final resolvedUserCategoryId = targetUserCategoryId ?? userCategoryId;
+    if (resolvedCategoryId == null && resolvedUserCategoryId == null) {
+      throw ArgumentError(
+        'A target category id or user category id is required',
+      );
+    }
+    final query = <String, String>{
+      if (resolvedCategoryId != null) 'targetCategoryId': resolvedCategoryId,
+      if (resolvedUserCategoryId != null)
+        'targetUserCategoryId': resolvedUserCategoryId,
+    };
+    final uri = Uri.parse(
+      '$apiBaseUrl/transactions/$transactionId/category-related-preview',
+    ).replace(queryParameters: query);
+    final response = await _client
+        .get(uri, headers: _headers)
+        .timeout(_transactionRequestTimeout);
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'GET /transactions/:id/category-related-preview failed: '
+        '${response.statusCode} ${response.body}',
+      );
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final payload = decoded['preview'] is Map
+        ? Map<String, dynamic>.from(decoded['preview'] as Map)
+        : decoded;
+    return RelatedCategoryPreview.fromJson(payload);
+  }
+
+  /// Applies exactly the selected IDs from a previously returned preview in
+  /// one server-side atomic operation. A fresh idempotency key must be used
+  /// for a new user action; retrying the same key is safe and returns the
+  /// original result from the server.
+  Future<CategoryBulkApplyResult> applyCategoryBulk({
+    required String previewId,
+    required Iterable<String> selectedTransactionIds,
+    String? categoryId,
+    String? userCategoryId,
+    String? targetCategoryId,
+    String? targetUserCategoryId,
+    String? idempotencyKey,
+  }) async {
+    final resolvedCategoryId = targetCategoryId ?? categoryId;
+    final resolvedUserCategoryId = targetUserCategoryId ?? userCategoryId;
+    if (resolvedCategoryId == null && resolvedUserCategoryId == null) {
+      throw ArgumentError(
+        'A target category id or user category id is required',
+      );
+    }
+    final selected = selectedTransactionIds.toSet().toList(growable: false);
+    if (selected.length > 500) {
+      throw ArgumentError.value(
+        selected.length,
+        'selectedTransactionIds',
+        'cannot contain more than 500 transactions',
+      );
+    }
+    final key = idempotencyKey ?? const Uuid().v4();
+    final body = <String, dynamic>{
+      'previewId': previewId,
+      'selectedTransactionIds': selected,
+      if (resolvedCategoryId != null) 'targetCategoryId': resolvedCategoryId,
+      if (resolvedUserCategoryId != null)
+        'targetUserCategoryId': resolvedUserCategoryId,
+      'idempotencyKey': key,
+    };
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/transactions/category-bulk-apply'),
+          headers: _headers,
+          body: jsonEncode(body),
+        )
+        .timeout(_transactionRequestTimeout);
+    final debug =
+        'POST /transactions/category-bulk-apply failed: '
+        '${response.statusCode} ${response.body}';
+    if (response.statusCode == 409) {
+      throw CategoryBulkConflictException(debug);
+    }
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw ApiException(debug);
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final payload = decoded['result'] is Map
+        ? Map<String, dynamic>.from(decoded['result'] as Map)
+        : decoded;
+    return CategoryBulkApplyResult.fromJson(payload);
   }
 
   static String _railToJson(TxnRail rail) {

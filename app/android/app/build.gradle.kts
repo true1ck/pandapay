@@ -1,4 +1,5 @@
 import java.util.Properties
+import org.gradle.api.tasks.compile.JavaCompile
 
 plugins {
     id("com.android.application")
@@ -127,6 +128,26 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// Flutter 3.44 can include the dev-only integration_test plugin in the
+// generated Android registrant even for release variants. Its Java class is
+// intentionally not packaged into a release build, so javac otherwise fails
+// before the APK is produced. Keep the plugin available to debug/integration
+// builds and remove only the generated release registration before compile.
+tasks.withType<JavaCompile>().configureEach {
+    if (name.contains("Release", ignoreCase = true)) {
+        doFirst {
+            val registrant = project.file("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java")
+            if (!registrant.exists()) return@doFirst
+            val integrationTestBlock = Regex(
+                """    try \{\r?\n      flutterEngine\.getPlugins\(\)\.add\(new dev\.flutter\.plugins\.integration_test\.IntegrationTestPlugin\(\)\);\r?\n    \} catch \(Exception e\) \{\r?\n      Log\.e\(TAG, \"Error registering plugin integration_test, dev\.flutter\.plugins\.integration_test\.IntegrationTestPlugin\", e\);\r?\n    \}\r?\n""",
+            )
+            val source = registrant.readText()
+            val updated = source.replace(integrationTestBlock, "")
+            if (updated != source) registrant.writeText(updated)
+        }
+    }
 }
 
 dependencies {

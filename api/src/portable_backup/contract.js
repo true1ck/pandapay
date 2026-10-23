@@ -17,6 +17,7 @@ const PORTABLE_SECTIONS = Object.freeze([
   { name: 'user_cards', table: 'user_cards', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id' },
   { name: 'card_overrides', table: 'card_overrides', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id' },
   { name: 'transactions', table: 'transactions', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id' },
+  { name: 'user_merchant_category_rules', table: 'user_merchant_category_rules', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id' },
   {
     name: 'transaction_splits',
     table: 'transaction_splits',

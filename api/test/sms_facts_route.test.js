@@ -370,6 +370,7 @@ test('POST /sms/facts persists a registered mandate through the injected writer'
   assert.equal(call.parsed.ok, true);
   assert.equal(call.parsed.lifecycle, 'active');
   assert.equal(call.parsed.fields.merchant, 'NETFLIX');
+  assert.equal(call.parsed.fields.limitInr, 2000);
   assert.equal(call.parsed.fields.amountInr, 2000);
   assert.equal(call.parsed.fields.last4, '1797');
   assert.equal(call.parsed.fields.cadenceExplicit, false);

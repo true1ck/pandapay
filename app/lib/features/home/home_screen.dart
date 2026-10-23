@@ -32,6 +32,7 @@ import '../quickadd/quick_add_screen.dart';
 import '../scan/scan_result_screen.dart';
 import '../scan/upi_qr_scanner_screen.dart';
 import '../cards/card_visual.dart';
+import '../../domain/cycle_engine.dart';
 import 'home_alerts.dart';
 import 'home_context_line.dart';
 
@@ -1190,11 +1191,8 @@ class _UtilizationWarningBanner extends ConsumerWidget {
     );
   }
 
-  static DateTime _nextOccurrence(int day, DateTime now) {
-    var next = DateTime(now.year, now.month, day);
-    if (!next.isAfter(now)) next = DateTime(now.year, now.month + 1, day);
-    return next;
-  }
+  static DateTime _nextOccurrence(int day, DateTime now) =>
+      CycleEngine.nextOccurrence(day, now);
 }
 
 /// Chunk 19: the real amount-entry field — everything downstream (ranking
@@ -2712,6 +2710,17 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
       ).hasMatch(label);
     }
 
+    bool isVerifiedBank(BankAccountSummary account) {
+      if (isNonBankAccount(account)) return false;
+      final slug = (account.issuerSlug ?? '').toLowerCase().trim();
+      final name = [
+        account.issuerShortName,
+        account.issuerName,
+      ].whereType<String>().join(' ').toLowerCase().trim();
+      return (slug.isNotEmpty && slug != 'unknown') ||
+          (name.isNotEmpty && name != 'unknown');
+    }
+
     // Keep the issuer in the identity. Two different banks can legitimately
     // have accounts ending in the same four digits; keying only by suffix
     // silently dropped one account and produced an incorrect total.
@@ -2721,7 +2730,8 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
               (account) =>
                   RegExp(r'^\d{4}$').hasMatch(account.accountLast4) &&
                   !isNonBankAccount(account) &&
-                  !cardSuffixes.contains(account.accountLast4),
+                  (isVerifiedBank(account) ||
+                      !cardSuffixes.contains(account.accountLast4)),
             )
             .toList()
           ..sort((a, b) {

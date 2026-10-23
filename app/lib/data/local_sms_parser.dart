@@ -14,10 +14,17 @@ enum LocalSmsEventType {
   balance,
   failed,
   security,
+  investment,
   unknown,
 }
 
-enum LocalSmsDisposition { sync, localObservation, localIgnore, review, localCommitment }
+enum LocalSmsDisposition {
+  sync,
+  localObservation,
+  localIgnore,
+  review,
+  localCommitment,
+}
 
 extension LocalSmsEventTypeWire on LocalSmsEventType {
   String get wireValue => switch (this) {
@@ -28,6 +35,7 @@ extension LocalSmsEventTypeWire on LocalSmsEventType {
     LocalSmsEventType.balance => 'balance',
     LocalSmsEventType.failed => 'failed',
     LocalSmsEventType.security => 'security',
+    LocalSmsEventType.investment => 'investment',
     LocalSmsEventType.unknown => 'unknown',
   };
 }
@@ -51,6 +59,8 @@ class LocalSmsObservation {
   final DateTime? statementDate;
   final bool statementDateExplicit;
   final Money? availableBalance, amountDue, minimumDue, autopayLimit;
+  final Money? amount;
+  String? get merchantName => billerName;
   final LocalSmsEventType eventType;
   final LocalSmsDisposition disposition;
   final List<String> reasonCodes;
@@ -75,6 +85,7 @@ class LocalSmsObservation {
     this.amountDue,
     this.minimumDue,
     this.autopayLimit,
+    this.amount,
     this.eventType = LocalSmsEventType.unknown,
     this.disposition = LocalSmsDisposition.review,
     this.reasonCodes = const [],
@@ -107,11 +118,26 @@ class LocalSmsReviewDraft {
 /// formats remain durable intake for server parsing; they never become guessed
 /// spending. Values are local observations until server reconciliation.
 class LocalSmsParser {
+  // 9: AutoPay setup and reminder observations no longer invent a monthly
+  // cadence, receive-date due date, or due amount from a mandate ceiling.
   // 8: the server can now resolve a card bill notice whose suffix is printed
   // straight after the instrument ("Credit Card 8708 bill"), so the open
   // review queue is re-examined once more and a card's due day can finally be
   // learned from its own AutoPay message.
-  static const version = 8;
+  static const version = 9;
+
+  static bool isInvestmentFolioAllotment(String body) {
+    final text = body.toLowerCase();
+    final hasAllotment = RegExp(
+      r'\b(?:units?\s+allotted|allotted\s+at\s+nav|units?\s*:\s*[\d.]+\s*,\s*nav|nav\s*:\s*[\d.]+|units?\s+(?:credited|allotted)\s+under\s+folio|allotted\s+for\s+your\s+investment)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+    final hasFolioOrFund = RegExp(
+      r'\b(?:folio|fund|mutual\s+fund|amc)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+    return hasAllotment && hasFolioOrFund;
+  }
 
   static bool isMerchantReceiptOrEbill(String body) {
     final text = body.toLowerCase();
@@ -129,7 +155,8 @@ class LocalSmsParser {
     if (digits == null) return null;
     final numMatch = RegExp(r'^(\d+)(?:\.(\d{1,2}))?$').firstMatch(digits);
     if (numMatch == null) return null;
-    final paise = int.parse(numMatch[1]!) * 100 +
+    final paise =
+        int.parse(numMatch[1]!) * 100 +
         int.parse((numMatch[2] ?? '').padRight(2, '0'));
     final value = Money.fromPaise(paise);
     return value.paise > 0 ? value : null;
@@ -140,20 +167,18 @@ class LocalSmsParser {
   static bool isAutoPayNotice(String body) {
     final text = body.replaceAll(RegExp(r'\s+'), ' ');
     return _re(
-          r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|mandate|e[- ]?mandate|auto[- ]?debit)\b',
+          r'\b(?:autopay\s+(?:alert|reminder|scheduled)?|auto[- ]?pay|mandate|e[- ]?mandate|e[- ]?nach|enach|standing\s+instruction|si\s+(?:debit|alert|notification)|pre[- ]?debit(?:\s+notification)?|auto[- ]?debit|recurring\s+subscription)\b',
         ).hasMatch(text) ||
         _re(
-          r'\b(?:will|shall|to|scheduled\s+to)\s+be\s+(?:auto[- ]?)?(?:deducted|debited)\b',
+          r'\b(?:will|shall|to|scheduled\s+to|scheduled\s+for)\s+(?:be\s+)?(?:auto[- ]?)?(?:deducted|debited|charged)\b',
         ).hasMatch(text) ||
         _re(
-          r'\b(?:auto[- ]?deducted|auto[- ]?debited)\s+(?:on|from)\b',
+          r'\b(?:auto[- ]?deducted|auto[- ]?debited|automatically\s+(?:charged|debited|deducted))\s+(?:on|from|to)\b',
         ).hasMatch(text) ||
         _re(
           r'\b(?:contribution|subscription|installment|instalment)\s+amount\b',
         ).hasMatch(text) ||
-        _re(
-          r'\bmaintain\s+(?:sufficient\s+)?bal(?:ance)?\b',
-        ).hasMatch(text) ||
+        _re(r'\bmaintain\s+(?:sufficient\s+)?bal(?:ance)?\b').hasMatch(text) ||
         (_re(
               r'\b(?:broadband|fiber|telecom|yojana|pension|subscription|insurance|utility)\b',
             ).hasMatch(text) &&
@@ -168,7 +193,7 @@ class LocalSmsParser {
   /// or balance snapshot. Used by Stage 0 sender scrubbing to whitelist real transactional
   /// alerts from promotional routes (-P).
   static bool isCompletedTransactionOrBill(String body) {
-    if (isMerchantReceiptOrEbill(body)) {
+    if (isMerchantReceiptOrEbill(body) || isInvestmentFolioAllotment(body)) {
       return true;
     }
     final text = body.replaceAll(RegExp(r'\s+'), ' ');
@@ -193,16 +218,19 @@ class LocalSmsParser {
     if (isAutoPayNotice(text)) {
       return true;
     }
-    final balance = (_re(
-          r'\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b',
-        ).hasMatch(text) ||
+    final balance =
         (_re(
-              r'\b(?:available|current|closing|avl|avail)\s+(?:credit\s+limit|limit)\b|\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?',
-            ).hasMatch(text) &&
-            !_re(
-              r'\b(?:apply\s+now|pre[-\s]?approved|upgrade\s+your|zero\s+joining\s+fee|no\s+annual\s+fee|lifetime\s+free|instant\s+cash\s+loan)\b',
-            ).hasMatch(text))) &&
-        !_re(r'\b(?:eligible\s+for\s+(?:conversion|flexipay|emi)|convert\s+(?:to|into)\s+emi)\b').hasMatch(text);
+              r'\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b',
+            ).hasMatch(text) ||
+            (_re(
+                  r'\b(?:available|current|closing|avl|avail)\s+(?:credit\s+limit|limit)\b|\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?',
+                ).hasMatch(text) &&
+                !_re(
+                  r'\b(?:apply\s+now|pre[-\s]?approved|upgrade\s+your|zero\s+joining\s+fee|no\s+annual\s+fee|lifetime\s+free|instant\s+cash\s+loan)\b',
+                ).hasMatch(text))) &&
+        !_re(
+          r'\b(?:eligible\s+for\s+(?:conversion|flexipay|emi)|convert\s+(?:to|into)\s+emi)\b',
+        ).hasMatch(text);
     if (balance) {
       return true;
     }
@@ -213,7 +241,7 @@ class LocalSmsParser {
   /// payment. Apply this before either upload or manual review, including to
   /// rows captured by an older app version.
   static bool isNonTransactionNoise(String sender, String body) {
-    if (isMerchantReceiptOrEbill(body)) {
+    if (isMerchantReceiptOrEbill(body) || isInvestmentFolioAllotment(body)) {
       return false;
     }
     final cleanSender = sender.trim();
@@ -227,7 +255,9 @@ class LocalSmsParser {
         return true;
       }
       // 6-digit numeric headers where digit 1-8 is bulk promotional SMS (TRAI DLT)
-      if (RegExp(r'^(?:[A-Za-z]{2}-)?\d{6}(?:-[A-Za-z])?$').hasMatch(cleanSender)) {
+      if (RegExp(
+        r'^(?:[A-Za-z]{2}-)?\d{6}(?:-[A-Za-z])?$',
+      ).hasMatch(cleanSender)) {
         return true;
       }
     }
@@ -244,8 +274,12 @@ class LocalSmsParser {
     if (_re(
           r'\b(?:eligible\s+for\s+(?:[\w\s]{0,20}\s+)?(?:conversion|flexipay|emis?)|convert(?:ed|ing)?\b[\s\S]{0,60}?\b(?:in)?to\b[\s\S]{0,20}?\b(?:smart\s+|flexipay\s+|easy\s+)?emis?|can\s+(?:now\s+)?be\s+converted\s+(?:in)?to\s+emis?|flexipay\s+emis?)\b',
         ).hasMatch(text) &&
-        !_re(r'\b(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)\b').hasMatch(text) &&
-        !_re(r'\b(?:debited|charged)\s*(?:by|with|for)?\s*(?:₹|rs\.?|inr)').hasMatch(text)) {
+        !_re(
+          r'\b(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)\b',
+        ).hasMatch(text) &&
+        !_re(
+          r'\b(?:debited|charged)\s*(?:by|with|for)?\s*(?:₹|rs\.?|inr)',
+        ).hasMatch(text)) {
       return true;
     }
     final completed = _re(
@@ -270,39 +304,49 @@ class LocalSmsParser {
     final serviceNotice = _re(
       r'\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service|transaction\s+check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|sim\s+swap|reported\s+(?:your\s+)?fund\s+bal(?:ance)?|securities\s+bal(?:ance)?|excludes\s+your\s+bank|beware\s+(?:of\s+)?dealing\s+(?:in|on)\s+unsolicited\s+tips|unsolicited\s+tips|due\s+for\s+renewal|renew\s+now\s+with\s+policybazaar|wallet\s+balance\s+is\s+(?:rs\.?|inr)\s*0|add\s+money\s+to\s+wallet|report\s+spam|trai\s+dnd|telecommunications\s+act|sanchar\s+saathi|chakshu|online\s+investment\s+scams|traded\s+value\s+for\b|has\s+been\s+dispatched|has\s+been\s+delivered|modification\s+success!?|card\s+usage\s+settings?|card\s+(?:usage\s+)?settings?\s+(?:for|modified|updated)|card\s+controls?\s+(?:modified|updated)|card\s+usage\s+(?:limits?|controls?|preferences?)|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated|ckyc\s+record|central\s+kyc\s+registry|out\s+for\s+delivery\s+with\s+cash\s+memo|pls\s+share\s+delivery\s+code|delivery\s+code\s+\d+)\b',
     ).hasMatch(text);
-    final balance = (_re(
-          r'\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b',
-        ).hasMatch(text) ||
+    final balance =
         (_re(
-              r'\b(?:available|current|closing|avl|avail)\s+(?:credit\s+limit|limit)\b|\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?',
-            ).hasMatch(text) &&
-            !_re(
-              r'\b(?:apply\s+now|pre[-\s]?approved|upgrade\s+your|zero\s+joining\s+fee|no\s+annual\s+fee|lifetime\s+free|instant\s+cash\s+loan)\b',
-            ).hasMatch(text))) &&
-        !_re(r'\b(?:eligible\s+for\s+(?:conversion|flexipay|emi)|convert\s+(?:to|into)\s+emi)\b').hasMatch(text);
+              r'\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:available|current|closing|avl|avail)\s+bal(?:ance)?\b',
+            ).hasMatch(text) ||
+            (_re(
+                  r'\b(?:available|current|closing|avl|avail)\s+(?:credit\s+limit|limit)\b|\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?',
+                ).hasMatch(text) &&
+                !_re(
+                  r'\b(?:apply\s+now|pre[-\s]?approved|upgrade\s+your|zero\s+joining\s+fee|no\s+annual\s+fee|lifetime\s+free|instant\s+cash\s+loan)\b',
+                ).hasMatch(text))) &&
+        !_re(
+          r'\b(?:eligible\s+for\s+(?:conversion|flexipay|emi)|convert\s+(?:to|into)\s+emi)\b',
+        ).hasMatch(text);
     if (balance) {
       return false;
     }
 
-    final promotionalSender = _re(r'-p\s*$').hasMatch(cleanSender) && !isCompletedTransactionOrBill(body);
+    final promotionalSender =
+        _re(r'-p\s*$').hasMatch(cleanSender) &&
+        !isCompletedTransactionOrBill(body);
     final operationalNotice = _re(
       r'\b(?:will\s+remain\s+open\s+and\s+fully\s+operational|available\s+at\s+our\s+branches\s+during\s+normal\s+working\s+hours|submission\s+of\s+positive\s+pay\s+details\s+is\s+mandatory)\b|'
       r'\bdone\s+\d+\s+out\s+of\s+\d+\s+free\s+transactions\s+at\s+[\w\s]+atms\b|'
       r'\b(?:cdsl|nsdl)\s*:\s*(?:debit|credit)\s+in\s+a/c\b[\s\S]{0,40}\b(?:etf|bees|shares?|units?|mf)\b|'
+      r'\b(?:cdsl|nsdl)\s*:\s*(?:unpledge|pledge)\b|'
+      r'\b(?:updated\s+(?:your\s+)?address\s+under\s+folio|address\s+in\s+folio[^\w\n]*\w+\s+is\s+updated|based\s+on\s+feed\s+received\s+from\s+kra)\b|'
       r"\b(?:track\s+it\s+using\s+this\s+ticket\s+id|ticket\s+id\s*:\s*\d+\s+on\s+the\s+help\s+section|we're\s+on\s+it\s+and\s+will\s+get\s+back\s+to\s+you\s+in\s+\d+[-–]\d+\s+hours)\b|"
       r'\benable\s+online,\s+international\s+(?:and|&)\s+contactless\s+transactions\b|'
       r'\byour\s+ekyc\s+has\s+been\s+successfully\s+completed\b|'
-      r'\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,60}\bwill\s+be\s+paused\b|'
+      r'\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,80}\b(?:paused|unavailable|interrupted)\b|'
+      r'\bregistration\s+alert\s*:\s*device\s+name\b|'
+      r'\bcoupons?\s+expire\b|'
+      r'\b(?:order\b[\s\S]{0,40}\b(?:is\s+)?dispatched\s+through|order\s+(?:is\s+)?dispatched\s+through|we\s+have\s+received\s+your\s+order\s+id)\b|'
+      r'\blifetime[- ]free\s+credit\s+card\s+facility\s+has\s+been\s+enabled\b|'
+      r'\b(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+for\b[\s\S]{0,50}\b(?:has\s+expired|expires\s+today|will\s+expire)\b|'
+      r'\b(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+expired\b|'
       r'\b(?:bse\s+trade\s+confirmation|welcome\s+to\s+nse,\s+you\s+have\s+been\s+registered\b|registered\s+with\s+[\w\s]+in\s+segment(?:\(s\))?|registered\s+with\s+[\w\s]+in\s+segment\(s\))\b|'
       r'\b(?:puc\s+certificate\s+for\s+vehicle\b|your\s+itr\s+for\s+ay\b[\s\S]{0,30}\bawaits\s+at\s+the\s+e[- ]?filing\s+portal)\b|'
       r'\b(?:(?:last\s+chance\s*:?\s*)?renew\s+(?:your\s+)?expired\b|(?:(?:car|motor|two[ -]?wheeler|vehicle|bike|health)\s+)?insurance\s+will\s+expire\s+on\b|will\s+expire\s+on\b[\s\S]{0,80}\b(?:premium|insurance|renew|policy|visit|starts?\s+(?:just\s+)?(?:at\s+)?(?:rs\.?|inr)|instant\s+renewal)\b|\+\s*taxes\*?)\b|'
       r'\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+(?:credit\s+)?card\s+with\s+limit|eligible\s+for\s+(?:a\s+)?(?:[\w\s]{0,20}\s+)?loan\b|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application|pre[-\s]?approved\s+loan)\b|'
       r'\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b',
     ).hasMatch(text);
-    return offer ||
-        serviceNotice ||
-        operationalNotice ||
-        promotionalSender;
+    return offer || serviceNotice || operationalNotice || promotionalSender;
   }
 
   /// True only for a deposit/current/savings-bank alert. Account-shaped
@@ -310,8 +354,14 @@ class LocalSmsParser {
   /// must not create rows in Home's bank-account snapshot.
   static bool isBankAccountMessage(String body, [String sender = '']) {
     final text = body.toLowerCase();
-    if (text.trim().isEmpty ||
-        RegExp(r'\b(?:credit|debit)\s+card\b').hasMatch(text)) {
+    if (text.trim().isEmpty) return false;
+    final hasExplicitAccount = RegExp(
+      r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b',
+    ).hasMatch(text);
+    if (RegExp(r'\bcredit\s+card\b').hasMatch(text)) {
+      return false;
+    }
+    if (!hasExplicitAccount && RegExp(r'\bdebit\s+card\b').hasMatch(text)) {
       return false;
     }
     if (RegExp(
@@ -330,7 +380,7 @@ class LocalSmsParser {
           r'(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb|gucb|cosmos|svc|tjsb|nkgsb|kccb|coop|ucb)',
         ).hasMatch(sender.toLowerCase());
     final balanceMarker = RegExp(
-      r'\b(?:available|avail|avl|current|closing|clr|new)\s*(?:balance|bal)\b',
+      r'\b(?:(?:total\s+)?(?:available|avail|avl|current|closing|clr|new|remaining)\.?\s*(?:balance|bal)\b|bal(?:ance)?\.?\s*(?:is|:|-))',
     ).hasMatch(text);
     final movementMarker = RegExp(
       r'\b(?:debited|debit|credited|credit|paid|spent|sent|transferred|withdrawn|received|deposited)\b',
@@ -407,6 +457,18 @@ class LocalSmsParser {
         _isOwnPersonName(match.group(1)!.trim(), ownUserName);
   }
 
+  /// UPI debit alerts often put the account clause before the recipient:
+  /// "debited from A/c XX1234 to Sujay Enterprises via UPI". The generic
+  /// `from ...` merchant pattern otherwise keeps the account text as part of
+  /// the merchant name. Require the account-shaped source and UPI rail so this
+  /// remains narrow and does not change unrelated card or NEFT narratives.
+  static String? _upiAccountRecipient(String body) {
+    final match = _re(
+      r'\bfrom\s+(?:your\s+)?(?:a\/?c\.?|account)\s*(?:[xX*]{1,4}\s*)?\d{4}\s+to\s+([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+(?:via\s+)?upi\b|\s+on\b|\s+ref(?:erence)?\b|[.,;]|$)',
+    ).firstMatch(body);
+    return match?.group(1)?.trim();
+  }
+
   static bool _incomingBankTransferCandidate(String body) =>
       !_re(r'\b(?:salary|cashback|refund(?:ed)?)\b').hasMatch(body) &&
       _re(r'\bfrom\b[\s\S]{0,80}\b(?:bank|a\/?c\.?|account)\b').hasMatch(body);
@@ -474,16 +536,63 @@ class LocalSmsParser {
     if (_re(r'\batal\s+pension\s+yojana\b').hasMatch(text)) {
       return 'Atal Pension Yojana';
     }
-    final prefixMatch = _re(r'^([A-Za-z][A-Za-z0-9 .&\x27/-]{2,40}?)\s*\.{3}').firstMatch(text);
+    final merchantLabelMatch = _re(
+      r'\b(?:merchant|biller|payee|service\s+provider)\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 .&\x27/()]{1,60})',
+    ).firstMatch(body);
+    if (merchantLabelMatch != null) {
+      final name = merchantLabelMatch.group(1)?.trim();
+      if (name != null && name.length >= 2) {
+        return name;
+      }
+    }
+    final mandateTowardsMatch = _re(
+      r'\b(?:created\s+towards|mandate\b[\s\S]{0,50}?\b(?:created\s+towards|towards|for)|subscription\s+to|subscription\s+towards|for\s+(?:the\s+)?subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 .&\x27/()]{1,60}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed)\b|[,.;]|$)',
+    ).firstMatch(text);
+    if (mandateTowardsMatch != null) {
+      final name = mandateTowardsMatch.group(1)?.trim();
+      if (name != null &&
+          name.length >= 2 &&
+          !_re(r'^(?:credit card|card|account|bank)$').hasMatch(name)) {
+        return name;
+      }
+    }
+    final billScheduledMatch = _re(
+      r'\b(?:bill\s+payment\b[\s\S]{0,40}?\bfor|payment\b[\s\S]{0,40}?\bfor)\s+([A-Za-z0-9_][-A-Za-z0-9 .&\x27/(),]{2,60}?)(?:\s+\d{5,})?\s+(?:is\s+scheduled|scheduled\s+(?:for|on)|is\s+due|due\s+on)\b',
+    ).firstMatch(text);
+    if (billScheduledMatch != null) {
+      final name = billScheduledMatch.group(1)?.trim();
+      if (name != null &&
+          name.length >= 3 &&
+          !_re(
+            r'^(?:credit card|card|account|bank)$',
+          ).hasMatch(name.toLowerCase())) {
+        return name;
+      }
+    }
+
+    final prefixMatch = _re(
+      r'^([A-Za-z][A-Za-z0-9 .&\x27/-]{2,40}?)\s*\.{3}',
+    ).firstMatch(text);
     if (prefixMatch != null) {
       final name = prefixMatch.group(1)?.trim();
       if (name != null && name.length >= 3) {
         return name;
       }
     }
-    final cardMatch = _re(r'\bfor\s+(credit\s+card\s+\d{4})\s+bill\b').firstMatch(text);
+    final cardMatch = _re(
+      r'\bfor\s+(credit\s+card\s+\d{4})\s+bill\b',
+    ).firstMatch(text);
     if (cardMatch != null) {
       return cardMatch.group(1);
+    }
+    final towardsCardMatch = _re(
+      r'\b(?:towards|for)\s+([A-Za-z][A-Za-z0-9 .&\x27/-]{2,50}?\b(?:Credit\s+Card|Card))\b',
+    ).firstMatch(text);
+    if (towardsCardMatch != null) {
+      final name = towardsCardMatch.group(1)?.trim();
+      if (name != null && name.length >= 3) {
+        return name.replaceAll(RegExp(r'\s+'), ' ');
+      }
     }
     final patterns = [
       _re(
@@ -616,26 +725,28 @@ class LocalSmsParser {
       return value.paise > 0 ? value : null;
     }
 
-    final completedSignal = _re(
-      r'\b(?:spent|debit|debited|paid|purchase|purchased|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed|successful|successfully|completed)\b',
-    ).hasMatch(body) || isMerchantReceiptOrEbill(body);
+    final completedSignal =
+        _re(
+          r'\b(?:spent|debit|debited|paid|purchase|purchased|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed|successful|successfully|completed)\b',
+        ).hasMatch(body) ||
+        isMerchantReceiptOrEbill(body);
     final nonFinalSignal = _re(
       r'\b(?:pending|processing|initiated|declined|failed|failure|cancelled|canceled|unsuccessful|(?:is|was)\s+unsuccessful)\b|\b(?:will|shall|would)\s+be\b|\b(?:not|never)\s+(?:be\s+)?(?:credited|received|deposited|refunded|reversed)\b',
     ).hasMatch(body);
     final amount = !localOnly && completedSignal && !nonFinalSignal
         ? money(
             _re(
-              r'(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
-            ).firstMatch(body)?.group(1) ??
-          _re(
-            r'\b(?:payment|bill|premium|contribution|subscription)\s+of\s*(?:₹|rs\.?|inr)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
-          ).firstMatch(body)?.group(1) ??
-          _re(
-            r'\b(?:contribution|subscription|mandate|installment|instalment)\s+(?:amount\b)?[\s\S]{0,80}?\b(?:is|of|for|:|-)?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
-          ).firstMatch(body)?.group(1) ??
-          _re(
-            r'\b(?:contribution|subscription)\s+amount\b[\s\S]{0,50}?\b(?:₹|rs\.?|inr)\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
-          ).firstMatch(body)?.group(1),
+                  r'(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+                ).firstMatch(body)?.group(1) ??
+                _re(
+                  r'\b(?:payment|bill|premium|contribution|subscription)\s+of\s*(?:₹|rs\.?|inr)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+                ).firstMatch(body)?.group(1) ??
+                _re(
+                  r'\b(?:contribution|subscription|mandate|installment|instalment)\s+(?:amount\b)?[\s\S]{0,80}?\b(?:is|of|for|:|-)?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+                ).firstMatch(body)?.group(1) ??
+                _re(
+                  r'\b(?:contribution|subscription)\s+amount\b[\s\S]{0,50}?\b(?:₹|rs\.?|inr)\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+                ).firstMatch(body)?.group(1),
           )
         : null;
     final cardLast4 =
@@ -662,25 +773,37 @@ class LocalSmsParser {
     final fvgMatch = _re(
       r'\b(?:fvg|fav|favouring|favoring|infvo|in\s+fav(?:ou?r)?\s+of)\s*[:.\-]?\s*([A-Za-z0-9_][A-Za-z0-9 ._&@*\x27/-]{0,80}?)(?=\s+(?:avl|avail|available|bal(?:ance)?|ref(?:erence|\s*no)?|txn|transaction|if\s+not|not\s+you|call|sms\s+block|on|dated)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body);
-    var merchant = localOnly ? null : fvgMatch?.group(1)?.trim();
-    if (!localOnly && (merchant == null || merchant.isEmpty) && asbaOrIpoBlock) {
-      final ipoCompanyMatch = _re(
-        r'\b(?:asba|ipo)\b[\s\S]{0,60}?\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)(?=\s+(?:of\s+(?:₹|rs\.?|inr)|application|has\s+been|is\s+accepted)|[.,;]|$)',
-      ).firstMatch(body) ??
-      _re(
-        r'\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)\s+of\s+(?:₹|rs\.?|inr)',
-      ).firstMatch(body);
+    final towardsMatchDraft = _re(
+      r'\b(?:towards?|in\s+fav(?:ou?r)?\s+of)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+    ).firstMatch(body);
+    var merchant = localOnly
+        ? null
+        : (_upiAccountRecipient(body) ??
+              fvgMatch?.group(1)?.trim() ??
+              towardsMatchDraft?.group(1)?.trim());
+    if (!localOnly &&
+        (merchant == null || merchant.isEmpty) &&
+        asbaOrIpoBlock) {
+      final ipoCompanyMatch =
+          _re(
+            r'\b(?:asba|ipo)\b[\s\S]{0,60}?\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)(?=\s+(?:of\s+(?:₹|rs\.?|inr)|application|has\s+been|is\s+accepted)|[.,;]|$)',
+          ).firstMatch(body) ??
+          _re(
+            r'\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)\s+of\s+(?:₹|rs\.?|inr)',
+          ).firstMatch(body);
       merchant = ipoCompanyMatch?.group(1)?.trim();
     }
     if (!localOnly && (merchant == null || merchant.isEmpty)) {
       final merchantMatch = _re(
-        r'\b(?:at|to|for|from|by)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|\s*\(|[.,;]|$)',
+        r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
       ).firstMatch(body);
       merchant = merchantMatch?.group(1)?.trim();
     }
     if (merchant != null &&
-        (_re(r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking|upi|imps|neft|rtgs)$').hasMatch(merchant) ||
-         _re(r'^(?:rs\.?|inr|re\.?|\d+)$').hasMatch(merchant))) {
+        (_re(
+              r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking|upi|imps|neft|rtgs)$',
+            ).hasMatch(merchant) ||
+            _re(r'^(?:rs\.?|inr|re\.?|\d+)$').hasMatch(merchant))) {
       merchant = fvgMatch?.group(1)?.trim();
     }
     if (merchant != null) {
@@ -707,17 +830,17 @@ class LocalSmsParser {
     final entryKind = asbaOrIpoBlock
         ? TxnEntryKind.investment
         : _ownAccountTransfer(body) ||
-            _accountToAccountTransfer(body) ||
-            _brokerSettlement(body) ||
-            _walletLoad(body) ||
-            _cardCredit(body) ||
-            (merchant != null &&
-                ownUserName != null &&
-                _isOwnPersonName(merchant, ownUserName)) ||
-            _ownNameInFromClause(body, ownUserName) ||
-            _re(
-              r'\b(?:refund(?:ed)?|reversal|reversed|cashback|reward|salary\s+advance|loan\s+disbursement|cash\s+deposit|cash\s+withdrawal)\b',
-            ).hasMatch(body)
+              _accountToAccountTransfer(body) ||
+              _brokerSettlement(body) ||
+              _walletLoad(body) ||
+              _cardCredit(body) ||
+              (merchant != null &&
+                  ownUserName != null &&
+                  _isOwnPersonName(merchant, ownUserName)) ||
+              _ownNameInFromClause(body, ownUserName) ||
+              _re(
+                r'\b(?:refund(?:ed)?|reversal|reversed|cashback|reward|salary\s+advance|loan\s+disbursement|cash\s+deposit|cash\s+withdrawal)\b',
+              ).hasMatch(body)
         ? TxnEntryKind.transfer
         : _re(r'\b(?:credited|received|deposited)\b').hasMatch(body) &&
               _earnedIncomeCredit(body)
@@ -749,24 +872,84 @@ class LocalSmsParser {
   }) {
     final biller = billerName ?? extractBillerName(body);
     final billerLower = (biller ?? '').toLowerCase();
-    final isCreditCard = billerLower.contains('credit card') ||
-        billerLower.contains('card') ||
-        cardLast4 != null ||
-        _re(r'\bcredit\s+card\b').hasMatch(body);
+    final isExplicitMerchant =
+        biller != null &&
+        biller.isNotEmpty &&
+        !billerLower.contains('credit card') &&
+        !billerLower.contains('card bill');
+    final isCreditCard =
+        !isExplicitMerchant &&
+        (billerLower.contains('credit card') ||
+            billerLower.contains('card') ||
+            _re(r'\bcredit\s+card\b').hasMatch(body));
 
-    final effectiveDue = due ?? receivedAt;
-    final effectiveCadence = cadenceHint ?? 'monthly';
+    final effectiveCardLast4 =
+        cardLast4 ??
+        _re(
+          r'\b(?:credit\s+|debit\s+)?card\b[\s\S]{0,45}?(?:ending(?:\s+(?:with|in))?\s*|x{1,4}|\*{1,4}|\.{3,}|last\s*4\s*|no\.?\s*)\D{0,8}(\d{4})\b',
+        ).firstMatch(body)?.group(1) ??
+        _re(
+          r'\b(?:credit\s+|debit\s+|bank\s+)?card\s+(?:no\.?\s*)?(\d{4})\b',
+        ).firstMatch(body)?.group(1);
+
+    Money? effectiveAmountDue = amountDue;
+    if (effectiveAmountDue == null) {
+      final amtMatch =
+          _re(
+            r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|standing\s+instruction|si\s+debit|payment|bill)\s*(?:of\s+|is\s+|:\s*|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body) ??
+          _re(
+            r'\b(?:standing\s+instruction|si\s+debit)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body) ??
+          _re(
+            r'(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body);
+      if (amtMatch != null) {
+        final rawText = amtMatch.group(1)?.replaceAll(RegExp(r'[,*xX\s]'), '');
+        if (rawText != null) {
+          final m = RegExp(r'^(\d+)(?:\.(\d{1,2}))?$').firstMatch(rawText);
+          if (m != null) {
+            final paise =
+                int.parse(m[1]!) * 100 +
+                int.parse((m[2] ?? '').padRight(2, '0'));
+            effectiveAmountDue = Money.fromPaise(paise);
+          }
+        }
+      }
+    }
+
+    DateTime? effectiveDue = due;
+    if (effectiveDue == null) {
+      for (final phrase in [
+        r'\b(?:will|shall|to)?\s*(?:be\s+)?(?:auto[- ]?)?(?:deducted|debited)\b[\s\S]{0,70}?\bon\s*[:\-]?\s*',
+        r'\b(?:auto[- ]?deducted|auto[- ]?debited|auto[- ]?debit)\s+on\s*[:\-]?\s*',
+        r'\b(?:scheduled\s+for\s+)?(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit)\b[\s\S]{0,80}?\b(?:on|by)\s*[:\-]?\s*',
+        r'\bdue\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
+      ]) {
+        final token = _re('$phrase($dateToken)').firstMatch(body)?.group(1);
+        if (token != null) {
+          effectiveDue = parseDate(token);
+          if (effectiveDue != null) break;
+        }
+      }
+      // A received-at timestamp is evidence of when the notice arrived, not
+      // a payment date. Keep the due date unknown until the SMS states one.
+    }
+
+    // AutoPay alone does not establish a billing cadence. The central
+    // projection may learn one from explicit plan evidence or posted history.
+    final effectiveCadence = cadenceHint;
 
     if (isCreditCard) {
       return LocalSmsObservation(
-        cardLast4: cardLast4,
+        cardLast4: effectiveCardLast4,
         accountLast4: accountLast4,
         billerName: biller,
         cadenceHint: effectiveCadence,
         dueDate: effectiveDue,
         statementDate: receivedAt,
         availableBalance: balance,
-        amountDue: amountDue,
+        amountDue: effectiveAmountDue,
         autopayLimit: autopayLimit,
         eventType: LocalSmsEventType.bill,
         disposition: LocalSmsDisposition.localObservation,
@@ -775,19 +958,34 @@ class LocalSmsParser {
         confidence: 0.95,
       );
     } else {
+      final isSetup =
+          autopayLimit != null ||
+          _re(
+            r'\b(?:activation|activated|enabled|registered|created|set\s+up|maximum|max\s+limit|e[- ]?mandate)\b',
+          ).hasMatch(body);
       return LocalSmsObservation(
-        cardLast4: null,
+        cardLast4: effectiveCardLast4,
         accountLast4: accountLast4,
         billerName: biller,
         cadenceHint: effectiveCadence,
         dueDate: effectiveDue,
         statementDate: receivedAt,
         availableBalance: balance,
-        amountDue: amountDue,
+        // A mandate limit is a ceiling, never the bill amount. A printed
+        // ₹0 setup amount is an activation signal, not a due amount.
+        amountDue: effectiveAmountDue != null && effectiveAmountDue.paise > 0
+            ? effectiveAmountDue
+            : null,
         autopayLimit: autopayLimit,
-        eventType: LocalSmsEventType.bill,
-        disposition: LocalSmsDisposition.localCommitment,
-        reasonCodes: const ['commitment_detected', 'mandate_notice'],
+        eventType: isSetup ? LocalSmsEventType.autopay : LocalSmsEventType.bill,
+        disposition: isSetup
+            ? LocalSmsDisposition.localIgnore
+            : LocalSmsDisposition.localCommitment,
+        reasonCodes: [
+          if (isSetup) 'autopay_setup' else 'commitment_detected',
+          'mandate_notice',
+          if (!isSetup) 'autopay_notice',
+        ],
         isAutopay: true,
         confidence: 0.95,
       );
@@ -804,6 +1002,47 @@ class LocalSmsParser {
     SmsRuleBundle? downloadedRules,
   }) {
     if (body.length > 20000 || sensitive(body)) return null;
+
+    if (isInvestmentFolioAllotment(body)) {
+      final amount = extractReceiptAmount(body);
+      final schemeMatch = _re(
+        r"\b(?:scheme|fund(?:\s+name)?)\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 .&'/()]{2,60})",
+      ).firstMatch(body);
+      final inFundMatch = _re(
+        r"\bin\s+([A-Za-z0-9][-A-Za-z0-9 .&'/()]{2,60}?)(?=(?:\s+(?:processed|successful|completed|allotted|for\b|at\s+nav|with\s+nav|nav|on\s+\d|folio)|[.,;]|$))",
+      ).firstMatch(body);
+      final towardsMatch = _re(
+        r"\btowards?\s+([A-Za-z0-9][-A-Za-z0-9 .&'/()]{2,60}?)(?=(?:\s+(?:processed|successful|completed|allotted|folio)|[.,;]|$))",
+      ).firstMatch(body);
+      var merchant =
+          schemeMatch?.group(1)?.trim() ??
+          inFundMatch?.group(1)?.trim() ??
+          towardsMatch?.group(1)?.trim();
+      if (merchant != null && merchant.isNotEmpty) {
+        final sanitized = IndianNarrationSanitizer.sanitize(merchant);
+        if (sanitized.isNotEmpty) {
+          merchant = sanitized;
+        }
+      }
+      final folioMatch = _re(
+        r'\bfolio(?:\s*no\.?|\s*number)?\s*[:#-]?\s*([A-Za-z0-9/-]+)\b',
+      ).firstMatch(body)?.group(1);
+      final folioLast4 = folioMatch != null && folioMatch.length >= 4
+          ? folioMatch.substring(folioMatch.length - 4)
+          : folioMatch;
+
+      return LocalSmsObservation(
+        eventType: LocalSmsEventType.investment,
+        disposition: LocalSmsDisposition.localObservation,
+        transaction: null,
+        amount: amount,
+        amountDue: amount,
+        billerName: merchant,
+        accountLast4: folioLast4,
+        reasonCodes: const ['mf_folio_unit_allotment'],
+        confidence: 1.0,
+      );
+    }
 
     // Safety gate: built-in non-transaction noise checks MUST run before any
     // downloaded rule. A downloaded rule can never turn marketing/promotional
@@ -836,14 +1075,14 @@ class LocalSmsParser {
     }
     final cardLast4 =
         _re(
-          r'\b(?:credit\s+|debit\s+)?card\b[\s\S]{0,45}?(?:ending(?:\s+with)?\s*|x{1,4}|\*{1,4}|\.{3,}|last\s*4\s*|no\.?\s*)\D{0,5}(\d{4})\b',
+          r'\b(?:credit\s+|debit\s+)?card\b[\s\S]{0,45}?(?:ending(?:\s+(?:with|in))?\s*|x{1,4}|\*{1,4}|\.{3,}|last\s*4\s*|no\.?\s*)\D{0,8}(\d{4})\b',
         ).firstMatch(body)?.group(1) ??
         _re(
           r'\b(?:credit\s+|debit\s+|bank\s+)?card\s+(?:no\.?\s*)?(\d{4})\b',
         ).firstMatch(body)?.group(1);
     // Credit-card account references identify a card ledger, not a bank account.
     final destinationAccountLast4 = _re(
-      r'\bto\s+your\b[\s\S]{0,70}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*(\d{4})\b',
+      r'\bto\s+your\b[\s\S]{0,70}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX.\s-]*(\d{4})\b',
     ).firstMatch(body)?.group(1);
     var accountLast4 = _re(r'\bcredit\s+card\b').hasMatch(body)
         ? null
@@ -852,7 +1091,7 @@ class LocalSmsParser {
               destinationAccountLast4 != null
         ? destinationAccountLast4
         : _re(
-            r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX-]*\s*(\d{4})\b',
+            r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX.\s-]*(\d{4})\b',
           ).firstMatch(body)?.group(1);
     final isInsuranceReminder = _re(
       r'\b(?:lic|life insurance|policy|premium)\b',
@@ -874,8 +1113,8 @@ class LocalSmsParser {
       r'\b(?:maintain|keep)\s+(?:sufficient|adequate)\s+(?:funds|balance|bal)\b[\s\S]{0,100}?\b(?:on\s+or\s+before|on|by|before)\s*[:\-]?\s*',
       r'\b(?:on\s+or\s+before|before)\s*[:\-]?\s*',
       r'\bdue\s+on\s*[:\-]?\s*',
-      r'\b(?:scheduled\s+for\s+)?(?:auto[- ]?debit|auto[- ]?pay|autopay)\b[\s\S]{0,50}?\b(?:on|by)\s*[:\-]?\s*',
-      r'\b(?:auto[- ]?debit|auto[- ]?pay|autopay)\b[\s\S]{0,50}?\bwill\s+be\s+(?:on|by)\s*[:\-]?\s*',
+      r'\b(?:scheduled\s+for\s+)?(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|mandate)\b[\s\S]{0,80}?\b(?:on|by)\s*[:\-]?\s*',
+      r'\b(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|mandate)\b[\s\S]{0,80}?\bwill\s+be\s+(?:on|by|attempted\s+on|processed\s+on|debited\s+on)\s*[:\-]?\s*',
       r'\b(?:auto[- ]?debit|auto[- ]?pay|autopay)\b[\s\S]{0,50}?\bwill\s+be\s+attempted\s+on\s*[:\-]?\s*',
       r'\bwill\s+be\s+attempted\s+on\s*[:\-]?\s*',
       if (isInsuranceReminder)
@@ -1000,9 +1239,13 @@ class LocalSmsParser {
       // date is then the best available statement-day observation.
       statementDate ??= receivedAt;
     }
-    final balanceText = _re(
-      r'\b(?:available|avail|avl|current|closing|clr|new|remaining)\s*(?:balance|bal)\s*(?:is|:|-)?\s*(?: ₹|rs\.?|inr)?\s*:?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
-    ).firstMatch(body)?.group(1) ??
+    final balanceText =
+        _re(
+          r'\b(?:(?:total|tot)\s+)?(?:avail(?:able)?|avl|current|closing|clr|new|remaining)?\.?\s*(?:bal(?:ance)?|a\/?c\s*bal(?:ance)?)\.?\s*(?:is|:|-)?\s*(?:(?:rs\.?|inr|₹)\s*){1,2}:?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+        ).firstMatch(body)?.group(1) ??
+        _re(
+          r'\b(?:is|of)\s*(?:(?:rs\.?|inr|₹)\s*){1,2}:?\s*([\d,]+(?:\.\d{1,2})?)\s*(?:(?:dr\.?|cr\.?)?\s*(?:total\s*)?avail(?:able)?\.?\s*bal(?:ance)?\.?|\s*as\s+avail(?:able)?\.?\s*bal(?:ance)?\.?)',
+        ).firstMatch(body)?.group(1) ??
         _re(
           r'\b(?:bal|balance)\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
         ).firstMatch(body)?.group(1);
@@ -1020,7 +1263,8 @@ class LocalSmsParser {
 
     final balance = money(balanceText);
     final billerName = extractBillerName(body);
-    final cadenceHint = _re(r'\b(?:monthly|month)\b').hasMatch(body) ||
+    final cadenceHint =
+        _re(r'\b(?:monthly|month)\b').hasMatch(body) ||
             _re(r'\b(?:for\s+the\s+month|month\s+of)\b').hasMatch(body)
         ? 'monthly'
         : _re(r'\bquarterly\b').hasMatch(body)
@@ -1032,8 +1276,11 @@ class LocalSmsParser {
         : null;
     final amountDue = money(
       _re(
-        r'\b(?:total|full|statement|amount|premium)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
-      ).firstMatch(body)?.group(1) ??
+            r'\b(?:total|full|statement|amount|premium)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1) ??
+          _re(
+            r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|standing\s+instruction|si\s+debit)\s*(?:of\s+|is\s+|:\s*|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1) ??
           _re(
             r'\btotal\s+(?:amt|amount)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
@@ -1049,10 +1296,10 @@ class LocalSmsParser {
     );
     final billAmount = money(
       _re(
-        r'\b(?:bill|invoice|premium)\s+(?:of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
-      ).firstMatch(body)?.group(1) ??
+            r'\b(?:bill|invoice|premium)\s+(?:of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1) ??
           _re(
-            r'\bautopay\s+(?:alert|reminder)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+            r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|standing\s+instruction|si\s+debit)\s*(?:of\s+|is\s+|:\s*|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
             r'\b(?:payment|bill|premium|contribution|subscription)\s+of\s*(?:₹|rs\.?|inr)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
@@ -1071,11 +1318,11 @@ class LocalSmsParser {
     );
     final autopayLimit = money(
       _re(
-        r'\b(?:max(?:imum)?|mandate)\s*(?:limit|amount)?\s*(?:[:\-]|\s+(?:of|is|for))?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+        r'\b(?:max(?:imum)?|mandate|si|standing\s+instruction)\s*(?:limit|amount)?\s*(?:[:\-]|\s+(?:of|is|for))?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
       ).firstMatch(body)?.group(1),
     );
     final hasAutopay = _re(
-      r'\b(?:auto[- ]?pay|autopay|mandate|e[- ]?mandate)\b',
+      r'\b(?:auto[- ]?pay|autopay|mandate|e[- ]?mandate|e[- ]?nach|enach|standing\s+instruction|si\s+debit)\b',
     ).hasMatch(body);
     final nonZeroDebit = _re(
       r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b|\b(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[*xX]*[1-9]',
@@ -1103,26 +1350,38 @@ class LocalSmsParser {
     // "No money was debited" makes the debit word a negation, not evidence
     // of movement — failure notices from banks print exactly this sentence.
     final movementBody = body.replaceAll(
-      RegExp(r'\b(?:ignore|disregard|plz\s+ignore)\s+if\s+(?:already\s+)?paid\b', caseSensitive: false),
+      RegExp(
+        r'\b(?:ignore|disregard|plz\s+ignore)\s+if\s+(?:already\s+)?paid\b',
+        caseSensitive: false,
+      ),
       '',
     );
     final asbaOrIpoBlock = _re(
       r'\b(?:asba\s+application|asba\s+(?:req(?:uest)?|bid|block|lien)|towards\s+asba|for\s+asba|asba\b[\s\S]{0,50}\b(?:accepted|blocked|lien|created)|(?:blocked|lien\s+marked)\b[\s\S]{0,50}\b(?:for|towards)?\s*(?:ipo|asba|rights\s+issue)|(?:ipo\s+(?:application|bid|mandate|block|lien)))\b',
     ).hasMatch(body);
     final hasCompletedMovement =
-        !_re(r'\b(?:no\s+money\s+(?:was|is)?\s*(?:debited|deducted)|not\s+(?:debited|deducted|charged))\b')
-                .hasMatch(body) &&
+        !_re(
+          r'\b(?:no\s+money\s+(?:was|is)?\s*(?:debited|deducted)|not\s+(?:debited|deducted|charged))\b',
+        ).hasMatch(body) &&
         (_re(
-              r'\b(?:spent|debited|debit|paid|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed)\b',
+              r'\b(?:spent|debited|debit|paid|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed|deducted|deduct)\b',
             ).hasMatch(movementBody) ||
-            (!failed && _re(r'\b(?:purchase|purchased)\b').hasMatch(movementBody)) ||
+            (!failed &&
+                _re(r'\b(?:purchase|purchased)\b').hasMatch(movementBody)) ||
             asbaOrIpoBlock ||
             _re(
-              r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred)\b[\s\S]{0,40}\b(?:successful|successfully|completed)\b',
-            ).hasMatch(movementBody) || _re(r'\b(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[*xX]*[\d,.]+\b').hasMatch(movementBody));
-    final isDueReminder = _re(
-      r'\b(?:is\s+due\s+on|payment\s+is\s+due|bill\s+is\s+due|due\s+date\s+is|payment\s+due\s+date)\b|\b(?:payment|bill|amount)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[*xX]*[\d,.]+\b[\s\S]{0,80}\bis\s+due\b|\b(?:minimum|total)\s+amount\s+due\b',
-    ).hasMatch(body) && !_re(r'\b(?:debited|withdrawn|charged)\b').hasMatch(movementBody);
+              r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred|deducted)\b[\s\S]{0,40}\b(?:successful|successfully|completed)\b',
+            ).hasMatch(movementBody) ||
+            _re(
+              r'\b(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[*xX]*[\d,.]+\b',
+            ).hasMatch(movementBody));
+    final isDueReminder =
+        _re(
+          r'\b(?:is\s+due\s+on|payment\s+is\s+due|bill\s+is\s+due|due\s+date\s+is|payment\s+due\s+date)\b|\b(?:payment|bill|amount)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[*xX]*[\d,.]+\b[\s\S]{0,80}\bis\s+due\b|\b(?:minimum|total)\s+amount\s+due\b',
+        ).hasMatch(body) &&
+        !_re(
+          r'\b(?:debited|withdrawn|charged|deducted)\b',
+        ).hasMatch(movementBody);
     LocalSmsObservation observation([
       TransactionEntry? row,
       LocalSmsEventType? type,
@@ -1143,6 +1402,7 @@ class LocalSmsParser {
       amountDue: amountDue ?? billAmount,
       minimumDue: minimumDue,
       autopayLimit: autopayLimit,
+      isAutopay: isAutoPayNotice(body),
       eventType:
           type ??
           (row == null
@@ -1164,11 +1424,10 @@ class LocalSmsParser {
           : 1,
     );
     // Reminders and offers are observations, never purchases.
-    final futureDebit =
-        _re(
-          r'\b(?:(?:will|shall|to|scheduled to)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)|for\s+(?:auto[- ]?)?debit|scheduled\s+for\s+(?:auto[- ]?)?debit|(?:maintain|keep)\s+sufficient\s+(?:bal|balance)\b[\s\S]{0,50}\b(?:debit|deduction)|(?:auto[- ]?debit|auto[- ]?pay|autopay)\b[\s\S]{0,50}?\bwill\s+be\b|(?:auto[- ]?debit|auto[- ]?pay|autopay)\b[\s\S]{0,50}?\b(?:attempted|scheduled)\b)\b',
-        ).hasMatch(body);
-        if (isMerchantReceiptOrEbill(body)) {
+    final futureDebit = _re(
+      r'\b(?:(?:will|shall|to|scheduled to|scheduled for)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)|for\s+(?:auto[- ]?)?debit|scheduled\s+for\s+(?:auto[- ]?)?debit|(?:maintain|keep)\s+sufficient\s+(?:bal|balance)\b[\s\S]{0,50}\b(?:debit|deduction)|(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|pre[- ]?debit)\b[\s\S]{0,50}?\bwill\s+be\b|(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|pre[- ]?debit)\b[\s\S]{0,50}?\b(?:attempted|scheduled)\b)\b',
+    ).hasMatch(body);
+    if (isMerchantReceiptOrEbill(body)) {
       return observation(
         null,
         LocalSmsEventType.unknown,
@@ -1178,8 +1437,7 @@ class LocalSmsParser {
     }
     if (!failed &&
         isAutoPayNotice(body) &&
-        !autopaySetup &&
-        (!hasCompletedMovement || futureDebit)) {
+        (!hasCompletedMovement || futureDebit || autopaySetup)) {
       final obs = _parseAutoPay(
         body: body,
         sender: sender,
@@ -1201,8 +1459,11 @@ class LocalSmsParser {
         hasBillMarker &&
         !autopaySetup &&
         (!hasCompletedMovement || futureDebit || isDueReminder)) {
-      final isInsuranceOrUtility = isInsuranceReminder ||
-          _re(r'\b(?:broadband|fiber|telecom|yojana|pension|subscription|utility)\b').hasMatch(body);
+      final isInsuranceOrUtility =
+          isInsuranceReminder ||
+          _re(
+            r'\b(?:broadband|fiber|telecom|yojana|pension|subscription|utility)\b',
+          ).hasMatch(body);
       return observation(
         null,
         LocalSmsEventType.bill,
@@ -1219,8 +1480,8 @@ class LocalSmsParser {
       return observation(
         null,
         LocalSmsEventType.autopay,
-        LocalSmsDisposition.localIgnore,
-        ['autopay_setup'],
+        LocalSmsDisposition.localCommitment,
+        ['autopay_setup', 'mandate_notice', 'commitment_detected'],
       );
     }
     if (promotion &&
@@ -1291,7 +1552,7 @@ class LocalSmsParser {
               r'\b(?:paid|payment)\s+(?:successfully|completed)\b|\bpayment\s+received\b',
             ).hasMatch(body));
     final cashWithdrawal = _re(
-      r'\b(?:cash\s+withdrawal|withdrawn\s+from\b[\s\S]{0,50}\bcard|withdrawn\s+(?:from|at)\s+(?:an?\s+)?atm|atm\b[\s\S]{0,60}\bwithdrawn)\b',
+      r'\b(?:cash\s+withdrawal|withdrawn\s+from\b[\s\S]{0,50}\bcard|withdrawn\s+(?:from|at)\s+(?:an?\s+)?atm|atm\b[\s\S]{0,60}\bwithdrawn|atm\s+(?:txn|transaction|w\/d))\b',
     ).hasMatch(body);
     final loanRepayment = !cashWithdrawal && _loanRepayment(body);
     final feeCharge = !cashWithdrawal && !loanRepayment && _feeCharge(body);
@@ -1329,7 +1590,7 @@ class LocalSmsParser {
         !feeCharge &&
         !asbaOrIpoBlock &&
         !_re(
-          r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred|txn|transaction)\b',
+          r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred|txn|transaction|deducted|deduct)\b',
         ).hasMatch(body)) {
       return observation();
     }
@@ -1346,8 +1607,11 @@ class LocalSmsParser {
     final walletDebit = _re(
       r'\b(?:debited\s+from|paid\s+from|deducted\s+from|spent\s+from|debited\s+using)\b[\s\S]{0,35}\b([a-zA-Z0-9]+)\s+wallet\b|\b([a-zA-Z0-9]+)\s+wallet\b[\s\S]{0,35}\b(?:debited|paid|deducted)\b',
     ).firstMatch(body);
-    final isWalletDebit = walletDebit != null ||
-        _re(r'\bfrom\s+(?:your\s+)?wallet\b|\bwallet\s+balance\b').hasMatch(body);
+    final isWalletDebit =
+        walletDebit != null ||
+        _re(
+          r'\bfrom\s+(?:your\s+)?wallet\b|\bwallet\s+balance\b',
+        ).hasMatch(body);
     var instrument = billPayment
         ? (bankDebit ? TxnInstrument.upiBank : TxnInstrument.other)
         : cardCredit
@@ -1356,28 +1620,44 @@ class LocalSmsParser {
         ? TxnInstrument.wallet
         : isWalletDebit
         ? TxnInstrument.wallet
-        : bankDebit || credit || asbaOrIpoBlock
-        ? TxnInstrument.upiBank
         : _re(
             r'\bdebit\s+card\b|\b(?:atm|withdrawn|cash\s+withdrawal|block\s+dc)\b',
           ).hasMatch(body)
         ? TxnInstrument.debitCard
+        : _re(r'\bcredit\s+card\b').hasMatch(body) ||
+              (cardLast4 != null && accountLast4 == null)
+        ? TxnInstrument.creditCard
+        : bankDebit ||
+              credit ||
+              asbaOrIpoBlock ||
+              _re(r'\bupi\b').hasMatch(body)
+        ? TxnInstrument.upiBank
         : cardLast4 != null
         ? TxnInstrument.creditCard
         : null;
     if (instrument == null) return observation();
     if (isWalletDebit) {
       instrument = TxnInstrument.wallet;
-      final amazonPay = _re(r'\b(Amazon\s+Pay)\s+wallet\b').firstMatch(body)?.group(1);
+      final amazonPay = _re(
+        r'\b(Amazon\s+Pay)\s+wallet\b',
+      ).firstMatch(body)?.group(1);
       var rawProvider = walletDebit?.group(1) ?? walletDebit?.group(2);
       if (rawProvider != null &&
-          const {'your', 'the', 'my', 'a', 'an', 'our'}
-              .contains(rawProvider.toLowerCase())) {
+          const {
+            'your',
+            'the',
+            'my',
+            'a',
+            'an',
+            'our',
+          }.contains(rawProvider.toLowerCase())) {
         rawProvider = null;
       }
       var walletProvider = amazonPay ?? rawProvider;
       if (walletProvider == null || walletProvider.isEmpty) {
-        final senderClean = sender.replaceAll(RegExp(r'^[A-Za-z]{2}-|-[A-Za-z]$'), '').trim();
+        final senderClean = sender
+            .replaceAll(RegExp(r'^[A-Za-z]{2}-|-[A-Za-z]$'), '')
+            .trim();
         if (_re(r'mobikw|mbkwik').hasMatch(senderClean)) {
           walletProvider = 'MobiKwik';
         } else if (_re(r'paytm').hasMatch(senderClean)) {
@@ -1386,7 +1666,9 @@ class LocalSmsParser {
           walletProvider = 'Amazon Pay';
         } else if (_re(r'phonepe').hasMatch(senderClean)) {
           walletProvider = 'PhonePe';
-        } else if (senderClean.isNotEmpty && senderClean.length <= 12 && !RegExp(r'^\d+$').hasMatch(senderClean)) {
+        } else if (senderClean.isNotEmpty &&
+            senderClean.length <= 12 &&
+            !RegExp(r'^\d+$').hasMatch(senderClean)) {
           walletProvider = senderClean;
         } else {
           walletProvider = 'Wallet';
@@ -1422,30 +1704,40 @@ class LocalSmsParser {
     final upiSlashMatch = _re(
       r'\bupi/(?:\d+/)?([a-zA-Z0-9 ._&@*\x27/-]{2,50}?)(?=[.,;\s]|$)',
     ).firstMatch(body);
+    final towardsMatchParse = _re(
+      r'\b(?:towards?|in\s+fav(?:ou?r)?\s+of)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+    ).firstMatch(body);
 
-    var merchant = fvgMatch?.group(1)?.trim() ?? upiSlashMatch?.group(1)?.trim();
+    var merchant =
+        _upiAccountRecipient(body) ??
+        fvgMatch?.group(1)?.trim() ??
+        upiSlashMatch?.group(1)?.trim() ??
+        towardsMatchParse?.group(1)?.trim();
 
     if (asbaOrIpoBlock && (merchant == null || merchant.isEmpty)) {
-      final ipoCompanyMatch = _re(
-        r'\b(?:asba|ipo)\b[\s\S]{0,60}?\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)(?=\s+(?:of\s+(?:₹|rs\.?|inr)|application|has\s+been|is\s+accepted)|[.,;]|$)',
-      ).firstMatch(body) ??
-      _re(
-        r'\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)\s+of\s+(?:₹|rs\.?|inr)',
-      ).firstMatch(body);
+      final ipoCompanyMatch =
+          _re(
+            r'\b(?:asba|ipo)\b[\s\S]{0,60}?\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)(?=\s+(?:of\s+(?:₹|rs\.?|inr)|application|has\s+been|is\s+accepted)|[.,;]|$)',
+          ).firstMatch(body) ??
+          _re(
+            r'\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)\s+of\s+(?:₹|rs\.?|inr)',
+          ).firstMatch(body);
       merchant = ipoCompanyMatch?.group(1)?.trim() ?? 'IPO Application';
     }
 
     if (merchant == null || merchant.isEmpty) {
       final merchantMatch = _re(
-        r'\b(?:at|to|for|from|by)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|\s*\(|[.,;]|$)',
+        r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
       ).firstMatch(body);
       merchant = merchantMatch?.group(1)?.trim();
     }
 
     // Banking channels / currency tokens are not recipients.
     if (merchant != null &&
-        (_re(r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking|upi|imps|neft|rtgs)$').hasMatch(merchant) ||
-         _re(r'^(?:rs\.?|inr|re\.?|\d+)$').hasMatch(merchant))) {
+        (_re(
+              r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking|upi|imps|neft|rtgs)$',
+            ).hasMatch(merchant) ||
+            _re(r'^(?:rs\.?|inr|re\.?|\d+)$').hasMatch(merchant))) {
       merchant = fvgMatch?.group(1)?.trim();
     }
     if (isWalletDebit &&
@@ -1608,7 +1900,8 @@ class LocalSmsParser {
     }
 
     String? getGroup(String field) {
-      final idx = rule.fieldMap[field] ??
+      final idx =
+          rule.fieldMap[field] ??
           rule.fieldMap[field.replaceAll('cardLast4', 'card_last4')] ??
           rule.fieldMap[field.replaceAll('accountLast4', 'account_last4')] ??
           rule.fieldMap[field.replaceAll('amountInr', 'amount_inr')] ??
@@ -1636,10 +1929,16 @@ class LocalSmsParser {
       final amount = parseMoney(getGroup('amount') ?? getGroup('amountInr'));
       if (amount == null) return null;
       final merchant = getGroup('merchant') ?? 'Unknown Merchant';
-      final last4 = getGroup('last4') ?? getGroup('cardLast4') ?? getGroup('accountLast4');
+      final last4 =
+          getGroup('last4') ??
+          getGroup('cardLast4') ??
+          getGroup('accountLast4');
 
       var instrument = TxnInstrument.upiBank;
-      final rawInst = (rule.defaultFields['instrument'] ?? getGroup('instrument'))?.toString().toLowerCase();
+      final rawInst =
+          (rule.defaultFields['instrument'] ?? getGroup('instrument'))
+              ?.toString()
+              .toLowerCase();
       if (rawInst == 'creditcard' || rawInst == 'credit_card') {
         instrument = TxnInstrument.creditCard;
       } else if (rawInst == 'debitcard' || rawInst == 'debit_card') {
@@ -1649,9 +1948,15 @@ class LocalSmsParser {
       }
 
       var entryKind = TxnEntryKind.spend;
-      final rawKind = (rule.defaultFields['entryKind'] ?? getGroup('entryKind'))?.toString().toLowerCase();
+      final rawKind = (rule.defaultFields['entryKind'] ?? getGroup('entryKind'))
+          ?.toString()
+          .toLowerCase();
       if (rawKind == 'income' || rawKind == 'credit') {
         entryKind = TxnEntryKind.income;
+      } else if (rawKind == 'transfer') {
+        entryKind = TxnEntryKind.transfer;
+      } else if (rawKind == 'investment') {
+        entryKind = TxnEntryKind.investment;
       }
 
       String? matchedCardId;
@@ -1665,7 +1970,8 @@ class LocalSmsParser {
       }
 
       // Instrument safety: if card is claimed but last4 is missing/invalid, default away from card
-      if ((instrument == TxnInstrument.creditCard || instrument == TxnInstrument.debitCard) &&
+      if ((instrument == TxnInstrument.creditCard ||
+              instrument == TxnInstrument.debitCard) &&
           (last4 == null || last4.length != 4)) {
         instrument = TxnInstrument.other;
       }
@@ -1703,7 +2009,9 @@ class LocalSmsParser {
     }
 
     if (rule.family == SmsRuleFamily.balanceSnapshot) {
-      final bal = parseMoney(getGroup('availableBalance') ?? getGroup('availableBalanceInr'));
+      final bal = parseMoney(
+        getGroup('availableBalance') ?? getGroup('availableBalanceInr'),
+      );
       final acct = getGroup('accountLast4') ?? getGroup('last4');
       if (bal == null && acct == null) return null;
       return LocalSmsObservation(
@@ -1717,7 +2025,11 @@ class LocalSmsParser {
     }
 
     if (rule.family == SmsRuleFamily.billObligation) {
-      final amt = parseMoney(getGroup('amountDue') ?? getGroup('amountDueInr') ?? getGroup('minimumDue'));
+      final amt = parseMoney(
+        getGroup('amountDue') ??
+            getGroup('amountDueInr') ??
+            getGroup('minimumDue'),
+      );
       final dueRaw = getGroup('dueDate');
       final due = dueRaw != null ? parseDate(dueRaw) : null;
       final biller = getGroup('billerName') ?? sender;

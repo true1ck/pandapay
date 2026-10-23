@@ -260,14 +260,14 @@
       "expected": {
         "capture": true,
         "facts": ["posted_movement"],
-        "spend": { "amount": 250, "kind": "spend" },
+        "spend": { "amount": 250, "kind": "spend", "merchant": "Sujay Enterprises" },
         "review": false,
         "note": "payment to a person is a cost; a namesake store is not a self-transfer without wider profile-name evidence"
       },
       "baseline": {
         "gate": "capture",
-        "device": "spend, but the merchant capture swallows the account clause ('A/c XX1234 to Sujay Enterprises') instead of the payee; with ownUserName 'Sujay Kumar' it stays spend because one matching token is not enough",
-        "server": "conservative parser returns spend with transferParty Sujay Enterprises and a junk merchant 'A/c XX1234 to Sujay Enterprises'-style clause"
+        "device": "spend with recipient merchant Sujay Enterprises; with ownUserName 'Sujay Kumar' it stays spend because one matching token is not enough",
+        "server": "conservative parser returns spend with merchant and transferParty both set to Sujay Enterprises"
       }
     },
     {

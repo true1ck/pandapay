@@ -46,6 +46,7 @@ import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
 import '../data/local_user_cards_repository.dart';
+import '../data/merchant_category_rules_repository.dart';
 import '../data/merchant_search_repository.dart';
 import '../data/needs_review_repository.dart';
 import '../data/notification_preferences_repository.dart';
@@ -585,18 +586,19 @@ Future<void> recoverLegacyPendingChanges(WidgetRef ref) async {
       ]);
     }
     for (final entry in intake.pending('legacy', limit: 100000)) {
-      final bundle = SmsRuleBundleStore(
-        cache.financialStore.database,
-      ).loadActiveBundleSync(
-        clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
-      );
+      final bundle = SmsRuleBundleStore(cache.financialStore.database)
+          .loadActiveBundleSync(
+            clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+          );
       SmsImportStore(
         cache.financialStore,
         downloadedRules: bundle,
-        candidateRules: SmsRuleBundleStore(cache.financialStore.database).loadCandidateBundlesSync(
-          clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
-          namespace: namespace,
-        ),
+        candidateRules: SmsRuleBundleStore(cache.financialStore.database)
+            .loadCandidateBundlesSync(
+              clientVersion:
+                  ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+              namespace: namespace,
+            ),
       ).capture(namespace, entry.message);
       intake.acknowledge('legacy', entry.id);
     }
@@ -1035,7 +1037,9 @@ final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((ref) {
 /// The shared SMS rule bundle the server publishes: a versioned set of
 /// sender/word patterns the device applies locally, so a parser improvement
 /// reaches a phone without an app release.
-final smsRuleBundleStoreProvider = FutureProvider<SmsRuleBundleStore>((ref) async {
+final smsRuleBundleStoreProvider = FutureProvider<SmsRuleBundleStore>((
+  ref,
+) async {
   final db = await ref.watch(appDatabaseProvider.future);
   return SmsRuleBundleStore(db);
 });
@@ -1057,7 +1061,8 @@ final commitmentsRepositoryProvider = Provider<CommitmentsRepository>((ref) {
   final ns = ref.watch(cacheNamespaceProvider);
   return CommitmentsRepository(
     namespace: ns,
-    loadDatabase: () async => (await ref.watch(responseCacheProvider.future)).financialStore.database,
+    loadDatabase: () async =>
+        (await ref.watch(responseCacheProvider.future)).financialStore.database,
   );
 });
 
@@ -1281,18 +1286,19 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       }
       final cache = await ref.read(responseCacheProvider.future);
       cache.financialStore.migrateLegacy(namespace);
-      final bundle = SmsRuleBundleStore(
-        cache.financialStore.database,
-      ).loadActiveBundleSync(
-        clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
-      );
+      final bundle = SmsRuleBundleStore(cache.financialStore.database)
+          .loadActiveBundleSync(
+            clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+          );
       SmsImportStore(
         cache.financialStore,
         downloadedRules: bundle,
-        candidateRules: SmsRuleBundleStore(cache.financialStore.database).loadCandidateBundlesSync(
-          clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
-          namespace: namespace,
-        ),
+        candidateRules: SmsRuleBundleStore(cache.financialStore.database)
+            .loadCandidateBundlesSync(
+              clientVersion:
+                  ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+              namespace: namespace,
+            ),
       ).capture(
         namespace,
         QueuedSms(
@@ -1311,18 +1317,20 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
           throw StateError('Account changed during import');
         }
         final end = (start + 100).clamp(0, messages.length);
-        final bundle = SmsRuleBundleStore(
-          cache.financialStore.database,
-        ).loadActiveBundleSync(
-          clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
-        );
+        final bundle = SmsRuleBundleStore(cache.financialStore.database)
+            .loadActiveBundleSync(
+              clientVersion:
+                  ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+            );
         SmsImportStore(
           cache.financialStore,
           downloadedRules: bundle,
-          candidateRules: SmsRuleBundleStore(cache.financialStore.database).loadCandidateBundlesSync(
-            clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
-            namespace: namespace,
-          ),
+          candidateRules: SmsRuleBundleStore(cache.financialStore.database)
+              .loadCandidateBundlesSync(
+                clientVersion:
+                    ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+                namespace: namespace,
+              ),
         ).captureBatch(namespace, [
           for (final message in messages.sublist(start, end))
             QueuedSms(
@@ -1436,15 +1444,14 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
             intake.acknowledge(namespace, key);
           });
         } else if (outcome == 'needs_review' || outcome == 'unparsed') {
-          final isNoise =
-              NeedsReviewRepository.isNoiseItem(
-                NeedsReviewItem(
-                  id: key,
-                  sender: message.sender,
-                  body: message.body,
-                  receivedAt: message.occurredAt,
-                ),
-              );
+          final isNoise = NeedsReviewRepository.isNoiseItem(
+            NeedsReviewItem(
+              id: key,
+              sender: message.sender,
+              body: message.body,
+              receivedAt: message.occurredAt,
+            ),
+          );
           final isFinancialCandidate =
               capturesFinancialSms(message.body, sender: message.sender) &&
               !isNoise;
@@ -1497,6 +1504,37 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
   repository.flushDismissalQueue().ignore();
   return repository;
 });
+
+/// Future merchant category rules are a separate owner-scoped API contract
+/// from the one-time transaction bulk review.  Keeping this provider separate
+/// lets the bulk flow remain usable while rule creation is unavailable or
+/// disabled server-side.
+final merchantCategoryRulesRepositoryProvider =
+    Provider<MerchantCategoryRulesRepository?>((ref) {
+      final token = _stableSessionToken(ref);
+      if (token == null) return null;
+      return MerchantCategoryRulesRepository(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: token,
+        client: ref.read(authenticatedHttpClientProvider),
+      );
+    });
+
+/// Invalidates all projections whose values can change after a category bulk
+/// apply. This is deliberately lazy: visible consumers fetch their own fresh
+/// snapshot instead of issuing a burst of requests for every report.
+void invalidateTransactionViews(Ref ref) {
+  ref.invalidate(transactionsProvider);
+  ref.invalidate(utilizationTransactionsProvider);
+  ref.invalidate(userCardsProvider);
+  ref.invalidate(homeSummaryProvider);
+  ref.invalidate(categorySpendProvider);
+  ref.invalidate(spendReportProvider);
+  ref.invalidate(bankAccountSummariesProvider);
+  ref.invalidate(budgetsProvider);
+  ref.invalidate(recurringReportProvider);
+  ref.invalidate(currentMonthlyReportProvider);
+}
 
 /// Spend trends and budgets. Null in guest mode, like every other
 /// server-backed repository here: both read `transactions`, which is
@@ -1712,7 +1750,11 @@ recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
           ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['series']
                   as List)
               .cast<Map<String, dynamic>>()
-              .map(RecurringSeries.fromJson)
+              .map(
+                (item) => _normalizeLegacyServiceMandate(
+                  RecurringSeries.fromJson(item),
+                ),
+              )
               .toList(),
       totalAnnual: Money.fromRupees(
         (((jsonDecode(snapshot.rawJson)
@@ -1749,7 +1791,7 @@ recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
           repo.fetchRecurring,
           (report) => report.toJson(),
         );
-        return saved;
+        return await _mergeLocalSetupSeries(ref, saved);
       } catch (_) {
         await cache?.clear(key);
       }
@@ -1759,7 +1801,7 @@ recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
       try {
         await cache?.put(key, jsonEncode(report.toJson()));
       } catch (_) {}
-      return report;
+      return await _mergeLocalSetupSeries(ref, report);
     } catch (error) {
       if (cached == null) {
         final local = await _buildLocalRecurringReport(ref);
@@ -1780,7 +1822,7 @@ recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
         rethrow;
       }
       try {
-        return decode(cached);
+        return await _mergeLocalSetupSeries(ref, decode(cached));
       } catch (_) {
         await cache?.clear(key);
         rethrow;
@@ -3052,9 +3094,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   // its own rows in bankAccounts(). Checked on the RAW issuer strings —
   // canonicalBankSender collapses 'sbiupi' to 'sbi', hiding the marker.
   // ponytail: remove once server dedupes.
-  bool isUpiPhantom(BankAccountSummary account) => RegExp(
-    r'upi',
-  ).hasMatch(
+  bool isUpiPhantom(BankAccountSummary account) => RegExp(r'upi').hasMatch(
     [
       account.issuerSlug,
       account.issuerShortName,
@@ -3275,10 +3315,7 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
   var allTxns = payments;
   if (allTxns.isEmpty && store != null) {
     final localRows = store.entities(namespace, 'transactions');
-    allTxns = [
-      for (final raw in localRows)
-        TransactionEntry.fromJson(raw),
-    ];
+    allTxns = [for (final raw in localRows) TransactionEntry.fromJson(raw)];
   }
 
   final usable = [
@@ -4091,6 +4128,82 @@ Future<List<TransactionEntry>?> _cachedTransactionsForReports(Ref ref) async {
       ?.rows;
 }
 
+/// Local SMS evidence can confirm that a named service has AutoPay enabled,
+/// even before a charge or billing term appears. Keep this allowlist semantic:
+/// card bills and utility billers must remain in Bills & Commitments.
+String? _namedServiceAutoPayName(String? raw) {
+  final name = raw?.trim();
+  if (name == null || name.length < 2) return null;
+  final normalized = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  final lower = name.toLowerCase();
+  if (RegExp(
+    r'\b(?:credit|debit)?\s*card\b|\bbill\b|\bstatement\b|\b(?:electricity|water|gas|utility|municipal|broadband|telecom)\b',
+  ).hasMatch(lower)) {
+    return null;
+  }
+  const serviceTokens = [
+    'openai',
+    'chatgpt',
+    'netflix',
+    'spotify',
+    'amazonprime',
+    'primevideo',
+    'googleone',
+    'youtube',
+    'hotstar',
+    'sonyliv',
+    'zee5',
+    'canva',
+    'adobe',
+    'notion',
+    'dropbox',
+    'linkedinpremium',
+    'microsoft365',
+  ];
+  if (!serviceTokens.any(normalized.contains)) return null;
+  if (normalized.contains('creditcard') || normalized.contains('utility')) {
+    return null;
+  }
+  if (normalized.contains('openai')) return 'OpenAI';
+  if (normalized.contains('chatgpt')) return 'ChatGPT';
+  return name;
+}
+
+/// Older cached/server reports used `detectionSource: mandate` for every
+/// AutoPay setup. Reclassify only a known named service; card bills, utility
+/// billers, and generic mandates stay hidden from Subscriptions.
+RecurringSeries _normalizeLegacyServiceMandate(RecurringSeries item) {
+  if (!item.isMandate && item.detectionSource != 'mandate') return item;
+  final service = _namedServiceAutoPayName(item.displayName);
+  if (service == null) return item;
+  final lifecycle = item.lifecycleStatus.trim().toLowerCase();
+  return RecurringSeries(
+    id: item.id,
+    displayName: service,
+    typicalAmount: Money.zero(),
+    amountKnown: false,
+    cadenceDays: 0,
+    occurrenceCount: 0,
+    annualCost: Money.zero(),
+    categoryName: item.categoryName,
+    subcategoryName: item.subcategoryName,
+    cardName: item.cardName,
+    paymentMethod: item.paymentMethod,
+    detectionSource: 'local_setup',
+    isMandate: false,
+    isUserEdited: item.isUserEdited,
+    lifecycleStatus: item.lifecycleStatus,
+    autopayStatus: item.autopayStatus,
+    mandateReference: item.mandateReference,
+    sourceKey: item.sourceKey,
+    cadenceConfirmed: false,
+    setupConfirmed: true,
+    engineStatus: lifecycle.isEmpty || lifecycle == 'active'
+        ? 'candidate'
+        : lifecycle,
+  );
+}
+
 ({DateTime from, DateTime to, DateTime previousFrom, DateTime previousTo})
 _localReportBounds(SpendReportQuery query, DateTime now) {
   late DateTime from;
@@ -4482,8 +4595,8 @@ DateTime _nextRecurringDateAfter(
 }
 
 Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
-  final rows = await _cachedTransactionsForReports(ref);
-  if (rows == null) return null;
+  final cachedRows = await _cachedTransactionsForReports(ref);
+  final rows = cachedRows ?? const [];
   final groups = <String, List<TransactionEntry>>{};
   for (final row in rows) {
     final merchant = row.merchantName?.trim();
@@ -4563,40 +4676,49 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
       ),
     );
   }
+  // A named service AutoPay setup is a presence signal. It intentionally has
+  // no amount, cadence, renewal date, or annual cost until a later fact proves
+  // one. Card and utility AutoPay observations do not pass the service
+  // allowlist and remain available to Bills & Commitments.
   final cache = await _cacheOrNull(ref);
-  final ns = ref.watch(cacheNamespaceProvider);
-  final obsRows = cache?.financialStore.entities(ns, 'sms_observations') ?? const [];
-  for (final obs in obsRows) {
-    if (obs['card_last4'] != null) continue;
-    final isMandate = obs['disposition'] == 'local_commitment' ||
-        (obs['reason_codes'] as List?)?.contains('mandate_notice') == true;
-    if (!isMandate) continue;
-    final biller = (obs['biller_name'] as String?)?.trim();
-    final title = biller != null && biller.isNotEmpty
-        ? biller
-        : (obs['sender_bank'] as String? ?? 'Subscription');
-    final amountPaise = (obs['amount_due_paise'] as num?)?.toInt() ?? 0;
-    final typical = Money.fromPaise(amountPaise);
-    final dueDateStr = obs['due_date'] as String?;
-    final dueDate = dueDateStr != null ? DateTime.tryParse(dueDateStr) : null;
-    final cadenceStr = obs['cadence_hint'] as String?;
-    final cadence = cadenceStr == 'annual' ? 365 : 30;
-    final annual = Money.fromPaise((typical.paise * _chargesPerYear(cadence)).round());
+  final namespace = ref.read(cacheNamespaceProvider);
+  final observations =
+      cache?.financialStore.entities(namespace, 'sms_observations') ??
+      const <Map<String, dynamic>>[];
+  final existing = {
+    for (final item in series)
+      item.displayName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), ''),
+  };
+  for (final observation in observations) {
+    if (observation['event_type'] != 'autopay' ||
+        observation['is_autopay'] != true) {
+      continue;
+    }
+    final service = _namedServiceAutoPayName(
+      observation['biller_name'] as String?,
+    );
+    if (service == null) continue;
+    final key = service.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    if (!existing.add(key)) continue;
     series.add(
       RecurringSeries(
-        id: 'mandate:${obs['id']}',
-        displayName: title,
-        typicalAmount: typical,
-        cadenceDays: cadence,
-        occurrenceCount: 1,
-        annualCost: annual,
-        nextExpectedOn: dueDate,
-        isMandate: true,
-        autopayStatus: 'active',
-        detectionSource: 'mandate',
-        engineStatus: 'confirmed',
+        id: 'local-setup:${observation['id'] ?? key}',
+        sourceKey: observation['id'] as String?,
+        displayName: service,
+        typicalAmount: Money.zero(),
+        amountKnown: false,
+        cadenceDays: 0,
+        occurrenceCount: 0,
+        annualCost: Money.zero(),
+        detectionSource: 'local_setup',
+        setupConfirmed: true,
+        cadenceConfirmed: false,
+        engineStatus: 'candidate',
       ),
     );
+  }
+  if (cachedRows == null && series.isEmpty) {
+    return null;
   }
   series.sort((a, b) => b.annualCost.paise.compareTo(a.annualCost.paise));
   return RecurringReport(
@@ -4607,6 +4729,41 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
         .where((item) => item.status == 'confirmed')
         .fold(const Money.zero(), (total, item) => total + item.annualCost),
   );
+}
+
+/// Preserve a locally observed named-service setup when a cached or live
+/// server report predates that fact. Only setup rows are merged; established
+/// server charge series remain authoritative and are matched by service name
+/// so an OpenAILLC/OpenAI spelling difference cannot duplicate a row.
+Future<RecurringReport> _mergeLocalSetupSeries(
+  Ref ref,
+  RecurringReport report,
+) async {
+  final normalizedReport = RecurringReport(
+    series: report.series.map(_normalizeLegacyServiceMandate).toList(),
+    totalAnnual: report.totalAnnual,
+  );
+  final local = await _buildLocalRecurringReport(ref);
+  if (local == null) return normalizedReport;
+  final serviceKeys = {
+    for (final item in normalizedReport.series)
+      _recurringServiceKey(item.displayName),
+  };
+  final additions = <RecurringSeries>[];
+  for (final item in local.series.where((item) => item.setupConfirmed)) {
+    if (!serviceKeys.add(_recurringServiceKey(item.displayName))) continue;
+    additions.add(item);
+  }
+  if (additions.isEmpty) return normalizedReport;
+  return RecurringReport(
+    series: [...normalizedReport.series, ...additions],
+    totalAnnual: normalizedReport.totalAnnual,
+  );
+}
+
+String _recurringServiceKey(String name) {
+  final canonical = _namedServiceAutoPayName(name) ?? name;
+  return canonical.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 }
 
 /// Shared stale-safe transaction loader for Activity, Insights, and the
@@ -5412,7 +5569,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
               changed;
         }
         final result = status['result'];
-        if (status['status'] == 'done' && result is Map &&
+        if (status['status'] == 'done' &&
+            result is Map &&
             result['reviewRequired'] == false) {
           await reviewRepo.remove(item.id);
           changed = true;
@@ -5466,9 +5624,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       if (ref.read(isOnlineProvider).valueOrNull == true) {
         try {
           final cache = await ref.read(responseCacheProvider.future);
-          final bundleStore = SmsRuleBundleStore(
-            cache.financialStore.database,
-          );
+          final bundleStore = SmsRuleBundleStore(cache.financialStore.database);
           final updated = await bundleStore.syncRules(
             ref.read(authenticatedHttpClientProvider),
             apiBaseUrl: _apiBaseUrl,
@@ -6020,21 +6176,37 @@ class SmsAutoImportController {
           );
         }
       }
-      final exposureOutbox = SmsRuleExposureOutbox(cache.financialStore.database);
+      final exposureOutbox = SmsRuleExposureOutbox(
+        cache.financialStore.database,
+      );
       final pendingExposures = exposureOutbox.pending(namespace);
       if (pendingExposures.isNotEmpty &&
           _ref.read(isOnlineProvider).valueOrNull != false &&
           _ref.read(cacheNamespaceProvider) == namespace) {
-        final accepted = await repo.logSmsRuleExposures(exposures: pendingExposures);
+        final accepted = await repo.logSmsRuleExposures(
+          exposures: pendingExposures,
+        );
         for (final exposure in pendingExposures) {
           final candidateId = exposure['candidateId'] as String;
           final sourceKey = exposure['sourceKey'] as String;
           final stage = exposure['stage'] as String;
           final stageVersion = (exposure['stageVersion'] as int?) ?? 1;
           if (accepted) {
-            exposureOutbox.acknowledge(namespace, candidateId, sourceKey, stage, stageVersion: stageVersion);
+            exposureOutbox.acknowledge(
+              namespace,
+              candidateId,
+              sourceKey,
+              stage,
+              stageVersion: stageVersion,
+            );
           } else {
-            exposureOutbox.failed(namespace, candidateId, sourceKey, stage, stageVersion: stageVersion);
+            exposureOutbox.failed(
+              namespace,
+              candidateId,
+              sourceKey,
+              stage,
+              stageVersion: stageVersion,
+            );
           }
         }
       }

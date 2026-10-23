@@ -239,6 +239,15 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
 
   final lower = smsBody.toLowerCase();
 
+  // A quoted card-fee benefit is an offer, even when it says the fee
+  // "will be charged". That future conditional is not a posted debit.
+  if (RegExp(r'\bapply\s+now\b').hasMatch(lower) &&
+      RegExp(r'\bno\s+annual\s+fee\b').hasMatch(lower) &&
+      !RegExp(r'\b(?:debited|paid|charged)\s*(?:by|with|for)?\s*(?:₹|rs\.?|inr)\s*[\d,]+')
+          .hasMatch(lower)) {
+    return const SmsTriageResult(SmsTriageKind.promotion, 'card_offer');
+  }
+
   final emiSolicitation = RegExp(
     r'\b(?:eligible\s+for\s+(?:[\w\s]{0,20}\s+)?(?:conversion|emis?)|convert(?:ed|ing)?\b[\s\S]{0,60}?\b(?:in)?to\b[\s\S]{0,20}?\b(?:smart\s+|flexipay\s+|easy\s+)?emis?|can\s+(?:now\s+)?be\s+converted\s+(?:in)?to\s+emis?|flexipay\s+emis?)\b',
   ).hasMatch(lower);

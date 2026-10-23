@@ -7,6 +7,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart';
+import 'subscription_detail_screen.dart';
 import '../cards/card_summary.dart';
 import '../../main.dart' show MoneyText;
 
@@ -25,9 +26,21 @@ bool _isDisplayableSubscription(RecurringSeries series) {
   if (name.length < 2 || !RegExp(r'[A-Za-z]{2,}').hasMatch(name)) {
     return false;
   }
-  final incompleteActiveMandate = series.isMandate && series.hasActiveAutoPay;
-  if ((!incompleteActiveMandate && series.typicalAmount.paise <= 0) ||
-      (!incompleteActiveMandate && series.nextExpectedOn == null)) {
+  // A merchant mandate is an authorization record. It may carry a zero
+  // setup amount and a maximum ceiling, neither of which proves a service
+  // subscription or a future payment. Bills & Commitments owns that evidence
+  // until the central projection links it to a service and supporting facts.
+  if (series.isMandate || series.detectionSource == 'mandate') {
+    return false;
+  }
+  // Central explicit facts may describe a free or one-time service before a
+  // charge exists. Keep that row so its lifecycle and unknown amount remain
+  // visible; legacy observed rows still need a monetary or posted signal.
+  if (series.typicalAmount.paise <= 0 &&
+      series.occurrenceCount <= 0 &&
+      !series.setupConfirmed &&
+      series.detectionSource != 'central_projection' &&
+      series.detectionSource != 'manual') {
     return false;
   }
   // Raw UPI VPAs containing '@' are peer/merchant transfer handles, not subscriptions
@@ -50,6 +63,39 @@ bool _isDisplayableSubscription(RecurringSeries series) {
     r'^(daily|weekly|fortnightly|monthly|quarterly|half yearly|yearly|annual)\s*'
     r'(payment|charge|debit|subscription|mandate|autopay|plan)?$',
   ).hasMatch(normalized);
+}
+
+enum SubscriptionCadenceFilter { all, monthly, quarterly, yearly }
+
+final _subscriptionFilterProvider =
+    StateProvider.autoDispose<SubscriptionCadenceFilter>(
+      (ref) => SubscriptionCadenceFilter.all,
+    );
+
+bool _matchesCadence(RecurringSeries series, SubscriptionCadenceFilter filter) {
+  if (filter == SubscriptionCadenceFilter.all) return true;
+  final days = series.cadenceDays;
+  final label = series.cadenceLabel.toLowerCase();
+  switch (filter) {
+    case SubscriptionCadenceFilter.monthly:
+      return (days >= 20 && days <= 45) ||
+          days == 28 ||
+          label.contains('month');
+    case SubscriptionCadenceFilter.quarterly:
+      return (days >= 70 && days < 150) ||
+          days == 84 ||
+          label.contains('quarter');
+    case SubscriptionCadenceFilter.yearly:
+      return days >= 300 || label.contains('year') || label.contains('annual');
+    case SubscriptionCadenceFilter.all:
+      return true;
+  }
+}
+
+String _subscriptionStatus(RecurringSeries series) {
+  final lifecycle = series.lifecycleStatus.trim().toLowerCase();
+  if (lifecycle.isNotEmpty && lifecycle != 'active') return lifecycle;
+  return series.status;
 }
 
 /// Subscriptions — the charges that repeat, found in the user's own history.
@@ -129,33 +175,65 @@ class SubscriptionsScreen extends ConsumerWidget {
                 .where(_isDisplayableSubscription)
                 .toList(growable: false);
             if (subscriptions.isEmpty) {
-              // Refreshable, not a dead end: this screen only fills in once
-              // a third matching charge lands, so "nothing yet" is the
-              // state a user most wants to retry from.
+              // A service can be one-time, free, or still awaiting a charge.
+              // Keep the empty state neutral and refreshable.
               return RefreshableEmptyState(
                 icon: Icons.autorenew_rounded,
-                title: 'No confirmed subscriptions found yet',
+                title: 'No subscriptions found yet',
                 message:
-                    'PandaPay shows recurring services with a real merchant name. '
-                    'Active AutoPay alerts may still be waiting for amount or cadence details.',
+                    'Named service subscriptions appear here when a setup, plan, or payment is identified. '
+                    'Bills stay in Bills & Commitments.',
                 onRefresh: () async => ref.invalidate(recurringReportProvider),
               );
             }
-            // The engine split them; the screen groups the same truth.
-            final billing = subscriptions
-                .where((s) => s.status == 'confirmed')
-                .toList(growable: false);
-            final flagged = subscriptions
+            final filter = ref.watch(_subscriptionFilterProvider);
+            final monthlyCount = subscriptions
                 .where(
-                  (s) => s.status == 'at_risk' || s.status == 'unused',
+                  (s) => _matchesCadence(s, SubscriptionCadenceFilter.monthly),
+                )
+                .length;
+            final quarterlyCount = subscriptions
+                .where(
+                  (s) =>
+                      _matchesCadence(s, SubscriptionCadenceFilter.quarterly),
+                )
+                .length;
+            final yearlyCount = subscriptions
+                .where(
+                  (s) => _matchesCadence(s, SubscriptionCadenceFilter.yearly),
+                )
+                .length;
+
+            final filteredSubscriptions = subscriptions
+                .where((s) => _matchesCadence(s, filter))
+                .toList(growable: false);
+
+            // The engine split them; the screen groups the same truth.
+            final billing = filteredSubscriptions
+                .where(
+                  (s) =>
+                      s.setupConfirmed || _subscriptionStatus(s) == 'confirmed',
                 )
                 .toList(growable: false);
-            final needsCadence = subscriptions
-                .where((s) => s.status == 'needs_cadence')
+            final flagged = filteredSubscriptions
+                .where(
+                  (s) =>
+                      !s.setupConfirmed &&
+                      _subscriptionStatus(s) != 'confirmed' &&
+                      _subscriptionStatus(s) != 'needs_cadence',
+                )
+                .toList(growable: false);
+            final needsCadence = filteredSubscriptions
+                .where((s) => _subscriptionStatus(s) == 'needs_cadence')
                 .toList(growable: false);
             // The server total already counts only proven, still-billing
             // series; re-folding here would put guesses back in the headline.
-            final totalAnnual = data.totalAnnual;
+            final totalAnnual = filter == SubscriptionCadenceFilter.all
+                ? data.totalAnnual
+                : billing.fold<Money>(
+                    Money.zero(),
+                    (sum, s) => sum + s.annualCost,
+                  );
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(recurringReportProvider),
               child: ListView(
@@ -171,17 +249,204 @@ class SubscriptionsScreen extends ConsumerWidget {
                     series: billing,
                     totalAnnual: totalAnnual,
                     pendingCount: flagged.length + needsCadence.length,
+                    title: switch (filter) {
+                      SubscriptionCadenceFilter.monthly => 'Your monthly spend',
+                      SubscriptionCadenceFilter.quarterly =>
+                        'Your quarterly spend',
+                      SubscriptionCadenceFilter.yearly => 'Your yearly spend',
+                      SubscriptionCadenceFilter.all => 'Your recurring spend',
+                    },
                   ),
+                  const SizedBox(height: AppSpace.md),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          avatar: Icon(
+                            Icons.apps_rounded,
+                            size: 15,
+                            color: filter == SubscriptionCadenceFilter.all
+                                ? BambooInk.onSlate
+                                : BambooInk.ink700,
+                          ),
+                          label: Text('All (${subscriptions.length})'),
+                          labelStyle: BambooFonts.ui(
+                            12.5,
+                            weight: FontWeight.w600,
+                            color: filter == SubscriptionCadenceFilter.all
+                                ? BambooInk.onSlate
+                                : BambooInk.ink900,
+                          ),
+                          selected: filter == SubscriptionCadenceFilter.all,
+                          selectedColor: BambooInk.slate,
+                          backgroundColor: BambooInk.paperMuted,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          onSelected: (_) =>
+                              ref
+                                  .read(_subscriptionFilterProvider.notifier)
+                                  .state = SubscriptionCadenceFilter
+                                  .all,
+                        ),
+                        const SizedBox(width: AppSpace.xs),
+                        ChoiceChip(
+                          avatar: Icon(
+                            Icons.calendar_view_month_rounded,
+                            size: 15,
+                            color: filter == SubscriptionCadenceFilter.monthly
+                                ? BambooInk.lime
+                                : BambooInk.jade,
+                          ),
+                          label: Text('Monthly ($monthlyCount)'),
+                          labelStyle: BambooFonts.ui(
+                            12.5,
+                            weight: FontWeight.w600,
+                            color: filter == SubscriptionCadenceFilter.monthly
+                                ? BambooInk.onSlate
+                                : BambooInk.ink900,
+                          ),
+                          selected: filter == SubscriptionCadenceFilter.monthly,
+                          selectedColor: BambooInk.slate,
+                          backgroundColor: BambooInk.paperMuted,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          onSelected: (_) =>
+                              ref
+                                  .read(_subscriptionFilterProvider.notifier)
+                                  .state = SubscriptionCadenceFilter
+                                  .monthly,
+                        ),
+                        const SizedBox(width: AppSpace.xs),
+                        ChoiceChip(
+                          avatar: Icon(
+                            Icons.date_range_rounded,
+                            size: 15,
+                            color: filter == SubscriptionCadenceFilter.quarterly
+                                ? BambooInk.lime
+                                : BambooInk.jade,
+                          ),
+                          label: Text('Quarterly ($quarterlyCount)'),
+                          labelStyle: BambooFonts.ui(
+                            12.5,
+                            weight: FontWeight.w600,
+                            color: filter == SubscriptionCadenceFilter.quarterly
+                                ? BambooInk.onSlate
+                                : BambooInk.ink900,
+                          ),
+                          selected:
+                              filter == SubscriptionCadenceFilter.quarterly,
+                          selectedColor: BambooInk.slate,
+                          backgroundColor: BambooInk.paperMuted,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          onSelected: (_) =>
+                              ref
+                                  .read(_subscriptionFilterProvider.notifier)
+                                  .state = SubscriptionCadenceFilter
+                                  .quarterly,
+                        ),
+                        const SizedBox(width: AppSpace.xs),
+                        ChoiceChip(
+                          avatar: Icon(
+                            Icons.event_repeat_rounded,
+                            size: 15,
+                            color: filter == SubscriptionCadenceFilter.yearly
+                                ? BambooInk.lime
+                                : BambooInk.jade,
+                          ),
+                          label: Text('Yearly ($yearlyCount)'),
+                          labelStyle: BambooFonts.ui(
+                            12.5,
+                            weight: FontWeight.w600,
+                            color: filter == SubscriptionCadenceFilter.yearly
+                                ? BambooInk.onSlate
+                                : BambooInk.ink900,
+                          ),
+                          selected: filter == SubscriptionCadenceFilter.yearly,
+                          selectedColor: BambooInk.slate,
+                          backgroundColor: BambooInk.paperMuted,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          onSelected: (_) =>
+                              ref
+                                  .read(_subscriptionFilterProvider.notifier)
+                                  .state = SubscriptionCadenceFilter
+                                  .yearly,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.md),
+                  if (filteredSubscriptions.isEmpty)
+                    CardSummaryPanel(
+                      elevated: false,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 28,
+                      ),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.event_busy_outlined,
+                              size: 36,
+                              color: BambooInk.ink500,
+                            ),
+                            const SizedBox(height: AppSpace.sm),
+                            Text(
+                              switch (filter) {
+                                SubscriptionCadenceFilter.monthly =>
+                                  'No monthly subscriptions found',
+                                SubscriptionCadenceFilter.quarterly =>
+                                  'No quarterly subscriptions found',
+                                SubscriptionCadenceFilter.yearly =>
+                                  'No yearly subscriptions found',
+                                SubscriptionCadenceFilter.all =>
+                                  'No subscriptions found',
+                              },
+                              style: BambooFonts.heading(
+                                15,
+                                color: BambooInk.ink900,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpace.xs),
+                            Text(
+                              switch (filter) {
+                                SubscriptionCadenceFilter.monthly =>
+                                  'Recurring services with a monthly cycle will appear here.',
+                                SubscriptionCadenceFilter.quarterly =>
+                                  'Recurring services with a quarterly cycle will appear here.',
+                                SubscriptionCadenceFilter.yearly =>
+                                  'Recurring services with an annual or yearly cycle will appear here.',
+                                SubscriptionCadenceFilter.all =>
+                                  'Recurring services with confirmed billing cadence will appear here.',
+                              },
+                              textAlign: TextAlign.center,
+                              style: BambooFonts.ui(
+                                12.5,
+                                color: BambooInk.ink500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: AppSpace.lg),
                   for (var i = 0; i < billing.length; i++) ...[
                     _SeriesCard(series: billing[i], toneIndex: i),
                     const SizedBox(height: AppSpace.md),
                   ],
                   if (flagged.isNotEmpty) ...[
-                    _SectionLabel(
-                      'Flagged — watch or fix',
-                      Icons.flag_rounded,
-                    ),
+                    _SectionLabel('Flagged — watch or fix', Icons.flag_rounded),
                     const SizedBox(height: AppSpace.xs),
                     for (var i = 0; i < flagged.length; i++) ...[
                       _SeriesCard(series: flagged[i], toneIndex: i),
@@ -441,9 +706,8 @@ class _AddSubscriptionDialogState extends State<_AddSubscriptionDialog> {
                               title: 'AutoPay status',
                               child: _AutoPaySelector(
                                 value: _autopayStatus,
-                                onChanged: (value) => setState(
-                                  () => _autopayStatus = value,
-                                ),
+                                onChanged: (value) =>
+                                    setState(() => _autopayStatus = value),
                               ),
                             ),
                           ],
@@ -863,15 +1127,26 @@ class _TotalCard extends StatelessWidget {
   final List<RecurringSeries> series;
   final Money totalAnnual;
   final int pendingCount;
+  final String title;
   const _TotalCard({
     required this.series,
     required this.totalAnnual,
     this.pendingCount = 0,
+    this.title = 'Your recurring spend',
   });
 
   @override
   Widget build(BuildContext context) {
     final monthly = Money.fromPaise((totalAnnual.paise / 12).round());
+    final setupOnly =
+        totalAnnual.isZero &&
+        series.any(
+          (item) =>
+              item.setupConfirmed &&
+              !item.amountKnown &&
+              item.occurrenceCount == 0 &&
+              item.nextExpectedOn == null,
+        );
     return ClipRRect(
       borderRadius: BorderRadius.circular(26),
       child: DecoratedBox(
@@ -914,7 +1189,7 @@ class _TotalCard extends StatelessWidget {
                       const SizedBox(width: AppSpace.md),
                       Expanded(
                         child: Text(
-                          'Your recurring spend',
+                          title,
                           style: BambooFonts.heading(
                             15,
                             color: BambooInk.onSlate,
@@ -934,42 +1209,59 @@ class _TotalCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: AppSpace.lg),
-                  Text(
-                    'Estimated annual cost',
-                    style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
-                  ),
-                  const SizedBox(height: AppSpace.xs),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Flexible(
-                        child: MoneyText(
-                          totalAnnual,
-                          confidence: Confidence.estimated,
-                          style: BambooFonts.money(
-                            30,
-                            color: BambooInk.onSlate,
+                  if (setupOnly)
+                    Text(
+                      'Paid amount not known',
+                      style: BambooFonts.ui(
+                        15,
+                        weight: FontWeight.w700,
+                        color: BambooInk.onSlate,
+                      ),
+                    )
+                  else ...[
+                    Text(
+                      'Estimated annual cost',
+                      style: BambooFonts.ui(
+                        12.5,
+                        color: BambooInk.onSlateMuted,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpace.xs),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Flexible(
+                          child: MoneyText(
+                            totalAnnual,
+                            confidence: Confidence.estimated,
+                            style: BambooFonts.money(
+                              30,
+                              color: BambooInk.onSlate,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: AppSpace.sm),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 3),
-                        child: Text(
-                          '/ year',
-                          style: BambooFonts.ui(
-                            12.5,
-                            color: BambooInk.onSlateMuted,
+                        const SizedBox(width: AppSpace.sm),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 3),
+                          child: Text(
+                            '/ year',
+                            style: BambooFonts.ui(
+                              12.5,
+                              color: BambooInk.onSlateMuted,
+                            ),
                           ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpace.sm),
+                    Text(
+                      'About ${monthly.format(hidePaise: true)} a month',
+                      style: BambooFonts.ui(
+                        12.5,
+                        color: BambooInk.onSlateSubtle,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpace.sm),
-                  Text(
-                    'About ${monthly.format(hidePaise: true)} a month',
-                    style: BambooFonts.ui(12.5, color: BambooInk.onSlateSubtle),
-                  ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -985,6 +1277,12 @@ class _SeriesCard extends ConsumerWidget {
   final int toneIndex;
 
   const _SeriesCard({required this.series, required this.toneIndex});
+
+  bool get _setupOnly =>
+      series.setupConfirmed &&
+      !series.amountKnown &&
+      series.occurrenceCount == 0 &&
+      series.nextExpectedOn == null;
 
   static const _months = [
     'Jan',
@@ -1029,20 +1327,63 @@ class _SeriesCard extends ConsumerWidget {
     return next;
   }
 
+  String get _frequencyLabel {
+    if (!series.cadenceConfirmed) return 'Cadence not confirmed';
+    final suffix = series.autopayStatus == 'active' ? ' AutoPay' : '';
+    final days = series.cadenceDays;
+    final labelLower = series.cadenceLabel.toLowerCase();
+
+    if (days >= 300 ||
+        labelLower.contains('year') ||
+        labelLower.contains('annual')) {
+      return 'Yearly$suffix';
+    }
+    if ((days >= 70 && days < 150) ||
+        days == 84 ||
+        labelLower.contains('quarter')) {
+      return days == 84 ? '84-day$suffix' : 'Quarterly$suffix';
+    }
+    if (days == 28) {
+      return '28-day$suffix';
+    }
+    if (days == 56) {
+      return '56-day$suffix';
+    }
+    if ((days >= 20 && days <= 45) || labelLower.contains('month')) {
+      return 'Monthly$suffix';
+    }
+    if (labelLower.contains('week')) {
+      return 'Weekly$suffix';
+    }
+    if (labelLower.endsWith('autopay') && suffix.isEmpty) {
+      return series.cadenceLabel;
+    }
+    return '${series.cadenceLabel}$suffix';
+  }
+
   /// The yearly line is only honest once the cycle is proven. Until then the
   /// per-cycle amount is what's real; a fabricated annual number built on a
   /// guessed cadence would bleed into the headline later.
   String get _costLine {
-    if (series.typicalAmount.paise <= 0) {
-      return 'Amount not stated in the AutoPay alert';
+    if (_setupOnly) {
+      return 'Setup confirmed — payment amount unknown';
     }
+    if (!series.amountKnown) {
+      return 'Amount not stated';
+    }
+    if (series.typicalAmount.paise == 0) return 'Free';
     final perCycle =
         '₹${series.typicalAmount.format(hidePaise: true)} this cycle';
-    switch (series.status) {
+    switch (_subscriptionStatus(series)) {
       case 'needs_cadence':
         return '$perCycle — confirm the cadence to estimate the year';
       case 'unused':
-        return '$perCycle at registration, never charged';
+        return '$perCycle — no posted charge yet';
+      case 'renewal_unverified':
+      case 'payment_issue':
+      case 'ended':
+      case 'unknown':
+        return '$perCycle — next amount unknown';
       default:
         return '${series.annualCost.format(hidePaise: true)} estimated per year';
     }
@@ -1052,269 +1393,307 @@ class _SeriesCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final next = series.nextExpectedOn;
     final icon = _subscriptionIcons[toneIndex % _subscriptionIcons.length];
-    return Container(
-      decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D2B313A),
-            blurRadius: 14,
-            offset: Offset(0, 6),
-          ),
-        ],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SubscriptionDetailScreen(series: series),
+        ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 14, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: _subscriptionTint,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: _subscriptionAccent, size: 19),
-                ),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 1),
-                    child: Text(
-                      series.displayName,
-                      style: BambooFonts.heading(
-                        16,
-                        color: BambooInk.ink900,
-                        height: 1.15,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpace.sm),
-                if (series.typicalAmount.paise > 0)
-                  Flexible(
-                    child: MoneyText(
-                      series.typicalAmount,
-                      confidence: Confidence.estimated,
-                      style: BambooFonts.money(16, color: BambooInk.ink900),
-                    ),
-                  )
-                else
-                  Text(
-                    'Amount varies',
-                    style: BambooFonts.ui(12, color: BambooInk.ink500),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.md),
-            Wrap(
-              spacing: AppSpace.xs,
-              runSpacing: AppSpace.xs,
-              children: [
-                _InfoPill(
-                  icon: Icons.schedule_rounded,
-                  label: series.cadenceConfirmed
-                      ? series.cadenceLabel
-                      : 'Cadence not confirmed',
-                  color: _subscriptionAccent,
-                  background: _subscriptionTint,
-                ),
-                if (series.detectionSource == 'manual')
-                  const _InfoPill(
-                    icon: Icons.edit_outlined,
-                    label: 'Added by you',
-                    color: _subscriptionAccent,
-                    background: _subscriptionTint,
-                  ),
-                if (series.hasActiveAutoPay)
-                  const _InfoPill(
-                    icon: Icons.bolt_rounded,
-                    label: 'AutoPay',
-                    color: _subscriptionAccent,
-                    background: _subscriptionTint,
-                  ),
-                if (series.status == 'at_risk')
-                  const _InfoPill(
-                    icon: Icons.warning_amber_rounded,
-                    label: 'Needs review',
-                    color: Color(0xFF9B6500),
-                    background: Color(0xFFFFF3D6),
-                  ),
-                if (series.status == 'unused')
-                  const _InfoPill(
-                    icon: Icons.bolt_rounded,
-                    label: 'No charges yet',
-                    color: Color(0xFF9B6500),
-                    background: Color(0xFFFFF3D6),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.xs),
-            Text(
-              _costLine,
-              style: BambooFonts.ui(12, color: BambooInk.ink500),
-            ),
-            if (next != null && series.status == 'confirmed') ...[
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  Icon(
-                    Icons.event_available_outlined,
-                    size: 16,
-                    color: _subscriptionAccent,
-                  ),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      'Renews around ${next.day} ${_months[next.month - 1]} ${next.year}',
-                      style: BambooFonts.ui(
-                        12,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (series.status == 'at_risk' &&
-                !series.hasPastRenewal &&
-                series.lastSeenOn != null) ...[
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.history_toggle_off_rounded,
-                    size: 16,
-                    color: Color(0xFF9B6500),
-                  ),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      'No recent charge detected since ${_formatDate(series.lastSeenOn!)}',
-                      style: BambooFonts.ui(
-                        12,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (series.status == 'unused') ...[
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.pause_circle_outline_rounded,
-                    size: 16,
-                    color: Color(0xFF9B6500),
-                  ),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      series.lastSeenOn == null
-                          ? 'Registered on AutoPay, but no charge was detected'
-                          : 'Registered on AutoPay, but no charge since '
-                                '${_formatDate(series.lastSeenOn!)}',
-                      style: BambooFonts.ui(
-                        12,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (series.status == 'at_risk' && series.hasPastRenewal) ...[
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.event_busy_outlined,
-                    size: 16,
-                    color: Color(0xFF9B6500),
-                  ),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      'Saved renewal date has passed; please review it',
-                      style: BambooFonts.ui(
-                        12,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (series.cardName != null) ...[
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.credit_card_outlined,
-                    size: 16,
-                    color: BambooInk.ink500,
-                  ),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      series.cardName!,
-                      style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: AppSpace.md),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _edit(context, ref),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(42),
-                      foregroundColor: BambooInk.ink900,
-                      side: BorderSide(color: BambooInk.hairlineOnPaper),
-                      backgroundColor: Colors.white.withValues(alpha: 0.52),
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                      ),
-                    ),
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text('Edit'),
-                  ),
-                ),
-                const SizedBox(width: AppSpace.sm),
-                Expanded(
-                  child: TextButton.icon(
-                    onPressed: () => _dismiss(context, ref),
-                    style: TextButton.styleFrom(
-                      minimumSize: const Size.fromHeight(42),
-                      foregroundColor: BambooInk.ink700,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    icon: const Icon(Icons.visibility_off_outlined, size: 16),
-                    label: const Text('Ignore'),
-                  ),
-                ),
-              ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0D2B313A),
+              blurRadius: 14,
+              offset: Offset(0, 6),
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 14, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: _subscriptionTint,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: _subscriptionAccent, size: 19),
+                  ),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Text(
+                        series.displayName,
+                        style: BambooFonts.heading(
+                          16,
+                          color: BambooInk.ink900,
+                          height: 1.15,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  if (series.typicalAmount.paise > 0)
+                    Flexible(
+                      child: MoneyText(
+                        series.typicalAmount,
+                        confidence: Confidence.estimated,
+                        style: BambooFonts.money(16, color: BambooInk.ink900),
+                      ),
+                    )
+                  else
+                    Text(
+                      series.amountKnown ? 'Free' : 'Amount not stated',
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpace.md),
+              Wrap(
+                spacing: AppSpace.xs,
+                runSpacing: AppSpace.xs,
+                children: [
+                  if (_setupOnly)
+                    const _InfoPill(
+                      icon: Icons.verified_outlined,
+                      label: 'Setup confirmed',
+                      color: _subscriptionAccent,
+                      background: _subscriptionTint,
+                    )
+                  else
+                    _InfoPill(
+                      icon: Icons.bolt_rounded,
+                      label: _frequencyLabel,
+                      color: _subscriptionAccent,
+                      background: _subscriptionTint,
+                    ),
+                  if (series.detectionSource == 'manual')
+                    const _InfoPill(
+                      icon: Icons.edit_outlined,
+                      label: 'Added by you',
+                      color: _subscriptionAccent,
+                      background: _subscriptionTint,
+                    ),
+                  if ((series.hasActiveAutoPay || series.isMandate) &&
+                      !_frequencyLabel.toLowerCase().contains('autopay'))
+                    const _InfoPill(
+                      icon: Icons.bolt_rounded,
+                      label: 'AutoPay Active',
+                      color: BambooInk.jade,
+                      background: BambooInk.rankBadgeBg,
+                    ),
+                  if (_subscriptionStatus(series) == 'at_risk' ||
+                      _subscriptionStatus(series) == 'renewal_unverified')
+                    const _InfoPill(
+                      icon: Icons.warning_amber_rounded,
+                      label: 'Needs review',
+                      color: Color(0xFF9B6500),
+                      background: Color(0xFFFFF3D6),
+                    ),
+                  if (_subscriptionStatus(series) == 'unused')
+                    const _InfoPill(
+                      icon: Icons.bolt_rounded,
+                      label: 'No charges yet',
+                      color: Color(0xFF9B6500),
+                      background: Color(0xFFFFF3D6),
+                    ),
+                  if (_subscriptionStatus(series) == 'payment_issue')
+                    const _InfoPill(
+                      icon: Icons.error_outline_rounded,
+                      label: 'Payment issue',
+                      color: Color(0xFF9B3D00),
+                      background: Color(0xFFFFE9DF),
+                    ),
+                  if (_subscriptionStatus(series) == 'ended')
+                    const _InfoPill(
+                      icon: Icons.stop_circle_outlined,
+                      label: 'Ended',
+                      color: BambooInk.ink500,
+                      background: BambooInk.paperMuted,
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpace.xs),
+              Text(
+                _costLine,
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
+              if (next != null &&
+                  _subscriptionStatus(series) == 'confirmed') ...[
+                const SizedBox(height: AppSpace.xs),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.event_available_outlined,
+                      size: 16,
+                      color: _subscriptionAccent,
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Expanded(
+                      child: Text(
+                        '${series.detectionSource == 'central_projection'
+                            ? 'Next payment'
+                            : series.detectionSource == 'manual'
+                            ? 'Next payment'
+                            : 'Renews'} around ${next.day} ${_months[next.month - 1]} ${next.year}',
+                        style: BambooFonts.ui(
+                          12,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if ((_subscriptionStatus(series) == 'at_risk' ||
+                      _subscriptionStatus(series) == 'renewal_unverified') &&
+                  !series.hasPastRenewal &&
+                  series.lastSeenOn != null) ...[
+                const SizedBox(height: AppSpace.xs),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.history_toggle_off_rounded,
+                      size: 16,
+                      color: Color(0xFF9B6500),
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Expanded(
+                      child: Text(
+                        'No recent charge detected since ${_formatDate(series.lastSeenOn!)}',
+                        style: BambooFonts.ui(
+                          12,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (_subscriptionStatus(series) == 'unused') ...[
+                const SizedBox(height: AppSpace.xs),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.pause_circle_outline_rounded,
+                      size: 16,
+                      color: Color(0xFF9B6500),
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Expanded(
+                      child: Text(
+                        series.lastSeenOn == null
+                            ? 'No posted charge detected yet'
+                            : 'No posted charge since '
+                                  '${_formatDate(series.lastSeenOn!)}',
+                        style: BambooFonts.ui(
+                          12,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if ((_subscriptionStatus(series) == 'at_risk' ||
+                      _subscriptionStatus(series) == 'renewal_unverified') &&
+                  series.hasPastRenewal) ...[
+                const SizedBox(height: AppSpace.xs),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.event_busy_outlined,
+                      size: 16,
+                      color: Color(0xFF9B6500),
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Expanded(
+                      child: Text(
+                        'Saved renewal date has passed; please review it',
+                        style: BambooFonts.ui(
+                          12,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (series.cardName != null) ...[
+                const SizedBox(height: AppSpace.xs),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.credit_card_outlined,
+                      size: 16,
+                      color: BambooInk.ink500,
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Expanded(
+                      child: Text(
+                        series.cardName!,
+                        style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: AppSpace.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _edit(context, ref),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(42),
+                        foregroundColor: BambooInk.ink900,
+                        side: BorderSide(color: BambooInk.hairlineOnPaper),
+                        backgroundColor: Colors.white.withValues(alpha: 0.52),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                      ),
+                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      label: const Text('Edit'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: () => _dismiss(context, ref),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size.fromHeight(42),
+                        foregroundColor: BambooInk.ink700,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      icon: const Icon(Icons.visibility_off_outlined, size: 16),
+                      label: const Text('Ignore'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1326,11 +1705,12 @@ class _SeriesCard extends ConsumerWidget {
       text: series.typicalAmount.rupees.toStringAsFixed(2),
     );
     final cadence = TextEditingController(text: series.cadenceDays.toString());
-    var autopayStatus = series.hasActiveAutoPay ? 'active' : series.autopayStatus;
-    var next = _nextEditableDate(
-      series.nextExpectedOn ?? DateTime.now().add(const Duration(days: 30)),
-      series.cadenceDays,
-    );
+    var autopayStatus = series.hasActiveAutoPay
+        ? 'active'
+        : series.autopayStatus;
+    DateTime? next = series.nextExpectedOn == null
+        ? null
+        : _nextEditableDate(series.nextExpectedOn!, series.cadenceDays);
     final formKey = GlobalKey<FormState>();
     final saved = await showDialog<bool>(
       context: context,
@@ -1393,13 +1773,17 @@ class _SeriesCard extends ConsumerWidget {
                       ),
                     ),
                     subtitle: Text(
-                      _formatDate(next),
+                      next == null
+                          ? 'No date stated · tap to set'
+                          : _formatDate(next!),
                       style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                     onTap: () async {
                       final picked = await showDatePicker(
                         context: context,
-                        initialDate: next,
+                        initialDate:
+                            next ??
+                            DateTime.now().add(const Duration(days: 30)),
                         firstDate: DateUtils.dateOnly(DateTime.now()),
                         lastDate: DateTime(2100),
                       );
@@ -1423,9 +1807,8 @@ class _SeriesCard extends ConsumerWidget {
                   const SizedBox(height: AppSpace.xs),
                   _AutoPaySelector(
                     value: autopayStatus,
-                    onChanged: (value) => setDialogState(
-                      () => autopayStatus = value,
-                    ),
+                    onChanged: (value) =>
+                        setDialogState(() => autopayStatus = value),
                   ),
                 ],
               ),
@@ -1438,8 +1821,14 @@ class _SeriesCard extends ConsumerWidget {
             ),
             FilledButton(
               onPressed: () {
-                if (formKey.currentState!.validate()) {
+                if (formKey.currentState!.validate() && next != null) {
                   Navigator.pop(dialogContext, true);
+                } else if (next == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Choose a next payment date or cancel.'),
+                    ),
+                  );
                 }
               },
               child: const Text('Save'),
@@ -1457,7 +1846,7 @@ class _SeriesCard extends ConsumerWidget {
               displayName: name.text.trim(),
               amountInr: double.parse(amount.text),
               cadenceDays: int.parse(cadence.text),
-              nextExpectedOn: next,
+              nextExpectedOn: next!,
               autopayStatus: autopayStatus,
             );
         if (!context.mounted) return;
@@ -1521,4 +1910,3 @@ class _SeriesCard extends ConsumerWidget {
     }
   }
 }
-

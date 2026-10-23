@@ -19,6 +19,7 @@ const {
   createEngagementReceipt,
 } = require('./referral_routes');
 const { registerPortableBackupRoutes } = require('./portable_backup/routes');
+const { registerPortableBackupRestoreRoutes } = require('./portable_backup/restore_routes');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
 const { replayCurrentCapConsumption } = require('./card_state_reconciliation');
 const {
@@ -30,6 +31,8 @@ const {
 } = require('./sms_parser');
 const { parseSubscriptionMandate } = require('./subscription_parser');
 const importResolvers = require('./import_resolvers');
+const centralProjection = require('./central_financial_projection');
+const { registerBillsProjectionRoutes } = require('./bills_projection_route');
 const smsFactsRoute = require('./sms_facts_route');
 const smsRuleBundleRoute = require('./sms_rule_bundle');
 const smsLearning = require('./sms_learning');
@@ -45,6 +48,7 @@ const aiProviderQuotaRoute = require('./ai_provider_quota_route');
 const rewardMath = require('./reward_math');
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
+const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
 const { AMOUNT_TOLERANCE_INR, MAX_TIME_DISTANCE_MS, bestDuplicate } = require('./transaction_dedup');
 const { emailSourceKey } = require('./source_identity');
 const { resolveTrustProxyHops, rejectMalformedClientIp } = require('./proxyTrust');
@@ -66,6 +70,15 @@ const { startImapPoller, fetchRecentMessages } = require('./imap_poller');
 const { requestLogger, errorHandler } = require('./observability');
 const { importSourceKey } = require('./import_source_key');
 const { extractVpa, extractMcc } = require('./merchant_category');
+const {
+  MATCH_POLICY_VERSION,
+  normalizeMerchantVpa,
+  normalizeMerchantName,
+  isGenericMerchantName,
+  merchantMatch,
+  classifyCandidate,
+  resolveBulkIdempotencyRow,
+} = require('./merchant_bulk_category');
 const notificationService = require('./notification_service');
 const { createTestNotificationLimiter } = require('./notification_test');
 const {
@@ -113,12 +126,33 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
   if (parsed.lifecycle === 'cancelled') {
     const result = await client.query(
       `UPDATE recurring_series
-          SET is_active = false,
-              dismissed_at = COALESCE(dismissed_at, now()),
-              lifecycle_status = 'cancelled',
+          SET typical_amount_inr = CASE
+                WHEN detection_source = 'mandate' THEN 0
+                ELSE typical_amount_inr
+              END,
+              next_expected_on = CASE
+                WHEN detection_source = 'mandate' THEN NULL
+                ELSE next_expected_on
+              END,
+              is_active = CASE
+                WHEN detection_source = 'mandate' THEN false
+                ELSE is_active
+              END,
+              dismissed_at = CASE
+                WHEN detection_source = 'mandate' THEN COALESCE(dismissed_at, now())
+                ELSE dismissed_at
+              END,
+              lifecycle_status = CASE
+                WHEN detection_source = 'mandate' THEN 'cancelled'
+                ELSE lifecycle_status
+              END,
               autopay_status = 'cancelled',
               mandate_reference = COALESCE($3, mandate_reference),
               mandate_cancelled_at = now(),
+              cadence_confirmed = CASE
+                WHEN detection_source = 'mandate' THEN false
+                ELSE cadence_confirmed
+              END,
               updated_at = now()
         WHERE profile_id = $1
           AND merchant_key = $2
@@ -162,12 +196,18 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
    */
 
   const seenOn = new Date(occurred).toISOString().slice(0, 10);
+  // `amountInr` in the mandate parser is the authorization ceiling. It is
+  // not a posted payment and cannot be used as a subscription price. The
+  // legacy recurring_series table has no authorization-limit column, so the
+  // typed facts projection remains the source of that ceiling and mandate
+  // rows use the table's zero-valued amount only as a compatibility sentinel.
   const cadenceDays = fields.cadenceDays || 30;
-  const typicalAmount = fields.amountInr || 0;
-  const cadenceConfirmed = fields.cadenceExplicit !== false;
-  const nextExpected = cadenceConfirmed
-    ? new Date(new Date(occurred).getTime() + cadenceDays * 86400000).toISOString().slice(0, 10)
-    : null;
+  const typicalAmount = 0;
+  const cadenceConfirmed = false;
+  // A mandate activation does not prove that a renewal is due. Keep this
+  // null even when the SMS names a cadence; the cadence is authorization
+  // metadata until a posted payment or explicit service fact exists.
+  const nextExpected = null;
   const result = await client.query(
     `INSERT INTO recurring_series
        (profile_id, merchant_key, display_name, category_id, user_category_id, user_card_id,
@@ -184,28 +224,48 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
        user_card_id = COALESCE(recurring_series.user_card_id, EXCLUDED.user_card_id),
        payment_method = COALESCE(EXCLUDED.payment_method, recurring_series.payment_method),
        typical_amount_inr = CASE
-         WHEN recurring_series.detection_source = 'observed' THEN recurring_series.typical_amount_inr
-         WHEN EXCLUDED.typical_amount_inr > 0 THEN EXCLUDED.typical_amount_inr
+         WHEN recurring_series.detection_source = 'mandate' THEN 0
          ELSE recurring_series.typical_amount_inr
        END,
        cadence_days = CASE
-         WHEN recurring_series.detection_source = 'observed' THEN recurring_series.cadence_days
-         ELSE EXCLUDED.cadence_days
+         WHEN recurring_series.detection_source = 'mandate' THEN EXCLUDED.cadence_days
+         ELSE recurring_series.cadence_days
        END,
-       last_seen_on = EXCLUDED.last_seen_on,
-       next_expected_on = COALESCE(EXCLUDED.next_expected_on, recurring_series.next_expected_on),
-       detection_source = 'mandate',
-       lifecycle_status = 'active',
-       autopay_status = 'active',
+       last_seen_on = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN EXCLUDED.last_seen_on
+         ELSE recurring_series.last_seen_on
+       END,
+       next_expected_on = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN NULL
+         ELSE recurring_series.next_expected_on
+       END,
+       detection_source = recurring_series.detection_source,
+       lifecycle_status = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN 'active'
+         ELSE recurring_series.lifecycle_status
+       END,
+       autopay_status = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN 'active'
+         ELSE recurring_series.autopay_status
+       END,
        mandate_reference = COALESCE(EXCLUDED.mandate_reference, recurring_series.mandate_reference),
        mandate_started_on = COALESCE(recurring_series.mandate_started_on, EXCLUDED.mandate_started_on),
-       mandate_cancelled_at = NULL,
-       cadence_confirmed = CASE
-         WHEN recurring_series.detection_source = 'observed' THEN recurring_series.cadence_confirmed
-         ELSE EXCLUDED.cadence_confirmed
+       mandate_cancelled_at = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN NULL
+         ELSE recurring_series.mandate_cancelled_at
        END,
-       is_active = true,
-       dismissed_at = NULL,
+       cadence_confirmed = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN false
+         ELSE recurring_series.cadence_confirmed
+       END,
+       is_active = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN true
+         ELSE recurring_series.is_active
+       END,
+       dismissed_at = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN NULL
+         ELSE recurring_series.dismissed_at
+       END,
        updated_at = now()
      RETURNING id, detection_source`,
     [
@@ -257,6 +317,8 @@ app.get('/ready', async (req, res) => {
 
 registerReferralRoutes(app);
 registerPortableBackupRoutes(app, { requireAuth, pool });
+registerPortableBackupRestoreRoutes(app, { requireAuth, pool });
+registerUserMerchantCategoryRuleRoutes(app, { requireAuth, withUserClient });
 
 /**
  * GET /profile — proves RLS is reachable end to end: an authenticated user
@@ -1758,6 +1820,32 @@ app.post('/sync/push', requireAuth, async (req, res) => {
               applied: categoryRow.out_applied,
               conflicts: 0,
               reason: categoryRow.out_reason,
+            });
+            continue;
+          }
+          if (entity === 'user_merchant_category_rules') {
+            const ruleResult = await client.query(
+              `SELECT out_applied, out_conflicts, out_reason
+                 FROM pandapay.sync_apply_user_merchant_category_rule(
+                   $1, $2, $3, $4, $5::jsonb, $6
+                 )`,
+              [
+                req.userId,
+                deviceId,
+                entityId,
+                op,
+                JSON.stringify(payload || {}),
+                Number.isFinite(clientSeq) ? clientSeq : 0,
+              ],
+            );
+            const ruleRow = ruleResult.rows[0];
+            await client.query('RELEASE SAVEPOINT sync_item');
+            out.push({
+              clientSeq: clientSeq ?? null,
+              entityId,
+              applied: ruleRow.out_applied,
+              conflicts: ruleRow.out_conflicts,
+              reason: ruleRow.out_reason,
             });
             continue;
           }
@@ -4093,6 +4181,11 @@ async function importParsedMessage(client, userId, {
           vpa: parsedVpa,
           mcc: parsedMcc,
           messageText: rawText,
+          entryKind,
+          status: 'active',
+          transferKind: parsed.fields.transferKind,
+          isRefund: parsed.fields.transferKind === 'refund',
+          isReversal: parsed.fields.transferKind === 'reversal',
         })
       : {
           categoryId: await importResolvers.resolveCategoryForImport(client, userId, {
@@ -4100,6 +4193,11 @@ async function importParsedMessage(client, userId, {
             vpa: parsedVpa,
             mcc: parsedMcc,
             messageText: rawText,
+            entryKind,
+            status: 'active',
+            transferKind: parsed.fields.transferKind,
+            isRefund: parsed.fields.transferKind === 'refund',
+            isReversal: parsed.fields.transferKind === 'reversal',
           }),
           userCategoryId: null,
         });
@@ -4557,6 +4655,9 @@ async function repairSmsHistory(client, userId) {
       vpa: row.merchant_vpa,
       mcc: row.mcc ? String(row.mcc).trim() : null,
       messageText: null,
+      // This maintenance pass repairs legacy rows; future rules must never
+      // rewrite a transaction that was already saved.
+      applyUserMerchantRule: false,
     });
     if (!categoryId || categoryId === row.category_id) continue;
 
@@ -5193,6 +5294,8 @@ app.post('/transactions', requireAuth, async (req, res) => {
                 vpa: merchantVpa || null,
                 mcc: mcc || null,
                 messageText: null,
+                entryKind,
+                status: 'active',
               })
             : {
                 categoryId: await importResolvers.resolveCategoryForImport(client, req.userId, {
@@ -5200,6 +5303,8 @@ app.post('/transactions', requireAuth, async (req, res) => {
                   vpa: merchantVpa || null,
                   mcc: mcc || null,
                   messageText: null,
+                  entryKind,
+                  status: 'active',
                 }),
                 userCategoryId: null,
               });
@@ -5251,6 +5356,7 @@ smsFactsRoute.registerSmsFactsRoutes(app, {
   withUserClient,
   persistSubscriptionMandate,
 });
+registerBillsProjectionRoutes(app, { requireAuth, withUserClient });
 // The versioned rule bundle the device downloads and applies locally, so a
 // parser improvement reaches a phone without an app release.
 smsRuleBundleRoute.registerSmsRuleBundleRoutes(app, {
@@ -5848,7 +5954,7 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
              WHERE o.profile_id = $1
                AND o.source IN ('sms', 'sms_bulk')
                AND o.metadata->>'accountLast4' ~ '^[0-9]{4}$'
-               AND t.instrument = 'upi_bank'
+               AND t.instrument IN ('upi_bank', 'debit_card')
                AND t.entry_kind <> 'investment'
                AND COALESCE(o.metadata->>'isBankAccount', 'legacy') <> 'false'
                -- UPI-platform senders (SBIUPI & friends) quote the
@@ -5880,7 +5986,7 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
              FROM transactions t
             WHERE t.profile_id = $1
               AND t.status = 'active'
-              AND t.instrument = 'upi_bank'
+              AND t.instrument IN ('upi_bank', 'debit_card')
               AND t.entry_kind <> 'investment'
               AND t.source_account_last4 ~ '^[0-9]{4}$'
               AND NOT EXISTS (
@@ -6630,6 +6736,478 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('PATCH /transactions/:id error', safeErrorCode(err));
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+const BULK_CATEGORY_MAX_ROWS = 500;
+const BULK_CATEGORY_PREVIEW_TTL_MINUTES = 15;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function bulkCategoryVersion(row) {
+  const raw = row.version ?? row.updated_version ?? row.updated_at;
+  const value = Number(raw instanceof Date ? raw.getTime() : raw);
+  return Number.isFinite(value) ? Math.trunc(value) : null;
+}
+
+function sameCategoryIdentity(row, target) {
+  return String(row.category_id || '') === String(target.categoryId || '')
+    && String(row.user_category_id || '') === String(target.userCategoryId || '');
+}
+
+async function loadBulkTargetCategory(client, userId, { categoryId, userCategoryId }) {
+  if (!categoryId && !userCategoryId) return { error: 'one target category is required' };
+  if (categoryId && !UUID_RE.test(categoryId)) return { error: 'targetCategoryId must be a valid UUID' };
+  if (userCategoryId && !UUID_RE.test(userCategoryId)) return { error: 'targetUserCategoryId must be a valid UUID' };
+
+  if (userCategoryId) {
+    const result = await client.query(
+      `SELECT uc.id, uc.name, uc.parent_category_id, uc.parent_user_category_id,
+              parent_sc.name AS parent_category_name, parent_uc.name AS parent_user_category_name
+         FROM user_categories uc
+         LEFT JOIN spend_categories parent_sc ON parent_sc.id = uc.parent_category_id
+         LEFT JOIN user_categories parent_uc
+           ON parent_uc.id = uc.parent_user_category_id AND parent_uc.profile_id = uc.profile_id
+        WHERE uc.id = $1 AND uc.profile_id = $2`,
+      [userCategoryId, userId],
+    );
+    if (result.rows.length === 0) return { error: 'target user category not found' };
+    const row = result.rows[0];
+    if (categoryId && String(categoryId) !== String(row.parent_category_id || '')) {
+      return { error: 'targetCategoryId does not match the user category parent' };
+    }
+    return {
+      categoryId: row.parent_category_id,
+      userCategoryId: row.id,
+      name: row.name,
+      parentName: row.parent_category_name || row.parent_user_category_name || null,
+    };
+  }
+
+  const result = await client.query(
+    'SELECT id, name, slug FROM spend_categories WHERE id = $1',
+    [categoryId],
+  );
+  if (result.rows.length === 0) return { error: 'target category not found' };
+  return {
+    categoryId: result.rows[0].id,
+    userCategoryId: null,
+    name: result.rows[0].name,
+    slug: result.rows[0].slug,
+  };
+}
+
+async function loadBulkTransaction(client, userId, id, { forUpdate = false } = {}) {
+  const lock = forUpdate ? ' FOR UPDATE' : '';
+  const result = await client.query(
+    `SELECT t.id, t.profile_id, t.user_card_id, t.amount_inr, t.occurred_at,
+            t.merchant_name, t.merchant_vpa::text AS merchant_vpa, t.category_id,
+            t.user_category_id, t.rail, t.status, t.instrument, t.entry_kind,
+            t.state_applied, t.is_backfill, t.is_split_parent, t.parent_txn_id,
+            floor(extract(epoch from t.updated_at) * 1000)::bigint AS version,
+            t.updated_at,
+            sc.name AS category_name, sc.slug AS category_slug,
+            ucat.name AS user_category_name,
+            EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = t.id) AS has_splits
+       FROM transactions t
+       LEFT JOIN spend_categories sc ON sc.id = t.category_id
+       LEFT JOIN user_categories ucat
+         ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+      WHERE t.id = $1 AND t.profile_id = $2${lock}`,
+    [id, userId],
+  );
+  return result.rows[0] || null;
+}
+
+function bulkCandidateResponse(row, classification) {
+  return {
+    id: row.id,
+    occurredAt: row.occurred_at,
+    amountInr: Number(row.amount_inr),
+    merchantName: row.merchant_name,
+    categoryId: row.category_id,
+    userCategoryId: row.user_category_id,
+    categoryName: row.user_category_name || row.category_name || null,
+    selected: classification.selected,
+    tier: classification.tier,
+    reason: classification.reason,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * GET /transactions/:id/category-related-preview — builds a short-lived,
+ * server-owned candidate set for the category review sheet. The merchant key
+ * is always derived from the source row; the client cannot supply a name/VPA.
+ */
+app.get('/transactions/:id/category-related-preview', requireAuth, async (req, res) => {
+  const targetCategoryId = req.query.targetCategoryId ? String(req.query.targetCategoryId) : null;
+  const targetUserCategoryId = req.query.targetUserCategoryId ? String(req.query.targetUserCategoryId) : null;
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const target = await loadBulkTargetCategory(client, req.userId, {
+        categoryId: targetCategoryId,
+        userCategoryId: targetUserCategoryId,
+      });
+      if (target.error) return { status: 400, error: target.error };
+
+      const source = await loadBulkTransaction(client, req.userId, req.params.id);
+      if (!source) return { status: 404, error: 'transaction not found' };
+      if (source.status !== 'active') return { status: 409, error: 'source transaction is not active' };
+
+      const sourceVpa = normalizeMerchantVpa(source.merchant_vpa);
+      const sourceName = normalizeMerchantName(source.merchant_name);
+      const basis = sourceVpa ? 'vpa' : 'strict_name';
+      if (!sourceVpa && isGenericMerchantName(sourceName)) {
+        const emptyPreview = await client.query(
+          `INSERT INTO transaction_category_bulk_previews
+             (profile_id, source_transaction_id, target_category_id, target_user_category_id,
+              match_basis, match_value, match_policy_version, source_version,
+              candidates, candidate_count, selectable_count, overflow, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '[]'::jsonb, 0, 0, false,
+                   now() + ($9::text || ' minutes')::interval)
+           RETURNING id, expires_at, created_at`,
+          [
+            req.userId, source.id, target.categoryId, target.userCategoryId,
+            basis, sourceName || '__generic__', MATCH_POLICY_VERSION,
+            bulkCategoryVersion(source), BULK_CATEGORY_PREVIEW_TTL_MINUTES,
+          ],
+        );
+        return {
+          status: 200,
+          preview: {
+            previewId: emptyPreview.rows[0].id, expiresAt: emptyPreview.rows[0].expires_at,
+            createdAt: emptyPreview.rows[0].created_at, sourceTransactionId: source.id,
+            targetCategory: target, targetCategoryId: target.categoryId,
+            targetUserCategoryId: target.userCategoryId, targetCategoryName: target.name,
+            matchBasis: basis, matchValue: sourceName || '__generic__',
+            candidates: [], totalCount: 0, selectableCount: 0, defaultSelectedCount: 0,
+            overflow: false, canApply: false,
+            reason: 'generic_merchant_name',
+          },
+        };
+      }
+
+      const keyParams = [req.userId, source.id, sourceVpa, sourceName];
+      const matches = await client.query(
+        `SELECT t.id, t.amount_inr, t.occurred_at, t.merchant_name,
+                t.merchant_vpa::text AS merchant_vpa,
+                t.category_id, t.user_category_id, t.status, t.entry_kind,
+                t.instrument, t.is_split_parent, t.parent_txn_id,
+                t.updated_at, floor(extract(epoch from t.updated_at) * 1000)::bigint AS version,
+                sc.name AS category_name, sc.slug AS category_slug,
+                ucat.name AS user_category_name,
+                EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = t.id) AS has_splits
+           FROM transactions t
+           LEFT JOIN spend_categories sc ON sc.id = t.category_id
+           LEFT JOIN user_categories ucat
+             ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+          WHERE t.profile_id = $1 AND t.id <> $2
+            AND (($3::text IS NOT NULL AND lower(btrim(t.merchant_vpa::text)) = $3)
+              OR ($3::text IS NULL AND lower(regexp_replace(btrim(t.merchant_name), '\\s+', ' ', 'g')) = $4))
+          ORDER BY t.occurred_at DESC, t.id DESC
+          LIMIT ${BULK_CATEGORY_MAX_ROWS + 1}`,
+        keyParams,
+      );
+      const count = await client.query(
+        `SELECT count(*)::int AS total
+           FROM transactions t
+          WHERE t.profile_id = $1 AND t.id <> $2
+            AND (($3::text IS NOT NULL AND lower(btrim(t.merchant_vpa::text)) = $3)
+              OR ($3::text IS NULL AND lower(regexp_replace(btrim(t.merchant_name), '\\s+', ' ', 'g')) = $4))`,
+        keyParams,
+      );
+      const allRows = matches.rows;
+      const overflow = allRows.length > BULK_CATEGORY_MAX_ROWS;
+      const rows = allRows.slice(0, BULK_CATEGORY_MAX_ROWS);
+      const candidates = rows.map((row) => {
+        const classification = classifyCandidate(row, source.id, target);
+        return { row, classification };
+      });
+      const selectable = candidates.filter(({ classification }) => classification.tier !== 'ineligible');
+      const snapshots = candidates.map(({ row, classification }) => ({
+        id: row.id,
+        version: bulkCategoryVersion(row),
+        tier: classification.tier,
+        selected: classification.selected,
+      }));
+      const inserted = await client.query(
+        `INSERT INTO transaction_category_bulk_previews
+           (profile_id, source_transaction_id, target_category_id, target_user_category_id,
+            match_basis, match_value, match_policy_version, source_version,
+            candidates, candidate_count, selectable_count, overflow, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12,
+                 now() + ($13::text || ' minutes')::interval)
+         RETURNING id, expires_at, created_at`,
+        [
+          req.userId, source.id, target.categoryId, target.userCategoryId,
+          basis, sourceVpa || sourceName, MATCH_POLICY_VERSION,
+          bulkCategoryVersion(source), JSON.stringify(snapshots), Number(count.rows[0].total),
+          selectable.length, overflow, BULK_CATEGORY_PREVIEW_TTL_MINUTES,
+        ],
+      );
+      return {
+        status: 200,
+        preview: {
+          previewId: inserted.rows[0].id,
+          expiresAt: inserted.rows[0].expires_at,
+          createdAt: inserted.rows[0].created_at,
+          sourceTransactionId: source.id,
+          targetCategory: target,
+          targetCategoryId: target.categoryId,
+          targetUserCategoryId: target.userCategoryId,
+          targetCategoryName: target.name,
+          matchBasis: basis,
+          matchValue: sourceVpa || sourceName,
+          candidates: candidates.map(({ row, classification }) => bulkCandidateResponse(row, classification)),
+          totalCount: Number(count.rows[0].total),
+          selectableCount: selectable.length,
+          defaultSelectedCount: candidates.filter(({ classification }) => classification.selected).length,
+          overflow,
+          canApply: !overflow && selectable.length > 0,
+        },
+      };
+    });
+    if (result.status !== 200) return res.status(result.status).json({ error: result.error });
+    res.json(result.preview);
+  } catch (err) {
+    console.error('GET /transactions/:id/category-related-preview error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /transactions/category-bulk-apply — applies the exact selected rows
+ * from a preview in one transaction, including reward/cap reverse and apply.
+ */
+app.post('/transactions/category-bulk-apply', requireAuth, async (req, res) => {
+  const {
+    previewId, selectedTransactionIds, targetCategoryId, targetUserCategoryId, idempotencyKey,
+  } = req.body || {};
+  if (!UUID_RE.test(String(previewId || ''))) return res.status(400).json({ error: 'previewId must be a valid UUID' });
+  if (!Array.isArray(selectedTransactionIds)
+      || selectedTransactionIds.length > BULK_CATEGORY_MAX_ROWS
+      || selectedTransactionIds.some((id) => !UUID_RE.test(String(id)))) {
+    return res.status(400).json({ error: `selectedTransactionIds must contain at most ${BULK_CATEGORY_MAX_ROWS} UUIDs` });
+  }
+  const selectedIds = [...new Set(selectedTransactionIds.map(String))];
+  if (selectedIds.length !== selectedTransactionIds.length) return res.status(400).json({ error: 'selectedTransactionIds must be unique' });
+  if (typeof idempotencyKey !== 'string' || idempotencyKey.trim().length < 8 || idempotencyKey.trim().length > 200) {
+    return res.status(400).json({ error: 'idempotencyKey must be between 8 and 200 characters' });
+  }
+  if ((targetCategoryId && !UUID_RE.test(String(targetCategoryId)))
+      || (targetUserCategoryId && !UUID_RE.test(String(targetUserCategoryId)))) {
+    return res.status(400).json({ error: 'target category IDs must be valid UUIDs' });
+  }
+
+  const requestHash = crypto.createHash('sha256').update(JSON.stringify({
+    previewId, selectedIds, targetCategoryId: targetCategoryId || null,
+    targetUserCategoryId: targetUserCategoryId || null,
+  })).digest('hex');
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      // Serialize attempts for this profile/key before checking or creating
+      // the receipt. This avoids two retries doing the same state mutation and
+      // lets us recover null-result markers left by the pre-fix 4xx path.
+      await client.query(
+        `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`,
+        [`transaction-category-bulk:${req.userId}:${idempotencyKey.trim()}`],
+      );
+      const existingOperation = await client.query(
+        `SELECT operation_id, request_hash, result
+           FROM transaction_category_bulk_operations
+          WHERE profile_id = $1 AND idempotency_key = $2 FOR UPDATE`,
+        [req.userId, idempotencyKey.trim()],
+      );
+      const idempotency = resolveBulkIdempotencyRow(existingOperation.rows[0] || null, requestHash);
+      if (idempotency.action === 'conflict') {
+        return { status: 409, error: 'idempotency key was used for a different request' };
+      }
+      if (idempotency.action === 'replay') return { status: 200, result: idempotency.result };
+      // A previous implementation committed this marker before validating the
+      // preview and could strand retries forever with a null result. It never
+      // represented a committed category mutation, and replacing it here is
+      // safe after the matching request hash and advisory lock are confirmed.
+      if (idempotency.action === 'replace_pending') {
+        await client.query(
+          `DELETE FROM transaction_category_bulk_operations
+            WHERE profile_id = $1 AND operation_id = $2 AND result IS NULL`,
+          [req.userId, idempotency.operationId],
+        );
+      }
+
+      const previewResult = await client.query(
+        `SELECT * FROM transaction_category_bulk_previews
+          WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
+        [previewId, req.userId],
+      );
+      if (previewResult.rows.length === 0) return { status: 404, error: 'preview not found' };
+      const preview = previewResult.rows[0];
+      if (preview.status !== 'pending' || new Date(preview.expires_at).getTime() <= Date.now()) {
+        return { status: 409, error: 'preview_stale' };
+      }
+      if (preview.match_policy_version !== MATCH_POLICY_VERSION) {
+        return { status: 409, error: 'preview_policy_changed' };
+      }
+      if (preview.target_category_id !== (targetCategoryId || null)
+          || preview.target_user_category_id !== (targetUserCategoryId || null)) {
+        return { status: 409, error: 'preview target category mismatch' };
+      }
+      if (preview.overflow) return { status: 409, error: 'preview has more than 500 matching transactions; narrow the selection' };
+
+      const snapshots = Array.isArray(preview.candidates) ? preview.candidates : [];
+      const snapshotById = new Map(snapshots.map((row) => [String(row.id), row]));
+      if (selectedIds.some((id) => !snapshotById.has(id))) {
+        return { status: 409, error: 'selected transaction is not part of the preview' };
+      }
+      const target = await loadBulkTargetCategory(client, req.userId, {
+        categoryId: targetCategoryId || null,
+        userCategoryId: targetUserCategoryId || null,
+      });
+      if (target.error) return { status: 400, error: target.error };
+
+      const lockIds = [...new Set([String(preview.source_transaction_id), ...selectedIds])].sort();
+      const locked = await client.query(
+        `SELECT t.id, t.profile_id, t.user_card_id, t.amount_inr, t.occurred_at,
+                t.merchant_name, t.merchant_vpa::text AS merchant_vpa, t.category_id,
+                t.user_category_id, t.rail, t.status, t.instrument, t.entry_kind,
+                t.state_applied, t.is_backfill, t.is_split_parent, t.parent_txn_id,
+                floor(extract(epoch from t.updated_at) * 1000)::bigint AS version,
+                t.updated_at,
+                sc.slug AS category_slug,
+                EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = t.id) AS has_splits
+           FROM transactions t
+           LEFT JOIN spend_categories sc ON sc.id = t.category_id
+          WHERE t.profile_id = $1 AND t.id = ANY($2::uuid[])
+          ORDER BY t.id
+          FOR UPDATE`,
+        [req.userId, lockIds],
+      );
+      const rowsById = new Map(locked.rows.map((row) => [String(row.id), row]));
+      const source = rowsById.get(String(preview.source_transaction_id));
+      if (!source || bulkCategoryVersion(source) !== Number(preview.source_version)) {
+        return { status: 409, error: 'preview_stale', conflicts: [preview.source_transaction_id] };
+      }
+      const sourceMatch = merchantMatch(source, source);
+      if (sourceMatch.basis !== preview.match_basis || sourceMatch.value !== preview.match_value) {
+        return { status: 409, error: 'preview_stale', conflicts: [source.id] };
+      }
+      const conflicts = [];
+      // Apply in a deterministic order so concurrent operations acquire and
+      // update derived cap/milestone state consistently.
+      const applyIds = [...selectedIds].sort();
+      for (const id of applyIds) {
+        const row = rowsById.get(id);
+        const snapshot = snapshotById.get(id);
+        const match = merchantMatch(source, row || {});
+        if (!row || bulkCategoryVersion(row) !== Number(snapshot.version)
+            || !match.matched || row.status !== 'active' || row.entry_kind !== 'spend'
+            || row.is_split_parent || row.parent_txn_id || row.has_splits) {
+          conflicts.push(id);
+        }
+      }
+      if (conflicts.length) return { status: 409, error: 'preview_stale', conflicts };
+
+      // Validate all card-state dependencies before creating the receipt. A
+      // missing/archived card is a client-visible 404 and must therefore leave
+      // no committed null-result operation row behind.
+      const stateCards = new Map();
+      for (const id of applyIds) {
+        const row = rowsById.get(id);
+        if (sameCategoryIdentity(row, target)) continue;
+        if (row.instrument === 'credit_card' && row.entry_kind === 'spend' && row.user_card_id) {
+          await client.query(
+            `SELECT id FROM user_cards
+              WHERE id = $1 AND profile_id = $2
+              FOR UPDATE`,
+            [row.user_card_id, req.userId],
+          );
+          const card = await loadUserCardForState(client, req.userId, row.user_card_id);
+          if (!card) return { status: 404, error: 'user_card for transaction not found or archived' };
+          stateCards.set(id, card);
+        }
+      }
+
+      // Create the idempotency receipt only after every validation above has
+      // succeeded. Any later exception rolls the receipt back with the
+      // category/state changes, so a 4xx can never strand a pending marker.
+      const operationInsert = await client.query(
+        `INSERT INTO transaction_category_bulk_operations
+           (profile_id, idempotency_key, preview_id, request_hash, target_category_id, target_user_category_id)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING operation_id`,
+        [req.userId, idempotencyKey.trim(), previewId, requestHash, targetCategoryId || null, targetUserCategoryId || null],
+      );
+      const operationId = operationInsert.rows[0].operation_id;
+
+      const changed = [];
+      const unchanged = [];
+      for (const id of selectedIds) {
+        const old = rowsById.get(id);
+        if (sameCategoryIdentity(old, target)) {
+          unchanged.push(id);
+          continue;
+        }
+        const oldMovesCardState = old.instrument === 'credit_card'
+          && old.entry_kind === 'spend' && Boolean(old.user_card_id);
+        const oldCard = oldMovesCardState ? stateCards.get(id) : null;
+        if (oldMovesCardState && !oldCard) throw new Error('user_card for transaction not found or archived');
+        if (old.state_applied !== false && oldMovesCardState) {
+          await reverseTransactionState(client, req.userId, oldCard, old);
+        }
+        await client.query(
+          `UPDATE transactions
+              SET category_id = $1, user_category_id = $2, updated_at = now()
+            WHERE id = $3 AND profile_id = $4`,
+          [target.categoryId || null, target.userCategoryId || null, old.id, req.userId],
+        );
+        const newCard = oldMovesCardState ? stateCards.get(id) : null;
+        if (!old.is_backfill && oldMovesCardState) {
+          await applyTransactionState(client, req.userId, newCard, {
+            txnId: old.id, userCardId: old.user_card_id, amount: Number(old.amount_inr),
+            occurred: old.occurred_at, categoryId: target.categoryId || null, sign: 1,
+            merchantName: old.merchant_name, rail: old.rail,
+          });
+        }
+        if (!old.is_backfill) await client.query('UPDATE transactions SET state_applied = true WHERE id = $1', [old.id]);
+        await client.query(
+          `INSERT INTO transaction_category_bulk_operation_items
+             (profile_id, operation_id, transaction_id, old_category_id, old_user_category_id,
+              new_category_id, new_user_category_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [req.userId, operationId, old.id, old.category_id, old.user_category_id,
+            target.categoryId || null, target.userCategoryId || null],
+        );
+        changed.push(old.id);
+      }
+
+      const operationResult = {
+        operationId,
+        previewId,
+        targetCategory: target,
+        changedCount: changed.length,
+        unchangedCount: unchanged.length,
+        changedTransactionIds: changed,
+        unchangedTransactionIds: unchanged,
+      };
+      await client.query(
+        `UPDATE transaction_category_bulk_operations
+            SET result = $1::jsonb, completed_at = now()
+          WHERE profile_id = $2 AND operation_id = $3`,
+        [JSON.stringify(operationResult), req.userId, operationId],
+      );
+      await client.query(
+        `UPDATE transaction_category_bulk_previews SET status = 'applied', applied_at = now()
+          WHERE id = $1 AND profile_id = $2`,
+        [previewId, req.userId],
+      );
+      return { status: 200, result: operationResult };
+    });
+    if (result.status !== 200) return res.status(result.status).json({ error: result.error, conflicts: result.conflicts });
+    res.json(result.result);
+  } catch (err) {
+    console.error('POST /transactions/category-bulk-apply error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -7604,13 +8182,89 @@ app.get('/recurring', requireAuth, async (req, res) => {
         [req.userId]
       );
 
+      // Explicit service facts (including a free or one-time plan) may not
+      // have a repeated transaction row yet. Read those central projections
+      // alongside the legacy recurring_series rows. The savepoint keeps an
+      // older deployment usable until the additive projection migration has
+      // reached every API instance.
+      let centralSubscriptions = [];
+      let centralSavepoint = false;
+      try {
+        await client.query('SAVEPOINT recurring_central_projection');
+        centralSavepoint = true;
+        let projectionRows = await client.query(
+          `SELECT projection_key, status, projection, source_key
+             FROM financial_projections
+            WHERE profile_id = $1
+              AND projection_kind = 'subscription'
+              AND status NOT IN ('cancelled', 'ended', 'hidden')
+            ORDER BY updated_at DESC`,
+          [req.userId],
+        );
+
+        // The checkpoint includes sources that yield no domain projection,
+        // so repeated page reads never reprocess the same historical SMS.
+        const backfilled = await centralProjection.backfillFinancialProjections(client, req.userId);
+        if (backfilled > 0) {
+          projectionRows = await client.query(
+            `SELECT projection_key, status, projection, source_key
+               FROM financial_projections
+              WHERE profile_id = $1
+                AND projection_kind = 'subscription'
+                AND status NOT IN ('cancelled', 'ended', 'hidden')
+              ORDER BY updated_at DESC`,
+            [req.userId],
+          );
+        }
+        await client.query('RELEASE SAVEPOINT recurring_central_projection');
+        centralSubscriptions = projectionRows.rows || [];
+      } catch (error) {
+        if (centralSavepoint) {
+          await client.query('ROLLBACK TO SAVEPOINT recurring_central_projection').catch(() => {});
+          await client.query('RELEASE SAVEPOINT recurring_central_projection').catch(() => {});
+        }
+        console.warn('central subscription read skipped:', error.message || error);
+      }
+
       // The parser used to accept dates, account numbers, and labels such as
       // "MONTHLY" as merchants. Ignore those legacy rows at the read
       // boundary as well as fixing new ingestion, so an existing account is
       // corrected without a destructive migration.
-      const validRows = stored.rows.filter(isDisplayableSubscriptionRecord);
+      const legacyMandateRows = stored.rows
+        .map((row) => centralProjection.legacyMandateSetupRow(row))
+        .filter(Boolean);
+      const validRows = stored.rows.filter(isDisplayableSubscriptionRecord).concat(legacyMandateRows);
       const now = new Date();
       const series = validRows.map((r) => {
+        if (r.__legacyMandateSetup) {
+          return {
+            id: r.id,
+            displayName: r.display_name,
+            typicalAmountInr: null,
+            cadenceDays: null,
+            occurrenceCount: 0,
+            firstSeenOn: null,
+            lastSeenOn: null,
+            nextExpectedOn: null,
+            categoryId: r.category_id,
+            userCategoryId: r.user_category_id,
+            categoryName: r.category_name,
+            subcategoryName: r.subcategory_name,
+            cardId: r.user_card_id,
+            paymentMethod: r.payment_method,
+            cardName: r.card_nickname || r.card_name,
+            detectionSource: 'mandate',
+            isMandate: true,
+            isUserEdited: r.user_edited,
+            lifecycleStatus: 'candidate',
+            autopayStatus: r.autopay_status || 'active',
+            mandateReference: r.mandate_reference || null,
+            cadenceConfirmed: false,
+            setupConfirmed: true,
+            engineStatus: 'candidate',
+            annualCostInr: 0,
+          };
+        }
         const cadenceDays = r.cadence_days;
         // The renewal date is DERIVED at read, never trusted from storage:
         // a stored next_expected_on is a write-time snapshot that silently
@@ -7675,6 +8329,66 @@ app.get('/recurring', requireAuth, async (req, res) => {
           }),
         };
       });
+
+      const existingServiceKeys = new Set(
+        series.map((item) => merchantSeriesKey(item.displayName)),
+      );
+      const centralSubscriptionStatuses = new Set([
+        'candidate', 'active', 'renewal_unverified', 'ended', 'payment_issue',
+        'cancelled', 'paused', 'unknown',
+      ]);
+      for (const row of centralSubscriptions) {
+        const projection = row.projection && typeof row.projection === 'object'
+          ? row.projection
+          : {};
+        const displayName = String(projection.serviceName || '').trim();
+        const serviceKey = merchantSeriesKey(displayName);
+        if (!displayName || !serviceKey || existingServiceKeys.has(serviceKey)) continue;
+        const numericAmount = (value) => (
+          value !== null && value !== undefined && value !== '' && Number.isFinite(value)
+            ? value
+            : null
+        );
+        const statedAmount = numericAmount(projection.statedNextPaymentAmountInr);
+        const postedAmount = numericAmount(projection.lastPostedPayment?.amountInr);
+        const amount = statedAmount ?? postedAmount;
+        const cadence = Number(projection.cadenceDays);
+        const cadenceKnown = Number.isInteger(cadence) && cadence > 0;
+        const nextDate = projection.statedNextPaymentDate
+          || projection.estimatedNextPaymentDate
+          || null;
+        const rawStatus = String(row.status || projection.subscriptionStatus || 'unknown');
+        const status = centralSubscriptionStatuses.has(rawStatus) ? rawStatus : 'unknown';
+        const oneTime = projection.renewalMode === 'one_time';
+        series.push({
+          id: `projection:${row.projection_key}`,
+          displayName,
+          typicalAmountInr: amount,
+          cadenceDays: cadenceKnown ? cadence : null,
+          occurrenceCount: projection.lastPostedPayment ? 1 : 0,
+          firstSeenOn: projection.lastPostedPayment?.occurredAt || null,
+          lastSeenOn: projection.lastPostedPayment?.occurredAt || null,
+          nextExpectedOn: nextDate,
+          categoryId: null,
+          userCategoryId: null,
+          categoryName: null,
+          subcategoryName: null,
+          cardId: null,
+          paymentMethod: null,
+          detectionSource: 'central_projection',
+          isMandate: false,
+          isUserEdited: false,
+          lifecycleStatus: status,
+          autopayStatus: 'unknown',
+          mandateReference: projection.mandateKey || null,
+          sourceKey: row.source_key || null,
+          cadenceConfirmed: cadenceKnown,
+          setupConfirmed: projection.setupConfirmed === true,
+          engineStatus: status === 'active' && (oneTime || cadenceKnown) ? 'confirmed' : status,
+          annualCostInr: oneTime || !cadenceKnown || amount === null ? 0 : amount * (365 / cadence),
+        });
+        existingServiceKeys.add(serviceKey);
+      }
 
       // Biggest annual cost first — the order someone reviewing their
       // subscriptions wants. Sorted here rather than in SQL so the same

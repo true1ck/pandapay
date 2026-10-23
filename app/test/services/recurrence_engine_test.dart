@@ -87,6 +87,90 @@ void main() {
       expect(bill.occurrenceCount, equals(4));
     });
 
+    test('detects Indian prepaid telecom 28-day cycle (e.g. Jio)', () {
+      final txns = [
+        RecurrenceTransactionInput(
+          id: '1',
+          merchantName: 'JIO PREPAID MUMBAI',
+          amount: Money.fromRupees(299),
+          occurredAt: DateTime(2026, 7, 1),
+        ),
+        RecurrenceTransactionInput(
+          id: '2',
+          merchantName: 'JIO PREPAID MUMBAI',
+          amount: Money.fromRupees(299),
+          occurredAt: DateTime(2026, 7, 29),
+        ),
+        RecurrenceTransactionInput(
+          id: '3',
+          merchantName: 'JIO PREPAID MUMBAI',
+          amount: Money.fromRupees(299),
+          occurredAt: DateTime(2026, 8, 26),
+        ),
+        RecurrenceTransactionInput(
+          id: '4',
+          merchantName: 'JIO PREPAID MUMBAI',
+          amount: Money.fromRupees(299),
+          occurredAt: DateTime(2026, 9, 23),
+        ),
+      ];
+
+      final recurrences = RecurrenceEngine.detectRecurrences(txns);
+      expect(recurrences.length, equals(1));
+      expect(recurrences.first.cadence, equals(RecurrenceCadence.telecom28Day));
+      expect(recurrences.first.cadenceDays, equals(28));
+    });
+
+    test('detects Indian prepaid telecom 56-day and 84-day cycles', () {
+      final txns56 = [
+        RecurrenceTransactionInput(
+          id: '1',
+          merchantName: 'AIRTEL PREPAID',
+          amount: Money.fromRupees(579),
+          occurredAt: DateTime(2026, 1, 1),
+        ),
+        RecurrenceTransactionInput(
+          id: '2',
+          merchantName: 'AIRTEL PREPAID',
+          amount: Money.fromRupees(579),
+          occurredAt: DateTime(2026, 2, 26),
+        ),
+        RecurrenceTransactionInput(
+          id: '3',
+          merchantName: 'AIRTEL PREPAID',
+          amount: Money.fromRupees(579),
+          occurredAt: DateTime(2026, 4, 23),
+        ),
+      ];
+      final rec56 = RecurrenceEngine.detectRecurrences(txns56);
+      expect(rec56.length, equals(1));
+      expect(rec56.first.cadence, equals(RecurrenceCadence.telecom56Day));
+
+      final txns84 = [
+        RecurrenceTransactionInput(
+          id: '1',
+          merchantName: 'VI PREPAID',
+          amount: Money.fromRupees(859),
+          occurredAt: DateTime(2026, 1, 1),
+        ),
+        RecurrenceTransactionInput(
+          id: '2',
+          merchantName: 'VI PREPAID',
+          amount: Money.fromRupees(859),
+          occurredAt: DateTime(2026, 3, 26),
+        ),
+        RecurrenceTransactionInput(
+          id: '3',
+          merchantName: 'VI PREPAID',
+          amount: Money.fromRupees(859),
+          occurredAt: DateTime(2026, 6, 18),
+        ),
+      ];
+      final rec84 = RecurrenceEngine.detectRecurrences(txns84);
+      expect(rec84.length, equals(1));
+      expect(rec84.first.cadence, equals(RecurrenceCadence.telecom84Day));
+    });
+
     test('rejects irregular random visits without consistent cadence', () {
       final txns = [
         RecurrenceTransactionInput(

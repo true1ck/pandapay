@@ -72,6 +72,7 @@ const PAYLOAD_FIELD_SHAPES = {
   outstandingInr: { number: true, positive: true },
   limitInr: { number: true, positive: true },
   proposedAmountInr: { number: true, positive: true },
+  activationAmountInr: { number: true, nonnegative: true },
   availableBalanceInr: { number: true, nonnegative: true },
   occurredAt: { date: true },
   dueDate: { date: true },
@@ -79,6 +80,23 @@ const PAYLOAD_FIELD_SHAPES = {
   proposedAt: { date: true },
   asOfAt: { date: true },
   mandateStatus: { in: ['registered', 'scheduled', 'paused', 'cancelled', 'failed'] },
+  targetKind: { in: ['card_bill', 'utility_or_other_bill', 'service_merchant', 'unknown'] },
+  mandateReference: { shortText: true },
+  serviceName: { shortText: true },
+  planName: { shortText: true },
+  plan: { shortText: true },
+  subscriptionEvidence: { in: ['explicit', 'user_asserted', 'posted', 'historical', 'brand_prior'] },
+  renewalMode: { in: ['one_time', 'automatic', 'manual', 'unknown'] },
+  subscriptionStatus: { in: ['candidate', 'active', 'renewal_unverified', 'ended', 'payment_issue', 'cancelled', 'paused', 'unknown'] },
+  cadenceDays: { integer: true, positive: true },
+  cadenceExplicit: { boolean: true },
+  accessEndDate: { date: true },
+  nextPaymentDate: { date: true },
+  nextPaymentAmountInr: { number: true, nonnegative: true },
+  explicitSubscription: { boolean: true },
+  userAsserted: { boolean: true },
+  cardBill: { boolean: true },
+  currency: { shortText: true },
   attemptStatus: { in: ['attempted', 'scheduled', 'failed'] },
   statementStatus: { in: ['outstanding', 'settled'] },
   alertKind: { in: ['otp', 'verification', 'service'] },
@@ -167,6 +185,15 @@ function validatePayload(factType, payload) {
     if (rule.number === true && rule.nonnegative && !(typeof value === 'number' && value >= 0)) {
       errors.push(`${field} must be non-negative`);
     }
+    if (rule.integer && !Number.isInteger(value)) {
+      errors.push(`${field} must be an integer`);
+    }
+    if (rule.integer && rule.positive && !(Number.isInteger(value) && value > 0)) {
+      errors.push(`${field} must be positive`);
+    }
+    if (rule.boolean && typeof value !== 'boolean') {
+      errors.push(`${field} must be a boolean`);
+    }
     if (rule.date && !dateOk(value)) {
       errors.push(`${field} must be an ISO date-time`);
     }
@@ -202,7 +229,9 @@ function validatePayload(factType, payload) {
   // Guard the core invariant the classification plan lives by: non-posted
   // families must not claim a posted amount, and posted movements must not
   // borrow due/ceiling roles.
-  if (NON_POSTED_TYPES.has(factType) && payload.amountRole !== undefined && payload.amountRole !== null && payload.amountRole !== 'proposed') {
+  if (NON_POSTED_TYPES.has(factType) && payload.amountRole !== undefined && payload.amountRole !== null &&
+      payload.amountRole !== 'proposed' &&
+      !(factType === 'mandate_lifecycle' && payload.amountRole === 'ceiling')) {
     if (factType === 'bill_obligation' || factType === 'bill_payment') {
       // Bills legitimately use due/outstanding roles; posted is never right.
       if (payload.amountRole === 'posted') {
@@ -217,15 +246,9 @@ function validatePayload(factType, payload) {
       errors.push('limitInr is only meaningful for a registered mandate');
     }
   }
-  // A registered mandate must carry its ceiling: without the limit the fact
-  // says nothing a projection can safely use, so it must abstain instead.
-  if (
-    factType === 'mandate_lifecycle' &&
-    payload.mandateStatus === 'registered' &&
-    (payload.limitInr === undefined || payload.limitInr === null)
-  ) {
-    errors.push('a registered mandate requires limitInr');
-  }
+  // A registered mandate may omit its ceiling. The lifecycle and named
+  // service evidence still establish authorization presence; the ceiling is
+  // optional authorization metadata and must never gate classification.
   if (factType === 'posted_movement') {
     if (payload.entryKind === 'spend' && (payload.merchant === null || payload.merchant === undefined)) {
       errors.push("posted spend requires merchant");
@@ -482,6 +505,7 @@ async function loadSmsSourceFacts(client, profileId, sourceKey) {
 
   return {
     sourceId: source.rows[0].id,
+    sourceKey,
     sender: source.rows[0].sender,
     bodyHash: source.rows[0].body_hash,
     contractVersion: source.rows[0].contract_version,

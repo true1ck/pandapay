@@ -5,6 +5,10 @@ const {
   annualCost,
   isUsableSubscriptionName,
   nextExpectedAfter,
+  isDisplayableSubscriptionRecord,
+  classifySubscriptionEvidence,
+  deriveSubscriptionProjection,
+  deriveSubscriptionStatus,
 } = require('../src/recurring');
 
 /**
@@ -387,4 +391,91 @@ test('a lapsed saved renewal date is still flagged from a driver-parsed date', (
     new Date('2026-10-21T00:00:00Z'),
   );
   assert.equal(status, 'at_risk');
+});
+
+test('historical detection is explicitly posted-payment evidence', () => {
+  const series = detectRecurringSeries(monthly('Netflix', 649, '2026-05-03', 3));
+  assert.equal(series[0].detectionSource, 'observed');
+  assert.equal(series[0].evidenceSource, 'historical_posted_payment');
+  assert.equal(series[0].subscriptionEvidence, 'posted_payment_pattern');
+  assert.equal(series[0].lastPostedPaymentAmountInr, 649);
+});
+
+test('mandate limit stays an authorisation and never becomes paid subscription evidence', () => {
+  const mandate = {
+    detection_source: 'mandate',
+    display_name: 'OpenAI',
+    typical_amount_inr: 1999,
+    cadence_days: 30,
+    occurrence_count: 1,
+    first_seen_on: '2026-10-01',
+    last_seen_on: '2026-10-01',
+    autopay_status: 'active',
+  };
+  assert.equal(isDisplayableSubscriptionRecord(mandate), false);
+  assert.deepEqual(classifySubscriptionEvidence(mandate, { now: new Date('2026-10-21T00:00:00Z') }), {
+    target: 'mandate_authorization',
+    isServiceSubscription: false,
+    isMandateAuthorization: true,
+    detectionSource: 'mandate',
+    status: 'mandate_only',
+    lifecycleStatus: 'active',
+    renewalMode: 'unknown',
+    reason: 'mandate_authorization_without_service_evidence',
+  });
+  const projection = deriveSubscriptionProjection(mandate, { now: new Date('2026-10-21T00:00:00Z') });
+  assert.equal(projection.authorizationLimitInr, 1999);
+  assert.equal(projection.typicalAmountInr, null);
+  assert.equal(projection.lastPostedPayment, null);
+});
+
+test('explicit free one-time service supports an access end without inventing renewal', () => {
+  const row = {
+    detection_source: 'manual',
+    display_name: 'ChatGPT trial',
+    typical_amount_inr: 0,
+    renewal_mode: 'one_time',
+    explicit_subscription_evidence: true,
+    access_end_on: '2026-11-01',
+  };
+  assert.equal(deriveSubscriptionStatus(row, { now: new Date('2026-10-21T00:00:00Z') }), 'active');
+  assert.equal(deriveSubscriptionStatus(row, { now: new Date('2026-11-02T00:00:00Z') }), 'ended');
+  const projection = deriveSubscriptionProjection(row, { now: new Date('2026-10-21T00:00:00Z') });
+  assert.equal(projection.renewalMode, 'one_time');
+  assert.equal(projection.typicalAmountInr, 0);
+  assert.equal(projection.estimatedNextPayment, null);
+});
+
+test('a missed expected historical renewal is unverified after the grace window', () => {
+  const row = {
+    detection_source: 'observed',
+    display_name: 'Example Service',
+    typical_amount_inr: 499,
+    cadence_days: 30,
+    occurrence_count: 3,
+    last_seen_on: '2026-08-01',
+  };
+  assert.equal(
+    deriveSubscriptionStatus(row, { now: new Date('2026-09-15T00:00:00Z') }),
+    'renewal_unverified',
+  );
+  assert.equal(
+    deriveSubscriptionStatus({ ...row, lifecycle_status: 'cancelled' }, { now: new Date('2026-09-15T00:00:00Z') }),
+    'cancelled',
+  );
+});
+
+test('manual renewal without a known term remains unknown', () => {
+  const row = {
+    detection_source: 'manual',
+    display_name: 'Local Gym',
+    typical_amount_inr: 1200,
+    renewal_mode: 'manual',
+    occurrence_count: 0,
+  };
+  const projection = deriveSubscriptionProjection(row);
+  assert.equal(projection.target, 'subscription_service');
+  assert.equal(projection.status, 'unknown');
+  assert.equal(projection.billingCadenceDays, null);
+  assert.equal(projection.estimatedNextPayment, null);
 });

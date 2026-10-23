@@ -10,6 +10,7 @@ import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/sms_fact_contract.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 
 /// SMS intelligence Phase 2 device routing: the broadened capture gate plus
 /// the typed-facts outbox that lets the server learn about recognized
@@ -120,6 +121,23 @@ void main() {
       expect(validateSmsFact(facts.single).valid, isTrue);
     });
 
+    test('card bill AutoPay remains a card bill mandate', () {
+      final facts = buildSmsFactsForObservation(
+        body: 'AutoPay registered for your credit card bill with maximum limit INR 5000',
+        observation: LocalSmsObservation(
+          eventType: LocalSmsEventType.autopay,
+          autopayLimit: Money.fromRupees(5000),
+          billerName: 'Axis Bank',
+          cardLast4: '7105',
+        ),
+        receivedAt: DateTime(2026, 10, 18, 9),
+      );
+      expect(facts, hasLength(1));
+      expect(facts.single.payload['targetKind'], 'card_bill');
+      expect(facts.single.payload['amountRole'], 'ceiling');
+      expect(validateSmsFact(facts.single).valid, isTrue);
+    });
+
     test('mandate cancellation mints a cancelled mandate_lifecycle fact', () {
       final body =
           'Your NETFLIX AutoPay mandate has been cancelled successfully on HDFC A/c XX1797.';
@@ -146,9 +164,27 @@ void main() {
       expect(facts, hasLength(1));
       expect(facts.single.factType, 'mandate_lifecycle');
       expect(facts.single.payload['mandateStatus'], 'registered');
+      expect(facts.single.payload['amountRole'], 'ceiling');
       expect(facts.single.payload['limitInr'], 2000.0);
       expect(facts.single.payload['merchant'], 'NETFLIX');
+      expect(facts.single.payload['serviceName'], 'NETFLIX');
+      expect(facts.single.payload['subscriptionEvidence'], 'historical');
+      expect(facts.single.payload['targetKind'], 'service_merchant');
       expect(validateSmsFact(facts.single).valid, isTrue);
+    });
+
+    test('subscription wording marks service evidence without using amount', () {
+      final body =
+          'AutoPay mandate successfully registered for ACME Membership subscription on card XX1797.';
+      final facts = buildSmsFactsForObservation(
+        body: body,
+        observation: parse('HDFCBK', body),
+        receivedAt: DateTime(2026, 10, 18, 9),
+      );
+      expect(facts, hasLength(1));
+      expect(facts.single.payload['targetKind'], 'service_merchant');
+      expect(facts.single.payload['explicitSubscription'], isTrue);
+      expect(facts.single.payload['limitInr'], isNull);
     });
 
     test('declined attempt carries the card suffix, never spend semantics', () {
@@ -267,27 +303,33 @@ void main() {
         'HDFCBK',
         'The e-mandate has been cancelled for your reference 12345.',
       );
-      expect(
-        buildSmsFactsForObservation(
+      final orphanFacts = buildSmsFactsForObservation(
           body: 'The e-mandate has been cancelled for your reference 12345.',
           observation: orphans,
           receivedAt: DateTime(2026, 10, 18, 9),
-        ),
-        isEmpty,
-      );
-      // A registered mandate with no extractable ceiling must abstain too
-      // (the contract refuses a registered mandate without limitInr).
+        );
+      expect(orphanFacts, isEmpty, reason: orphanFacts.map((f) => f.payload).toString());
+      // A named service registration remains useful even when the bank SMS
+      // omits its optional authorization ceiling.
       final noCeiling = parse(
         'HDFCBK',
-        'Your mandated subscription renewal plan was successfully activated for NETFLIX on card XX1797.',
+        'Your AutoPay mandate successfully registered for NETFLIX on card XX1797.',
       );
       expect(
         buildSmsFactsForObservation(
-          body: 'Your mandated subscription renewal plan was successfully activated for NETFLIX on card XX1797.',
+          body: 'Your AutoPay mandate successfully registered for NETFLIX on card XX1797.',
           observation: noCeiling,
           receivedAt: DateTime(2026, 10, 18, 9),
         ),
-        isEmpty,
+        hasLength(1),
+      );
+      expect(
+        buildSmsFactsForObservation(
+          body: 'Your AutoPay mandate successfully registered for NETFLIX on card XX1797.',
+          observation: noCeiling,
+          receivedAt: DateTime(2026, 10, 18, 9),
+        ).single.payload['limitInr'],
+        isNull,
       );
     });
   });
@@ -341,8 +383,8 @@ void main() {
       final outbox = SmsFactsOutbox(db);
       outbox.enqueue(
         'user:a',
-        message('registered without ceiling'),
-        [SmsFactValidationEntry(factType: 'mandate_lifecycle', payload: {'mandateStatus': 'registered', 'asOfAt': '2026-10-18T03:30:00.000Z'})],
+        message('invalid mandate status'),
+        [SmsFactValidationEntry(factType: 'mandate_lifecycle', payload: {'mandateStatus': 'impossible', 'asOfAt': '2026-10-18T03:30:00.000Z'})],
         sourceKey: 'f' * 64,
       );
       expect(outbox.pending('user:a'), isEmpty);

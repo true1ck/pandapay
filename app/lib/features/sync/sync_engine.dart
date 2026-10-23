@@ -173,7 +173,7 @@ class SyncEngine {
     // backlog can't spin here forever holding the UI's refresh.
     for (var page = 0; page < 20; page++) {
       final batch = await api.pull(deviceId: deviceId, since: since);
-      totalConflicts = batch.conflicts.length;
+      totalConflicts += batch.conflicts.length;
 
       if (batch.changes.isEmpty) break;
 

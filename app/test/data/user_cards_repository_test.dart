@@ -349,4 +349,187 @@ void main() {
       }
     },
   );
+
+  group('merchant category bulk boundary', () {
+    test('parses a related preview and derives default selected ids', () async {
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'token',
+        client: MockClient((request) async {
+          expect(request.method, 'GET');
+          expect(
+            request.url.path,
+            '/transactions/source/category-related-preview',
+          );
+          expect(request.url.queryParameters, {'targetCategoryId': 'food'});
+          return http.Response(
+            jsonEncode({
+              'preview': {
+                'preview_id': 'preview-1',
+                'source_transaction_id': 'source',
+                'target_category_id': 'food',
+                'target_category_name': 'Food',
+                'match_basis': 'vpa',
+                'total_candidate_count': 2,
+                'selectable_candidate_count': 2,
+                'candidates': [
+                  {
+                    'id': 'other-1',
+                    'occurred_at': '2026-10-05T00:00:00Z',
+                    'amount_inr': 500,
+                    'payment_source': 'UPI / bank account',
+                    'selection_tier': 'default_selected',
+                    'category_name': 'Other',
+                    'updated_at': '2026-10-05T01:00:00Z',
+                  },
+                  {
+                    'id': 'other-2',
+                    'occurred_at': '2026-10-02T00:00:00Z',
+                    'amount_inr': 777,
+                    'payment_source': 'UPI / bank account',
+                    'selection_tier': 'manual_review',
+                    'category_name': 'Groceries',
+                  },
+                ],
+              },
+            }),
+            200,
+          );
+        }),
+      );
+
+      final preview = await repository.fetchCategoryRelatedPreview(
+        'source',
+        targetCategoryId: 'food',
+      );
+
+      expect(preview.previewId, 'preview-1');
+      expect(preview.matchBasis, RelatedTransactionMatchBasis.vpa);
+      expect(preview.candidates, hasLength(2));
+      expect(preview.defaultSelectedTransactionIds, ['other-1']);
+      expect(preview.candidates[1].currentCategoryLabel, 'Groceries');
+      expect(preview.candidates[0].updatedAt, isNotNull);
+    });
+
+    test('sends a deduplicated apply payload and parses the result', () async {
+      late http.Request request;
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'token',
+        client: MockClient((incoming) async {
+          request = incoming;
+          return http.Response(
+            jsonEncode({
+              'operationId': 'operation-1',
+              'changedCount': 2,
+              'unchangedCount': 0,
+              'targetCategoryId': 'food',
+              'affectedTransactionIds': ['other-1', 'other-2'],
+            }),
+            200,
+          );
+        }),
+      );
+
+      final result = await repository.applyCategoryBulk(
+        previewId: 'preview-1',
+        selectedTransactionIds: const ['other-1', 'other-1', 'other-2'],
+        targetCategoryId: 'food',
+        idempotencyKey: 'idempotency-1',
+      );
+
+      expect(request.method, 'POST');
+      expect(request.url.path, '/transactions/category-bulk-apply');
+      expect(jsonDecode(request.body), {
+        'previewId': 'preview-1',
+        'selectedTransactionIds': ['other-1', 'other-2'],
+        'targetCategoryId': 'food',
+        'idempotencyKey': 'idempotency-1',
+      });
+      expect(result.operationId, 'operation-1');
+      expect(result.changedCount, 2);
+      expect(result.affectedTransactionIds, ['other-1', 'other-2']);
+    });
+
+    test('maps a stale preview response to a refreshable conflict', () async {
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'token',
+        client: MockClient(
+          (request) async => http.Response(
+            jsonEncode({
+              'error': 'category_preview_stale',
+              'message': 'Preview is stale',
+            }),
+            409,
+          ),
+        ),
+      );
+
+      expect(
+        () => repository.applyCategoryBulk(
+          previewId: 'preview-1',
+          selectedTransactionIds: const ['other-1'],
+          targetCategoryId: 'food',
+          idempotencyKey: 'idempotency-1',
+        ),
+        throwsA(
+          isA<CategoryBulkConflictException>()
+              .having((error) => error.statusCode, 'status', 409)
+              .having(
+                (error) => error.errorCode,
+                'code',
+                'category_preview_stale',
+              ),
+        ),
+      );
+    });
+
+    test(
+      'can explicitly clear a category without changing other fields',
+      () async {
+        late Map<String, dynamic> body;
+        final repository = UserCardsRepository(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'token',
+          client: MockClient((request) async {
+            body = jsonDecode(request.body) as Map<String, dynamic>;
+            return http.Response('{}', 200);
+          }),
+        );
+
+        await repository.clearTransactionCategory('txn-1');
+
+        expect(body, {'categoryId': null, 'userCategoryId': null});
+      },
+    );
+
+    test(
+      'rejects bulk selection above the server limit before making a request',
+      () async {
+        var requests = 0;
+        final repository = UserCardsRepository(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'token',
+          client: MockClient((request) async {
+            requests += 1;
+            return http.Response('{}', 200);
+          }),
+        );
+
+        expect(
+          () => repository.applyCategoryBulk(
+            previewId: 'preview-1',
+            selectedTransactionIds: List<String>.generate(
+              501,
+              (index) => 'txn-$index',
+            ),
+            targetCategoryId: 'food',
+          ),
+          throwsArgumentError,
+        );
+        expect(requests, 0);
+      },
+    );
+  });
 }

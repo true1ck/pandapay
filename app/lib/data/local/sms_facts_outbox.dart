@@ -99,22 +99,25 @@ class SmsFactsOutbox {
 
   /// One queued envelope. [entries] is the decoded fact list (index,
   /// factType, payload, provenance) ready to POST.
-  List<SmsFactsOutboxEntry> pending(String namespace, {int limit = 50}) =>
-      database.db
-          .select(
-            'SELECT * FROM sms_facts_outbox WHERE namespace=? AND next_attempt<=? '
-            'ORDER BY occurred_at, id LIMIT ?',
-            [namespace, now().millisecondsSinceEpoch, limit],
-          )
-          .map((row) {
-            final decoded = jsonDecode(row['facts'] as String) as Map<String, dynamic>;
-            return SmsFactsOutboxEntry(
-              row['id'] as String,
-              row['sender'] as String,
-              decoded,
-            );
-          })
-          .toList();
+  List<SmsFactsOutboxEntry> pending(
+    String namespace, {
+    int limit = 50,
+  }) => database.db
+      .select(
+        'SELECT * FROM sms_facts_outbox WHERE namespace=? AND next_attempt<=? '
+        'ORDER BY occurred_at, id LIMIT ?',
+        [namespace, now().millisecondsSinceEpoch, limit],
+      )
+      .map((row) {
+        final decoded =
+            jsonDecode(row['facts'] as String) as Map<String, dynamic>;
+        return SmsFactsOutboxEntry(
+          row['id'] as String,
+          row['sender'] as String,
+          decoded,
+        );
+      })
+      .toList();
 
   void acknowledge(String namespace, String id) {
     database.db.execute(
@@ -132,7 +135,9 @@ class SmsFactsOutbox {
     String? sampleBody,
     String? templateText,
   }) {
-    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sourceKey) || factIndex < 0 || patch.isEmpty) {
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sourceKey) ||
+        factIndex < 0 ||
+        patch.isEmpty) {
       throw ArgumentError('Invalid SMS fact correction');
     }
     database.db.execute(
@@ -140,57 +145,75 @@ class SmsFactsOutbox {
          VALUES(?,?,?,?,?,?,?) ON CONFLICT(namespace,source_key,fact_index) DO UPDATE SET
            patch=excluded.patch,reason=excluded.reason,sample_body=excluded.sample_body,
            template_text=excluded.template_text,attempts=0,next_attempt=0,last_error=NULL''',
-      [namespace, sourceKey, factIndex, jsonEncode(patch), reason,
-        redactSmsLearningText(sampleBody), redactSmsLearningText(templateText)],
+      [
+        namespace,
+        sourceKey,
+        factIndex,
+        jsonEncode(patch),
+        reason,
+        redactSmsLearningText(sampleBody),
+        redactSmsLearningText(templateText),
+      ],
     );
   }
 
-  List<SmsFactOverrideOutboxEntry> pendingOverrides(String namespace, {int limit = 50}) =>
-      database.db
-          .select(
-            'SELECT * FROM sms_fact_override_outbox WHERE namespace=? AND next_attempt<=? '
-            'ORDER BY rowid LIMIT ?',
-            [namespace, now().millisecondsSinceEpoch, limit],
-          )
-          .map((row) => SmsFactOverrideOutboxEntry(
-                sourceKey: row['source_key'] as String,
-                factIndex: row['fact_index'] as int,
-                patch: jsonDecode(row['patch'] as String) as Map<String, dynamic>,
-                reason: row['reason'] as String?,
-                sampleBody: row['sample_body'] as String?,
-                templateText: row['template_text'] as String?,
-              ))
-          .toList();
+  List<SmsFactOverrideOutboxEntry> pendingOverrides(
+    String namespace, {
+    int limit = 50,
+  }) => database.db
+      .select(
+        'SELECT * FROM sms_fact_override_outbox WHERE namespace=? AND next_attempt<=? '
+        'ORDER BY rowid LIMIT ?',
+        [namespace, now().millisecondsSinceEpoch, limit],
+      )
+      .map(
+        (row) => SmsFactOverrideOutboxEntry(
+          sourceKey: row['source_key'] as String,
+          factIndex: row['fact_index'] as int,
+          patch: jsonDecode(row['patch'] as String) as Map<String, dynamic>,
+          reason: row['reason'] as String?,
+          sampleBody: row['sample_body'] as String?,
+          templateText: row['template_text'] as String?,
+        ),
+      )
+      .toList();
 
-  void acknowledgeOverride(String namespace, String sourceKey, int factIndex) =>
-      database.db.execute(
-        'DELETE FROM sms_fact_override_outbox WHERE namespace=? AND source_key=? AND fact_index=?',
-        [namespace, sourceKey, factIndex],
-      );
+  void acknowledgeOverride(
+    String namespace,
+    String sourceKey,
+    int factIndex,
+  ) => database.db.execute(
+    'DELETE FROM sms_fact_override_outbox WHERE namespace=? AND source_key=? AND fact_index=?',
+    [namespace, sourceKey, factIndex],
+  );
 
-  void failedOverride(String namespace, String sourceKey, int factIndex) =>
-      database.db.execute(
-        "UPDATE sms_fact_override_outbox SET next_attempt=? + MIN(1800000,30000 * (1 << MIN(attempts,6))),attempts=attempts+1,last_error='Correction sync pending' WHERE namespace=? AND source_key=? AND fact_index=?",
-        [now().millisecondsSinceEpoch, namespace, sourceKey, factIndex],
-      );
+  void failedOverride(
+    String namespace,
+    String sourceKey,
+    int factIndex,
+  ) => database.db.execute(
+    "UPDATE sms_fact_override_outbox SET next_attempt=? + MIN(1800000,30000 * (1 << MIN(attempts,6))),attempts=attempts+1,last_error='Correction sync pending' WHERE namespace=? AND source_key=? AND fact_index=?",
+    [now().millisecondsSinceEpoch, namespace, sourceKey, factIndex],
+  );
 
   void failed(String namespace, String id) => database.db.execute(
     "UPDATE sms_facts_outbox SET next_attempt=? + MIN(1800000,30000 * (1 << MIN(attempts,6))),attempts=attempts+1,last_error='Facts upload pending' WHERE namespace=? AND id=?",
     [now().millisecondsSinceEpoch, namespace, id],
   );
 
-  bool contains(String namespace, String id) => database.db
-      .select('SELECT 1 FROM sms_facts_outbox WHERE namespace=? AND id=?', [
-        namespace,
-        id,
-      ])
-      .isNotEmpty;
+  bool contains(String namespace, String id) => database.db.select(
+    'SELECT 1 FROM sms_facts_outbox WHERE namespace=? AND id=?',
+    [namespace, id],
+  ).isNotEmpty;
 
   void clear(String namespace) {
     database.db.execute('DELETE FROM sms_facts_outbox WHERE namespace=?', [
       namespace,
     ]);
-    database.db.execute('DELETE FROM sms_fact_override_outbox WHERE namespace=?', [namespace]);
+    database.db.execute(
+      'DELETE FROM sms_fact_override_outbox WHERE namespace=?',
+      [namespace],
+    );
   }
 }
 
@@ -258,15 +281,19 @@ List<SmsFactValidationEntry> buildSmsFactsForObservation({
         'availableBalanceInr': balance.rupees,
         'asOfAt': asOfAt,
         'instrument': isCard ? 'credit_card' : 'upi_bank',
-        if (isCard && observation.cardLast4 != null) 'last4': observation.cardLast4,
+        if (isCard && observation.cardLast4 != null)
+          'last4': observation.cardLast4,
         if (!isCard && observation.accountLast4 != null)
           'accountLast4': observation.accountLast4,
       };
       add('balance_snapshot', payload);
       break;
     case LocalSmsEventType.failed:
-      final isMandate = _reMatch(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate)\b', lower);
-      final isCancel = _reMatch(r'\bcancell?e[rd]?\b', lower);
+      final isMandate = _reMatch(
+        r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate)\b',
+        lower,
+      );
+      final isCancel = _reMatch(r'\bcancel(?:led|ed|ling|ing)\b', lower);
       if (isMandate && isCancel) {
         final merchant = _mandateCancelledMerchant(lower);
         if (merchant == null) break;
@@ -286,25 +313,64 @@ List<SmsFactValidationEntry> buildSmsFactsForObservation({
         'attemptStatus': 'failed',
         'occurredAt': asOfAt,
         'merchant': ?merchant,
-        if (isCard && observation.cardLast4 != null) 'last4': observation.cardLast4,
+        if (isCard && observation.cardLast4 != null)
+          'last4': observation.cardLast4,
         if (isCard) 'instrument': 'credit_card',
-        if (observation.accountLast4 != null) 'accountLast4': observation.accountLast4,
+        if (observation.accountLast4 != null)
+          'accountLast4': observation.accountLast4,
       });
       break;
     case LocalSmsEventType.autopay:
-      // Registration/mandate ceiling only; the fact contract refuses a
-      // registered mandate without a ceiling, so both pieces must be present.
+      if (_reMatch(r'\bcancel(?:led|ed|ling|ing)\b', lower)) {
+        final cancelledMerchant = _mandateCancelledMerchant(lower);
+        if (cancelledMerchant != null) {
+          add('mandate_lifecycle', {
+            'mandateStatus': 'cancelled',
+            'asOfAt': asOfAt,
+            'merchant': cancelledMerchant,
+          });
+        }
+        break;
+      }
+      // Registration/mandate lifecycle. A ceiling is optional authorization
+      // metadata and must not gate a named service setup fact.
       final limit = observation.autopayLimit;
-      if (limit == null || limit.paise <= 0) break;
-      final merchant = _mandateRegisteredMerchant(lower);
+      final merchant = _mandateRegisteredMerchant(lower) ??
+          observation.billerName?.trim();
       if (merchant == null) break;
       final isCard = _reMatch(r'\bcredit\s+card\b', lower);
+      final explicitService = _reMatch(
+        r'\b(?:subscription|membership)\b',
+        lower,
+      );
+      final targetKind = _reMatch(
+        r'\b(?:credit\s+card|card)\s*(?:bill|payment|dues?)\b|\b(?:bill|dues?)\s*(?:of|for|on)?\s*(?:your\s*)?credit\s*card\b',
+        lower,
+      )
+          ? 'card_bill'
+          : _reMatch(r'\b(?:electricity|water|gas|utility|municipal)\s*(?:bill|payment|dues?)\b|\b(?:bill|statement|minimum\s+due)\b', lower) &&
+                  !explicitService
+              ? 'utility_or_other_bill'
+              : 'service_merchant';
       add('mandate_lifecycle', {
         'mandateStatus': 'registered',
+        'targetKind': targetKind,
         'asOfAt': asOfAt,
-        'limitInr': limit.rupees,
         'merchant': merchant,
-        if (isCard && observation.cardLast4 != null) 'last4': observation.cardLast4,
+        if (targetKind == 'service_merchant') ...{
+          'serviceName': merchant,
+          if (explicitService) ...{
+            'explicitSubscription': true,
+            'subscriptionEvidence': 'explicit',
+          } else
+            'subscriptionEvidence': 'historical',
+        },
+        if (limit != null && limit.paise > 0) ...{
+          'amountRole': 'ceiling',
+          'limitInr': limit.rupees,
+        },
+        if (isCard && observation.cardLast4 != null)
+          'last4': observation.cardLast4,
         if (!isCard && observation.accountLast4 != null)
           'accountLast4': observation.accountLast4,
       });
@@ -323,17 +389,24 @@ List<SmsFactValidationEntry> buildSmsFactsForObservation({
         'dueDate': dueDateIso,
         'statementDate': ?statementIso,
         'billerName': ?biller,
-        if (isCard && observation.cardLast4 != null) 'last4': observation.cardLast4,
+        if (isCard && observation.cardLast4 != null)
+          'last4': observation.cardLast4,
         if (isCard) 'instrument': 'credit_card',
         if (!isCard && observation.accountLast4 != null)
           'accountLast4': observation.accountLast4,
       };
       final total = observation.amountDue;
       if (total == null || total.paise <= 0) break;
-      add('bill_obligation', {...billPayload('due_total'), 'amountDueInr': total.rupees});
+      add('bill_obligation', {
+        ...billPayload('due_total'),
+        'amountDueInr': total.rupees,
+      });
       final minimum = observation.minimumDue;
       if (minimum != null && minimum.paise > 0) {
-        add('bill_obligation', {...billPayload('due_minimum'), 'minimumDueInr': minimum.rupees});
+        add('bill_obligation', {
+          ...billPayload('due_minimum'),
+          'minimumDueInr': minimum.rupees,
+        });
       }
       break;
     default:
@@ -351,7 +424,8 @@ List<SmsFactValidationEntry> buildSmsFactsForObservation({
       'availableBalanceInr': balance.rupees,
       'asOfAt': asOfAt,
       'instrument': isCard ? 'credit_card' : 'upi_bank',
-      if (isCard && observation.cardLast4 != null) 'last4': observation.cardLast4,
+      if (isCard && observation.cardLast4 != null)
+        'last4': observation.cardLast4,
       if (!isCard && observation.accountLast4 != null)
         'accountLast4': observation.accountLast4,
     };
@@ -379,11 +453,11 @@ String? _mandateCancelledMerchant(String lower) {
     ).firstMatch(lower);
     if (fallback == null) return null;
     final name = fallback.group(1)?.trim();
-    if (name == null || name.isEmpty) return null;
+    if (name == null || !RegExp(r'[a-z]{3,}').hasMatch(name)) return null;
     return name.toUpperCase();
   }
   final merchant = match.group(1)?.trim();
-  if (merchant == null || merchant.isEmpty) return null;
+  if (merchant == null || !RegExp(r'[a-z]{3,}').hasMatch(merchant)) return null;
   return merchant.toUpperCase();
 }
 

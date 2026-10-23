@@ -67,12 +67,11 @@ test('amount/date role consistency is enforced per fact type', () => {
   assert.equal(nonePostedAmount.valid, false);
   assert.ok(nonePostedAmount.errors.some((e) => e.includes('requires a positive amountDueInr')));
 
-  const ceilingWrongField = smsFacts.validateFact({
+  const ceilingOmitted = smsFacts.validateFact({
     ...mandate,
     payload: { ...mandate.payload, limitInr: undefined, amountInr: 2000 },
   });
-  assert.equal(ceilingWrongField.valid, false);
-  assert.ok(ceilingWrongField.errors.some((e) => e.includes('registered mandate requires limitInr')));
+  assert.equal(ceilingOmitted.valid, true);
 });
 
 test('a mandate ceiling can never be booked as posted money', () => {

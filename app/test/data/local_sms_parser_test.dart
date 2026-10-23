@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/user_cards_repository.dart' show TxnEntryKind, TxnInstrument;
 import 'package:pandapay/data/needs_review_repository.dart';
@@ -633,6 +634,9 @@ void main() {
     expect(result?.eventType, LocalSmsEventType.autopay);
     expect(result?.disposition, LocalSmsDisposition.localIgnore);
     expect(result?.autopayLimit?.rupees, 1999);
+    expect(result?.amountDue, isNull);
+    expect(result?.dueDate, isNull);
+    expect(result?.cadenceHint, isNull);
   });
 
   test('does not ignore a completed AutoPay debit as setup', () {
@@ -763,6 +767,41 @@ void main() {
     expect(result?.cardLast4, '8708');
     expect(result?.amountDue?.rupees, 4150);
     expect(result?.dueDate, DateTime(2026, 7, 9));
+  });
+
+  test('classifies credit card scheduled AutoPay notice with card ending, amount, due date and isAutopay', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'AX-AXISBK-S',
+      body:
+          'AutoPay scheduled for your credit card ending in 4567 on 25-Oct-2026 for Rs 4,500.00. Maintain sufficient balance in your account.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.transaction, isNull);
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.cardLast4, '4567');
+    expect(result?.amountDue?.rupees, 4500);
+    expect(result?.dueDate, DateTime(2026, 10, 25));
+    expect(result?.isAutopay, isTrue);
+    expect(result?.disposition, LocalSmsDisposition.localObservation);
+  });
+
+  test('classifies Standing Instruction towards Credit Card with amount, card last 4, due date and isAutopay', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VD-HDFCBK-S',
+      body:
+          'Standing Instruction of Rs 5,000 towards HDFC Bank Credit Card ending in 5678 will be debited on 20-Oct-2026.',
+      receivedAt: DateTime(2026, 10, 12),
+    );
+    expect(result?.transaction, isNull);
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.cardLast4, '5678');
+    expect(result?.amountDue?.rupees, 5000);
+    expect(result?.dueDate, DateTime(2026, 10, 20));
+    expect(result?.isAutopay, isTrue);
+    expect(result?.billerName, 'HDFC Bank Credit Card');
+    expect(result?.disposition, LocalSmsDisposition.localObservation);
   });
 
   test('classifies Atal Pension Yojana contribution notice as a local commitment', () {
@@ -956,5 +995,154 @@ void main() {
     expect(result?.transaction, isNotNull);
     expect(result?.transaction?.amount.rupees, 209272.0);
     expect(result?.transaction?.entryKind, TxnEntryKind.investment);
+  });
+
+  test('extractReceiptAmount sanitizes order ID and AWB sequences before extraction', () {
+    expect(
+      LocalSmsParser.extractReceiptAmount('Order ID: 987654321 for Rs. 450.00 confirmed')?.rupees,
+      450.0,
+    );
+    expect(
+      LocalSmsParser.extractReceiptAmount('Order No. 123456 total Rs 1,299 paid')?.rupees,
+      1299.0,
+    );
+    expect(
+      LocalSmsParser.extractReceiptAmount('AWB 8876543210 shipment fee INR 250.50')?.rupees,
+      250.5,
+    );
+    expect(
+      LocalSmsParser.extractReceiptAmount('order number #54321 Rs. 99')?.rupees,
+      99.0,
+    );
+  });
+
+  test('new noise patterns are identified as non-transaction noise', () {
+    final noiseAlerts = <(String sender, String body)>[
+      ('CDSLIN', 'CDSL: Unpledge confirmed for 100 shares in demat account.'),
+      ('NSDLIN', 'NSDL: Pledge setup request initiated for a/c 1234.'),
+      ('KFINTECH', 'Updated your address under folio 98765432 based on feed received from KRA.'),
+      ('CAMS', 'Address in folio 12345/6 is updated based on feed received from KRA.'),
+      ('HDFCBK', 'Due to scheduled maintenance NetBanking services will be unavailable from 02:00 to 05:00.'),
+      ('ICICIB', 'Registration alert: device name iPhone 15 was registered on iMobile Pay.'),
+      ('AMAZON', 'Reminder: 5 cashback coupons expire at midnight. Use code FESTIVE.'),
+      ('DELHIV', 'Order is dispatched through Delhivery with tracking 123456789.'),
+      ('BLUEDART', 'Your order is dispatched through Blue Dart express logistics.'),
+      ('FLIPKT', 'We have received your order ID OD123456789. We are preparing it for shipment.'),
+      ('AXISBK', 'Lifetime-free credit card facility has been enabled for your account. Limit Rs. 2,00,000.'),
+      ('BAJAJA', 'Two wheeler insurance for MH01AB1234 has expired. Renew today at Rs. 1499.'),
+      ('ACKOIN', 'Car insurance expired! Renew before midnight to protect your NCB.'),
+      ('HDFCER', 'Vehicle insurance for DL01CD5678 will expire tomorrow. Premium Rs 2150.'),
+    ];
+
+    for (final (sender, body) in noiseAlerts) {
+      expect(
+        LocalSmsParser.isNonTransactionNoise(sender, body),
+        isTrue,
+        reason: 'Expected noise for: ' + body,
+      );
+    }
+  });
+  test('mutual fund folio unit allotment does not create a cash spend transaction', () {
+    const amcMessages = [
+      'Folio 12345/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',
+      'Dear Investor, 45.123 units allotted under Folio 9876543/21 in Nippon India Small Cap Fund - Reg (G) for your investment of Rs 5,000 at NAV 110.8123 on 05-Oct-2026.',
+      'Units: 25.432, NAV: 196.50 allotted for your investment of Rs. 5000 in Parag Parikh Flexi Cap Fund, Folio: 123456789.',
+      'Units allotted under folio 11223344 for Rs 10000 in ICICI Prudential Bluechip Fund. NAV: 85.25.',
+    ];
+
+    for (final body in amcMessages) {
+      expect(LocalSmsParser.isInvestmentFolioAllotment(body), isTrue);
+      expect(LocalSmsParser.isNonTransactionNoise('HDFCMF', body), isFalse);
+
+      final obs = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'HDFCMF',
+        body: body,
+        receivedAt: DateTime(2026, 10, 5, 14, 30),
+      );
+
+      expect(obs, isNotNull);
+      expect(obs!.transaction, isNull, reason: 'Must not mint a cash spend transaction!');
+      expect(obs.eventType, LocalSmsEventType.investment);
+      expect(obs.disposition, LocalSmsDisposition.localObservation);
+      expect(obs.reasonCodes, contains('mf_folio_unit_allotment'));
+      expect(obs.amount, isNotNull);
+      expect(obs.amount!.paise, greaterThan(0));
+      expect(obs.amountDue, obs.amount);
+      expect(obs.merchantName, isNotNull);
+    }
+  });
+  test('bank account balance and account discovery extracts balance and accounts', () {
+    // 1. Canara Bank interest credit 1
+    final canara1 = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VK-CANBNK',
+      body:
+          'INR 25.00 credited to A/c XXXX1772 on 28/09/2026 towards Interest. Total Avail. Bal. INR 4,304.19. -Canara Bank',
+      receivedAt: DateTime(2026, 9, 28),
+    );
+    expect(canara1?.accountLast4, '1772');
+    expect(canara1?.availableBalance, Money.fromRupees(4304.19));
+    expect(
+      LocalSmsParser.isBankAccountMessage(
+        'INR 25.00 credited to A/c XXXX1772 on 28/09/2026 towards Interest. Total Avail. Bal. INR 4,304.19. -Canara Bank',
+        'VK-CANBNK',
+      ),
+      isTrue,
+    );
+
+    // 2. Canara Bank interest credit 2
+    final canara2 = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VK-CANBNK',
+      body:
+          'INR 1,103.00 credited to A/c XXXX2226 on 28/09/2026 towards Interest. Total Avail. Bal. INR 1,83,459.65. -Canara Bank',
+      receivedAt: DateTime(2026, 9, 28),
+    );
+    expect(canara2?.accountLast4, '2226');
+    expect(canara2?.availableBalance, Money.fromRupees(183459.65));
+    expect(
+      LocalSmsParser.isBankAccountMessage(
+        'INR 1,103.00 credited to A/c XXXX2226 on 28/09/2026 towards Interest. Total Avail. Bal. INR 1,83,459.65. -Canara Bank',
+        'VK-CANBNK',
+      ),
+      isTrue,
+    );
+
+    // 3. Canara Bank ATM withdrawal
+    final canaraAtm = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VK-CANBNK',
+      body:
+          'A/C XXXX1772 linked to card XXXX5667 debited Rs INR 20,000.00 on 31/03/2026 Seq 3906 ATM txn.Avl Bal is Rs INR 30,188.05.',
+      receivedAt: DateTime(2026, 3, 31),
+    );
+    expect(canaraAtm?.accountLast4, '1772');
+    expect(canaraAtm?.cardLast4, '5667');
+    expect(canaraAtm?.availableBalance, Money.fromRupees(30188.05));
+    expect(
+      LocalSmsParser.isBankAccountMessage(
+        'A/C XXXX1772 linked to card XXXX5667 debited Rs INR 20,000.00 on 31/03/2026 Seq 3906 ATM txn.Avl Bal is Rs INR 30,188.05.',
+        'VK-CANBNK',
+      ),
+      isTrue,
+    );
+
+    // 4. Union Bank debit
+    final union = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VK-UNIONB',
+      body: 'An amount of INR 500.00 debited from a/c ...8565. Avl Bal Rs: 594.92',
+      receivedAt: DateTime(2026, 10, 1),
+    );
+    expect(union?.accountLast4, '8565');
+    expect(union?.availableBalance, Money.fromRupees(594.92));
+    expect(
+      LocalSmsParser.isBankAccountMessage(
+        'An amount of INR 500.00 debited from a/c ...8565. Avl Bal Rs: 594.92',
+        'VK-UNIONB',
+      ),
+      isTrue,
+    );
   });
 }
