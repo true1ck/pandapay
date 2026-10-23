@@ -3400,6 +3400,7 @@ class SpendingDonut extends StatelessWidget {
   final String? totalLabel;
   final int? selectedIndex;
   final ValueChanged<int?> onSelected;
+  final VoidCallback? onCenterTap;
 
   const SpendingDonut({
     super.key,
@@ -3410,6 +3411,7 @@ class SpendingDonut extends StatelessWidget {
     this.totalLabel,
     required this.selectedIndex,
     required this.onSelected,
+    this.onCenterTap,
   });
 
   void _selectSlice(Offset point) {
@@ -3453,8 +3455,8 @@ class SpendingDonut extends StatelessWidget {
         key: const Key('spending_donut_chart'),
         button: true,
         label: selected == null
-            ? 'Spending mix, total ${total.format(hidePaise: false)}. Tap a slice to see category details.'
-            : 'Spending mix, selected ${selected.label}, ${selected.total.format(hidePaise: false)}, ${(share * 100).round()}% of spending. Tap the center to show total.',
+            ? 'Spending mix, total ${total.format(hidePaise: false)}. Tap a slice to see category details${onCenterTap == null ? '.' : ' or the center to open spending details.'}'
+            : 'Spending mix, selected ${selected.label}, ${selected.total.format(hidePaise: false)}, ${(share * 100).round()}% of spending. ${onCenterTap == null ? 'Tap the center to show total.' : 'Tap the center to open spending details.'}',
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapUp: (details) => _selectSlice(details.localPosition),
@@ -3486,7 +3488,8 @@ class SpendingDonut extends StatelessWidget {
                 GestureDetector(
                   key: const Key('spending_donut_center'),
                   behavior: HitTestBehavior.opaque,
-                  onTap: selected == null ? null : () => onSelected(null),
+                  onTap: onCenterTap ??
+                      (selected == null ? null : () => onSelected(null)),
                   child: SizedBox(
                     width: size * 0.60,
                     height: size * 0.60,

@@ -586,6 +586,7 @@ class _HomeSpendHeadlineState extends ConsumerState<_HomeSpendHeadline> {
                             totalLabel: 'spent',
                             selectedIndex: selectedCategoryIndex,
                             onSelected: _selectCategory,
+                            onCenterTap: () => context.push(AppRoute.spendTrends),
                           ),
                           if (projected != null &&
                               report.elapsedFraction < .95) ...[
