@@ -835,6 +835,17 @@ class FinancialStore {
           PRIMARY KEY (namespace, id)
         );
       ''');
+      final balanceApplied = database.db.select(
+        'SELECT 1 FROM local_repairs WHERE namespace=? AND repair_key=?',
+        [ns, 'bank_balance_repair_v1'],
+      );
+      if (balanceApplied.isEmpty) {
+        _repairHistoricalBalanceObservations(ns);
+        database.db.execute(
+          'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
+          [ns, 'bank_balance_repair_v1'],
+        );
+      }
       final applied = database.db.select(
         'SELECT 1 FROM local_repairs WHERE namespace=? AND repair_key=?',
         [ns, 'bill_and_autopay_repair_v6'],
@@ -1044,6 +1055,84 @@ class FinancialStore {
       }
     } catch (_) {
       // Best-effort local repair
+    }
+  }
+
+  /// Historical captures from before the balance-observing pipeline kept only
+  /// transaction receipts, so their bank-account balances were never stored.
+  /// Re-parse each bank-shaped capture once and mint the missing observation.
+  /// Transactions are left untouched; only the observation layer is backfilled.
+  /// Bump `bank_balance_repair_v1` in repairAutoPayArtifacts when the parser
+  /// version jumps so older installs re-derive their balances.
+  void _repairHistoricalBalanceObservations(String ns) {
+    final messages = database.db.select(
+      'SELECT id, sender, body, received_at FROM sms_captured_messages WHERE namespace=?',
+      [ns],
+    );
+    for (final msg in messages) {
+      final sourceKey = msg['id'] as String;
+      final sender = msg['sender'] as String;
+      final body = msg['body'] as String;
+      final receivedAtMs = msg['received_at'];
+      final receivedAt = receivedAtMs is int
+          ? DateTime.fromMillisecondsSinceEpoch(receivedAtMs)
+          : DateTime.tryParse(receivedAtMs.toString());
+      if (receivedAt == null) continue;
+      if (!LocalSmsParser.isBankAccountMessage(body, sender)) continue;
+      final existingObservation = database.db.select(
+        "SELECT payload FROM financial_entities WHERE namespace=? AND entity='sms_observations' AND id=?",
+        [ns, sourceKey],
+      );
+      final existingPayload = existingObservation.isEmpty
+          ? null
+          : jsonDecode(existingObservation.single['payload'] as String);
+      final currentParserVersion = existingPayload is Map
+          ? existingPayload['parser_version']
+          : null;
+      // Same policy as the bill branch: a freshly captured observation may
+      // have come from a newer downloaded rule; never replace that decision
+      // with the fallback.
+      if (currentParserVersion is num &&
+          currentParserVersion >= LocalSmsParser.version) {
+        continue;
+      }
+      final obs = LocalSmsParser.parse(
+        namespace: ns,
+        sender: sender,
+        body: body,
+        receivedAt: receivedAt,
+      );
+      // Without a last-4 the balance cannot be grouped into an account row.
+      if (obs == null ||
+          obs.availableBalance == null ||
+          obs.accountLast4 == null) {
+        continue;
+      }
+      saveObservation(ns, sourceKey, {
+        'id': sourceKey,
+        'sender_bank': sender
+            .toUpperCase()
+            .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
+            .replaceFirst(RegExp(r'-[A-Z]$'), ''),
+        'parser_version': LocalSmsParser.version,
+        'received_at': receivedAt.toUtc().toIso8601String(),
+        'account_last4': obs.accountLast4,
+        'is_bank_account': true,
+        'card_last4': obs.cardLast4,
+        'biller_name': obs.billerName,
+        'cadence_hint': obs.cadenceHint,
+        'balance_paise': obs.availableBalance!.paise,
+        'amount_due_paise': obs.amountDue?.paise,
+        'minimum_due_paise': obs.minimumDue?.paise,
+        'autopay_limit_paise': obs.autopayLimit?.paise,
+        'due_date': obs.dueDate?.toIso8601String(),
+        'statement_date': obs.statementDate?.toIso8601String(),
+        'statement_date_explicit': obs.statementDateExplicit,
+        'event_type': obs.eventType.wireValue,
+        'disposition': obs.disposition.wireValue,
+        'reason_codes': [...obs.reasonCodes],
+        'confidence': obs.confidence,
+      });
     }
   }
 

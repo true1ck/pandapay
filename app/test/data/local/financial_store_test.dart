@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
+import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -378,6 +379,105 @@ void main() {
       final updated = store.entities('a', 'cards').single;
       expect(updated['statement_day'], 14);
       expect(updated['due_day'], 2);
+    },
+  );
+
+  test(
+    'historical balance-bearing bank SMS resurfaces through the repair pass',
+    () {
+      db.db.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS sms_captured_messages (
+          namespace TEXT NOT NULL, id TEXT NOT NULL, sender TEXT NOT NULL,
+          body TEXT NOT NULL, received_at INTEGER NOT NULL,
+          processed INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(namespace, id)
+        );
+        ''',
+      );
+      const sliceBody =
+          'Rs. 1 received in A/c xx5799 on 30-Jul-26 from API Banking EB via '
+          'IMPS (Ref ID: 621107441979). Avl. Bal. Rs. 5,431.54 - slice';
+      const kotakBody =
+          'Rs. 1000.00 debited from A/c xx2626 on 30-Jul-26 towards UPI '
+          'ref 621107441980 blocked. - Kotak Bank';
+      final receivedAt =
+          DateTime.utc(2026, 7, 30, 15, 3, 43).millisecondsSinceEpoch;
+      for (final (id, sender, body) in [
+        ('slice-balance', 'VM-SLCBNK-T', sliceBody),
+        ('kotak-no-balance', 'VM-KOTAKB-T', kotakBody),
+        ('slice-current', 'VM-SLCBNK-T', sliceBody),
+      ]) {
+        db.db.execute(
+          'INSERT INTO sms_captured_messages(namespace,id,sender,body,received_at)'
+          ' VALUES (?,?,?,?,?)',
+          ['ns1', id, sender, body, receivedAt],
+        );
+      }
+      // A capture whose observation is already at the current parser version
+      // must be left untouched by the repair.
+      store.saveObservation('ns1', 'slice-current', {
+        'id': 'slice-current',
+        'sender_bank': 'SLCBNK',
+        'parser_version': LocalSmsParser.version,
+        'received_at': '2026-07-30T15:03:43.000Z',
+        'account_last4': '5799',
+        'is_bank_account': true,
+        'card_last4': null,
+        'biller_name': null,
+        'cadence_hint': null,
+        'balance_paise': null,
+        'amount_due_paise': null,
+        'minimum_due_paise': null,
+        'autopay_limit_paise': null,
+        'due_date': null,
+        'statement_date': null,
+        'statement_date_explicit': false,
+        'event_type': 'transaction',
+        'disposition': 'sync',
+        'reason_codes': <String>[],
+        'confidence': 0.9,
+      });
+
+      store.repairAutoPayArtifacts('ns1');
+
+      // Both SLCBNK rows group into one account; the Kotak debit SMS
+      // carries no balance, so it must never mint an observation.
+      final accounts = store.bankAccounts('ns1');
+      expect(accounts, hasLength(1));
+      expect(accounts.single.accountLast4, '5799');
+      expect(accounts.single.availableBalance?.paise, 543154);
+      expect(
+        accounts.single.latestBalanceSmsAt,
+        DateTime.parse('2026-07-30T15:03:43.000Z'),
+      );
+      expect(accounts.single.smsCount, 2);
+
+      final repaired =
+          store.entities('ns1', 'sms_observations', id: 'slice-balance');
+      expect(repaired, hasLength(1));
+      expect(repaired.single['is_bank_account'], isTrue);
+      expect(repaired.single['balance_paise'], 543154);
+
+      final untouched =
+          store.entities('ns1', 'sms_observations', id: 'slice-current');
+      expect(untouched, hasLength(1));
+      expect(untouched.single['balance_paise'], isNull);
+      expect(untouched.single['parser_version'], LocalSmsParser.version);
+
+      // Idempotent: a second pass neither duplicates observations nor
+      // overwrites the already-current one, and the accountless Kotak
+      // capture still produced nothing.
+      final idsBefore = store
+          .entities('ns1', 'sms_observations')
+          .map((o) => o['id'])
+          .toSet();
+      expect(idsBefore, hasLength(2));
+      store.repairAutoPayArtifacts('ns1');
+      expect(
+        store.entities('ns1', 'sms_observations').map((o) => o['id']).toSet(),
+        idsBefore,
+      );
     },
   );
 }
