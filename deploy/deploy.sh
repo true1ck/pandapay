@@ -127,6 +127,11 @@ if [ -n "${GOOGLE_PLACES_API_KEY:-}" ]; then
   echo "    google places api key configuration updated"
 fi
 
+if [ -n "${GEMINI_API_KEY:-}" ]; then
+  upsert_env_value GEMINI_API_KEY "$GEMINI_API_KEY"
+  echo "    Gemini worker configuration updated"
+fi
+
 # Gemini is a server-only, opt-in integration. Require a strong worker token
 # when enabled, and persist only values supplied by the host operator/secret
 # store. Never print either secret.
