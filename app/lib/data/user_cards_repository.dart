@@ -2916,6 +2916,9 @@ class TransactionEntry {
   final Money amount;
   final DateTime occurredAt;
   final String? merchantName;
+
+  /// UPI address of the counterparty, when the source transaction includes it.
+  final String? merchantVpa;
   final String? categoryId;
 
   /// The reporting parent category. For a private subcategory, [categoryId]
@@ -2992,6 +2995,7 @@ class TransactionEntry {
     required this.amount,
     required this.occurredAt,
     this.merchantName,
+    this.merchantVpa,
     this.categoryId,
     this.parentCategoryId,
     this.parentUserCategoryId,
@@ -3035,6 +3039,7 @@ class TransactionEntry {
       'amount_inr': amount.rupees,
       'occurred_at': occurredAt.toIso8601String(),
       'merchant_name': merchantName,
+      'merchant_vpa': merchantVpa,
       'category_id': customCategoryId == null ? categoryId : null,
       'parent_category_id': parentCategoryId,
       'parent_user_category_id': parentUserCategoryId,
@@ -3073,6 +3078,7 @@ class TransactionEntry {
       amount: amount,
       occurredAt: occurredAt,
       merchantName: merchantName,
+      merchantVpa: merchantVpa,
       categoryId: categoryId,
       parentCategoryId: parentCategoryId,
       parentUserCategoryId: parentUserCategoryId,
@@ -3121,6 +3127,7 @@ class TransactionEntry {
       amount: Money.fromRupees(_num(json['amount_inr'])),
       occurredAt: DateTime.parse(json['occurred_at'] as String),
       merchantName: json['merchant_name'] as String?,
+      merchantVpa: json['merchant_vpa'] as String?,
       categoryId: userCategoryId == null
           ? rawCategoryId
           : 'custom:$userCategoryId',

@@ -6218,6 +6218,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
           HAVING COUNT(*) = 1
         )
         SELECT t.id, t.source_key, ${canonicalCardId} AS user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
+                t.merchant_vpa::text AS merchant_vpa,
                 t.category_id, t.user_category_id,
                 ucat.parent_user_category_id AS parent_user_category_id,
                 COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,

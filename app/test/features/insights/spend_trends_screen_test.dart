@@ -86,20 +86,25 @@ TransactionEntry _detailEntry({
   required DateTime occurredAt,
   double reward = 0,
   String? subcategoryName,
+  String? merchantVpa,
+  TxnInstrument instrument = TxnInstrument.creditCard,
+  String? cardDisplayName = 'HDFC Millennia',
+  String? userCardId = 'uc-1',
   List<TransactionTag> tags = const [],
 }) => TransactionEntry(
   id: id,
   amount: Money.fromRupees(amount),
   occurredAt: occurredAt,
   merchantName: merchant,
+  merchantVpa: merchantVpa,
   categoryId: categoryId,
   categoryName: categoryName,
   subcategoryName: subcategoryName,
   tags: tags,
-  cardDisplayName: 'HDFC Millennia',
-  userCardId: 'uc-1',
+  cardDisplayName: cardDisplayName,
+  userCardId: userCardId,
   rail: TxnRail.swipe,
-  instrument: TxnInstrument.creditCard,
+  instrument: instrument,
   source: 'sms',
   status: 'active',
   rewardValue: Money.fromRupees(reward),
@@ -681,6 +686,65 @@ void main() {
     expect(find.text('Dining · Dinner\nHDFC Millennia'), findsOneWidget);
   });
 
+  testWidgets('clubs repeated payments to the same merchant as one row', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _report(
+        spend: 100000,
+        byMerchant: [
+          SpendBreakdownRow(
+            label: 'RAJA DAS',
+            total: Money.fromRupees(100000),
+            txnCount: 2,
+          ),
+        ],
+      ),
+      transactions: [
+        _detailEntry(
+          id: 'txn-a',
+          merchant: 'RAJA DAS',
+          amount: 50000,
+          categoryId: 'dining',
+          categoryName: 'Dining',
+          occurredAt: DateTime(2026, 8, 12),
+        ),
+        _detailEntry(
+          id: 'txn-b',
+          merchant: 'RAJA DAS',
+          amount: 50000,
+          categoryId: 'dining',
+          categoryName: 'Dining',
+          occurredAt: DateTime(2026, 8, 15),
+        ),
+      ],
+    );
+
+    await tester.ensureVisible(find.text('Merchants'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Merchants'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('RAJA DAS'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('2 transactions · Tap to see payments'), findsOneWidget);
+    expect(find.textContaining('12/08/2026'), findsNothing);
+    expect(find.textContaining('15/08/2026'), findsNothing);
+
+    await tester.ensureVisible(find.text('RAJA DAS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('RAJA DAS'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('12/08/2026'), findsOneWidget);
+    expect(find.textContaining('15/08/2026'), findsOneWidget);
+    expect(find.text('Dining\nHDFC Millennia'), findsNWidgets(2));
+  });
+
   testWidgets(
     'combined category and merchant filters match despite merchant casing',
     (tester) async {
@@ -858,6 +922,121 @@ void main() {
     expect(find.text('PAYMENT METHOD'), findsOneWidget);
     expect(find.text('Credit cards'), findsOneWidget);
     expect(find.text('UPI from bank account'), findsOneWidget);
+  });
+
+  testWidgets('card rows expand into merchants and matching transactions', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _report(
+        spend: 200,
+        byCard: [
+          CardSpendRow(
+            cardId: 'uc-1',
+            cardName: 'HDFC Millennia',
+            total: Money.fromRupees(200),
+            rewards: Money.fromRupees(5),
+            txnCount: 2,
+            effectiveRatePerRupee: 0.025,
+          ),
+        ],
+      ),
+      transactions: [
+        _detailEntry(
+          id: 'card-txn-1',
+          merchant: 'Swiggy',
+          amount: 125,
+          categoryId: 'dining',
+          categoryName: 'Dining',
+          occurredAt: DateTime(2026, 8, 12),
+        ),
+        _detailEntry(
+          id: 'card-txn-2',
+          merchant: 'Cafe Central',
+          amount: 75,
+          categoryId: 'dining',
+          categoryName: 'Dining',
+          occurredAt: DateTime(2026, 8, 13),
+        ),
+      ],
+    );
+
+    await tester.ensureVisible(find.text('Cards'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cards'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('HDFC Millennia'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.ensureVisible(find.text('HDFC Millennia'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('HDFC Millennia'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Swiggy'), findsOneWidget);
+    expect(find.text('Cafe Central'), findsOneWidget);
+    expect(find.textContaining('12/08/2026'), findsOneWidget);
+    expect(find.textContaining('13/08/2026'), findsOneWidget);
+  });
+
+  testWidgets('UPI payment method expands into VPA groups', (tester) async {
+    await _pump(
+      tester,
+      _report(
+        spend: 200,
+        byInstrument: [
+          InstrumentSpendRow(
+            instrument: 'upi_bank',
+            total: Money.fromRupees(200),
+            txnCount: 2,
+          ),
+        ],
+      ),
+      transactions: [
+        _detailEntry(
+          id: 'upi-txn-1',
+          merchant: 'Raja Das',
+          merchantVpa: 'raja@upi',
+          amount: 125,
+          categoryId: 'other',
+          categoryName: 'Other',
+          occurredAt: DateTime(2026, 8, 12),
+          instrument: TxnInstrument.upiBank,
+          cardDisplayName: null,
+          userCardId: null,
+        ),
+        _detailEntry(
+          id: 'upi-txn-2',
+          merchant: 'Raja Das',
+          merchantVpa: 'raja@upi',
+          amount: 75,
+          categoryId: 'other',
+          categoryName: 'Other',
+          occurredAt: DateTime(2026, 8, 13),
+          instrument: TxnInstrument.upiBank,
+          cardDisplayName: null,
+          userCardId: null,
+        ),
+      ],
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('UPI from bank account'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.ensureVisible(find.text('UPI from bank account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('UPI from bank account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('raja@upi'), findsOneWidget);
+    expect(find.text('Raja Das'), findsOneWidget);
+    expect(find.textContaining('12/08/2026'), findsOneWidget);
+    expect(find.textContaining('13/08/2026'), findsOneWidget);
   });
 
   testWidgets('omits the long trend chart from the spending summary', (

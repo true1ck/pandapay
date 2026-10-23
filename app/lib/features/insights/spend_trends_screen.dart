@@ -1141,9 +1141,31 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       : 'Unknown merchant';
 
   String _cardName(TransactionEntry entry) =>
-      entry.cardDisplayName?.trim().isNotEmpty == true
+      entry.userCardId != null &&
+          entry.cardDisplayName?.trim().isNotEmpty == true
       ? entry.cardDisplayName!.trim()
-      : entry.instrument.label;
+      : entry.instrument == TxnInstrument.upiBank
+      ? (entry.accountLast4 == null
+            ? 'UPI / bank account'
+            : 'Bank account ending ${entry.accountLast4}')
+      : entry.instrument == TxnInstrument.debitCard
+      ? (entry.cardLast4 == null
+            ? 'Debit card (unmatched)'
+            : 'Debit card ending ${entry.cardLast4} (unlinked)')
+      : entry.instrument == TxnInstrument.creditCard
+      ? (entry.cardLast4 == null
+            ? 'Credit card (unmatched)'
+            : 'Credit card ending ${entry.cardLast4} (unlinked)')
+      : entry.instrument == TxnInstrument.wallet
+      ? 'Wallet'
+      : 'Cash & other';
+
+  List<TransactionEntry> _transactionsForCard(CardSpendRow row) {
+    return _visibleEntries.where((entry) {
+      if (row.cardId != null) return entry.userCardId == row.cardId;
+      return _cardName(entry).toLowerCase() == row.cardName.toLowerCase();
+    }).toList();
+  }
 
   List<String> _distinct(Iterable<String> values) {
     final result = values
@@ -1382,6 +1404,21 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     }).toList();
   }
 
+  List<TransactionEntry> _transactionsForInstrument(InstrumentSpendRow row) {
+    return _visibleEntries
+        .where((entry) => entry.instrument.wireValue == row.instrument)
+        .toList();
+  }
+
+  List<TransactionEntry> _transactionsForMerchant(SpendBreakdownRow row) {
+    return _visibleEntries
+        .where(
+          (entry) =>
+              _merchantName(entry).toLowerCase() == row.label.toLowerCase(),
+        )
+        .toList();
+  }
+
   Future<void> openFilters() async {
     final selection = await showModalBottomSheet<_SpendFilterSelection>(
       context: context,
@@ -1581,12 +1618,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
                   child: Column(
                     children: [
                       for (final row in instrumentRows)
-                        _BreakdownRow(
-                          label: row.label,
-                          amount: row.total,
+                        _ExpandableInstrumentRow(
+                          row: row,
                           total: total,
-                          count: row.txnCount,
-                          visual: spendingInstrumentVisual(row.instrument),
+                          entries: _transactionsForInstrument(row),
+                          detailsLoading: widget.transactionDetailsLoading,
                         ),
                     ],
                   ),
@@ -1596,24 +1632,32 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
                 merchantRows.isNotEmpty) ...[
               _SectionHeader('Merchants'),
               for (final row in merchantRows.take(20))
-                _BreakdownRow(
-                  label: row.label,
-                  amount: row.total,
+                _ExpandableMerchantRow(
+                  row: row,
                   total: total,
-                  count: row.txnCount,
-                  visual: const SpendingVisual(
-                    icon: Icons.storefront_rounded,
-                    accent: BambooChartColors.coral,
-                  ),
+                  entries: _transactionsForMerchant(row),
+                  detailsLoading: widget.transactionDetailsLoading,
                 ),
             ] else if (_tab == _SpendingTab.cards && cardRows.isNotEmpty) ...[
               _SectionHeader('Cards'),
-              for (final row in cardRows) _CardRow(row: row, total: total),
+              for (final row in cardRows)
+                _CardRow(
+                  row: row,
+                  total: total,
+                  entries: _transactionsForCard(row),
+                  detailsLoading: widget.transactionDetailsLoading,
+                ),
             ] else if (!_filtersActive && cardRows.isNotEmpty) ...[
               // A useful fallback for older reports that have card totals but
               // no category rows yet.
               _SectionHeader('Cards'),
-              for (final row in cardRows) _CardRow(row: row, total: total),
+              for (final row in cardRows)
+                _CardRow(
+                  row: row,
+                  total: total,
+                  entries: _transactionsForCard(row),
+                  detailsLoading: widget.transactionDetailsLoading,
+                ),
             ] else if (instrumentRows.isNotEmpty) ...[
               _BreakdownPanel(
                 title: 'Payment method',
@@ -1624,12 +1668,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
                 child: Column(
                   children: [
                     for (final row in instrumentRows)
-                      _BreakdownRow(
-                        label: row.label,
-                        amount: row.total,
+                      _ExpandableInstrumentRow(
+                        row: row,
                         total: total,
-                        count: row.txnCount,
-                        visual: spendingInstrumentVisual(row.instrument),
+                        entries: _transactionsForInstrument(row),
+                        detailsLoading: widget.transactionDetailsLoading,
                       ),
                   ],
                 ),
@@ -3488,7 +3531,8 @@ class SpendingDonut extends StatelessWidget {
                 GestureDetector(
                   key: const Key('spending_donut_center'),
                   behavior: HitTestBehavior.opaque,
-                  onTap: onCenterTap ??
+                  onTap:
+                      onCenterTap ??
                       (selected == null ? null : () => onSelected(null)),
                   child: SizedBox(
                     width: size * 0.60,
@@ -3983,6 +4027,284 @@ class _ExpandableCategoryRow extends StatelessWidget {
   }
 }
 
+/// A payment-method total that opens into its payees and the underlying
+/// transactions. UPI rows prefer the stored VPA as the grouping key; card and
+/// other methods use the merchant name when no counterparty identifier exists.
+class _ExpandableInstrumentRow extends StatelessWidget {
+  final InstrumentSpendRow row;
+  final Money total;
+  final List<TransactionEntry> entries;
+  final bool detailsLoading;
+
+  const _ExpandableInstrumentRow({
+    required this.row,
+    required this.total,
+    required this.entries,
+    required this.detailsLoading,
+  });
+
+  Map<String, List<TransactionEntry>> _recipientGroups() {
+    final isUpi = row.instrument == 'upi_bank';
+    final groups = <String, List<TransactionEntry>>{};
+    for (final entry in entries) {
+      final vpa = entry.merchantVpa?.trim();
+      final merchant = entry.merchantName?.trim();
+      final label = isUpi && vpa != null && vpa.isNotEmpty
+          ? vpa
+          : (merchant == null || merchant.isEmpty ? 'Unknown payee' : merchant);
+      groups.putIfAbsent(label, () => []).add(entry);
+    }
+    return groups;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = total.isZero
+        ? 0.0
+        : (row.total.paise / total.paise).clamp(0.0, 1.0);
+    final groups = _recipientGroups().entries.toList()
+      ..sort((a, b) {
+        final aTotal = a.value.fold<int>(
+          0,
+          (sum, entry) => sum + entry.amount.paise,
+        );
+        final bTotal = b.value.fold<int>(
+          0,
+          (sum, entry) => sum + entry.amount.paise,
+        );
+        return bTotal.compareTo(aTotal);
+      });
+
+    return CardSummaryPanel(
+      padding: EdgeInsets.zero,
+      margin: const EdgeInsets.only(bottom: AppSpace.sm),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          AppSpace.sm,
+          AppSpace.sm,
+          AppSpace.sm,
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          0,
+          AppSpace.md,
+          AppSpace.sm,
+        ),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: _SpendingVisualBadge(
+          visual: spendingInstrumentVisual(row.instrument),
+          size: 38,
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    row.label,
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Text(
+                  '${(ratio * 100).toStringAsFixed(0)}%',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: MoneyText(
+                      row.total,
+                      confidence: Confidence.estimated,
+                      style: BambooFonts.ui(
+                        13.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${row.txnCount} ${row.txnCount == 1 ? 'transaction' : 'transactions'} · Tap to see payees',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              child: LinearProgressIndicator(
+                value: ratio,
+                minHeight: 4,
+                backgroundColor: BambooInk.paperMuted,
+                color: spendingInstrumentVisual(row.instrument).accent,
+              ),
+            ),
+          ],
+        ),
+        children: [
+          if (detailsLoading && entries.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Loading transaction details…'),
+              ),
+            )
+          else if (groups.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Transaction details are not available for this period yet.',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+              ),
+            )
+          else
+            for (final group in groups)
+              _MerchantGroup(merchant: group.key, entries: group.value),
+        ],
+      ),
+    );
+  }
+}
+
+/// A merchant (or UPI payee) total that opens in place — repeated payments to
+/// the same person or merchant are clubbed into one expandable row whose
+/// children are the underlying transactions.
+class _ExpandableMerchantRow extends StatelessWidget {
+  final SpendBreakdownRow row;
+  final Money total;
+  final List<TransactionEntry> entries;
+  final bool detailsLoading;
+
+  const _ExpandableMerchantRow({
+    required this.row,
+    required this.total,
+    required this.entries,
+    required this.detailsLoading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = total.isZero
+        ? 0.0
+        : (row.total.paise / total.paise).clamp(0.0, 1.0);
+
+    return CardSummaryPanel(
+      padding: EdgeInsets.zero,
+      margin: const EdgeInsets.only(bottom: AppSpace.md),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          AppSpace.sm,
+          AppSpace.sm,
+          AppSpace.sm,
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          0,
+          AppSpace.md,
+          AppSpace.sm,
+        ),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: _SpendingVisualBadge(
+          visual: const SpendingVisual(
+            icon: Icons.storefront_rounded,
+            accent: BambooChartColors.coral,
+          ),
+          size: 38,
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    row.label,
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Text(
+                  '${(ratio * 100).toStringAsFixed(0)}%',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: MoneyText(
+                      row.total,
+                      confidence: Confidence.estimated,
+                      style: BambooFonts.ui(
+                        13.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${row.txnCount} ${row.txnCount == 1 ? 'transaction' : 'transactions'} · Tap to see payments',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              child: LinearProgressIndicator(
+                value: ratio,
+                minHeight: 4,
+                backgroundColor: BambooInk.paperMuted,
+                color: BambooChartColors.coral,
+              ),
+            ),
+          ],
+        ),
+        children: [
+          if (detailsLoading && entries.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Loading transaction details…'),
+              ),
+            )
+          else if (entries.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Transaction details are not available for this period yet.',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+              ),
+            )
+          else
+            _MerchantGroup(merchant: row.label, entries: entries),
+        ],
+      ),
+    );
+  }
+}
+
 class _MerchantGroup extends StatelessWidget {
   final String merchant;
   final List<TransactionEntry> entries;
@@ -4069,6 +4391,10 @@ class _MerchantGroup extends StatelessWidget {
                 ),
                 subtitle: Text(
                   [
+                    if (entry.merchantName?.trim().isNotEmpty == true &&
+                        entry.merchantName!.trim().toLowerCase() !=
+                            merchant.toLowerCase())
+                      entry.merchantName!.trim(),
                     if (entry.categoryName != null) entry.categoryLabel,
                     entry.cardDisplayName ?? entry.instrument.label,
                   ].join('\n'),
@@ -4195,7 +4521,27 @@ class _BreakdownRow extends StatelessWidget {
 class _CardRow extends StatelessWidget {
   final CardSpendRow row;
   final Money total;
-  const _CardRow({required this.row, required this.total});
+  final List<TransactionEntry> entries;
+  final bool detailsLoading;
+
+  const _CardRow({
+    required this.row,
+    required this.total,
+    required this.entries,
+    required this.detailsLoading,
+  });
+
+  Map<String, List<TransactionEntry>> _merchantGroups() {
+    final groups = <String, List<TransactionEntry>>{};
+    for (final entry in entries) {
+      final merchant = entry.merchantName?.trim();
+      final label = merchant == null || merchant.isEmpty
+          ? 'Unknown merchant'
+          : merchant;
+      groups.putIfAbsent(label, () => []).add(entry);
+    }
+    return groups;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -4211,57 +4557,110 @@ class _CardRow extends StatelessWidget {
           ? BambooChartColors.violet
           : BambooChartColors.blue,
     );
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpace.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _SpendingVisualBadge(visual: visual, size: 34),
-              const SizedBox(width: AppSpace.sm),
-              Expanded(
-                child: Text(
-                  row.cardName,
-                  style: BambooFonts.ui(13.5, color: BambooInk.ink900),
-                  overflow: TextOverflow.ellipsis,
+    final groups = _merchantGroups().entries.toList()
+      ..sort((a, b) {
+        final aTotal = a.value.fold<int>(
+          0,
+          (sum, entry) => sum + entry.amount.paise,
+        );
+        final bTotal = b.value.fold<int>(
+          0,
+          (sum, entry) => sum + entry.amount.paise,
+        );
+        return bTotal.compareTo(aTotal);
+      });
+
+    return CardSummaryPanel(
+      padding: EdgeInsets.zero,
+      margin: const EdgeInsets.only(bottom: AppSpace.sm),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          AppSpace.sm,
+          AppSpace.sm,
+          AppSpace.sm,
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          0,
+          AppSpace.md,
+          AppSpace.sm,
+        ),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: _SpendingVisualBadge(visual: visual, size: 34),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    row.cardName,
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpace.sm),
-              MoneyText(
-                row.total,
-                confidence: Confidence.estimated,
-                style: BambooFonts.ui(
-                  13.5,
-                  weight: FontWeight.w600,
-                  color: BambooInk.ink900,
+                const SizedBox(width: AppSpace.sm),
+                MoneyText(
+                  row.total,
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.ui(
+                    13.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '${row.txnCount} ${row.txnCount == 1 ? 'transaction' : 'transactions'}',
-            style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            rate != null && !row.rewards.isZero
-                ? 'Rewards earned ${row.rewards.format(hidePaise: true)} — '
-                      '${(rate * 100).toStringAsFixed(2)}% back on what you spent here'
-                : 'Rewards earned ${row.rewards.format(hidePaise: true)}',
-            style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-          ),
-          const SizedBox(height: 4),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            child: LinearProgressIndicator(
-              value: ratio,
-              minHeight: 4,
-              backgroundColor: BambooInk.paperMuted,
-              color: visual.accent,
+              ],
             ),
-          ),
+            const SizedBox(height: 4),
+            Text(
+              '${row.txnCount} ${row.txnCount == 1 ? 'transaction' : 'transactions'} · Tap to see merchants',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              rate != null && !row.rewards.isZero
+                  ? 'Rewards earned ${row.rewards.format(hidePaise: true)} — '
+                        '${(rate * 100).toStringAsFixed(2)}% back on what you spent here'
+                  : 'Rewards earned ${row.rewards.format(hidePaise: true)}',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              child: LinearProgressIndicator(
+                value: ratio,
+                minHeight: 4,
+                backgroundColor: BambooInk.paperMuted,
+                color: visual.accent,
+              ),
+            ),
+          ],
+        ),
+        children: [
+          if (detailsLoading && entries.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Loading transaction details…'),
+              ),
+            )
+          else if (groups.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Transaction details are not available for this period yet.',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+              ),
+            )
+          else
+            for (final group in groups)
+              _MerchantGroup(merchant: group.key, entries: group.value),
         ],
       ),
     );
