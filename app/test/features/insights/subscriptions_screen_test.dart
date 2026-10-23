@@ -131,7 +131,6 @@ void main() {
 
       expect(find.text('1 active'), findsOneWidget);
       expect(find.text('OpenAILLC'), findsOneWidget);
-      expect(find.text('AutoPay Active'), findsOneWidget);
       expect(find.text('Monthly AutoPay'), findsOneWidget);
       expect(find.text('Axis Bank Card XX7105'), findsOneWidget);
       expect(find.text('paytm-98510@ptys'), findsNothing);
@@ -249,7 +248,7 @@ void main() {
     expect(find.textContaining('Renews around 4 Jul 2025'), findsNothing);
   });
 
-  testWidgets('filters by AutoPay and displays clear cadence frequency badges', (
+  testWidgets('filters by cadence and displays clear AutoPay frequency labels', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -281,7 +280,7 @@ void main() {
                   autopayStatus: 'active',
                 ),
                 RecurringSeries(
-                  id: 'gym-manual',
+                  id: 'gym-monthly',
                   displayName: 'Cult Fit',
                   typicalAmount: Money.fromRupees(1200),
                   cadenceDays: 30,
@@ -301,33 +300,41 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Frequency labels for autopay items
-    expect(find.text('Monthly AutoPay'), findsOneWidget);
-    expect(find.text('Yearly AutoPay'), findsOneWidget);
-    expect(find.text('AutoPay Active'), findsNWidgets(2));
+    // Frequency labels for recurring items
+    expect(find.text('Monthly AutoPay', skipOffstage: false), findsNWidgets(2));
+    expect(find.text('Yearly AutoPay', skipOffstage: false), findsOneWidget);
 
-    // Filter chips present
+    // Cadence filter chips present
     expect(find.text('All (3)'), findsOneWidget);
-    expect(find.text('AutoPay (2)'), findsOneWidget);
-    expect(find.text('Manual (1)'), findsOneWidget);
+    expect(find.text('Monthly (2)'), findsOneWidget);
+    expect(find.text('Quarterly (0)'), findsOneWidget);
+    expect(find.text('Yearly (1)'), findsOneWidget);
 
-    // Tap AutoPay filter
-    await tester.tap(find.text('AutoPay (2)'));
+    // Tap Monthly filter
+    await tester.tap(find.text('Monthly (2)'));
     await tester.pumpAndSettle();
 
-    // AutoPay items visible, manual hidden
+    // Monthly items visible, yearly hidden
     expect(find.text('Netflix'), findsOneWidget);
-    expect(find.text('Amazon Prime'), findsOneWidget);
-    expect(find.text('Cult Fit'), findsNothing);
-    expect(find.text('Your AutoPay spend'), findsOneWidget);
+    expect(find.text('Cult Fit', skipOffstage: false), findsOneWidget);
+    expect(find.text('Amazon Prime'), findsNothing);
+    expect(find.text('Your monthly AutoPay spend'), findsOneWidget);
 
-    // Tap Manual filter
-    await tester.tap(find.text('Manual (1)'));
+    // Tap Yearly filter
+    await tester.tap(find.text('Yearly (1)'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Amazon Prime'), findsOneWidget);
     expect(find.text('Netflix'), findsNothing);
-    expect(find.text('Amazon Prime'), findsNothing);
-    expect(find.text('Cult Fit', skipOffstage: false), findsOneWidget);
+    expect(find.text('Cult Fit'), findsNothing);
+    expect(find.text('Your yearly AutoPay spend'), findsOneWidget);
+
+    // Tap Quarterly (0) filter
+    await tester.tap(find.text('Quarterly (0)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No quarterly AutoPay found'), findsOneWidget);
+    expect(find.text('Netflix'), findsNothing);
 
     // Tap All filter
     await tester.tap(find.text('All (3)'));
@@ -336,5 +343,6 @@ void main() {
     expect(find.text('Netflix'), findsOneWidget);
     expect(find.text('Amazon Prime'), findsOneWidget);
     expect(find.text('Cult Fit', skipOffstage: false), findsOneWidget);
+    expect(find.text('Your recurring spend'), findsOneWidget);
   });
 }

@@ -52,7 +52,36 @@ bool _isDisplayableSubscription(RecurringSeries series) {
   ).hasMatch(normalized);
 }
 
-final _subscriptionFilterProvider = StateProvider.autoDispose<String>((ref) => 'all');
+enum SubscriptionCadenceFilter {
+  all,
+  monthly,
+  quarterly,
+  yearly,
+}
+
+final _subscriptionFilterProvider =
+    StateProvider.autoDispose<SubscriptionCadenceFilter>(
+  (ref) => SubscriptionCadenceFilter.all,
+);
+
+bool _matchesCadence(
+  RecurringSeries series,
+  SubscriptionCadenceFilter filter,
+) {
+  if (filter == SubscriptionCadenceFilter.all) return true;
+  final days = series.cadenceDays;
+  final label = series.cadenceLabel.toLowerCase();
+  switch (filter) {
+    case SubscriptionCadenceFilter.monthly:
+      return (days >= 20 && days <= 45) || days == 28 || label.contains('month');
+    case SubscriptionCadenceFilter.quarterly:
+      return (days >= 70 && days < 150) || days == 84 || label.contains('quarter');
+    case SubscriptionCadenceFilter.yearly:
+      return days >= 300 || label.contains('year') || label.contains('annual');
+    case SubscriptionCadenceFilter.all:
+      return true;
+  }
+}
 
 /// Subscriptions — the charges that repeat, found in the user's own history.
 ///
@@ -144,20 +173,19 @@ class SubscriptionsScreen extends ConsumerWidget {
               );
             }
             final filter = ref.watch(_subscriptionFilterProvider);
-            final autopayCount = subscriptions
-                .where((s) => s.hasActiveAutoPay || s.isMandate)
+            final monthlyCount = subscriptions
+                .where((s) => _matchesCadence(s, SubscriptionCadenceFilter.monthly))
                 .length;
-            final manualCount = subscriptions.length - autopayCount;
+            final quarterlyCount = subscriptions
+                .where((s) => _matchesCadence(s, SubscriptionCadenceFilter.quarterly))
+                .length;
+            final yearlyCount = subscriptions
+                .where((s) => _matchesCadence(s, SubscriptionCadenceFilter.yearly))
+                .length;
 
-            final filteredSubscriptions = filter == 'autopay'
-                ? subscriptions
-                    .where((s) => s.hasActiveAutoPay || s.isMandate)
-                    .toList(growable: false)
-                : filter == 'manual'
-                    ? subscriptions
-                        .where((s) => !s.hasActiveAutoPay && !s.isMandate)
-                        .toList(growable: false)
-                    : subscriptions;
+            final filteredSubscriptions = subscriptions
+                .where((s) => _matchesCadence(s, filter))
+                .toList(growable: false);
 
             // The engine split them; the screen groups the same truth.
             final billing = filteredSubscriptions
@@ -173,7 +201,7 @@ class SubscriptionsScreen extends ConsumerWidget {
                 .toList(growable: false);
             // The server total already counts only proven, still-billing
             // series; re-folding here would put guesses back in the headline.
-            final totalAnnual = filter == 'all'
+            final totalAnnual = filter == SubscriptionCadenceFilter.all
                 ? data.totalAnnual
                 : billing.fold<Money>(
                     Money.zero(),
@@ -194,9 +222,12 @@ class SubscriptionsScreen extends ConsumerWidget {
                     series: billing,
                     totalAnnual: totalAnnual,
                     pendingCount: flagged.length + needsCadence.length,
-                    title: filter == 'autopay'
-                        ? 'Your AutoPay spend'
-                        : 'Your recurring spend',
+                    title: switch (filter) {
+                      SubscriptionCadenceFilter.monthly => 'Your monthly AutoPay spend',
+                      SubscriptionCadenceFilter.quarterly => 'Your quarterly AutoPay spend',
+                      SubscriptionCadenceFilter.yearly => 'Your yearly AutoPay spend',
+                      SubscriptionCadenceFilter.all => 'Your recurring spend',
+                    },
                   ),
                   const SizedBox(height: AppSpace.md),
                   SingleChildScrollView(
@@ -207,7 +238,7 @@ class SubscriptionsScreen extends ConsumerWidget {
                           avatar: Icon(
                             Icons.apps_rounded,
                             size: 15,
-                            color: filter == 'all'
+                            color: filter == SubscriptionCadenceFilter.all
                                 ? BambooInk.onSlate
                                 : BambooInk.ink700,
                           ),
@@ -215,11 +246,11 @@ class SubscriptionsScreen extends ConsumerWidget {
                           labelStyle: BambooFonts.ui(
                             12.5,
                             weight: FontWeight.w600,
-                            color: filter == 'all'
+                            color: filter == SubscriptionCadenceFilter.all
                                 ? BambooInk.onSlate
                                 : BambooInk.ink900,
                           ),
-                          selected: filter == 'all',
+                          selected: filter == SubscriptionCadenceFilter.all,
                           selectedColor: BambooInk.slate,
                           backgroundColor: BambooInk.paperMuted,
                           side: BorderSide.none,
@@ -228,26 +259,26 @@ class SubscriptionsScreen extends ConsumerWidget {
                           ),
                           onSelected: (_) => ref
                               .read(_subscriptionFilterProvider.notifier)
-                              .state = 'all',
+                              .state = SubscriptionCadenceFilter.all,
                         ),
                         const SizedBox(width: AppSpace.xs),
                         ChoiceChip(
                           avatar: Icon(
-                            Icons.bolt_rounded,
+                            Icons.calendar_view_month_rounded,
                             size: 15,
-                            color: filter == 'autopay'
+                            color: filter == SubscriptionCadenceFilter.monthly
                                 ? BambooInk.lime
                                 : BambooInk.jade,
                           ),
-                          label: Text('AutoPay ($autopayCount)'),
+                          label: Text('Monthly ($monthlyCount)'),
                           labelStyle: BambooFonts.ui(
                             12.5,
                             weight: FontWeight.w600,
-                            color: filter == 'autopay'
+                            color: filter == SubscriptionCadenceFilter.monthly
                                 ? BambooInk.onSlate
                                 : BambooInk.ink900,
                           ),
-                          selected: filter == 'autopay',
+                          selected: filter == SubscriptionCadenceFilter.monthly,
                           selectedColor: BambooInk.slate,
                           backgroundColor: BambooInk.paperMuted,
                           side: BorderSide.none,
@@ -256,38 +287,64 @@ class SubscriptionsScreen extends ConsumerWidget {
                           ),
                           onSelected: (_) => ref
                               .read(_subscriptionFilterProvider.notifier)
-                              .state = 'autopay',
+                              .state = SubscriptionCadenceFilter.monthly,
                         ),
-                        if (manualCount > 0) ...[
-                          const SizedBox(width: AppSpace.xs),
-                          ChoiceChip(
-                            avatar: Icon(
-                              Icons.touch_app_outlined,
-                              size: 15,
-                              color: filter == 'manual'
-                                  ? BambooInk.onSlate
-                                  : BambooInk.ink700,
-                            ),
-                            label: Text('Manual ($manualCount)'),
-                            labelStyle: BambooFonts.ui(
-                              12.5,
-                              weight: FontWeight.w600,
-                              color: filter == 'manual'
-                                  ? BambooInk.onSlate
-                                  : BambooInk.ink900,
-                            ),
-                            selected: filter == 'manual',
-                            selectedColor: BambooInk.slate,
-                            backgroundColor: BambooInk.paperMuted,
-                            side: BorderSide.none,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            onSelected: (_) => ref
-                                .read(_subscriptionFilterProvider.notifier)
-                                .state = 'manual',
+                        const SizedBox(width: AppSpace.xs),
+                        ChoiceChip(
+                          avatar: Icon(
+                            Icons.date_range_rounded,
+                            size: 15,
+                            color: filter == SubscriptionCadenceFilter.quarterly
+                                ? BambooInk.lime
+                                : BambooInk.jade,
                           ),
-                        ],
+                          label: Text('Quarterly ($quarterlyCount)'),
+                          labelStyle: BambooFonts.ui(
+                            12.5,
+                            weight: FontWeight.w600,
+                            color: filter == SubscriptionCadenceFilter.quarterly
+                                ? BambooInk.onSlate
+                                : BambooInk.ink900,
+                          ),
+                          selected: filter == SubscriptionCadenceFilter.quarterly,
+                          selectedColor: BambooInk.slate,
+                          backgroundColor: BambooInk.paperMuted,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          onSelected: (_) => ref
+                              .read(_subscriptionFilterProvider.notifier)
+                              .state = SubscriptionCadenceFilter.quarterly,
+                        ),
+                        const SizedBox(width: AppSpace.xs),
+                        ChoiceChip(
+                          avatar: Icon(
+                            Icons.event_repeat_rounded,
+                            size: 15,
+                            color: filter == SubscriptionCadenceFilter.yearly
+                                ? BambooInk.lime
+                                : BambooInk.jade,
+                          ),
+                          label: Text('Yearly ($yearlyCount)'),
+                          labelStyle: BambooFonts.ui(
+                            12.5,
+                            weight: FontWeight.w600,
+                            color: filter == SubscriptionCadenceFilter.yearly
+                                ? BambooInk.onSlate
+                                : BambooInk.ink900,
+                          ),
+                          selected: filter == SubscriptionCadenceFilter.yearly,
+                          selectedColor: BambooInk.slate,
+                          backgroundColor: BambooInk.paperMuted,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          onSelected: (_) => ref
+                              .read(_subscriptionFilterProvider.notifier)
+                              .state = SubscriptionCadenceFilter.yearly,
+                        ),
                       ],
                     ),
                   ),
@@ -303,15 +360,18 @@ class SubscriptionsScreen extends ConsumerWidget {
                         child: Column(
                           children: [
                             const Icon(
-                              Icons.bolt_outlined,
+                              Icons.event_busy_outlined,
                               size: 36,
                               color: BambooInk.ink500,
                             ),
                             const SizedBox(height: AppSpace.sm),
                             Text(
-                              filter == 'autopay'
-                                  ? 'No active AutoPay found'
-                                  : 'No manual subscriptions found',
+                              switch (filter) {
+                                SubscriptionCadenceFilter.monthly => 'No monthly AutoPay found',
+                                SubscriptionCadenceFilter.quarterly => 'No quarterly AutoPay found',
+                                SubscriptionCadenceFilter.yearly => 'No yearly AutoPay found',
+                                SubscriptionCadenceFilter.all => 'No subscriptions found',
+                              },
                               style: BambooFonts.heading(
                                 15,
                                 color: BambooInk.ink900,
@@ -319,9 +379,16 @@ class SubscriptionsScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: AppSpace.xs),
                             Text(
-                              filter == 'autopay'
-                                  ? 'Recurring services with automated bank mandates or card standing instructions will appear here.'
-                                  : 'Subscriptions without automated AutoPay mandates will appear here.',
+                              switch (filter) {
+                                SubscriptionCadenceFilter.monthly =>
+                                  'Recurring services with a monthly AutoPay cycle will appear here.',
+                                SubscriptionCadenceFilter.quarterly =>
+                                  'Recurring services with a quarterly AutoPay cycle will appear here.',
+                                SubscriptionCadenceFilter.yearly =>
+                                  'Recurring services with an annual or yearly AutoPay cycle will appear here.',
+                                SubscriptionCadenceFilter.all =>
+                                  'Recurring services with confirmed AutoPay cadence will appear here.',
+                              },
                               textAlign: TextAlign.center,
                               style: BambooFonts.ui(
                                 12.5,
@@ -1193,18 +1260,31 @@ class _SeriesCard extends ConsumerWidget {
 
   String get _frequencyLabel {
     if (!series.cadenceConfirmed) return 'Cadence not confirmed';
-    final isAutoPay = series.hasActiveAutoPay || series.isMandate;
-    if (isAutoPay) {
-      if (series.cadenceDays >= 350) return 'Yearly AutoPay';
-      if (series.cadenceDays >= 85 && series.cadenceDays < 175) {
-        return 'Quarterly AutoPay';
-      }
-      if (series.cadenceDays >= 26 && series.cadenceDays <= 32) {
-        return 'Monthly AutoPay';
-      }
-      return '${series.cadenceLabel} AutoPay';
+    final days = series.cadenceDays;
+    final labelLower = series.cadenceLabel.toLowerCase();
+
+    if (days >= 300 || labelLower.contains('year') || labelLower.contains('annual')) {
+      return 'Yearly AutoPay';
     }
-    return series.cadenceLabel;
+    if ((days >= 70 && days < 150) || days == 84 || labelLower.contains('quarter')) {
+      return days == 84 ? '84-day AutoPay' : 'Quarterly AutoPay';
+    }
+    if (days == 28) {
+      return '28-day AutoPay';
+    }
+    if (days == 56) {
+      return '56-day AutoPay';
+    }
+    if ((days >= 20 && days <= 45) || labelLower.contains('month')) {
+      return 'Monthly AutoPay';
+    }
+    if (labelLower.contains('week')) {
+      return 'Weekly AutoPay';
+    }
+    if (labelLower.endsWith('autopay')) {
+      return series.cadenceLabel;
+    }
+    return '${series.cadenceLabel} AutoPay';
   }
 
   /// The yearly line is only honest once the cycle is proven. Until then the
@@ -1298,7 +1378,7 @@ class _SeriesCard extends ConsumerWidget {
               runSpacing: AppSpace.xs,
               children: [
                 _InfoPill(
-                  icon: Icons.schedule_rounded,
+                  icon: Icons.bolt_rounded,
                   label: _frequencyLabel,
                   color: _subscriptionAccent,
                   background: _subscriptionTint,
@@ -1310,7 +1390,8 @@ class _SeriesCard extends ConsumerWidget {
                     color: _subscriptionAccent,
                     background: _subscriptionTint,
                   ),
-                if (series.hasActiveAutoPay || series.isMandate)
+                if ((series.hasActiveAutoPay || series.isMandate) &&
+                    !_frequencyLabel.toLowerCase().contains('autopay'))
                   const _InfoPill(
                     icon: Icons.bolt_rounded,
                     label: 'AutoPay Active',
