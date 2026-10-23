@@ -8,6 +8,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/support_api.dart';
+import '../../data/merchant_issue_rules_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../settings/feedback_support_screen.dart' show supportApiBaseUrl;
 import '../../main.dart' show MoneyText;
@@ -96,6 +97,11 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
         message: [kind.label, if (_details.text.trim().isNotEmpty) _details.text.trim()].join('\n\n'),
         diagnostics: _diagnostics,
       );
+      // The support ticket is the primary report. The merchant propagation
+      // prompt is optional and independent: a user can report one payment,
+      // select a subset of the same merchant's payments, and then separately
+      // opt into applying this issue flag to future imports.
+      await _offerMerchantPropagation(kind);
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(
@@ -109,6 +115,97 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  MerchantIssueKind _merchantIssueKind(_IssueKind kind) => switch (kind) {
+    _IssueKind.wrongReward => MerchantIssueKind.wrongReward,
+    _IssueKind.duplicateCharge => MerchantIssueKind.duplicateCharge,
+    _IssueKind.cardNotRecognized => MerchantIssueKind.cardNotRecognized,
+    _IssueKind.other => MerchantIssueKind.other,
+  };
+
+  Future<void> _offerMerchantPropagation(_IssueKind kind) async {
+    final repository = ref.read(merchantIssueRulesRepositoryProvider);
+    if (repository == null || !mounted) return;
+    final issueKind = _merchantIssueKind(kind);
+    MerchantIssueRulePreview preview;
+    try {
+      preview = await repository.preview(
+        sourceTransactionId: widget.entry.id,
+        issueKind: issueKind,
+      );
+    } catch (_) {
+      // Reporting remains successful when the optional propagation API is not
+      // deployed yet, unavailable offline, or rejects an unsafe merchant.
+      return;
+    }
+    if (!mounted || !preview.canCreate) return;
+    final remember = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Apply this flag to future transactions?',
+                style: BambooFonts.heading(18, color: BambooInk.ink900),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'New ${preview.displayMerchantName} transactions can carry the ${issueKind.label.toLowerCase()} rule. Existing transactions are shown only as reference and will not be changed.',
+                style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+              ),
+              if (preview.candidates.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${preview.candidates.length} existing matching transaction${preview.candidates.length == 1 ? '' : 's'} found for reference.',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+              ],
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(false),
+                      child: const Text('Not now'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(true),
+                      child: const Text('Remember for future'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (remember != true || !mounted) return;
+    try {
+      await repository.createFutureRule(
+        sourceTransactionId: widget.entry.id,
+        issueKind: issueKind,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('The report was sent, but the future flag could not be saved.')),
+        );
+      }
     }
   }
 

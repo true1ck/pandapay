@@ -47,6 +47,7 @@ import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
 import '../data/local_user_cards_repository.dart';
 import '../data/merchant_category_rules_repository.dart';
+import '../data/merchant_issue_rules_repository.dart';
 import '../data/merchant_search_repository.dart';
 import '../data/needs_review_repository.dart';
 import '../data/notification_preferences_repository.dart';
@@ -1519,6 +1520,21 @@ final merchantCategoryRulesRepositoryProvider =
         client: ref.read(authenticatedHttpClientProvider),
       );
     });
+
+/// Future merchant issue-flag rules use the same authenticated API contract
+/// as category rules but carry `action: flag`. Keeping a separate provider
+/// prevents a flag report from sharing category state or mutating a category
+/// rule accidentally.
+final merchantIssueRulesRepositoryProvider =
+    Provider<MerchantIssueRulesRepository?>((ref) {
+  final token = _stableSessionToken(ref);
+  if (token == null) return null;
+  return MerchantIssueRulesRepository(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
+});
 
 /// Invalidates all projections whose values can change after a category bulk
 /// apply. This is deliberately lazy: visible consumers fetch their own fresh

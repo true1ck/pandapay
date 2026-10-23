@@ -88,6 +88,70 @@ test('a user merchant rule outranks inferred private match terms', async () => {
   assert.equal(client.calls.length, 0);
 });
 
+test('category resolution ignores flag-only merchant rules', () => {
+  const result = resolveUserMerchantRule([
+    activeRule({
+      id: 'flag-rule',
+      action: 'flag',
+      category_id: null,
+      flag: 'needs_review',
+    }),
+    activeRule({
+      id: 'category-rule',
+      action: 'category',
+      category_id: 'food-category',
+      version: 2,
+    }),
+  ], { merchantVpa: 'shop@upi', entryKind: 'spend', status: 'active' });
+
+  assert.equal(result.id, 'category-rule');
+  assert.equal(result.categoryId, 'food-category');
+  assert.equal(result.action, 'category');
+});
+
+test('a flag-only merchant rule never becomes a category assignment', async () => {
+  const client = fakeClient([[], [], [], [], [], [{ id: 'other-category' }]]);
+  const result = await resolveCategoryAssignmentForImport(client, 'user-1', {
+    merchantName: 'Same Shop',
+    vpa: 'shop@upi',
+    userMerchantRules: [{
+      id: 'flag-rule',
+      action: 'flag',
+      match_basis: 'vpa',
+      match_value: 'shop@upi',
+      category_id: null,
+      is_active: true,
+      flag: 'needs_review',
+    }],
+  });
+
+  assert.equal(result.categoryId, 'other-category');
+  assert.equal(result.userCategoryId, null);
+});
+
+test('future category rules remain opt-out at import boundary', async () => {
+  const client = fakeClient([[{ id: 'explicit-category' }]]);
+  const rule = activeRule({ category_id: 'remembered-category' });
+
+  assert.equal(
+    await resolveUserMerchantRuleForImport(client, 'user-1', {
+      vpa: 'shop@upi',
+      entryKind: 'spend',
+      status: 'active',
+      userMerchantRules: [rule],
+      applyUserMerchantRule: false,
+    }),
+    null,
+  );
+  const explicit = await resolveCategoryForImport(client, 'user-1', {
+    merchantName: 'Same Shop',
+    vpa: 'shop@upi',
+    categoryHint: 'Dining',
+    userMerchantRules: [rule],
+  });
+  assert.equal(explicit, 'explicit-category');
+});
+
 test('inactive, non-spend, split, refund and reversal rows are ineligible', () => {
   const rule = activeRule();
   for (const transaction of [

@@ -10,6 +10,7 @@ const {
 const MAX_LIST_LIMIT = 100;
 const MAX_EXAMPLES = 20;
 const RULE_ENTITY = 'user_merchant_category_rules';
+const RULE_ACTIONS = new Set(['category', 'flag']);
 const UNSAFE_RULE_NAMES = new Set([
   'razorpay', 'payu', 'cashfree', 'billdesk', 'ccavenue', 'juspay', 'stripe',
   'payment gateway', 'gateway', 'upi', 'upi collect', 'phonepe', 'paytm',
@@ -33,6 +34,39 @@ function uuid(value) {
 
 function bodyValue(body, snake, camel = snake) {
   return Object.prototype.hasOwnProperty.call(body || {}, snake) ? body[snake] : body?.[camel];
+}
+
+function parseAction(body, fallback = 'category') {
+  const supplied = bodyValue(body, 'action', 'actionType');
+  const action = supplied === undefined || supplied === null || supplied === ''
+    ? fallback
+    : String(supplied).trim().toLowerCase();
+  if (!RULE_ACTIONS.has(action)) throw new MerchantRuleError('action_invalid', 400);
+  return action;
+}
+
+function parseFlag(body, fallback = null) {
+  const supplied = bodyValue(body, 'flag', 'flagKey');
+  const flag = supplied === undefined || supplied === null || supplied === ''
+    ? fallback
+    : String(supplied).trim().toLowerCase();
+  if (flag === null || flag === undefined) return null;
+  if (!/^[a-z][a-z0-9_.:-]{0,63}$/.test(flag)) {
+    throw new MerchantRuleError('flag_invalid', 400);
+  }
+  return flag;
+}
+
+function validateActionTarget(action, categoryId, userCategoryId, flag) {
+  if (action === 'category') {
+    if (!uuid(categoryId) || flag !== null) {
+      throw new MerchantRuleError('category_action_target_invalid', 400);
+    }
+    return;
+  }
+  if (flag === null || categoryId !== null || userCategoryId !== null) {
+    throw new MerchantRuleError('flag_action_target_invalid', 400);
+  }
 }
 
 function requestHash(input) {
@@ -164,6 +198,8 @@ function safeMerchantName(name) {
 
 function responseForRule(row, extra = {}) {
   if (!row) return null;
+  const action = row.action || row.action_type || 'category';
+  const flag = row.flag || row.flag_key || null;
   const category = {
     categoryId: row.category_id,
     categoryName: row.category_name || null,
@@ -173,6 +209,9 @@ function responseForRule(row, extra = {}) {
   };
   return {
     id: row.id,
+    action,
+    flag,
+    flagKey: flag,
     matchBasis: row.match_basis,
     matchValue: row.match_value,
     merchantName: safeMerchantName(row.display_merchant_name || row.merchant_name),
@@ -190,7 +229,7 @@ function responseForRule(row, extra = {}) {
 }
 
 const RULE_SELECT = `
-  SELECT r.id, r.profile_id, r.match_basis, r.match_value, r.category_id,
+  SELECT r.id, r.profile_id, r.match_basis, r.match_value, r.action, r.flag, r.category_id,
          r.user_category_id, r.is_active, r.version, r.source_transaction_id,
          r.created_at, r.updated_at,
          sc.name AS category_name, sc.slug AS category_slug,
@@ -231,6 +270,8 @@ async function writeSyncChange(client, profileId, rule, operation) {
     [profileId, RULE_ENTITY, rule.id, JSON.stringify({
       match_basis: rule.match_basis,
       match_value: rule.match_value,
+      action: rule.action || 'category',
+      flag: rule.flag || null,
       category_id: rule.category_id,
       user_category_id: rule.user_category_id,
       is_active: rule.is_active,
@@ -243,10 +284,13 @@ async function writeSyncChange(client, profileId, rule, operation) {
 async function writeAudit(client, profileId, actorId, operation, oldRule, newRule) {
   await client.query(
     `INSERT INTO user_merchant_category_rule_audit
-       (profile_id, rule_id, actor_id, operation, old_category_id, old_user_category_id,
+      (profile_id, rule_id, actor_id, operation, old_action, old_flag,
+        new_action, new_flag, old_category_id, old_user_category_id,
         new_category_id, new_user_category_id, old_is_active, new_is_active, version)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
     [profileId, newRule.id, actorId, operation,
+      oldRule?.action || 'category', oldRule?.flag || null,
+      newRule.action || 'category', newRule.flag || null,
       oldRule?.category_id || null, oldRule?.user_category_id || null,
       newRule.category_id, newRule.user_category_id || null,
       oldRule?.is_active ?? null, newRule.is_active, newRule.version],
@@ -311,8 +355,10 @@ async function createRule({ client, profileId, actorId, body, idempotencyKey }) 
   const sourceId = bodyValue(body, 'source_transaction_id', 'sourceTransactionId');
   const categoryId = bodyValue(body, 'category_id', 'categoryId');
   const userCategoryId = bodyValue(body, 'user_category_id', 'userCategoryId');
+  const action = parseAction(body);
+  const flag = parseFlag(body);
   const expectedVersion = parseExpectedVersion(body);
-  const hash = requestHash({ sourceId, categoryId, userCategoryId: userCategoryId || null, expectedVersion });
+  const hash = requestHash({ sourceId, action, flag, categoryId, userCategoryId: userCategoryId || null, expectedVersion });
   await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [`merchant-rule-idempotency:${profileId}:${idempotencyKey}`]);
   const existingIdempotency = await client.query(
     `SELECT request_hash, result FROM user_merchant_category_rule_idempotency
@@ -334,7 +380,10 @@ async function createRule({ client, profileId, actorId, body, idempotencyKey }) 
 
   const source = await loadSourceTransaction(client, profileId, sourceId);
   const match = ruleMatchFromTransaction(source);
-  const target = await loadCategoryTarget(client, profileId, categoryId, userCategoryId);
+  const target = action === 'category'
+    ? await loadCategoryTarget(client, profileId, categoryId, userCategoryId)
+    : { categoryId: null, userCategoryId: null };
+  validateActionTarget(action, target.categoryId, target.userCategoryId, flag);
   let rule = await readRuleByKey(client, profileId, match.basis, match.value, true);
   const oldRule = rule;
   let operation = 'create';
@@ -346,19 +395,19 @@ async function createRule({ client, profileId, actorId, body, idempotencyKey }) 
     resultStatus = 200;
     const updated = await client.query(
       `UPDATE user_merchant_category_rules
-          SET category_id=$1, user_category_id=$2, source_transaction_id=$3,
+          SET action=$1, flag=$2, category_id=$3, user_category_id=$4, source_transaction_id=$5,
               is_active=true, version=version+1, updated_at=now()
-        WHERE id=$4 AND profile_id=$5 RETURNING *`,
-      [target.categoryId, target.userCategoryId, source.id, rule.id, profileId],
+        WHERE id=$6 AND profile_id=$7 RETURNING *`,
+      [action, flag, target.categoryId, target.userCategoryId, source.id, rule.id, profileId],
     );
     rule = (await readRule(client, profileId, updated.rows[0].id)) || updated.rows[0];
   } else {
     try {
       const inserted = await client.query(
         `INSERT INTO user_merchant_category_rules
-           (profile_id,match_basis,match_value,category_id,user_category_id,source_transaction_id)
-         VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
-        [profileId, match.basis, match.value, target.categoryId, target.userCategoryId, source.id],
+           (profile_id,match_basis,match_value,action,flag,category_id,user_category_id,source_transaction_id)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [profileId, match.basis, match.value, action, flag, target.categoryId, target.userCategoryId, source.id],
       );
       rule = await readRule(client, profileId, inserted.rows[0].id);
     } catch (error) {
@@ -431,10 +480,15 @@ function registerUserMerchantCategoryRuleRoutes(app, { requireAuth, withUserClie
       const sourceId = bodyValue(body, 'source_transaction_id', 'sourceTransactionId');
       const categoryId = bodyValue(body, 'category_id', 'categoryId');
       const userCategoryId = bodyValue(body, 'user_category_id', 'userCategoryId');
+      const action = parseAction(body);
+      const flag = parseFlag(body);
       const result = await withUserClient(req.userId, async (client) => {
         const source = await loadSourceTransaction(client, req.userId, sourceId);
         const match = ruleMatchFromTransaction(source);
-        const target = await loadCategoryTarget(client, req.userId, categoryId, userCategoryId);
+        const target = action === 'category'
+          ? await loadCategoryTarget(client, req.userId, categoryId, userCategoryId)
+          : { categoryId: null, userCategoryId: null, categoryName: null, categorySlug: null, userCategoryName: null };
+        validateActionTarget(action, target.categoryId, target.userCategoryId, flag);
         const examples = await loadExamples(client, req.userId, match);
         const current = await readRuleByKey(client, req.userId, match.basis, match.value);
         return {
@@ -443,6 +497,8 @@ function registerUserMerchantCategoryRuleRoutes(app, { requireAuth, withUserClie
           displayMerchantName: safeMerchantName(source.merchant_name),
           matchBasis: match.basis,
           matchValue: match.value,
+          action,
+          flag,
           ...categoryIdentity(target),
           category: categoryIdentity(target),
           canCreate: true,
@@ -476,21 +532,26 @@ function registerUserMerchantCategoryRuleRoutes(app, { requireAuth, withUserClie
         const current = await readRule(client, req.userId, req.params.id, true);
         if (!current) throw new MerchantRuleError('rule_not_found', 404);
         if (Number(current.version) !== expectedVersion) throw new MerchantRuleError('version_conflict', 409, responseForRule(current));
+        const action = parseAction(body, current.action || 'category');
+        const flag = parseFlag(body, current.flag || null);
         const hasCategory = Object.prototype.hasOwnProperty.call(body, 'categoryId') || Object.prototype.hasOwnProperty.call(body, 'category_id');
         const hasUserCategory = Object.prototype.hasOwnProperty.call(body, 'userCategoryId') || Object.prototype.hasOwnProperty.call(body, 'user_category_id');
-        const target = hasCategory || hasUserCategory
+        const target = action === 'category' && (hasCategory || hasUserCategory)
           ? await loadCategoryTarget(client, req.userId,
             hasCategory ? bodyValue(body, 'category_id', 'categoryId') : current.category_id,
             hasUserCategory ? bodyValue(body, 'user_category_id', 'userCategoryId') : current.user_category_id)
-          : { categoryId: current.category_id, userCategoryId: current.user_category_id };
+          : action === 'category'
+            ? { categoryId: current.category_id, userCategoryId: current.user_category_id }
+            : { categoryId: null, userCategoryId: null };
+        validateActionTarget(action, target.categoryId, target.userCategoryId, flag);
         const active = Object.prototype.hasOwnProperty.call(body, 'is_active') || Object.prototype.hasOwnProperty.call(body, 'isActive')
           ? bodyValue(body, 'is_active', 'isActive') : current.is_active;
         if (typeof active !== 'boolean') throw new MerchantRuleError('is_active_invalid', 400);
         const operation = active === current.is_active ? 'update' : active ? 'enable' : 'disable';
         await client.query(
-          `UPDATE user_merchant_category_rules SET category_id=$1,user_category_id=$2,is_active=$3,version=version+1,updated_at=now()
-            WHERE id=$4 AND profile_id=$5`,
-          [target.categoryId, target.userCategoryId || null, active, current.id, req.userId],
+          `UPDATE user_merchant_category_rules SET action=$1,flag=$2,category_id=$3,user_category_id=$4,is_active=$5,version=version+1,updated_at=now()
+            WHERE id=$6 AND profile_id=$7`,
+          [action, flag, target.categoryId, target.userCategoryId || null, active, current.id, req.userId],
         );
         const updated = await readRule(client, req.userId, current.id);
         await writeAudit(client, req.userId, req.userId, operation, current, updated);
@@ -528,6 +589,7 @@ function registerUserMerchantCategoryRuleRoutes(app, { requireAuth, withUserClie
 
 module.exports = {
   MAX_LIST_LIMIT,
+  RULE_ACTIONS,
   MerchantRuleError,
   assertSourceTransaction,
   categoryIdentity,
@@ -536,8 +598,11 @@ module.exports = {
   loadCategoryTarget,
   normalizeMerchantVpa,
   normalizeMerchantName,
+  parseAction,
+  parseFlag,
   requestHash,
   responseForRule,
   ruleMatchFromTransaction,
+  validateActionTarget,
   registerUserMerchantCategoryRuleRoutes,
 };

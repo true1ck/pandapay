@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
 import 'api_exception.dart';
+import 'merchant_issue_rules_repository.dart';
 
 /// The server's safe identity for a user-owned future category rule.
 ///
@@ -38,6 +39,8 @@ enum MerchantRuleMatchBasis {
 /// should use [displayMerchantName] for user-facing copy.
 class MerchantCategoryRule {
   final String id;
+  final MerchantRuleAction action;
+  final String? flag;
   final String displayMerchantName;
   final MerchantRuleMatchBasis matchBasis;
   final String? matchValue;
@@ -52,6 +55,8 @@ class MerchantCategoryRule {
 
   const MerchantCategoryRule({
     required this.id,
+    this.action = MerchantRuleAction.category,
+    this.flag,
     required this.displayMerchantName,
     required this.matchBasis,
     this.matchValue,
@@ -78,6 +83,10 @@ class MerchantCategoryRule {
         : const <String, dynamic>{};
     return MerchantCategoryRule(
       id: _requiredString(json, const ['id', 'ruleId', 'rule_id']),
+      action: MerchantRuleAction.fromJson(
+        _firstValue(json, const ['action', 'actionType', 'action_type']),
+      ),
+      flag: _firstString(json, const ['flag', 'flagKey', 'flag_key']),
       displayMerchantName: displayName ?? 'This merchant',
       matchBasis: MerchantRuleMatchBasis.fromJson(
         _firstValue(json, const ['matchBasis', 'match_basis']),

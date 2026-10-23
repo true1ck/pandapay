@@ -138,7 +138,7 @@ class _MerchantFutureRulesScreenState
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Future category rules', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text('Future merchant rules', style: BambooFonts.heading(18, color: BambooInk.ink900)),
         actions: [IconButton(onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh))],
       ),
       body: AppBackground(
@@ -200,7 +200,12 @@ class _MerchantFutureRulesScreenState
               ],
             ),
             const SizedBox(height: 4),
-            Text(rule.categoryName ?? 'Category', style: BambooFonts.ui(13, color: BambooInk.ink700)),
+            Text(
+              rule.action == MerchantRuleAction.flag
+                  ? 'Issue flag: ${rule.flag ?? 'unspecified'}'
+                  : (rule.categoryName ?? 'Category'),
+              style: BambooFonts.ui(13, color: BambooInk.ink700),
+            ),
             Text(
               rule.matchBasis == MerchantRuleMatchBasis.vpa
                   ? 'Exact merchant VPA'
@@ -214,11 +219,12 @@ class _MerchantFutureRulesScreenState
               Wrap(
                 spacing: AppSpace.sm,
                 children: [
-                  OutlinedButton.icon(
-                    onPressed: () => _edit(rule),
-                    icon: const Icon(Icons.edit_outlined, size: 17),
-                    label: const Text('Edit category'),
-                  ),
+                  if (rule.action == MerchantRuleAction.category)
+                    OutlinedButton.icon(
+                      onPressed: () => _edit(rule),
+                      icon: const Icon(Icons.edit_outlined, size: 17),
+                      label: const Text('Edit category'),
+                    ),
                   TextButton(
                     onPressed: () => _setActive(rule, !rule.isActive),
                     child: Text(rule.isActive ? 'Disable' : 'Enable'),

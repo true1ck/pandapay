@@ -8,9 +8,12 @@ const {
   decodeCursor,
   encodeCursor,
   loadCategoryTarget,
+  parseAction,
+  parseFlag,
   requestHash,
   responseForRule,
   ruleMatchFromTransaction,
+  validateActionTarget,
 } = require('../src/user_merchant_category_rules');
 
 test('future-rule identity is exact VPA, with strict-name fallback only for specific names', () => {
@@ -89,6 +92,36 @@ test('rule responses state future-only scope and do not expose SMS or account da
 test('idempotency hash is stable for equivalent request objects', () => {
   assert.equal(requestHash({ sourceId: 'a', categoryId: 'b' }), requestHash({ sourceId: 'a', categoryId: 'b' }));
   assert.notEqual(requestHash({ sourceId: 'a', categoryId: 'b' }), requestHash({ sourceId: 'a', categoryId: 'c' }));
+});
+
+test('rule actions remain backward compatible while validating explicit flag targets', () => {
+  assert.equal(parseAction({}), 'category');
+  assert.equal(parseAction({ action: 'FLAG' }), 'flag');
+  assert.equal(parseFlag({ flag: 'needs_review' }), 'needs_review');
+  assert.deepEqual(responseForRule({
+    id: '55555555-5555-4555-8555-555555555555',
+    action: 'flag', flag: 'needs_review', match_basis: 'vpa', match_value: 'shop@upi',
+    category_id: null, user_category_id: null, is_active: true, version: '1',
+  }), {
+    id: '55555555-5555-4555-8555-555555555555',
+    action: 'flag', flag: 'needs_review', flagKey: 'needs_review',
+    matchBasis: 'vpa', matchValue: 'shop@upi', merchantName: null,
+    displayMerchantName: null,
+    category: {
+      categoryId: null, categoryName: null, categorySlug: null,
+      userCategoryId: null, userCategoryName: null,
+    },
+    categoryId: null, categoryName: null, categorySlug: null,
+    userCategoryId: null, userCategoryName: null,
+    isActive: true, version: 1, sourceTransactionId: null,
+    createdAt: null, updatedAt: null, historicTransactionsUnchanged: true,
+  });
+  assert.doesNotThrow(() => validateActionTarget('category', '11111111-1111-4111-8111-111111111111', null, null));
+  assert.doesNotThrow(() => validateActionTarget('flag', null, null, 'needs_review'));
+  assert.throws(() => parseAction({ action: 'delete' }), (error) => error.code === 'action_invalid');
+  assert.throws(() => parseFlag({ flag: 'Needs Review' }), (error) => error.code === 'flag_invalid');
+  assert.throws(() => validateActionTarget('flag', null, null, null), (error) => error.code === 'flag_action_target_invalid');
+  assert.throws(() => validateActionTarget('category', null, null, null), (error) => error.code === 'category_action_target_invalid');
 });
 
 test('rule listing cursor is opaque, bounded, and validates its owner-visible shape', () => {
