@@ -55,10 +55,12 @@ import '../data/notification_devices_api.dart';
 import '../data/override_resolver.dart';
 import '../data/partner_apply_repository.dart';
 import '../data/pending_bills.dart';
+import '../data/past_bill_receipts.dart';
 import '../data/recovery_api.dart';
 import '../data/referral_repository.dart';
 import '../data/spend_by_category_repository.dart';
 import '../data/spend_reports_repository.dart';
+import '../data/spending_selection.dart';
 import '../data/subscription_credits_repository.dart';
 import '../data/sync_api.dart';
 import '../data/token_store.dart';
@@ -1187,6 +1189,13 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
     return manualList;
   }
 });
+
+final pastBillReceiptsProvider = FutureProvider<List<PastBillReceipt>>((ref) async {
+  final db = await ref.watch(appDatabaseProvider.future);
+  final namespace = ref.watch(cacheNamespaceProvider);
+  return PastBillReceiptRepository(db, namespace: namespace).fetchAll(limit: 100);
+});
+
 /// Bills pane input: bill/autopay sms_observations resolved against the
 /// logged transaction history. Covers what the commitments sections skip —
 /// card-linked bills, autopay reminders, any bill whose payment the app
@@ -4380,9 +4389,18 @@ List<CardSpendRow> _localCardRows(Iterable<TransactionEntry> rows) {
   final names = <String, String>{};
   final ids = <String, String?>{};
   for (final row in rows) {
-    final key =
-        row.userCardId ??
-        'other:${row.cardDisplayName ?? row.instrument.wireValue}';
+    final instrument = row.instrumentKnown
+        ? row.instrument
+        : TxnInstrument.other;
+    final sourceKey = row.userCardId != null
+        ? 'card:${row.userCardId}'
+        : instrument == TxnInstrument.creditCard ||
+              instrument == TxnInstrument.debitCard
+        ? 'card-source:${instrument.wireValue}:${row.cardLast4 ?? 'unknown'}'
+        : row.accountLast4 != null
+        ? 'bank-account:${row.accountLast4}'
+        : 'source:${instrument.wireValue}';
+    final key = sourceKey;
     totals[key] = (totals[key] ?? const Money.zero()) + row.amount;
     rewards[key] =
         (rewards[key] ?? const Money.zero()) +
@@ -4390,7 +4408,17 @@ List<CardSpendRow> _localCardRows(Iterable<TransactionEntry> rows) {
     counts[key] = (counts[key] ?? 0) + 1;
     names[key] =
         row.cardDisplayName ??
-        (row.instrumentKnown ? row.instrument.label : 'Cash & other');
+        (instrument == TxnInstrument.creditCard ||
+                instrument == TxnInstrument.debitCard
+            ? '${instrument.label}${row.cardLast4 == null ? ' (unlinked)' : ' ••${row.cardLast4} (unlinked)'}'
+            : row.accountLast4 != null
+            ? 'Bank account ••${row.accountLast4}'
+            : switch (instrument) {
+                TxnInstrument.upiBank => 'UPI bank account',
+                TxnInstrument.wallet => 'Wallet',
+                TxnInstrument.cash => 'Cash',
+                _ => 'Unknown source',
+              });
     ids[key] = row.userCardId;
   }
   final keys = totals.keys.toList()
@@ -4439,9 +4467,7 @@ List<CardCategorySpendRow> _localCardCategoryRows(
   final counts = <String, int>{};
   final names = <String, (String, String)>{};
   for (final row in rows) {
-    final card =
-        row.cardDisplayName ??
-        (row.instrumentKnown ? row.instrument.label : 'Cash & other');
+    final card = SpendingSelection.sourceName(row);
     final category = row.categoryName ?? 'Other';
     final key = '$card\u0000$category';
     totals[key] = (totals[key] ?? const Money.zero()) + row.amount;

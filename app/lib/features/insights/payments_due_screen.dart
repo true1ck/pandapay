@@ -12,6 +12,7 @@ import '../../data/commitments_repository.dart';
 import '../../data/user_cards_repository.dart';
 import 'central_bills_section.dart';
 import 'sms_bills_section.dart';
+import 'past_bill_receipts_screen.dart';
 
 // ---------------------------------------------------------------------------
 // Backward-compatible type aliases for existing test harnesses
@@ -266,11 +267,94 @@ class _DueList extends StatelessWidget {
 
         // ── Section B: Upcoming bills & insurance commitments ─────────
         const _CommitmentsSection(),
+        const SizedBox(height: AppSpace.lg),
+        const _PastBillsPreview(),
         const SizedBox(height: AppSpace.xl),
       ],
     );
   }
 }
+
+class _PastBillsPreview extends ConsumerWidget {
+  const _PastBillsPreview();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final history = ref.watch(pastBillReceiptsProvider).valueOrNull ?? const [];
+    if (history.isEmpty) return const SizedBox.shrink();
+    final visible = history.take(3).toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _SectionHeader(label: 'Past bills & receipts', count: null)),
+            TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PastBillReceiptsScreen()),
+              ),
+              child: Text('View all', style: BambooFonts.ui(12, color: BambooInk.jade, weight: FontWeight.w600)),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpace.xs),
+        for (final item in visible)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.sm),
+            child: _PastBillPreviewRow(item: item),
+          ),
+      ],
+    );
+  }
+}
+
+class _PastBillPreviewRow extends StatelessWidget {
+  final PastBillReceipt item;
+  const _PastBillPreviewRow({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => PastBillReceiptDetailScreen(item: item)),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.receipt_long_outlined, color: BambooInk.ink500),
+            const SizedBox(width: AppSpace.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.merchant, style: BambooFonts.ui(14, weight: FontWeight.w600, color: BambooInk.ink900), overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(_pastBillStatusLabel(item), style: BambooFonts.ui(12, color: item.status == PastBillReceiptStatus.historicalUnpaid ? BambooInk.clayInk : BambooInk.jade)),
+                ],
+              ),
+            ),
+            if (item.amount != null) Text(item.amount!.format(hidePaise: true), style: BambooFonts.money(14, color: BambooInk.ink900)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _pastBillStatusLabel(PastBillReceipt item) => switch (item.status) {
+  PastBillReceiptStatus.paidLinked => 'Paid · Linked',
+  PastBillReceiptStatus.paidUnlinked => 'Paid · Unlinked',
+  PastBillReceiptStatus.historicalUnpaid => 'Past bill · Payment not detected',
+  PastBillReceiptStatus.needsConfirmation => 'Needs confirmation',
+  PastBillReceiptStatus.userSavedPurchase => 'Saved purchase',
+};
 
 class _ComingUpRow extends StatelessWidget {
   final DuePayment row;

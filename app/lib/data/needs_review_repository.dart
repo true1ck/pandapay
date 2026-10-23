@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'commitments_repository.dart';
+import 'past_bill_receipts.dart';
 import 'adjustment_matcher.dart';
 import 'local/app_database.dart';
 import 'local_sms_parser.dart';
@@ -327,10 +328,24 @@ class NeedsReviewRepository {
                 database: db,
                 transactions: txns,
               )) {
+            PastBillReceiptRepository(db, namespace: namespace).archiveReceipt(
+              id: item.id,
+              sender: item.sender,
+              body: item.body,
+              receivedAt: item.receivedAt,
+              status: PastBillReceiptStatus.paidLinked,
+            );
             toRemove.add(item.id);
             continue;
           }
           if (now.difference(item.receivedAt).abs() > const Duration(days: 30)) {
+            PastBillReceiptRepository(db, namespace: namespace).archiveReceipt(
+              id: item.id,
+              sender: item.sender,
+              body: item.body,
+              receivedAt: item.receivedAt,
+              status: PastBillReceiptStatus.paidUnlinked,
+            );
             toRemove.add(item.id);
             continue;
           }
@@ -381,6 +396,18 @@ class NeedsReviewRepository {
 
           if (parsed.eventType == LocalSmsEventType.bill &&
               (parsed.cardLast4 != null || parsed.dueDate != null)) {
+            final due = parsed.dueDate;
+            if (due != null && due.isBefore(DateTime.now())) {
+              PastBillReceiptRepository(db, namespace: namespace).archiveBill(
+                id: item.id,
+                sender: item.sender,
+                merchant: parsed.billerName ?? item.sender,
+                amount: parsed.amountDue,
+                receivedAt: item.receivedAt,
+                dueDate: due,
+                cardLast4: parsed.cardLast4,
+              );
+            }
             _persistResolvedBillObservationSync(db, namespace, parsed, item);
             toRemove.add(item.id);
             continue;

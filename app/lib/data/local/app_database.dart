@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS local_needs_review (
   namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL,
   PRIMARY KEY(namespace,id)
 );
+CREATE TABLE IF NOT EXISTS local_past_bill_receipts (
+  namespace TEXT NOT NULL,
+  id TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(namespace, id)
+);
+CREATE INDEX IF NOT EXISTS idx_local_past_bill_receipts_date
+  ON local_past_bill_receipts(namespace, updated_at DESC);
 CREATE TABLE IF NOT EXISTS cache_refresh_requests (key TEXT PRIMARY KEY);
 
 CREATE TABLE IF NOT EXISTS transaction_outbox_entries (
