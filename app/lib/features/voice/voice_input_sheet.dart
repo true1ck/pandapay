@@ -14,6 +14,7 @@ import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/transaction_tags_repository.dart' show TransactionTag;
 import '../../data/user_cards_repository.dart' show TxnInstrument, UserCard;
 import 'voice_action_parser.dart';
+import 'voice_transcript_buffer.dart';
 
 Future<void> showVoiceInputSheet(BuildContext context) {
   return showModalBottomSheet<void>(
@@ -34,16 +35,17 @@ class VoiceInputSheet extends ConsumerStatefulWidget {
 
 class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   final _speech = stt.SpeechToText();
+  final _transcriptBuffer = VoiceTranscriptBuffer();
   final _editors = <_VoiceDraftEditor>[];
   List<VoiceActionDraft> _drafts = const [];
-  String _transcript = '';
-  String _interimTranscript = '';
   bool _available = false;
   bool _listening = false;
   bool _speechSessionCompleted = false;
   bool _keepListening = false;
   bool _speechInitialized = false;
   int _listenGeneration = 0;
+  int _activeSession = 0;
+  int _endedSession = 0;
   Timer? _completionTimer;
   Timer? _restartTimer;
   bool _saving = false;
@@ -74,8 +76,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     }
     setState(() {
       _error = null;
-      _transcript = '';
-      _interimTranscript = '';
+      _transcriptBuffer.clear();
       _drafts = const [];
     });
     for (final editor in _editors) {
@@ -109,7 +110,8 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
           onStatus: (status) {
             if (status == stt.SpeechToText.doneStatus) {
               if (_keepListening) {
-                _scheduleSpeechRestart(generation);
+                _endedSession = _activeSession;
+                _scheduleSpeechRestart(generation, _activeSession);
               } else {
                 _scheduleListeningCompletion();
               }
@@ -137,21 +139,28 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
         }
         return;
       }
+      final session = ++_activeSession;
+      _transcriptBuffer.beginSession();
       if (mounted) setState(() => _listening = true);
       await _speech.listen(
         onResult: (result) {
-          if (!mounted || generation != _listenGeneration) return;
+          if (!mounted ||
+              generation != _listenGeneration ||
+              session != _activeSession) {
+            return;
+          }
+          _completionTimer?.cancel();
+          if (_endedSession == session) _endedSession = 0;
           final words = result.recognizedWords.trim();
           if (words.isEmpty) return;
+          _transcriptBuffer.update(words, isFinal: result.finalResult);
+          setState(() {});
           if (result.finalResult) {
-            _appendFinalTranscript(words);
             if (_keepListening) {
-              _scheduleSpeechRestart(generation);
+              _scheduleSpeechRestart(generation, session);
             } else {
               _scheduleListeningCompletion();
             }
-          } else {
-            setState(() => _interimTranscript = words);
           }
         },
         listenOptions: stt.SpeechListenOptions(
@@ -161,6 +170,15 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
           listenMode: stt.ListenMode.dictation,
         ),
       );
+      if (session != _activeSession || generation != _listenGeneration) {
+        // A newer native session superseded this start while listen() was
+        // awaiting the platform channel.
+        await _stopSpeechSafely();
+        return;
+      }
+      if (_endedSession == session && _keepListening) {
+        _scheduleSpeechRestart(generation, session);
+      }
     } catch (_) {
       if (mounted) {
         _keepListening = false;
@@ -173,25 +191,26 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     }
   }
 
-  void _appendFinalTranscript(String words) {
-    _completionTimer?.cancel();
-    _interimTranscript = '';
-    if (_transcript.isEmpty) {
-      _transcript = words;
-    } else if (_transcript.toLowerCase() != words.toLowerCase() &&
-        !_transcript.toLowerCase().endsWith(words.toLowerCase())) {
-      _transcript = '$_transcript $words';
+  void _scheduleSpeechRestart(int generation, int session) {
+    if (!mounted ||
+        !_keepListening ||
+        generation != _listenGeneration ||
+        session != _activeSession) {
+      return;
     }
-    if (mounted) setState(() {});
-  }
-
-  void _scheduleSpeechRestart(int generation) {
-    if (!mounted || !_keepListening || generation != _listenGeneration) return;
     _restartTimer?.cancel();
-    _restartTimer = Timer(
-      const Duration(milliseconds: 180),
-      () => _startSpeech(generation),
-    );
+    _restartTimer = Timer(const Duration(milliseconds: 180), () {
+      if (session != _activeSession ||
+          generation != _listenGeneration ||
+          !_keepListening) {
+        return;
+      }
+      _transcriptBuffer.commitProvisional();
+      // Invalidate callbacks from the native session that just ended.
+      _activeSession++;
+      if (mounted) setState(() {});
+      _startSpeech(generation);
+    });
   }
 
   Future<void> _stopSpeechSafely() async {
@@ -207,11 +226,10 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     _completionTimer?.cancel();
     _completionTimer = null;
     _speechSessionCompleted = true;
-    final transcript = _visibleTranscript.trim();
+    _transcriptBuffer.commitProvisional();
+    final transcript = _transcriptBuffer.text.trim();
     setState(() {
       _listening = false;
-      _interimTranscript = '';
-      _transcript = transcript;
     });
     if (transcript.isEmpty) {
       setState(
@@ -230,7 +248,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     final tags =
         ref.read(transactionTagsProvider)?.tags ?? const <TransactionTag>[];
     final drafts = VoiceActionParser.parseMany(
-      _transcript,
+      _transcriptBuffer.text,
       cards: cards,
       categories: categories,
       tags: tags,
@@ -247,8 +265,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   }
 
   String get _visibleTranscript => [
-    _transcript.trim(),
-    _interimTranscript.trim(),
+    _transcriptBuffer.text.trim(),
   ].where((part) => part.isNotEmpty).join(' ');
 
   Future<void> _save() async {
@@ -522,7 +539,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
           ],
         ),
         const SizedBox(height: 8),
-        _quote(_transcript),
+        _quote(_transcriptBuffer.text),
         const SizedBox(height: 16),
         for (var index = 0; index < _drafts.length; index++) ...[
           _entryEditor(
