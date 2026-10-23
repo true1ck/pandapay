@@ -31,6 +31,11 @@
     "sms_source_facts": { "disposition": "exported_v1", "section": "sms_source_facts" },
     "fact_overrides": { "disposition": "exported_v1", "section": "fact_overrides" },
 
+    "portable_restore_sessions": { "disposition": "excluded_with_intent", "reason": "restore protocol staging metadata; never included in a portable archive" },
+    "portable_restore_sections": { "disposition": "excluded_with_intent", "reason": "restore protocol upload declarations; ephemeral until commit or expiry" },
+    "portable_restore_records": { "disposition": "excluded_with_intent", "reason": "untrusted restore rows; applied atomically and then discarded with the session" },
+    "portable_backup_ledger": { "disposition": "excluded_with_intent", "reason": "idempotent committed-restore receipt; never included in a portable archive" },
+
     "billing_cycle_rules": { "disposition": "global_catalog" },
     "cap_rules": { "disposition": "global_catalog" },
     "card_benefits": { "disposition": "global_catalog" },

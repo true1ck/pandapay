@@ -28,7 +28,9 @@ Started 23 October 2026 by the parent integration task.
 - [x] Wave 1 agent diffs inspected and integrated (encryption now real, routes mounted, coverage registry added).
 - [x] Independent archive self-check passes (see commands below).
 - [x] API and Flutter targeted tests pass (see commands below; full device gates remain open).
-- [ ] Full export and restore waves complete.
+- [x] Wave 1 export route, coverage registry, archive crypto and focused tests are present.
+- [x] Wave 2 restore staging/preview/commit routes, migration, local staging/finalization contracts, streamed HTTP export consumption and focused tests are present.
+- [ ] Full device A/B export-and-restore drill and real PostgreSQL migration/RLS execution remain open.
 
 ## Verified this session (23 October 2026, Windows 11 / PowerShell 5.1)
 
@@ -56,12 +58,24 @@ Implemented in this session (Wave 1 scope, no UI changes):
 - `api/test/portable_backup_coverage.test.js`: fails when a migration table is unclassified and when exported tables diverge from `PORTABLE_SECTIONS`.
 - `docs/portable-backup-format-v1.md`: wire layout (header table + frame/AAD/nonce spec + failure semantics) appended under "Encryption envelope".
 
-## Remaining Wave-1 gaps (recorded, not blocking what shipped)
+## Verified follow-up work (23 October 2026)
+
+- Server restore protocol is mounted at `/portable-backups/restore-sessions` and supports idempotent session creation, section upload, preview, guarded commit, status and cancellation.
+- Restore validation now accepts the frozen Dart manifest shape (`account_binding`, `schema_version: portable-v1`, array sections with `record_count` and `byte_length`).
+- Local snapshot capture includes active and legacy namespaces, orders composite tag links deterministically, and refuses pending outboxes.
+- Existing `DataExportScreen` and `DataTransferScreen` were restored unchanged after the user requested that no UI be changed. The new export/restore services remain behind existing data-transfer integration points.
+- `api`: `node --test test/portable_backup_export.test.js test/portable_backup_restore.test.js test/portable_backup_coverage.test.js test/csv.test.js` — 28 passed, 0 failed.
+- `api`: `npm run check` plus explicit restore syntax checks — passed.
+- `app`: `flutter analyze --no-pub lib/data/portable_backup test/data/portable_backup` — no issues.
+- `app`: portable backup directory plus explicit restore/snapshot/HTTP-consumer tests — 51 passed, 0 failed.
+- `app`: `flutter build apk --debug --flavor dev --no-pub` — passed; full multi-flavor build was not attempted after a disk-space failure.
+
+## Remaining gaps (recorded, not blocking the verified service layer)
 
 1. `PortableLocalSnapshotSource` has no concrete drift-database implementation yet — the coordinator type only has the interface; a follow-up should implement it against the existing SQLite schema without touching outbox semantics.
 2. Not a single device benchmark exists for Argon2id v1 params (16384 KiB mobile budget); on-device runtime remains an acceptance item.
 3. Cross-runtime encryption test vectors (Android/iOS/JS) not yet generated.
-4. Titanium/`import` UI is untouched by contract; the independent inspector exists and passes, but the streaming HTTP consumer of `/portable-backups/export-v1` in Dart is not written (Wave-1 accepted export path is local-first).
+4. The client calls for the restore-session endpoints still need to be wired into the existing repository/service layer. The streamed export consumer is implemented; UI remains intentionally unchanged per the user's direction.
 5. Golden fixture: `app/test/fixtures/portable_backup_fixture.dart` covers inspector shapes; a full end-to-end archive binary fixture suitable for all three inspectors is still open.
 
 Agents must append exact commands, counts, failures and unresolved risks here when reporting. This file must not claim completion from mocked or skipped database/device gates.

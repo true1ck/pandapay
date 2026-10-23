@@ -1,6 +1,10 @@
 export 'canonical_ndjson.dart';
+export 'local_snapshot_source.dart';
 export 'portable_archive.dart';
 export 'portable_attachments.dart';
 export 'portable_backup_models.dart';
 export 'portable_crypto.dart';
+export 'portable_restore.dart';
+export 'portable_restore_finalize.dart';
 export 'portable_snapshot.dart';
+export 'portable_http_repository.dart';

@@ -18,6 +18,7 @@ const {
   createEngagementReceipt,
 } = require('./referral_routes');
 const { registerPortableBackupRoutes } = require('./portable_backup/routes');
+const { registerPortableBackupRestoreRoutes } = require('./portable_backup/restore_routes');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
 const { replayCurrentCapConsumption } = require('./card_state_reconciliation');
 const {
@@ -253,6 +254,7 @@ app.get('/ready', async (req, res) => {
 
 registerReferralRoutes(app);
 registerPortableBackupRoutes(app, { requireAuth, pool });
+registerPortableBackupRestoreRoutes(app, { requireAuth, pool });
 
 /**
  * GET /profile — proves RLS is reachable end to end: an authenticated user
