@@ -1495,7 +1495,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
         _ => 'financial detail',
       },
     );
-    return 'Gemini suggests ${labels.join(', ')}. Check the SMS before saving.';
+    return 'AI suggested · ${labels.join(', ')}';
   }
 
   Future<void> _dismissNotATransaction() async {
@@ -1989,10 +1989,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           ),
           if (item.aiSuggestions?.isNotEmpty == true) ...[
             const SizedBox(height: AppSpace.xs),
-            Text(
-              _aiSummary,
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-            ),
+            _AiBadge(summary: _aiSummary),
           ],
           if (item.aiSuggestions != null && item.aiSuggestions!.length > 1) ...[
             const SizedBox(height: AppSpace.sm),
@@ -2414,6 +2411,37 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
                 ));
               },
               child: const Text('Save transaction'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AiBadge extends StatelessWidget {
+  final String summary;
+  const _AiBadge({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Color(0xFF8064C7).withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: Color(0xFF8064C7).withValues(alpha: 0.28)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.auto_awesome_rounded, size: 11, color: Color(0xFF8064C7)),
+            const SizedBox(width: 4),
+            Text(
+              summary,
+              style: BambooFonts.ui(11.5, weight: FontWeight.w600, color: Color(0xFF8064C7)),
             ),
           ],
         ),
