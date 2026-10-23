@@ -82,9 +82,7 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
   Future<void> _ensureInitialized() async {
     if (_initialized) return;
     try {
-      const androidInit = AndroidInitializationSettings(
-        '@drawable/ic_notification',
-      );
+      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
       const iosInit = DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
@@ -204,8 +202,8 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
               notificationText: 'Checking for nearby businesses',
               notificationTitle: 'PandaPay is checking your location',
               notificationIcon: AndroidResource(
-                name: 'ic_notification',
-                defType: 'drawable',
+                name: 'ic_launcher',
+                defType: 'mipmap',
               ),
               color: AppColors.teal500,
               enableWakeLock: true,
@@ -341,7 +339,7 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
           'Alerts when nearby businesses are detected while monitoring is on',
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
-      icon: '@drawable/ic_notification',
+      icon: '@mipmap/ic_launcher',
       color: AppColors.teal500,
     );
     const details = NotificationDetails(
