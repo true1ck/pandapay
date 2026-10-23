@@ -119,7 +119,7 @@ TransactionEntry _detailEntry({
 );
 
 void main() {
-  testWidgets('tag rows expand into categories and open scoped activity', (
+  testWidgets('tag categories expand into payments and open scoped activity', (
     tester,
   ) async {
     const trip = TransactionTag(id: 'trip', name: 'Thailand trip');
@@ -230,10 +230,26 @@ void main() {
       findsOneWidget,
     );
 
-    final diningRow = find.byKey(const ValueKey('tag-category-trip-dining'));
+    final diningRow = find.byKey(
+      const PageStorageKey<String>('spending-tag-category-trip-dining'),
+    );
     await tester.ensureVisible(diningRow);
     await tester.pumpAndSettle();
     await tester.tap(diningRow);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Bangkok Cafe'), findsOneWidget);
+    expect(find.text('₹500.00'), findsWidgets);
+    expect(find.text('View all transactions'), findsOneWidget);
+
+    await tester.tap(find.text('Dining'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bangkok Cafe'), findsNothing);
+    await tester.tap(find.text('Dining'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('View all transactions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View all transactions'));
     await tester.pumpAndSettle();
     final activityUri = Uri.parse(
       tester.widget<Text>(find.byKey(const ValueKey('activity-uri'))).data!,
@@ -628,6 +644,8 @@ void main() {
     );
     expect(find.text('HDFC Millennia'), findsOneWidget);
     expect(find.text('Axis Ace'), findsOneWidget);
+    expect(find.textContaining('2 transactions'), findsOneWidget);
+    expect(find.textContaining('1 transaction'), findsOneWidget);
   });
 
   testWidgets('expands a category into merchants and transaction details', (
@@ -1040,9 +1058,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('raja@upi'), findsOneWidget);
-    expect(find.text('Raja Das'), findsOneWidget);
-    expect(find.textContaining('12/08/2026'), findsAtLeastNWidgets(1));
-    expect(find.textContaining('13/08/2026'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Raja Das'), findsNWidgets(2));
+    final firstPayment = tester.widget<ListTile>(
+      find.byKey(const ValueKey('spending-transaction-upi-txn-1')),
+    );
+    final secondPayment = tester.widget<ListTile>(
+      find.byKey(const ValueKey('spending-transaction-upi-txn-2')),
+    );
+    expect(firstPayment.title, isA<Text>());
+    expect((firstPayment.title as Text).data, startsWith('12/08/2026'));
+    expect(secondPayment.title, isA<Text>());
+    expect((secondPayment.title as Text).data, startsWith('13/08/2026'));
   });
 
   testWidgets('Accounts groups UPI spend under the matched bank account', (
