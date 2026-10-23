@@ -1141,30 +1141,3 @@ test('card setting updates and delivery memos are recognized as non-transaction 
   assert.equal(deliveryMemoParse.ok, false);
   assert.equal(deliveryMemoParse.reason, 'non_transaction_message');
 });
-
-test('operational and regulatory noise alerts are screened as non-transaction noise', () => {
-  const noiseMessages = [
-    'Dear Customer, your Two Wheeler Insurance for HONDA ACTIVA policy no. 920222423120813150 has expired. Premium: Rs.1245.00 + taxes*. Renew with discount...',
-    'Alert: Dear Customer, your Two Wheeler Insurance for HONDA ACTIVA policy no. 920222423120813150 has expired. Premium: Rs.1245.00 + taxes*...',
-    'Girish Shantaram Curtikar, car insurance for your MARUTI OMNI will expire on 22 May, 2025. Please click here - https://epbz.in/POLBAZ...',
-    'Hi Girish Shantaram Curtikar, your car insurance expired 22 May, 2025. Premium starts at only Rs.2471. Visit https://epbz.in/POLBAZ...',
-    'CDSL: Unpledge Accepted in a/c *00025520 for 2-MIRAE ASSET INVESTMENT MANAGER, 2-MOTILAL OSWAL ASSET MANAGEMENT, Total 8 ISINs Accepted on 0...',
-    'CDSL: Unpledge accepted by pledgee a/c *04953816 on 03/01/2025 for 4 shares of NIPPON LIFE INDIA AM LTD#NIPPO',
-    'CDSL: Pledge accepted by pledgee a/c 04953816 for 2 Units-NIPPON LIFE INDIA AM LTD#NIPPO...',
-    'Your Address in Folio- XXXXXXXX4724 is updated from KYC records based on feed received from KRA. For more details, call us at 8108622222. MotilalOswal MF',
-    'We have updated your address under folio XXXXXXXX5553, based on the feed received from KRA. For more details, call us at 18602660111. Nippon India MF',
-    'Due to scheduled maintenance, txns. with Axis Bank Credit Card on 30-10-25, 00:30 AM - 01:00 AM IST will be paused. Inconvenience caused is...',
-    'Registration Alert:Device Name: android-motorola-motorola edge 50 fusion For HDFC Bank App on 09-03-2026, 09:24. Not you? Call 18002586161',
-    'Hi Sujay, your Rs. 50 off and Rs. 30 off coupons expire...',
-    'Your order from Wellness is dispatched through Blue Dart AWB 80705290890...',
-    'Order Received! We have received your order ID 8584859 for Wellness Forever...',
-    'Important Info: A Lifetime-Free Credit Card facility has been enabled on your HDFC Bank A/c xx1797. Check: https://1.hdfc.bank.in/...',
-  ];
-
-  for (const body of noiseMessages) {
-    assert.equal(isNonTransactionNoise('AD-BANK', body), true, `Failed isNonTransactionNoise for: ${body}`);
-    const res = parseSmsAgainstPatterns([], { sender: 'AD-BANK', body });
-    assert.equal(res.ok, false, `Failed parseSmsAgainstPatterns ok for: ${body}`);
-    assert.equal(res.reason, 'non_transaction_message', `Failed parseSmsAgainstPatterns reason for: ${body}`);
-  }
-});

@@ -13,7 +13,6 @@ enum NeedsReviewKind {
   securityOrServiceAlert,
   investmentSettlement,
   mandate,
-  receipt,
 }
 
 /// Task D-4 (ui-spec D4 Needs Review Queue) â€” one raw SMS the parser
@@ -115,18 +114,14 @@ void addNeedsReviewSync(
   List<TransactionEntry>? existingTransactions,
 }) {
   if (NeedsReviewRepository.isNoiseItem(item)) return;
-  if (NeedsReviewRepository.isMerchantReceiptOrEbill(item.body)) {
-    if (DateTime.now().difference(item.receivedAt).abs() > const Duration(days: 30)) {
-      return;
-    }
-    if (NeedsReviewRepository.hasMatchingSpendTransactionSync(
-          database,
-          namespace,
-          item,
-          transactions: existingTransactions,
-        )) {
-      return;
-    }
+  if (NeedsReviewRepository.isMerchantReceiptOrEbill(item.body) &&
+      NeedsReviewRepository.hasMatchingSpendTransactionSync(
+        database,
+        namespace,
+        item,
+        transactions: existingTransactions,
+      )) {
+    return;
   }
   final resolved = NeedsReviewRepository.resolveItemKind(item);
   database.db.execute(
@@ -173,13 +168,11 @@ class NeedsReviewRepository {
   final String namespace;
   final Future<AppDatabase> Function()? loadDatabase;
   final List<TransactionEntry>? existingTransactions;
-  final DateTime Function() now;
   NeedsReviewRepository({
     this.namespace = 'legacy',
     this.loadDatabase,
     this.existingTransactions,
-    DateTime Function()? now,
-  }) : now = now ?? DateTime.now;
+  });
   Future<AppDatabase> _database() async {
     final db = await loadDatabase!();
     db.db.execute(
@@ -278,24 +271,17 @@ class NeedsReviewRepository {
           kept.add(item);
           continue;
         }
-        if (isMerchantReceiptOrEbill(item.body)) {
-          if (_hasMatchingSpendTransaction(
-                item,
-                database: db,
-                transactions: txns,
-              )) {
-            toRemove.add(item.id);
-            continue;
-          }
-          if (now().difference(item.receivedAt).abs() > const Duration(days: 30)) {
-            toRemove.add(item.id);
-            continue;
-          }
-        }
-        if (item.kind != NeedsReviewKind.transaction &&
-            item.kind != NeedsReviewKind.mandate &&
-            item.kind != NeedsReviewKind.receipt) {
+        if (item.kind != NeedsReviewKind.transaction) {
           kept.add(item);
+          continue;
+        }
+        if (isMerchantReceiptOrEbill(item.body) &&
+            _hasMatchingSpendTransaction(
+              item,
+              database: db,
+              transactions: txns,
+            )) {
+          toRemove.add(item.id);
           continue;
         }
 
@@ -318,11 +304,9 @@ class NeedsReviewRepository {
               parsed.transaction != null &&
               parsed.transaction!.entryKind == TxnEntryKind.spend) {
             final isWallet = parsed.transaction!.instrument == TxnInstrument.wallet;
-            final isBank = parsed.transaction!.instrument == TxnInstrument.upiBank ||
-                parsed.accountLast4 != null;
             final cardMatches = parsed.cardLast4 != null &&
                 _matchesUserCardSync(db, namespace, parsed.cardLast4!);
-            if (isWallet || cardMatches || isBank) {
+            if (isWallet || cardMatches) {
               _persistResolvedTransactionSync(
                 db,
                 namespace,
@@ -334,19 +318,16 @@ class NeedsReviewRepository {
             }
           }
 
-          if (parsed.disposition != LocalSmsDisposition.localCommitment &&
-              parsed.eventType == LocalSmsEventType.bill &&
-              (parsed.cardLast4 != null || parsed.dueDate != null)) {
-            _persistResolvedBillObservationSync(db, namespace, parsed, item);
+          if (parsed.disposition == LocalSmsDisposition.localCommitment ||
+              parsed.reasonCodes.contains('mandate_notice') ||
+              parsed.reasonCodes.contains('commitment_detected')) {
+            _persistResolvedCommitmentSync(db, namespace, parsed, item);
             toRemove.add(item.id);
             continue;
           }
 
-          if (parsed.disposition == LocalSmsDisposition.localCommitment ||
-              parsed.reasonCodes.contains('mandate_notice') ||
-              parsed.reasonCodes.contains('commitment_detected') ||
-              item.kind == NeedsReviewKind.mandate) {
-            _persistResolvedCommitmentSync(db, namespace, parsed, item);
+          if (parsed.eventType == LocalSmsEventType.bill && parsed.dueDate != null) {
+            _persistResolvedBillObservationSync(db, namespace, parsed, item);
             toRemove.add(item.id);
             continue;
           }
@@ -378,23 +359,16 @@ class NeedsReviewRepository {
         kept.add(item);
         continue;
       }
-      if (isMerchantReceiptOrEbill(item.body)) {
-        if (_hasMatchingSpendTransaction(
-              item,
-              transactions: txns,
-            )) {
-          toRemove.add(item.id);
-          continue;
-        }
-        if (now().difference(item.receivedAt).abs() > const Duration(days: 30)) {
-          toRemove.add(item.id);
-          continue;
-        }
-      }
-      if (item.kind != NeedsReviewKind.transaction &&
-          item.kind != NeedsReviewKind.mandate &&
-          item.kind != NeedsReviewKind.receipt) {
+      if (item.kind != NeedsReviewKind.transaction) {
         kept.add(item);
+        continue;
+      }
+      if (isMerchantReceiptOrEbill(item.body) &&
+          _hasMatchingSpendTransaction(
+            item,
+            transactions: txns,
+          )) {
+        toRemove.add(item.id);
         continue;
       }
       final parsed = LocalSmsParser.parse(
@@ -414,23 +388,18 @@ class NeedsReviewRepository {
             parsed.transaction != null &&
             parsed.transaction!.entryKind == TxnEntryKind.spend) {
           final isWallet = parsed.transaction!.instrument == TxnInstrument.wallet;
-          final isBank = parsed.transaction!.instrument == TxnInstrument.upiBank ||
-              parsed.accountLast4 != null;
-          if (isWallet || isBank) {
+          if (isWallet) {
             toRemove.add(item.id);
             continue;
           }
         }
-        if (parsed.disposition != LocalSmsDisposition.localCommitment &&
-            parsed.eventType == LocalSmsEventType.bill &&
-            (parsed.cardLast4 != null || parsed.dueDate != null)) {
+        if (parsed.disposition == LocalSmsDisposition.localCommitment ||
+            parsed.reasonCodes.contains('mandate_notice') ||
+            parsed.reasonCodes.contains('commitment_detected')) {
           toRemove.add(item.id);
           continue;
         }
-        if (parsed.disposition == LocalSmsDisposition.localCommitment ||
-            parsed.reasonCodes.contains('mandate_notice') ||
-            parsed.reasonCodes.contains('commitment_detected') ||
-            item.kind == NeedsReviewKind.mandate) {
+        if (parsed.eventType == LocalSmsEventType.bill && parsed.dueDate != null) {
           toRemove.add(item.id);
           continue;
         }
@@ -451,21 +420,13 @@ class NeedsReviewRepository {
       r'\b(?:will\s+remain\s+open\s+and\s+fully\s+operational|available\s+at\s+our\s+branches\s+during\s+normal\s+working\s+hours|submission\s+of\s+positive\s+pay\s+details\s+is\s+mandatory)\b|'
       r'\bdone\s+\d+\s+out\s+of\s+\d+\s+free\s+transactions\s+at\s+[\w\s]+atms\b|'
       r'\b(?:cdsl|nsdl)\s*:\s*(?:debit|credit)\s+in\s+a/c\b[\s\S]{0,40}\b(?:etf|bees|shares?|units?|mf)\b|'
-      r'\b(?:cdsl|nsdl)\s*:\s*(?:unpledge|pledge)\b|'
-      r'\b(?:updated\s+(?:your\s+)?address\s+under\s+folio|address\s+in\s+folio[^\w\n]*\w+\s+is\s+updated|based\s+on\s+feed\s+received\s+from\s+kra)\b|'
       r"\b(?:track\s+it\s+using\s+this\s+ticket\s+id|ticket\s+id\s*:\s*\d+\s+on\s+the\s+help\s+section|we're\s+on\s+it\s+and\s+will\s+get\s+back\s+to\s+you\s+in\s+\d+[-–]\d+\s+hours)\b|"
       r'\benable\s+online,\s+international\s+(?:and|&)\s+contactless\s+transactions\b|'
       r'\byour\s+ekyc\s+has\s+been\s+successfully\s+completed\b|'
-      r'\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,80}\b(?:paused|unavailable|interrupted)\b|'
-      r'\bregistration\s+alert\s*:\s*device\s+name\b|'
-      r'\bcoupons?\s+expire\b|'
-      r'\b(?:order\b[\s\S]{0,40}\b(?:is\s+)?dispatched\s+through|order\s+(?:is\s+)?dispatched\s+through|we\s+have\s+received\s+your\s+order\s+id)\b|'
-      r'\blifetime[- ]free\s+credit\s+card\s+facility\s+has\s+been\s+enabled\b|'
+      r'\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,60}\bwill\s+be\s+paused\b|'
       r'\b(?:bse\s+trade\s+confirmation|welcome\s+to\s+nse,\s+you\s+have\s+been\s+registered\b|registered\s+with\s+[\w\s]+in\s+segment(?:\(s\))?|registered\s+with\s+[\w\s]+in\s+segment\(s\))\b|'
       r'\b(?:puc\s+certificate\s+for\s+vehicle\b|your\s+itr\s+for\s+ay\b[\s\S]{0,30}\bawaits\s+at\s+the\s+e[- ]?filing\s+portal)\b|'
       r'\b(?:(?:last\s+chance\s*:?\s*)?renew\s+(?:your\s+)?expired\b|(?:(?:car|motor|two[ -]?wheeler|vehicle|bike|health)\s+)?insurance\s+will\s+expire\s+on\b|will\s+expire\s+on\b[\s\S]{0,80}\b(?:premium|insurance|renew|policy|visit|starts?\s+(?:just\s+)?(?:at\s+)?(?:rs\.?|inr)|instant\s+renewal)\b|\+\s*taxes\*?)\b|'
-      r'\b(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+for\b[\s\S]{0,50}\b(?:has\s+expired|expires\s+today|will\s+expire)\b|'
-      r'\b(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+expired\b|'
       r'\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+(?:credit\s+)?card\s+with\s+limit|eligible\s+for\s+(?:a\s+)?(?:[\w\s]{0,20}\s+)?loan\b|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application|pre[-\s]?approved\s+loan)\b|'
       r'\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b',
     ).hasMatch(text);
@@ -502,38 +463,11 @@ class NeedsReviewRepository {
     if (isMandateReview(item.body)) {
       return item.copyWith(kind: NeedsReviewKind.mandate);
     }
-    if (isMerchantReceiptOrEbill(item.body)) {
-      return item.copyWith(kind: NeedsReviewKind.receipt);
-    }
     return item;
   }
 
   static bool isMerchantReceiptOrEbill(String body) =>
       LocalSmsParser.isMerchantReceiptOrEbill(body);
-
-  static bool _merchantMatchesOrOverlaps(
-    String? txnMerchant,
-    String itemBody,
-    String itemSender,
-  ) {
-    if (txnMerchant == null || txnMerchant.trim().isEmpty) return true;
-    final lowerMerchant = txnMerchant.trim().toLowerCase();
-    const generic = {
-      'bank', 'transfer', 'payment', 'spend', 'upi', 'pos', 'ecom',
-      'pvt', 'ltd', 'limited', 'inc', 'corp', 'india', 'store', 'shop',
-      'money', 'sent', 'received', 'debit', 'unknown',
-    };
-    final tokens = lowerMerchant
-        .split(RegExp(r'[^a-z0-9]+'))
-        .where((t) => t.length >= 3 && !generic.contains(t))
-        .toList();
-    if (tokens.isEmpty) return true;
-
-    final lowerBody = itemBody.toLowerCase();
-    final lowerSender = itemSender.toLowerCase();
-
-    return tokens.any((t) => lowerBody.contains(t) || lowerSender.contains(t));
-  }
 
   static bool hasMatchingSpendTransactionSync(
     AppDatabase database,
@@ -548,18 +482,10 @@ class NeedsReviewRepository {
       for (final txn in transactions) {
         if (txn.entryKind != TxnEntryKind.spend) continue;
         if (txn.amount.paise != extracted.paise) continue;
-        if (txn.occurredAt.difference(item.receivedAt).abs() >
-            const Duration(hours: 72)) {
-          continue;
+        if (txn.occurredAt.difference(item.receivedAt).abs() <=
+            const Duration(hours: 24)) {
+          return true;
         }
-        if (!_merchantMatchesOrOverlaps(
-          txn.merchantName,
-          item.body,
-          item.sender,
-        )) {
-          continue;
-        }
-        return true;
       }
     }
 
@@ -582,10 +508,8 @@ class NeedsReviewRepository {
         if (payloadJson == null) continue;
         final data = jsonDecode(payloadJson) as Map<String, dynamic>;
 
-        final entryKind = (data['entry_kind'] as String?)?.toLowerCase();
-        if (entryKind != null && entryKind != 'spend' && entryKind != 'payment') {
-          continue;
-        }
+        final entryKind = data['entry_kind'] as String?;
+        if (entryKind != null && entryKind.toLowerCase() != 'spend') continue;
 
         final paiseCol = row['amount_paise'] as int?;
         final amountInr = data['amount_inr'] as num?;
@@ -613,17 +537,10 @@ class NeedsReviewRepository {
         }
         if (occurredAt == null) continue;
 
-        if (occurredAt.difference(item.receivedAt).abs() >
-            const Duration(hours: 72)) {
-          continue;
+        if (occurredAt.difference(item.receivedAt).abs() <=
+            const Duration(hours: 24)) {
+          return true;
         }
-
-        final txnMerchant = (data['merchant_name'] ?? data['merchant']) as String?;
-        if (!_merchantMatchesOrOverlaps(txnMerchant, item.body, item.sender)) {
-          continue;
-        }
-
-        return true;
       }
     } catch (_) {}
 
@@ -650,18 +567,10 @@ class NeedsReviewRepository {
       for (final txn in txns) {
         if (txn.entryKind != TxnEntryKind.spend) continue;
         if (txn.amount.paise != extracted.paise) continue;
-        if (txn.occurredAt.difference(item.receivedAt).abs() >
-            const Duration(hours: 72)) {
-          continue;
+        if (txn.occurredAt.difference(item.receivedAt).abs() <=
+            const Duration(hours: 24)) {
+          return true;
         }
-        if (!_merchantMatchesOrOverlaps(
-          txn.merchantName,
-          item.body,
-          item.sender,
-        )) {
-          continue;
-        }
-        return true;
       }
     }
     return false;
@@ -676,8 +585,7 @@ class NeedsReviewRepository {
       return true;
     }
     if (resolved.kind == NeedsReviewKind.investmentSettlement ||
-        resolved.kind == NeedsReviewKind.mandate ||
-        resolved.kind == NeedsReviewKind.receipt) {
+        resolved.kind == NeedsReviewKind.mandate) {
       return false;
     }
     if (isMerchantReceiptOrEbill(resolved.body)) {
@@ -695,9 +603,6 @@ class NeedsReviewRepository {
     if (isNoiseItem(item)) return;
     final txns = transactions ?? existingTransactions;
     if (isMerchantReceiptOrEbill(item.body)) {
-      if (now().difference(item.receivedAt).abs() > const Duration(days: 30)) {
-        return;
-      }
       if (loadDatabase != null) {
         final db = await _database();
         if (_hasMatchingSpendTransaction(item, database: db, transactions: txns)) {
