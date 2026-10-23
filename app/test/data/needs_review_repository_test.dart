@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
+import 'package:pandapay/data/commitments_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -1133,5 +1134,104 @@ void main() {
     expect(NeedsReviewRepository.isNoiseItem(cdslEvoting), isTrue);
     expect(NeedsReviewRepository.isNoiseItem(ckycFetch), isTrue);
     expect(NeedsReviewRepository.isNoiseItem(indiaLendsSpam), isTrue);
+  });
+  test('fetchAll persists AutoPay setup notice as commitment with extracted merchant and autopayLimit', () async {
+    final db = openInMemoryForTesting();
+    final ns = 'user:test';
+    final repo = NeedsReviewRepository(
+      namespace: ns,
+      loadDatabase: () async => db,
+    );
+
+    final autopayItem = NeedsReviewItem(
+      id: 'autopay-openai-1',
+      sender: 'VM-AXISBK-S',
+      body: 'AutoPay mandate created towards OpenAI. Txn amt: INR 0.00 Max limit: INR 1999.00.',
+      receivedAt: DateTime(2026, 10, 18),
+      kind: NeedsReviewKind.mandate,
+    );
+
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+    );
+    db.db.execute(
+      'INSERT INTO local_needs_review VALUES (?,?,?)',
+      [ns, autopayItem.id, jsonEncode(autopayItem.toJson())],
+    );
+
+    final remaining = await repo.fetchAll();
+
+    expect(remaining, isEmpty);
+
+    final commitmentRows = db.db.select(
+      'SELECT payload FROM local_commitments WHERE namespace = ?',
+      [ns],
+    );
+    expect(commitmentRows, hasLength(1));
+    final commitment = Commitment.fromJson(
+      jsonDecode(commitmentRows.single['payload'] as String) as Map<String, dynamic>,
+    );
+    expect(commitment.title, 'OpenAI');
+    expect(commitment.category, CommitmentCategory.subscription);
+    expect(commitment.amount?.rupees, 1999);
+
+    db.close();
+  });
+
+  test('fetchAll updates existing generic commitment title and category when re-parsed with better title', () async {
+    final db = openInMemoryForTesting();
+    final ns = 'user:test';
+    final repo = NeedsReviewRepository(
+      namespace: ns,
+      loadDatabase: () async => db,
+    );
+
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_commitments (namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(namespace, id))',
+    );
+    final oldCommitment = Commitment(
+      id: 'commitment:item-emergent-1',
+      title: 'Subscription / Mandate',
+      category: CommitmentCategory.other,
+      amount: Money.fromRupees(500),
+      dueOn: DateTime(2026, 10, 20),
+      anchorDay: 20,
+    );
+    db.db.execute(
+      'INSERT INTO local_commitments VALUES (?, ?, ?)',
+      [ns, oldCommitment.id, jsonEncode(oldCommitment.toJson())],
+    );
+
+    final item = NeedsReviewItem(
+      id: 'item-emergent-1',
+      sender: 'VM-HDFCBK',
+      body: 'Mandate of INR 500.00 created towards Emergent Labs on your account. Due on 20-Oct-2026.',
+      receivedAt: DateTime(2026, 10, 15),
+      kind: NeedsReviewKind.mandate,
+    );
+
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+    );
+    db.db.execute(
+      'INSERT INTO local_needs_review VALUES (?,?,?)',
+      [ns, item.id, jsonEncode(item.toJson())],
+    );
+
+    final remaining = await repo.fetchAll();
+    expect(remaining, isEmpty);
+
+    final rows = db.db.select(
+      'SELECT payload FROM local_commitments WHERE namespace = ?',
+      [ns],
+    );
+    expect(rows, hasLength(1));
+    final updated = Commitment.fromJson(
+      jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>,
+    );
+    expect(updated.title, 'Emergent Labs');
+    expect(updated.amount?.rupees, 500);
+
+    db.close();
   });
 }

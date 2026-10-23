@@ -158,13 +158,13 @@ class LocalSmsParser {
   static bool isAutoPayNotice(String body) {
     final text = body.replaceAll(RegExp(r'\s+'), ' ');
     return _re(
-          r'\b(?:autopay\s+(?:alert|reminder|scheduled)?|auto[- ]?pay|mandate|e[- ]?mandate|e[- ]?nach|enach|standing\s+instruction|si\s+(?:debit|alert|notification)|pre[- ]?debit(?:\s+notification)?|auto[- ]?debit)\b',
+          r'\b(?:autopay\s+(?:alert|reminder|scheduled)?|auto[- ]?pay|mandate|e[- ]?mandate|e[- ]?nach|enach|standing\s+instruction|si\s+(?:debit|alert|notification)|pre[- ]?debit(?:\s+notification)?|auto[- ]?debit|recurring\s+subscription)\b',
         ).hasMatch(text) ||
         _re(
-          r'\b(?:will|shall|to|scheduled\s+to|scheduled\s+for)\s+(?:be\s+)?(?:auto[- ]?)?(?:deducted|debited)\b',
+          r'\b(?:will|shall|to|scheduled\s+to|scheduled\s+for)\s+(?:be\s+)?(?:auto[- ]?)?(?:deducted|debited|charged)\b',
         ).hasMatch(text) ||
         _re(
-          r'\b(?:auto[- ]?deducted|auto[- ]?debited)\s+(?:on|from)\b',
+          r'\b(?:auto[- ]?deducted|auto[- ]?debited|automatically\s+(?:charged|debited|deducted))\s+(?:on|from|to)\b',
         ).hasMatch(text) ||
         _re(
           r'\b(?:contribution|subscription|installment|instalment)\s+amount\b',
@@ -439,6 +439,18 @@ class LocalSmsParser {
         _isOwnPersonName(match.group(1)!.trim(), ownUserName);
   }
 
+  /// UPI debit alerts often put the account clause before the recipient:
+  /// "debited from A/c XX1234 to Sujay Enterprises via UPI". The generic
+  /// `from ...` merchant pattern otherwise keeps the account text as part of
+  /// the merchant name. Require the account-shaped source and UPI rail so this
+  /// remains narrow and does not change unrelated card or NEFT narratives.
+  static String? _upiAccountRecipient(String body) {
+    final match = _re(
+      r'\bfrom\s+(?:your\s+)?(?:a\/?c\.?|account)\s*(?:[xX*]{1,4}\s*)?\d{4}\s+to\s+([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+(?:via\s+)?upi\b|\s+on\b|\s+ref(?:erence)?\b|[.,;]|$)',
+    ).firstMatch(body);
+    return match?.group(1)?.trim();
+  }
+
   static bool _incomingBankTransferCandidate(String body) =>
       !_re(r'\b(?:salary|cashback|refund(?:ed)?)\b').hasMatch(body) &&
       _re(r'\bfrom\b[\s\S]{0,80}\b(?:bank|a\/?c\.?|account)\b').hasMatch(body);
@@ -506,6 +518,34 @@ class LocalSmsParser {
     if (_re(r'\batal\s+pension\s+yojana\b').hasMatch(text)) {
       return 'Atal Pension Yojana';
     }
+    final merchantLabelMatch = _re(
+      r'\b(?:merchant|biller|payee|service\s+provider)\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 .&\x27/()]{1,60})',
+    ).firstMatch(body);
+    if (merchantLabelMatch != null) {
+      final name = merchantLabelMatch.group(1)?.trim();
+      if (name != null && name.length >= 2) {
+        return name;
+      }
+    }
+    final mandateTowardsMatch = _re(
+      r'\b(?:created\s+towards|mandate\b[\s\S]{0,50}?\b(?:created\s+towards|towards|for)|subscription\s+to|subscription\s+towards|for\s+(?:the\s+)?subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 .&\x27/()]{1,60}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed)\b|[,.;]|$)',
+    ).firstMatch(text);
+    if (mandateTowardsMatch != null) {
+      final name = mandateTowardsMatch.group(1)?.trim();
+      if (name != null && name.length >= 2 && !_re(r'^(?:credit card|card|account|bank)$').hasMatch(name)) {
+        return name;
+      }
+    }
+    final billScheduledMatch = _re(
+      r'\b(?:bill\s+payment\b[\s\S]{0,40}?\bfor|payment\b[\s\S]{0,40}?\bfor)\s+([A-Za-z0-9_][-A-Za-z0-9 .&\x27/(),]{2,60}?)(?:\s+\d{5,})?\s+(?:is\s+scheduled|scheduled\s+(?:for|on)|is\s+due|due\s+on)\b',
+    ).firstMatch(text);
+    if (billScheduledMatch != null) {
+      final name = billScheduledMatch.group(1)?.trim();
+      if (name != null && name.length >= 3 && !_re(r'^(?:credit card|card|account|bank)$').hasMatch(name.toLowerCase())) {
+        return name;
+      }
+    }
+
     final prefixMatch = _re(r'^([A-Za-z][A-Za-z0-9 .&\x27/-]{2,40}?)\s*\.{3}').firstMatch(text);
     if (prefixMatch != null) {
       final name = prefixMatch.group(1)?.trim();
@@ -706,7 +746,11 @@ class LocalSmsParser {
     final towardsMatchDraft = _re(
       r'\b(?:towards?|in\s+fav(?:ou?r)?\s+of)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body);
-    var merchant = localOnly ? null : (fvgMatch?.group(1)?.trim() ?? towardsMatchDraft?.group(1)?.trim());
+    var merchant = localOnly
+        ? null
+        : (_upiAccountRecipient(body) ??
+            fvgMatch?.group(1)?.trim() ??
+            towardsMatchDraft?.group(1)?.trim());
     if (!localOnly && (merchant == null || merchant.isEmpty) && asbaOrIpoBlock) {
       final ipoCompanyMatch = _re(
         r'\b(?:asba|ipo)\b[\s\S]{0,60}?\bfor\s+([A-Za-z0-9 ._&@*\x27/-]{2,60}?)(?=\s+(?:of\s+(?:₹|rs\.?|inr)|application|has\s+been|is\s+accepted)|[.,;]|$)',
@@ -793,10 +837,14 @@ class LocalSmsParser {
   }) {
     final biller = billerName ?? extractBillerName(body);
     final billerLower = (biller ?? '').toLowerCase();
-    final isCreditCard = billerLower.contains('credit card') ||
-        billerLower.contains('card') ||
-        cardLast4 != null ||
-        _re(r'\bcredit\s+card\b').hasMatch(body);
+    final isExplicitMerchant = biller != null &&
+        biller.isNotEmpty &&
+        !billerLower.contains('credit card') &&
+        !billerLower.contains('card bill');
+    final isCreditCard = !isExplicitMerchant &&
+        (billerLower.contains('credit card') ||
+            billerLower.contains('card') ||
+            _re(r'\bcredit\s+card\b').hasMatch(body));
 
     final effectiveCardLast4 = cardLast4 ??
         _re(
@@ -867,19 +915,29 @@ class LocalSmsParser {
         confidence: 0.95,
       );
     } else {
+      final isSetup = autopayLimit != null ||
+          _re(r'\b(?:activation|activated|enabled|registered|created|set\s+up|maximum|max\s+limit|e[- ]?mandate)\b').hasMatch(body);
       return LocalSmsObservation(
-        cardLast4: null,
+        cardLast4: effectiveCardLast4,
         accountLast4: accountLast4,
         billerName: biller,
         cadenceHint: effectiveCadence,
         dueDate: effectiveDue,
         statementDate: receivedAt,
         availableBalance: balance,
-        amountDue: effectiveAmountDue,
+        amountDue: (effectiveAmountDue != null && effectiveAmountDue.paise > 0)
+            ? effectiveAmountDue
+            : autopayLimit,
         autopayLimit: autopayLimit,
-        eventType: LocalSmsEventType.bill,
-        disposition: LocalSmsDisposition.localCommitment,
-        reasonCodes: const ['commitment_detected', 'mandate_notice'],
+        eventType: isSetup ? LocalSmsEventType.autopay : LocalSmsEventType.bill,
+        disposition: isSetup
+            ? LocalSmsDisposition.localIgnore
+            : LocalSmsDisposition.localCommitment,
+        reasonCodes: [
+          if (isSetup) 'autopay_setup' else 'commitment_detected',
+          'mandate_notice',
+          if (!isSetup) 'autopay_notice',
+        ],
         isAutopay: true,
         confidence: 0.95,
       );
@@ -1281,6 +1339,7 @@ class LocalSmsParser {
       amountDue: amountDue ?? billAmount,
       minimumDue: minimumDue,
       autopayLimit: autopayLimit,
+      isAutopay: isAutoPayNotice(body),
       eventType:
           type ??
           (row == null
@@ -1316,8 +1375,7 @@ class LocalSmsParser {
     }
     if (!failed &&
         isAutoPayNotice(body) &&
-        !autopaySetup &&
-        (!hasCompletedMovement || futureDebit)) {
+        (!hasCompletedMovement || futureDebit || autopaySetup)) {
       final obs = _parseAutoPay(
         body: body,
         sender: sender,
@@ -1357,8 +1415,8 @@ class LocalSmsParser {
       return observation(
         null,
         LocalSmsEventType.autopay,
-        LocalSmsDisposition.localIgnore,
-        ['autopay_setup'],
+        LocalSmsDisposition.localCommitment,
+        ['autopay_setup', 'mandate_notice', 'commitment_detected'],
       );
     }
     if (promotion &&
@@ -1494,12 +1552,14 @@ class LocalSmsParser {
         ? TxnInstrument.wallet
         : isWalletDebit
         ? TxnInstrument.wallet
-        : bankDebit || credit || asbaOrIpoBlock
-        ? TxnInstrument.upiBank
         : _re(
             r'\bdebit\s+card\b|\b(?:atm|withdrawn|cash\s+withdrawal|block\s+dc)\b',
           ).hasMatch(body)
         ? TxnInstrument.debitCard
+        : _re(r'\bcredit\s+card\b').hasMatch(body) || (cardLast4 != null && accountLast4 == null)
+        ? TxnInstrument.creditCard
+        : bankDebit || credit || asbaOrIpoBlock || _re(r'\bupi\b').hasMatch(body)
+        ? TxnInstrument.upiBank
         : cardLast4 != null
         ? TxnInstrument.creditCard
         : null;
@@ -1564,7 +1624,8 @@ class LocalSmsParser {
       r'\b(?:towards?|in\s+fav(?:ou?r)?\s+of)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body);
 
-    var merchant = fvgMatch?.group(1)?.trim() ??
+    var merchant = _upiAccountRecipient(body) ??
+        fvgMatch?.group(1)?.trim() ??
         upiSlashMatch?.group(1)?.trim() ??
         towardsMatchParse?.group(1)?.trim();
 
@@ -1795,6 +1856,10 @@ class LocalSmsParser {
       final rawKind = (rule.defaultFields['entryKind'] ?? getGroup('entryKind'))?.toString().toLowerCase();
       if (rawKind == 'income' || rawKind == 'credit') {
         entryKind = TxnEntryKind.income;
+      } else if (rawKind == 'transfer') {
+        entryKind = TxnEntryKind.transfer;
+      } else if (rawKind == 'investment') {
+        entryKind = TxnEntryKind.investment;
       }
 
       String? matchedCardId;

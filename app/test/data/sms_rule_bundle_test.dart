@@ -228,6 +228,15 @@ void main() {
         'confidence': 0.99,
       },
       {
+        'id': 'rule_custom_transfer',
+        'family': 'posted_movement',
+        'senderPattern': 'CUSTOMTRANSFER',
+        'regex': r'Card payment: Rs\.?\s*([0-9.]+) paid from account (\d{4})',
+        'fieldMap': {'amount': 1, 'accountLast4': 2},
+        'defaultFields': {'instrument': 'upiBank', 'entryKind': 'transfer'},
+        'confidence': 0.99,
+      },
+      {
         'id': 'rule_custom_bal',
         'family': 'balance_snapshot',
         'senderPattern': 'CUSTOMBK',
@@ -274,6 +283,21 @@ void main() {
       expect(obs.transaction!.instrument, TxnInstrument.creditCard);
       expect(obs.confidence, 0.90);
       expect(obs.reasonCodes, contains('downloaded_rule_match'));
+    });
+
+    test('preserves transfer and investment kinds from downloaded rules', () {
+      final obs = LocalSmsParser.parse(
+        namespace: 'profile1',
+        sender: 'VK-CUSTOMTRANSFER-T',
+        body: 'Card payment: Rs. 500.00 paid from account 4321',
+        receivedAt: DateTime(2026, 10, 21, 14, 30),
+        downloadedRules: bundle,
+      );
+
+      expect(obs, isNotNull);
+      expect(obs!.transaction, isNotNull);
+      expect(obs.transaction!.entryKind, TxnEntryKind.transfer);
+      expect(obs.transaction!.amount.rupees, 500.00);
     });
 
     test('matches downloaded balance snapshot rule on-device', () {

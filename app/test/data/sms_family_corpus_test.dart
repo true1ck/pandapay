@@ -165,13 +165,11 @@ void main() {
       expect(o.transaction?.accountLast4, '1234');
     });
 
-    test('upi_person_spend: payment to a person is spending', () {
+    test('upi_person_spend: payment to a person keeps the recipient merchant', () {
       final o = parseCase(cases['upi_person_spend']!)!;
       expect(o.transaction?.entryKind, TxnEntryKind.spend);
       expect(o.transaction?.amount.paise, 25000);
-      // BASELINE GAP → Phase 2: the merchant capture swallows the account
-      // clause ("debited from A/c XX1234 to ...") instead of the payee.
-      expect(o.transaction?.merchantName, 'A/c XX1234 to Sujay Enterprises');
+      expect(o.transaction?.merchantName, 'Sujay Enterprises');
     });
 
     test('salary_income: explicit salary wording earns income', () {

@@ -343,18 +343,26 @@ class NeedsReviewRepository {
         );
 
         if (parsed != null) {
-          if (parsed.disposition == LocalSmsDisposition.localIgnore ||
-              LocalSmsParser.isNonTransactionNoise(item.sender, item.body) ||
-              isSecurityOrServiceAlert(item.body)) {
+          final isCardBill = parsed.eventType == LocalSmsEventType.bill &&
+              parsed.cardLast4 != null &&
+              parsed.disposition != LocalSmsDisposition.localCommitment &&
+              !parsed.reasonCodes.contains('mandate_notice');
+          final isMandateOrAutopay = !isCardBill &&
+              (parsed.isAutopay ||
+                  parsed.disposition == LocalSmsDisposition.localCommitment ||
+                  parsed.reasonCodes.contains('mandate_notice') ||
+                  parsed.reasonCodes.contains('commitment_detected') ||
+                  item.kind == NeedsReviewKind.mandate ||
+                  isMandateReview(item.body));
+          if (isMandateOrAutopay) {
+            _persistResolvedCommitmentSync(db, namespace, parsed, item);
             toRemove.add(item.id);
             continue;
           }
 
-          if (parsed.disposition == LocalSmsDisposition.localCommitment ||
-              parsed.reasonCodes.contains('mandate_notice') ||
-              parsed.reasonCodes.contains('commitment_detected') ||
-              item.kind == NeedsReviewKind.mandate) {
-            _persistResolvedCommitmentSync(db, namespace, parsed, item);
+          if (parsed.disposition == LocalSmsDisposition.localIgnore ||
+              LocalSmsParser.isNonTransactionNoise(item.sender, item.body) ||
+              isSecurityOrServiceAlert(item.body)) {
             toRemove.add(item.id);
             continue;
           }
@@ -448,16 +456,25 @@ class NeedsReviewRepository {
         namespace: namespace,
       );
       if (parsed != null) {
-        if (parsed.disposition == LocalSmsDisposition.localIgnore ||
-            LocalSmsParser.isNonTransactionNoise(item.sender, item.body) ||
-            isSecurityOrServiceAlert(item.body)) {
+        final isCardBill = parsed.eventType == LocalSmsEventType.bill &&
+            parsed.cardLast4 != null &&
+            parsed.disposition != LocalSmsDisposition.localCommitment &&
+            !parsed.reasonCodes.contains('mandate_notice');
+        final isMandateOrAutopay = !isCardBill &&
+            (parsed.isAutopay ||
+                parsed.disposition == LocalSmsDisposition.localCommitment ||
+                parsed.reasonCodes.contains('mandate_notice') ||
+                parsed.reasonCodes.contains('commitment_detected') ||
+                item.kind == NeedsReviewKind.mandate ||
+                isMandateReview(item.body));
+        if (isMandateOrAutopay) {
           toRemove.add(item.id);
           continue;
         }
-        if (parsed.disposition == LocalSmsDisposition.localCommitment ||
-            parsed.reasonCodes.contains('mandate_notice') ||
-            parsed.reasonCodes.contains('commitment_detected') ||
-            item.kind == NeedsReviewKind.mandate) {
+
+        if (parsed.disposition == LocalSmsDisposition.localIgnore ||
+            LocalSmsParser.isNonTransactionNoise(item.sender, item.body) ||
+            isSecurityOrServiceAlert(item.body)) {
           toRemove.add(item.id);
           continue;
         }
@@ -530,10 +547,24 @@ class NeedsReviewRepository {
 
   static bool isMandateReview(String body) {
     final text = body.toLowerCase();
-    if (RegExp(r'\bcredit\s+card\b').hasMatch(text)) return false;
-    return RegExp(
-      r'\b(?:auto[-\s]?pay|e[-\s]?mandate|standing\s+instruction)\b',
+    final hasMandateMarker = RegExp(
+      r'\b(?:auto[-\s]?pay|e[-\s]?mandate|standing\s+instruction|sihub)\b',
     ).hasMatch(text);
+    if (!hasMandateMarker) return false;
+
+    final isCardBillPayment = RegExp(
+      r'\b(?:credit\s+card\s+bill|towards\s+(?:your\s+)?credit\s+card|for\s+(?:your\s+)?credit\s+card\s+bill)\b',
+    ).hasMatch(text);
+    if (isCardBillPayment) return false;
+
+    final hasMerchantOrLimit = RegExp(
+      r'\b(?:merchant|payee|biller|max\s+limit|maximum\s+limit|created\s+towards|subscription\s+to|initiated\s+by)\b',
+    ).hasMatch(text);
+    if (hasMerchantOrLimit) return true;
+
+    if (RegExp(r'\bcredit\s+card\b').hasMatch(text)) return false;
+
+    return true;
   }
 
   static NeedsReviewItem resolveItemKind(NeedsReviewItem item) {
@@ -1366,12 +1397,81 @@ class NeedsReviewRepository {
           PRIMARY KEY(namespace, id)
         );
       ''');
-      final title = parsed.billerName ?? 'Subscription / Mandate';
+      final commitmentId = 'commitment:${item.id}';
+      var title = (parsed.billerName != null && parsed.billerName!.trim().isNotEmpty)
+          ? parsed.billerName!.trim()
+          : 'Subscription / Mandate';
+
+      final Money amount;
+      if (parsed.autopayLimit != null &&
+          (parsed.amountDue == null || parsed.amountDue!.isZero)) {
+        amount = parsed.autopayLimit!;
+      } else if (parsed.amountDue != null && !parsed.amountDue!.isZero) {
+        amount = parsed.amountDue!;
+      } else {
+        amount = parsed.amount ??
+            parsed.autopayLimit ??
+            parsed.amountDue ??
+            const Money.zero();
+      }
+
+      try {
+        final existingRows = database.db.select(
+          'SELECT id, payload FROM local_commitments WHERE namespace = ?',
+          [namespace],
+        );
+        for (final r in existingRows) {
+          final existingId = r['id'] as String;
+          final payload =
+              jsonDecode(r['payload'] as String) as Map<String, dynamic>;
+          final old = Commitment.fromJson(payload);
+          final oldTitle = old.title.trim();
+          final isOldGeneric = oldTitle.isEmpty ||
+              oldTitle == 'Subscription / Mandate' ||
+              oldTitle.toLowerCase() == 'subscription' ||
+              oldTitle.toLowerCase() == 'mandate';
+
+          if (existingId == commitmentId ||
+              existingId == 'review-${item.id}' ||
+              existingId == item.id) {
+            if (!isOldGeneric && title == 'Subscription / Mandate') {
+              title = oldTitle;
+            }
+            if (existingId != commitmentId) {
+              database.db.execute(
+                'DELETE FROM local_commitments WHERE namespace = ? AND id = ?',
+                [namespace, existingId],
+              );
+            }
+            continue;
+          }
+
+          if (isOldGeneric && title != 'Subscription / Mandate') {
+            final oldAmountPaise = old.amount?.paise;
+            final oldAnchorDay = old.anchorDay;
+            if (oldAmountPaise != null &&
+                oldAmountPaise == amount.paise &&
+                oldAnchorDay != null &&
+                oldAnchorDay == (parsed.dueDate ?? item.receivedAt).day) {
+              final updatedCommitment = old.copyWith(
+                title: title,
+                category: CommitmentCategory.fromText(title),
+              );
+              database.db.execute(
+                'UPDATE local_commitments SET payload = ? WHERE namespace = ? AND id = ?',
+                [jsonEncode(updatedCommitment.toJson()), namespace, existingId],
+              );
+              return;
+            }
+          }
+        }
+      } catch (_) {}
+
       final commitment = Commitment(
-        id: 'commitment:${item.id}',
+        id: commitmentId,
         title: title,
         category: CommitmentCategory.fromText(title),
-        amount: parsed.amountDue ?? parsed.autopayLimit ?? const Money.zero(),
+        amount: amount,
         dueOn: parsed.dueDate ?? item.receivedAt,
         anchorDay: (parsed.dueDate ?? item.receivedAt).day,
         status: CommitmentStatus.due,

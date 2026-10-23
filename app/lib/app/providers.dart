@@ -4498,8 +4498,8 @@ DateTime _nextRecurringDateAfter(
 }
 
 Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
-  final rows = await _cachedTransactionsForReports(ref);
-  if (rows == null) return null;
+  final cachedRows = await _cachedTransactionsForReports(ref);
+  final rows = cachedRows ?? const [];
   final groups = <String, List<TransactionEntry>>{};
   for (final row in rows) {
     final merchant = row.merchantName?.trim();
@@ -4583,36 +4583,96 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
   final ns = ref.watch(cacheNamespaceProvider);
   final obsRows = cache?.financialStore.entities(ns, 'sms_observations') ?? const [];
   for (final obs in obsRows) {
-    if (obs['card_last4'] != null) continue;
     final isMandate = obs['disposition'] == 'local_commitment' ||
-        (obs['reason_codes'] as List?)?.contains('mandate_notice') == true;
+        (obs['reason_codes'] as List?)?.contains('mandate_notice') == true ||
+        obs['is_autopay'] == true;
     if (!isMandate) continue;
     final biller = (obs['biller_name'] as String?)?.trim();
     final title = biller != null && biller.isNotEmpty
         ? biller
         : (obs['sender_bank'] as String? ?? 'Subscription');
-    final amountPaise = (obs['amount_due_paise'] as num?)?.toInt() ?? 0;
+    final lowerTitle = title.toLowerCase();
+    if (lowerTitle.contains('credit card') || lowerTitle.contains('card bill')) {
+      continue;
+    }
+    final existingIdx = series.indexWhere(
+      (s) => s.displayName.trim().toLowerCase() == title.toLowerCase(),
+    );
+    if (existingIdx >= 0) continue;
+    var amountPaise = (obs['amount_due_paise'] as num?)?.toInt() ?? 0;
+    if (amountPaise == 0) {
+      amountPaise = (obs['autopay_limit_paise'] as num?)?.toInt() ?? 0;
+    }
     final typical = Money.fromPaise(amountPaise);
     final dueDateStr = obs['due_date'] as String?;
     final dueDate = dueDateStr != null ? DateTime.tryParse(dueDateStr) : null;
-    final cadenceStr = obs['cadence_hint'] as String?;
-    final cadence = cadenceStr == 'annual' ? 365 : 30;
+    final cadenceStr = (obs['cadence_hint'] as String?)?.toLowerCase();
+    final cadence = cadenceStr == 'annual'
+        ? 365
+        : (cadenceStr == 'quarterly' ? 90 : 30);
     final annual = Money.fromPaise((typical.paise * _chargesPerYear(cadence)).round());
+    final cardLast4 = obs['card_last4']?.toString().trim();
+    final cardName = cardLast4 != null && cardLast4.isNotEmpty
+        ? 'Card XX$cardLast4'
+        : null;
     series.add(
       RecurringSeries(
-        id: 'mandate:${obs['id']}',
+        id: 'mandate:${obs['id'] ?? title}',
         displayName: title,
         typicalAmount: typical,
         cadenceDays: cadence,
         occurrenceCount: 1,
         annualCost: annual,
         nextExpectedOn: dueDate,
+        cardName: cardName,
         isMandate: true,
         autopayStatus: 'active',
         detectionSource: 'mandate',
+        cadenceConfirmed: true,
         engineStatus: 'confirmed',
       ),
     );
+  }
+  try {
+    final commitments = await ref.read(commitmentsRepositoryProvider).fetchAll();
+    for (final c in commitments) {
+      if (c.status == CommitmentStatus.dismissed) continue;
+      if (c.category != CommitmentCategory.subscription &&
+          !c.title.toLowerCase().contains('subscription') &&
+          !c.title.toLowerCase().contains('openai')) {
+        continue;
+      }
+      final title = c.title.trim();
+      if (title.isEmpty || title == 'Subscription / Mandate') continue;
+      final existingIdx = series.indexWhere(
+        (s) => s.displayName.toLowerCase() == title.toLowerCase(),
+      );
+      if (existingIdx >= 0) continue;
+      final cadence = c.cadence == CommitmentCadence.annual
+          ? 365
+          : (c.cadence == CommitmentCadence.quarterly ? 90 : 30);
+      final typical = c.amount ?? Money.zero();
+      final annual = Money.fromPaise((typical.paise * _chargesPerYear(cadence)).round());
+      series.add(
+        RecurringSeries(
+          id: 'commitment:${c.id}',
+          displayName: title,
+          typicalAmount: typical,
+          cadenceDays: cadence,
+          occurrenceCount: 1,
+          annualCost: annual,
+          nextExpectedOn: c.dueOn,
+          isMandate: true,
+          autopayStatus: 'active',
+          detectionSource: 'mandate',
+          cadenceConfirmed: true,
+          engineStatus: 'confirmed',
+        ),
+      );
+    }
+  } catch (_) {}
+  if (cachedRows == null && series.isEmpty) {
+    return null;
   }
   series.sort((a, b) => b.annualCost.paise.compareTo(a.annualCost.paise));
   return RecurringReport(

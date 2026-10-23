@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../user_cards_repository.dart';
 import 'app_database.dart';
 import '../local_sms_parser.dart';
+import '../commitments_repository.dart';
 
 /// DLT SMS sender IDs split one bank's alerts across channel variants
 /// ("AD-" advertising, "AX-" activity, "VM-"/"PD-" operator packs, "-S"/"-T"
@@ -826,9 +827,17 @@ class FinancialStore {
           PRIMARY KEY(namespace, repair_key)
         );
       ''');
+      database.db.execute('''
+        CREATE TABLE IF NOT EXISTS local_commitments (
+          namespace TEXT NOT NULL,
+          id TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          PRIMARY KEY (namespace, id)
+        );
+      ''');
       final applied = database.db.select(
         'SELECT 1 FROM local_repairs WHERE namespace=? AND repair_key=?',
-        [ns, 'bill_and_autopay_repair_v4'],
+        [ns, 'bill_and_autopay_repair_v6'],
       );
       if (applied.isNotEmpty) return;
 
@@ -847,91 +856,175 @@ class FinancialStore {
             : DateTime.tryParse(receivedAtMs.toString());
         if (receivedAt == null) continue;
 
-        final isBillCandidate = RegExp(
-          r'\b(?:autopay\s+(?:alert|reminder)|will\s+be\s+(?:auto[- ]?)?(?:deducted|debited)|auto[- ]?(?:deducted|debited)|bill\b[\s\S]{0,100}\b(?:ready|due|generated)|statement\b[\s\S]{0,100}\b(?:ready|due|generated))\b',
+        final isCandidate = RegExp(
+          r'\b(?:autopay|mandate|standing\s+instruction|sihub|e-?nach|auto[- ]?(?:deducted|debited)|will\s+be\s+(?:auto[- ]?)?(?:deducted|debited)|bill\b[\s\S]{0,100}\b(?:ready|due|generated)|statement\b[\s\S]{0,100}\b(?:ready|due|generated))\b',
           caseSensitive: false,
         ).hasMatch(body);
-        if (isBillCandidate) {
-          final existingObs = database.db.select(
-            "SELECT 1 FROM financial_entities WHERE namespace=? AND entity='sms_observations' AND id=?",
+        if (!isCandidate) continue;
+
+        final obs = LocalSmsParser.parse(
+          namespace: ns,
+          sender: sender,
+          body: body,
+          receivedAt: receivedAt,
+        );
+        if (obs == null) continue;
+
+        final isAutopayOrMandate = obs.isAutopay ||
+            obs.eventType == LocalSmsEventType.autopay ||
+            obs.disposition == LocalSmsDisposition.localCommitment ||
+            obs.reasonCodes.contains('autopay_notice') ||
+            obs.reasonCodes.contains('mandate_notice');
+        final isBillOrMandate = obs.eventType == LocalSmsEventType.bill || isAutopayOrMandate;
+
+        if (isBillOrMandate) {
+          database.db.execute(
+            "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' AND source_key=? AND pending=1",
             [ns, sourceKey],
           );
-          if (existingObs.isNotEmpty) continue;
-
-          final obs = LocalSmsParser.parse(
-            namespace: ns,
-            sender: sender,
-            body: body,
-            receivedAt: receivedAt,
-          );
-          if (obs != null && obs.eventType == LocalSmsEventType.bill) {
+          if (isAutopayOrMandate && obs.transaction == null) {
             database.db.execute(
-              "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' AND source_key=? AND pending=1",
+              "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' AND source_key=?",
               [ns, sourceKey],
             );
-            final isAutopay = RegExp(
-              r'\b(?:autopay\s+(?:alert|reminder)|will\s+be\s+(?:auto[- ]?)?(?:deducted|debited)|auto[- ]?(?:deducted|debited))\b',
-              caseSensitive: false,
-            ).hasMatch(body);
-            saveObservation(ns, sourceKey, {
-              'id': sourceKey,
-              'sender_bank': sender
-                  .toUpperCase()
-                  .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
-                  .replaceFirst(RegExp(r'-[A-Z]$'), ''),
-              'parser_version': LocalSmsParser.version,
-              'received_at': receivedAt.toUtc().toIso8601String(),
-              'account_last4': obs.accountLast4,
-              'is_bank_account': false,
-              'card_last4': obs.cardLast4,
-              'biller_name': obs.billerName,
-              'cadence_hint': obs.cadenceHint,
-              'balance_paise': obs.availableBalance?.paise,
-              'amount_due_paise': obs.amountDue?.paise,
-              'minimum_due_paise': obs.minimumDue?.paise,
-              'autopay_limit_paise': obs.autopayLimit?.paise,
-              'due_date': obs.dueDate?.toIso8601String(),
-              'statement_date': obs.statementDate?.toIso8601String(),
-              'statement_date_explicit': obs.statementDateExplicit,
-              'event_type': obs.eventType.wireValue,
-              'disposition': obs.disposition.wireValue,
-              'reason_codes': [
-                ...obs.reasonCodes,
-                if (isAutopay) 'autopay_notice',
-              ],
-              'confidence': obs.confidence,
-              if (isAutopay) 'is_autopay': true,
-            });
-            if (obs.cardLast4 != null && obs.dueDate != null && (isAutopay || obs.statementDate != null)) {
-              final cardRows = database.db.select(
-                "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='cards'",
-                [ns],
+          }
+
+          saveObservation(ns, sourceKey, {
+            'id': sourceKey,
+            'sender_bank': sender
+                .toUpperCase()
+                .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
+                .replaceFirst(RegExp(r'-[A-Z]$'), ''),
+            'parser_version': LocalSmsParser.version,
+            'received_at': receivedAt.toUtc().toIso8601String(),
+            'account_last4': obs.accountLast4,
+            'is_bank_account': false,
+            'card_last4': obs.cardLast4,
+            'biller_name': obs.billerName,
+            'cadence_hint': obs.cadenceHint,
+            'balance_paise': obs.availableBalance?.paise,
+            'amount_due_paise': obs.amountDue?.paise,
+            'minimum_due_paise': obs.minimumDue?.paise,
+            'autopay_limit_paise': obs.autopayLimit?.paise,
+            'due_date': obs.dueDate?.toIso8601String(),
+            'statement_date': obs.statementDate?.toIso8601String(),
+            'statement_date_explicit': obs.statementDateExplicit,
+            'event_type': obs.eventType.wireValue,
+            'disposition': obs.disposition.wireValue,
+            'reason_codes': [
+              ...obs.reasonCodes,
+              if (isAutopayOrMandate) 'autopay_notice',
+            ],
+            'confidence': obs.confidence,
+            if (isAutopayOrMandate) 'is_autopay': true,
+          });
+
+          if (isAutopayOrMandate && obs.billerName != null && obs.billerName!.trim().isNotEmpty) {
+            final billerLower = obs.billerName!.toLowerCase();
+            final isCardBill = billerLower.contains('credit card') || billerLower.contains('card bill');
+            if (!isCardBill) {
+              final existingForBiller = database.db.select(
+                "SELECT id FROM local_commitments WHERE namespace=? AND payload LIKE ?",
+                [ns, '%"title":"${obs.billerName}"%'],
               );
-              for (final cardRow in cardRows) {
-                final cardBody =
-                    jsonDecode(cardRow['payload'] as String)
-                        as Map<String, dynamic>;
-                if (cardBody['last4'] == obs.cardLast4) {
-                  if (cardBody['due_day'] == null) {
-                    patchCard(ns, cardRow['id'] as String, {
-                      'due_day': obs.dueDate!.day,
-                    });
-                  }
+              if (existingForBiller.isEmpty) {
+                final limitOrDue = (obs.autopayLimit != null && !obs.autopayLimit!.isZero)
+                    ? obs.autopayLimit!
+                    : (obs.amountDue != null && !obs.amountDue!.isZero ? obs.amountDue! : Money.zero());
+                final cadence = obs.cadenceHint == 'annual'
+                    ? CommitmentCadence.annual
+                    : (obs.cadenceHint == 'quarterly'
+                        ? CommitmentCadence.quarterly
+                        : CommitmentCadence.monthly);
+                final cat = CommitmentCategory.fromText(obs.billerName!);
+                final category = cat == CommitmentCategory.other ? CommitmentCategory.subscription : cat;
+                final c = Commitment(
+                  id: 'commitment:$sourceKey',
+                  title: obs.billerName!,
+                  category: category,
+                  amount: limitOrDue,
+                  dueOn: obs.dueDate ?? receivedAt,
+                  cadence: cadence,
+                  anchorDay: (obs.dueDate ?? receivedAt).day,
+                  status: CommitmentStatus.due,
+                  source: CommitmentSource.sms,
+                  confidence: 1.0,
+                );
+                database.db.execute(
+                  'INSERT OR REPLACE INTO local_commitments (namespace, id, payload) VALUES (?, ?, ?)',
+                  [ns, c.id, jsonEncode(c.toJson())],
+                );
+              }
+            }
+          }
+
+          if (obs.cardLast4 != null && obs.dueDate != null && (isAutopayOrMandate || obs.statementDate != null)) {
+            final cardRows = database.db.select(
+              "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='cards'",
+              [ns],
+            );
+            for (final cardRow in cardRows) {
+              final cardBody =
+                  jsonDecode(cardRow['payload'] as String)
+                      as Map<String, dynamic>;
+              if (cardBody['last4'] == obs.cardLast4) {
+                if (cardBody['due_day'] == null) {
+                  patchCard(ns, cardRow['id'] as String, {
+                    'due_day': obs.dueDate!.day,
+                  });
                 }
               }
             }
-            changed = true;
+          }
+          changed = true;
+        }
+      }
+
+      final genericCommitments = database.db.select(
+        "SELECT id, payload FROM local_commitments WHERE namespace=? AND payload LIKE '%Subscription / Mandate%'",
+        [ns],
+      );
+      for (final g in genericCommitments) {
+        final gid = g['id'] as String;
+        final rawSourceKey = gid.startsWith('commitment:') ? gid.substring(11) : gid;
+        final msgRow = database.db.select(
+          'SELECT sender, body, received_at FROM sms_captured_messages WHERE namespace=? AND id=?',
+          [ns, rawSourceKey],
+        );
+        if (msgRow.isNotEmpty) {
+          final s = msgRow.first['sender'] as String;
+          final b = msgRow.first['body'] as String;
+          final rAt = msgRow.first['received_at'];
+          final dt = rAt is int ? DateTime.fromMillisecondsSinceEpoch(rAt) : DateTime.tryParse(rAt.toString());
+          if (dt != null) {
+            final reParsed = LocalSmsParser.parse(namespace: ns, sender: s, body: b, receivedAt: dt);
+            if (reParsed?.billerName != null && reParsed!.billerName!.trim().isNotEmpty) {
+              final cat = CommitmentCategory.fromText(reParsed.billerName!);
+              final payload = jsonDecode(g['payload'] as String) as Map<String, dynamic>;
+              payload['title'] = reParsed.billerName!;
+              payload['category'] = (cat == CommitmentCategory.other ? CommitmentCategory.subscription : cat).name;
+              if (payload['amount_paise'] == 0 && reParsed.autopayLimit != null) {
+                payload['amount_paise'] = reParsed.autopayLimit!.paise;
+              }
+              database.db.execute(
+                'UPDATE local_commitments SET payload=? WHERE namespace=? AND id=?',
+                [jsonEncode(payload), ns, gid],
+              );
+              changed = true;
+            }
           }
         }
       }
+
       database.db.execute(
         'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
-        [ns, 'bill_and_autopay_repair_v4'],
+        [ns, 'bill_and_autopay_repair_v6'],
       );
       if (changed) {
         _notify(ns, entity: 'cards');
         _notify(ns, entity: 'observations');
         _notify(ns, entity: 'transactions');
+        _notify(ns, entity: 'commitments');
       }
     } catch (_) {
       // Best-effort local repair

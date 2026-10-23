@@ -15,8 +15,14 @@ class _Api implements SyncApi {
   final void Function()? onAck;
   int acknowledgments = 0;
   final int pages;
+  final int conflictsPerPage;
   int pulls = 0;
-  _Api({this.changes = true, this.onAck, this.pages = 1});
+  _Api({
+    this.changes = true,
+    this.onAck,
+    this.pages = 1,
+    this.conflictsPerPage = 0,
+  });
   @override
   Future<List<SyncPushResult>> push({
     required String deviceId,
@@ -38,7 +44,19 @@ class _Api implements SyncApi {
               {'entity': 'transactions', 'entity_id': 'id', 'op': 'update'},
             ]
           : [],
-      conflicts: [],
+      conflicts: [
+        for (var index = 0; index < conflictsPerPage; index++)
+          SyncConflict(
+            id: 'conflict-$pulls-$index',
+            entity: 'transactions',
+            entityId: 'id-$pulls-$index',
+            field: 'note',
+            localValue: 'local',
+            serverValue: 'server',
+            chosenValue: 'server',
+            createdAt: DateTime(2026, 10, 18),
+          ),
+      ],
       hasMore: pulls < pages,
       latestServerSeq: pulls * 42,
     );
@@ -174,6 +192,16 @@ void main() {
       );
     },
   );
+
+  test('accumulates conflicts across every pulled page', () async {
+    final api = _Api(pages: 3, conflictsPerPage: 2);
+    final scope = container(api);
+    addTearDown(scope.dispose);
+    final result = await scope.read(syncEngineProvider).sync();
+    expect(result.ranToCompletion, isTrue);
+    expect(result.conflicts, 6);
+    expect(scope.read(unacknowledgedConflictsProvider), 6);
+  });
 
   test(
     'failed multi-page materialization keeps the entire backlog replayable',

@@ -47,7 +47,7 @@ function isNonTransactionNoise(sender, body) {
       && !/\b(?:debited|charged)\s*(?:by|with|for)?\s*(?:₹|rs\.?|inr)/i.test(text)) return true;
   const completed = /\b(?:your\s+(?:txn|transaction)\s+of|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)(?:\s+(?:by|with|for|towards|of|amounting\s+to))?\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:sent|cash\s+withdrawal|withdrawal|auto[-\s]?debit)\s*(?:of|by)?\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase|settlement|payout)\b[\s\S]{0,45}\b(?:successful|completed|initiated|processed))/i.test(text);
   if (completed || (/\b(?:cashback|refund)\b/i.test(text) && /\b(?:credited|received|deposited)\b/i.test(text)) || /\b(?:debit|credit)\s+hua\b/i.test(text)) return false;
-  if (/\bautopay\s+(?:alert|reminder)\b/i.test(text)) return false;
+  if (/\bautopay\s+(?:alert|reminder|scheduled|activation)\b|\bauto[-\s]?pay\b|\b(?:e[-\s]?mandate|mandate|standing\s+instruction)\b|\bmax(?:imum)?\s*limit\b/i.test(text)) return false;
   return /\b(?:offer|sale|discount|cashback|voucher|coupon|rewarding|shop\s+at|grab|buy\s+now|apply\s+now|prices?\s+slashed|treat\s+yourself|festive\s+shopping|eligible\s+for\s+conversion|convert\s+(?:to|into)\s+emi|international\s+roaming\s+pack)\b|\b(?:get|earn|save)\b[\s\S]{0,45}\b(?:reward|cashback|off|free|voucher)\b/i.test(text)
     || /\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service|transaction\s+check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|sim\s+swap|reported\s+(?:your\s+)?fund\s+bal(?:ance)?|securities\s+bal(?:ance)?|excludes\s+your\s+bank|beware\s+(?:of\s+)?dealing\s+(?:in|on)\s+unsolicited\s+tips|unsolicited\s+tips|due\s+for\s+renewal|renew\s+now\s+with\s+policybazaar|wallet\s+balance\s+is\s+(?:rs\.?|inr)\s*0|add\s+money\s+to\s+wallet|report\s+spam|trai\s+dnd|telecommunications\s+act|sanchar\s+saathi|chakshu|online\s+investment\s+scams|traded\s+value\s+for\b|has\s+been\s+dispatched|has\s+been\s+delivered|card\s+usage\s+settings?|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated|ckyc\s+record|central\s+kyc\s+registry|out\s+for\s+delivery\s+with\s+cash\s+memo|pls\s+share\s+delivery\s+code|delivery\s+code\s+\d+)\b/i.test(text)
     || /\b(?:will\s+remain\s+open\s+and\s+fully\s+operational|available\s+at\s+our\s+branches\s+during\s+normal\s+working\s+hours|submission\s+of\s+positive\s+pay\s+details\s+is\s+mandatory)\b/i.test(text)
@@ -647,6 +647,7 @@ function isSuccessfulSpend(body) {
   const text = String(body || '').toLowerCase();
   if (isSecurityOrOtpMessage(text)) return false;
   if (isRejectedTransaction(text)) return false;
+  if (isCardBillNotice(text)) return false;
   if (isNonTransactionAlert(text)) return false;
   return /\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b/.test(text)
     || /\b(?:payment|purchase|transaction)\b[\s\S]{0,80}\b(?:successful|successfully|completed)\b/.test(text)
@@ -830,7 +831,9 @@ function parseBuiltInInvestmentMovement(sms) {
   const investmentProceeds = /\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b[\s\S]{0,80}\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b/i.test(body)
     || /\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b[\s\S]{0,80}\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b/i.test(body);
   if (/\b(?:autopay|auto[- ]?pay|mandate|standing\s+instruction)\b/i.test(body) &&
-      !/\b(?:debited|credited|paid|transferred|invested|purchased|bought|funds?\s+added|money\s+added)\b/i.test(body)) {
+      (!/\b(?:debited|credited|paid|transferred|invested|purchased|bought|funds?\s+added|money\s+added)\b/i.test(body)
+       || /\b(?:txn\s*amt|amount)\s*[:.]?\s*(?:₹|rs\.?|inr)?\s*0(?:\.00?)?\b/i.test(body)
+       || /\b(?:max(?:imum)?\s*limit|autopay\s+activation\s+successful)\b/i.test(body))) {
     return { ok: false, reason: 'investment_mandate_setup' };
   }
   if (/\b(?:will|shall|would|to)\s+be\s+(?:added|credited|deposited|transferred)\b/i.test(body)) {
@@ -874,10 +877,14 @@ function parseBuiltInUpiDebit(sms) {
   if (instrument !== 'upi_bank') return { ok: false, reason: 'no_builtin_upi_match' };
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_builtin_upi_match' };
+  const amountInr = Number(amountMatch[1].replace(/,/g, ''));
+  if (!Number.isFinite(amountInr) || amountInr <= 0) return { ok: false, reason: 'no_builtin_upi_match' };
   // UPI alerts commonly put the reference in parentheses immediately after
   // the payee ("to ekart (UPI Ref ...)"). Stop before that metadata so it
   // cannot become part of the merchant name.
-  const merchantMatch = body.match(/\b(?:to|at|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|\s*\(|[.,]|$)/i);
+  const merchantMatch = body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|\s*\(|[.,;]|$|\r|\n)/i)
+    || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|\s*\(|[.,;]|$|\r|\n)/i)
+    || body.match(/\b(?:to|at|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|\s*\(|[.,]|$)/i);
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:upi\s*)?(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
   const walletLoad = isWalletLoadMessage(body);
@@ -909,7 +916,10 @@ function parseBuiltInUpiDebit(sms) {
  */
 function isCardBillNotice(body) {
   const text = String(body || '');
-  if (/\bauto[-\s]?pay\s+(?:alert|reminder)\b/i.test(text)) return true;
+  if (/\bauto[-\s]?pay\s+(?:alert|reminder|scheduled|activation)\b/i.test(text)) return true;
+  if (/\b(?:autopay\s+activation\s+successful|max(?:imum)?\s*limit)\b/i.test(text)) return true;
+  if (/\b(?:txn\s*amt|amount)\s*[:.]?\s*(?:₹|rs\.?|inr)?\s*0(?:\.00?)?\b/i.test(text) &&
+      /\b(?:autopay|auto[-\s]?pay|mandate|standing\s+instruction)\b/i.test(text)) return true;
   return (
     /\bwill\s+be\s+(?:auto[-\s]?)?(?:deducted|debited)\b/i.test(text) &&
     /\b(?:credit\s+card|card)\b[\s\S]{0,60}\bbill\b/i.test(text)
@@ -929,13 +939,17 @@ function parseBuiltInCardSpend(sms) {
   if (instrument !== 'credit_card' && instrument !== 'debit_card') return { ok: false, reason: 'no_builtin_card_match' };
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_builtin_card_match' };
+  const amountInr = Number(amountMatch[1].replace(/,/g, ''));
+  if (!Number.isFinite(amountInr) || amountInr <= 0) return { ok: false, reason: 'no_builtin_card_match' };
   // Some issuers put the merchant immediately after the card suffix:
   // "Card XX9008 on OPENAI *CHATGPT. Avl Limit ...". Prefer that clause,
   // then fall back to the more common "at MERCHANT" form. The candidate
   // must begin with a letter so a later customer-care number cannot become
   // the merchant when the message also contains "to 921...".
-  const merchantMatch = body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
-    || body.match(/\b(?:at|to|for)\s+([A-Za-z_][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|[.,]|$)/i);
+  const merchantMatch = body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block|card|bank|account|a\/c|max\s*limit|txn)\b|\s*\(|[.,;]|$|\r|\n)/i)
+    || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|\s*\(|[.,;]|$|\r|\n)/i)
+    || body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
+    || body.match(/\b(?:at|to|for)\s+([A-Za-z_][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|was|is|has|successful|completed)\b|[.,]|$)/i);
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   return {
     ok: true,
@@ -1120,6 +1134,9 @@ function parseConservativeBankSpend(sms) {
   if (/\b(otp|one[ -]?time password|verification code|payment due|amount due|minimum due|credited|refund(?:ed)?|reversal|reversed|declined|failed|cancelled)\b/i.test(body)) {
     return { ok: false, reason: 'non_spend_or_sensitive_message' };
   }
+  if (isCardBillNotice(body)) {
+    return { ok: false, reason: 'card_bill_notice' };
+  }
   if (!/\b(spent|spend|debited|purchase|purchased|used|transaction)\b/i.test(body)) {
     return { ok: false, reason: 'no_spend_marker' };
   }
@@ -1148,7 +1165,9 @@ function parseConservativeBankSpend(sms) {
   };
   if (last4) fields.last4 = last4[1];
 
-  const merchant = body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
+  const merchant = body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$|\r|\n)/i)
+    || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$|\r|\n)/i)
+    || body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
     || body.match(/\b(?:at|to)\s+([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block|for\s+card)\b|[.;]|$)/i);
   if (merchant) {
     const value = merchant[1].trim().replace(/^_+/, '').replace(/[.,;:-]+$/, '').trim();
@@ -1194,6 +1213,9 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (walletSpend.ok) return walletSpend;
   if (isRejectedTransaction(sms?.body)) {
     return { ok: false, reason: 'not_a_successful_spend' };
+  }
+  if (isCardBillNotice(sms?.body)) {
+    return { ok: false, reason: 'card_bill_notice' };
   }
   if (isNonTransactionAlert(sms?.body)) {
     return { ok: false, reason: 'not_a_transaction_alert' };
@@ -1375,5 +1397,6 @@ module.exports = {
   isSecurityOrOtpMessage,
   isNonTransactionNoise,
   extractAvailableBalance,
+  isCardBillNotice,
   isBankAccountMessage,
 };

@@ -23,6 +23,20 @@ Classify every local SQLite table, server table, and attachment source by accoun
 
 Create format v2 while retaining a read path for valid v1 archives. Manifest fields: format/schema version, archive ID, account binding, mode, snapshot time, local namespace identity, local applied-through server sequence, server snapshot high-water sequence (nullable), pending mutation IDs/counts, section provenance and hashes, attachment inventory, required capabilities, and explicit exclusions. `local_only` is complete for its declared local scope, not for the account. Reject unknown required capabilities, duplicate paths/IDs, missing files, bad hashes, cross-account references, and oversized input before mutation.
 
+For each data type, designate one authoritative owner. A local pending command is authoritative until acknowledged; a server row is authoritative after acknowledgement; a local projection of that row is a replica. If the same stable ID appears in local and server sections, the manifest must say whether the local version is a pending change, an acknowledged mirror, or an independent local-only record. Never resolve the overlap by timestamp or archive order. A coverage registry must also say whether `change_log` actually observes every portable server table; a high-water sequence is valid only for covered tables. Until that proof exists, use full-section server digests and call the local applied-through sequence a sync hint, not a completeness certificate.
+
+### Archive state contract
+
+| Mode/phase | Can be created offline? | Local data available after import? | Full-account clone claim? |
+| --- | --- | --- | --- |
+| `local_only` archive | Yes | Yes, after local apply | No |
+| `converged` archive | No | Yes, including when imported offline | Only after online reconciliation |
+| `local_applied_pending_sync` restore | Yes | Yes | No |
+| `conflict_needs_review` restore | After reconnect | Yes, with conflicting mutations held | No |
+| `converged` restore | No | Yes | Yes, subject to declared exclusions |
+
+The archive mode is immutable. Restore phase changes durably. A `converged` archive imported offline still enters `local_applied_pending_sync`; its server section is staged, never assumed to be the current server state.
+
 ## Export algorithm
 
 1. Resolve signed-in account and freeze a backup generation. Read all outbox counts; query errors fail closed. Create a consistent SQLite snapshot using the SQLite Online Backup API or a read transaction, and capture attachment metadata with it. Copy each referenced attachment to private staging and hash it; a missing file aborts. Stream rows in bounded batches; do not load an entire database or ZIP in memory.
@@ -37,6 +51,12 @@ Create format v2 while retaining a read path for valid v1 archives. Manifest fie
 3. If offline, stop at `local_applied_pending_sync`. The restored data is usable locally; never report a full clone. Resume automatically and idempotently on reconnect.
 4. Online reconciliation: authenticate; fetch server state/high-water; preview conflicts by stable ID, version, ownership, and dependency. Replay pending mutations with original mutation IDs, **once**, in causal order. Never use last-write-wins for financial records or silently skip unique-key conflicts. Apply server recovery rows in foreign-key order, or through validated deferred constraints, in one transaction; require expected insert/compare counts. Pull changes to the new device from a fresh cursor; do not copy the old device's cursor. Rebuild derived projections and compare database-level counts, hashes, relationship checks, and monetary totals. Mark `converged` only after all comparisons pass.
 5. Keep the durable session after an uncertain server response. Query status/ledger before retrying so economic events cannot be duplicated. Failure or conflict leaves local data and a repairable state, not a false success.
+
+### Ordering and crash rules
+
+Persist restore transitions as `validated` → `local_applying` → `local_applied_pending_sync` → `server_previewed` → `server_committed` → `pulling` → `reconciling` → `converged`. `conflict_needs_review` and `failed_retryable` retain staging and diagnostic codes. Each transition is idempotent by archive ID, account ID, mutation ID, and session ID. Local database commit and its phase marker must be in the same SQLite transaction. Attachment installation needs a staging directory and a recoverable move journal because filesystem renames are not part of the SQLite transaction. If the app dies, inspect the journal, verify hashes, and resume or roll back before exposing the restored namespace.
+
+Do not replay commands merely because they are present in an archive. First check the server's idempotency ledger and current row version. A command already acknowledged on device A between capture and device B reconnect must become a no-op on B. A different result is a conflict requiring an explicit decision. Server restore must never use `ON CONFLICT DO NOTHING` as proof of success; check each expected row and its canonical digest after insert.
 
 ## Required scenario matrix
 

@@ -345,4 +345,45 @@ void main() {
     expect(find.text('Cult Fit', skipOffstage: false), findsOneWidget);
     expect(find.text('Your recurring spend'), findsOneWidget);
   });
+
+  testWidgets(
+    'displays active mandate with 0 registration fee and 1999 max limit with OpenAILLC and Monthly AutoPay',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recurringReportProvider.overrideWith((ref) async {
+              return RecurringReport(
+                series: [
+                  RecurringSeries(
+                    id: 'mandate:openai-7105',
+                    displayName: 'OpenAILLC',
+                    typicalAmount: Money.fromRupees(1999),
+                    cadenceDays: 30,
+                    occurrenceCount: 1,
+                    annualCost: Money.fromRupees(24321.17),
+                    nextExpectedOn: DateTime(2026, 11, 19),
+                    cardName: 'Card XX7105',
+                    isMandate: true,
+                    autopayStatus: 'active',
+                    detectionSource: 'mandate',
+                    cadenceConfirmed: true,
+                    engineStatus: 'confirmed',
+                  ),
+                ],
+                totalAnnual: Money.fromRupees(24321.17),
+              );
+            }),
+          ],
+          child: const MaterialApp(home: SubscriptionsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('OpenAILLC'), findsOneWidget);
+      expect(find.text('Monthly AutoPay'), findsOneWidget);
+      expect(find.text('Card XX7105'), findsOneWidget);
+      expect(find.textContaining('1,999'), findsWidgets);
+    },
+  );
 }

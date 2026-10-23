@@ -1184,3 +1184,68 @@ test('mutual fund folio unit allotment does not create a cash spend or duplicate
     assert.ok(result.fields.amountInr > 0);
   }
 });
+
+test('AutoPay activation and mandate notices are not flagged as noise and do not mint fake cash spend', () => {
+  const autoPaySetupMessages = [
+    'AutoPay activation successful.\nTxn amt: INR 0.00\nMerchant: OpenAILLC\nAxis Bank Card no.: XX7105\nMax limit: INR 1999.00\n...',
+    'AutoPay activation successful. Txn amt: INR 0.00 Merchant: OpenAI LLC Axis Bank Card no.: XX7105 Max limit: INR 1999.00.',
+    'AutoPay e-mandate successfully registered for NETFLIX with maximum limit of INR 2,000.00 on Axis Bank Card no.: XX7105',
+    'Standing Instruction created towards AGIONE TEC. Max limit: INR 500.00 on card ending 1234.',
+  ];
+
+  for (const body of autoPaySetupMessages) {
+    assert.equal(isNonTransactionNoise('VM-AXISBK-S', body), false, 'Should not be flagged as noise: ' + body);
+    const result = parseSmsAgainstPatterns([], { sender: 'VM-AXISBK-S', body });
+    assert.equal(result.ok, false, 'Should not mint a spend transaction: ' + body);
+    assert.equal(result.reason, 'card_bill_notice');
+  }
+});
+
+test('completed AutoPay debit of a real purchase still parses as spend', () => {
+  const body = 'AutoPay debit of INR 1000 on credit card XX7105 at NETFLIX was successful on 18-Oct-2026.';
+  assert.equal(isNonTransactionNoise('VM-AXISBK-S', body), false);
+  const result = parseSmsAgainstPatterns([], { sender: 'VM-AXISBK-S', body });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 1000);
+  assert.equal(result.fields.last4, '7105');
+  assert.equal(result.fields.merchant, 'NETFLIX');
+  assert.equal(result.fields.entryKind, 'spend');
+});
+
+test('merchant name extraction extracts Merchant: <Name> and created towards <Name>', () => {
+  // 1. Card spend with Merchant: <Name>
+  const cardWithMerchantLabel = parseSmsAgainstPatterns([], {
+    sender: 'AD-AXISBK',
+    body: 'Spent INR 500.00 on Axis Bank Card XX7105 on 20-Oct-2026. Merchant: OpenAILLC. Avl limit: INR 45000.',
+  });
+  assert.equal(cardWithMerchantLabel.ok, true);
+  assert.equal(cardWithMerchantLabel.fields.merchant, 'OpenAILLC');
+  assert.equal(cardWithMerchantLabel.fields.amountInr, 500);
+
+  // 2. Card spend with created towards <Name>
+  const cardWithCreatedTowards = parseSmsAgainstPatterns([], {
+    sender: 'AD-AXISBK',
+    body: 'INR 250.00 debited from card XX7105 created towards AGIONE TEC on 20-Oct-2026.',
+  });
+  assert.equal(cardWithCreatedTowards.ok, true);
+  assert.equal(cardWithCreatedTowards.fields.merchant, 'AGIONE TEC');
+  assert.equal(cardWithCreatedTowards.fields.amountInr, 250);
+
+  // 3. UPI debit with Merchant: <Name>
+  const upiWithMerchantLabel = parseSmsAgainstPatterns([], {
+    sender: 'AX-AXISBK',
+    body: 'INR 350.00 debited from A/C XX1234 on 20-Oct-2026. Merchant: OpenAILLC. UPI Ref: 123456789012.',
+  });
+  assert.equal(upiWithMerchantLabel.ok, true);
+  assert.equal(upiWithMerchantLabel.fields.merchant, 'OpenAILLC');
+  assert.equal(upiWithMerchantLabel.fields.amountInr, 350);
+
+  // 4. UPI debit with created towards <Name>
+  const upiWithCreatedTowards = parseSmsAgainstPatterns([], {
+    sender: 'AX-AXISBK',
+    body: 'INR 450.00 debited from A/C XX1234 on 20-Oct-2026 created towards AGIONE TEC. UPI Ref: 123456789012.',
+  });
+  assert.equal(upiWithCreatedTowards.ok, true);
+  assert.equal(upiWithCreatedTowards.fields.transferParty || upiWithCreatedTowards.fields.merchant, 'AGIONE TEC');
+  assert.equal(upiWithCreatedTowards.fields.amountInr, 450);
+});
