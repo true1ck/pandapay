@@ -2710,6 +2710,17 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
       ).hasMatch(label);
     }
 
+    bool isVerifiedBank(BankAccountSummary account) {
+      if (isNonBankAccount(account)) return false;
+      final slug = (account.issuerSlug ?? '').toLowerCase().trim();
+      final name = [
+        account.issuerShortName,
+        account.issuerName,
+      ].whereType<String>().join(' ').toLowerCase().trim();
+      return (slug.isNotEmpty && slug != 'unknown') ||
+          (name.isNotEmpty && name != 'unknown');
+    }
+
     // Keep the issuer in the identity. Two different banks can legitimately
     // have accounts ending in the same four digits; keying only by suffix
     // silently dropped one account and produced an incorrect total.
@@ -2719,7 +2730,8 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
               (account) =>
                   RegExp(r'^\d{4}$').hasMatch(account.accountLast4) &&
                   !isNonBankAccount(account) &&
-                  !cardSuffixes.contains(account.accountLast4),
+                  (isVerifiedBank(account) ||
+                      !cardSuffixes.contains(account.accountLast4)),
             )
             .toList()
           ..sort((a, b) {

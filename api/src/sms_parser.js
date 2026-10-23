@@ -119,7 +119,7 @@ function extractAccountLast4(body) {
   // A credit-card account is a card ledger, not a deposit account.
   if (/\bcredit\s+card\b/i.test(String(body || ''))) return null;
   const match = String(body || '').match(
-    /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX-]*\s*(\d{4})\b/i,
+    /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX.\s-]*(\d{4})\b/i,
   );
   return match ? match[1] : null;
 }
@@ -132,7 +132,10 @@ function extractAccountLast4(body) {
 // brokerage, or card ledger.
 function isBankAccountMessage(body, sender = '') {
   const text = String(body || '').toLowerCase();
-  if (!text || /\b(?:credit|debit)\s+card\b/.test(text)) return false;
+  if (!text) return false;
+  const hasExplicitAccount = /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b/i.test(text);
+  if (/\bcredit\s+card\b/i.test(text)) return false;
+  if (!hasExplicitAccount && /\bdebit\s+card\b/i.test(text)) return false;
   if (/\b(?:lic|life\s+insurance|policy|premium|demat|trading|broker(?:age|ing)?|portfolio|holdings?|folio|dp\s*id|client\s*id|nav|units?|shares?|stocks?|equity|sip|mutual\s+fund|investment|zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money)\b/.test(text)) {
     return false;
   }
@@ -140,7 +143,7 @@ function isBankAccountMessage(body, sender = '') {
   const accountMarker = /\b(?:bank|a\/?c\.?|account|savings|current|upi|imps|neft|rtgs|atm)\b/.test(text);
   const bankIdentityMarker = /\b(?:bank|a\/?c\.?|savings|current|upi|imps|neft|rtgs|atm)\b/.test(text)
     || /(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)/.test(String(sender || '').toLowerCase());
-  const balanceMarker = /\b(?:available|avail|avl|current|closing)\s*(?:balance|bal)\b/.test(text);
+  const balanceMarker = /\b(?:(?:total\s+)?(?:available|avail|avl|current|closing|clr|new|remaining)\.?\s*(?:balance|bal)\b|bal(?:ance)?\.?\s*(?:is|:|-))/i.test(text);
   const movementMarker = /\b(?:debited|debit|credited|credit|paid|spent|sent|transferred|withdrawn|received|deposited)\b/.test(text);
   // The suffix must be accompanied by explicit account/bank language. A
   // balance phrase by itself is not enough because investment and policy
@@ -152,12 +155,13 @@ function isBankAccountMessage(body, sender = '') {
 // amount and the balance are often both present in one bank SMS; taking the
 // first or last currency value would silently turn the spend into a balance.
 function extractAvailableBalance(body) {
-  const match = String(body || '').match(
-    /\b(?:available|avail|avl|clr|new)\s*(?:balance|bal)\s*(?:is|:|-)?\s*(?: ₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i,
-  ) || String(body || '').match(
-    /\b(?:current|closing)\s*balance\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i,
-  ) || String(body || '').match(
-    /\b(?:bal|balance)\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i,
+  const text = String(body || '');
+  const match = text.match(
+    /\b(?:(?:total|tot)\s+)?(?:avail(?:able)?|avl|current|closing|clr|new|remaining)?\.?\s*(?:bal(?:ance)?|a\/?c\s*bal(?:ance)?)\.?\s*(?:is|:|-)?\s*(?:(?:rs\.?|inr|₹)\s*){1,2}:?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)/i,
+  ) || text.match(
+    /\b(?:is|of)\s*(?:(?:rs\.?|inr|₹)\s*){1,2}:?\s*([\d,]+(?:\.\d{1,2})?)\s*(?:(?:dr\.?|cr\.?)?\s*(?:total\s*)?avail(?:able)?\.?\s*bal(?:ance)?\.?|\s*as\s+avail(?:able)?\.?\s*bal(?:ance)?\.?)/i,
+  ) || text.match(
+    /\b(?:bal|balance)\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)/i,
   );
   if (!match) return null;
   const amount = Number(match[1].replace(/,/g, ''));
@@ -747,7 +751,7 @@ function parseBuiltInCardCredit(sms) {
 function parseBuiltInNonSpendDebit(sms) {
   const body = String(sms?.body || '');
   if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_non_spend_debit' };
-  const cashWithdrawal = /\b(?:cash\s+withdrawal|withdrawn\s+from\b[\s\S]{0,50}\bcard|withdrawn\s+(?:from|at)\s+(?:an?\s+)?atm|atm\b[\s\S]{0,60}\bwithdrawn)\b/i.test(body);
+  const cashWithdrawal = /\b(?:cash\s+withdrawal|withdrawn\s+from\b[\s\S]{0,50}\bcard|withdrawn\s+(?:from|at)\s+(?:an?\s+)?atm|atm\b[\s\S]{0,60}\bwithdrawn|atm\s+(?:txn|transaction|w\/d))\b/i.test(body);
   const feeCharge = !cashWithdrawal && /\b(?:bank\s+charge|service\s+charge|processing\s+fee|convenience\s+fee|late\s+fee|annual\s+fee|maintenance\s+fee|finance\s+charge|interest\s+charge|interest\s+(?:on\s+)?(?:loan|emi)|(?:loan|emi)\s+interest|commission|brokerage\s+fee|gst\s+on\s+(?:fee|charge))\b/i.test(body);
   const loanRepayment = !cashWithdrawal && !feeCharge && /\b(?:loan|personal\s+loan|home\s+loan|car\s+loan|education\s+loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|debited|repaid|repayment|deducted|transferred)\b/i.test(body);
   const investment = !cashWithdrawal

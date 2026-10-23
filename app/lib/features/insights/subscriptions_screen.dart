@@ -25,7 +25,7 @@ bool _isDisplayableSubscription(RecurringSeries series) {
   if (name.length < 2 || !RegExp(r'[A-Za-z]{2,}').hasMatch(name)) {
     return false;
   }
-  final incompleteActiveMandate = series.isMandate && series.hasActiveAutoPay;
+  final incompleteActiveMandate = series.isMandate || series.hasActiveAutoPay;
   if ((!incompleteActiveMandate && series.typicalAmount.paise <= 0) ||
       (!incompleteActiveMandate && series.nextExpectedOn == null)) {
     return false;
@@ -51,6 +51,8 @@ bool _isDisplayableSubscription(RecurringSeries series) {
     r'(payment|charge|debit|subscription|mandate|autopay|plan)?$',
   ).hasMatch(normalized);
 }
+
+final _subscriptionFilterProvider = StateProvider.autoDispose<String>((ref) => 'all');
 
 /// Subscriptions — the charges that repeat, found in the user's own history.
 ///
@@ -141,21 +143,42 @@ class SubscriptionsScreen extends ConsumerWidget {
                 onRefresh: () async => ref.invalidate(recurringReportProvider),
               );
             }
+            final filter = ref.watch(_subscriptionFilterProvider);
+            final autopayCount = subscriptions
+                .where((s) => s.hasActiveAutoPay || s.isMandate)
+                .length;
+            final manualCount = subscriptions.length - autopayCount;
+
+            final filteredSubscriptions = filter == 'autopay'
+                ? subscriptions
+                    .where((s) => s.hasActiveAutoPay || s.isMandate)
+                    .toList(growable: false)
+                : filter == 'manual'
+                    ? subscriptions
+                        .where((s) => !s.hasActiveAutoPay && !s.isMandate)
+                        .toList(growable: false)
+                    : subscriptions;
+
             // The engine split them; the screen groups the same truth.
-            final billing = subscriptions
+            final billing = filteredSubscriptions
                 .where((s) => s.status == 'confirmed')
                 .toList(growable: false);
-            final flagged = subscriptions
+            final flagged = filteredSubscriptions
                 .where(
                   (s) => s.status == 'at_risk' || s.status == 'unused',
                 )
                 .toList(growable: false);
-            final needsCadence = subscriptions
+            final needsCadence = filteredSubscriptions
                 .where((s) => s.status == 'needs_cadence')
                 .toList(growable: false);
             // The server total already counts only proven, still-billing
             // series; re-folding here would put guesses back in the headline.
-            final totalAnnual = data.totalAnnual;
+            final totalAnnual = filter == 'all'
+                ? data.totalAnnual
+                : billing.fold<Money>(
+                    Money.zero(),
+                    (sum, s) => sum + s.annualCost,
+                  );
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(recurringReportProvider),
               child: ListView(
@@ -171,7 +194,144 @@ class SubscriptionsScreen extends ConsumerWidget {
                     series: billing,
                     totalAnnual: totalAnnual,
                     pendingCount: flagged.length + needsCadence.length,
+                    title: filter == 'autopay'
+                        ? 'Your AutoPay spend'
+                        : 'Your recurring spend',
                   ),
+                  const SizedBox(height: AppSpace.md),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          avatar: Icon(
+                            Icons.apps_rounded,
+                            size: 15,
+                            color: filter == 'all'
+                                ? BambooInk.onSlate
+                                : BambooInk.ink700,
+                          ),
+                          label: Text('All (${subscriptions.length})'),
+                          labelStyle: BambooFonts.ui(
+                            12.5,
+                            weight: FontWeight.w600,
+                            color: filter == 'all'
+                                ? BambooInk.onSlate
+                                : BambooInk.ink900,
+                          ),
+                          selected: filter == 'all',
+                          selectedColor: BambooInk.slate,
+                          backgroundColor: BambooInk.paperMuted,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          onSelected: (_) => ref
+                              .read(_subscriptionFilterProvider.notifier)
+                              .state = 'all',
+                        ),
+                        const SizedBox(width: AppSpace.xs),
+                        ChoiceChip(
+                          avatar: Icon(
+                            Icons.bolt_rounded,
+                            size: 15,
+                            color: filter == 'autopay'
+                                ? BambooInk.lime
+                                : BambooInk.jade,
+                          ),
+                          label: Text('AutoPay ($autopayCount)'),
+                          labelStyle: BambooFonts.ui(
+                            12.5,
+                            weight: FontWeight.w600,
+                            color: filter == 'autopay'
+                                ? BambooInk.onSlate
+                                : BambooInk.ink900,
+                          ),
+                          selected: filter == 'autopay',
+                          selectedColor: BambooInk.slate,
+                          backgroundColor: BambooInk.paperMuted,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          onSelected: (_) => ref
+                              .read(_subscriptionFilterProvider.notifier)
+                              .state = 'autopay',
+                        ),
+                        if (manualCount > 0) ...[
+                          const SizedBox(width: AppSpace.xs),
+                          ChoiceChip(
+                            avatar: Icon(
+                              Icons.touch_app_outlined,
+                              size: 15,
+                              color: filter == 'manual'
+                                  ? BambooInk.onSlate
+                                  : BambooInk.ink700,
+                            ),
+                            label: Text('Manual ($manualCount)'),
+                            labelStyle: BambooFonts.ui(
+                              12.5,
+                              weight: FontWeight.w600,
+                              color: filter == 'manual'
+                                  ? BambooInk.onSlate
+                                  : BambooInk.ink900,
+                            ),
+                            selected: filter == 'manual',
+                            selectedColor: BambooInk.slate,
+                            backgroundColor: BambooInk.paperMuted,
+                            side: BorderSide.none,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            onSelected: (_) => ref
+                                .read(_subscriptionFilterProvider.notifier)
+                                .state = 'manual',
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.md),
+                  if (filteredSubscriptions.isEmpty)
+                    CardSummaryPanel(
+                      elevated: false,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 28,
+                      ),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.bolt_outlined,
+                              size: 36,
+                              color: BambooInk.ink500,
+                            ),
+                            const SizedBox(height: AppSpace.sm),
+                            Text(
+                              filter == 'autopay'
+                                  ? 'No active AutoPay found'
+                                  : 'No manual subscriptions found',
+                              style: BambooFonts.heading(
+                                15,
+                                color: BambooInk.ink900,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpace.xs),
+                            Text(
+                              filter == 'autopay'
+                                  ? 'Recurring services with automated bank mandates or card standing instructions will appear here.'
+                                  : 'Subscriptions without automated AutoPay mandates will appear here.',
+                              textAlign: TextAlign.center,
+                              style: BambooFonts.ui(
+                                12.5,
+                                color: BambooInk.ink500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: AppSpace.lg),
                   for (var i = 0; i < billing.length; i++) ...[
                     _SeriesCard(series: billing[i], toneIndex: i),
@@ -863,10 +1023,12 @@ class _TotalCard extends StatelessWidget {
   final List<RecurringSeries> series;
   final Money totalAnnual;
   final int pendingCount;
+  final String title;
   const _TotalCard({
     required this.series,
     required this.totalAnnual,
     this.pendingCount = 0,
+    this.title = 'Your recurring spend',
   });
 
   @override
@@ -914,7 +1076,7 @@ class _TotalCard extends StatelessWidget {
                       const SizedBox(width: AppSpace.md),
                       Expanded(
                         child: Text(
-                          'Your recurring spend',
+                          title,
                           style: BambooFonts.heading(
                             15,
                             color: BambooInk.onSlate,
@@ -1029,6 +1191,22 @@ class _SeriesCard extends ConsumerWidget {
     return next;
   }
 
+  String get _frequencyLabel {
+    if (!series.cadenceConfirmed) return 'Cadence not confirmed';
+    final isAutoPay = series.hasActiveAutoPay || series.isMandate;
+    if (isAutoPay) {
+      if (series.cadenceDays >= 350) return 'Yearly AutoPay';
+      if (series.cadenceDays >= 85 && series.cadenceDays < 175) {
+        return 'Quarterly AutoPay';
+      }
+      if (series.cadenceDays >= 26 && series.cadenceDays <= 32) {
+        return 'Monthly AutoPay';
+      }
+      return '${series.cadenceLabel} AutoPay';
+    }
+    return series.cadenceLabel;
+  }
+
   /// The yearly line is only honest once the cycle is proven. Until then the
   /// per-cycle amount is what's real; a fabricated annual number built on a
   /// guessed cadence would bleed into the headline later.
@@ -1121,9 +1299,7 @@ class _SeriesCard extends ConsumerWidget {
               children: [
                 _InfoPill(
                   icon: Icons.schedule_rounded,
-                  label: series.cadenceConfirmed
-                      ? series.cadenceLabel
-                      : 'Cadence not confirmed',
+                  label: _frequencyLabel,
                   color: _subscriptionAccent,
                   background: _subscriptionTint,
                 ),
@@ -1134,12 +1310,12 @@ class _SeriesCard extends ConsumerWidget {
                     color: _subscriptionAccent,
                     background: _subscriptionTint,
                   ),
-                if (series.hasActiveAutoPay)
+                if (series.hasActiveAutoPay || series.isMandate)
                   const _InfoPill(
                     icon: Icons.bolt_rounded,
-                    label: 'AutoPay',
-                    color: _subscriptionAccent,
-                    background: _subscriptionTint,
+                    label: 'AutoPay Active',
+                    color: BambooInk.jade,
+                    background: BambooInk.rankBadgeBg,
                   ),
                 if (series.status == 'at_risk')
                   const _InfoPill(

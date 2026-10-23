@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/user_cards_repository.dart' show TxnEntryKind, TxnInstrument;
 import 'package:pandapay/data/needs_review_repository.dart';
@@ -765,6 +766,41 @@ void main() {
     expect(result?.dueDate, DateTime(2026, 7, 9));
   });
 
+  test('classifies credit card scheduled AutoPay notice with card ending, amount, due date and isAutopay', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'AX-AXISBK-S',
+      body:
+          'AutoPay scheduled for your credit card ending in 4567 on 25-Oct-2026 for Rs 4,500.00. Maintain sufficient balance in your account.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.transaction, isNull);
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.cardLast4, '4567');
+    expect(result?.amountDue?.rupees, 4500);
+    expect(result?.dueDate, DateTime(2026, 10, 25));
+    expect(result?.isAutopay, isTrue);
+    expect(result?.disposition, LocalSmsDisposition.localObservation);
+  });
+
+  test('classifies Standing Instruction towards Credit Card with amount, card last 4, due date and isAutopay', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VD-HDFCBK-S',
+      body:
+          'Standing Instruction of Rs 5,000 towards HDFC Bank Credit Card ending in 5678 will be debited on 20-Oct-2026.',
+      receivedAt: DateTime(2026, 10, 12),
+    );
+    expect(result?.transaction, isNull);
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.cardLast4, '5678');
+    expect(result?.amountDue?.rupees, 5000);
+    expect(result?.dueDate, DateTime(2026, 10, 20));
+    expect(result?.isAutopay, isTrue);
+    expect(result?.billerName, 'HDFC Bank Credit Card');
+    expect(result?.disposition, LocalSmsDisposition.localObservation);
+  });
+
   test('classifies Atal Pension Yojana contribution notice as a local commitment', () {
     const body =
         'Dear customer, your Atal Pension Yojana contribution amount for the Month April is Rs 46/-, Kindly maintain sufficient bal in your account for auto debit on 15/04/2026.';
@@ -1032,5 +1068,78 @@ void main() {
       expect(obs.amountDue, obs.amount);
       expect(obs.merchantName, isNotNull);
     }
+  });
+  test('bank account balance and account discovery extracts balance and accounts', () {
+    // 1. Canara Bank interest credit 1
+    final canara1 = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VK-CANBNK',
+      body:
+          'INR 25.00 credited to A/c XXXX1772 on 28/09/2026 towards Interest. Total Avail. Bal. INR 4,304.19. -Canara Bank',
+      receivedAt: DateTime(2026, 9, 28),
+    );
+    expect(canara1?.accountLast4, '1772');
+    expect(canara1?.availableBalance, Money.fromRupees(4304.19));
+    expect(
+      LocalSmsParser.isBankAccountMessage(
+        'INR 25.00 credited to A/c XXXX1772 on 28/09/2026 towards Interest. Total Avail. Bal. INR 4,304.19. -Canara Bank',
+        'VK-CANBNK',
+      ),
+      isTrue,
+    );
+
+    // 2. Canara Bank interest credit 2
+    final canara2 = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VK-CANBNK',
+      body:
+          'INR 1,103.00 credited to A/c XXXX2226 on 28/09/2026 towards Interest. Total Avail. Bal. INR 1,83,459.65. -Canara Bank',
+      receivedAt: DateTime(2026, 9, 28),
+    );
+    expect(canara2?.accountLast4, '2226');
+    expect(canara2?.availableBalance, Money.fromRupees(183459.65));
+    expect(
+      LocalSmsParser.isBankAccountMessage(
+        'INR 1,103.00 credited to A/c XXXX2226 on 28/09/2026 towards Interest. Total Avail. Bal. INR 1,83,459.65. -Canara Bank',
+        'VK-CANBNK',
+      ),
+      isTrue,
+    );
+
+    // 3. Canara Bank ATM withdrawal
+    final canaraAtm = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VK-CANBNK',
+      body:
+          'A/C XXXX1772 linked to card XXXX5667 debited Rs INR 20,000.00 on 31/03/2026 Seq 3906 ATM txn.Avl Bal is Rs INR 30,188.05.',
+      receivedAt: DateTime(2026, 3, 31),
+    );
+    expect(canaraAtm?.accountLast4, '1772');
+    expect(canaraAtm?.cardLast4, '5667');
+    expect(canaraAtm?.availableBalance, Money.fromRupees(30188.05));
+    expect(
+      LocalSmsParser.isBankAccountMessage(
+        'A/C XXXX1772 linked to card XXXX5667 debited Rs INR 20,000.00 on 31/03/2026 Seq 3906 ATM txn.Avl Bal is Rs INR 30,188.05.',
+        'VK-CANBNK',
+      ),
+      isTrue,
+    );
+
+    // 4. Union Bank debit
+    final union = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VK-UNIONB',
+      body: 'An amount of INR 500.00 debited from a/c ...8565. Avl Bal Rs: 594.92',
+      receivedAt: DateTime(2026, 10, 1),
+    );
+    expect(union?.accountLast4, '8565');
+    expect(union?.availableBalance, Money.fromRupees(594.92));
+    expect(
+      LocalSmsParser.isBankAccountMessage(
+        'An amount of INR 500.00 debited from a/c ...8565. Avl Bal Rs: 594.92',
+        'VK-UNIONB',
+      ),
+      isTrue,
+    );
   });
 }

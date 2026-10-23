@@ -158,10 +158,10 @@ class LocalSmsParser {
   static bool isAutoPayNotice(String body) {
     final text = body.replaceAll(RegExp(r'\s+'), ' ');
     return _re(
-          r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|mandate|e[- ]?mandate|auto[- ]?debit)\b',
+          r'\b(?:autopay\s+(?:alert|reminder|scheduled)?|auto[- ]?pay|mandate|e[- ]?mandate|e[- ]?nach|enach|standing\s+instruction|si\s+(?:debit|alert|notification)|pre[- ]?debit(?:\s+notification)?|auto[- ]?debit)\b',
         ).hasMatch(text) ||
         _re(
-          r'\b(?:will|shall|to|scheduled\s+to)\s+be\s+(?:auto[- ]?)?(?:deducted|debited)\b',
+          r'\b(?:will|shall|to|scheduled\s+to|scheduled\s+for)\s+(?:be\s+)?(?:auto[- ]?)?(?:deducted|debited)\b',
         ).hasMatch(text) ||
         _re(
           r'\b(?:auto[- ]?deducted|auto[- ]?debited)\s+(?:on|from)\b',
@@ -336,8 +336,14 @@ class LocalSmsParser {
   /// must not create rows in Home's bank-account snapshot.
   static bool isBankAccountMessage(String body, [String sender = '']) {
     final text = body.toLowerCase();
-    if (text.trim().isEmpty ||
-        RegExp(r'\b(?:credit|debit)\s+card\b').hasMatch(text)) {
+    if (text.trim().isEmpty) return false;
+    final hasExplicitAccount = RegExp(
+      r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b',
+    ).hasMatch(text);
+    if (RegExp(r'\bcredit\s+card\b').hasMatch(text)) {
+      return false;
+    }
+    if (!hasExplicitAccount && RegExp(r'\bdebit\s+card\b').hasMatch(text)) {
       return false;
     }
     if (RegExp(
@@ -356,7 +362,7 @@ class LocalSmsParser {
           r'(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb|gucb|cosmos|svc|tjsb|nkgsb|kccb|coop|ucb)',
         ).hasMatch(sender.toLowerCase());
     final balanceMarker = RegExp(
-      r'\b(?:available|avail|avl|current|closing|clr|new)\s*(?:balance|bal)\b',
+      r'\b(?:(?:total\s+)?(?:available|avail|avl|current|closing|clr|new|remaining)\.?\s*(?:balance|bal)\b|bal(?:ance)?\.?\s*(?:is|:|-))',
     ).hasMatch(text);
     final movementMarker = RegExp(
       r'\b(?:debited|debit|credited|credit|paid|spent|sent|transferred|withdrawn|received|deposited)\b',
@@ -510,6 +516,15 @@ class LocalSmsParser {
     final cardMatch = _re(r'\bfor\s+(credit\s+card\s+\d{4})\s+bill\b').firstMatch(text);
     if (cardMatch != null) {
       return cardMatch.group(1);
+    }
+    final towardsCardMatch = _re(
+      r'\b(?:towards|for)\s+([A-Za-z][A-Za-z0-9 .&\x27/-]{2,50}?\b(?:Credit\s+Card|Card))\b',
+    ).firstMatch(text);
+    if (towardsCardMatch != null) {
+      final name = towardsCardMatch.group(1)?.trim();
+      if (name != null && name.length >= 3) {
+        return name.replaceAll(RegExp(r'\s+'), ' ');
+      }
     }
     final patterns = [
       _re(
@@ -785,7 +800,7 @@ class LocalSmsParser {
 
     final effectiveCardLast4 = cardLast4 ??
         _re(
-          r'\b(?:credit\s+|debit\s+)?card\b[\s\S]{0,45}?(?:ending(?:\s+with)?\s*|x{1,4}|\*{1,4}|\.{3,}|last\s*4\s*|no\.?\s*)\D{0,5}(\d{4})\b',
+          r'\b(?:credit\s+|debit\s+)?card\b[\s\S]{0,45}?(?:ending(?:\s+(?:with|in))?\s*|x{1,4}|\*{1,4}|\.{3,}|last\s*4\s*|no\.?\s*)\D{0,8}(\d{4})\b',
         ).firstMatch(body)?.group(1) ??
         _re(
           r'\b(?:credit\s+|debit\s+|bank\s+)?card\s+(?:no\.?\s*)?(\d{4})\b',
@@ -794,7 +809,10 @@ class LocalSmsParser {
     Money? effectiveAmountDue = amountDue;
     if (effectiveAmountDue == null) {
       final amtMatch = _re(
-        r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|payment|bill)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+        r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|standing\s+instruction|si\s+debit|payment|bill)\s*(?:of\s+|is\s+|:\s*|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+      ).firstMatch(body) ??
+      _re(
+        r'\b(?:standing\s+instruction|si\s+debit)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
       ).firstMatch(body) ??
       _re(
         r'(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
@@ -817,6 +835,7 @@ class LocalSmsParser {
       for (final phrase in [
         r'\b(?:will|shall|to)?\s*(?:be\s+)?(?:auto[- ]?)?(?:deducted|debited)\b[\s\S]{0,70}?\bon\s*[:\-]?\s*',
         r'\b(?:auto[- ]?deducted|auto[- ]?debited|auto[- ]?debit)\s+on\s*[:\-]?\s*',
+        r'\b(?:scheduled\s+for\s+)?(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit)\b[\s\S]{0,80}?\b(?:on|by)\s*[:\-]?\s*',
         r'\bdue\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
       ]) {
         final token = _re('$phrase($dateToken)').firstMatch(body)?.group(1);
@@ -949,14 +968,14 @@ class LocalSmsParser {
     }
     final cardLast4 =
         _re(
-          r'\b(?:credit\s+|debit\s+)?card\b[\s\S]{0,45}?(?:ending(?:\s+with)?\s*|x{1,4}|\*{1,4}|\.{3,}|last\s*4\s*|no\.?\s*)\D{0,5}(\d{4})\b',
+          r'\b(?:credit\s+|debit\s+)?card\b[\s\S]{0,45}?(?:ending(?:\s+(?:with|in))?\s*|x{1,4}|\*{1,4}|\.{3,}|last\s*4\s*|no\.?\s*)\D{0,8}(\d{4})\b',
         ).firstMatch(body)?.group(1) ??
         _re(
           r'\b(?:credit\s+|debit\s+|bank\s+)?card\s+(?:no\.?\s*)?(\d{4})\b',
         ).firstMatch(body)?.group(1);
     // Credit-card account references identify a card ledger, not a bank account.
     final destinationAccountLast4 = _re(
-      r'\bto\s+your\b[\s\S]{0,70}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*(\d{4})\b',
+      r'\bto\s+your\b[\s\S]{0,70}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX.\s-]*(\d{4})\b',
     ).firstMatch(body)?.group(1);
     var accountLast4 = _re(r'\bcredit\s+card\b').hasMatch(body)
         ? null
@@ -965,7 +984,7 @@ class LocalSmsParser {
               destinationAccountLast4 != null
         ? destinationAccountLast4
         : _re(
-            r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX-]*\s*(\d{4})\b',
+            r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX.\s-]*(\d{4})\b',
           ).firstMatch(body)?.group(1);
     final isInsuranceReminder = _re(
       r'\b(?:lic|life insurance|policy|premium)\b',
@@ -987,8 +1006,8 @@ class LocalSmsParser {
       r'\b(?:maintain|keep)\s+(?:sufficient|adequate)\s+(?:funds|balance|bal)\b[\s\S]{0,100}?\b(?:on\s+or\s+before|on|by|before)\s*[:\-]?\s*',
       r'\b(?:on\s+or\s+before|before)\s*[:\-]?\s*',
       r'\bdue\s+on\s*[:\-]?\s*',
-      r'\b(?:scheduled\s+for\s+)?(?:auto[- ]?debit|auto[- ]?pay|autopay)\b[\s\S]{0,50}?\b(?:on|by)\s*[:\-]?\s*',
-      r'\b(?:auto[- ]?debit|auto[- ]?pay|autopay)\b[\s\S]{0,50}?\bwill\s+be\s+(?:on|by)\s*[:\-]?\s*',
+      r'\b(?:scheduled\s+for\s+)?(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|mandate)\b[\s\S]{0,80}?\b(?:on|by)\s*[:\-]?\s*',
+      r'\b(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|mandate)\b[\s\S]{0,80}?\bwill\s+be\s+(?:on|by|attempted\s+on|processed\s+on|debited\s+on)\s*[:\-]?\s*',
       r'\b(?:auto[- ]?debit|auto[- ]?pay|autopay)\b[\s\S]{0,50}?\bwill\s+be\s+attempted\s+on\s*[:\-]?\s*',
       r'\bwill\s+be\s+attempted\s+on\s*[:\-]?\s*',
       if (isInsuranceReminder)
@@ -1114,8 +1133,11 @@ class LocalSmsParser {
       statementDate ??= receivedAt;
     }
     final balanceText = _re(
-      r'\b(?:available|avail|avl|current|closing|clr|new|remaining)\s*(?:balance|bal)\s*(?:is|:|-)?\s*(?: ₹|rs\.?|inr)?\s*:?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+      r'\b(?:(?:total|tot)\s+)?(?:avail(?:able)?|avl|current|closing|clr|new|remaining)?\.?\s*(?:bal(?:ance)?|a\/?c\s*bal(?:ance)?)\.?\s*(?:is|:|-)?\s*(?:(?:rs\.?|inr|₹)\s*){1,2}:?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
     ).firstMatch(body)?.group(1) ??
+        _re(
+          r'\b(?:is|of)\s*(?:(?:rs\.?|inr|₹)\s*){1,2}:?\s*([\d,]+(?:\.\d{1,2})?)\s*(?:(?:dr\.?|cr\.?)?\s*(?:total\s*)?avail(?:able)?\.?\s*bal(?:ance)?\.?|\s*as\s+avail(?:able)?\.?\s*bal(?:ance)?\.?)',
+        ).firstMatch(body)?.group(1) ??
         _re(
           r'\b(?:bal|balance)\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
         ).firstMatch(body)?.group(1);
@@ -1148,6 +1170,9 @@ class LocalSmsParser {
         r'\b(?:total|full|statement|amount|premium)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
       ).firstMatch(body)?.group(1) ??
           _re(
+            r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|standing\s+instruction|si\s+debit)\s*(?:of\s+|is\s+|:\s*|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1) ??
+          _re(
             r'\btotal\s+(?:amt|amount)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
@@ -1165,7 +1190,7 @@ class LocalSmsParser {
         r'\b(?:bill|invoice|premium)\s+(?:of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
       ).firstMatch(body)?.group(1) ??
           _re(
-            r'\bautopay\s+(?:alert|reminder)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+            r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|standing\s+instruction|si\s+debit)\s*(?:of\s+|is\s+|:\s*|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
             r'\b(?:payment|bill|premium|contribution|subscription)\s+of\s*(?:₹|rs\.?|inr)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
@@ -1184,11 +1209,11 @@ class LocalSmsParser {
     );
     final autopayLimit = money(
       _re(
-        r'\b(?:max(?:imum)?|mandate)\s*(?:limit|amount)?\s*(?:[:\-]|\s+(?:of|is|for))?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+        r'\b(?:max(?:imum)?|mandate|si|standing\s+instruction)\s*(?:limit|amount)?\s*(?:[:\-]|\s+(?:of|is|for))?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
       ).firstMatch(body)?.group(1),
     );
     final hasAutopay = _re(
-      r'\b(?:auto[- ]?pay|autopay|mandate|e[- ]?mandate)\b',
+      r'\b(?:auto[- ]?pay|autopay|mandate|e[- ]?mandate|e[- ]?nach|enach|standing\s+instruction|si\s+debit)\b',
     ).hasMatch(body);
     final nonZeroDebit = _re(
       r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b|\b(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[*xX]*[1-9]',
@@ -1279,7 +1304,7 @@ class LocalSmsParser {
     // Reminders and offers are observations, never purchases.
     final futureDebit =
         _re(
-          r'\b(?:(?:will|shall|to|scheduled to)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)|for\s+(?:auto[- ]?)?debit|scheduled\s+for\s+(?:auto[- ]?)?debit|(?:maintain|keep)\s+sufficient\s+(?:bal|balance)\b[\s\S]{0,50}\b(?:debit|deduction)|(?:auto[- ]?debit|auto[- ]?pay|autopay)\b[\s\S]{0,50}?\bwill\s+be\b|(?:auto[- ]?debit|auto[- ]?pay|autopay)\b[\s\S]{0,50}?\b(?:attempted|scheduled)\b)\b',
+          r'\b(?:(?:will|shall|to|scheduled to|scheduled for)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)|for\s+(?:auto[- ]?)?debit|scheduled\s+for\s+(?:auto[- ]?)?debit|(?:maintain|keep)\s+sufficient\s+(?:bal|balance)\b[\s\S]{0,50}\b(?:debit|deduction)|(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|pre[- ]?debit)\b[\s\S]{0,50}?\bwill\s+be\b|(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|pre[- ]?debit)\b[\s\S]{0,50}?\b(?:attempted|scheduled)\b)\b',
         ).hasMatch(body);
         if (isMerchantReceiptOrEbill(body)) {
       return observation(
@@ -1404,7 +1429,7 @@ class LocalSmsParser {
               r'\b(?:paid|payment)\s+(?:successfully|completed)\b|\bpayment\s+received\b',
             ).hasMatch(body));
     final cashWithdrawal = _re(
-      r'\b(?:cash\s+withdrawal|withdrawn\s+from\b[\s\S]{0,50}\bcard|withdrawn\s+(?:from|at)\s+(?:an?\s+)?atm|atm\b[\s\S]{0,60}\bwithdrawn)\b',
+      r'\b(?:cash\s+withdrawal|withdrawn\s+from\b[\s\S]{0,50}\bcard|withdrawn\s+(?:from|at)\s+(?:an?\s+)?atm|atm\b[\s\S]{0,60}\bwithdrawn|atm\s+(?:txn|transaction|w\/d))\b',
     ).hasMatch(body);
     final loanRepayment = !cashWithdrawal && _loanRepayment(body);
     final feeCharge = !cashWithdrawal && !loanRepayment && _feeCharge(body);

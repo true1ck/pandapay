@@ -5846,7 +5846,7 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
              WHERE o.profile_id = $1
                AND o.source IN ('sms', 'sms_bulk')
                AND o.metadata->>'accountLast4' ~ '^[0-9]{4}$'
-               AND t.instrument = 'upi_bank'
+               AND t.instrument IN ('upi_bank', 'debit_card')
                AND t.entry_kind <> 'investment'
                AND COALESCE(o.metadata->>'isBankAccount', 'legacy') <> 'false'
                -- UPI-platform senders (SBIUPI & friends) quote the
@@ -5878,7 +5878,7 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
              FROM transactions t
             WHERE t.profile_id = $1
               AND t.status = 'active'
-              AND t.instrument = 'upi_bank'
+              AND t.instrument IN ('upi_bank', 'debit_card')
               AND t.entry_kind <> 'investment'
               AND t.source_account_last4 ~ '^[0-9]{4}$'
               AND NOT EXISTS (

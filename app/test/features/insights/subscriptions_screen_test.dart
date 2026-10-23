@@ -131,7 +131,8 @@ void main() {
 
       expect(find.text('1 active'), findsOneWidget);
       expect(find.text('OpenAILLC'), findsOneWidget);
-      expect(find.text('AutoPay'), findsOneWidget);
+      expect(find.text('AutoPay Active'), findsOneWidget);
+      expect(find.text('Monthly AutoPay'), findsOneWidget);
       expect(find.text('Axis Bank Card XX7105'), findsOneWidget);
       expect(find.text('paytm-98510@ptys'), findsNothing);
       expect(find.text('Kavlekar petroleum'), findsNothing);
@@ -170,7 +171,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('A service'), findsOneWidget);
-    expect(find.text('AutoPay'), findsOneWidget);
+    expect(find.text('AutoPay Active'), findsOneWidget);
     expect(find.text('Cadence not confirmed'), findsOneWidget);
     expect(find.text('Amount not stated in the AutoPay alert'), findsOneWidget);
     expect(find.textContaining('Renews around'), findsNothing);
@@ -246,5 +247,94 @@ void main() {
     expect(find.text('Needs review'), findsOneWidget);
     expect(find.text('Saved renewal date has passed; please review it'), findsOneWidget);
     expect(find.textContaining('Renews around 4 Jul 2025'), findsNothing);
+  });
+
+  testWidgets('filters by AutoPay and displays clear cadence frequency badges', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recurringReportProvider.overrideWith((ref) async {
+            return RecurringReport(
+              series: [
+                RecurringSeries(
+                  id: 'netflix-monthly',
+                  displayName: 'Netflix',
+                  typicalAmount: Money.fromRupees(649),
+                  cadenceDays: 30,
+                  occurrenceCount: 3,
+                  annualCost: Money.fromRupees(7788),
+                  nextExpectedOn: DateTime(2026, 11, 15),
+                  isMandate: true,
+                  autopayStatus: 'active',
+                ),
+                RecurringSeries(
+                  id: 'amazon-prime-yearly',
+                  displayName: 'Amazon Prime',
+                  typicalAmount: Money.fromRupees(1499),
+                  cadenceDays: 365,
+                  occurrenceCount: 2,
+                  annualCost: Money.fromRupees(1499),
+                  nextExpectedOn: DateTime(2027, 5, 20),
+                  isMandate: true,
+                  autopayStatus: 'active',
+                ),
+                RecurringSeries(
+                  id: 'gym-manual',
+                  displayName: 'Cult Fit',
+                  typicalAmount: Money.fromRupees(1200),
+                  cadenceDays: 30,
+                  occurrenceCount: 2,
+                  annualCost: Money.fromRupees(14400),
+                  nextExpectedOn: DateTime(2026, 11, 10),
+                  isMandate: false,
+                  autopayStatus: 'unknown',
+                ),
+              ],
+              totalAnnual: Money.fromRupees(23687),
+            );
+          }),
+        ],
+        child: const MaterialApp(home: SubscriptionsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Frequency labels for autopay items
+    expect(find.text('Monthly AutoPay'), findsOneWidget);
+    expect(find.text('Yearly AutoPay'), findsOneWidget);
+    expect(find.text('AutoPay Active'), findsNWidgets(2));
+
+    // Filter chips present
+    expect(find.text('All (3)'), findsOneWidget);
+    expect(find.text('AutoPay (2)'), findsOneWidget);
+    expect(find.text('Manual (1)'), findsOneWidget);
+
+    // Tap AutoPay filter
+    await tester.tap(find.text('AutoPay (2)'));
+    await tester.pumpAndSettle();
+
+    // AutoPay items visible, manual hidden
+    expect(find.text('Netflix'), findsOneWidget);
+    expect(find.text('Amazon Prime'), findsOneWidget);
+    expect(find.text('Cult Fit'), findsNothing);
+    expect(find.text('Your AutoPay spend'), findsOneWidget);
+
+    // Tap Manual filter
+    await tester.tap(find.text('Manual (1)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Netflix'), findsNothing);
+    expect(find.text('Amazon Prime'), findsNothing);
+    expect(find.text('Cult Fit', skipOffstage: false), findsOneWidget);
+
+    // Tap All filter
+    await tester.tap(find.text('All (3)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Netflix'), findsOneWidget);
+    expect(find.text('Amazon Prime'), findsOneWidget);
+    expect(find.text('Cult Fit', skipOffstage: false), findsOneWidget);
   });
 }

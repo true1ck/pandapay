@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
@@ -245,11 +246,102 @@ typedef _BillReviewResult = ({
 /// NeedsReviewRepository's own doc-comment for why this can't be a
 /// server-side queue), one-tap fill of missing fields, "not a transaction"
 /// dismiss, bulk dismiss.
-class NeedsReviewScreen extends ConsumerWidget {
+enum _ReviewFilterCategory {
+  all('All types'),
+  spends('Spends / Debits'),
+  bills('Bills & Mandates'),
+  alerts('Alerts & Notices');
+
+  final String label;
+  const _ReviewFilterCategory(this.label);
+}
+
+_ReviewFilterCategory _categorizeItem(NeedsReviewItem item) {
+  if (item.kind == NeedsReviewKind.commitment ||
+      item.kind == NeedsReviewKind.mandate ||
+      _isMandateReview(item.body)) {
+    return _ReviewFilterCategory.bills;
+  }
+  if (item.aiSuggestions?.isNotEmpty == true) {
+    final type = item.aiSuggestions!.first['factType'];
+    if (type == 'bill_obligation' || type == 'mandate_lifecycle') {
+      return _ReviewFilterCategory.bills;
+    }
+    if (type == 'balance_snapshot' ||
+        type == 'security_or_service_alert' ||
+        type == 'promotion') {
+      return _ReviewFilterCategory.alerts;
+    }
+    if (type == 'posted_movement') {
+      return _ReviewFilterCategory.spends;
+    }
+  }
+  if (item.kind == NeedsReviewKind.securityOrServiceAlert ||
+      _isSecurityOrServiceAlert(item.body)) {
+    return _ReviewFilterCategory.alerts;
+  }
+  return _ReviewFilterCategory.spends;
+}
+
+class _MonthEntry {
+  final String key;
+  final String label;
+  final int count;
+  final DateTime date;
+  const _MonthEntry({
+    required this.key,
+    required this.label,
+    required this.count,
+    required this.date,
+  });
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      onPressed: onTap,
+      label: Text(label),
+      labelStyle: BambooFonts.ui(
+        12.5,
+        weight: selected ? FontWeight.w600 : FontWeight.w500,
+        color: selected ? BambooInk.onSlate : BambooInk.ink700,
+      ),
+      backgroundColor: selected ? BambooInk.slate : BambooInk.paperMuted,
+      side: BorderSide(
+        color: selected ? BambooInk.slate : BambooInk.hairlineOnPaper,
+      ),
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class NeedsReviewScreen extends ConsumerStatefulWidget {
   const NeedsReviewScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NeedsReviewScreen> createState() => _NeedsReviewScreenState();
+}
+
+class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
+  String? _selectedMonth;
+  String? _selectedMonthLabel;
+  _ReviewFilterCategory _selectedCategory = _ReviewFilterCategory.all;
+
+  @override
+  Widget build(BuildContext context) {
     final items = ref.watch(needsReviewItemsProvider);
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -306,15 +398,129 @@ class NeedsReviewScreen extends ConsumerWidget {
                     'Messages we couldn\'t automatically parse show up here — nothing is ever dropped silently.',
               );
             }
-            return ListView.builder(
-              padding: const EdgeInsets.all(AppSpace.lg),
-              itemCount: list.length,
-              itemBuilder: (context, index) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.md),
-                child: list[index].kind == NeedsReviewKind.commitment
-                    ? _CommitmentNeedsReviewTile(list[index])
-                    : _NeedsReviewTile(list[index]),
-              ),
+
+            final sortedList = List<NeedsReviewItem>.from(list)
+              ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+
+            final monthMap = <String, ({String label, int count, DateTime date})>{};
+            for (final item in sortedList) {
+              final key = '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
+              final current = monthMap[key];
+              if (current == null) {
+                monthMap[key] = (
+                  label: DateFormat('MMM yyyy').format(item.receivedAt),
+                  count: 1,
+                  date: DateTime(item.receivedAt.year, item.receivedAt.month),
+                );
+              } else {
+                monthMap[key] = (
+                  label: current.label,
+                  count: current.count + 1,
+                  date: current.date,
+                );
+              }
+            }
+
+            final availableMonths = monthMap.entries.map((e) => _MonthEntry(
+              key: e.key,
+              label: e.value.label,
+              count: e.value.count,
+              date: e.value.date,
+            )).toList()..sort((a, b) => b.date.compareTo(a.date));
+
+            final filteredList = sortedList.where((item) {
+              if (_selectedMonth != null) {
+                final itemMonthKey = '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
+                if (itemMonthKey != _selectedMonth) return false;
+              }
+              if (_selectedCategory != _ReviewFilterCategory.all) {
+                if (_categorizeItem(item) != _selectedCategory) return false;
+              }
+              return true;
+            }).toList();
+
+            return Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: BambooInk.hairlineOnPaper),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                        child: Row(
+                          children: [
+                            _FilterChip(
+                              label: 'All time',
+                              selected: _selectedMonth == null,
+                              onTap: () => setState(() {
+                                _selectedMonth = null;
+                                _selectedMonthLabel = null;
+                              }),
+                            ),
+                            for (final m in availableMonths) ...[
+                              const SizedBox(width: AppSpace.xs),
+                              _FilterChip(
+                                label: '${m.label} (${m.count})',
+                                selected: _selectedMonth == m.key,
+                                onTap: () => setState(() {
+                                  _selectedMonth = m.key;
+                                  _selectedMonthLabel = m.label;
+                                }),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpace.xs),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                        child: Row(
+                          children: [
+                            for (int i = 0; i < _ReviewFilterCategory.values.length; i++) ...[
+                              if (i > 0) const SizedBox(width: AppSpace.xs),
+                              _FilterChip(
+                                label: _ReviewFilterCategory.values[i].label,
+                                selected: _selectedCategory == _ReviewFilterCategory.values[i],
+                                onTap: () => setState(() {
+                                  _selectedCategory = _ReviewFilterCategory.values[i];
+                                }),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: filteredList.isEmpty
+                      ? EmptyState(
+                          icon: Icons.filter_alt_off_outlined,
+                          title: _selectedMonthLabel != null
+                              ? 'No review items in $_selectedMonthLabel'
+                              : 'No review items in ${_selectedCategory.label}',
+                          message: 'Try changing your month or type filter.',
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(AppSpace.lg),
+                          itemCount: filteredList.length,
+                          itemBuilder: (context, index) => Padding(
+                            padding: const EdgeInsets.only(bottom: AppSpace.md),
+                            child: filteredList[index].kind == NeedsReviewKind.commitment
+                                ? _CommitmentNeedsReviewTile(filteredList[index])
+                                : _NeedsReviewTile(filteredList[index]),
+                          ),
+                        ),
+                ),
+              ],
             );
           },
         ),
@@ -498,6 +704,11 @@ class _CommitmentNeedsReviewTileState
           Text(
             item.sender,
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            DateFormat('MMM d, yyyy • h:mm a').format(item.receivedAt.toLocal()),
+            style: BambooFonts.ui(12, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.sm),
           Container(
@@ -1728,9 +1939,19 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  item.sender,
-                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.sender,
+                      style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      DateFormat('MMM d, yyyy • h:mm a').format(item.receivedAt.toLocal()),
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
+                  ],
                 ),
               ),
               IconButton(

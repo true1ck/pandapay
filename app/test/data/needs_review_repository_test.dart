@@ -1095,4 +1095,43 @@ void main() {
 
     db.close();
   });
+
+  test('isNoiseItem drops operational noise like MPIN alerts, device registration, CDSL e-voting, CKYC fetch, and IndiaLends spam', () {
+    final mpinAlert = NeedsReviewItem(
+      id: 'mpin-1',
+      sender: 'VM-HDFCBK',
+      body: 'Alert: Dear customer, you have successfully set an MPIN for your UPI account.',
+      receivedAt: DateTime(2026, 10, 1),
+    );
+    final deviceRegistration = NeedsReviewItem(
+      id: 'dev-1',
+      sender: 'AD-AXISBK',
+      body: "Alert: Dear customer, you've registered Axis Mobile App on your motorola edge 40 phone.",
+      receivedAt: DateTime(2026, 10, 1),
+    );
+    final cdslEvoting = NeedsReviewItem(
+      id: 'cdsl-1',
+      sender: 'VM-CDSLIN',
+      body: 'CDSL: E-voting for AGM of ABC Ltd has started. Cast your vote via e-voting portal.',
+      receivedAt: DateTime(2026, 10, 1),
+    );
+    final ckycFetch = NeedsReviewItem(
+      id: 'ckyc-1',
+      sender: 'CKYCRG',
+      body: 'Dear customer, your CKYC record has been downloaded/fetched from Central KYC Registry.',
+      receivedAt: DateTime(2026, 10, 1),
+    );
+    final indiaLendsSpam = NeedsReviewItem(
+      id: 'idl-1',
+      sender: 'AD-INDLND',
+      body: 'Pre-approved loan of Rs 5,00,000 from IndiaLends with instant disbursal. Apply now.',
+      receivedAt: DateTime(2026, 10, 1),
+    );
+
+    expect(NeedsReviewRepository.isNoiseItem(mpinAlert), isTrue);
+    expect(NeedsReviewRepository.isNoiseItem(deviceRegistration), isTrue);
+    expect(NeedsReviewRepository.isNoiseItem(cdslEvoting), isTrue);
+    expect(NeedsReviewRepository.isNoiseItem(ckycFetch), isTrue);
+    expect(NeedsReviewRepository.isNoiseItem(indiaLendsSpam), isTrue);
+  });
 }

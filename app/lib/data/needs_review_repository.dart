@@ -504,7 +504,11 @@ class NeedsReviewRepository {
       r'\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b|'
       r'\b(?:pledge(?:d)?|unpledge(?:d)?|margin\s+pledge)\b|'
       r'\b(?:kra\b[\s\S]{0,60}\b(?:address|update|kyc)|(?:address|kyc|update)\b[\s\S]{0,60}\bkra|(?:cvy|cvl|ndml|cams|karvy)\s*kra)\b|'
-      r'\b(?:(?:new\s+)?device\s+(?:registration|registered)|registration\s+(?:for|of)\s+(?:new\s+)?device|registered\s+(?:a\s+)?new\s+device)\b|'
+      r'\b(?:(?:new\s+)?device\s+(?:registration|registered)|registration\s+(?:for|of)\s+(?:new\s+)?device|registered\s+(?:a\s+)?new\s+device|you(?:\x27ve|\s+have)\s+registered\b[\s\S]{0,60}\bon\s+your\b|registered\b[\s\S]{0,40}\bapp\s+on\s+your\b)\b|'
+      r'\b(?:(?:successfully\s+)?(?:set|reset|changed|updated)\s+(?:an?\s+)?mpin|mpin\s+(?:has\s+been\s+)?(?:set|reset|changed|updated)|set\s+(?:an?\s+)?mpin)\b|'
+      r'\b(?:(?:cdsl|nsdl)\b[\s\S]{0,40}\be[- ]?voting\b|e[- ]?voting\b[\s\S]{0,40}\b(?:cdsl|nsdl|agm|egm|resolution|ballot)|cast\s+your\s+vote\s+(?:on|via)\s+(?:cdsl|nsdl|evoting))\b|'
+      r'\b(?:ckyc\b[\s\S]{0,60}\b(?:registry|fetch|fetched|downloaded|accessed|record|reference|search|details)|central\s+kyc\s+registry|ckyc\s+number)\b|'
+      r'\b(?:indialends?|pre[-\s]?approved\s+(?:personal\s+)?loan)\b|'
       r'\b(?:expired\s+insurance|insurance\s+(?:has\s+)?expired|policy\s+(?:has\s+)?expired)\b|'
       r'\b(?:use\s+coupon|apply\s+coupon|coupon\s+code|discount\s+coupon|promotional\s+coupon|coupons?|voucher\s+code)\b|'
       r'\b(?:(?:order|item|package|shipment|consignment|courier)\s+(?:has\s+been\s+)?dispatched|has\s+been\s+dispatched|dispatched\s+(?:via|through|with))\b',
@@ -1056,6 +1060,12 @@ class NeedsReviewRepository {
   }
 
   static bool isNoiseItem(NeedsReviewItem item) {
+    final cleanSender = item.sender.trim().toLowerCase();
+    if (cleanSender.contains('indialend') ||
+        cleanSender.contains('indlnd') ||
+        cleanSender.contains('idlnd')) {
+      return true;
+    }
     if (isSecurityOrServiceAlert(item.body)) {
       return true;
     }

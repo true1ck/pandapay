@@ -606,7 +606,7 @@ class FinancialStore {
           RegExp(r'^\d{4}$').hasMatch(account) &&
           bankAccount &&
           !upiServiceSender &&
-          !cardSuffixes.contains(account)) {
+          (!cardSuffixes.contains(account) || row['is_bank_account'] == true)) {
         final canonical = canonicalBankSender(row['sender_bank']);
         byAccount.putIfAbsent('$canonical:$account', () => []).add(row);
       }
