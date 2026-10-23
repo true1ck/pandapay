@@ -64,6 +64,15 @@ const { startImapPoller, fetchRecentMessages } = require('./imap_poller');
 const { requestLogger, errorHandler } = require('./observability');
 const { importSourceKey } = require('./import_source_key');
 const { extractVpa, extractMcc } = require('./merchant_category');
+const {
+  MATCH_POLICY_VERSION,
+  normalizeMerchantVpa,
+  normalizeMerchantName,
+  isGenericMerchantName,
+  merchantMatch,
+  classifyCandidate,
+  resolveBulkIdempotencyRow,
+} = require('./merchant_bulk_category');
 const notificationService = require('./notification_service');
 const { createTestNotificationLimiter } = require('./notification_test');
 const {
@@ -6628,6 +6637,478 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('PATCH /transactions/:id error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+const BULK_CATEGORY_MAX_ROWS = 500;
+const BULK_CATEGORY_PREVIEW_TTL_MINUTES = 15;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function bulkCategoryVersion(row) {
+  const raw = row.version ?? row.updated_version ?? row.updated_at;
+  const value = Number(raw instanceof Date ? raw.getTime() : raw);
+  return Number.isFinite(value) ? Math.trunc(value) : null;
+}
+
+function sameCategoryIdentity(row, target) {
+  return String(row.category_id || '') === String(target.categoryId || '')
+    && String(row.user_category_id || '') === String(target.userCategoryId || '');
+}
+
+async function loadBulkTargetCategory(client, userId, { categoryId, userCategoryId }) {
+  if (!categoryId && !userCategoryId) return { error: 'one target category is required' };
+  if (categoryId && !UUID_RE.test(categoryId)) return { error: 'targetCategoryId must be a valid UUID' };
+  if (userCategoryId && !UUID_RE.test(userCategoryId)) return { error: 'targetUserCategoryId must be a valid UUID' };
+
+  if (userCategoryId) {
+    const result = await client.query(
+      `SELECT uc.id, uc.name, uc.parent_category_id, uc.parent_user_category_id,
+              parent_sc.name AS parent_category_name, parent_uc.name AS parent_user_category_name
+         FROM user_categories uc
+         LEFT JOIN spend_categories parent_sc ON parent_sc.id = uc.parent_category_id
+         LEFT JOIN user_categories parent_uc
+           ON parent_uc.id = uc.parent_user_category_id AND parent_uc.profile_id = uc.profile_id
+        WHERE uc.id = $1 AND uc.profile_id = $2`,
+      [userCategoryId, userId],
+    );
+    if (result.rows.length === 0) return { error: 'target user category not found' };
+    const row = result.rows[0];
+    if (categoryId && String(categoryId) !== String(row.parent_category_id || '')) {
+      return { error: 'targetCategoryId does not match the user category parent' };
+    }
+    return {
+      categoryId: row.parent_category_id,
+      userCategoryId: row.id,
+      name: row.name,
+      parentName: row.parent_category_name || row.parent_user_category_name || null,
+    };
+  }
+
+  const result = await client.query(
+    'SELECT id, name, slug FROM spend_categories WHERE id = $1',
+    [categoryId],
+  );
+  if (result.rows.length === 0) return { error: 'target category not found' };
+  return {
+    categoryId: result.rows[0].id,
+    userCategoryId: null,
+    name: result.rows[0].name,
+    slug: result.rows[0].slug,
+  };
+}
+
+async function loadBulkTransaction(client, userId, id, { forUpdate = false } = {}) {
+  const lock = forUpdate ? ' FOR UPDATE' : '';
+  const result = await client.query(
+    `SELECT t.id, t.profile_id, t.user_card_id, t.amount_inr, t.occurred_at,
+            t.merchant_name, t.merchant_vpa::text AS merchant_vpa, t.category_id,
+            t.user_category_id, t.rail, t.status, t.instrument, t.entry_kind,
+            t.state_applied, t.is_backfill, t.is_split_parent, t.parent_txn_id,
+            floor(extract(epoch from t.updated_at) * 1000)::bigint AS version,
+            t.updated_at,
+            sc.name AS category_name, sc.slug AS category_slug,
+            ucat.name AS user_category_name,
+            EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = t.id) AS has_splits
+       FROM transactions t
+       LEFT JOIN spend_categories sc ON sc.id = t.category_id
+       LEFT JOIN user_categories ucat
+         ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+      WHERE t.id = $1 AND t.profile_id = $2${lock}`,
+    [id, userId],
+  );
+  return result.rows[0] || null;
+}
+
+function bulkCandidateResponse(row, classification) {
+  return {
+    id: row.id,
+    occurredAt: row.occurred_at,
+    amountInr: Number(row.amount_inr),
+    merchantName: row.merchant_name,
+    categoryId: row.category_id,
+    userCategoryId: row.user_category_id,
+    categoryName: row.user_category_name || row.category_name || null,
+    selected: classification.selected,
+    tier: classification.tier,
+    reason: classification.reason,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * GET /transactions/:id/category-related-preview — builds a short-lived,
+ * server-owned candidate set for the category review sheet. The merchant key
+ * is always derived from the source row; the client cannot supply a name/VPA.
+ */
+app.get('/transactions/:id/category-related-preview', requireAuth, async (req, res) => {
+  const targetCategoryId = req.query.targetCategoryId ? String(req.query.targetCategoryId) : null;
+  const targetUserCategoryId = req.query.targetUserCategoryId ? String(req.query.targetUserCategoryId) : null;
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const target = await loadBulkTargetCategory(client, req.userId, {
+        categoryId: targetCategoryId,
+        userCategoryId: targetUserCategoryId,
+      });
+      if (target.error) return { status: 400, error: target.error };
+
+      const source = await loadBulkTransaction(client, req.userId, req.params.id);
+      if (!source) return { status: 404, error: 'transaction not found' };
+      if (source.status !== 'active') return { status: 409, error: 'source transaction is not active' };
+
+      const sourceVpa = normalizeMerchantVpa(source.merchant_vpa);
+      const sourceName = normalizeMerchantName(source.merchant_name);
+      const basis = sourceVpa ? 'vpa' : 'strict_name';
+      if (!sourceVpa && isGenericMerchantName(sourceName)) {
+        const emptyPreview = await client.query(
+          `INSERT INTO transaction_category_bulk_previews
+             (profile_id, source_transaction_id, target_category_id, target_user_category_id,
+              match_basis, match_value, match_policy_version, source_version,
+              candidates, candidate_count, selectable_count, overflow, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '[]'::jsonb, 0, 0, false,
+                   now() + ($9::text || ' minutes')::interval)
+           RETURNING id, expires_at, created_at`,
+          [
+            req.userId, source.id, target.categoryId, target.userCategoryId,
+            basis, sourceName || '__generic__', MATCH_POLICY_VERSION,
+            bulkCategoryVersion(source), BULK_CATEGORY_PREVIEW_TTL_MINUTES,
+          ],
+        );
+        return {
+          status: 200,
+          preview: {
+            previewId: emptyPreview.rows[0].id, expiresAt: emptyPreview.rows[0].expires_at,
+            createdAt: emptyPreview.rows[0].created_at, sourceTransactionId: source.id,
+            targetCategory: target, targetCategoryId: target.categoryId,
+            targetUserCategoryId: target.userCategoryId, targetCategoryName: target.name,
+            matchBasis: basis, matchValue: sourceName || '__generic__',
+            candidates: [], totalCount: 0, selectableCount: 0, defaultSelectedCount: 0,
+            overflow: false, canApply: false,
+            reason: 'generic_merchant_name',
+          },
+        };
+      }
+
+      const keyParams = [req.userId, source.id, sourceVpa, sourceName];
+      const matches = await client.query(
+        `SELECT t.id, t.amount_inr, t.occurred_at, t.merchant_name,
+                t.merchant_vpa::text AS merchant_vpa,
+                t.category_id, t.user_category_id, t.status, t.entry_kind,
+                t.instrument, t.is_split_parent, t.parent_txn_id,
+                t.updated_at, floor(extract(epoch from t.updated_at) * 1000)::bigint AS version,
+                sc.name AS category_name, sc.slug AS category_slug,
+                ucat.name AS user_category_name,
+                EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = t.id) AS has_splits
+           FROM transactions t
+           LEFT JOIN spend_categories sc ON sc.id = t.category_id
+           LEFT JOIN user_categories ucat
+             ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+          WHERE t.profile_id = $1 AND t.id <> $2
+            AND (($3::text IS NOT NULL AND lower(btrim(t.merchant_vpa::text)) = $3)
+              OR ($3::text IS NULL AND lower(regexp_replace(btrim(t.merchant_name), '\\s+', ' ', 'g')) = $4))
+          ORDER BY t.occurred_at DESC, t.id DESC
+          LIMIT ${BULK_CATEGORY_MAX_ROWS + 1}`,
+        keyParams,
+      );
+      const count = await client.query(
+        `SELECT count(*)::int AS total
+           FROM transactions t
+          WHERE t.profile_id = $1 AND t.id <> $2
+            AND (($3::text IS NOT NULL AND lower(btrim(t.merchant_vpa::text)) = $3)
+              OR ($3::text IS NULL AND lower(regexp_replace(btrim(t.merchant_name), '\\s+', ' ', 'g')) = $4))`,
+        keyParams,
+      );
+      const allRows = matches.rows;
+      const overflow = allRows.length > BULK_CATEGORY_MAX_ROWS;
+      const rows = allRows.slice(0, BULK_CATEGORY_MAX_ROWS);
+      const candidates = rows.map((row) => {
+        const classification = classifyCandidate(row, source.id, target);
+        return { row, classification };
+      });
+      const selectable = candidates.filter(({ classification }) => classification.tier !== 'ineligible');
+      const snapshots = candidates.map(({ row, classification }) => ({
+        id: row.id,
+        version: bulkCategoryVersion(row),
+        tier: classification.tier,
+        selected: classification.selected,
+      }));
+      const inserted = await client.query(
+        `INSERT INTO transaction_category_bulk_previews
+           (profile_id, source_transaction_id, target_category_id, target_user_category_id,
+            match_basis, match_value, match_policy_version, source_version,
+            candidates, candidate_count, selectable_count, overflow, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12,
+                 now() + ($13::text || ' minutes')::interval)
+         RETURNING id, expires_at, created_at`,
+        [
+          req.userId, source.id, target.categoryId, target.userCategoryId,
+          basis, sourceVpa || sourceName, MATCH_POLICY_VERSION,
+          bulkCategoryVersion(source), JSON.stringify(snapshots), Number(count.rows[0].total),
+          selectable.length, overflow, BULK_CATEGORY_PREVIEW_TTL_MINUTES,
+        ],
+      );
+      return {
+        status: 200,
+        preview: {
+          previewId: inserted.rows[0].id,
+          expiresAt: inserted.rows[0].expires_at,
+          createdAt: inserted.rows[0].created_at,
+          sourceTransactionId: source.id,
+          targetCategory: target,
+          targetCategoryId: target.categoryId,
+          targetUserCategoryId: target.userCategoryId,
+          targetCategoryName: target.name,
+          matchBasis: basis,
+          matchValue: sourceVpa || sourceName,
+          candidates: candidates.map(({ row, classification }) => bulkCandidateResponse(row, classification)),
+          totalCount: Number(count.rows[0].total),
+          selectableCount: selectable.length,
+          defaultSelectedCount: candidates.filter(({ classification }) => classification.selected).length,
+          overflow,
+          canApply: !overflow && selectable.length > 0,
+        },
+      };
+    });
+    if (result.status !== 200) return res.status(result.status).json({ error: result.error });
+    res.json(result.preview);
+  } catch (err) {
+    console.error('GET /transactions/:id/category-related-preview error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /transactions/category-bulk-apply — applies the exact selected rows
+ * from a preview in one transaction, including reward/cap reverse and apply.
+ */
+app.post('/transactions/category-bulk-apply', requireAuth, async (req, res) => {
+  const {
+    previewId, selectedTransactionIds, targetCategoryId, targetUserCategoryId, idempotencyKey,
+  } = req.body || {};
+  if (!UUID_RE.test(String(previewId || ''))) return res.status(400).json({ error: 'previewId must be a valid UUID' });
+  if (!Array.isArray(selectedTransactionIds)
+      || selectedTransactionIds.length > BULK_CATEGORY_MAX_ROWS
+      || selectedTransactionIds.some((id) => !UUID_RE.test(String(id)))) {
+    return res.status(400).json({ error: `selectedTransactionIds must contain at most ${BULK_CATEGORY_MAX_ROWS} UUIDs` });
+  }
+  const selectedIds = [...new Set(selectedTransactionIds.map(String))];
+  if (selectedIds.length !== selectedTransactionIds.length) return res.status(400).json({ error: 'selectedTransactionIds must be unique' });
+  if (typeof idempotencyKey !== 'string' || idempotencyKey.trim().length < 8 || idempotencyKey.trim().length > 200) {
+    return res.status(400).json({ error: 'idempotencyKey must be between 8 and 200 characters' });
+  }
+  if ((targetCategoryId && !UUID_RE.test(String(targetCategoryId)))
+      || (targetUserCategoryId && !UUID_RE.test(String(targetUserCategoryId)))) {
+    return res.status(400).json({ error: 'target category IDs must be valid UUIDs' });
+  }
+
+  const requestHash = crypto.createHash('sha256').update(JSON.stringify({
+    previewId, selectedIds, targetCategoryId: targetCategoryId || null,
+    targetUserCategoryId: targetUserCategoryId || null,
+  })).digest('hex');
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      // Serialize attempts for this profile/key before checking or creating
+      // the receipt. This avoids two retries doing the same state mutation and
+      // lets us recover null-result markers left by the pre-fix 4xx path.
+      await client.query(
+        `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`,
+        [`transaction-category-bulk:${req.userId}:${idempotencyKey.trim()}`],
+      );
+      const existingOperation = await client.query(
+        `SELECT operation_id, request_hash, result
+           FROM transaction_category_bulk_operations
+          WHERE profile_id = $1 AND idempotency_key = $2 FOR UPDATE`,
+        [req.userId, idempotencyKey.trim()],
+      );
+      const idempotency = resolveBulkIdempotencyRow(existingOperation.rows[0] || null, requestHash);
+      if (idempotency.action === 'conflict') {
+        return { status: 409, error: 'idempotency key was used for a different request' };
+      }
+      if (idempotency.action === 'replay') return { status: 200, result: idempotency.result };
+      // A previous implementation committed this marker before validating the
+      // preview and could strand retries forever with a null result. It never
+      // represented a committed category mutation, and replacing it here is
+      // safe after the matching request hash and advisory lock are confirmed.
+      if (idempotency.action === 'replace_pending') {
+        await client.query(
+          `DELETE FROM transaction_category_bulk_operations
+            WHERE profile_id = $1 AND operation_id = $2 AND result IS NULL`,
+          [req.userId, idempotency.operationId],
+        );
+      }
+
+      const previewResult = await client.query(
+        `SELECT * FROM transaction_category_bulk_previews
+          WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
+        [previewId, req.userId],
+      );
+      if (previewResult.rows.length === 0) return { status: 404, error: 'preview not found' };
+      const preview = previewResult.rows[0];
+      if (preview.status !== 'pending' || new Date(preview.expires_at).getTime() <= Date.now()) {
+        return { status: 409, error: 'preview_stale' };
+      }
+      if (preview.match_policy_version !== MATCH_POLICY_VERSION) {
+        return { status: 409, error: 'preview_policy_changed' };
+      }
+      if (preview.target_category_id !== (targetCategoryId || null)
+          || preview.target_user_category_id !== (targetUserCategoryId || null)) {
+        return { status: 409, error: 'preview target category mismatch' };
+      }
+      if (preview.overflow) return { status: 409, error: 'preview has more than 500 matching transactions; narrow the selection' };
+
+      const snapshots = Array.isArray(preview.candidates) ? preview.candidates : [];
+      const snapshotById = new Map(snapshots.map((row) => [String(row.id), row]));
+      if (selectedIds.some((id) => !snapshotById.has(id))) {
+        return { status: 409, error: 'selected transaction is not part of the preview' };
+      }
+      const target = await loadBulkTargetCategory(client, req.userId, {
+        categoryId: targetCategoryId || null,
+        userCategoryId: targetUserCategoryId || null,
+      });
+      if (target.error) return { status: 400, error: target.error };
+
+      const lockIds = [...new Set([String(preview.source_transaction_id), ...selectedIds])].sort();
+      const locked = await client.query(
+        `SELECT t.id, t.profile_id, t.user_card_id, t.amount_inr, t.occurred_at,
+                t.merchant_name, t.merchant_vpa::text AS merchant_vpa, t.category_id,
+                t.user_category_id, t.rail, t.status, t.instrument, t.entry_kind,
+                t.state_applied, t.is_backfill, t.is_split_parent, t.parent_txn_id,
+                floor(extract(epoch from t.updated_at) * 1000)::bigint AS version,
+                t.updated_at,
+                sc.slug AS category_slug,
+                EXISTS (SELECT 1 FROM transaction_splits ts WHERE ts.transaction_id = t.id) AS has_splits
+           FROM transactions t
+           LEFT JOIN spend_categories sc ON sc.id = t.category_id
+          WHERE t.profile_id = $1 AND t.id = ANY($2::uuid[])
+          ORDER BY t.id
+          FOR UPDATE`,
+        [req.userId, lockIds],
+      );
+      const rowsById = new Map(locked.rows.map((row) => [String(row.id), row]));
+      const source = rowsById.get(String(preview.source_transaction_id));
+      if (!source || bulkCategoryVersion(source) !== Number(preview.source_version)) {
+        return { status: 409, error: 'preview_stale', conflicts: [preview.source_transaction_id] };
+      }
+      const sourceMatch = merchantMatch(source, source);
+      if (sourceMatch.basis !== preview.match_basis || sourceMatch.value !== preview.match_value) {
+        return { status: 409, error: 'preview_stale', conflicts: [source.id] };
+      }
+      const conflicts = [];
+      // Apply in a deterministic order so concurrent operations acquire and
+      // update derived cap/milestone state consistently.
+      const applyIds = [...selectedIds].sort();
+      for (const id of applyIds) {
+        const row = rowsById.get(id);
+        const snapshot = snapshotById.get(id);
+        const match = merchantMatch(source, row || {});
+        if (!row || bulkCategoryVersion(row) !== Number(snapshot.version)
+            || !match.matched || row.status !== 'active' || row.entry_kind !== 'spend'
+            || row.is_split_parent || row.parent_txn_id || row.has_splits) {
+          conflicts.push(id);
+        }
+      }
+      if (conflicts.length) return { status: 409, error: 'preview_stale', conflicts };
+
+      // Validate all card-state dependencies before creating the receipt. A
+      // missing/archived card is a client-visible 404 and must therefore leave
+      // no committed null-result operation row behind.
+      const stateCards = new Map();
+      for (const id of applyIds) {
+        const row = rowsById.get(id);
+        if (sameCategoryIdentity(row, target)) continue;
+        if (row.instrument === 'credit_card' && row.entry_kind === 'spend' && row.user_card_id) {
+          await client.query(
+            `SELECT id FROM user_cards
+              WHERE id = $1 AND profile_id = $2
+              FOR UPDATE`,
+            [row.user_card_id, req.userId],
+          );
+          const card = await loadUserCardForState(client, req.userId, row.user_card_id);
+          if (!card) return { status: 404, error: 'user_card for transaction not found or archived' };
+          stateCards.set(id, card);
+        }
+      }
+
+      // Create the idempotency receipt only after every validation above has
+      // succeeded. Any later exception rolls the receipt back with the
+      // category/state changes, so a 4xx can never strand a pending marker.
+      const operationInsert = await client.query(
+        `INSERT INTO transaction_category_bulk_operations
+           (profile_id, idempotency_key, preview_id, request_hash, target_category_id, target_user_category_id)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING operation_id`,
+        [req.userId, idempotencyKey.trim(), previewId, requestHash, targetCategoryId || null, targetUserCategoryId || null],
+      );
+      const operationId = operationInsert.rows[0].operation_id;
+
+      const changed = [];
+      const unchanged = [];
+      for (const id of selectedIds) {
+        const old = rowsById.get(id);
+        if (sameCategoryIdentity(old, target)) {
+          unchanged.push(id);
+          continue;
+        }
+        const oldMovesCardState = old.instrument === 'credit_card'
+          && old.entry_kind === 'spend' && Boolean(old.user_card_id);
+        const oldCard = oldMovesCardState ? stateCards.get(id) : null;
+        if (oldMovesCardState && !oldCard) throw new Error('user_card for transaction not found or archived');
+        if (old.state_applied !== false && oldMovesCardState) {
+          await reverseTransactionState(client, req.userId, oldCard, old);
+        }
+        await client.query(
+          `UPDATE transactions
+              SET category_id = $1, user_category_id = $2, updated_at = now()
+            WHERE id = $3 AND profile_id = $4`,
+          [target.categoryId || null, target.userCategoryId || null, old.id, req.userId],
+        );
+        const newCard = oldMovesCardState ? stateCards.get(id) : null;
+        if (!old.is_backfill && oldMovesCardState) {
+          await applyTransactionState(client, req.userId, newCard, {
+            txnId: old.id, userCardId: old.user_card_id, amount: Number(old.amount_inr),
+            occurred: old.occurred_at, categoryId: target.categoryId || null, sign: 1,
+            merchantName: old.merchant_name, rail: old.rail,
+          });
+        }
+        if (!old.is_backfill) await client.query('UPDATE transactions SET state_applied = true WHERE id = $1', [old.id]);
+        await client.query(
+          `INSERT INTO transaction_category_bulk_operation_items
+             (profile_id, operation_id, transaction_id, old_category_id, old_user_category_id,
+              new_category_id, new_user_category_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [req.userId, operationId, old.id, old.category_id, old.user_category_id,
+            target.categoryId || null, target.userCategoryId || null],
+        );
+        changed.push(old.id);
+      }
+
+      const operationResult = {
+        operationId,
+        previewId,
+        targetCategory: target,
+        changedCount: changed.length,
+        unchangedCount: unchanged.length,
+        changedTransactionIds: changed,
+        unchangedTransactionIds: unchanged,
+      };
+      await client.query(
+        `UPDATE transaction_category_bulk_operations
+            SET result = $1::jsonb, completed_at = now()
+          WHERE profile_id = $2 AND operation_id = $3`,
+        [JSON.stringify(operationResult), req.userId, operationId],
+      );
+      await client.query(
+        `UPDATE transaction_category_bulk_previews SET status = 'applied', applied_at = now()
+          WHERE id = $1 AND profile_id = $2`,
+        [previewId, req.userId],
+      );
+      return { status: 200, result: operationResult };
+    });
+    if (result.status !== 200) return res.status(result.status).json({ error: result.error, conflicts: result.conflicts });
+    res.json(result.result);
+  } catch (err) {
+    console.error('POST /transactions/category-bulk-apply error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });

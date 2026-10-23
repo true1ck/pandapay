@@ -10,8 +10,11 @@
 /// somewhere else.
 ///
 /// The defaults are the local dev ports, so `flutter run` with no flags keeps
-/// behaving exactly as it did before this change. Every non-dev build is
-/// expected to pass all three defines:
+/// behaving exactly as it did before this change. Every hosted build is
+/// expected to pass all three defines. A physical-device QA build may keep
+/// the Dev Android flavor and package id while using `dev_hosted`; this keeps
+/// the Dev runtime behavior and existing install data while making the
+/// backend target explicit and allowing hosted URLs in a release artifact.
 ///
 /// ```bash
 /// flutter build apk --release \
@@ -72,6 +75,11 @@ class Env {
     _ => AppEnvironment.dev,
   };
 
+  /// A Dev flavor that uses hosted endpoints is still a Dev app from the
+  /// user's perspective. The raw value remains distinct so a release build
+  /// cannot accidentally use hosted URLs under the plain local `dev` mode.
+  static bool get isHostedDev => _rawEnv == 'dev_hosted';
+
   static bool get isDev => environment == AppEnvironment.dev;
 
   /// True for the `prod` Android flavor — the one used for the production
@@ -110,7 +118,7 @@ class Env {
     // a long way from its cause.
     const isRelease = bool.fromEnvironment('dart.vm.product');
     if (!isRelease) return null;
-    if (environment == AppEnvironment.dev) {
+    if (environment == AppEnvironment.dev && !isHostedDev) {
       return 'This release build was compiled as dev. Use the production '
           'build script with the prod flavor and hosted backend URLs.';
     }

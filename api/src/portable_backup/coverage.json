@@ -112,6 +112,9 @@
     "sync_cursors": { "disposition": "excluded_with_intent", "reason": "wave-1 scope gap: sync session artifacts; candidate for later wave" },
     "transaction_tag_mutations": { "disposition": "excluded_with_intent", "reason": "wave-1 scope gap: tag audit artifacts; tagged state is exported via transaction_tags/links" },
     "transaction_tag_transaction_aliases": { "disposition": "excluded_with_intent", "reason": "wave-1 scope gap: tag alias mapping; candidate for later wave" },
+    "transaction_category_bulk_previews": { "disposition": "excluded_with_intent", "reason": "short-lived category review snapshots; expired after the apply window and rebuilt on demand" },
+    "transaction_category_bulk_operations": { "disposition": "excluded_with_intent", "reason": "category bulk operation receipts are server audit/idempotency state, not portable user data" },
+    "transaction_category_bulk_operation_items": { "disposition": "excluded_with_intent", "reason": "category bulk audit details are derived operation history and are not restored into a new account" },
     "user_consents": { "disposition": "excluded_with_intent", "reason": "wave-1 scope gap: consent ledger; candidate for later wave" },
     "user_devices": { "disposition": "excluded_with_intent", "reason": "device registry is security-sensitive FCM state; re-registered by app" }
   }

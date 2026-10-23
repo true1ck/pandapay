@@ -1498,6 +1498,22 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
   return repository;
 });
 
+/// Invalidates all projections whose values can change after a category bulk
+/// apply. This is deliberately lazy: visible consumers fetch their own fresh
+/// snapshot instead of issuing a burst of requests for every report.
+void invalidateTransactionViews(Ref ref) {
+  ref.invalidate(transactionsProvider);
+  ref.invalidate(utilizationTransactionsProvider);
+  ref.invalidate(userCardsProvider);
+  ref.invalidate(homeSummaryProvider);
+  ref.invalidate(categorySpendProvider);
+  ref.invalidate(spendReportProvider);
+  ref.invalidate(bankAccountSummariesProvider);
+  ref.invalidate(budgetsProvider);
+  ref.invalidate(recurringReportProvider);
+  ref.invalidate(currentMonthlyReportProvider);
+}
+
 /// Spend trends and budgets. Null in guest mode, like every other
 /// server-backed repository here: both read `transactions`, which is
 /// owner-scoped and has no local-only counterpart.

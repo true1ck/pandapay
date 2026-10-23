@@ -12,6 +12,7 @@ import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart'
     show categoryIdForServer, userCategoryIdForServer;
 import '../../data/user_cards_repository.dart';
+import 'category_bulk_review_sheet.dart';
 
 /// D3 Edit Transaction (ui-spec Group D). All fields editable, explicit
 /// save/cancel; recomputes caps/milestones on save — that recompute is
@@ -100,6 +101,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     });
     try {
       final original = _originalEntry;
+      final categoryChanged =
+          original != null && original.categoryId != _categoryId;
       final financialChanged =
           original == null ||
           original.amount != Money.fromRupees(amount) ||
@@ -126,6 +129,27 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
       ref.invalidate(homeSummaryProvider);
+
+      // The original row is saved before this optional bulk flow starts. A
+      // preview is only useful for a real online category change; tags and
+      // other edits retain the existing one-row behaviour. The repository
+      // adapter is intentionally invoked through the dynamic boundary here so
+      // old app builds and lightweight repository fakes can keep compiling
+      // while the typed data-layer methods roll out.
+      if (categoryChanged && ref.read(isOnlineProvider).valueOrNull != false) {
+        final result = await _offerCategoryBulkReview(
+          targetCategoryId: _categoryId,
+        );
+        if (result != null && mounted && result.changedCount > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Applied ${result.changedCount} more transaction${result.changedCount == 1 ? '' : 's'} to ${_categoryLabel(_categoryId)}.',
+              ),
+            ),
+          );
+        }
+      }
       if (mounted) context.pop(true);
     } catch (e) {
       // Plan Phase 4. Before this, an edit made offline simply failed and the
@@ -210,6 +234,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       amountInr: amount,
       occurredAt: _occurredAt,
       categoryId: _categoryId,
+      clearCategory: _originalEntry?.categoryId != null && _categoryId == null,
       merchantName: _merchantController.text.trim().isEmpty
           ? null
           : _merchantController.text.trim(),
@@ -218,6 +243,75 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       entryKind: _entryKind,
       rail: _rail,
     );
+  }
+
+  String _categoryLabel(String? id) {
+    if (id == null) return 'this category';
+    final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
+    for (final category in categories) {
+      if (category.id == id) return category.name;
+    }
+    return 'this category';
+  }
+
+  /// Invokes the category-bulk data contract after the original row is saved.
+  /// Preview and apply both use server-owned IDs and selection tiers; the UI
+  /// never reconstructs merchant matches locally.
+  Future<CategoryBulkApplyResult?> _offerCategoryBulkReview({
+    required String? targetCategoryId,
+  }) async {
+    if (targetCategoryId == null || targetCategoryId.isEmpty) return null;
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null) return null;
+    final isCustomCategory = targetCategoryId.startsWith('custom:');
+    final serverCategoryId = isCustomCategory
+        ? null
+        : targetCategoryId;
+    final serverUserCategoryId = isCustomCategory
+        ? targetCategoryId.substring('custom:'.length)
+        : null;
+
+    Future<RelatedCategoryPreview> fetchPreview() =>
+        repo.fetchCategoryRelatedPreview(
+          widget.transactionId,
+          targetCategoryId: serverCategoryId,
+          targetUserCategoryId: serverUserCategoryId,
+        );
+
+    RelatedCategoryPreview preview;
+    try {
+      preview = await fetchPreview();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Saved this transaction. Related transactions could not be loaded.'),
+          ),
+        );
+      }
+      return null;
+    }
+    if (!mounted || preview.candidates.isEmpty) return null;
+
+    Future<CategoryBulkApplyResult> apply(Set<String> ids) => repo.applyCategoryBulk(
+          previewId: preview.previewId,
+          selectedTransactionIds: ids,
+          targetCategoryId: serverCategoryId,
+          targetUserCategoryId: serverUserCategoryId,
+        );
+
+    final result = await showCategoryBulkReviewSheet(
+      context: context,
+      preview: preview,
+      onRetry: fetchPreview,
+      onApply: apply,
+    );
+    if (result != null) {
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+    }
+    return result;
   }
 
   @override
