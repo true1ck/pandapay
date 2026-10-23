@@ -87,6 +87,7 @@ jobs:
           NOTIFICATION_SERVICE_API_KEY: ${{ secrets.NOTIFICATION_SERVICE_API_KEY }}
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AI_WORKER_TOKEN: ${{ secrets.AI_WORKER_TOKEN }}
         run: |
           test -n "$NOTIFICATION_SERVICE_URL"
           test -n "$NOTIFICATION_SERVICE_API_KEY"
@@ -98,6 +99,9 @@ jobs:
             fi
             if [ -n "$GEMINI_API_KEY" ]; then
               printf 'export GEMINI_API_KEY=%q\n' "$GEMINI_API_KEY"
+            fi
+            if [ -n "$AI_WORKER_TOKEN" ]; then
+              printf 'export AI_WORKER_TOKEN=%q\n' "$AI_WORKER_TOKEN"
             fi
             cat deploy/deploy.sh
           } | ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
