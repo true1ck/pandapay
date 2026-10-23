@@ -588,7 +588,9 @@ class _YearTotals extends StatelessWidget {
               value: year,
               underline: const SizedBox.shrink(),
               items: [
-                for (var value = currentYear; value >= currentYear - 4; value--)
+                for (var value = currentYear;
+                    value >= (currentYear - 4).clamp(2026, currentYear);
+                    value--)
                   DropdownMenuItem(value: value, child: Text('$value')),
               ],
               onChanged: (value) {
