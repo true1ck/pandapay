@@ -237,7 +237,7 @@ void main() {
     expect(categoriesBody.contains('Gym'), isFalse);
   });
 
-  test('legacy-namespace rows ride along with the active account', () async {
+  test('legacy-namespace rows are excluded without account ownership proof', () async {
     appDb.db.execute('DELETE FROM sync_pending_changes');
     appDb.db.execute('UPDATE financial_entities SET pending = 0 WHERE namespace = ?', [namespace]);
     appDb.db.execute(
@@ -248,7 +248,24 @@ void main() {
     final source = LocalPortableSnapshotSource(appDb: appDb, namespace: namespace);
     final sections = await source.capturePortableSections(stagingDirectory: staging);
     final body = utf8.decode(sections['transactions']!.readAsBytesSync());
-    expect(body.contains('txn-legacy'), isTrue);
+    expect(body.contains('txn-legacy'), isFalse);
+  });
+
+  test('missing queue table counts zero, but schema drift fails closed', () async {
+    final source = LocalPortableSnapshotSource(appDb: appDb, namespace: namespace);
+    appDb.db.execute('DROP TABLE sync_pending_changes');
+    // never-created table: nothing can be pending in it
+    final status = await source.drainAndVerifyOutboxes();
+    expect(status.pendingByQueue['sync_pending_changes'], 0);
+
+    // schema drift (old table without the namespace column) must fail loudly
+    appDb.db.execute(
+      'CREATE TABLE sms_facts_outbox (entity TEXT, id TEXT, created_at INTEGER)',
+    );
+    await expectLater(
+      source.drainAndVerifyOutboxes(),
+      throwsA(isA<sqlite.SqliteException>()),
+    );
   });
 
   test('attachments are listed with metadata only', () async {

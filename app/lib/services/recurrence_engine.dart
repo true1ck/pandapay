@@ -11,6 +11,9 @@ enum RecurrenceCadence {
   quarterly,
   halfYearly,
   annual,
+  telecom28Day,
+  telecom56Day,
+  telecom84Day,
   custom,
 }
 
@@ -195,7 +198,10 @@ class RecurrenceEngine {
   static RecurrenceCadence _classifyCadence(int days) {
     if (days >= 6 && days <= 10) return RecurrenceCadence.weekly;
     if (days >= 12 && days <= 18) return RecurrenceCadence.fortnightly;
+    if (days >= 26 && days <= 29) return RecurrenceCadence.telecom28Day;
     if (days >= 25 && days <= 35) return RecurrenceCadence.monthly;
+    if (days >= 54 && days <= 58) return RecurrenceCadence.telecom56Day;
+    if (days >= 82 && days <= 86) return RecurrenceCadence.telecom84Day;
     if (days >= 75 && days <= 105) return RecurrenceCadence.quarterly;
     if (days >= 160 && days <= 200) return RecurrenceCadence.halfYearly;
     if (days >= 330 && days <= 400) return RecurrenceCadence.annual;

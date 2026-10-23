@@ -1,4 +1,5 @@
 export 'canonical_ndjson.dart';
+export 'local_restore_writer.dart';
 export 'local_snapshot_source.dart';
 export 'portable_archive.dart';
 export 'portable_attachments.dart';

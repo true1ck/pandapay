@@ -77,10 +77,20 @@ test('each section query has an explicit owner filter and bounded batch', () => 
     const query = sqlForSection(section, 17, null);
     assert.match(query.text, /LIMIT \$2/);
     assert.equal(query.values[0], null);
+    assert.equal(query.values.length, section.cursor ? 2 : 3);
     assert.match(query.text, /profile_id|p\.id/);
   }
   const transactionSplit = PORTABLE_SECTIONS.find((section) => section.name === 'transaction_splits');
   assert.match(sqlForSection(transactionSplit, 17, null).text, /owner_txn\.profile_id = \$1/);
+});
+
+test('cursor pages bind and advance the declared cursor column', async () => {
+  const settings = PORTABLE_SECTIONS.find((section) => section.name === 'settings');
+  const first = sqlForSection(settings, 1, null);
+  const next = sqlForSection(settings, 1, '11111111-1111-4111-8111-111111111111');
+  assert.equal(first.values.length, 2);
+  assert.match(next.text, /t\.profile_id > \$3/);
+  assert.equal(next.values[2], '11111111-1111-4111-8111-111111111111');
 });
 
 test('empty snapshot emits one header, all sections, and a complete footer', async () => {

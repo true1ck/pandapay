@@ -27,9 +27,8 @@ typedef LocalQueueDrain = Future<void> Function();
 ///
 /// Reads rows inside one synchronous transaction so every section observes
 /// the same committed state, then serialises to canonical NDJSON. The live WAL
-/// file is never copied. Local rows written before namespaces existed are
-/// stored under `legacy` and belong to this same account, so they are
-/// exported alongside the active namespace.
+/// file is never copied. Only rows assigned to the active account namespace
+/// are exported; ownership of pre-namespace `legacy` rows cannot be proven.
 ///
 /// ponytail: rows are materialised per section (single-account local data);
 /// move to chunked streaming reads inside the transaction if an account
@@ -56,7 +55,7 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
     this.drainHooks = const {},
   });
 
-  List<String> get _namespaces => <String>[namespace, 'legacy'];
+  List<String> get _namespaces => <String>[namespace];
 
   @override
   Future<PortableOutboxStatus> drainAndVerifyOutboxes({
@@ -75,7 +74,7 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
   Map<String, List<Object?>> get _queues {
     final args = _namespaces;
     List<Object?> namespaced(String table, {String column = 'namespace'}) => <Object?>[
-          'SELECT COUNT(*) FROM $table WHERE $column IN (?, ?)',
+          'SELECT COUNT(*) FROM $table WHERE $column = ?',
           args,
         ];
     return <String, List<Object?>>{
@@ -100,10 +99,14 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
     try {
       final rows = appDb.db.select(sql, args);
       final value = rows.single.values.first;
-      return value is int ? value : int.tryParse('$value') ?? 0;
-    } on SqliteException {
-      // A queue whose table has never been created has nothing pending.
-      return 0;
+      if (value is int) return value;
+      return int.parse('$value');
+    } on SqliteException catch (error) {
+      // Queue tables are created lazily by their owning repositories; a slot
+      // that has never been written cannot hold pending work. Other SQLite
+      // failures (corruption, readonly) still abort the export.
+      if (error.message.contains('no such table')) return 0;
+      rethrow;
     }
   }
 
@@ -166,8 +169,15 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
         'id',
         'payload',
       ]);
-    } finally {
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+    try {
       db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
     }
 
     await stagingDirectory.create(recursive: true);
@@ -213,7 +223,7 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
   List<Map<String, dynamic>> _entitySnapshot(Database db, String entity) {
     final rows = db.select(
       'SELECT id, observed_at, pending, source_key, payload FROM financial_entities '
-      'WHERE namespace IN (?, ?) AND entity = ? ORDER BY namespace, id',
+      'WHERE namespace = ? AND entity = ? ORDER BY namespace, id',
       <Object?>[..._namespaces, entity],
     );
     return <Map<String, dynamic>>[
@@ -240,7 +250,7 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
             ? 'namespace, transaction_id, tag_id'
             : 'namespace';
     final rows = db.select(
-      'SELECT $names FROM $table WHERE namespace IN (?, ?) ORDER BY $ordering',
+      'SELECT $names FROM $table WHERE namespace = ? ORDER BY $ordering',
       _namespaces,
     );
     return <Map<String, dynamic>>[for (final row in rows) _rowMap(row)];

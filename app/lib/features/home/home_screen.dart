@@ -32,6 +32,7 @@ import '../quickadd/quick_add_screen.dart';
 import '../scan/scan_result_screen.dart';
 import '../scan/upi_qr_scanner_screen.dart';
 import '../cards/card_visual.dart';
+import '../../domain/cycle_engine.dart';
 import 'home_alerts.dart';
 import 'home_context_line.dart';
 
@@ -1190,11 +1191,8 @@ class _UtilizationWarningBanner extends ConsumerWidget {
     );
   }
 
-  static DateTime _nextOccurrence(int day, DateTime now) {
-    var next = DateTime(now.year, now.month, day);
-    if (!next.isAfter(now)) next = DateTime(now.year, now.month + 1, day);
-    return next;
-  }
+  static DateTime _nextOccurrence(int day, DateTime now) =>
+      CycleEngine.nextOccurrence(day, now);
 }
 
 /// Chunk 19: the real amount-entry field — everything downstream (ranking

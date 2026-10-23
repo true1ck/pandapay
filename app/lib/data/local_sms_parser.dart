@@ -14,6 +14,7 @@ enum LocalSmsEventType {
   balance,
   failed,
   security,
+  investment,
   unknown,
 }
 
@@ -28,6 +29,7 @@ extension LocalSmsEventTypeWire on LocalSmsEventType {
     LocalSmsEventType.balance => 'balance',
     LocalSmsEventType.failed => 'failed',
     LocalSmsEventType.security => 'security',
+    LocalSmsEventType.investment => 'investment',
     LocalSmsEventType.unknown => 'unknown',
   };
 }
@@ -51,6 +53,8 @@ class LocalSmsObservation {
   final DateTime? statementDate;
   final bool statementDateExplicit;
   final Money? availableBalance, amountDue, minimumDue, autopayLimit;
+  final Money? amount;
+  String? get merchantName => billerName;
   final LocalSmsEventType eventType;
   final LocalSmsDisposition disposition;
   final List<String> reasonCodes;
@@ -75,6 +79,7 @@ class LocalSmsObservation {
     this.amountDue,
     this.minimumDue,
     this.autopayLimit,
+    this.amount,
     this.eventType = LocalSmsEventType.unknown,
     this.disposition = LocalSmsDisposition.review,
     this.reasonCodes = const [],
@@ -112,6 +117,19 @@ class LocalSmsParser {
   // review queue is re-examined once more and a card's due day can finally be
   // learned from its own AutoPay message.
   static const version = 8;
+
+  static bool isInvestmentFolioAllotment(String body) {
+    final text = body.toLowerCase();
+    final hasAllotment = RegExp(
+      r'\b(?:units?\s+allotted|allotted\s+at\s+nav|units?\s*:\s*[\d.]+\s*,\s*nav|nav\s*:\s*[\d.]+|units?\s+(?:credited|allotted)\s+under\s+folio|allotted\s+for\s+your\s+investment)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+    final hasFolioOrFund = RegExp(
+      r'\b(?:folio|fund|mutual\s+fund|amc)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+    return hasAllotment && hasFolioOrFund;
+  }
 
   static bool isMerchantReceiptOrEbill(String body) {
     final text = body.toLowerCase();
@@ -168,7 +186,7 @@ class LocalSmsParser {
   /// or balance snapshot. Used by Stage 0 sender scrubbing to whitelist real transactional
   /// alerts from promotional routes (-P).
   static bool isCompletedTransactionOrBill(String body) {
-    if (isMerchantReceiptOrEbill(body)) {
+    if (isMerchantReceiptOrEbill(body) || isInvestmentFolioAllotment(body)) {
       return true;
     }
     final text = body.replaceAll(RegExp(r'\s+'), ' ');
@@ -213,7 +231,7 @@ class LocalSmsParser {
   /// payment. Apply this before either upload or manual review, including to
   /// rows captured by an older app version.
   static bool isNonTransactionNoise(String sender, String body) {
-    if (isMerchantReceiptOrEbill(body)) {
+    if (isMerchantReceiptOrEbill(body) || isInvestmentFolioAllotment(body)) {
       return false;
     }
     final cleanSender = sender.trim();
@@ -859,6 +877,46 @@ class LocalSmsParser {
     SmsRuleBundle? downloadedRules,
   }) {
     if (body.length > 20000 || sensitive(body)) return null;
+
+    if (isInvestmentFolioAllotment(body)) {
+      final amount = extractReceiptAmount(body);
+      final schemeMatch = _re(
+        r"\b(?:scheme|fund(?:\s+name)?)\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 .&'/()]{2,60})",
+      ).firstMatch(body);
+      final inFundMatch = _re(
+        r"\bin\s+([A-Za-z0-9][-A-Za-z0-9 .&'/()]{2,60}?)(?=(?:\s+(?:processed|successful|completed|allotted|for\b|at\s+nav|with\s+nav|nav|on\s+\d|folio)|[.,;]|$))",
+      ).firstMatch(body);
+      final towardsMatch = _re(
+        r"\btowards?\s+([A-Za-z0-9][-A-Za-z0-9 .&'/()]{2,60}?)(?=(?:\s+(?:processed|successful|completed|allotted|folio)|[.,;]|$))",
+      ).firstMatch(body);
+      var merchant = schemeMatch?.group(1)?.trim() ??
+          inFundMatch?.group(1)?.trim() ??
+          towardsMatch?.group(1)?.trim();
+      if (merchant != null && merchant.isNotEmpty) {
+        final sanitized = IndianNarrationSanitizer.sanitize(merchant);
+        if (sanitized.isNotEmpty) {
+          merchant = sanitized;
+        }
+      }
+      final folioMatch = _re(
+        r'\bfolio(?:\s*no\.?|\s*number)?\s*[:#-]?\s*([A-Za-z0-9/-]+)\b',
+      ).firstMatch(body)?.group(1);
+      final folioLast4 = folioMatch != null && folioMatch.length >= 4
+          ? folioMatch.substring(folioMatch.length - 4)
+          : folioMatch;
+
+      return LocalSmsObservation(
+        eventType: LocalSmsEventType.investment,
+        disposition: LocalSmsDisposition.localObservation,
+        transaction: null,
+        amount: amount,
+        amountDue: amount,
+        billerName: merchant,
+        accountLast4: folioLast4,
+        reasonCodes: const ['mf_folio_unit_allotment'],
+        confidence: 1.0,
+      );
+    }
 
     // Safety gate: built-in non-transaction noise checks MUST run before any
     // downloaded rule. A downloaded rule can never turn marketing/promotional

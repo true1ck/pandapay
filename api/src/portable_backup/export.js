@@ -28,7 +28,7 @@ function sqlForSection(section, batchSize, cursor, offset = 0) {
             WHERE ${section.filter}${cursorClause}
             ORDER BY ${section.orderBy}
             LIMIT $2${offsetClause}`,
-    values: cursorClause ? [null, batchSize, cursor] : [null, batchSize, offset],
+    values: cursorClause ? [null, batchSize, cursor] : section.cursor ? [null, batchSize] : [null, batchSize, offset],
   };
 }
 
@@ -124,7 +124,10 @@ async function exportSnapshot({ client, res, profileId, batchSize = DEFAULT_BATC
           bytes += bytesForLine;
           count += 1;
           await writeChunk(res, line, state);
-          if (section.cursor) cursor = record?.id ?? row?.id ?? null;
+          if (section.cursor) {
+            const cursorField = section.cursor.split('.').at(-1);
+            cursor = record?.[cursorField] ?? null;
+          }
         }
         if (result.rows.length < batchSize) break;
         if (section.cursor && cursor === null) throw new PortableBackupExportError('section_cursor_missing');

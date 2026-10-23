@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'commitments_repository.dart';
+import 'adjustment_matcher.dart';
 import 'local/app_database.dart';
 import 'local_sms_parser.dart';
 import 'user_cards_repository.dart';
+import 'investment_classifier.dart';
 
 enum NeedsReviewKind {
   transaction,
@@ -115,8 +117,26 @@ void addNeedsReviewSync(
   List<TransactionEntry>? existingTransactions,
 }) {
   if (NeedsReviewRepository.isNoiseItem(item)) return;
+  if (isInvestmentFolioAllotment(item.body) &&
+      NeedsReviewRepository.hasMatchingInvestmentTransactionSync(
+        database,
+        namespace,
+        item,
+        transactions: existingTransactions,
+      )) {
+    return;
+  }
   if (NeedsReviewRepository.isMerchantReceiptOrEbill(item.body) &&
       NeedsReviewRepository.hasMatchingSpendTransactionSync(
+        database,
+        namespace,
+        item,
+        transactions: existingTransactions,
+      )) {
+    return;
+  }
+  if (NeedsReviewRepository.isRefundOrReversal(item.body) &&
+      NeedsReviewRepository.hasMatchingRefundDebitSync(
         database,
         namespace,
         item,
@@ -279,6 +299,16 @@ class NeedsReviewRepository {
           kept.add(item);
           continue;
         }
+        if (isInvestmentFolioAllotment(item.body)) {
+          if (_hasMatchingInvestmentTransaction(
+                item,
+                database: db,
+                transactions: txns,
+              )) {
+            toRemove.add(item.id);
+            continue;
+          }
+        }
         if (isMerchantReceiptOrEbill(item.body)) {
           if (_hasMatchingSpendTransaction(
                 item,
@@ -289,6 +319,17 @@ class NeedsReviewRepository {
             continue;
           }
           if (now.difference(item.receivedAt).abs() > const Duration(days: 30)) {
+            toRemove.add(item.id);
+            continue;
+          }
+        }
+
+        if (isRefundOrReversal(item.body)) {
+          if (_hasMatchingRefundDebit(
+                item,
+                database: db,
+                transactions: txns,
+              )) {
             toRemove.add(item.id);
             continue;
           }
@@ -387,6 +428,15 @@ class NeedsReviewRepository {
           continue;
         }
         if (now.difference(item.receivedAt).abs() > const Duration(days: 30)) {
+          toRemove.add(item.id);
+          continue;
+        }
+      }
+      if (isRefundOrReversal(item.body)) {
+        if (_hasMatchingRefundDebit(
+              item,
+              transactions: txns,
+            )) {
           toRemove.add(item.id);
           continue;
         }
@@ -497,6 +547,131 @@ class NeedsReviewRepository {
       return item.copyWith(kind: NeedsReviewKind.receipt);
     }
     return item;
+  }
+
+  static bool hasMatchingInvestmentTransactionSync(
+    AppDatabase database,
+    String namespace,
+    NeedsReviewItem item, {
+    List<TransactionEntry>? transactions,
+  }) {
+    final extracted = LocalSmsParser.extractReceiptAmount(item.body);
+    if (extracted == null || extracted.paise <= 0) return false;
+
+    if (transactions != null && transactions.isNotEmpty) {
+      for (final txn in transactions) {
+        final entryKindStr = txn.entryKind.name.toLowerCase();
+        final wireValueStr = txn.entryKind.wireValue.toLowerCase();
+        if (entryKindStr != 'investment' &&
+            entryKindStr != 'spend' &&
+            wireValueStr != 'investment' &&
+            wireValueStr != 'spend') {
+          continue;
+        }
+        if (txn.amount.paise != extracted.paise) continue;
+        if (txn.occurredAt.difference(item.receivedAt).abs() <=
+            const Duration(hours: 72)) {
+          return true;
+        }
+      }
+    }
+
+    try {
+      database.db.execute('''
+        CREATE TABLE IF NOT EXISTS financial_entities (
+          namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,
+          payload TEXT NOT NULL, observed_at INTEGER NOT NULL,
+          pending INTEGER NOT NULL DEFAULT 0, source_key TEXT,
+          occurred_at INTEGER, amount_paise INTEGER,
+          PRIMARY KEY(namespace, entity, id)
+        );
+      ''');
+      final rows = database.db.select(
+        "SELECT payload, occurred_at, amount_paise FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
+        [namespace],
+      );
+      for (final row in rows) {
+        final payloadJson = row['payload'] as String?;
+        if (payloadJson == null) continue;
+        final data = jsonDecode(payloadJson) as Map<String, dynamic>;
+
+        final entryKind = (data['entry_kind'] as String?)?.toLowerCase();
+        if (entryKind != null &&
+            entryKind != 'investment' &&
+            entryKind != 'spend') {
+          continue;
+        }
+
+        final paiseCol = row['amount_paise'] as int?;
+        final amountInr = data['amount_inr'] as num?;
+        var amountMatched = false;
+        if (paiseCol != null) {
+          amountMatched = paiseCol == extracted.paise;
+        } else if (amountInr != null) {
+          amountMatched = (amountInr * 100).round() == extracted.paise;
+        } else if (data['amount'] is Map && (data['amount'] as Map)['paise'] is int) {
+          amountMatched = (data['amount'] as Map)['paise'] == extracted.paise;
+        }
+        if (!amountMatched) continue;
+
+        DateTime? occurredAt;
+        final occurredCol = row['occurred_at'] as int?;
+        if (occurredCol != null) {
+          occurredAt = DateTime.fromMillisecondsSinceEpoch(occurredCol);
+        } else if (data['occurred_at'] != null) {
+          final rawOccurred = data['occurred_at'];
+          if (rawOccurred is String) {
+            occurredAt = DateTime.tryParse(rawOccurred);
+          } else if (rawOccurred is int) {
+            occurredAt = DateTime.fromMillisecondsSinceEpoch(rawOccurred);
+          }
+        }
+        if (occurredAt == null) continue;
+
+        if (occurredAt.difference(item.receivedAt).abs() <=
+            const Duration(hours: 72)) {
+          return true;
+        }
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
+  bool _hasMatchingInvestmentTransaction(
+    NeedsReviewItem item, {
+    AppDatabase? database,
+    List<TransactionEntry>? transactions,
+  }) {
+    final txns = transactions ?? existingTransactions;
+    if (database != null) {
+      return hasMatchingInvestmentTransactionSync(
+        database,
+        namespace,
+        item,
+        transactions: txns,
+      );
+    }
+    final extracted = LocalSmsParser.extractReceiptAmount(item.body);
+    if (extracted == null || extracted.paise <= 0) return false;
+    if (txns != null) {
+      for (final txn in txns) {
+        final entryKindStr = txn.entryKind.name.toLowerCase();
+        final wireValueStr = txn.entryKind.wireValue.toLowerCase();
+        if (entryKindStr != 'investment' &&
+            entryKindStr != 'spend' &&
+            wireValueStr != 'investment' &&
+            wireValueStr != 'spend') {
+          continue;
+        }
+        if (txn.amount.paise != extracted.paise) continue;
+        if (txn.occurredAt.difference(item.receivedAt).abs() <=
+            const Duration(hours: 72)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   static bool isMerchantReceiptOrEbill(String body) =>
@@ -678,6 +853,208 @@ class NeedsReviewRepository {
     return false;
   }
 
+  static bool isRefundOrReversal(String body) {
+    final text = body.toLowerCase();
+    return RegExp(
+      r'\b(?:refund(?:ed)?|chargeback|reversal|reversed)\b',
+    ).hasMatch(text);
+  }
+
+  static bool hasMatchingRefundDebitSync(
+    AppDatabase database,
+    String namespace,
+    NeedsReviewItem item, {
+    List<TransactionEntry>? transactions,
+  }) {
+    final parsed = LocalSmsParser.parse(
+      body: item.body,
+      sender: item.sender,
+      receivedAt: item.receivedAt,
+      namespace: namespace,
+    );
+    final refundAmount = parsed?.transaction?.amount ??
+        LocalSmsParser.extractReceiptAmount(item.body);
+    if (refundAmount == null || refundAmount.paise <= 0) return false;
+
+    var refundMerchant = parsed?.transaction?.merchantName;
+    if (refundMerchant == null ||
+        refundMerchant.isEmpty ||
+        refundMerchant.toLowerCase() == 'refund' ||
+        refundMerchant.toLowerCase() == 'reversal') {
+      final match = RegExp(
+        r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+        caseSensitive: false,
+      ).firstMatch(item.body);
+      refundMerchant = match?.group(1)?.trim();
+    }
+    if (refundMerchant == null || refundMerchant.isEmpty) {
+      final senderClean = item.sender
+          .toUpperCase()
+          .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
+          .replaceFirst(RegExp(r'-[A-Z]$'), '');
+      if (senderClean.isNotEmpty) {
+        refundMerchant = senderClean;
+      }
+    }
+    refundMerchant ??= item.body;
+
+    final candidateDebits = <TransactionEntry>[];
+    if (transactions != null && transactions.isNotEmpty) {
+      candidateDebits.addAll(
+        transactions.where((t) => t.entryKind == TxnEntryKind.spend),
+      );
+    }
+
+    try {
+      database.db.execute('''
+        CREATE TABLE IF NOT EXISTS financial_entities (
+          namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,
+          payload TEXT NOT NULL, observed_at INTEGER NOT NULL,
+          pending INTEGER NOT NULL DEFAULT 0, source_key TEXT,
+          occurred_at INTEGER, amount_paise INTEGER,
+          PRIMARY KEY(namespace, entity, id)
+        );
+      ''');
+      final rows = database.db.select(
+        "SELECT payload FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
+        [namespace],
+      );
+      for (final row in rows) {
+        final payloadJson = row['payload'] as String?;
+        if (payloadJson == null) continue;
+        try {
+          final data = jsonDecode(payloadJson) as Map<String, dynamic>;
+          final entry = TransactionEntry.fromJson(data);
+          if (entry.entryKind == TxnEntryKind.spend) {
+            candidateDebits.add(entry);
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    final refundDate = parsed?.transaction?.occurredAt ?? item.receivedAt;
+    final matchResult = AdjustmentMatcher.findMatchingDebit(
+      refundAmount: refundAmount,
+      refundMerchant: refundMerchant,
+      refundDate: refundDate,
+      candidateDebits: candidateDebits,
+    );
+
+    if (matchResult != null) {
+      _persistResolvedRefundMatchSync(database, namespace, item, matchResult);
+      return true;
+    }
+    return false;
+  }
+
+  bool _hasMatchingRefundDebit(
+    NeedsReviewItem item, {
+    AppDatabase? database,
+    List<TransactionEntry>? transactions,
+  }) {
+    final txns = transactions ?? existingTransactions;
+    if (database != null) {
+      return hasMatchingRefundDebitSync(
+        database,
+        namespace,
+        item,
+        transactions: txns,
+      );
+    }
+    final parsed = LocalSmsParser.parse(
+      body: item.body,
+      sender: item.sender,
+      receivedAt: item.receivedAt,
+      namespace: namespace,
+    );
+    final refundAmount = parsed?.transaction?.amount ??
+        LocalSmsParser.extractReceiptAmount(item.body);
+    if (refundAmount == null || refundAmount.paise <= 0) return false;
+
+    var refundMerchant = parsed?.transaction?.merchantName;
+    if (refundMerchant == null ||
+        refundMerchant.isEmpty ||
+        refundMerchant.toLowerCase() == 'refund' ||
+        refundMerchant.toLowerCase() == 'reversal') {
+      final match = RegExp(
+        r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+        caseSensitive: false,
+      ).firstMatch(item.body);
+      refundMerchant = match?.group(1)?.trim();
+    }
+    if (refundMerchant == null || refundMerchant.isEmpty) {
+      final senderClean = item.sender
+          .toUpperCase()
+          .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
+          .replaceFirst(RegExp(r'-[A-Z]$'), '');
+      if (senderClean.isNotEmpty) {
+        refundMerchant = senderClean;
+      }
+    }
+    refundMerchant ??= item.body;
+
+    final candidateDebits = <TransactionEntry>[];
+    if (txns != null && txns.isNotEmpty) {
+      candidateDebits.addAll(
+        txns.where((t) => t.entryKind == TxnEntryKind.spend),
+      );
+    }
+
+    final refundDate = parsed?.transaction?.occurredAt ?? item.receivedAt;
+    final matchResult = AdjustmentMatcher.findMatchingDebit(
+      refundAmount: refundAmount,
+      refundMerchant: refundMerchant,
+      refundDate: refundDate,
+      candidateDebits: candidateDebits,
+    );
+
+    return matchResult != null;
+  }
+
+  static void _persistResolvedRefundMatchSync(
+    AppDatabase database,
+    String namespace,
+    NeedsReviewItem item,
+    LiveRefundMatchResult match,
+  ) {
+    try {
+      database.db.execute('''
+        CREATE TABLE IF NOT EXISTS financial_entities (
+          namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,
+          payload TEXT NOT NULL, observed_at INTEGER NOT NULL,
+          pending INTEGER NOT NULL DEFAULT 0, source_key TEXT,
+          occurred_at INTEGER, amount_paise INTEGER,
+          PRIMARY KEY(namespace, entity, id)
+        );
+      ''');
+      final linkPayload = {
+        'id': 'refund_link:${item.id}',
+        'debit_txn_id': match.debitTxnId,
+        'original_debit_amount_paise': match.originalDebitAmount.paise,
+        'refund_amount_paise': match.refundAmount.paise,
+        'net_amount_paise': match.netAmount.paise,
+        'days_apart': match.daysApart,
+        'matched_at': DateTime.now().toUtc().toIso8601String(),
+        'refund_sms_id': item.id,
+      };
+      database.db.execute('''
+        INSERT INTO financial_entities(
+          namespace, entity, id, payload, observed_at, pending, source_key, occurred_at, amount_paise
+        ) VALUES (?, 'refund_adjustments', ?, ?, ?, 0, ?, ?, ?)
+        ON CONFLICT(namespace, entity, id) DO UPDATE SET
+          payload=excluded.payload, observed_at=excluded.observed_at
+      ''', [
+        namespace,
+        'refund_link:${item.id}',
+        jsonEncode(linkPayload),
+        item.receivedAt.millisecondsSinceEpoch,
+        item.id,
+        item.receivedAt.millisecondsSinceEpoch,
+        match.refundAmount.paise,
+      ]);
+    } catch (_) {}
+  }
+
   static bool isNoiseItem(NeedsReviewItem item) {
     if (isSecurityOrServiceAlert(item.body)) {
       return true;
@@ -691,7 +1068,8 @@ class NeedsReviewRepository {
         resolved.kind == NeedsReviewKind.receipt) {
       return false;
     }
-    if (isMerchantReceiptOrEbill(resolved.body)) {
+    if (isMerchantReceiptOrEbill(resolved.body) ||
+        isInvestmentFolioAllotment(resolved.body)) {
       return false;
     }
     return LocalSmsParser.isNonTransactionNoise(resolved.sender, resolved.body);
@@ -712,6 +1090,16 @@ class NeedsReviewRepository {
           return;
         }
       } else if (_hasMatchingSpendTransaction(item, transactions: txns)) {
+        return;
+      }
+    }
+    if (isRefundOrReversal(item.body)) {
+      if (loadDatabase != null) {
+        final db = await _database();
+        if (_hasMatchingRefundDebit(item, database: db, transactions: txns)) {
+          return;
+        }
+      } else if (_hasMatchingRefundDebit(item, transactions: txns)) {
         return;
       }
     }

@@ -33,9 +33,17 @@ function isBrokerSettlementMessage(value) {
  * investment purchase. This is intentionally stricter than matching a broker
  * name: a broker can also send a genuine premium-product subscription alert.
  */
+function isInvestmentFolioAllotment(body) {
+  const text = String(body || '').toLowerCase();
+  const hasAllotment = /\b(?:units?\s+allotted|allotted\s+at\s+nav|units?\s*:\s*[\d.]+\s*,\s*nav|nav\s*:\s*[\d.]+|units?\s+(?:credited|allotted)\s+under\s+folio|allotted\s+for\s+your\s+investment)\b/i.test(text);
+  const hasFolioOrFund = /\b(?:folio|fund|mutual\s+fund|amc)\b/i.test(text);
+  return hasAllotment && hasFolioOrFund;
+}
+
 function isInvestmentFundingMessage(value) {
   const text = String(value || '');
   if (!text || !MOVEMENT_VERB.test(text)) return false;
+  if (isInvestmentFolioAllotment(text)) return false;
   const explicitInvestment = INVESTMENT_INTENT.test(text);
   const brokerFunding = FINANCIAL_PROVIDER.test(text) &&
     /\b(?:add(?:ing|ed)?|fund(?:s|ed|ing)?|top[ -]?up|debit(?:ed)?|paid|sent|transferred|credited|deposited)\b/i.test(text);
@@ -449,6 +457,7 @@ module.exports = {
   isUsableSubscriptionName,
   isDisplayableSubscriptionRecord,
   isInvestmentFundingMessage,
+  isInvestmentFolioAllotment,
   isInvestmentMandateMessage,
   isBrokerSettlementMessage,
   isNonSubscriptionFinancialName,

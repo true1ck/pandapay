@@ -1003,4 +1003,34 @@ void main() {
       );
     }
   });
+  test('mutual fund folio unit allotment does not create a cash spend transaction', () {
+    const amcMessages = [
+      'Folio 12345/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',
+      'Dear Investor, 45.123 units allotted under Folio 9876543/21 in Nippon India Small Cap Fund - Reg (G) for your investment of Rs 5,000 at NAV 110.8123 on 05-Oct-2026.',
+      'Units: 25.432, NAV: 196.50 allotted for your investment of Rs. 5000 in Parag Parikh Flexi Cap Fund, Folio: 123456789.',
+      'Units allotted under folio 11223344 for Rs 10000 in ICICI Prudential Bluechip Fund. NAV: 85.25.',
+    ];
+
+    for (final body in amcMessages) {
+      expect(LocalSmsParser.isInvestmentFolioAllotment(body), isTrue);
+      expect(LocalSmsParser.isNonTransactionNoise('HDFCMF', body), isFalse);
+
+      final obs = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'HDFCMF',
+        body: body,
+        receivedAt: DateTime(2026, 10, 5, 14, 30),
+      );
+
+      expect(obs, isNotNull);
+      expect(obs!.transaction, isNull, reason: 'Must not mint a cash spend transaction!');
+      expect(obs.eventType, LocalSmsEventType.investment);
+      expect(obs.disposition, LocalSmsDisposition.localObservation);
+      expect(obs.reasonCodes, contains('mf_folio_unit_allotment'));
+      expect(obs.amount, isNotNull);
+      expect(obs.amount!.paise, greaterThan(0));
+      expect(obs.amountDue, obs.amount);
+      expect(obs.merchantName, isNotNull);
+    }
+  });
 }

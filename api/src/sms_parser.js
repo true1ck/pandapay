@@ -19,7 +19,7 @@ const KNOWN_FIELDS = [
   'direction', 'mcc', 'availableBalance', 'balance',
 ];
 const MAX_MESSAGE_LENGTH = 20000;
-const { isInvestmentFundingMessage, isBrokerSettlementMessage } = require('./recurring');
+const { isInvestmentFundingMessage, isBrokerSettlementMessage, isInvestmentFolioAllotment } = require('./recurring');
 
 // OTP/security alerts can contain the same words as a transaction alert
 // ("txn", "INR", "card ending") but must never become spending records.
@@ -33,6 +33,7 @@ function isSecurityOrOtpMessage(body) {
 }
 
 function isNonTransactionNoise(sender, body) {
+  if (isInvestmentFolioAllotment(body)) return false;
   const cleanSender = String(sender || '').trim();
   if (cleanSender) {
     if (/^(?:\+?91[-\s]?|0)?[6-9]\d{9}$/.test(cleanSender)) return true;
@@ -788,9 +789,37 @@ function parseBuiltInNonSpendDebit(sms) {
   };
 }
 
+function parseInvestmentFolioAllotment(sms) {
+  const body = String(sms?.body || '');
+  if (!isInvestmentFolioAllotment(body)) {
+    return { ok: false, reason: 'not_folio_allotment' };
+  }
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountInr = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : null;
+  const schemeMatch = body.match(/\b(?:scheme|fund(?:\s+name)?)\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 .&'/()]{2,60})/i);
+  const inFundMatch = body.match(/\bin\s+([A-Za-z0-9][-A-Za-z0-9 .&'/()]{2,60}?)(?=(?:\s+(?:processed|successful|completed|allotted|for\b|at\s+nav|with\s+nav|nav|on\s+\d|folio)|[.,;]|$))/i);
+  const towardsMatch = body.match(/\btowards?\s+([A-Za-z0-9][-A-Za-z0-9 .&'/()]{2,60}?)(?=(?:\s+(?:processed|successful|completed|allotted|folio)|[.,;]|$))/i);
+  const merchant = schemeMatch?.[1]?.trim() || inFundMatch?.[1]?.trim() || towardsMatch?.[1]?.trim() || null;
+  const folioMatch = body.match(/\bfolio(?:\s*no\.?|\s*number)?\s*[:#-]?\s*([A-Za-z0-9/-]+)\b/i)?.[1];
+
+  return {
+    ok: false,
+    reason: 'mf_folio_unit_allotment',
+    isObservation: true,
+    fields: {
+      ...(amountInr && Number.isFinite(amountInr) ? { amountInr } : {}),
+      ...(merchant ? { merchant } : {}),
+      ...(folioMatch ? { folio: folioMatch } : {}),
+    },
+  };
+}
+
 /** Broker acknowledgements are investment movements, not income or spend. */
 function parseBuiltInInvestmentMovement(sms) {
   const body = String(sms?.body || '');
+  if (isInvestmentFolioAllotment(body)) {
+    return { ok: false, reason: 'mf_folio_unit_allotment' };
+  }
   if (!isInvestmentFundingMessage(body)) {
     return { ok: false, reason: 'no_investment_movement_match' };
   }
@@ -1139,6 +1168,9 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (isSecurityOrOtpMessage(sms?.body)) {
     return { ok: false, reason: 'security_message' };
   }
+  if (isInvestmentFolioAllotment(sms?.body)) {
+    return parseInvestmentFolioAllotment(sms);
+  }
   if (isNonTransactionNoise(sms?.sender, sms?.body)) {
     return { ok: false, reason: 'non_transaction_message' };
   }
@@ -1328,6 +1360,8 @@ module.exports = {
   parseBuiltInAccountTransfer,
   parseBuiltInAccountCredit,
   parseBuiltInWalletSpend,
+  isInvestmentFolioAllotment,
+  parseInvestmentFolioAllotment,
   senderMatches,
   redactSmsShape,
   parseTransactionDate,

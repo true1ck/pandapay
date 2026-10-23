@@ -916,4 +916,183 @@ void main() {
     expect(nach.transaction!.amount, const Money.fromPaise(39500));
     expect(nach.transaction!.merchantName, 'Capital Float');
   });
+
+  test('fetchAll and add auto-resolve live refund SMS when matching debit exists', () async {
+    final db = openInMemoryForTesting();
+    const ns = 'user:refund-test';
+    final repo = NeedsReviewRepository(
+      namespace: ns,
+      loadDatabase: () async => db,
+    );
+
+    // 1. Existing spend debit of ₹1000 at Swiggy in SQLite
+    final txnTime = DateTime(2026, 10, 10, 12, 0);
+    db.db.execute('''
+      CREATE TABLE IF NOT EXISTS financial_entities (
+        namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,
+        payload TEXT NOT NULL, observed_at INTEGER NOT NULL,
+        pending INTEGER NOT NULL DEFAULT 0, source_key TEXT,
+        occurred_at INTEGER, amount_paise INTEGER,
+        PRIMARY KEY(namespace, entity, id)
+      );
+    ''');
+    db.db.execute(
+      '''
+      INSERT INTO financial_entities(namespace, entity, id, payload, observed_at, occurred_at, amount_paise)
+      VALUES (?, 'transactions', 'txn-swiggy-debit', ?, ?, ?, ?)
+      ''',
+      [
+        ns,
+        jsonEncode({
+          'id': 'txn-swiggy-debit',
+          'amount_inr': 1000.0,
+          'occurred_at': txnTime.toIso8601String(),
+          'merchant_name': 'Swiggy Bangalore',
+          'entry_kind': 'spend',
+        }),
+        txnTime.millisecondsSinceEpoch,
+        txnTime.millisecondsSinceEpoch,
+        100000,
+      ],
+    );
+
+    // 2. Swiggy partial refund SMS of ₹450 received 3 days later
+    final refundSwiggy = NeedsReviewItem(
+      id: 'refund-swiggy-1',
+      sender: 'VM-HDFCBK',
+      body: 'Dear customer, Rs. 450.00 has been refunded from Swiggy to your card ending 1234 on 13-Oct-26.',
+      receivedAt: txnTime.add(const Duration(days: 3)),
+    );
+
+    // 3. Another refund SMS with NO matching spend (Amazon refund with no Amazon debit)
+    final refundUnmatched = NeedsReviewItem(
+      id: 'refund-unmatched-1',
+      sender: 'AX-AxisBk',
+      body: 'Refund of INR 800.00 for order at Amazon credited back to your account.',
+      receivedAt: txnTime.add(const Duration(days: 4)),
+    );
+
+    // Queue both in local_needs_review
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+    );
+    db.db.execute(
+      'INSERT INTO local_needs_review VALUES (?,?,?)',
+      [ns, refundSwiggy.id, jsonEncode(refundSwiggy.toJson())],
+    );
+    db.db.execute(
+      'INSERT INTO local_needs_review VALUES (?,?,?)',
+      [ns, refundUnmatched.id, jsonEncode(refundUnmatched.toJson())],
+    );
+
+    // fetchAll auto-resolves Swiggy refund and keeps unmatched refund
+    final remaining = await repo.fetchAll();
+    expect(remaining.map((i) => i.id).toList(), ['refund-unmatched-1']);
+
+    // Verify Swiggy refund was removed from SQLite local_needs_review
+    final storedRows = db.db.select('SELECT id FROM local_needs_review WHERE namespace=?', [ns]);
+    expect(storedRows.map((r) => r['id']).toList(), ['refund-unmatched-1']);
+
+    // Verify refund adjustment link was persisted to financial_entities
+    final adjustmentRows = db.db.select(
+      "SELECT payload FROM financial_entities WHERE namespace = ? AND entity = 'refund_adjustments'",
+      [ns],
+    );
+    expect(adjustmentRows, hasLength(1));
+    final adjustmentData = jsonDecode(adjustmentRows.single['payload'] as String) as Map<String, dynamic>;
+    expect(adjustmentData['debit_txn_id'], 'txn-swiggy-debit');
+    expect(adjustmentData['original_debit_amount_paise'], 100000);
+    expect(adjustmentData['refund_amount_paise'], 45000);
+    expect(adjustmentData['net_amount_paise'], 55000);
+    expect(adjustmentData['days_apart'], anyOf(2, 3));
+
+    // Verify add() and addNeedsReviewSync() also auto-link and do not queue when matching spend exists
+    await repo.add(refundSwiggy);
+    final afterAdd = db.db.select('SELECT id FROM local_needs_review WHERE namespace=?', [ns]);
+    expect(afterAdd.map((r) => r['id']).toList(), ['refund-unmatched-1']);
+
+    addNeedsReviewSync(db, ns, refundSwiggy);
+    final afterSync = db.db.select('SELECT id FROM local_needs_review WHERE namespace=?', [ns]);
+    expect(afterSync.map((r) => r['id']).toList(), ['refund-unmatched-1']);
+
+    db.close();
+  });
+  test('fetchAll auto-removes mutual fund folio allotment when matching investment debit exists within 72 hours', () async {
+    final db = openInMemoryForTesting();
+    final ns = 'mf-test-${DateTime.now().microsecondsSinceEpoch}';
+    final repo = NeedsReviewRepository(
+      namespace: ns,
+      loadDatabase: () async => db,
+    );
+
+    // Seed matching investment debit transaction in financial_entities (Rs 5,000 on Oct 5 10:00)
+    final debitOccurred = DateTime(2026, 10, 5, 10, 0);
+    final debitPayload = {
+      'id': 'txn-mf-sip-debit',
+      'entry_kind': 'investment',
+      'amount_inr': 5000,
+      'amount': {'paise': 500000},
+      'merchant_name': 'HDFC MF SIP Mandate',
+      'occurred_at': debitOccurred.toIso8601String(),
+    };
+    db.db.execute('''
+      CREATE TABLE IF NOT EXISTS financial_entities (
+        namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,
+        payload TEXT NOT NULL, observed_at INTEGER NOT NULL,
+        pending INTEGER NOT NULL DEFAULT 0, source_key TEXT,
+        occurred_at INTEGER, amount_paise INTEGER,
+        PRIMARY KEY(namespace, entity, id)
+      );
+    ''');
+    db.db.execute('''
+      INSERT INTO financial_entities (namespace, entity, id, payload, observed_at, pending, source_key, occurred_at, amount_paise)
+      VALUES (?, 'transactions', 'txn-mf-sip-debit', ?, ?, 0, 'src-sip', ?, 500000)
+    ''', [
+      ns,
+      jsonEncode(debitPayload),
+      debitOccurred.millisecondsSinceEpoch,
+      debitOccurred.millisecondsSinceEpoch,
+    ]);
+
+    // 1. Folio allotment matching the debit (Rs 5,000 on Oct 5 14:00 - within 4 hours)
+    final matchedAllotment = NeedsReviewItem(
+      id: 'review-allotment-matched',
+      sender: 'HDFCMF',
+      body: 'Folio 12345/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',
+      receivedAt: DateTime(2026, 10, 5, 14, 0),
+    );
+
+    // 2. Unmatched folio allotment (Rs 12,000 - no matching investment debit exists)
+    final unmatchedAllotment = NeedsReviewItem(
+      id: 'review-allotment-unmatched',
+      sender: 'CAMSSM',
+      body: 'Folio 99887766: Purchase of Rs 12000 in Parag Parikh Flexi Cap Fund processed. 45.67 units allotted at NAV 262.75 on 05-Oct-2026.',
+      receivedAt: DateTime(2026, 10, 5, 15, 0),
+    );
+
+    db.db.execute(
+      'INSERT INTO local_needs_review VALUES (?,?,?), (?,?,?)',
+      [
+        ns, matchedAllotment.id, jsonEncode(matchedAllotment.toJson()),
+        ns, unmatchedAllotment.id, jsonEncode(unmatchedAllotment.toJson()),
+      ],
+    );
+
+    final beforeFetch = db.db.select('SELECT id FROM local_needs_review WHERE namespace=?', [ns]);
+    expect(beforeFetch.map((r) => r['id']).toSet(), {'review-allotment-matched', 'review-allotment-unmatched'});
+
+    // Fetch all: matched allotment must be auto-removed, unmatched kept
+    final items = await repo.fetchAll();
+    expect(items.map((i) => i.id).toList(), ['review-allotment-unmatched']);
+
+    final afterFetch = db.db.select('SELECT id FROM local_needs_review WHERE namespace=?', [ns]);
+    expect(afterFetch.map((r) => r['id']).toList(), ['review-allotment-unmatched']);
+
+    // addNeedsReviewSync also drops matched allotment
+    addNeedsReviewSync(db, ns, matchedAllotment);
+    final afterSync = db.db.select('SELECT id FROM local_needs_review WHERE namespace=?', [ns]);
+    expect(afterSync.map((r) => r['id']).toList(), ['review-allotment-unmatched']);
+
+    db.close();
+  });
 }

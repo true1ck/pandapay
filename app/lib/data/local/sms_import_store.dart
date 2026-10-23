@@ -464,6 +464,7 @@ bool _observationHasValidFacts(LocalSmsObservation observation) {
     case LocalSmsEventType.failed:
     case LocalSmsEventType.promotion:
     case LocalSmsEventType.security:
+    case LocalSmsEventType.investment:
     case LocalSmsEventType.unknown:
       return true;
   }

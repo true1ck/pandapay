@@ -6,6 +6,7 @@
 bool isInvestmentMovementDescription(String value) {
   final text = value.trim();
   if (text.isEmpty) return false;
+  if (isInvestmentFolioAllotment(text)) return false;
 
   final provider = RegExp(
     r'\b(?:zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|demat|trading|broker(?:age|ing)?|portfolio)\b',
@@ -61,3 +62,19 @@ bool isBrokerSettlementMessage(String value) {
     caseSensitive: false,
   ).hasMatch(text);
 }
+
+/// Returns true when a message confirms allotment of units in a mutual fund folio
+/// rather than a cash movement from a bank or broker account.
+bool isInvestmentFolioAllotment(String body) {
+  final text = body.toLowerCase();
+  final hasAllotment = RegExp(
+    r'\b(?:units?\s+allotted|allotted\s+at\s+nav|units?\s*:\s*[\d.]+\s*,\s*nav|nav\s*:\s*[\d.]+|units?\s+(?:credited|allotted)\s+under\s+folio|allotted\s+for\s+your\s+investment)\b',
+    caseSensitive: false,
+  ).hasMatch(text);
+  final hasFolioOrFund = RegExp(
+    r'\b(?:folio|fund|mutual\s+fund|amc)\b',
+    caseSensitive: false,
+  ).hasMatch(text);
+  return hasAllotment && hasFolioOrFund;
+}
+
