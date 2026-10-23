@@ -1185,6 +1185,18 @@ test('mutual fund folio unit allotment does not create a cash spend or duplicate
   }
 });
 
+test('Scapia txn-of card purchase parses without card last4 or configured patterns', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'AD-FEDSCP-S',
+    body: 'Your txn of ₹1,018 at 3 Rajdhani Parantha House on your Scapia Federal RuPay credit card earned you 5% rewards!',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'conservative_fallback');
+  assert.equal(result.fields.amountInr, 1018);
+  assert.equal(result.fields.merchant, '3 Rajdhani Parantha House');
+  assert.equal(result.fields.last4, undefined);
+});
+
 test('AutoPay activation and mandate notices are not flagged as noise and do not mint fake cash spend', () => {
   const autoPaySetupMessages = [
     'AutoPay activation successful.\nTxn amt: INR 0.00\nMerchant: OpenAILLC\nAxis Bank Card no.: XX7105\nMax limit: INR 1999.00\n...',

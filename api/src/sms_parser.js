@@ -651,6 +651,12 @@ function isSuccessfulSpend(body) {
   if (isNonTransactionAlert(text)) return false;
   return /\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b/.test(text)
     || /\b(?:payment|purchase|transaction)\b[\s\S]{0,80}\b(?:successful|successfully|completed)\b/.test(text)
+    // Issuer rewards-accomplishment alerts ("Your txn of ₹1,018 at M on
+    // your X card earned you 5% rewards!") carry no standard completion
+    // verb. Accept the txn-of-of shape only when it is not a pending
+    // attempt (isRejectedTransaction already excludes declined/failed).
+    || (/\b(?:your\s+)?txn\s+(?:of|for)\s*(?:₹|rs\.?|inr)?\s*[\d,.]+/.test(text)
+        && !/\b(?:initiated|pending|processing|in\s+progress|in\s+process)\b/.test(text))
     || isWalletLoadMessage(text);
 }
 
@@ -1137,7 +1143,7 @@ function parseConservativeBankSpend(sms) {
   if (isCardBillNotice(body)) {
     return { ok: false, reason: 'card_bill_notice' };
   }
-  if (!/\b(spent|spend|debited|purchase|purchased|used|transaction)\b/i.test(body)) {
+  if (!/\b(spent|spend|debited|purchase|purchased|used|transaction|txn)\b/i.test(body)) {
     return { ok: false, reason: 'no_spend_marker' };
   }
   // Current auto-resolution is a credit-card pipeline. Requiring card
@@ -1168,7 +1174,7 @@ function parseConservativeBankSpend(sms) {
   const merchant = body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$|\r|\n)/i)
     || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$|\r|\n)/i)
     || body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
-    || body.match(/\b(?:at|to)\s+([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block|for\s+card)\b|[.;]|$)/i);
+    || body.match(/\b(?:at|to)\s+([A-Za-z0-9_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block|for\s+card)\b|[.;]|$)/i);
   if (merchant) {
     const value = merchant[1].trim().replace(/^_+/, '').replace(/[.,;:-]+$/, '').trim();
     if (value && !/^(your|card|account|a\/c)$/i.test(value)) fields.merchant = value;

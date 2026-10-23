@@ -54,6 +54,7 @@ import '../data/notification_preferences_repository.dart';
 import '../data/notification_devices_api.dart';
 import '../data/override_resolver.dart';
 import '../data/partner_apply_repository.dart';
+import '../data/pending_bills.dart';
 import '../data/recovery_api.dart';
 import '../data/referral_repository.dart';
 import '../data/spend_by_category_repository.dart';
@@ -1185,6 +1186,48 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
   } catch (_) {
     return manualList;
   }
+});
+/// Bills pane input: bill/autopay sms_observations resolved against the
+/// logged transaction history. Covers what the commitments sections skip —
+/// card-linked bills, autopay reminders, any bill whose payment the app
+/// never saw — with the settled/pending/payment-not-detected state each.
+final smsBillRowsProvider = FutureProvider<List<SmsBillRow>>((ref) async {
+  var ready = false;
+  ref.listen(financialStoreRevisionProvider('observations'), (_, next) {
+    if (ready) ref.invalidateSelf();
+  });
+  ref.listen(financialStoreRevisionProvider('transactions'), (_, next) {
+    if (ready) ref.invalidateSelf();
+  });
+  final clockNow = ref.watch(clockProvider).now();
+  final cache = await ref.watch(responseCacheProvider.future);
+  final ns = ref.watch(cacheNamespaceProvider);
+  final observations = cache.financialStore.entities(ns, 'sms_observations');
+  final cardsLast4ById = {
+    for (final card in await ref.watch(myCardsProvider.future))
+      if (card.last4 != null) card.id: card.last4!,
+  };
+  final repo = ref.watch(userCardsRepositoryProvider);
+  final transactions = repo == null
+      ? const <TransactionEntry>[]
+      : await loadTransactionsWithOfflineCache(
+          ref,
+          repo: repo,
+          cacheKey: 'transactions:sms_bills',
+          from: clockNow.subtract(const Duration(days: 120)),
+        );
+  final taken = <String>{
+    for (final commitment in await ref.watch(commitmentsProvider.future))
+      smsBillIdentityForCommitment(commitment),
+  };
+  ready = true;
+  return deriveSmsBillRows(
+    observations: observations,
+    transactions: transactions,
+    cardsLast4ById: cardsLast4ById,
+    takenIdentities: taken,
+    now: clockNow,
+  );
 });
 
 /// UA-3: the signed-in user's own profiles row (owner-scoped via RLS —

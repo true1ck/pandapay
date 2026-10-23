@@ -1032,6 +1032,8 @@ void main() {
       ('BAJAJA', 'Two wheeler insurance for MH01AB1234 has expired. Renew today at Rs. 1499.'),
       ('ACKOIN', 'Car insurance expired! Renew before midnight to protect your NCB.'),
       ('HDFCER', 'Vehicle insurance for DL01CD5678 will expire tomorrow. Premium Rs 2150.'),
+      ('JIOFBR', 'Help us serve you better. Rate your experience with JioFiber.'),
+      ('VICARE', 'Your experience matters to us. Take a quick survey and share your feedback.'),
     ];
 
     for (final (sender, body) in noiseAlerts) {
@@ -1041,6 +1043,11 @@ void main() {
         reason: 'Expected noise for: ' + body,
       );
     }
+  });
+  test('feedback text after a completed recharge does not hide the transaction', () {
+    const body =
+        'Recharge of Rs 239 successful. Rate your experience with Jio.';
+    expect(LocalSmsParser.isNonTransactionNoise('JIOFBR', body), isFalse);
   });
   test('mutual fund folio unit allotment does not create a cash spend transaction', () {
     const amcMessages = [

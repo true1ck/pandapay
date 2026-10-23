@@ -8,6 +8,7 @@ import 'local/app_database.dart';
 import 'local_sms_parser.dart';
 import 'user_cards_repository.dart';
 import 'investment_classifier.dart';
+import '../features/sms_import/sms_text_hint.dart';
 
 enum NeedsReviewKind {
   transaction,
@@ -107,6 +108,16 @@ class NeedsReviewItem {
 
 const _needsReviewKey = 'pandapay_app.needs_review_queue_v1';
 
+bool _capturesReviewableFinancial(NeedsReviewItem item) {
+  if (capturesFinancialSms(item.body, sender: item.sender)) return true;
+  return switch (NeedsReviewRepository.resolveItemKind(item).kind) {
+    NeedsReviewKind.investmentSettlement ||
+    NeedsReviewKind.mandate ||
+    NeedsReviewKind.receipt => true,
+    _ => false,
+  };
+}
+
 /// Synchronous capture path used by the local SMS parser, which deliberately
 /// remains synchronous so foreground/background capture share one transaction.
 /// The stable SMS id makes this insert idempotent.
@@ -117,6 +128,7 @@ void addNeedsReviewSync(
   List<TransactionEntry>? existingTransactions,
 }) {
   if (NeedsReviewRepository.isNoiseItem(item)) return;
+  if (!_capturesReviewableFinancial(item)) return;
   if (isInvestmentFolioAllotment(item.body) &&
       NeedsReviewRepository.hasMatchingInvestmentTransactionSync(
         database,
@@ -282,9 +294,9 @@ class NeedsReviewRepository {
           db.db.execute('RELEASE SAVEPOINT update_resolved_kinds');
         }
       }
-      final noise = items.where(_isNoise).map((item) => item.id).toList();
+      final noise = items.where(_isNoiseOrStale).map((item) => item.id).toList();
       if (noise.isNotEmpty) await removeAll(noise);
-      final nonNoise = items.where((item) => !_isNoise(item)).toList();
+      final nonNoise = items.where((item) => !_isNoiseOrStale(item)).toList();
       final kept = <NeedsReviewItem>[];
       final toRemove = <String>[];
       final now = DateTime.now();
@@ -410,9 +422,9 @@ class NeedsReviewRepository {
           ),
         )
         .toList();
-    final noise = items.where(_isNoise).map((item) => item.id).toList();
+    final noise = items.where(_isNoiseOrStale).map((item) => item.id).toList();
     if (noise.isNotEmpty) await removeAll(noise);
-    final nonNoise = items.where((item) => !_isNoise(item)).toList();
+    final nonNoise = items.where((item) => !_isNoiseOrStale(item)).toList();
     final kept = <NeedsReviewItem>[];
     final toRemove = <String>[];
     final now = DateTime.now();
@@ -1116,13 +1128,15 @@ class NeedsReviewRepository {
     return LocalSmsParser.isNonTransactionNoise(resolved.sender, resolved.body);
   }
 
-  bool _isNoise(NeedsReviewItem item) => isNoiseItem(item);
+  bool _isNoiseOrStale(NeedsReviewItem item) =>
+      isNoiseItem(item) || !_capturesReviewableFinancial(item);
 
   Future<void> add(
     NeedsReviewItem item, {
     List<TransactionEntry>? transactions,
   }) async {
     if (isNoiseItem(item)) return;
+    if (!_capturesReviewableFinancial(item)) return;
     final txns = transactions ?? existingTransactions;
     if (isMerchantReceiptOrEbill(item.body)) {
       if (loadDatabase != null) {

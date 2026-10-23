@@ -11,6 +11,7 @@ import '../../data/card_bill_ledger.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/user_cards_repository.dart';
 import 'central_bills_section.dart';
+import 'sms_bills_section.dart';
 
 // ---------------------------------------------------------------------------
 // Backward-compatible type aliases for existing test harnesses
@@ -240,6 +241,7 @@ class _DueList extends StatelessWidget {
               )
               .toList(growable: false),
         ),
+        const SmsBillsSection(),
         if (rows.isNotEmpty) ...[
           _SectionHeader(label: 'Credit cards', count: rows.length),
           const SizedBox(height: AppSpace.xs),

@@ -227,6 +227,9 @@ class SmsImportStore {
           'reason_codes': observation.reasonCodes,
           'confidence': observation.confidence,
           if (observation.isAutopay) 'is_autopay': true,
+          // Device-local only: the Bills pane shows the source message.
+          // Typed facts and the legacy upload carry structured fields.
+          'sample_body': message.body,
         });
         if (observation.transaction != null) {
           store.saveProvisional(namespace, observation.transaction!);
@@ -344,6 +347,31 @@ class SmsImportStore {
           }
           intake.acknowledge(namespace, key);
         }
+        // Rich upcoming-bill reminders are the Bills pane's domain: they are
+        // already persisted as observations and their typed facts were
+        // queued above, so acknowledging here keeps raw bodies off the
+        // wire — otherwise the hosted parser never matches them and they
+        // reappear as review cards with a "Confirm mandate" CTA. Weak or
+        // ambiguous bills (no due date, no amount, fragment-y biller) still
+        // keep the existing sync/review behavior.
+        final strongBiller =
+            observation.billerName != null &&
+            observation.billerName!.trim().length > 2 &&
+            !_weakBillerNameRe.hasMatch(
+              observation.billerName!.trim().toLowerCase(),
+            );
+        if ((observation.disposition == LocalSmsDisposition.localObservation ||
+                observation.disposition ==
+                    LocalSmsDisposition.localCommitment) &&
+            (observation.eventType == LocalSmsEventType.bill ||
+                observation.eventType == LocalSmsEventType.autopay) &&
+            (observation.cardLast4 != null || strongBiller) &&
+            (observation.amountDue != null ||
+                observation.minimumDue != null ||
+                observation.autopayLimit != null) &&
+            observation.dueDate != null) {
+          intake.acknowledge(namespace, key);
+        }
         // Billing dates are selected across the captured inbox by the server.
         // A capture page is not a complete cycle, so writing the first date
         // here would lock in an older or reminder SMS before history arrives.
@@ -366,6 +394,11 @@ class SmsImportStore {
     }
   }
 }
+
+final _weakBillerNameRe = RegExp(
+  r'^(your|our|a|an|the|this|card|credit|debit|payment|bill|account|'
+  r'e-?mandate|nach|si|standing|instruction)\b',
+);
 
 const _downloadedRuleMatchReasons = {
   'downloaded_rule_match',

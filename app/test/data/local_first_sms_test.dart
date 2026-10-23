@@ -59,7 +59,34 @@ void main() {
       'sms_observations',
     );
     expect(observations, hasLength(2));
-    expect(SmsIntakeRepository(db).pending('user:account-a'), hasLength(2));
+    expect(SmsIntakeRepository(db).pending('user:account-a'), isEmpty);
+  });
+
+  test('rich local bill commitments are acknowledged without raw upload', () {
+    const bill = 'Alegra Broadband ... Payment of Rs.800/- is due on 24-10-2026.';
+    SmsImportStore(cache.financialStore).capture(
+      'user:account-a',
+      QueuedSms(
+        sender: 'TNBPAY',
+        body: bill,
+        receivedAt: DateTime(2026, 10, 18),
+      ),
+    );
+
+    expect(SmsIntakeRepository(db).pending('user:account-a'), isEmpty);
+    final observation = cache.financialStore.entities(
+      'user:account-a',
+      'sms_observations',
+    ).single;
+    expect(observation['sample_body'], bill);
+    expect(observation['event_type'], 'bill');
+    expect(
+      db.db.select(
+        'SELECT id FROM local_commitments WHERE namespace=?',
+        ['user:account-a'],
+      ),
+      hasLength(1),
+    );
   });
 
   test(
