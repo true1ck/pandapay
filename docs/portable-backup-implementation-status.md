@@ -72,7 +72,7 @@ Implemented in this session (Wave 1 scope, no UI changes):
 
 ## Remaining gaps (recorded, not blocking the verified service layer)
 
-1. `PortableLocalSnapshotSource` has no concrete drift-database implementation yet — the coordinator type only has the interface; a follow-up should implement it against the existing SQLite schema without touching outbox semantics.
+1. ~~`PortableLocalSnapshotSource` has no concrete drift-database implementation yet~~ **Done**: `app/lib/data/portable_backup/local_snapshot_source.dart` implements it against the raw-sqlite3 `AppDatabase` (the project local store is `package:sqlite3`, not drift). It reads all sections in one deferred transaction, captures active plus `legacy` namespaces, decodes embedded JSON columns so section digests stay stable, counts the nine outbox queues (absent table = 0 pending) and refuses nonzero pending counts; per-queue drain hooks plug into existing flush machinery without bypassing outbox semantics. `flutter test test/data/portable_backup` green (46 tests), `flutter analyze lib/data/portable_backup` clean.
 2. Not a single device benchmark exists for Argon2id v1 params (16384 KiB mobile budget); on-device runtime remains an acceptance item.
 3. Cross-runtime encryption test vectors (Android/iOS/JS) not yet generated.
 4. The client calls for the restore-session endpoints still need to be wired into the existing repository/service layer. The streamed export consumer is implemented; UI remains intentionally unchanged per the user's direction.
