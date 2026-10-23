@@ -1,5 +1,10 @@
 const { normalizeMerchant } = require('./reward_math');
 const { inferBuiltinCategory } = require('./merchant_category');
+const {
+  normalizeMerchantVpa,
+  normalizeMerchantName,
+  isGenericMerchantName,
+} = require('./merchant_bulk_category');
 const { extractCreditLimit } = require('./card_limit_parser');
 const {
   extractDueDate,
@@ -411,6 +416,161 @@ function normalizedImportText(...values) {
     .join(' ');
 }
 
+// User rules are intentionally narrower than the existing bulk-review
+// matcher.  A rule is a durable promise about a merchant, so a provider or
+// payment rail name must never become the identity of every merchant it
+// processes.  Keep this list conservative: adding a name here only prevents
+// future automatic matches; it never changes an existing transaction.
+const UNSAFE_USER_RULE_NAMES = new Set([
+  'razorpay', 'payu', 'cashfree', 'billdesk', 'ccavenue', 'juspay',
+  'stripe', 'payment gateway', 'gateway', 'upi', 'upi collect',
+  'phonepe', 'paytm', 'bharatpe', 'mobikwik', 'amazon pay',
+]);
+
+function normalizeUserMerchantVpa(value) {
+  const normalized = normalizeMerchantVpa(value);
+  if (!normalized || !normalized.includes('@') || /\s/.test(normalized)) return null;
+  return normalized;
+}
+
+function normalizeUserMerchantName(value) {
+  return normalizeMerchantName(value);
+}
+
+function isUnsafeUserMerchantName(value) {
+  const normalized = normalizeUserMerchantName(value);
+  if (!normalized || isGenericMerchantName(normalized)) return true;
+  if (UNSAFE_USER_RULE_NAMES.has(normalized)) return true;
+  if (/\b(?:payment\s+)?gateway\b/i.test(normalized)) return true;
+  return false;
+}
+
+/**
+ * Pure V1 matcher for a user's future merchant rules.
+ *
+ * A VPA is the strongest identity.  When one is present, name rules are not
+ * considered at all: two VPAs displayed as the same merchant must remain
+ * independent.  Without a VPA, only a complete, non-generic normalized name
+ * can match.  The eligibility guard is kept here (rather than in SQL) so SMS,
+ * statement and manual callers share exactly the same exclusions.
+ */
+function isEligibleUserMerchantRuleTransaction(transaction = {}) {
+  if (transaction.status && transaction.status !== 'active') return false;
+  if ((transaction.entryKind || transaction.entry_kind || 'spend') !== 'spend') return false;
+  if (transaction.isIgnored || transaction.is_ignored || transaction.status === 'ignored') return false;
+  if (transaction.isSplit || transaction.is_split || transaction.isSplitParent
+      || transaction.is_split_parent || transaction.parentTxnId || transaction.parent_txn_id
+      || transaction.hasSplits || transaction.has_splits) return false;
+  if (transaction.isRefund || transaction.is_refund || transaction.isReversal
+      || transaction.is_reversal) return false;
+  const transferKind = String(transaction.transferKind || transaction.transfer_kind || '').toLowerCase();
+  if (['refund', 'reversal', 'transfer', 'income'].includes(transferKind)) return false;
+  return true;
+}
+
+function activeUserRule(rule) {
+  return rule && (rule.is_active === true || rule.isActive === true || rule.active === true);
+}
+
+function ruleVersion(rule) {
+  const value = Number(rule?.version);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function resolveUserMerchantRule(rules, transaction = {}) {
+  if (!isEligibleUserMerchantRuleTransaction(transaction) || !Array.isArray(rules)) return null;
+  const vpa = normalizeUserMerchantVpa(transaction.vpa ?? transaction.merchantVpa ?? transaction.merchant_vpa);
+  const name = normalizeUserMerchantName(transaction.merchantName ?? transaction.merchant_name);
+  const basis = vpa ? 'vpa' : (!isUnsafeUserMerchantName(name) ? 'strict_name' : null);
+  if (!basis) return null;
+  const value = basis === 'vpa' ? vpa : name;
+  const matches = rules
+    .filter(activeUserRule)
+    .filter((rule) => String(rule.match_basis || rule.matchBasis || '') === basis)
+    .filter((rule) => (basis === 'vpa'
+      ? normalizeUserMerchantVpa(rule.match_value ?? rule.matchValue) === value
+      : normalizeUserMerchantName(rule.match_value ?? rule.matchValue) === value))
+    .filter((rule) => rule.category_id || rule.categoryId || rule.resolved_category_id)
+    .sort((a, b) => ruleVersion(b) - ruleVersion(a)
+      || String(b.updated_at || b.updatedAt || '').localeCompare(String(a.updated_at || a.updatedAt || ''))
+      || String(a.id || '').localeCompare(String(b.id || '')));
+  const rule = matches[0];
+  if (!rule) return null;
+  return {
+    ...rule,
+    matchBasis: basis,
+    matchValue: value,
+    categoryId: rule.resolved_category_id || rule.category_id || rule.categoryId,
+    userCategoryId: rule.user_category_id || rule.userCategoryId || null,
+  };
+}
+
+async function loadActiveUserMerchantRules(client, userId) {
+  const [rulesResult, categoriesResult] = await Promise.all([
+    client.query(
+      `SELECT umr.id, umr.match_basis, umr.match_value, umr.category_id,
+              umr.user_category_id, umr.is_active, umr.version, umr.updated_at
+         FROM user_merchant_category_rules umr
+        WHERE umr.profile_id = $1 AND umr.is_active = true
+        ORDER BY umr.version DESC, umr.updated_at DESC, umr.id`,
+      [userId],
+    ),
+    client.query(
+      `SELECT id, parent_category_id, parent_user_category_id
+         FROM user_categories
+        WHERE profile_id = $1`,
+      [userId],
+    ),
+  ]);
+
+  // A custom child can itself belong to another private category. Resolve
+  // the complete chain here so import classification agrees with the API's
+  // recursive category validation. Cycles are treated as an invalid target
+  // and therefore fall back to ordinary classification.
+  const categories = new Map(
+    categoriesResult.rows.map((row) => [String(row.id), row]),
+  );
+  const resolvedParent = (categoryId) => {
+    const seen = new Set();
+    let current = categories.get(String(categoryId));
+    while (current) {
+      const key = String(current.id);
+      if (seen.has(key)) return null;
+      seen.add(key);
+      if (current.parent_category_id) return String(current.parent_category_id);
+      current = current.parent_user_category_id
+        ? categories.get(String(current.parent_user_category_id))
+        : null;
+    }
+    return null;
+  };
+
+  return rulesResult.rows
+    .map((row) => ({
+      ...row,
+      resolved_category_id: row.user_category_id
+        ? resolvedParent(row.user_category_id)
+        : row.category_id,
+    }))
+    .filter((row) => row.resolved_category_id);
+}
+
+async function resolveUserMerchantRuleForImport(client, userId, options = {}) {
+  if (options.applyUserMerchantRule === false) return null;
+  // A reviewed statement/import hint is an explicit source choice and ranks
+  // above a remembered merchant rule.
+  if (options.categoryHint || options.subcategoryHint
+      || options.explicitCategoryId || options.explicitUserCategoryId) return null;
+  if (!isEligibleUserMerchantRuleTransaction(options)) return null;
+  const vpa = normalizeUserMerchantVpa(options.vpa);
+  const name = normalizeUserMerchantName(options.merchantName);
+  if (!vpa && isUnsafeUserMerchantName(name)) return null;
+  const rules = Array.isArray(options.userMerchantRules)
+    ? options.userMerchantRules
+    : await loadActiveUserMerchantRules(client, userId);
+  return resolveUserMerchantRule(rules, options);
+}
+
 function importTermMatches(text, term) {
   const normalizedTerm = String(term || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   if (!normalizedTerm || normalizedTerm.length < 2) return false;
@@ -477,16 +637,44 @@ async function resolveUserCategoryForImport(client, userId, {
 
 /** Returns both the reward/reporting parent and the private child. */
 async function resolveCategoryAssignmentForImport(client, userId, options) {
-  const userCategory = await resolveUserCategoryForImport(client, userId, options);
-  if (userCategory) return userCategory;
+  const hasExplicitHint = Boolean(options.categoryHint || options.subcategoryHint);
+  // A reviewed category/subcategory hint is an explicit source choice. It is
+  // allowed to resolve before a remembered rule; ordinary match_terms from
+  // narration are inference and must wait until after the user rule.
+  if (hasExplicitHint) {
+    const userCategory = await resolveUserCategoryForImport(client, userId, options);
+    if (userCategory) return userCategory;
+  }
+
+  // Keep the private child attached when the rule points at one.  The base
+  // category resolver intentionally returns only a reporting parent for its
+  // legacy callers, so resolve the rule at this richer boundary first.
+  const userRule = await resolveUserMerchantRuleForImport(client, userId, options);
+  if (userRule) {
+    return {
+      categoryId: userRule.categoryId,
+      userCategoryId: userRule.userCategoryId || null,
+    };
+  }
+  if (!hasExplicitHint) {
+    const userCategory = await resolveUserCategoryForImport(client, userId, options);
+    if (userCategory) return userCategory;
+  }
   return {
-    categoryId: await resolveCategoryForImport(client, userId, options),
+    categoryId: await resolveCategoryForImport(client, userId, {
+      ...options,
+      // The rule was already checked above. Supplying an empty list keeps
+      // this fallback query-free while preserving the same precedence.
+      userMerchantRules: [],
+    }),
     userCategoryId: null,
   };
 }
 
 async function resolveCategoryForImport(client, userId, {
   merchantName, vpa, mcc, messageText, categoryHint,
+  entryKind, status, isSplit, isSplitParent, parentTxnId, hasSplits,
+  isRefund, isReversal, transferKind, userMerchantRules,
 }) {
   // Explicit category names from a reviewed import/export are stronger than
   // merchant inference. Match only this product's exact built-in label/slug;
@@ -502,6 +690,25 @@ async function resolveCategoryForImport(client, userId, {
     );
     if (hinted.rows[0]) return hinted.rows[0].id;
   }
+
+  // Explicit source categories are handled above by categoryHint and by the
+  // callers' categoryId/userCategoryId branches.  A future user rule is the
+  // next tier and therefore must run before VPA/MCC/history/global inference.
+  const userRule = await resolveUserMerchantRuleForImport(client, userId, {
+    merchantName,
+    vpa,
+    entryKind,
+    status,
+    isSplit,
+    isSplitParent,
+    parentTxnId,
+    hasSplits,
+    isRefund,
+    isReversal,
+    transferKind,
+    userMerchantRules,
+  });
+  if (userRule) return userRule.categoryId;
 
   const merchantKey = normalizeMerchant(merchantName);
   const normalized = ['unknown', 'unknownmerchant', 'other', 'na', 'notavailable'].includes(merchantKey) ? '' : merchantKey;
@@ -760,5 +967,12 @@ module.exports = {
   resolveUserCategoryForImport,
   resolveCategoryAssignmentForImport,
   resolveCategoryForImport,
+  normalizeUserMerchantVpa,
+  normalizeUserMerchantName,
+  isUnsafeUserMerchantName,
+  isEligibleUserMerchantRuleTransaction,
+  resolveUserMerchantRule,
+  resolveUserMerchantRuleForImport,
+  loadActiveUserMerchantRules,
   fileForReview,
 };

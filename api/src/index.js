@@ -44,6 +44,7 @@ const aiProviderQuotaRoute = require('./ai_provider_quota_route');
 const rewardMath = require('./reward_math');
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
+const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
 const { AMOUNT_TOLERANCE_INR, MAX_TIME_DISTANCE_MS, bestDuplicate } = require('./transaction_dedup');
 const { emailSourceKey } = require('./source_identity');
 const spendReports = require('./spend_reports');
@@ -264,6 +265,7 @@ app.get('/ready', async (req, res) => {
 registerReferralRoutes(app);
 registerPortableBackupRoutes(app, { requireAuth, pool });
 registerPortableBackupRestoreRoutes(app, { requireAuth, pool });
+registerUserMerchantCategoryRuleRoutes(app, { requireAuth, withUserClient });
 
 /**
  * GET /profile — proves RLS is reachable end to end: an authenticated user
@@ -1765,6 +1767,32 @@ app.post('/sync/push', requireAuth, async (req, res) => {
               applied: categoryRow.out_applied,
               conflicts: 0,
               reason: categoryRow.out_reason,
+            });
+            continue;
+          }
+          if (entity === 'user_merchant_category_rules') {
+            const ruleResult = await client.query(
+              `SELECT out_applied, out_conflicts, out_reason
+                 FROM pandapay.sync_apply_user_merchant_category_rule(
+                   $1, $2, $3, $4, $5::jsonb, $6
+                 )`,
+              [
+                req.userId,
+                deviceId,
+                entityId,
+                op,
+                JSON.stringify(payload || {}),
+                Number.isFinite(clientSeq) ? clientSeq : 0,
+              ],
+            );
+            const ruleRow = ruleResult.rows[0];
+            await client.query('RELEASE SAVEPOINT sync_item');
+            out.push({
+              clientSeq: clientSeq ?? null,
+              entityId,
+              applied: ruleRow.out_applied,
+              conflicts: ruleRow.out_conflicts,
+              reason: ruleRow.out_reason,
             });
             continue;
           }
@@ -4100,6 +4128,11 @@ async function importParsedMessage(client, userId, {
           vpa: parsedVpa,
           mcc: parsedMcc,
           messageText: rawText,
+          entryKind,
+          status: 'active',
+          transferKind: parsed.fields.transferKind,
+          isRefund: parsed.fields.transferKind === 'refund',
+          isReversal: parsed.fields.transferKind === 'reversal',
         })
       : {
           categoryId: await importResolvers.resolveCategoryForImport(client, userId, {
@@ -4107,6 +4140,11 @@ async function importParsedMessage(client, userId, {
             vpa: parsedVpa,
             mcc: parsedMcc,
             messageText: rawText,
+            entryKind,
+            status: 'active',
+            transferKind: parsed.fields.transferKind,
+            isRefund: parsed.fields.transferKind === 'refund',
+            isReversal: parsed.fields.transferKind === 'reversal',
           }),
           userCategoryId: null,
         });
@@ -4564,6 +4602,9 @@ async function repairSmsHistory(client, userId) {
       vpa: row.merchant_vpa,
       mcc: row.mcc ? String(row.mcc).trim() : null,
       messageText: null,
+      // This maintenance pass repairs legacy rows; future rules must never
+      // rewrite a transaction that was already saved.
+      applyUserMerchantRule: false,
     });
     if (!categoryId || categoryId === row.category_id) continue;
 
@@ -5200,6 +5241,8 @@ app.post('/transactions', requireAuth, async (req, res) => {
                 vpa: merchantVpa || null,
                 mcc: mcc || null,
                 messageText: null,
+                entryKind,
+                status: 'active',
               })
             : {
                 categoryId: await importResolvers.resolveCategoryForImport(client, req.userId, {
@@ -5207,6 +5250,8 @@ app.post('/transactions', requireAuth, async (req, res) => {
                   vpa: merchantVpa || null,
                   mcc: mcc || null,
                   messageText: null,
+                  entryKind,
+                  status: 'active',
                 }),
                 userCategoryId: null,
               });

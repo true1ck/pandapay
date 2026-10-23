@@ -222,16 +222,26 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
       for (const [index, transaction] of (structuredTransactions || []).entries()) {
         const occurred = new Date(transaction.occurredAt);
         const merchantName = transaction.merchantName?.trim() || null;
+        const merchantVpa = transaction.merchantVpa || transaction.vpa || null;
+        const merchantMcc = transaction.mcc || null;
         const explicitKey = `${transaction.categoryId || ''}:${transaction.userCategoryId || ''}`;
         const classification = explicitAssignments.get(explicitKey) || (importResolvers.resolveCategoryAssignmentForImport
           ? await importResolvers.resolveCategoryAssignmentForImport(client, req.userId, {
               merchantName,
+              vpa: merchantVpa,
+              mcc: merchantMcc,
               categoryHint: transaction.categoryHint,
               subcategoryHint: transaction.subcategoryHint,
+              entryKind: inferStatementEntryKind(transaction),
+              status: 'active',
             })
           : {
               categoryId: await importResolvers.resolveCategoryForImport(client, req.userId, {
                 merchantName,
+                vpa: merchantVpa,
+                mcc: merchantMcc,
+                entryKind: inferStatementEntryKind(transaction),
+                status: 'active',
               }),
               userCategoryId: null,
             });
@@ -250,6 +260,8 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
           userCategoryId: classification.userCategoryId,
           rail: transaction.rail || 'unknown',
           merchantName,
+          merchantVpa,
+          mcc: merchantMcc,
           note: transaction.note || null,
           source: transactionSource,
           sourceKey,

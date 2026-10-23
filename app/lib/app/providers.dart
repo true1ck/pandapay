@@ -46,6 +46,7 @@ import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
 import '../data/local_user_cards_repository.dart';
+import '../data/merchant_category_rules_repository.dart';
 import '../data/merchant_search_repository.dart';
 import '../data/needs_review_repository.dart';
 import '../data/notification_preferences_repository.dart';
@@ -1496,6 +1497,21 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
   );
   repository.flushDismissalQueue().ignore();
   return repository;
+});
+
+/// Future merchant category rules are a separate owner-scoped API contract
+/// from the one-time transaction bulk review.  Keeping this provider separate
+/// lets the bulk flow remain usable while rule creation is unavailable or
+/// disabled server-side.
+final merchantCategoryRulesRepositoryProvider =
+    Provider<MerchantCategoryRulesRepository?>((ref) {
+  final token = _stableSessionToken(ref);
+  if (token == null) return null;
+  return MerchantCategoryRulesRepository(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// Invalidates all projections whose values can change after a category bulk

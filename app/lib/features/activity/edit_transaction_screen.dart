@@ -11,8 +11,10 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart'
     show categoryIdForServer, userCategoryIdForServer;
+import '../../data/merchant_category_rules_repository.dart';
 import '../../data/user_cards_repository.dart';
 import 'category_bulk_review_sheet.dart';
+import 'merchant_future_rule_sheet.dart';
 
 /// D3 Edit Transaction (ui-spec Group D). All fields editable, explicit
 /// save/cancel; recomputes caps/milestones on save — that recompute is
@@ -149,6 +151,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
             ),
           );
         }
+        await _offerFutureCategoryRule(targetCategoryId: _categoryId);
       }
       if (mounted) context.pop(true);
     } catch (e) {
@@ -312,6 +315,64 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       ref.invalidate(homeSummaryProvider);
     }
     return result;
+  }
+
+  /// Offers the separate, opt-in future rule after the one-time bulk review.
+  /// The server derives merchant identity from the owned source transaction;
+  /// the client never sends a merchant name, VPA, narration, or phone number.
+  Future<MerchantCategoryRule?> _offerFutureCategoryRule({
+    required String? targetCategoryId,
+  }) async {
+    if (targetCategoryId == null || targetCategoryId.isEmpty) return null;
+    final repo = ref.read(merchantCategoryRulesRepositoryProvider);
+    if (repo == null) return null;
+    final isCustomCategory = targetCategoryId.startsWith('custom:');
+    final categoryId = isCustomCategory ? null : targetCategoryId;
+    final userCategoryId = isCustomCategory
+        ? targetCategoryId.substring('custom:'.length)
+        : null;
+    MerchantCategoryRulePreview preview;
+    try {
+      preview = await repo.preview(
+        sourceTransactionId: widget.transactionId,
+        categoryId: categoryId,
+        userCategoryId: userCategoryId,
+      );
+    } catch (_) {
+      // The saved one-time category edit remains complete if the optional
+      // future-rule service is unavailable. Do not turn this into an edit
+      // failure or imply that a rule was created.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Saved this transaction. Future rule options could not be loaded.'),
+          ),
+        );
+      }
+      return null;
+    }
+    if (!mounted || !preview.hasUsableIdentity) return null;
+
+    Future<MerchantCategoryRule> create() => repo.create(
+          sourceTransactionId: widget.transactionId,
+          categoryId: categoryId,
+          userCategoryId: userCategoryId,
+        );
+    Future<MerchantCategoryRule> update(MerchantCategoryRule rule) => repo.update(
+          rule.id,
+          categoryId: categoryId,
+          userCategoryId: userCategoryId,
+          isActive: true,
+          expectedVersion: rule.version,
+        );
+
+    return showMerchantFutureRuleSheet(
+      context: context,
+      preview: preview,
+      onCreate: create,
+      onUpdate: update,
+      offline: ref.read(isOnlineProvider).valueOrNull == false,
+    );
   }
 
   @override

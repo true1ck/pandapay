@@ -5,9 +5,139 @@ const {
   resolveUserCardForImport,
   resolveCategoryAssignmentForImport,
   resolveCategoryForImport,
+  resolveUserMerchantRule,
+  resolveUserMerchantRuleForImport,
+  isUnsafeUserMerchantName,
   syncDueDayFromSms,
   syncStatementDayFromSms,
 } = require('../src/import_resolvers');
+
+const activeRule = (overrides = {}) => ({
+  id: 'rule-1',
+  match_basis: 'vpa',
+  match_value: 'shop@upi',
+  category_id: 'rule-category',
+  user_category_id: null,
+  is_active: true,
+  version: 1,
+  ...overrides,
+});
+
+test('future merchant rule matches exact VPA across display-name changes', () => {
+  const result = resolveUserMerchantRule([activeRule()], {
+    merchantVpa: ' SHOP@UPI ',
+    merchantName: 'Different Display Name',
+    entryKind: 'spend',
+    status: 'active',
+  });
+  assert.equal(result.categoryId, 'rule-category');
+  assert.equal(result.matchBasis, 'vpa');
+});
+
+test('future merchant rule does not fall back to name when a different VPA is present', () => {
+  const result = resolveUserMerchantRule([
+    activeRule({ match_value: 'other@upi' }),
+    activeRule({ id: 'rule-name', match_basis: 'strict_name', match_value: 'same shop' }),
+  ], {
+    merchantVpa: 'different@upi',
+    merchantName: 'Same Shop',
+    entryKind: 'spend',
+    status: 'active',
+  });
+  assert.equal(result, null);
+});
+
+test('future merchant rule uses strict normalized name only without a VPA', () => {
+  const result = resolveUserMerchantRule([
+    activeRule({ match_basis: 'strict_name', match_value: 'same shop' }),
+  ], {
+    merchantName: '  Same   Shop ',
+    entryKind: 'spend',
+    status: 'active',
+  });
+  assert.equal(result.categoryId, 'rule-category');
+  assert.equal(result.matchBasis, 'strict_name');
+});
+
+test('generic and gateway labels cannot match a name rule', () => {
+  assert.equal(isUnsafeUserMerchantName('UPI Payment'), true);
+  assert.equal(isUnsafeUserMerchantName('Razorpay'), true);
+  assert.equal(resolveUserMerchantRule([
+    activeRule({ match_basis: 'strict_name', match_value: 'razorpay' }),
+  ], { merchantName: 'Razorpay', entryKind: 'spend' }), null);
+});
+
+test('explicit category stays above a rule at the assignment boundary', async () => {
+  const client = fakeClient([[{ id: 'dining-category' }]]);
+  const result = await resolveCategoryForImport(client, 'user-1', {
+    merchantName: 'Same Shop',
+    categoryHint: 'Dining',
+    userMerchantRules: [activeRule({ match_basis: 'strict_name', match_value: 'same shop' })],
+  });
+  assert.equal(result, 'dining-category');
+});
+
+test('a user merchant rule outranks inferred private match terms', async () => {
+  const client = fakeClient([]);
+  const result = await resolveCategoryAssignmentForImport(client, 'user-1', {
+    merchantName: 'Same Shop',
+    messageText: 'payment for office supplies',
+    userMerchantRules: [activeRule({ match_basis: 'strict_name', match_value: 'same shop' })],
+  });
+  assert.deepEqual(result, { categoryId: 'rule-category', userCategoryId: null });
+  assert.equal(client.calls.length, 0);
+});
+
+test('inactive, non-spend, split, refund and reversal rows are ineligible', () => {
+  const rule = activeRule();
+  for (const transaction of [
+    { merchantVpa: 'shop@upi', status: 'ignored' },
+    { merchantVpa: 'shop@upi', entryKind: 'income' },
+    { merchantVpa: 'shop@upi', isSplitParent: true },
+    { merchantVpa: 'shop@upi', isRefund: true },
+    { merchantVpa: 'shop@upi', isReversal: true },
+  ]) {
+    assert.equal(resolveUserMerchantRule([rule], transaction), null);
+  }
+});
+
+test('conflicting active rules resolve deterministically to the newest version', () => {
+  const result = resolveUserMerchantRule([
+    activeRule({ id: 'old', version: 1, category_id: 'old-category' }),
+    activeRule({ id: 'new', version: 2, category_id: 'new-category' }),
+  ], { merchantVpa: 'shop@upi' });
+  assert.equal(result.categoryId, 'new-category');
+});
+
+test('active merchant rules resolve nested private-category parents before applying', async () => {
+  const client = {
+    async query(sql) {
+      if (sql.includes('FROM user_merchant_category_rules')) {
+        return {
+          rows: [{
+            id: 'rule-nested', match_basis: 'vpa', match_value: 'shop@upi',
+            category_id: 'food', user_category_id: 'child', is_active: true,
+            version: 1, updated_at: '2026-10-23T00:00:00Z',
+          }],
+        };
+      }
+      if (sql.includes('FROM user_categories')) {
+        return {
+          rows: [
+            { id: 'child', parent_category_id: null, parent_user_category_id: 'parent' },
+            { id: 'parent', parent_category_id: 'food', parent_user_category_id: null },
+          ],
+        };
+      }
+      throw new Error(`unexpected query: ${sql}`);
+    },
+  };
+  const result = await resolveUserMerchantRuleForImport(client, 'user-1', {
+    vpa: 'shop@upi', entryKind: 'spend', status: 'active',
+  });
+  assert.equal(result.categoryId, 'food');
+  assert.equal(result.userCategoryId, 'child');
+});
 
 function fakeClient(rowsByCall) {
   const calls = [];
@@ -334,6 +464,7 @@ test('category fallback recognises a fuel-station merchant when no rule exists',
   const client = fakeClient([[], [], [{ id: 'fuel-category' }]]);
   const result = await resolveCategoryForImport(client, 'user-1', {
     merchantName: 'QUALITY FUEL STATION',
+    userMerchantRules: [],
   });
 
   assert.equal(result, 'fuel-category');
@@ -357,6 +488,7 @@ test('published VPA category outranks local history and keyword fallback', async
   const result = await resolveCategoryForImport(client, 'user-1', {
     merchantName: 'FOODHUB@upi',
     vpa: 'foodhub@upi',
+    userMerchantRules: [],
   });
 
   assert.equal(result, 'vpa-category');
@@ -369,6 +501,7 @@ test('MCC category is used when no published VPA is available', async () => {
     merchantName: 'FOODHUB@upi',
     vpa: 'foodhub@upi',
     mcc: '5812',
+    userMerchantRules: [],
   });
 
   assert.equal(result, 'mcc-category');
@@ -380,6 +513,7 @@ test('personal VPA history stabilizes a merchant when the public directory has n
   const result = await resolveCategoryForImport(client, 'user-1', {
     merchantName: 'FOODHUB STORE',
     vpa: 'foodhub@upi',
+    userMerchantRules: [],
   });
 
   assert.equal(result, 'personal-category');
@@ -391,6 +525,7 @@ test('explicit merchant history still outranks built-in category hints', async (
   const client = fakeClient([[{ category_id: 'custom-category' }]]);
   const result = await resolveCategoryForImport(client, 'user-1', {
     merchantName: 'QUALITY FUEL STATION',
+    userMerchantRules: [],
   });
 
   assert.equal(result, 'custom-category');
@@ -402,6 +537,7 @@ test('an unknown merchant is assigned the explicit Other bucket instead of NULL'
   const client = fakeClient([[], [], [{ id: 'other-category' }]]);
   const result = await resolveCategoryForImport(client, 'user-1', {
     merchantName: 'A SMALL LOCAL SHOP 123',
+    userMerchantRules: [],
   });
 
   assert.equal(result, 'other-category');
@@ -413,6 +549,7 @@ test('a merchant still present in the SMS body is classified when the parser omi
   const result = await resolveCategoryForImport(client, 'user-1', {
     merchantName: undefined,
     messageText: 'Spent Rs.210 at QUALITY FUEL STATION on 2026-10-02',
+    userMerchantRules: [],
   });
 
   assert.equal(result, 'fuel-category');
@@ -421,7 +558,7 @@ test('a merchant still present in the SMS body is classified when the parser omi
 });
 test('placeholder merchant names never inherit a category from unrelated unknown purchases', async () => {
   const client = fakeClient([[{ id: 'other-category' }]]);
-  const result = await resolveCategoryForImport(client, 'user-1', {merchantName:'Unknown merchant'});
+  const result = await resolveCategoryForImport(client, 'user-1', {merchantName:'Unknown merchant', userMerchantRules: []});
   assert.equal(result, 'other-category');
   assert.equal(client.calls.length, 1);
   assert.match(client.calls[0].sql, /slug = 'other'/);
@@ -443,6 +580,7 @@ test('private subcategory terms win over built-in import classification', async 
   const result = await resolveCategoryAssignmentForImport(client, 'user-1', {
     merchantName: 'Uber trip to office',
     messageText: 'UPI payment to Uber',
+    userMerchantRules: [],
   });
 
   assert.deepEqual(result, {

@@ -16,6 +16,7 @@ import 'feedback_support_screen.dart';
 import 'help_faq_screen.dart';
 import 'legal_screen.dart';
 import 'linked_devices_screen.dart';
+import 'merchant_future_rules_screen.dart';
 import 'notification_settings_screen.dart';
 import 'privacy_permissions_screen.dart';
 import 'transaction_tags_screen.dart';
@@ -125,6 +126,12 @@ class SettingsHubScreen extends ConsumerWidget {
               icon: Icons.label_outline_rounded,
               label: 'Manage tags',
               onTap: () => open(const TransactionTagsScreen()),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            AccountTile(
+              icon: Icons.auto_fix_high_outlined,
+              label: 'Future category rules',
+              onTap: () => open(const MerchantFutureRulesScreen()),
             ),
             const SizedBox(height: AppSpace.sm),
             AccountTile(
