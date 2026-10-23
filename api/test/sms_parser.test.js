@@ -1141,3 +1141,26 @@ test('card setting updates and delivery memos are recognized as non-transaction 
   assert.equal(deliveryMemoParse.ok, false);
   assert.equal(deliveryMemoParse.reason, 'non_transaction_message');
 });
+
+test('new noise patterns are identified as non-transaction noise in parity with Dart', () => {
+  const noiseAlerts = [
+    ['CDSLIN', 'CDSL: Unpledge confirmed for 100 shares in demat account.'],
+    ['NSDLIN', 'NSDL: Pledge setup request initiated for a/c 1234.'],
+    ['KFINTECH', 'Updated your address under folio 98765432 based on feed received from KRA.'],
+    ['CAMS', 'Address in folio 12345/6 is updated based on feed received from KRA.'],
+    ['HDFCBK', 'Due to scheduled maintenance NetBanking services will be unavailable from 02:00 to 05:00.'],
+    ['ICICIB', 'Registration alert: device name iPhone 15 was registered on iMobile Pay.'],
+    ['AMAZON', 'Reminder: 5 cashback coupons expire at midnight. Use code FESTIVE.'],
+    ['DELHIV', 'Order is dispatched through Delhivery with tracking 123456789.'],
+    ['BLUEDART', 'Your order is dispatched through Blue Dart express logistics.'],
+    ['FLIPKT', 'We have received your order ID OD123456789. We are preparing it for shipment.'],
+    ['AXISBK', 'Lifetime-free credit card facility has been enabled for your account. Limit Rs. 2,00,000.'],
+    ['BAJAJA', 'Two wheeler insurance for MH01AB1234 has expired. Renew today at Rs. 1499.'],
+    ['ACKOIN', 'Car insurance expired! Renew before midnight to protect your NCB.'],
+    ['HDFCER', 'Vehicle insurance for DL01CD5678 will expire tomorrow. Premium Rs 2150.'],
+  ];
+
+  for (const [sender, body] of noiseAlerts) {
+    assert.equal(isNonTransactionNoise(sender, body), true, 'Expected noise for: ' + body);
+  }
+});

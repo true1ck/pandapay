@@ -66,6 +66,54 @@ void main() {
       expect(verdict.dropReason, SmsGateDropReason.dematOrSecuritiesAlert);
     });
 
+    test('Gate 4: drops depository pledge/unpledge alerts and KRA/folio address updates', () {
+      const unpledgeMsg =
+          'CDSL: Unpledge confirmed for 50 shares of TATASTEEL in A/c **4321 on 22-OCT-2026.';
+      final v1 = SmsGateFilter.evaluate('CDSLIN', unpledgeMsg);
+      expect(v1.action, SmsGateAction.drop);
+      expect(v1.dropReason, SmsGateDropReason.dematOrSecuritiesAlert);
+
+      const kraMsg =
+          'Updated your address under folio 12345678 based on feed received from KRA.';
+      final v2 = SmsGateFilter.evaluate('KFINTECH', kraMsg);
+      expect(v2.action, SmsGateAction.drop);
+      expect(v2.dropReason, SmsGateDropReason.dematOrSecuritiesAlert);
+    });
+
+    test('Gate 4/5: drops operational downtime, logistics, coupons, cards, and insurance noise', () {
+      const downtimeMsg =
+          'Due to scheduled maintenance banking services will be unavailable from 1 AM to 4 AM.';
+      final v1 = SmsGateFilter.evaluate('HDFCBK', downtimeMsg);
+      expect(v1.action, SmsGateAction.drop);
+      expect(v1.dropReason, SmsGateDropReason.promotionalNoise);
+
+      const regMsg =
+          'Registration alert: device name iPhone 15 was registered for Mobile Banking.';
+      final v2 = SmsGateFilter.evaluate('HDFCBK', regMsg);
+      expect(v2.action, SmsGateAction.drop);
+
+      const couponMsg = 'Hurry! Your 5 discount coupons expire today. Shop now at Amazon.';
+      final v3 = SmsGateFilter.evaluate('AMAZON', couponMsg);
+      expect(v3.action, SmsGateAction.drop);
+
+      const dispatchMsg =
+          'Your order ID 987654 is dispatched through Blue Dart with tracking AWB 12345.';
+      final v4 = SmsGateFilter.evaluate('DELHIV', dispatchMsg);
+      expect(v4.action, SmsGateAction.drop);
+
+      const ltfCardMsg =
+          'Congratulations! Lifetime-free credit card facility has been enabled with limit Rs. 1,50,000.';
+      final v5 = SmsGateFilter.evaluate('ICICIB', ltfCardMsg);
+      expect(v5.action, SmsGateAction.drop);
+      expect(v5.dropReason, SmsGateDropReason.promotionalNoise);
+
+      const insuranceMsg =
+          'Motor insurance for MH02CB1234 has expired. Renew today at Rs. 2,099.';
+      final v6 = SmsGateFilter.evaluate('BAJAJA', insuranceMsg);
+      expect(v6.action, SmsGateAction.drop);
+      expect(v6.dropReason, SmsGateDropReason.promotionalNoise);
+    });
+
     test('Gate 5: drops non-financial chatter with no amounts or financial verbs', () {
       const chatMsg = 'Hey, are you free to meet up this evening? Let me know!';
       final verdict = SmsGateFilter.evaluate('FRIEND', chatMsg);

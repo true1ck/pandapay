@@ -43,13 +43,28 @@ class SmsGateFilter {
 
   // Gate 2: Fast OTP & Security Veto
   static final _otpSecurityRe = RegExp(
-    r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin|passcode|secret code)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
+    r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin|passcode|secret code)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b|\bregistration\s+alert\s*:\s*device\s+name\b",
     caseSensitive: false,
   );
 
   // Gate 4: Demat, CDSL/NSDL depository share movements & broker noise
   static final _dematDepositoryRe = RegExp(
-    r'\b(?:cdsl|nsdl)\s*:\s*(?:debit|credit)\s+in\s+a/?c\b[\s\S]{0,40}\b(?:etf|bees|shares?|units?|mf)\b|\b(?:bse\s+trade\s+confirmation|welcome\s+to\s+nse,\s+you\s+have\s+been\s+registered\b|registered\s+with\s+[\w\s]+in\s+segment(?:\(s\))?|traded\s+value\s+for\b|unsolicited\s+tips|online\s+investment\s+scams)\b',
+    r'\b(?:cdsl|nsdl)\s*:\s*(?:debit|credit)\s+in\s+a/?c\b[\s\S]{0,40}\b(?:etf|bees|shares?|units?|mf)\b|'
+    r'\b(?:cdsl|nsdl)\s*:\s*(?:unpledge|pledge)\b|'
+    r'\b(?:updated\s+(?:your\s+)?address\s+under\s+folio|address\s+in\s+folio[^\w\n]*\w+\s+is\s+updated|based\s+on\s+feed\s+received\s+from\s+kra)\b|'
+    r'\b(?:bse\s+trade\s+confirmation|welcome\s+to\s+nse,\s+you\s+have\s+been\s+registered\b|registered\s+with\s+[\w\s]+in\s+segment(?:\(s\))?|traded\s+value\s+for\b|unsolicited\s+tips|online\s+investment\s+scams)\b',
+    caseSensitive: false,
+  );
+
+  // Early operational/promotional noise patterns
+  static final _earlyNoiseRe = RegExp(
+    r'\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,80}\b(?:paused|unavailable|interrupted)\b|'
+    r'\bregistration\s+alert\s*:\s*device\s+name\b|'
+    r'\bcoupons?\s+expire\b|'
+    r'\b(?:order\b[\s\S]{0,40}\b(?:is\s+)?dispatched\s+through|order\s+(?:is\s+)?dispatched\s+through|we\s+have\s+received\s+your\s+order\s+id)\b|'
+    r'\blifetime[- ]free\s+credit\s+card\s+facility\s+has\s+been\s+enabled\b|'
+    r'\b(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+for\b[\s\S]{0,50}\b(?:has\s+expired|expires\s+today|will\s+expire)\b|'
+    r'\b(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+expired\b',
     caseSensitive: false,
   );
 
@@ -106,6 +121,10 @@ class SmsGateFilter {
     // Gate 4: Demat depository & securities non-cash movement
     if (_dematDepositoryRe.hasMatch(body)) {
       return const SmsGateVerdict.drop(SmsGateDropReason.dematOrSecuritiesAlert);
+    }
+
+    if (_earlyNoiseRe.hasMatch(body) && !_balanceSnapshotRe.hasMatch(body)) {
+      return const SmsGateVerdict.drop(SmsGateDropReason.promotionalNoise);
     }
 
     // Gate 5: Fast Financial Indicators check (currency or transaction verbs)

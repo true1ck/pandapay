@@ -13,6 +13,7 @@ enum NeedsReviewKind {
   securityOrServiceAlert,
   investmentSettlement,
   mandate,
+  receipt,
 }
 
 /// Task D-4 (ui-spec D4 Needs Review Queue) â€” one raw SMS the parser
@@ -266,23 +267,31 @@ class NeedsReviewRepository {
       final nonNoise = items.where((item) => !_isNoise(item)).toList();
       final kept = <NeedsReviewItem>[];
       final toRemove = <String>[];
+      final now = DateTime.now();
       for (final item in nonNoise) {
         if (item.aiSuggestions != null && item.aiSuggestions!.isNotEmpty) {
           kept.add(item);
           continue;
         }
-        if (item.kind != NeedsReviewKind.transaction) {
+        if (item.kind != NeedsReviewKind.transaction &&
+            item.kind != NeedsReviewKind.mandate &&
+            item.kind != NeedsReviewKind.receipt) {
           kept.add(item);
           continue;
         }
-        if (isMerchantReceiptOrEbill(item.body) &&
-            _hasMatchingSpendTransaction(
-              item,
-              database: db,
-              transactions: txns,
-            )) {
-          toRemove.add(item.id);
-          continue;
+        if (isMerchantReceiptOrEbill(item.body)) {
+          if (_hasMatchingSpendTransaction(
+                item,
+                database: db,
+                transactions: txns,
+              )) {
+            toRemove.add(item.id);
+            continue;
+          }
+          if (now.difference(item.receivedAt).abs() > const Duration(days: 30)) {
+            toRemove.add(item.id);
+            continue;
+          }
         }
 
         final parsed = LocalSmsParser.parse(
@@ -300,13 +309,30 @@ class NeedsReviewRepository {
             continue;
           }
 
+          if (parsed.disposition == LocalSmsDisposition.localCommitment ||
+              parsed.reasonCodes.contains('mandate_notice') ||
+              parsed.reasonCodes.contains('commitment_detected') ||
+              item.kind == NeedsReviewKind.mandate) {
+            _persistResolvedCommitmentSync(db, namespace, parsed, item);
+            toRemove.add(item.id);
+            continue;
+          }
+
+          if (parsed.eventType == LocalSmsEventType.bill &&
+              (parsed.cardLast4 != null || parsed.dueDate != null)) {
+            _persistResolvedBillObservationSync(db, namespace, parsed, item);
+            toRemove.add(item.id);
+            continue;
+          }
+
           if (parsed.disposition == LocalSmsDisposition.sync &&
               parsed.transaction != null &&
               parsed.transaction!.entryKind == TxnEntryKind.spend) {
             final isWallet = parsed.transaction!.instrument == TxnInstrument.wallet;
             final cardMatches = parsed.cardLast4 != null &&
                 _matchesUserCardSync(db, namespace, parsed.cardLast4!);
-            if (isWallet || cardMatches) {
+            final isNonCard = parsed.cardLast4 == null;
+            if (isWallet || cardMatches || isNonCard) {
               _persistResolvedTransactionSync(
                 db,
                 namespace,
@@ -316,20 +342,6 @@ class NeedsReviewRepository {
               toRemove.add(item.id);
               continue;
             }
-          }
-
-          if (parsed.disposition == LocalSmsDisposition.localCommitment ||
-              parsed.reasonCodes.contains('mandate_notice') ||
-              parsed.reasonCodes.contains('commitment_detected')) {
-            _persistResolvedCommitmentSync(db, namespace, parsed, item);
-            toRemove.add(item.id);
-            continue;
-          }
-
-          if (parsed.eventType == LocalSmsEventType.bill && parsed.dueDate != null) {
-            _persistResolvedBillObservationSync(db, namespace, parsed, item);
-            toRemove.add(item.id);
-            continue;
           }
         }
 
@@ -354,22 +366,30 @@ class NeedsReviewRepository {
     final nonNoise = items.where((item) => !_isNoise(item)).toList();
     final kept = <NeedsReviewItem>[];
     final toRemove = <String>[];
+    final now = DateTime.now();
     for (final item in nonNoise) {
       if (item.aiSuggestions != null && item.aiSuggestions!.isNotEmpty) {
         kept.add(item);
         continue;
       }
-      if (item.kind != NeedsReviewKind.transaction) {
+      if (item.kind != NeedsReviewKind.transaction &&
+          item.kind != NeedsReviewKind.mandate &&
+          item.kind != NeedsReviewKind.receipt) {
         kept.add(item);
         continue;
       }
-      if (isMerchantReceiptOrEbill(item.body) &&
-          _hasMatchingSpendTransaction(
-            item,
-            transactions: txns,
-          )) {
-        toRemove.add(item.id);
-        continue;
+      if (isMerchantReceiptOrEbill(item.body)) {
+        if (_hasMatchingSpendTransaction(
+              item,
+              transactions: txns,
+            )) {
+          toRemove.add(item.id);
+          continue;
+        }
+        if (now.difference(item.receivedAt).abs() > const Duration(days: 30)) {
+          toRemove.add(item.id);
+          continue;
+        }
       }
       final parsed = LocalSmsParser.parse(
         body: item.body,
@@ -384,24 +404,27 @@ class NeedsReviewRepository {
           toRemove.add(item.id);
           continue;
         }
+        if (parsed.disposition == LocalSmsDisposition.localCommitment ||
+            parsed.reasonCodes.contains('mandate_notice') ||
+            parsed.reasonCodes.contains('commitment_detected') ||
+            item.kind == NeedsReviewKind.mandate) {
+          toRemove.add(item.id);
+          continue;
+        }
+        if (parsed.eventType == LocalSmsEventType.bill &&
+            (parsed.cardLast4 != null || parsed.dueDate != null)) {
+          toRemove.add(item.id);
+          continue;
+        }
         if (parsed.disposition == LocalSmsDisposition.sync &&
             parsed.transaction != null &&
             parsed.transaction!.entryKind == TxnEntryKind.spend) {
           final isWallet = parsed.transaction!.instrument == TxnInstrument.wallet;
-          if (isWallet) {
+          final isNonCard = parsed.cardLast4 == null;
+          if (isWallet || isNonCard) {
             toRemove.add(item.id);
             continue;
           }
-        }
-        if (parsed.disposition == LocalSmsDisposition.localCommitment ||
-            parsed.reasonCodes.contains('mandate_notice') ||
-            parsed.reasonCodes.contains('commitment_detected')) {
-          toRemove.add(item.id);
-          continue;
-        }
-        if (parsed.eventType == LocalSmsEventType.bill && parsed.dueDate != null) {
-          toRemove.add(item.id);
-          continue;
         }
       }
       kept.add(item);
@@ -423,12 +446,18 @@ class NeedsReviewRepository {
       r"\b(?:track\s+it\s+using\s+this\s+ticket\s+id|ticket\s+id\s*:\s*\d+\s+on\s+the\s+help\s+section|we're\s+on\s+it\s+and\s+will\s+get\s+back\s+to\s+you\s+in\s+\d+[-–]\d+\s+hours)\b|"
       r'\benable\s+online,\s+international\s+(?:and|&)\s+contactless\s+transactions\b|'
       r'\byour\s+ekyc\s+has\s+been\s+successfully\s+completed\b|'
-      r'\bdue\s+to\s+scheduled\s+maintenance\b[\s\S]{0,60}\bwill\s+be\s+paused\b|'
+      r'\b(?:scheduled\s+maintenance|maintenance\s+activity|system\s+maintenance|routine\s+maintenance|undergoing\s+maintenance|due\s+to\s+scheduled\s+maintenance)\b|'
       r'\b(?:bse\s+trade\s+confirmation|welcome\s+to\s+nse,\s+you\s+have\s+been\s+registered\b|registered\s+with\s+[\w\s]+in\s+segment(?:\(s\))?|registered\s+with\s+[\w\s]+in\s+segment\(s\))\b|'
       r'\b(?:puc\s+certificate\s+for\s+vehicle\b|your\s+itr\s+for\s+ay\b[\s\S]{0,30}\bawaits\s+at\s+the\s+e[- ]?filing\s+portal)\b|'
       r'\b(?:(?:last\s+chance\s*:?\s*)?renew\s+(?:your\s+)?expired\b|(?:(?:car|motor|two[ -]?wheeler|vehicle|bike|health)\s+)?insurance\s+will\s+expire\s+on\b|will\s+expire\s+on\b[\s\S]{0,80}\b(?:premium|insurance|renew|policy|visit|starts?\s+(?:just\s+)?(?:at\s+)?(?:rs\.?|inr)|instant\s+renewal)\b|\+\s*taxes\*?)\b|'
       r'\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+(?:credit\s+)?card\s+with\s+limit|eligible\s+for\s+(?:a\s+)?(?:[\w\s]{0,20}\s+)?loan\b|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application|pre[-\s]?approved\s+loan)\b|'
-      r'\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b',
+      r'\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b|'
+      r'\b(?:pledge(?:d)?|unpledge(?:d)?|margin\s+pledge)\b|'
+      r'\b(?:kra\b[\s\S]{0,60}\b(?:address|update|kyc)|(?:address|kyc|update)\b[\s\S]{0,60}\bkra|(?:cvy|cvl|ndml|cams|karvy)\s*kra)\b|'
+      r'\b(?:(?:new\s+)?device\s+(?:registration|registered)|registration\s+(?:for|of)\s+(?:new\s+)?device|registered\s+(?:a\s+)?new\s+device)\b|'
+      r'\b(?:expired\s+insurance|insurance\s+(?:has\s+)?expired|policy\s+(?:has\s+)?expired)\b|'
+      r'\b(?:use\s+coupon|apply\s+coupon|coupon\s+code|discount\s+coupon|promotional\s+coupon|coupons?|voucher\s+code)\b|'
+      r'\b(?:(?:order|item|package|shipment|consignment|courier)\s+(?:has\s+been\s+)?dispatched|has\s+been\s+dispatched|dispatched\s+(?:via|through|with))\b',
     ).hasMatch(text);
   }
 
@@ -447,6 +476,7 @@ class NeedsReviewRepository {
 
   static bool isMandateReview(String body) {
     final text = body.toLowerCase();
+    if (RegExp(r'\bcredit\s+card\b').hasMatch(text)) return false;
     return RegExp(
       r'\b(?:auto[-\s]?pay|e[-\s]?mandate|standing\s+instruction)\b',
     ).hasMatch(text);
@@ -463,11 +493,60 @@ class NeedsReviewRepository {
     if (isMandateReview(item.body)) {
       return item.copyWith(kind: NeedsReviewKind.mandate);
     }
+    if (isMerchantReceiptOrEbill(item.body)) {
+      return item.copyWith(kind: NeedsReviewKind.receipt);
+    }
     return item;
   }
 
   static bool isMerchantReceiptOrEbill(String body) =>
       LocalSmsParser.isMerchantReceiptOrEbill(body);
+
+  static bool _merchantMatchesOrOverlaps(
+    String? txnMerchant,
+    String receiptBody,
+    String receiptSender,
+  ) {
+    if (txnMerchant == null || txnMerchant.trim().isEmpty) {
+      return true;
+    }
+    final merchantLower = txnMerchant.trim().toLowerCase();
+    const stopWords = {
+      'pvt', 'ltd', 'limited', 'india', 'retail', 'store', 'stores',
+      'online', 'payment', 'payments', 'pay', 'corp', 'corporation',
+      'services', 'service', 'the', 'and', 'for', 'with', 'from',
+      'upi', 'pos', 'txn', 'bank', 'com', 'in', 'org', 'net',
+    };
+    final rawTokens = merchantLower
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where((t) => t.isNotEmpty && !stopWords.contains(t))
+        .toList();
+
+    if (rawTokens.isEmpty) {
+      return true;
+    }
+
+    final cleanBody = receiptBody.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final cleanSender = receiptSender.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final lowerBody = receiptBody.toLowerCase();
+    final lowerSender = receiptSender.toLowerCase();
+
+    for (final token in rawTokens) {
+      if (token.length >= 4) {
+        if (cleanBody.contains(token) || cleanSender.contains(token)) {
+          return true;
+        }
+      } else if (token.length == 3) {
+        if (RegExp(r'\b' + RegExp.escape(token) + r'\b').hasMatch(lowerBody) ||
+            RegExp(r'\b' + RegExp.escape(token) + r'\b').hasMatch(lowerSender) ||
+            cleanSender.contains(token)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
 
   static bool hasMatchingSpendTransactionSync(
     AppDatabase database,
@@ -480,11 +559,20 @@ class NeedsReviewRepository {
 
     if (transactions != null && transactions.isNotEmpty) {
       for (final txn in transactions) {
-        if (txn.entryKind != TxnEntryKind.spend) continue;
+        final entryKindStr = txn.entryKind.name.toLowerCase();
+        final wireValueStr = txn.entryKind.wireValue.toLowerCase();
+        if (entryKindStr != 'spend' &&
+            entryKindStr != 'payment' &&
+            wireValueStr != 'spend' &&
+            wireValueStr != 'payment') {
+          continue;
+        }
         if (txn.amount.paise != extracted.paise) continue;
         if (txn.occurredAt.difference(item.receivedAt).abs() <=
-            const Duration(hours: 24)) {
-          return true;
+            const Duration(hours: 72)) {
+          if (_merchantMatchesOrOverlaps(txn.merchantName, item.body, item.sender)) {
+            return true;
+          }
         }
       }
     }
@@ -508,8 +596,8 @@ class NeedsReviewRepository {
         if (payloadJson == null) continue;
         final data = jsonDecode(payloadJson) as Map<String, dynamic>;
 
-        final entryKind = data['entry_kind'] as String?;
-        if (entryKind != null && entryKind.toLowerCase() != 'spend') continue;
+        final entryKind = (data['entry_kind'] as String?)?.toLowerCase();
+        if (entryKind != null && entryKind != 'spend' && entryKind != 'payment') continue;
 
         final paiseCol = row['amount_paise'] as int?;
         final amountInr = data['amount_inr'] as num?;
@@ -538,8 +626,13 @@ class NeedsReviewRepository {
         if (occurredAt == null) continue;
 
         if (occurredAt.difference(item.receivedAt).abs() <=
-            const Duration(hours: 24)) {
-          return true;
+            const Duration(hours: 72)) {
+          final txnMerchant = data['merchant_name'] as String? ??
+              data['merchant'] as String? ??
+              data['merchantName'] as String?;
+          if (_merchantMatchesOrOverlaps(txnMerchant, item.body, item.sender)) {
+            return true;
+          }
         }
       }
     } catch (_) {}
@@ -565,11 +658,20 @@ class NeedsReviewRepository {
     if (extracted == null || extracted.paise <= 0) return false;
     if (txns != null) {
       for (final txn in txns) {
-        if (txn.entryKind != TxnEntryKind.spend) continue;
+        final entryKindStr = txn.entryKind.name.toLowerCase();
+        final wireValueStr = txn.entryKind.wireValue.toLowerCase();
+        if (entryKindStr != 'spend' &&
+            entryKindStr != 'payment' &&
+            wireValueStr != 'spend' &&
+            wireValueStr != 'payment') {
+          continue;
+        }
         if (txn.amount.paise != extracted.paise) continue;
         if (txn.occurredAt.difference(item.receivedAt).abs() <=
-            const Duration(hours: 24)) {
-          return true;
+            const Duration(hours: 72)) {
+          if (_merchantMatchesOrOverlaps(txn.merchantName, item.body, item.sender)) {
+            return true;
+          }
         }
       }
     }
@@ -585,7 +687,8 @@ class NeedsReviewRepository {
       return true;
     }
     if (resolved.kind == NeedsReviewKind.investmentSettlement ||
-        resolved.kind == NeedsReviewKind.mandate) {
+        resolved.kind == NeedsReviewKind.mandate ||
+        resolved.kind == NeedsReviewKind.receipt) {
       return false;
     }
     if (isMerchantReceiptOrEbill(resolved.body)) {

@@ -957,4 +957,50 @@ void main() {
     expect(result?.transaction?.amount.rupees, 209272.0);
     expect(result?.transaction?.entryKind, TxnEntryKind.investment);
   });
+
+  test('extractReceiptAmount sanitizes order ID and AWB sequences before extraction', () {
+    expect(
+      LocalSmsParser.extractReceiptAmount('Order ID: 987654321 for Rs. 450.00 confirmed')?.rupees,
+      450.0,
+    );
+    expect(
+      LocalSmsParser.extractReceiptAmount('Order No. 123456 total Rs 1,299 paid')?.rupees,
+      1299.0,
+    );
+    expect(
+      LocalSmsParser.extractReceiptAmount('AWB 8876543210 shipment fee INR 250.50')?.rupees,
+      250.5,
+    );
+    expect(
+      LocalSmsParser.extractReceiptAmount('order number #54321 Rs. 99')?.rupees,
+      99.0,
+    );
+  });
+
+  test('new noise patterns are identified as non-transaction noise', () {
+    final noiseAlerts = <(String sender, String body)>[
+      ('CDSLIN', 'CDSL: Unpledge confirmed for 100 shares in demat account.'),
+      ('NSDLIN', 'NSDL: Pledge setup request initiated for a/c 1234.'),
+      ('KFINTECH', 'Updated your address under folio 98765432 based on feed received from KRA.'),
+      ('CAMS', 'Address in folio 12345/6 is updated based on feed received from KRA.'),
+      ('HDFCBK', 'Due to scheduled maintenance NetBanking services will be unavailable from 02:00 to 05:00.'),
+      ('ICICIB', 'Registration alert: device name iPhone 15 was registered on iMobile Pay.'),
+      ('AMAZON', 'Reminder: 5 cashback coupons expire at midnight. Use code FESTIVE.'),
+      ('DELHIV', 'Order is dispatched through Delhivery with tracking 123456789.'),
+      ('BLUEDART', 'Your order is dispatched through Blue Dart express logistics.'),
+      ('FLIPKT', 'We have received your order ID OD123456789. We are preparing it for shipment.'),
+      ('AXISBK', 'Lifetime-free credit card facility has been enabled for your account. Limit Rs. 2,00,000.'),
+      ('BAJAJA', 'Two wheeler insurance for MH01AB1234 has expired. Renew today at Rs. 1499.'),
+      ('ACKOIN', 'Car insurance expired! Renew before midnight to protect your NCB.'),
+      ('HDFCER', 'Vehicle insurance for DL01CD5678 will expire tomorrow. Premium Rs 2150.'),
+    ];
+
+    for (final (sender, body) in noiseAlerts) {
+      expect(
+        LocalSmsParser.isNonTransactionNoise(sender, body),
+        isTrue,
+        reason: 'Expected noise for: ' + body,
+      );
+    }
+  });
 }
