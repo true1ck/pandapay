@@ -30,6 +30,8 @@ const {
 } = require('./sms_parser');
 const { parseSubscriptionMandate } = require('./subscription_parser');
 const importResolvers = require('./import_resolvers');
+const centralProjection = require('./central_financial_projection');
+const { registerBillsProjectionRoutes } = require('./bills_projection_route');
 const smsFactsRoute = require('./sms_facts_route');
 const smsRuleBundleRoute = require('./sms_rule_bundle');
 const smsLearning = require('./sms_learning');
@@ -121,12 +123,33 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
   if (parsed.lifecycle === 'cancelled') {
     const result = await client.query(
       `UPDATE recurring_series
-          SET is_active = false,
-              dismissed_at = COALESCE(dismissed_at, now()),
-              lifecycle_status = 'cancelled',
+          SET typical_amount_inr = CASE
+                WHEN detection_source = 'mandate' THEN 0
+                ELSE typical_amount_inr
+              END,
+              next_expected_on = CASE
+                WHEN detection_source = 'mandate' THEN NULL
+                ELSE next_expected_on
+              END,
+              is_active = CASE
+                WHEN detection_source = 'mandate' THEN false
+                ELSE is_active
+              END,
+              dismissed_at = CASE
+                WHEN detection_source = 'mandate' THEN COALESCE(dismissed_at, now())
+                ELSE dismissed_at
+              END,
+              lifecycle_status = CASE
+                WHEN detection_source = 'mandate' THEN 'cancelled'
+                ELSE lifecycle_status
+              END,
               autopay_status = 'cancelled',
               mandate_reference = COALESCE($3, mandate_reference),
               mandate_cancelled_at = now(),
+              cadence_confirmed = CASE
+                WHEN detection_source = 'mandate' THEN false
+                ELSE cadence_confirmed
+              END,
               updated_at = now()
         WHERE profile_id = $1
           AND merchant_key = $2
@@ -170,12 +193,18 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
    */
 
   const seenOn = new Date(occurred).toISOString().slice(0, 10);
+  // `amountInr` in the mandate parser is the authorization ceiling. It is
+  // not a posted payment and cannot be used as a subscription price. The
+  // legacy recurring_series table has no authorization-limit column, so the
+  // typed facts projection remains the source of that ceiling and mandate
+  // rows use the table's zero-valued amount only as a compatibility sentinel.
   const cadenceDays = fields.cadenceDays || 30;
-  const typicalAmount = fields.amountInr || 0;
-  const cadenceConfirmed = fields.cadenceExplicit !== false;
-  const nextExpected = cadenceConfirmed
-    ? new Date(new Date(occurred).getTime() + cadenceDays * 86400000).toISOString().slice(0, 10)
-    : null;
+  const typicalAmount = 0;
+  const cadenceConfirmed = false;
+  // A mandate activation does not prove that a renewal is due. Keep this
+  // null even when the SMS names a cadence; the cadence is authorization
+  // metadata until a posted payment or explicit service fact exists.
+  const nextExpected = null;
   const result = await client.query(
     `INSERT INTO recurring_series
        (profile_id, merchant_key, display_name, category_id, user_category_id, user_card_id,
@@ -192,28 +221,48 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
        user_card_id = COALESCE(recurring_series.user_card_id, EXCLUDED.user_card_id),
        payment_method = COALESCE(EXCLUDED.payment_method, recurring_series.payment_method),
        typical_amount_inr = CASE
-         WHEN recurring_series.detection_source = 'observed' THEN recurring_series.typical_amount_inr
-         WHEN EXCLUDED.typical_amount_inr > 0 THEN EXCLUDED.typical_amount_inr
+         WHEN recurring_series.detection_source = 'mandate' THEN 0
          ELSE recurring_series.typical_amount_inr
        END,
        cadence_days = CASE
-         WHEN recurring_series.detection_source = 'observed' THEN recurring_series.cadence_days
-         ELSE EXCLUDED.cadence_days
+         WHEN recurring_series.detection_source = 'mandate' THEN EXCLUDED.cadence_days
+         ELSE recurring_series.cadence_days
        END,
-       last_seen_on = EXCLUDED.last_seen_on,
-       next_expected_on = COALESCE(EXCLUDED.next_expected_on, recurring_series.next_expected_on),
-       detection_source = 'mandate',
-       lifecycle_status = 'active',
-       autopay_status = 'active',
+       last_seen_on = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN EXCLUDED.last_seen_on
+         ELSE recurring_series.last_seen_on
+       END,
+       next_expected_on = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN NULL
+         ELSE recurring_series.next_expected_on
+       END,
+       detection_source = recurring_series.detection_source,
+       lifecycle_status = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN 'active'
+         ELSE recurring_series.lifecycle_status
+       END,
+       autopay_status = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN 'active'
+         ELSE recurring_series.autopay_status
+       END,
        mandate_reference = COALESCE(EXCLUDED.mandate_reference, recurring_series.mandate_reference),
        mandate_started_on = COALESCE(recurring_series.mandate_started_on, EXCLUDED.mandate_started_on),
-       mandate_cancelled_at = NULL,
-       cadence_confirmed = CASE
-         WHEN recurring_series.detection_source = 'observed' THEN recurring_series.cadence_confirmed
-         ELSE EXCLUDED.cadence_confirmed
+       mandate_cancelled_at = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN NULL
+         ELSE recurring_series.mandate_cancelled_at
        END,
-       is_active = true,
-       dismissed_at = NULL,
+       cadence_confirmed = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN false
+         ELSE recurring_series.cadence_confirmed
+       END,
+       is_active = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN true
+         ELSE recurring_series.is_active
+       END,
+       dismissed_at = CASE
+         WHEN recurring_series.detection_source = 'mandate' THEN NULL
+         ELSE recurring_series.dismissed_at
+       END,
        updated_at = now()
      RETURNING id, detection_source`,
     [
@@ -5303,6 +5352,7 @@ smsFactsRoute.registerSmsFactsRoutes(app, {
   withUserClient,
   persistSubscriptionMandate,
 });
+registerBillsProjectionRoutes(app, { requireAuth, withUserClient });
 // The versioned rule bundle the device downloads and applies locally, so a
 // parser improvement reaches a phone without an app release.
 smsRuleBundleRoute.registerSmsRuleBundleRoutes(app, {
@@ -8128,13 +8178,89 @@ app.get('/recurring', requireAuth, async (req, res) => {
         [req.userId]
       );
 
+      // Explicit service facts (including a free or one-time plan) may not
+      // have a repeated transaction row yet. Read those central projections
+      // alongside the legacy recurring_series rows. The savepoint keeps an
+      // older deployment usable until the additive projection migration has
+      // reached every API instance.
+      let centralSubscriptions = [];
+      let centralSavepoint = false;
+      try {
+        await client.query('SAVEPOINT recurring_central_projection');
+        centralSavepoint = true;
+        let projectionRows = await client.query(
+          `SELECT projection_key, status, projection
+             FROM financial_projections
+            WHERE profile_id = $1
+              AND projection_kind = 'subscription'
+              AND status NOT IN ('cancelled', 'ended', 'hidden')
+            ORDER BY updated_at DESC`,
+          [req.userId],
+        );
+
+        // The checkpoint includes sources that yield no domain projection,
+        // so repeated page reads never reprocess the same historical SMS.
+        const backfilled = await centralProjection.backfillFinancialProjections(client, req.userId);
+        if (backfilled > 0) {
+          projectionRows = await client.query(
+            `SELECT projection_key, status, projection
+               FROM financial_projections
+              WHERE profile_id = $1
+                AND projection_kind = 'subscription'
+                AND status NOT IN ('cancelled', 'ended', 'hidden')
+              ORDER BY updated_at DESC`,
+            [req.userId],
+          );
+        }
+        await client.query('RELEASE SAVEPOINT recurring_central_projection');
+        centralSubscriptions = projectionRows.rows || [];
+      } catch (error) {
+        if (centralSavepoint) {
+          await client.query('ROLLBACK TO SAVEPOINT recurring_central_projection').catch(() => {});
+          await client.query('RELEASE SAVEPOINT recurring_central_projection').catch(() => {});
+        }
+        console.warn('central subscription read skipped:', error.message || error);
+      }
+
       // The parser used to accept dates, account numbers, and labels such as
       // "MONTHLY" as merchants. Ignore those legacy rows at the read
       // boundary as well as fixing new ingestion, so an existing account is
       // corrected without a destructive migration.
-      const validRows = stored.rows.filter(isDisplayableSubscriptionRecord);
+      const legacyMandateRows = stored.rows
+        .map((row) => centralProjection.legacyMandateSetupRow(row))
+        .filter(Boolean);
+      const validRows = stored.rows.filter(isDisplayableSubscriptionRecord).concat(legacyMandateRows);
       const now = new Date();
       const series = validRows.map((r) => {
+        if (r.__legacyMandateSetup) {
+          return {
+            id: r.id,
+            displayName: r.display_name,
+            typicalAmountInr: null,
+            cadenceDays: null,
+            occurrenceCount: 0,
+            firstSeenOn: null,
+            lastSeenOn: null,
+            nextExpectedOn: null,
+            categoryId: r.category_id,
+            userCategoryId: r.user_category_id,
+            categoryName: r.category_name,
+            subcategoryName: r.subcategory_name,
+            cardId: r.user_card_id,
+            paymentMethod: r.payment_method,
+            cardName: r.card_nickname || r.card_name,
+            detectionSource: 'mandate',
+            isMandate: true,
+            isUserEdited: r.user_edited,
+            lifecycleStatus: 'candidate',
+            autopayStatus: r.autopay_status || 'active',
+            mandateReference: r.mandate_reference || null,
+            cadenceConfirmed: false,
+            setupConfirmed: true,
+            engineStatus: 'candidate',
+            annualCostInr: 0,
+          };
+        }
         const cadenceDays = r.cadence_days;
         // The renewal date is DERIVED at read, never trusted from storage:
         // a stored next_expected_on is a write-time snapshot that silently
@@ -8199,6 +8325,65 @@ app.get('/recurring', requireAuth, async (req, res) => {
           }),
         };
       });
+
+      const existingServiceKeys = new Set(
+        series.map((item) => merchantSeriesKey(item.displayName)),
+      );
+      const centralSubscriptionStatuses = new Set([
+        'candidate', 'active', 'renewal_unverified', 'ended', 'payment_issue',
+        'cancelled', 'paused', 'unknown',
+      ]);
+      for (const row of centralSubscriptions) {
+        const projection = row.projection && typeof row.projection === 'object'
+          ? row.projection
+          : {};
+        const displayName = String(projection.serviceName || '').trim();
+        const serviceKey = merchantSeriesKey(displayName);
+        if (!displayName || !serviceKey || existingServiceKeys.has(serviceKey)) continue;
+        const numericAmount = (value) => (
+          value !== null && value !== undefined && value !== '' && Number.isFinite(value)
+            ? value
+            : null
+        );
+        const statedAmount = numericAmount(projection.statedNextPaymentAmountInr);
+        const postedAmount = numericAmount(projection.lastPostedPayment?.amountInr);
+        const amount = statedAmount ?? postedAmount;
+        const cadence = Number(projection.cadenceDays);
+        const cadenceKnown = Number.isInteger(cadence) && cadence > 0;
+        const nextDate = projection.statedNextPaymentDate
+          || projection.estimatedNextPaymentDate
+          || null;
+        const rawStatus = String(row.status || projection.subscriptionStatus || 'unknown');
+        const status = centralSubscriptionStatuses.has(rawStatus) ? rawStatus : 'unknown';
+        const oneTime = projection.renewalMode === 'one_time';
+        series.push({
+          id: `projection:${row.projection_key}`,
+          displayName,
+          typicalAmountInr: amount,
+          cadenceDays: cadenceKnown ? cadence : null,
+          occurrenceCount: projection.lastPostedPayment ? 1 : 0,
+          firstSeenOn: projection.lastPostedPayment?.occurredAt || null,
+          lastSeenOn: projection.lastPostedPayment?.occurredAt || null,
+          nextExpectedOn: nextDate,
+          categoryId: null,
+          userCategoryId: null,
+          categoryName: null,
+          subcategoryName: null,
+          cardId: null,
+          paymentMethod: null,
+          detectionSource: 'central_projection',
+          isMandate: false,
+          isUserEdited: false,
+          lifecycleStatus: status,
+          autopayStatus: 'unknown',
+          mandateReference: projection.mandateKey || null,
+          cadenceConfirmed: cadenceKnown,
+          setupConfirmed: projection.setupConfirmed === true,
+          engineStatus: status === 'active' && (oneTime || cadenceKnown) ? 'confirmed' : status,
+          annualCostInr: oneTime || !cadenceKnown || amount === null ? 0 : amount * (365 / cadence),
+        });
+        existingServiceKeys.add(serviceKey);
+      }
 
       // Biggest annual cost first — the order someone reviewing their
       // subscriptions wants. Sorted here rather than in SQL so the same

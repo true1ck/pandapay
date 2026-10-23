@@ -26,6 +26,7 @@
  */
 
 const smsFacts = require('./sms_facts');
+const centralProjection = require('./central_financial_projection');
 const importResolvers = require('./import_resolvers');
 const { importSourceKey } = require('./import_source_key');
 const smsLearning = require('./sms_learning');
@@ -72,6 +73,11 @@ function syntheticMandateParse(fact) {
   if (!payload.merchant) return null;
   const fields = {
     merchant: payload.merchant,
+    // Keep the typed fact's ceiling available to downstream projections. The
+    // legacy mandate writer deliberately ignores amountInr when choosing a
+    // recurring price, because this compatibility shape predates a separate
+    // authorization-limit column.
+    limitInr: payload.limitInr,
     amountInr: payload.limitInr,
     cadenceDays: payload.cadenceDays,
     cadenceExplicit: false,
@@ -99,6 +105,41 @@ async function applyFactSpecialists(client, userId, resolution, {
   occurred,
   persistSubscriptionMandate,
 }) {
+  // The projection table is additive and may be one migration behind during
+  // a rolling deploy. Keep the existing specialists usable if that happens;
+  // the savepoint prevents a missing table from aborting the surrounding
+  // user transaction.
+  let centralProjectionResult = {
+    projectionVersion: centralProjection.PROJECTION_VERSION,
+    projectionCount: 0,
+    projectionKinds: [],
+    projectionPersisted: false,
+  };
+  let savepoint = false;
+  try {
+    await client.query('SAVEPOINT sms_central_projection');
+    savepoint = true;
+    const persisted = await centralProjection.persistFinancialProjections(client, userId, {
+      sourceId: resolution?.sourceId || null,
+      sourceKey: resolution?.sourceKey || null,
+      facts: resolution?.facts || [],
+    });
+    await client.query('RELEASE SAVEPOINT sms_central_projection');
+    centralProjectionResult = {
+      projectionVersion: persisted.projectionVersion,
+      projectionCount: persisted.count,
+      projectionKinds: persisted.kinds,
+      projectionPersisted: true,
+    };
+  } catch (error) {
+    if (savepoint) {
+      await client.query('ROLLBACK TO SAVEPOINT sms_central_projection').catch(() => {});
+      await client.query('RELEASE SAVEPOINT sms_central_projection').catch(() => {});
+    }
+    // Facts remain durable and the legacy domain writers remain available
+    // while an additive migration rolls out across API instances.
+    console.warn('central SMS projection skipped:', error.message || error);
+  }
   let statementDayUpdated = false;
   let dueDayUpdated = false;
   let mandatePersisted = false;
@@ -147,7 +188,12 @@ async function applyFactSpecialists(client, userId, resolution, {
       }
     }
   }
-  return { statementDayUpdated, dueDayUpdated, mandatePersisted };
+  return {
+    statementDayUpdated,
+    dueDayUpdated,
+    mandatePersisted,
+    ...centralProjectionResult,
+  };
 }
 
 function registerSmsFactsRoutes(app, {

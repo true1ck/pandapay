@@ -889,7 +889,22 @@ class FinancialStore {
             );
           }
 
-          saveObservation(ns, sourceKey, {
+          // The repair re-parses historical captured SMS with built-in rules.
+          // A freshly captured observation may have come from a newer
+          // downloaded rule; never replace that decision with the fallback.
+          final existingObservation = database.db.select(
+            "SELECT payload FROM financial_entities WHERE namespace=? AND entity='sms_observations' AND id=?",
+            [ns, sourceKey],
+          );
+          final existingPayload = existingObservation.isEmpty
+              ? null
+              : jsonDecode(existingObservation.single['payload'] as String);
+          final currentParserVersion = existingPayload is Map
+              ? existingPayload['parser_version']
+              : null;
+          if (currentParserVersion is! num ||
+              currentParserVersion < LocalSmsParser.version) {
+            saveObservation(ns, sourceKey, {
             'id': sourceKey,
             'sender_bank': sender
                 .toUpperCase()
@@ -917,7 +932,8 @@ class FinancialStore {
             ],
             'confidence': obs.confidence,
             if (isAutopayOrMandate) 'is_autopay': true,
-          });
+            });
+          }
 
           if (isAutopayOrMandate && obs.billerName != null && obs.billerName!.trim().isNotEmpty) {
             final billerLower = obs.billerName!.toLowerCase();

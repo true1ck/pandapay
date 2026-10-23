@@ -802,6 +802,8 @@ class RecurringSeries {
   final String id;
   final String displayName;
   final Money typicalAmount;
+  /// Distinguishes an explicitly free service from an unstated price.
+  final bool amountKnown;
 
   /// Median days between charges. Not an enum of monthly/annual — real
   /// billing runs on cycles that don't map cleanly onto either (28-day,
@@ -824,6 +826,9 @@ class RecurringSeries {
   final String autopayStatus;
   final String? mandateReference;
   final bool cadenceConfirmed;
+  /// A named service AutoPay setup was confirmed without proving a charge or
+  /// recurring terms. Such a row is presence only and has no paid estimate.
+  final bool setupConfirmed;
   final Money annualCost;
 
   /// One honest state computed by the detection engine:
@@ -836,6 +841,7 @@ class RecurringSeries {
     required this.id,
     required this.displayName,
     required this.typicalAmount,
+    this.amountKnown = true,
     required this.cadenceDays,
     required this.occurrenceCount,
     required this.annualCost,
@@ -853,6 +859,7 @@ class RecurringSeries {
     this.autopayStatus = 'unknown',
     this.mandateReference,
     this.cadenceConfirmed = true,
+    this.setupConfirmed = false,
     this.engineStatus,
   });
 
@@ -936,8 +943,10 @@ class RecurringSeries {
   }
 
   factory RecurringSeries.fromJson(Map<String, dynamic> json) {
-    final cadenceDays = (json['cadenceDays'] as num?)?.toInt() ?? 30;
     final detectionSource = json['detectionSource'] as String? ?? 'observed';
+    final setupConfirmed = json['setupConfirmed'] == true;
+    final cadenceDays =
+        (json['cadenceDays'] as num?)?.toInt() ?? (setupConfirmed ? 0 : 30);
     final cadenceConfirmed = json['cadenceConfirmed'] as bool? ?? true;
     final lastSeenOn = json['lastSeenOn'] == null
         ? null
@@ -964,6 +973,7 @@ class RecurringSeries {
       id: json['id'] as String,
       displayName: json['displayName'] as String? ?? 'Unknown',
       typicalAmount: _money(json['typicalAmountInr']),
+      amountKnown: json['typicalAmountInr'] != null,
       cadenceDays: cadenceDays,
       occurrenceCount: occurrenceCount,
       annualCost: _money(json['annualCostInr']),
@@ -986,6 +996,7 @@ class RecurringSeries {
               : 'unknown'),
       mandateReference: json['mandateReference'] as String?,
       cadenceConfirmed: cadenceConfirmed,
+      setupConfirmed: setupConfirmed,
       engineStatus: engine,
     );
   }
@@ -993,7 +1004,7 @@ class RecurringSeries {
   Map<String, dynamic> toJson() => {
     'id': id,
     'displayName': displayName,
-    'typicalAmountInr': typicalAmount.rupees,
+    'typicalAmountInr': amountKnown ? typicalAmount.rupees : null,
     'cadenceDays': cadenceDays,
     'occurrenceCount': occurrenceCount,
     'lastSeenOn': lastSeenOn?.toIso8601String(),
@@ -1011,6 +1022,7 @@ class RecurringSeries {
     'autopayStatus': autopayStatus,
     'mandateReference': mandateReference,
     'cadenceConfirmed': cadenceConfirmed,
+    'setupConfirmed': setupConfirmed,
     if (engineStatus != null) 'engineStatus': engineStatus,
   };
 }

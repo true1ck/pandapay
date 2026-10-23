@@ -32,7 +32,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('No confirmed subscriptions'), findsOneWidget);
+    expect(find.textContaining('No subscriptions found yet'), findsOneWidget);
     expect(
       find.byType(RefreshableEmptyState),
       findsOneWidget,

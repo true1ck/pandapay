@@ -49,10 +49,31 @@ void main() {
           annualCost: Money.fromRupees(7896),
           nextExpectedOn: DateTime(2026, 11, 5),
         ),
+        RecurringSeries(
+          id: 'legacy-openai-mandate',
+          displayName: 'OPENAILLC',
+          typicalAmount: Money.fromRupees(1999),
+          cadenceDays: 30,
+          occurrenceCount: 1,
+          annualCost: Money.fromRupees(24321),
+          nextExpectedOn: DateTime(2026, 11, 19),
+          isMandate: true,
+          detectionSource: 'mandate',
+          autopayStatus: 'active',
+        ),
       ],
       totalAnnual: Money.fromRupees(7896),
     );
     await cache.put('$namespace:recurring_report', jsonEncode(saved.toJson()));
+    cache.financialStore.saveObservation(namespace, 'openai-setup', {
+      'id': 'openai-setup',
+      'received_at': DateTime(2026, 10, 18).toUtc().toIso8601String(),
+      'sender_bank': 'AXISBK',
+      'biller_name': 'OPENAILLC',
+      'event_type': 'autopay',
+      'disposition': 'local_ignore',
+      'is_autopay': true,
+    });
     cache.financialStore.saveProvisional(
       namespace,
       TransactionEntry(
@@ -66,11 +87,19 @@ void main() {
       ),
     );
     final report = await container.read(recurringReportProvider.future);
-    expect(report!.series.single.id, 'established');
+    expect(report!.series.map((item) => item.id), contains('established'));
+    expect(report.series.where((item) => item.setupConfirmed), hasLength(1));
+    expect(report.series.singleWhere((item) => item.setupConfirmed).displayName, 'OpenAI');
+    final setup = report.series.singleWhere((item) => item.setupConfirmed);
+    expect(setup.amountKnown, isFalse);
+    expect(setup.cadenceDays, 0);
+    expect(setup.nextExpectedOn, isNull);
+    expect(setup.annualCost, Money.zero());
     cache.financialStore.discardProvisional(namespace, 'unrelated');
     await Future<void>.delayed(Duration.zero);
     final afterSync = await container.read(recurringReportProvider.future);
-    expect(afterSync!.series.single.id, 'established');
+    expect(afterSync!.series.map((item) => item.id), contains('established'));
+    expect(afterSync.series.where((item) => item.setupConfirmed), hasLength(1));
   });
 
   test(

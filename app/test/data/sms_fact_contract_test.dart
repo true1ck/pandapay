@@ -65,17 +65,13 @@ void main() {
       isTrue,
     );
 
-    final ceilingWrongField = validateSmsFact(
+    final ceilingOmitted = validateSmsFact(
       SmsFactValidationEntry(
         factType: 'mandate_lifecycle',
         payload: {'mandateStatus': 'registered', 'asOfAt': '2026-10-16T10:00:00.000Z'},
       ),
     );
-    expect(ceilingWrongField.valid, isFalse);
-    expect(
-      ceilingWrongField.errors.any((e) => e.contains('registered mandate requires limitInr')),
-      isTrue,
-    );
+    expect(ceilingOmitted.valid, isTrue);
   });
 
   test('a mandate ceiling can never be booked as posted money', () {

@@ -634,6 +634,9 @@ void main() {
     expect(result?.eventType, LocalSmsEventType.autopay);
     expect(result?.disposition, LocalSmsDisposition.localIgnore);
     expect(result?.autopayLimit?.rupees, 1999);
+    expect(result?.amountDue, isNull);
+    expect(result?.dueDate, isNull);
+    expect(result?.cadenceHint, isNull);
   });
 
   test('does not ignore a completed AutoPay debit as setup', () {

@@ -33,6 +33,7 @@
     "sms_sources": { "disposition": "exported_v1", "section": "sms_sources" },
     "sms_source_facts": { "disposition": "exported_v1", "section": "sms_source_facts" },
     "fact_overrides": { "disposition": "exported_v1", "section": "fact_overrides" },
+    "financial_projections": { "disposition": "excluded_with_intent", "reason": "rebuildable domain projections derived from typed SMS facts and transaction history; source facts remain portable" },
 
     "portable_restore_sessions": { "disposition": "excluded_with_intent", "reason": "restore protocol staging metadata; never included in a portable archive" },
     "portable_restore_sections": { "disposition": "excluded_with_intent", "reason": "restore protocol upload declarations; ephemeral until commit or expiry" },

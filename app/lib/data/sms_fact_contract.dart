@@ -25,13 +25,14 @@ const List<String> smsFactTypes = [
   'promotion',
 ];
 
-const List<String> smsFactStatuses = [
-  'active',
-  'superseded',
-  'discarded',
-];
+const List<String> smsFactStatuses = ['active', 'superseded', 'discarded'];
 
-const List<String> smsEntryKinds = ['spend', 'income', 'transfer', 'investment'];
+const List<String> smsEntryKinds = [
+  'spend',
+  'income',
+  'transfer',
+  'investment',
+];
 
 const List<String> smsInstruments = [
   'upi_bank',
@@ -102,9 +103,7 @@ bool _dateOk(String? value) {
 }
 
 bool _shortTextOk(String? value) =>
-    value != null &&
-    value.trim().isNotEmpty &&
-    value.trim().length <= 120;
+    value != null && value.trim().isNotEmpty && value.trim().length <= 120;
 
 /// Fact payload shapes, mirroring the server PAYLOAD_FIELD_SHAPES table.
 const Map<String, Map<String, Object>> smsPayloadFieldShapes = {
@@ -116,6 +115,7 @@ const Map<String, Map<String, Object>> smsPayloadFieldShapes = {
   'minimumDueInr': {'number': true, 'positive': true},
   'outstandingInr': {'number': true, 'positive': true},
   'limitInr': {'number': true, 'positive': true},
+  'activationAmountInr': {'number': true, 'nonnegative': true},
   'proposedAmountInr': {'number': true, 'positive': true},
   'availableBalanceInr': {'number': true, 'nonnegative': true},
   'occurredAt': {'date': true},
@@ -126,6 +126,40 @@ const Map<String, Map<String, Object>> smsPayloadFieldShapes = {
   'mandateStatus': {
     'in': ['registered', 'scheduled', 'paused', 'cancelled', 'failed'],
   },
+  'targetKind': {
+    'in': ['card_bill', 'utility_or_other_bill', 'service_merchant', 'unknown'],
+  },
+  'mandateReference': {'shortText': true},
+  'serviceName': {'shortText': true},
+  'planName': {'shortText': true},
+  'plan': {'shortText': true},
+  'subscriptionEvidence': {
+    'in': ['explicit', 'user_asserted', 'posted', 'historical', 'brand_prior'],
+  },
+  'renewalMode': {
+    'in': ['one_time', 'automatic', 'manual', 'unknown'],
+  },
+  'subscriptionStatus': {
+    'in': [
+      'candidate',
+      'active',
+      'renewal_unverified',
+      'ended',
+      'payment_issue',
+      'cancelled',
+      'paused',
+      'unknown',
+    ],
+  },
+  'cadenceDays': {'integer': true, 'positive': true},
+  'cadenceExplicit': {'boolean': true},
+  'accessEndDate': {'date': true},
+  'nextPaymentDate': {'date': true},
+  'nextPaymentAmountInr': {'number': true, 'nonnegative': true},
+  'explicitSubscription': {'boolean': true},
+  'userAsserted': {'boolean': true},
+  'cardBill': {'boolean': true},
+  'currency': {'shortText': true},
   'attemptStatus': {
     'in': ['attempted', 'scheduled', 'failed'],
   },
@@ -158,7 +192,18 @@ const List<String> smsPositiveAmountFields = [
   'limitInr',
   'proposedAmountInr',
 ];
-const List<String> smsNonNegativeAmountFields = ['availableBalanceInr'];
+const List<String> smsNonNegativeAmountFields = [
+  'availableBalanceInr',
+  'activationAmountInr',
+  'nextPaymentAmountInr',
+];
+const List<String> smsBooleanFields = [
+  'cadenceExplicit',
+  'explicitSubscription',
+  'userAsserted',
+  'cardBill',
+];
+const List<String> smsIntegerFields = ['cadenceDays'];
 const List<String> smsDateFields = [
   'occurredAt',
   'dueDate',
@@ -219,6 +264,16 @@ SmsFactValidationResult validateSmsFactPayload(
       }
       continue;
     }
+    if (smsBooleanFields.contains(field)) {
+      if (value is! bool) errors.add('$field must be a boolean');
+      continue;
+    }
+    if (smsIntegerFields.contains(field)) {
+      if (value is! int || value <= 0) {
+        errors.add('$field must be a positive integer');
+      }
+      continue;
+    }
     if (smsDateFields.contains(field)) {
       if (value is! String || !_dateOk(value)) {
         errors.add('$field must be an ISO date-time');
@@ -252,7 +307,8 @@ SmsFactValidationResult validateSmsFactPayload(
     }
   }
 
-  for (final required in smsRequiredFieldsByType[factType] ?? const <String>[]) {
+  for (final required
+      in smsRequiredFieldsByType[factType] ?? const <String>[]) {
     if (payload[required] == null) {
       errors.add('$required is required for $factType');
     }
@@ -274,7 +330,8 @@ SmsFactValidationResult validateSmsFactPayload(
 
   if (smsNonPostedFactTypes.contains(factType) &&
       amountRole != null &&
-      amountRole != 'proposed') {
+      amountRole != 'proposed' &&
+      !(factType == 'mandate_lifecycle' && amountRole == 'ceiling')) {
     if (factType == 'bill_obligation' || factType == 'bill_payment') {
       if (amountRole == 'posted') {
         errors.add("$factType must not use amountRole 'posted'");
@@ -290,13 +347,9 @@ SmsFactValidationResult validateSmsFactPayload(
       payload['mandateStatus'] != 'registered') {
     errors.add('limitInr is only meaningful for a registered mandate');
   }
-  // A registered mandate must carry its ceiling: without the limit the fact
-  // says nothing a projection can safely use, so it must abstain instead.
-  if (factType == 'mandate_lifecycle' &&
-      payload['mandateStatus'] == 'registered' &&
-      limitInr == null) {
-    errors.add('a registered mandate requires limitInr');
-  }
+  // A registered mandate may omit its ceiling. Lifecycle and named service
+  // evidence still establish authorization presence; the ceiling is optional
+  // authorization metadata and must never gate classification.
 
   if (factType == 'posted_movement') {
     if (payload['entryKind'] == 'spend' && payload['merchant'] == null) {
@@ -353,11 +406,7 @@ String canonicalSmsFactString(
   Map<String, Object?> payload,
   Map<String, Object?> provenance,
 ) {
-  return jsonEncode([
-    factType,
-    payload,
-    provenance,
-  ]);
+  return jsonEncode([factType, payload, provenance]);
 }
 
 /// Assigns deterministic indices identical to the server's sort, so a device
@@ -366,10 +415,10 @@ List<SmsFactValidationEntry> assignDeterministicSmsFactIndices(
   List<SmsFactValidationEntry> facts,
 ) {
   String canonical(int i) => canonicalSmsFactString(
-        facts[i].factType,
-        facts[i].payload,
-        facts[i].provenance,
-      );
+    facts[i].factType,
+    facts[i].payload,
+    facts[i].provenance,
+  );
   final order = List<int>.generate(facts.length, (i) => i);
   order.sort((a, b) {
     final byCanonical = canonical(a).compareTo(canonical(b));
@@ -391,10 +440,7 @@ List<SmsFactValidationEntry> assignDeterministicSmsFactIndices(
 /// the legacy upload path, which keeps today's disclosure truthful.
 String smsBodyHash(String sender, String body) {
   return sha256
-      .convert(utf8.encode(jsonEncode([
-        sender.toUpperCase(),
-        body,
-      ])))
+      .convert(utf8.encode(jsonEncode([sender.toUpperCase(), body])))
       .toString();
 }
 

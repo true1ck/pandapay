@@ -10,6 +10,7 @@ import '../../data/api_exception.dart';
 import '../../data/card_bill_ledger.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/user_cards_repository.dart';
+import 'central_bills_section.dart';
 
 // ---------------------------------------------------------------------------
 // Backward-compatible type aliases for existing test harnesses
@@ -228,6 +229,17 @@ class _DueList extends StatelessWidget {
         AppSpace.xxl,
       ),
       children: [
+        CentralBillsSection(
+          cardRows: rows
+              .map(
+                (row) => CentralBillDedupKey(
+                  last4: row.card.last4,
+                  dueOn: row.dueOn,
+                  amountInr: row.bill?.amountDue?.rupees,
+                ),
+              )
+              .toList(growable: false),
+        ),
         if (rows.isNotEmpty) ...[
           _SectionHeader(label: 'Credit cards', count: rows.length),
           const SizedBox(height: AppSpace.xs),

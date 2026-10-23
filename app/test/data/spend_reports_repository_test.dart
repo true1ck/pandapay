@@ -6,6 +6,45 @@ import 'package:http/testing.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
 
 void main() {
+  test('subscription wire model keeps free distinct from unstated price', () {
+    final base = <String, dynamic>{
+      'id': 'service:openai',
+      'displayName': 'OpenAI',
+      'detectionSource': 'central_projection',
+      'cadenceDays': null,
+      'annualCostInr': 0,
+    };
+    final unknown = RecurringSeries.fromJson({
+      ...base,
+      'typicalAmountInr': null,
+    });
+    final free = RecurringSeries.fromJson({
+      ...base,
+      'typicalAmountInr': 0,
+    });
+    expect(unknown.amountKnown, isFalse);
+    expect(unknown.toJson()['typicalAmountInr'], isNull);
+    expect(free.amountKnown, isTrue);
+    expect(free.toJson()['typicalAmountInr'], 0);
+  });
+
+  test('setup presence keeps unknown cadence and amount unknown', () {
+    final setup = RecurringSeries.fromJson({
+      'id': 'service:openai',
+      'displayName': 'OpenAI',
+      'detectionSource': 'central_projection',
+      'typicalAmountInr': null,
+      'cadenceDays': null,
+      'cadenceConfirmed': false,
+      'setupConfirmed': true,
+      'annualCostInr': 0,
+    });
+    expect(setup.setupConfirmed, isTrue);
+    expect(setup.cadenceDays, 0);
+    expect(setup.amountKnown, isFalse);
+    expect(setup.toJson()['setupConfirmed'], isTrue);
+  });
+
   test('custom report sends inclusive date-only bounds to the API', () async {
     late Uri requested;
     final client = MockClient((request) async {

@@ -108,6 +108,25 @@ const CADENCE_TOLERANCE = 0.25;
 const MIN_CADENCE_DAYS = 6;
 const MAX_CADENCE_DAYS = 400;
 
+// These values are deliberately kept in this module rather than in the
+// route.  `recurring_series` predates the central facts work and only has
+// room for the legacy lifecycle values; the projection helpers below expose
+// richer read-time semantics without asking old transaction imports to write
+// unsupported enum values.
+const RENEWAL_MODES = Object.freeze(['one_time', 'automatic', 'manual', 'unknown']);
+const SUBSCRIPTION_STATUSES = Object.freeze([
+  'active',
+  'unknown',
+  'renewal_unverified',
+  'ended',
+  'payment_issue',
+  'paused',
+  'cancelled',
+  'hidden',
+  'mandate_only',
+]);
+const RENEWAL_GRACE_DAYS = 7;
+
 /**
  * A bank alert can put a date, account number, or cadence label after
  * "for". Those values are not merchant names, even when the rest of the
@@ -149,17 +168,26 @@ function isDisplayableSubscriptionRecord(record) {
   const cadence = Number(record?.cadenceDays ?? record?.cadence_days);
   const next = record?.nextExpectedOn ?? record?.next_expected_on;
   const detectionSource = record?.detectionSource ?? record?.detection_source;
-  const autopayStatus = record?.autopayStatus ?? record?.autopay_status;
-  const activeMandate = detectionSource === 'mandate' && autopayStatus === 'active';
+  // A mandate is an authorisation record.  It has no posted amount, renewal
+  // date, or service classification merely because the merchant name appears
+  // in the alert.  The old implementation admitted active mandates here,
+  // which made a mandate ceiling look like a subscription price.
+  if (detectionSource === 'mandate') {
+    return false;
+  }
+  const explicitService = isExplicitServiceEvidence(record);
+  const renewalMode = normalizeRenewalMode(record);
+  const amountIsKnown = Number.isFinite(amount) && amount >= 0;
+  const amountMayBeFree = amount === 0 && (explicitService || renewalMode === 'one_time');
   return (
     isUsableSubscriptionName(name) &&
     !isNonSubscriptionFinancialName(name) &&
-    Number.isFinite(amount) &&
-    (amount > 0 || activeMandate) &&
+    amountIsKnown &&
+    (amount > 0 || amountMayBeFree) &&
     Number.isInteger(cadence) &&
     cadence >= MIN_CADENCE_DAYS &&
     cadence <= MAX_CADENCE_DAYS &&
-    (Boolean(next) || activeMandate)
+    (Boolean(next) || renewalMode === 'one_time' || explicitService)
   );
 }
 
@@ -276,6 +304,210 @@ function nextExpectedAfter(date, cadenceDays, now = new Date()) {
   return next;
 }
 
+function valueOf(record, camel, snake = camel.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)) {
+  return record?.[camel] ?? record?.[snake];
+}
+
+function normalizeRenewalMode(record) {
+  const value = String(valueOf(record, 'renewalMode', 'renewal_mode') || '').trim().toLowerCase();
+  return RENEWAL_MODES.includes(value) ? value : 'unknown';
+}
+
+function normalizeDateOnly(value) {
+  const day = utcDayStart(value);
+  return day ? day.toISOString().slice(0, 10) : null;
+}
+
+function isExplicitServiceEvidence(record) {
+  return valueOf(record, 'explicitSubscriptionEvidence', 'explicit_subscription_evidence') === true
+    || valueOf(record, 'userAsserted', 'user_asserted') === true
+    || valueOf(record, 'serviceEvidence', 'service_evidence') === true
+    || valueOf(record, 'subscriptionSignal', 'subscription_signal') === true;
+}
+
+/**
+ * Mandate and service evidence have separate meanings even when they name the
+ * same merchant.  The legacy table has no separate mandate table, so this
+ * predicate is intentionally strict: a mandate row remains an authorisation
+ * until a later projection supplies explicit service or posted-payment
+ * evidence.  In particular, its limit is never reused as a paid amount.
+ */
+function isMandateOnlyRecord(record) {
+  return isMandateRecord(record) && !isExplicitServiceEvidence(record);
+}
+
+function isMandateRecord(record) {
+  return valueOf(record, 'detectionSource', 'detection_source') === 'mandate';
+}
+
+function isServiceSubscriptionRecord(record) {
+  return !isMandateOnlyRecord(record);
+}
+
+function lifecycleValue(record) {
+  const lifecycle = String(valueOf(record, 'lifecycleStatus', 'lifecycle_status') || '').trim().toLowerCase();
+  return ['active', 'paused', 'cancelled', 'hidden'].includes(lifecycle) ? lifecycle : 'active';
+}
+
+function expectedDateForRecord(record, now) {
+  const stated = valueOf(record, 'statedNextPaymentOn', 'stated_next_payment_on');
+  if (stated) return utcDayStart(stated);
+  const explicitlyExpected = valueOf(record, 'nextPaymentStated', 'next_payment_stated') === true
+    || valueOf(record, 'userEdited', 'user_edited') === true;
+  const next = valueOf(record, 'nextExpectedOn', 'next_expected_on');
+  if (explicitlyExpected && next) return utcDayStart(next);
+  const cadence = Number(valueOf(record, 'cadenceDays', 'cadence_days'));
+  const anchor = valueOf(record, 'lastPostedPaymentOn', 'last_posted_payment_on')
+    || valueOf(record, 'lastSeenOn', 'last_seen_on');
+  if (!Number.isInteger(cadence) || cadence < MIN_CADENCE_DAYS || cadence > MAX_CADENCE_DAYS || !anchor) {
+    return null;
+  }
+  // For status we need the first cycle after the last posted payment.  The
+  // public date helper intentionally rolls that date forward across all
+  // missed cycles, which would hide a missed renewal here.
+  const anchorDay = utcDayStart(anchor);
+  return anchorDay ? nextExpectedAfter(anchorDay, cadence, anchorDay) : null;
+}
+
+/**
+ * Return the semantic subscription state while retaining the database's
+ * older lifecycle enum.  `renewal_unverified`, `ended`, and `payment_issue`
+ * are read-time states and can be adopted by a future additive migration.
+ */
+function deriveSubscriptionStatus(record, { now = new Date(), graceDays = RENEWAL_GRACE_DAYS } = {}) {
+  const storedLifecycle = lifecycleValue(record);
+  if (storedLifecycle !== 'active') return storedLifecycle;
+
+  const explicitStatus = String(valueOf(record, 'subscriptionStatus', 'subscription_status') || '').trim().toLowerCase();
+  if (SUBSCRIPTION_STATUSES.includes(explicitStatus) && explicitStatus !== 'active') return explicitStatus;
+
+  if (isMandateOnlyRecord(record)) return 'mandate_only';
+
+  const accessEnd = utcDayStart(valueOf(record, 'accessEndOn', 'access_end_on'));
+  const today = utcDayStart(now) || new Date(now);
+  if (accessEnd && accessEnd < today) return 'ended';
+
+  const paymentIssue = valueOf(record, 'paymentIssue', 'payment_issue') === true
+    || ['failed', 'declined', 'payment_issue'].includes(String(valueOf(record, 'paymentStatus', 'payment_status') || '').toLowerCase());
+  if (paymentIssue) return 'payment_issue';
+
+  const renewalMode = normalizeRenewalMode(record);
+  if (renewalMode === 'one_time') return accessEnd ? 'active' : 'unknown';
+
+  const expected = expectedDateForRecord(record, now);
+  if (expected) {
+    const graceCutoff = new Date(today);
+    graceCutoff.setUTCDate(graceCutoff.getUTCDate() - Math.max(0, Number(graceDays) || 0));
+    const occurrenceCount = Number(valueOf(record, 'occurrenceCount', 'occurrence_count')) || 0;
+    const hasHistoricalRenewalEvidence = occurrenceCount >= 2
+      || valueOf(record, 'lastPostedPaymentOn', 'last_posted_payment_on') != null;
+    if (expected < graceCutoff && (
+      renewalMode === 'automatic'
+      || valueOf(record, 'nextPaymentStated', 'next_payment_stated') === true
+      || valueOf(record, 'userEdited', 'user_edited') === true
+      || (renewalMode === 'unknown' && hasHistoricalRenewalEvidence)
+    )) {
+      return 'renewal_unverified';
+    }
+  }
+
+  // A manual renewal has a real service record, but no evidence that it was
+  // renewed. Keep the lifecycle active and expose `unknown` as its status.
+  if (renewalMode === 'manual' && !expected) return 'unknown';
+  const cadence = Number(valueOf(record, 'cadenceDays', 'cadence_days'));
+  if (!Number.isInteger(cadence) || cadence < MIN_CADENCE_DAYS || cadence > MAX_CADENCE_DAYS) {
+    return 'unknown';
+  }
+  return 'active';
+}
+
+/**
+ * Classify the evidence represented by one recurring_series-shaped record.
+ * This is intentionally read-only and does not turn mandate rows into
+ * subscriptions. It is useful to callers that need a domain decision before
+ * writing a projection or rendering the compatible API shape.
+ */
+function classifySubscriptionEvidence(record, options = {}) {
+  const mandateOnly = isMandateOnlyRecord(record);
+  const source = valueOf(record, 'detectionSource', 'detection_source') || 'observed';
+  const status = deriveSubscriptionStatus(record, options);
+  return {
+    target: mandateOnly ? 'mandate_authorization' : 'subscription_service',
+    isServiceSubscription: !mandateOnly,
+    isMandateAuthorization: source === 'mandate',
+    detectionSource: source,
+    status,
+    lifecycleStatus: lifecycleValue(record),
+    renewalMode: normalizeRenewalMode(record),
+    reason: mandateOnly
+      ? 'mandate_authorization_without_service_evidence'
+      : isExplicitServiceEvidence(record)
+        ? 'explicit_service_or_user_evidence'
+        : source === 'observed'
+          ? 'historical_posted_payment_pattern'
+          : 'user_or_existing_subscription_record',
+  };
+}
+
+/**
+ * Build the safe, additive read model from an existing recurring row. Fields
+ * that cannot be represented by the old schema stay null. A mandate's amount
+ * is exposed only as `authorizationLimitInr`; it is never `typicalAmountInr`
+ * or `lastPostedPayment`.
+ */
+function deriveSubscriptionProjection(record, options = {}) {
+  const now = options.now || new Date();
+  const classification = classifySubscriptionEvidence(record, options);
+  const amount = Number(valueOf(record, 'typicalAmountInr', 'typical_amount_inr'));
+  const amountKnown = Number.isFinite(amount) && amount >= 0;
+  const cadence = Number(valueOf(record, 'cadenceDays', 'cadence_days'));
+  const cadenceKnown = Number.isInteger(cadence) && cadence >= MIN_CADENCE_DAYS && cadence <= MAX_CADENCE_DAYS;
+  const accessEndOn = normalizeDateOnly(valueOf(record, 'accessEndOn', 'access_end_on'));
+  const lastPostedOn = normalizeDateOnly(valueOf(record, 'lastPostedPaymentOn', 'last_posted_payment_on'))
+    || (!isMandateRecord(record) ? normalizeDateOnly(valueOf(record, 'lastSeenOn', 'last_seen_on')) : null);
+  const lastPostedAmount = Number(valueOf(record, 'lastPostedPaymentAmountInr', 'last_posted_payment_amount_inr'));
+  const postedAmount = Number.isFinite(lastPostedAmount)
+    ? lastPostedAmount
+    : (!isMandateRecord(record) && amountKnown && amount > 0 ? amount : null);
+  const statedOn = normalizeDateOnly(valueOf(record, 'statedNextPaymentOn', 'stated_next_payment_on'));
+  const statedAmount = Number(valueOf(record, 'statedNextPaymentAmountInr', 'stated_next_payment_amount_inr'));
+  const nextStatedAmount = Number.isFinite(statedAmount) ? statedAmount : null;
+  const estimatedDate = !isMandateRecord(record) && cadenceKnown && lastPostedOn
+    ? normalizeDateOnly(nextExpectedAfter(lastPostedOn, cadence, now))
+    : null;
+  const typicalAmount = !isMandateRecord(record) && amountKnown ? amount : null;
+
+  return {
+    ...classification,
+    serviceIdentity: valueOf(record, 'serviceIdentity', 'service_identity')
+      || valueOf(record, 'displayName', 'display_name')
+      || null,
+    authorizationLimitInr: isMandateRecord(record) && amountKnown ? amount : null,
+    typicalAmountInr: typicalAmount,
+    renewalMode: classification.renewalMode,
+    billingCadenceDays: cadenceKnown ? cadence : null,
+    accessEndOn,
+    lastPostedPayment: lastPostedOn
+      ? { on: lastPostedOn, amountInr: postedAmount }
+      : null,
+    statedNextPayment: statedOn || nextStatedAmount !== null
+      ? { on: statedOn, amountInr: nextStatedAmount }
+      : null,
+    estimatedNextPayment: !statedOn && estimatedDate
+      ? { on: estimatedDate, amountInr: typicalAmount }
+      : null,
+    confidence: isMandateOnlyRecord(record)
+      ? 'mandate_only'
+      : isExplicitServiceEvidence(record) || sourceIsManual(record)
+        ? 'explicit'
+        : 'historical',
+  };
+}
+
+function sourceIsManual(record) {
+  return valueOf(record, 'detectionSource', 'detection_source') === 'manual';
+}
+
 /**
  * Groups transactions by normalized merchant and returns the groups that
  * look like a subscription.
@@ -342,23 +574,38 @@ function detectRecurringSeries(rows, { now = new Date() } = {}) {
     const next = nextExpectedAfter(last, cadence, now);
 
     const latest = consistent[consistent.length - 1];
-    series.push({
+    const detected = {
       merchantKey: key,
+      // Historical matching is evidence only.  Consumers may promote this
+      // to a service subscription after applying explicit service evidence;
+      // it is never a mandate or a mandate-derived price.
+      detectionSource: 'observed',
+      evidenceSource: 'historical_posted_payment',
+      subscriptionEvidence: 'posted_payment_pattern',
       // The canonical catalog name when the merchant matches a known brand
       // ('OPENAILLC' → 'OpenAI'), otherwise the most recent spelling: the
       // one the user will recognise on their statement.
       displayName: brand?.name ?? latest.merchant_name,
       typicalAmountInr: typical,
       cadenceDays: Math.round(cadence),
+      billingCadenceDays: Math.round(cadence),
       occurrenceCount: consistent.length,
       firstSeenOn: dates[0],
       lastSeenOn: last,
+      lastPostedPaymentOn: last,
+      lastPostedPaymentAmountInr: Number(latest.amount_inr),
       nextExpectedOn: next,
+      estimatedNextPaymentOn: next,
       categoryId: latest.category_id || null,
       userCategoryId: latest.user_category_id || null,
       userCardId: latest.user_card_id || null,
       paymentMethod: latest.instrument || null,
-    });
+      lifecycleStatus: 'active',
+      renewalMode: 'unknown',
+      subscriptionStatus: 'active',
+    };
+    detected.subscriptionStatus = deriveSubscriptionStatus(detected, { now });
+    series.push(detected);
   }
 
   // Biggest annual cost first — that is the order in which someone
@@ -461,6 +708,16 @@ module.exports = {
   isInvestmentMandateMessage,
   isBrokerSettlementMessage,
   isNonSubscriptionFinancialName,
+  normalizeRenewalMode,
+  isMandateRecord,
+  isMandateOnlyRecord,
+  isServiceSubscriptionRecord,
+  deriveSubscriptionStatus,
+  classifySubscriptionEvidence,
+  deriveSubscriptionProjection,
+  RENEWAL_MODES,
+  SUBSCRIPTION_STATUSES,
+  RENEWAL_GRACE_DAYS,
   MIN_OCCURRENCES,
   AMOUNT_TOLERANCE,
   CADENCE_TOLERANCE,
