@@ -59,6 +59,7 @@ Future<void> _pump(
   WidgetTester tester,
   SpendReport? report, {
   List<TransactionEntry> transactions = const [],
+  List<BankAccountSummary> bankAccounts = const [],
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -70,6 +71,7 @@ Future<void> _pump(
         spendPeriodTransactionsProvider.overrideWith(
           (ref, period) async => transactions,
         ),
+        bankAccountSummariesProvider.overrideWith((ref) async => bankAccounts),
       ],
       child: const MaterialApp(home: SpendTrendsScreen()),
     ),
@@ -87,7 +89,10 @@ TransactionEntry _detailEntry({
   double reward = 0,
   String? subcategoryName,
   String? merchantVpa,
+  String? accountLast4,
+  String? cardLast4,
   TxnInstrument instrument = TxnInstrument.creditCard,
+  bool instrumentKnown = true,
   String? cardDisplayName = 'HDFC Millennia',
   String? userCardId = 'uc-1',
   List<TransactionTag> tags = const [],
@@ -102,9 +107,12 @@ TransactionEntry _detailEntry({
   subcategoryName: subcategoryName,
   tags: tags,
   cardDisplayName: cardDisplayName,
+  accountLast4: accountLast4,
+  cardLast4: cardLast4,
   userCardId: userCardId,
   rail: TxnRail.swipe,
   instrument: instrument,
+  instrumentKnown: instrumentKnown,
   source: 'sms',
   status: 'active',
   rewardValue: Money.fromRupees(reward),
@@ -924,7 +932,7 @@ void main() {
     expect(find.text('UPI from bank account'), findsOneWidget);
   });
 
-  testWidgets('card rows expand into merchants and matching transactions', (
+  testWidgets('account rows expand into payees and matching transactions', (
     tester,
   ) async {
     await _pump(
@@ -962,9 +970,9 @@ void main() {
       ],
     );
 
-    await tester.ensureVisible(find.text('Cards'));
+    await tester.ensureVisible(find.text('Accounts'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Cards'));
+    await tester.tap(find.text('Accounts'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('HDFC Millennia'),
@@ -1035,6 +1043,69 @@ void main() {
 
     expect(find.text('raja@upi'), findsOneWidget);
     expect(find.text('Raja Das'), findsOneWidget);
+    expect(find.textContaining('12/08/2026'), findsOneWidget);
+    expect(find.textContaining('13/08/2026'), findsOneWidget);
+  });
+
+  testWidgets('Accounts groups UPI spend under the matched bank account', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _report(spend: 200),
+      bankAccounts: [
+        BankAccountSummary(
+          accountLast4: '1234',
+          availableBalance: null,
+          latestSmsAt: DateTime(2026, 8, 13),
+          smsCount: 3,
+          issuerName: 'HDFC Bank',
+          issuerShortName: 'HDFC Bank',
+          issuerSlug: 'hdfc',
+        ),
+      ],
+      transactions: [
+        _detailEntry(
+          id: 'account-txn-1',
+          merchant: 'Raja Das',
+          merchantVpa: 'raja@upi',
+          accountLast4: '1234',
+          amount: 125,
+          categoryId: 'other',
+          categoryName: 'Other',
+          occurredAt: DateTime(2026, 8, 12),
+          instrument: TxnInstrument.upiBank,
+          cardDisplayName: null,
+          userCardId: null,
+        ),
+        _detailEntry(
+          id: 'account-txn-2',
+          merchant: 'Raja Das',
+          merchantVpa: 'raja@upi',
+          accountLast4: '1234',
+          amount: 75,
+          categoryId: 'other',
+          categoryName: 'Other',
+          occurredAt: DateTime(2026, 8, 13),
+          instrument: TxnInstrument.upiBank,
+          cardDisplayName: null,
+          userCardId: null,
+        ),
+      ],
+    );
+
+    await tester.ensureVisible(find.text('Accounts'));
+    await tester.tap(find.text('Accounts'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('HDFC Bank ••1234'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('HDFC Bank ••1234'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('raja@upi'), findsOneWidget);
     expect(find.textContaining('12/08/2026'), findsOneWidget);
     expect(find.textContaining('13/08/2026'), findsOneWidget);
   });

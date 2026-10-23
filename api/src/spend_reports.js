@@ -400,15 +400,33 @@ async function spendByCard(client, userId, { start, end }) {
         WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
           AND t.amount_inr > 0
           AND t.occurred_at >= $2 AND t.occurred_at < $3
+     ), labeled_rows AS (
+       SELECT transaction_rows.*,
+              CASE
+                WHEN user_card_id IS NOT NULL
+                  THEN COALESCE(NULLIF(card_nickname, ''), card_name)
+                WHEN instrument::text IN ('credit_card', 'debit_card')
+                  THEN CASE
+                    WHEN card_last4 IS NOT NULL
+                      THEN (CASE WHEN instrument::text = 'credit_card' THEN 'Credit card' ELSE 'Debit card' END)
+                           || ' ••' || card_last4 || ' (unlinked)'
+                    ELSE CASE WHEN instrument::text = 'credit_card' THEN 'Credit card' ELSE 'Debit card' END || ' (unlinked)'
+                  END
+                WHEN account_last4 IS NOT NULL
+                  THEN 'Bank account ••' || account_last4
+                WHEN instrument::text = 'upi_bank' THEN 'UPI bank account'
+                WHEN instrument::text = 'wallet' THEN 'Wallet'
+                WHEN instrument::text = 'cash' THEN 'Cash'
+                ELSE 'Unknown source'
+              END AS source_name
+         FROM transaction_rows
      )
-     SELECT user_card_id, instrument, card_name, card_nickname,
-            annual_fee_inr, card_last4, account_last4,
+     SELECT user_card_id, source_name, annual_fee_inr,
             COALESCE(SUM(amount_inr), 0) AS total,
             COALESCE(SUM(GREATEST(COALESCE(expected_value_inr, 0), 0)), 0) AS rewards,
             COUNT(*) AS txn_count
-       FROM transaction_rows
-      GROUP BY user_card_id, instrument, card_name, card_nickname,
-               annual_fee_inr, card_last4, account_last4
+       FROM labeled_rows
+      GROUP BY user_card_id, source_name, annual_fee_inr
       ORDER BY total DESC`,
     [userId, start, end]
   );
@@ -417,15 +435,7 @@ async function spendByCard(client, userId, { start, end }) {
     const rewardsInr = Number(r.rewards);
     return {
       cardId: r.user_card_id,
-      cardName: r.card_nickname || r.card_name || (r.instrument === 'upi_bank'
-        ? (r.account_last4 ? `Bank account ending ${r.account_last4}` : 'UPI / bank account')
-        : r.instrument === 'debit_card'
-          ? (r.card_last4 ? `Debit card ending ${r.card_last4} (unlinked)` : 'Debit card (unmatched)')
-          : r.instrument === 'credit_card'
-            ? (r.card_last4 ? `Credit card ending ${r.card_last4} (unlinked)` : 'Credit card (unmatched)')
-            : r.instrument === 'wallet'
-              ? 'Wallet'
-              : 'Cash & other'),
+      cardName: r.source_name || 'Unknown source',
       annualFeeInr: r.annual_fee_inr == null ? null : Number(r.annual_fee_inr),
       totalInr,
       rewardsInr,
@@ -533,15 +543,19 @@ async function spendByCardCategory(client, userId, { start, end }) {
   );
   return result.rows.map((r) => ({
     cardId: r.user_card_id,
-    cardName: r.card_nickname || r.card_name || (r.instrument === 'upi_bank'
-      ? (r.account_last4 ? `Bank account ending ${r.account_last4}` : 'UPI / bank account')
-      : r.instrument === 'debit_card'
-        ? (r.card_last4 ? `Debit card ending ${r.card_last4} (unlinked)` : 'Debit card (unmatched)')
+    cardName: r.card_nickname || r.card_name || (r.instrument === 'debit_card'
+        ? (r.card_last4 ? `Debit card ••${r.card_last4} (unlinked)` : 'Debit card (unlinked)')
         : r.instrument === 'credit_card'
-          ? (r.card_last4 ? `Credit card ending ${r.card_last4} (unlinked)` : 'Credit card (unmatched)')
+          ? (r.card_last4 ? `Credit card ••${r.card_last4} (unlinked)` : 'Credit card (unlinked)')
+          : r.account_last4
+            ? `Bank account ••${r.account_last4}`
+            : r.instrument === 'upi_bank'
+              ? 'UPI bank account'
           : r.instrument === 'wallet'
             ? 'Wallet'
-            : 'Cash & other'),
+            : r.instrument === 'cash'
+              ? 'Cash'
+              : 'Unknown source'),
     categoryId: r.category_id,
     categoryName: ['uncategorized', 'unclassified'].includes(
       String(r.category_name || '').trim().toLowerCase(),

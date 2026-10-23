@@ -77,4 +77,45 @@ void main() {
     expect(selection.matches(expense('one'), tags: []), isTrue);
     expect(selection.matches(expense('two'), tags: ['office']), isFalse);
   });
+
+  test('unknown instrument is not treated as a credit card', () {
+    final legacy = TransactionEntry(
+      id: 'legacy',
+      amount: Money.fromRupees(100),
+      occurredAt: DateTime(2026, 10, 20),
+      instrument: TxnInstrument.creditCard,
+      instrumentKnown: false,
+      source: 'sms',
+      status: 'active',
+    );
+
+    expect(
+      const SpendingSelection(
+        payment: TxnInstrument.creditCard,
+      ).matches(legacy),
+      isFalse,
+    );
+    expect(
+      const SpendingSelection(payment: TxnInstrument.other).matches(legacy),
+      isTrue,
+    );
+  });
+
+  test('a masked source account is filterable as an account', () {
+    final upi = TransactionEntry(
+      id: 'upi',
+      amount: Money.fromRupees(100),
+      occurredAt: DateTime(2026, 10, 20),
+      accountLast4: '1234',
+      userCardId: null,
+      cardDisplayName: null,
+      instrument: TxnInstrument.upiBank,
+      source: 'sms',
+      status: 'active',
+    );
+    const selection = SpendingSelection(card: 'Bank account ••1234');
+
+    expect(SpendingSelection.sourceName(upi), 'Bank account ••1234');
+    expect(selection.matches(upi), isTrue);
+  });
 }

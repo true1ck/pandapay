@@ -965,6 +965,9 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   late Set<String> _tagFilters = {...widget.initialSelection.tagIds};
   late bool _untagged = widget.initialSelection.untagged;
 
+  List<BankAccountSummary> get _bankAccounts =>
+      ref.read(bankAccountSummariesProvider).valueOrNull ?? const [];
+
   void _notifyFilters() {
     widget.onSelectionChanged(
       _SpendFilterSelection(
@@ -1120,6 +1123,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
           (entry) => selection.matches(
             entry,
             tags: _tagsFor(entry).map((tag) => tag.id),
+            bankAccounts: _bankAccounts,
           ),
         )
         .toList();
@@ -1141,29 +1145,12 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       : 'Unknown merchant';
 
   String _cardName(TransactionEntry entry) =>
-      entry.userCardId != null &&
-          entry.cardDisplayName?.trim().isNotEmpty == true
-      ? entry.cardDisplayName!.trim()
-      : entry.instrument == TxnInstrument.upiBank
-      ? (entry.accountLast4 == null
-            ? 'UPI / bank account'
-            : 'Bank account ending ${entry.accountLast4}')
-      : entry.instrument == TxnInstrument.debitCard
-      ? (entry.cardLast4 == null
-            ? 'Debit card (unmatched)'
-            : 'Debit card ending ${entry.cardLast4} (unlinked)')
-      : entry.instrument == TxnInstrument.creditCard
-      ? (entry.cardLast4 == null
-            ? 'Credit card (unmatched)'
-            : 'Credit card ending ${entry.cardLast4} (unlinked)')
-      : entry.instrument == TxnInstrument.wallet
-      ? 'Wallet'
-      : 'Cash & other';
+      SpendingSelection.sourceName(entry, bankAccounts: _bankAccounts);
 
   List<TransactionEntry> _transactionsForCard(CardSpendRow row) {
     return _visibleEntries.where((entry) {
       if (row.cardId != null) return entry.userCardId == row.cardId;
-      return _cardName(entry).toLowerCase() == row.cardName.toLowerCase();
+      return _cardName(entry) == row.cardName;
     }).toList();
   }
 
@@ -1201,7 +1188,8 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   ]);
 
   List<String> get _cardOptions => _distinct([
-    ...widget.report.byCard.map((row) => row.cardName),
+    if (_spendEntries.isEmpty)
+      ...widget.report.byCard.map((row) => row.cardName),
     ..._spendEntries.map(_cardName),
   ]);
 
@@ -1243,22 +1231,30 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   List<CardSpendRow> _cardRows() {
-    if (!_filtersActive && widget.report.byCard.isNotEmpty) {
+    // Keep the aggregate report visible while detail rows are loading. Once
+    // loaded, group the same transactions users can expand so bank-account
+    // suffixes and unlinked cards are preserved consistently.
+    if (_spendEntries.isEmpty) {
+      if (_filtersActive) return const [];
       return widget.report.byCard;
     }
     final groups = <String, List<TransactionEntry>>{};
     for (final entry in _visibleEntries) {
-      groups.putIfAbsent(_cardName(entry), () => []).add(entry);
+      final key = entry.userCardId == null
+          ? 'source:${_cardName(entry)}'
+          : 'card:${entry.userCardId}';
+      groups.putIfAbsent(key, () => []).add(entry);
     }
     final rows = groups.entries.map((item) {
+      final sourceEntries = item.value;
       final amount = _sum(item.value);
       final rewards = item.value.fold<Money>(
         const Money.zero(),
         (sum, entry) => sum + (entry.rewardValue ?? const Money.zero()),
       );
       return CardSpendRow(
-        cardId: item.value.first.userCardId,
-        cardName: item.key,
+        cardId: sourceEntries.first.userCardId,
+        cardName: _cardName(sourceEntries.first),
         total: amount,
         rewards: rewards,
         txnCount: item.value.length,
@@ -1277,7 +1273,9 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     }
     final groups = <TxnInstrument, List<TransactionEntry>>{};
     for (final entry in _visibleEntries) {
-      groups.putIfAbsent(entry.instrument, () => []).add(entry);
+      groups
+          .putIfAbsent(SpendingSelection.effectiveInstrument(entry), () => [])
+          .add(entry);
     }
     return groups.entries
         .map(
@@ -1406,7 +1404,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
 
   List<TransactionEntry> _transactionsForInstrument(InstrumentSpendRow row) {
     return _visibleEntries
-        .where((entry) => entry.instrument.wireValue == row.instrument)
+        .where(
+          (entry) =>
+              SpendingSelection.effectiveInstrument(entry).wireValue ==
+              row.instrument,
+        )
         .toList();
   }
 
@@ -1436,6 +1438,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         categories: _categoryOptions,
         merchants: _merchantOptions,
         cards: _cardOptions,
+        bankAccounts: _bankAccounts,
         tags: _allTags,
         tagsFor: _tagsFor,
         initial: _SpendFilterSelection(
@@ -1478,6 +1481,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   @override
   Widget build(BuildContext context) {
     ref.watch(transactionTagsProvider);
+    ref.watch(bankAccountSummariesProvider);
     final report = widget.report;
     final categoryRows = _categoryRows();
     final merchantRows = _merchantRows();
@@ -1638,10 +1642,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
                   entries: _transactionsForMerchant(row),
                   detailsLoading: widget.transactionDetailsLoading,
                 ),
-            ] else if (_tab == _SpendingTab.cards && cardRows.isNotEmpty) ...[
-              _SectionHeader('Cards'),
+            ] else if (_tab == _SpendingTab.accounts &&
+                cardRows.isNotEmpty) ...[
+              _SectionHeader('Accounts'),
               for (final row in cardRows)
-                _CardRow(
+                _AccountRow(
                   row: row,
                   total: total,
                   entries: _transactionsForCard(row),
@@ -1650,9 +1655,9 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
             ] else if (!_filtersActive && cardRows.isNotEmpty) ...[
               // A useful fallback for older reports that have card totals but
               // no category rows yet.
-              _SectionHeader('Cards'),
+              _SectionHeader('Accounts'),
               for (final row in cardRows)
-                _CardRow(
+                _AccountRow(
                   row: row,
                   total: total,
                   entries: _transactionsForCard(row),
@@ -1743,7 +1748,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
           (row) =>
               row.status == 'active' &&
               row.entryKind == kind &&
-              selection.matches(row, tags: _tagsFor(row).map((tag) => tag.id)),
+              selection.matches(
+                row,
+                tags: _tagsFor(row).map((tag) => tag.id),
+                bankAccounts: _bankAccounts,
+              ),
         )
         .toList();
     return EntryKindTotals(
@@ -1754,7 +1763,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 }
 
-enum _SpendingTab { categories, merchants, cards, tags }
+enum _SpendingTab { categories, merchants, accounts, tags }
 
 class _ExpandableTagRow extends StatefulWidget {
   final TransactionTag tag;
@@ -1984,7 +1993,7 @@ class _SpendingTabs extends StatelessWidget {
                     switch (tab) {
                       _SpendingTab.categories => 'Categories',
                       _SpendingTab.merchants => 'Merchants',
-                      _SpendingTab.cards => 'Cards',
+                      _SpendingTab.accounts => 'Accounts',
                       _SpendingTab.tags => 'Tags',
                     },
                     textAlign: TextAlign.center,
@@ -2048,6 +2057,7 @@ class _SpendFilterSheet extends StatefulWidget {
   final Map<String, String> categories;
   final List<String> merchants;
   final List<String> cards;
+  final List<BankAccountSummary> bankAccounts;
   final List<TransactionTag> tags;
   final List<TransactionTag> Function(TransactionEntry) tagsFor;
   final _SpendFilterSelection initial;
@@ -2058,6 +2068,7 @@ class _SpendFilterSheet extends StatefulWidget {
     required this.categories,
     required this.merchants,
     required this.cards,
+    required this.bankAccounts,
     required this.tags,
     required this.tagsFor,
     required this.initial,
@@ -2089,6 +2100,7 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
           (entry) => selection.matches(
             entry,
             tags: widget.tagsFor(entry).map((tag) => tag.id),
+            bankAccounts: widget.bankAccounts,
           ),
         )
         .toList();
@@ -2233,35 +2245,27 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
                     ),
                     const SizedBox(height: AppSpace.xl),
                     _FilterLabel('Payment method'),
-                    Row(
+                    Wrap(
+                      spacing: AppSpace.sm,
+                      runSpacing: AppSpace.sm,
                       children: [
-                        Expanded(
-                          child: _paymentButton(
-                            'All',
-                            _payment == null,
-                            () => setState(() => _payment = null),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpace.sm),
-                        Expanded(
-                          child: _paymentButton(
-                            'Credit cards',
-                            _payment == TxnInstrument.creditCard,
-                            () => setState(
-                              () => _payment = TxnInstrument.creditCard,
+                        for (final option in <(TxnInstrument?, String)>[
+                          (null, 'All'),
+                          (TxnInstrument.creditCard, 'Credit card'),
+                          (TxnInstrument.debitCard, 'Debit card'),
+                          (TxnInstrument.upiBank, 'UPI'),
+                          (TxnInstrument.wallet, 'Wallet'),
+                          (TxnInstrument.cash, 'Cash'),
+                          (TxnInstrument.other, 'Unknown'),
+                        ])
+                          SizedBox(
+                            width: 100,
+                            child: _paymentButton(
+                              option.$2,
+                              _payment == option.$1,
+                              () => setState(() => _payment = option.$1),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: AppSpace.sm),
-                        Expanded(
-                          child: _paymentButton(
-                            'UPI bank',
-                            _payment == TxnInstrument.upiBank,
-                            () => setState(
-                              () => _payment = TxnInstrument.upiBank,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: AppSpace.xl),
@@ -2342,12 +2346,12 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
                           : () => _chooseMerchant(),
                     ),
                     const SizedBox(height: AppSpace.xl),
-                    _FilterLabel('Card / account'),
+                    _FilterLabel('Account'),
                     _selectionField(
                       icon: Icons.credit_card_outlined,
                       child: _card == null
                           ? Text(
-                              'All cards and accounts',
+                              'All accounts',
                               style: BambooFonts.ui(
                                 14,
                                 color: BambooInk.ink500,
@@ -2531,9 +2535,9 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
 
   Future<void> _chooseCard() async {
     final value = await _chooseOption(
-      title: 'Card / account',
+      title: 'Account',
       options: widget.cards,
-      clearLabel: 'All cards and accounts',
+      clearLabel: 'All accounts',
     );
     if (!mounted || value == null) return;
     setState(() => _card = value.isEmpty ? null : value);
@@ -4426,10 +4430,11 @@ class _MerchantGroup extends StatelessWidget {
   }
 
   static String _paymentLabel(TransactionEntry entry) {
+    final instrument = SpendingSelection.effectiveInstrument(entry);
     if (entry.cardLast4 != null) {
-      return '${entry.instrument.label} ••${entry.cardLast4}';
+      return '${instrument.label} ••${entry.cardLast4}';
     }
-    return entry.instrument.label;
+    return entry.instrumentKnown ? instrument.label : 'Unknown payment method';
   }
 }
 
@@ -4518,24 +4523,30 @@ class _BreakdownRow extends StatelessWidget {
 /// the rate on the card's marketing page. A 5% headline card capped at
 /// ₹3,000/month against ₹40,000 of spend has an effective rate near 1%, and
 /// that is the figure that answers "is this annual fee worth paying".
-class _CardRow extends StatelessWidget {
+class _AccountRow extends StatelessWidget {
   final CardSpendRow row;
   final Money total;
   final List<TransactionEntry> entries;
   final bool detailsLoading;
 
-  const _CardRow({
+  const _AccountRow({
     required this.row,
     required this.total,
     required this.entries,
     required this.detailsLoading,
   });
 
-  Map<String, List<TransactionEntry>> _merchantGroups() {
+  Map<String, List<TransactionEntry>> _payeeGroups() {
     final groups = <String, List<TransactionEntry>>{};
     for (final entry in entries) {
+      final vpa = entry.merchantVpa?.trim();
       final merchant = entry.merchantName?.trim();
-      final label = merchant == null || merchant.isEmpty
+      final label =
+          entry.instrument == TxnInstrument.upiBank &&
+              vpa != null &&
+              vpa.isNotEmpty
+          ? vpa
+          : merchant == null || merchant.isEmpty
           ? 'Unknown merchant'
           : merchant;
       groups.putIfAbsent(label, () => []).add(entry);
@@ -4549,15 +4560,21 @@ class _CardRow extends StatelessWidget {
         ? 0.0
         : (row.total.paise / total.paise).clamp(0.0, 1.0);
     final rate = row.effectiveRatePerRupee;
+    final hasCardEvidence =
+        row.cardId != null || entries.any((entry) => entry.cardLast4 != null);
     final visual = SpendingVisual(
-      icon: row.cardId == null
-          ? Icons.account_balance_rounded
-          : Icons.credit_card_rounded,
-      accent: row.cardId == null
-          ? BambooChartColors.violet
-          : BambooChartColors.blue,
+      icon: hasCardEvidence
+          ? Icons.credit_card_rounded
+          : row.cardName == 'Wallet'
+          ? Icons.account_balance_wallet_rounded
+          : row.cardName == 'Cash'
+          ? Icons.payments_rounded
+          : Icons.account_balance_rounded,
+      accent: hasCardEvidence
+          ? BambooChartColors.blue
+          : BambooChartColors.violet,
     );
-    final groups = _merchantGroups().entries.toList()
+    final groups = _payeeGroups().entries.toList()
       ..sort((a, b) {
         final aTotal = a.value.fold<int>(
           0,
@@ -4615,7 +4632,7 @@ class _CardRow extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${row.txnCount} ${row.txnCount == 1 ? 'transaction' : 'transactions'} · Tap to see merchants',
+              '${row.txnCount} ${row.txnCount == 1 ? 'transaction' : 'transactions'} · Tap to see payees',
               style: BambooFonts.ui(11.5, color: BambooInk.ink500),
             ),
             const SizedBox(height: 2),
