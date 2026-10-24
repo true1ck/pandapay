@@ -1,0 +1,47 @@
+name: Pause Gemini SMS pilot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pause-pilot:
+    name: Disable Gemini queue
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Disable new Gemini jobs
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/apps/pandapay
+          DBURL="$(sed -n 's/^ADMIN_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
+          test -n "$DBURL"
+          docker run --rm -i -e U="$DBURL" postgres:17-alpine sh -lc 'psql "$U" -X -qAt -v ON_ERROR_STOP=1' <<'SQL'
+          UPDATE public.feature_flags
+             SET is_enabled = false,
+                 rollout_percent = 0,
+                 description = 'Gemini SMS pilot paused pending provider verification',
+                 updated_at = now()
+           WHERE key = 'sms_ai_queue_enabled';
+          SELECT json_build_object(
+            'key', key,
+            'enabled', is_enabled,
+            'rolloutPercent', rollout_percent,
+            'updatedAt', updated_at
+          ) FROM public.feature_flags WHERE key = 'sms_ai_queue_enabled';
+          SQL
+          REMOTE
