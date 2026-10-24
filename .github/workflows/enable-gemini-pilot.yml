@@ -301,7 +301,7 @@ jobs:
           const payload = {
             sender: 'SYNTHETIC_TEST',
             occurredAt: '2026-10-24T00:00:00.000Z',
-            body: 'Synthetic connectivity fixture only: available bank balance Rs 1234.50 as of 24 October 2026.',
+            body: 'Synthetic fixture only: HDFC Bank A/c XX1234 available balance Rs 1234.50 as of 24 October 2026.',
           };
 
           const nativeFetch = globalThis.fetch;
@@ -327,10 +327,20 @@ jobs:
           });
 
           provider.classify({ payload }).then((facts) => {
+            const smsFacts = require('./src/sms_facts');
+            const { verifyModelFacts } = require('./src/ai_fact_evidence');
+            const contract = smsFacts.validateFactSet(facts);
+            const evidence = verifyModelFacts(facts, payload);
+            const valid = contract.valid && evidence.valid;
             console.log(JSON.stringify({
-              provider: 'gemini', success: true, factCount: facts.length,
+              provider: 'gemini',
+              success: valid,
+              factCount: facts.length,
+              contractValid: contract.valid,
+              evidenceValid: evidence.valid,
               elapsedMs: Date.now() - startedAt,
             }));
+            if (!valid) process.exitCode = 1;
           }).catch((error) => {
             console.log(JSON.stringify({
               provider: 'gemini',
