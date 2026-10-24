@@ -13,6 +13,11 @@ on:
         type: boolean
         required: false
         default: false
+      run_minimal_generation_probe:
+        description: Send a tiny synthetic request capped at 32 output tokens
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -86,17 +91,19 @@ jobs:
           REMOTE
 
       - name: Probe Gemini with a synthetic fixture
-        if: ${{ inputs.run_live_provider_probe || inputs.check_gemini_model_access }}
+        if: ${{ inputs.run_live_provider_probe || inputs.check_gemini_model_access || inputs.run_minimal_generation_probe }}
         env:
           HOST: ${{ secrets.PROD_HOST }}
           DEPLOY_USER: ${{ secrets.PROD_USER }}
           RUN_LIVE_PROVIDER_PROBE: ${{ inputs.run_live_provider_probe }}
+          RUN_MINIMAL_GENERATION_PROBE: ${{ inputs.run_minimal_generation_probe }}
         run: |
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           cd /home/ubuntu/apps/pandapay
           docker compose --profile sms-ai --env-file .env -f docker-compose.prod.yml exec -T \
-            -e RUN_LIVE_PROVIDER_PROBE='${{ inputs.run_live_provider_probe }}' gemini-worker node - <<'NODE'
+            -e RUN_LIVE_PROVIDER_PROBE='${{ inputs.run_live_provider_probe }}' \
+            -e RUN_MINIMAL_GENERATION_PROBE='${{ inputs.run_minimal_generation_probe }}' gemini-worker node - <<'NODE'
           (async () => {
           const { GeminiProvider } = require('./src/gemini_worker');
 
@@ -187,6 +194,56 @@ jobs:
             }));
             process.exitCode = 1;
             return;
+          }
+
+          if (process.env.RUN_MINIMAL_GENERATION_PROBE === 'true') {
+            const startedAt = Date.now();
+            try {
+              const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'content-type': 'application/json',
+                    'x-goog-api-key': process.env.GEMINI_API_KEY,
+                  },
+                  body: JSON.stringify({
+                    contents: [{ parts: [{ text: 'Return exactly {"facts":[]} as JSON.' }] }],
+                    generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 32 },
+                  }),
+                  signal: AbortSignal.timeout(20000),
+                },
+              );
+              let candidateCount = 0;
+              try {
+                const data = await response.json();
+                candidateCount = Array.isArray(data.candidates) ? data.candidates.length : 0;
+              } catch (_) {}
+              console.log(JSON.stringify({
+                minimalGeneration: {
+                  success: response.ok && candidateCount > 0,
+                  status: response.status,
+                  candidateCount,
+                  elapsedMs: Date.now() - startedAt,
+                },
+              }));
+              if (!response.ok || candidateCount === 0) {
+                process.exitCode = 1;
+                return;
+              }
+            } catch (error) {
+              const cause = error.cause || error;
+              console.log(JSON.stringify({
+                minimalGeneration: {
+                  success: false,
+                  errorType: cause.name || error.name,
+                  errorCode: cause.code || error.code || null,
+                  elapsedMs: Date.now() - startedAt,
+                },
+              }));
+              process.exitCode = 1;
+              return;
+            }
           }
           if (process.env.RUN_LIVE_PROVIDER_PROBE !== 'true') return;
 
