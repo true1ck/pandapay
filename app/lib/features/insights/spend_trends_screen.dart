@@ -4415,7 +4415,11 @@ class _ExpandableMerchantRow extends StatelessWidget {
               ),
             )
           else
-            _MerchantGroup(merchant: row.label, entries: entries),
+            _MerchantGroup(
+              merchant: row.label,
+              entries: entries,
+              isCollapsible: false,
+            ),
         ],
       ),
     );
@@ -4425,8 +4429,15 @@ class _ExpandableMerchantRow extends StatelessWidget {
 class _MerchantGroup extends StatelessWidget {
   final String merchant;
   final List<TransactionEntry> entries;
+  final bool isCollapsible;
+  final bool initiallyExpanded;
 
-  const _MerchantGroup({required this.merchant, required this.entries});
+  const _MerchantGroup({
+    required this.merchant,
+    required this.entries,
+    this.isCollapsible = true,
+    this.initiallyExpanded = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -4446,101 +4457,192 @@ class _MerchantGroup extends StatelessWidget {
     final sorted = [...entries]
       ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
 
-    return CardSummaryPanel(
-      padding: const EdgeInsets.all(AppSpace.sm),
-      elevated: false,
-      margin: const EdgeInsets.only(bottom: AppSpace.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const _SpendingVisualBadge(
-                visual: SpendingVisual(
-                  icon: Icons.storefront_rounded,
-                  accent: BambooChartColors.coral,
-                ),
-                size: 30,
+    final transactionList = [
+      for (final entry in sorted)
+        Material(
+          color: Colors.transparent,
+          child: ListTile(
+            key: ValueKey('spending-transaction-${entry.id}'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            title: Text(
+              '${_shortDate(entry.occurredAt)} · ${_paymentLabel(entry)}',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink900),
+            ),
+            subtitle: Text(
+              [
+                if (entry.merchantName?.trim().isNotEmpty == true &&
+                    entry.merchantName!.trim().toLowerCase() !=
+                        merchant.toLowerCase())
+                  entry.merchantName!.trim(),
+                if (entry.categoryName != null) entry.categoryLabel,
+                entry.cardDisplayName ?? _paymentLabel(entry),
+              ].join('\n'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+            ),
+            trailing: MoneyText(
+              entry.amount,
+              confidence: Confidence.estimated,
+              style: BambooFonts.ui(
+                11.5,
+                weight: FontWeight.w600,
+                color: BambooInk.ink900,
               ),
-              const SizedBox(width: AppSpace.sm),
-              Expanded(
-                child: Text(
-                  merchant,
+            ),
+            onTap: () =>
+                context.push('/activity/${entry.id}', extra: entry),
+          ),
+        ),
+    ];
+
+    if (!isCollapsible) {
+      return CardSummaryPanel(
+        padding: const EdgeInsets.all(AppSpace.sm),
+        elevated: false,
+        margin: const EdgeInsets.only(bottom: AppSpace.sm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const _SpendingVisualBadge(
+                  visual: SpendingVisual(
+                    icon: Icons.storefront_rounded,
+                    accent: BambooChartColors.coral,
+                  ),
+                  size: 30,
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    merchant,
+                    style: BambooFonts.ui(
+                      12.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                ),
+                MoneyText(
+                  amount,
+                  confidence: Confidence.estimated,
                   style: BambooFonts.ui(
                     12.5,
                     weight: FontWeight.w700,
                     color: BambooInk.ink900,
                   ),
                 ),
-              ),
-              MoneyText(
-                amount,
-                confidence: Confidence.estimated,
-                style: BambooFonts.ui(
-                  12.5,
-                  weight: FontWeight.w700,
-                  color: BambooInk.ink900,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '${entries.length} ${entries.length == 1 ? 'transaction' : 'transactions'} · $cards',
-            style: BambooFonts.ui(11, color: BambooInk.ink500),
-          ),
-          if (entries.every(
-            (entry) => entry.merchantName?.trim().isEmpty ?? true,
-          ))
+              ],
+            ),
+            const SizedBox(height: 2),
             Text(
-              'Tap the payment to add its merchant.',
+              '${entries.length} ${entries.length == 1 ? 'transaction' : 'transactions'} · $cards',
               style: BambooFonts.ui(11, color: BambooInk.ink500),
             ),
-          if (hasRewardData)
-            Text(
-              'Rewards earned ${rewards.format()}',
-              style: BambooFonts.ui(11, color: BambooInk.ink500),
-            ),
-          const SizedBox(height: 2),
-          for (final entry in sorted)
-            Material(
-              color: Colors.transparent,
-              child: ListTile(
-                key: ValueKey('spending-transaction-${entry.id}'),
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                visualDensity: VisualDensity.compact,
-                title: Text(
-                  '${_shortDate(entry.occurredAt)} · ${_paymentLabel(entry)}',
-                  style: BambooFonts.ui(11.5, color: BambooInk.ink900),
-                ),
-                subtitle: Text(
-                  [
-                    if (entry.merchantName?.trim().isNotEmpty == true &&
-                        entry.merchantName!.trim().toLowerCase() !=
-                            merchant.toLowerCase())
-                      entry.merchantName!.trim(),
-                    if (entry.categoryName != null) entry.categoryLabel,
-                    entry.cardDisplayName ?? _paymentLabel(entry),
-                  ].join('\n'),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: BambooFonts.ui(10.5, color: BambooInk.ink500),
-                ),
-                trailing: MoneyText(
-                  entry.amount,
-                  confidence: Confidence.estimated,
-                  style: BambooFonts.ui(
-                    11.5,
-                    weight: FontWeight.w600,
-                    color: BambooInk.ink900,
+            if (entries.every(
+              (entry) => entry.merchantName?.trim().isEmpty ?? true,
+            ))
+              Text(
+                'Tap the payment to add its merchant.',
+                style: BambooFonts.ui(11, color: BambooInk.ink500),
+              ),
+            if (hasRewardData)
+              Text(
+                'Rewards earned ${rewards.format()}',
+                style: BambooFonts.ui(11, color: BambooInk.ink500),
+              ),
+            const SizedBox(height: 2),
+            ...transactionList,
+          ],
+        ),
+      );
+    }
+
+    return CardSummaryPanel(
+      padding: EdgeInsets.zero,
+      elevated: false,
+      margin: const EdgeInsets.only(bottom: AppSpace.sm),
+      child: ExpansionTile(
+        key: PageStorageKey<String>('spending-merchant-group-$merchant'),
+        initiallyExpanded: initiallyExpanded,
+        tilePadding: const EdgeInsets.fromLTRB(
+          AppSpace.sm,
+          AppSpace.xs,
+          AppSpace.xs,
+          AppSpace.xs,
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpace.sm,
+          0,
+          AppSpace.sm,
+          AppSpace.sm,
+        ),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: const _SpendingVisualBadge(
+          visual: SpendingVisual(
+            icon: Icons.storefront_rounded,
+            accent: BambooChartColors.coral,
+          ),
+          size: 30,
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    merchant,
+                    style: BambooFonts.ui(
+                      12.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink900,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                onTap: () =>
-                    context.push('/activity/${entry.id}', extra: entry),
-              ),
+                const SizedBox(width: AppSpace.xs),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: MoneyText(
+                      amount,
+                      confidence: Confidence.estimated,
+                      style: BambooFonts.ui(
+                        12.5,
+                        weight: FontWeight.w700,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              '${entries.length} ${entries.length == 1 ? 'transaction' : 'transactions'} · $cards',
+              style: BambooFonts.ui(11, color: BambooInk.ink500),
+            ),
+            if (entries.every(
+              (entry) => entry.merchantName?.trim().isEmpty ?? true,
+            ))
+              Text(
+                'Tap the payment to add its merchant.',
+                style: BambooFonts.ui(11, color: BambooInk.ink500),
+              ),
+            if (hasRewardData)
+              Text(
+                'Rewards earned ${rewards.format()}',
+                style: BambooFonts.ui(11, color: BambooInk.ink500),
+              ),
+          ],
+        ),
+        children: transactionList,
       ),
     );
   }

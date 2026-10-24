@@ -706,6 +706,10 @@ void main() {
     expect(find.text('Swiggy'), findsOneWidget);
     expect(find.text('Cafe Central'), findsOneWidget);
     expect(find.textContaining('Rewards earned ₹'), findsNWidgets(2));
+    expect(find.textContaining('12/08/2026'), findsNothing);
+
+    await tester.tap(find.text('Swiggy'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('12/08/2026'), findsOneWidget);
     expect(find.text('Dining · Dinner\nHDFC Millennia'), findsOneWidget);
   });
@@ -1084,6 +1088,95 @@ void main() {
     expect(find.text('UPI from bank account'), findsOneWidget);
   });
 
+  testWidgets(
+    'payment method expands into collapsible merchant groups with transaction drilldown',
+    (tester) async {
+      await _pump(
+        tester,
+        _report(
+          spend: 1500,
+          byInstrument: [
+            InstrumentSpendRow(
+              instrument: 'credit_card',
+              total: Money.fromRupees(1500),
+              txnCount: 3,
+            ),
+          ],
+        ),
+        transactions: [
+          _detailEntry(
+            id: 'flipkart-1',
+            merchant: 'FLIPKART IN',
+            amount: 1000,
+            categoryId: 'shopping',
+            categoryName: 'Online Shopping',
+            occurredAt: DateTime(2026, 10, 16),
+            cardDisplayName: 'Flipkart Axis Bank Credit Card',
+          ),
+          _detailEntry(
+            id: 'flipkart-2',
+            merchant: 'FLIPKART IN',
+            amount: 240,
+            categoryId: 'shopping',
+            categoryName: 'Online Shopping',
+            occurredAt: DateTime(2026, 10, 16),
+            cardDisplayName: 'Flipkart Axis Bank Credit Card',
+          ),
+          _detailEntry(
+            id: 'amazon-1',
+            merchant: 'AMAZON INDIA',
+            amount: 260,
+            categoryId: 'shopping',
+            categoryName: 'Online Shopping',
+            occurredAt: DateTime(2026, 10, 14),
+            cardDisplayName: 'ICICI Amazon Pay Credit Card',
+          ),
+        ],
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Credit cards'),
+        300,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.ensureVisible(find.text('Credit cards'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Credit cards'));
+      await tester.pumpAndSettle();
+
+      // Both merchants are shown collapsed inside Credit cards
+      expect(find.text('FLIPKART IN'), findsOneWidget);
+      expect(find.text('AMAZON INDIA'), findsOneWidget);
+      expect(find.text('2 transactions · Flipkart Axis Bank Credit Card'), findsOneWidget);
+      expect(find.text('1 transaction · ICICI Amazon Pay Credit Card'), findsOneWidget);
+
+      // Transactions are hidden while merchants are collapsed
+      expect(find.textContaining('16/10/2026'), findsNothing);
+      expect(find.textContaining('14/10/2026'), findsNothing);
+
+      // Expanding FLIPKART IN reveals only its transactions
+      await tester.tap(find.text('FLIPKART IN'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('16/10/2026'), findsNWidgets(2));
+      expect(find.textContaining('14/10/2026'), findsNothing);
+
+      // Expanding AMAZON INDIA reveals its transactions
+      await tester.ensureVisible(find.text('AMAZON INDIA'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('AMAZON INDIA'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('14/10/2026'), findsOneWidget);
+
+      // Collapsing FLIPKART IN hides its transactions again
+      await tester.ensureVisible(find.text('FLIPKART IN'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('FLIPKART IN'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('16/10/2026'), findsNothing);
+      expect(find.textContaining('14/10/2026'), findsOneWidget);
+    },
+  );
+
   testWidgets('labels Other spending as a payment method needing review', (
     tester,
   ) async {
@@ -1192,7 +1285,16 @@ void main() {
 
     expect(find.text('Swiggy'), findsOneWidget);
     expect(find.text('Cafe Central'), findsOneWidget);
+    expect(find.textContaining('12/08/2026'), findsNothing);
+
+    await tester.tap(find.text('Swiggy'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('12/08/2026'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Cafe Central'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cafe Central'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('13/08/2026'), findsOneWidget);
   });
 
@@ -1248,6 +1350,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('raja@upi'), findsOneWidget);
+    expect(find.textContaining('Raja Das'), findsNothing);
+
+    await tester.tap(find.text('raja@upi'));
+    await tester.pumpAndSettle();
+
     expect(find.textContaining('Raja Das'), findsNWidgets(2));
     final firstPayment = tester.widget<ListTile>(
       find.byKey(const ValueKey('spending-transaction-upi-txn-1')),
@@ -1320,6 +1427,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('raja@upi'), findsOneWidget);
+    expect(find.textContaining('12/08/2026'), findsNothing);
+
+    await tester.tap(find.text('raja@upi'));
+    await tester.pumpAndSettle();
+
     expect(find.textContaining('12/08/2026'), findsOneWidget);
     expect(find.textContaining('13/08/2026'), findsOneWidget);
   });
