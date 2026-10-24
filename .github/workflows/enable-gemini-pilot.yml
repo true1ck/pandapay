@@ -1,0 +1,50 @@
+name: Enable Gemini 1% pilot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  enable-pilot:
+    name: Enable SMS AI pilot
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Set 1% SMS AI rollout
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/apps/pandapay
+          DBURL="$(sed -n 's/^ADMIN_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
+          test -n "$DBURL"
+          docker run --rm -i -e U="$DBURL" postgres:17-alpine sh -lc 'psql "$U" -X -qAt -v ON_ERROR_STOP=1' <<'SQL'
+          BEGIN;
+          INSERT INTO public.feature_flags (key, is_enabled, rollout_percent, description)
+          VALUES ('sms_ai_queue_enabled', true, 1, 'Gemini SMS classification pilot')
+          ON CONFLICT (key) DO UPDATE SET
+            is_enabled = EXCLUDED.is_enabled,
+            rollout_percent = EXCLUDED.rollout_percent,
+            description = EXCLUDED.description,
+            updated_at = now();
+          SELECT json_build_object(
+            'key', key,
+            'enabled', is_enabled,
+            'rolloutPercent', rollout_percent,
+            'updatedAt', updated_at
+          ) FROM public.feature_flags WHERE key = 'sms_ai_queue_enabled';
+          COMMIT;
+          SQL
+          REMOTE
