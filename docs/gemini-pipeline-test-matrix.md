@@ -95,3 +95,25 @@ local test failures recorded here.
   validation, and removing conflicting per-item batch response instructions.
 - This review performed local checks only. It did not rerun production probes,
   change rollout flags, deploy services, or verify a physical-device update.
+
+## AI Studio follow-up (2026-10-24)
+
+- Verified that AI Studio was displaying the intended account and PandaPay
+  project. This supersedes the earlier inspection of a different
+  account/project; personal account identifiers are intentionally omitted.
+- The usage chart's Oct 23 (UTC-8) daily bucket reports 8 HTTP 400,
+  1 HTTP 404, and 2 HTTP 503 errors; Oct 24 reports 1 HTTP 400 and 1 HTTP 503.
+  The errors chart max for the range is 11. These are aggregate daily counts and
+  do not identify the caller. Our deliberate malformed-content and invalid-model
+  probes can explain some 400/404s; attribution of the remaining errors is not
+  established.
+- The Oct 23 output-token bucket reports 6.83K for Gemini 3.6 Flash and 19.572K
+  for Gemini 3.8 Flash. These are daily totals, not per-request counts. The
+  3.8 total is a cost/latency warning, but the chart alone cannot prove whether
+  it came from our timed-out synthetic probes or another caller.
+- Added `maxOutputTokens: 1024` to both single and batch provider requests to
+  bound generated output; truncation remains fail-closed through JSON/fact
+  validation. This local guard requires deployment before it protects
+  production requests. No further live Gemini requests were sent.
+- Production rollout remains paused at 0%; verify deployment status before any
+  pilot change.

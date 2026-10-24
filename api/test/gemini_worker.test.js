@@ -36,6 +36,7 @@ test('Gemini provider requests JSON and parses the model fact envelope', async (
   const facts = await provider.classify({ payload: { sender: 'BANK', body: 'Card XXXX1234 paid Rs 100' } });
   assert.deepEqual(facts, []);
   assert.equal(request.generationConfig.responseMimeType, 'application/json');
+  assert.equal(request.generationConfig.maxOutputTokens, 1024);
   assert.equal(Object.hasOwn(request.generationConfig, 'temperature'), false,
     'Gemini 3.8 Flash rejects deprecated sampling parameters');
   assert.match(request.contents[0].parts[0].text, /Card XXXX1234/);
@@ -47,6 +48,23 @@ test('Gemini provider requests JSON and parses the model fact envelope', async (
 test('Gemini worker defaults to the supported Flash model unless configured', () => {
   const provider = new GeminiProvider({ apiKey: 'test-key', fetchImpl: async () => response({}) });
   assert.equal(provider.model, process.env.GEMINI_MODEL || 'gemini-3.8-flash');
+});
+
+test('Gemini batch generation has a bounded output token limit', async () => {
+  let request;
+  const provider = new GeminiProvider({
+    apiKey: 'test-key',
+    fetchImpl: async (_url, options) => {
+      request = JSON.parse(options.body);
+      return response({ candidates: [{ content: { parts: [{ text: '{"items":[]}' }] } }] });
+    },
+  });
+  const result = await provider.classifyBatch([
+    { id: 'a', payload: { body: 'synthetic fixture A' } },
+    { id: 'b', payload: { body: 'synthetic fixture B' } },
+  ]);
+  assert.deepEqual(result, new Map());
+  assert.equal(request.generationConfig.maxOutputTokens, 1024);
 });
 
 test('Gemini prompt states required fact fields and fail-closed abstention rules', () => {

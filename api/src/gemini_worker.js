@@ -16,6 +16,7 @@ const DEFAULT_API_BASE_URL = process.env.AI_WORKER_API_BASE_URL || `http://127.0
 const PROVIDER_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_PROVIDER_TIMEOUT_MS || 20000));
 const DEFAULT_BATCH_MAX = Math.min(4, Math.max(1, Number(process.env.AI_WORKER_BATCH_MAX || 4)));
 const DEFAULT_BATCH_WINDOW_MS = Math.min(500, Math.max(0, Number(process.env.AI_WORKER_BATCH_WINDOW_MS || 300)));
+const MAX_OUTPUT_TOKENS = 1024;
 
 class GeminiProviderError extends Error {
   constructor(message, { retryable = false, retryAfterMs = undefined, status = undefined } = {}) {
@@ -156,6 +157,7 @@ class GeminiProvider {
           contents: [{ role: 'user', parts: [{ text: buildGeminiPrompt(job) }] }],
           generationConfig: {
             responseMimeType: 'application/json',
+            maxOutputTokens: MAX_OUTPUT_TOKENS,
           },
         }),
       },
@@ -199,7 +201,10 @@ class GeminiProvider {
           headers: { 'content-type': 'application/json', 'x-goog-api-key': this.apiKey },
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: buildGeminiBatchPrompt(jobs) }] }],
-            generationConfig: { responseMimeType: 'application/json' },
+            generationConfig: {
+              responseMimeType: 'application/json',
+              maxOutputTokens: MAX_OUTPUT_TOKENS,
+            },
           }),
         },
       );
