@@ -41,22 +41,22 @@ fabricated prompts.
   concurrent quota-edge acceptance, queue redaction/idempotency, batch isolation,
   provider error mapping/retries, fact evidence, prompt-field requirements,
   and rollback/fallback behavior.
-- Focused Flutter SMS/review/repository tests: **66 passed**; the separate AI
+- Focused Flutter SMS/review/repository tests: **60 passed**; the separate AI
   suggestion screen checks passed **2/2**. Added repository tests cover the
   authenticated queue request, refusal/offline fallback, and source-scoped
   status polling.
-- Full API suite: **818 passed, 1 failed, 2 skipped**. The single failure is
-  `api/test/local_sms_parity.test.js` expecting `other` while the current parser
-  returns `credit_card`; it is outside the Gemini code paths.
-- The broader Needs Review screen test file has four unrelated missing-action
-  assertions (`Ignore message` / `Dismiss all`); its two AI suggestion tests
-  pass. These are current shared-checkout UI changes, not changed by this test
-  work.
+- Full API suite in a clean worktree: **815 passed, 0 failed, 2 skipped**. The
+  full Flutter app CI also passed. The shared working checkout separately had
+  one unrelated local/server SMS parity failure and four Needs Review button
+  assertions; the AI suggestion tests passed. Those changes were outside this
+  Gemini test patch.
 - Live provider: key/model metadata succeeds; Google responds to authenticated
-  request validation. The synthetic `gemini-3.6-flash` minimal generation
-  succeeded, but full classifications were inconsistent (503, then success,
-  then 503). The successful output lacked required balance fields. `gemini-3.8`
-  timed out; `gemini-3.7` timed out; `gemini-2.5` returned 404.
+  request validation. A synthetic `gemini-3.6-flash` generation succeeded once,
+  but full classifications were inconsistent (503, success with a contract-
+  invalid fact, then 503). `gemini-3.8` timed out; `gemini-3.7` timed out;
+  `gemini-2.5` returned 404. The prompt now specifies required fields and
+  fail-closed abstention and is deployed, but the post-deploy full probe returned
+  503 before validating a successful model response.
 - Google AI Studio shows the project on Free Tier, with unused listed limits
   (3.8 Flash: 0/5 RPM, 0/250K TPM, 0/20 RPD), no billing account, and API
   Logs/Datasets disabled until billing setup. This does not by itself explain
@@ -64,8 +64,8 @@ fabricated prompts.
 - The production pilot is **paused** (`sms_ai_queue_enabled=false`, rollout
   0%). Final counters: no jobs, provider reservations, results, or retries.
   No real SMS content was sent and no production job was created.
-- The worker prompt was tightened locally to spell out required fact fields,
+- The worker prompt was tightened to spell out required fact fields,
   amount/date role mappings, and fail-closed abstention; the prompt regression
-  test passes. That source edit is not yet deployed.
+  test passes and the change is deployed.
 - Keep the pilot paused until a supported model completes repeated full-adapter
   probes and its returned facts pass contract/evidence validation.
