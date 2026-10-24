@@ -19,6 +19,7 @@ const assert = require('node:assert');
 const geminiQueue = require('../src/gemini_queue');
 const smsFacts = require('../src/sms_facts');
 const aiQueueRoute = require('../src/ai_queue_route');
+const smsObservationMigration = require('../src/sms_observation_migration');
 
 const PROFILE_A = '11111111-1111-1111-1111-111111111111';
 const PROFILE_B = '22222222-2222-2222-2222-222222222222';
@@ -256,6 +257,10 @@ function makeFakeClient() {
       job.lease_expires_at = null;
       return { rows: [], rowCount: 1 };
     }
+    if (norm.startsWith('DELETE FROM ai_jobs WHERE id')) {
+      const deleted = state.jobs.delete(params[0]);
+      return { rows: [], rowCount: deleted ? 1 : 0 };
+    }
     if (norm.startsWith('SELECT payload FROM ai_jobs WHERE id')) {
       const job = state.jobs.get(params[0]);
       return { rows: job ? [jsonbOut({ payload: job.payload })] : [], rowCount: job ? 1 : 0 };
@@ -279,8 +284,10 @@ function makeFakeClient() {
     }
     if (norm.startsWith('INSERT INTO ai_quota_days')) {
       const key = `${params[0]}:${todayKey()}`;
-      state.quota.set(key, (state.quota.get(key) || 0) + 1);
-      return { rows: [], rowCount: 1 };
+      const used = state.quota.get(key) || 0;
+      if (used >= params[1]) return { rows: [], rowCount: 0 };
+      state.quota.set(key, used + 1);
+      return { rows: [{ profile_id: params[0] }], rowCount: 1 };
     }
     if (norm.startsWith('INSERT INTO ai_events')) {
       state.events.push({
@@ -515,6 +522,27 @@ test('AI quota insert supplies the required day column', async () => {
     sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: 'Rs 100 debited',
   });
   assert.match(quotaSql, /\(profile_id, day, jobs_used\)/);
+});
+
+test('concurrent fresh accepts cannot exceed the daily quota or leave a rejected job', async () => {
+  const client = makeUserClient();
+  const quotaKey = `${PROFILE_A}:${todayKey()}`;
+  client.state.quota.set(quotaKey, geminiQueue.DAILY_QUOTA - 1);
+
+  const outcomes = await Promise.all([
+    geminiQueue.acceptOneJob(client, PROFILE_A, {
+      sourceKey: 'b'.repeat(64), sender: 'HDFCBK', body: BILL_BODY,
+    }),
+    geminiQueue.acceptOneJob(client, PROFILE_A, {
+      sourceKey: 'c'.repeat(64), sender: 'HDFCBK', body: BILL_BODY,
+    }),
+  ]);
+
+  assert.equal(outcomes.filter((item) => item.accepted).length, 1);
+  assert.equal(outcomes.filter((item) => item.reason === 'daily_quota_exhausted').length, 1);
+  assert.equal(client.state.quota.get(quotaKey), geminiQueue.DAILY_QUOTA);
+  assert.equal(client.state.jobs.size, 1);
+  assert.equal(client.state.events.filter((event) => event.event_type === 'accepted').length, 1);
 });
 
 test('AI sanitization hides full account IDs, addresses, references and URLs', () => {
@@ -917,6 +945,41 @@ test('POST /ai/jobs honors the server-side AI rollout flag without altering loca
   assert.equal(h.state.jobs.size, 0);
 });
 
+test('POST /ai/jobs accepts only profiles selected into the deterministic 1% pilot', async () => {
+  const included = Array.from({ length: 1000 }, (_, i) => `pilot-${i}`).find(
+    (id) => smsObservationMigration.hashProfileBucket(id, 'sms_ai_queue_enabled') === 0,
+  );
+  const excluded = Array.from({ length: 1000 }, (_, i) => `outside-${i}`).find(
+    (id) => smsObservationMigration.hashProfileBucket(id, 'sms_ai_queue_enabled') !== 0,
+  );
+  assert.ok(included);
+  assert.ok(excluded);
+
+  const forProfile = async (userId) => {
+    const h = harness({});
+    h.state.featureFlags = [
+      { key: 'sms_ai_queue_enabled', is_enabled: true, rollout_percent: 1 },
+    ];
+    return {
+      h,
+      response: await h.call('/ai/jobs', {
+        userId,
+        body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
+      }),
+    };
+  };
+
+  const inCohort = await forProfile(included);
+  assert.equal(inCohort.response.status, 200);
+  assert.equal(inCohort.h.state.jobs.size, 1);
+
+  const outOfCohort = await forProfile(excluded);
+  assert.equal(outOfCohort.response.status, 503);
+  assert.equal(outOfCohort.response.body.error, 'ai_queue_disabled');
+  assert.equal(outOfCohort.h.state.jobs.size, 0);
+  assert.equal(outOfCohort.h.state.quota.size, 0);
+});
+
 test('lease endpoint hands out nothing on an empty queue', async () => {
   const h = harness({});
   const res = await h.call('/ai/jobs/lease', { body: {} });
@@ -985,6 +1048,29 @@ test('result endpoint requires the current lease token and job owner context', a
   });
   assert.equal(stale.status, 409);
   assert.match(stale.body.error, /lease/);
+});
+
+test('valid AI result endpoint completes review-only without invoking projection specialists', async () => {
+  for (const facts of [[], BILL_FACTS]) {
+    const h = harness({});
+    const accepted = await h.call('/ai/jobs', {
+      userId: PROFILE_A,
+      body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
+    });
+    const lease = await h.call('/ai/jobs/lease', { body: {} });
+    const job = h.state.jobs.get(accepted.body.jobId);
+    job.lease_expires_at = new Date(Date.now() + 600000);
+    const result = await h.call('/ai/jobs/:id/result', {
+      params: { id: job.id },
+      body: { profileId: PROFILE_A, leaseToken: lease.body.job.leaseToken, facts },
+    });
+    assert.equal(result.status, 200);
+    assert.equal(job.status, 'done');
+    assert.equal(job.result.reviewRequired, true);
+    assert.equal(job.result.specialists, null);
+    assert.deepEqual(job.payload, { purged: true });
+    assert.equal(h.state.events.filter((event) => event.event_type === 'result').length, 1);
+  }
 });
 
 // Phase 6: Admin monitoring & Learning loop

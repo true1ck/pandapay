@@ -99,6 +99,17 @@ test('new projection fields remain valid under the typed fact contract', () => {
   assert.deepEqual(result, { valid: true, errors: [] });
 });
 
+test('AI suggestions cannot become projections until explicitly corrected', () => {
+  const fact = { ...mandate(), provenance: { channel: 'ai' } };
+  assert.deepEqual(projection.buildProjectionDecisions({ facts: [fact] }), []);
+  const confirmed = smsFacts.resolveFactsWithOverrides({
+    facts: [fact], overrides: new Map([[0, { merchant: 'NETFLIX' }]]),
+  });
+  assert.deepEqual(confirmed.errors, []);
+  assert.deepEqual(projection.buildProjectionDecisions(confirmed)
+    .map((item) => item.projectionKind), ['mandate', 'subscription']);
+});
+
 test('cancelled service mandates retain lifecycle without manufacturing a payment', () => {
   const decisions = projection.buildProjectionDecisions({ facts: [mandate({ mandateStatus: 'cancelled' })] });
   const mandateDecision = decisions.find((item) => item.projectionKind === 'mandate');

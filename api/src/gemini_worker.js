@@ -74,15 +74,20 @@ function parseModelJson(text) {
   }
 }
 
-function buildGeminiPrompt(job) {
+function buildGeminiPrompt(job, { batch = false } = {}) {
   const payload = job?.payload || {};
   return [
     'Classify this bank SMS into typed financial facts for a personal finance app.',
     'The message has already been redacted. Never infer or invent missing digits.',
-    'Return JSON only in the form {"facts":[...]}; return an empty facts array when uncertain.',
+    batch
+      ? 'Supply this item\'s facts array in the batch items envelope; keep this item with facts: [] when uncertain.'
+      : 'Return JSON only in the form {"facts":[...]}; return an empty facts array when uncertain.',
     'Each fact must use the app contract: factType, payload, provenance.',
     'Allowed factType values: posted_movement, pending_or_failed_attempt, balance_snapshot, bill_obligation, bill_payment, mandate_lifecycle, card_identity_hint, security_or_service_alert, promotion.',
     'Amounts must use the correct role: posted, due_total, due_minimum, outstanding, ceiling, or proposed.',
+    'Required payload fields: posted_movement = amountRole, entryKind, occurredAt; pending_or_failed_attempt = attemptStatus, occurredAt; balance_snapshot = availableBalanceInr, asOfAt; bill_obligation = amountRole, dueDate and its evidenced amount/date fields; bill_payment = amountRole, occurredAt and its evidenced amount field; mandate_lifecycle = mandateStatus, asOfAt; card_identity_hint = asOfAt; security_or_service_alert = alertKind, occurredAt; promotion may be empty.',
+    'For amountRole, include its matching amount and date: posted=amountInr/occurredAt, due_total=amountDueInr/dueDate, due_minimum=minimumDueInr/dueDate, outstanding=outstandingInr/asOfAt, ceiling=limitInr/asOfAt, proposed=proposedAmountInr/proposedAt.',
+    'A posted spend also requires merchant. A mandate limit is valid only for registered status. Never omit required fields or invent values; if any required value is absent or uncertain, leave this SMS\'s facts array empty.',
     'Do not treat a bill total, credit limit, or mandate ceiling as a posted movement.',
     `Sender: ${String(payload.sender || '')}`,
     `Occurred at: ${String(payload.occurredAt || '')}`,
@@ -95,7 +100,7 @@ function buildGeminiBatchPrompt(jobs) {
     'Classify each SMS independently. Return JSON only: {"items":[{"id":"<id>","facts":[...]}]}.',
     'Return exactly one item per supplied id, even when its facts array is empty.',
     'Never mix an amount, account or date from one item into another item.',
-    ...jobs.map((job) => `ITEM ${job.id}\n${buildGeminiPrompt(job)}`),
+    ...jobs.map((job) => `ITEM ${job.id}\n${buildGeminiPrompt(job, { batch: true })}`),
   ].join('\n\n');
 }
 
@@ -275,7 +280,9 @@ async function runWorkerOnce({
   }
   const batchId = crypto.randomUUID();
   const settleFailure = async (job, error) => {
-    if (error?.status === 422) return { jobId: job.id, failed: true };
+    // Only the API's 422 has already failed/purged the job. A provider 422
+    // still needs the terminal failure endpoint to release this lease.
+    if (error?.status === 422 && !(error instanceof GeminiProviderError)) return { jobId: job.id, failed: true };
     const retryable = error?.retryable === true || error?.status === 408 || error?.status === 409 || error?.status === 429 || error?.status >= 500;
     const route = retryable ? 'retry' : 'fail';
     const outcome = await jsonRequest(fetchImpl, `${base}/ai/jobs/${encodeURIComponent(job.id)}/${route}`, workerToken, {

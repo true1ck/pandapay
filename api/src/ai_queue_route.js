@@ -14,7 +14,6 @@
  */
 
 const geminiQueue = require('./gemini_queue');
-const { applyFactSpecialists } = require('./sms_facts_route');
 const smsFacts = require('./sms_facts');
 const smsObservationMigration = require('./sms_observation_migration');
 const crypto = require('crypto');
@@ -218,8 +217,8 @@ function registerAiQueueRoutes(app, {
             ...(typeof batchId === 'string' && /^[0-9a-f-]{36}$/i.test(batchId) ? { batchId } : {}),
             ...(Number.isInteger(batchSize) && batchSize >= 1 && batchSize <= 4 ? { batchSize } : {}),
           },
-          applySpecialists: applyFactSpecialists,
-          persistSubscriptionMandate,
+          // AI output remains a review suggestion. Only device facts and
+          // explicit user corrections may invoke the domain specialists.
         });
         return { status: 200, jobStatus: 'done' };
       });

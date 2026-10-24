@@ -154,7 +154,13 @@ function fakeClient({ contributionsOptIn = true } = {}) {
         return { rows };
       }
       // user_cards instrumentation match (import_resolvers)
-      if (sql.includes('FROM user_cards uc')) return cardFitRows;
+      if (sql.includes('FROM user_cards uc')) {
+        if (cardFitRows.rows.length && /^\d{4}$/.test(params[1])) {
+          const cardId = { '4321': 'uc-1', '8708': 'uc-2', '1797': 'uc-3' }[params[1]];
+          return { rows: cardId ? [{ id: cardId }] : [] };
+        }
+        return cardFitRows;
+      }
       if (sql.startsWith('UPDATE user_cards')) {
         cardUpdates.push({
           day: params[0],
@@ -349,6 +355,103 @@ test('POST /sms/facts accepts statement bills with role-separated money', async 
   // Days heal once even though two bill facts carry the same dates.
   assert.equal(client.cardUpdates.filter((u) => u.sql.includes('statement_day')).length, 1);
   assert.equal(client.cardUpdates.filter((u) => u.sql.includes('due_day')).length, 1);
+});
+
+test('POST /sms/facts does not deduplicate the same date across different cards', async () => {
+  const client = fakeClient();
+  const route = harness();
+  const secondCardBill = {
+    factType: 'bill_obligation',
+    payload: {
+      amountRole: 'due_total',
+      amountDueInr: 1200,
+      dueDate: billFact.payload.dueDate,
+      statementDate: billFact.payload.statementDate,
+      last4: '8708',
+    },
+  };
+  const result = await route.call(client, {
+    userId: 'user-1',
+    body: {
+      sourceKey: '8'.repeat(64),
+      sender: 'HDFCBK',
+      bodyHash: '7'.repeat(64),
+      occurredAt: '2026-10-16T10:00:00.000Z',
+      facts: [billFact, secondCardBill],
+    },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(client.cardUpdates.filter((u) => u.sql.includes('statement_day')).length, 2);
+  assert.equal(client.cardUpdates.filter((u) => u.sql.includes('due_day')).length, 2);
+  assert.deepEqual(client.cardUpdates.filter((u) => u.sql.includes('due_day'))
+    .map((u) => u.cardId).sort(), ['uc-1', 'uc-2']);
+});
+
+test('card-day specialists ignore inactive and explicitly non-credit-card bills', async () => {
+  for (const fact of [
+    { ...billFact, status: 'discarded' },
+    { ...billFact, status: 'superseded' },
+    ...['upi_bank', 'debit_card', 'wallet', 'other'].map((instrument) => ({
+      ...billFact, payload: { ...billFact.payload, instrument },
+    })),
+    { ...billFact, payload: { ...billFact.payload, cardType: 'debit' } },
+    { ...billFact, payload: { ...billFact.payload, targetKind: 'utility_or_other_bill' } },
+  ]) {
+    const client = fakeClient();
+    const result = await harness().call(client, {
+      userId: 'user-1',
+      body: { sourceKey: '4'.repeat(64), bodyHash: '3'.repeat(64), facts: [fact], userCardId: 'uc-1' },
+    });
+    assert.equal(result.status, 200);
+    assert.equal(client.cardUpdates.length, 0);
+  }
+});
+
+test('POST /sms/facts does not learn card days from non-bill facts with date fields', async () => {
+  const client = fakeClient();
+  const route = harness();
+  const result = await route.call(client, {
+    userId: 'user-1',
+    body: {
+      sourceKey: '6'.repeat(64),
+      sender: 'HDFCBK',
+      bodyHash: '5'.repeat(64),
+      occurredAt: '2026-10-16T10:00:00.000Z',
+      facts: [{
+        factType: 'card_identity_hint',
+        payload: {
+          asOfAt: '2026-10-16T10:00:00.000Z',
+          last4: '8708',
+          statementDate: '2026-10-12T18:30:00.000Z',
+          dueDate: '2026-11-05T00:00:00.000Z',
+        },
+      }],
+    },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(client.cardUpdates.length, 0);
+});
+
+test('replaying a source cannot promote AI card-day suggestions before user correction', async () => {
+  const client = fakeClient({ contributionsOptIn: false });
+  const route = harness();
+  const request = {
+    userId: 'user-1',
+    body: {
+      sourceKey: '2'.repeat(64), bodyHash: '1'.repeat(64),
+      facts: [{ ...billFact, provenance: { channel: 'ai' } }],
+    },
+  };
+  assert.equal((await route.call(client, request)).status, 200);
+  assert.equal((await route.call(client, request)).status, 200);
+  assert.equal(client.cardUpdates.length, 0);
+  const corrected = await route.overrideCall(client, {
+    userId: 'user-1',
+    body: { sourceKey: request.body.sourceKey, factIndex: 0, patch: { dueDate: '2026-11-08T00:00:00.000Z' } },
+  });
+  assert.equal(corrected.status, 200);
+  assert.equal(corrected.body.dueDayUpdated, true);
+  assert.equal(client.cardUpdates.find((item) => item.sql.includes('due_day')).day, 8);
 });
 
 test('POST /sms/facts persists a registered mandate through the injected writer', async () => {

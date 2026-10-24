@@ -361,6 +361,9 @@ function buildProjectionDecisions({ facts = [], sourceId = null, sourceKey = nul
   const decisions = [];
   for (const fact of facts) {
     if (!fact || fact.status === 'superseded' || fact.status === 'discarded') continue;
+    // The same builder serves live intake and read-time backfill. Neither may
+    // materialize a review-only AI suggestion before a user confirms it.
+    if (fact.provenance?.channel === 'ai' && !fact.overridden) continue;
     let projected = null;
     if (fact.factType === 'posted_movement') {
       projected = movementDecision(fact, sourceId, sourceKey);

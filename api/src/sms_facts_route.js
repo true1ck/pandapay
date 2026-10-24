@@ -145,6 +145,10 @@ async function applyFactSpecialists(client, userId, resolution, {
   let mandatePersisted = false;
   const seenDates = new Set();
   for (const fact of resolution.facts) {
+    if (fact.status === 'superseded' || fact.status === 'discarded') continue;
+    // A device replay can load AI suggestions already stored on this source.
+    // Only an explicit saved correction promotes those suggestions to evidence.
+    if (fact.provenance?.channel === 'ai' && !fact.overridden) continue;
     if (fact.factType === 'mandate_lifecycle' && !mandatePersisted) {
       const parsed = syntheticMandateParse(fact);
       if (parsed) {
@@ -159,10 +163,17 @@ async function applyFactSpecialists(client, userId, resolution, {
     }
     const payload = fact.payload || {};
     const last4 = typeof payload.last4 === 'string' ? payload.last4 : null;
-    if (payload.statementDate) {
+    // Only a card-bill obligation is evidence for recurring card days. Other
+    // fact families may carry dates for their own lifecycle and must not heal
+    // the card profile.
+    const isCardBill = fact.factType === 'bill_obligation' &&
+      (!payload.instrument || payload.instrument === 'credit_card') &&
+      (!payload.cardType || payload.cardType === 'credit') &&
+      payload.targetKind !== 'utility_or_other_bill';
+    if (isCardBill && payload.statementDate) {
       // Several roles of one bill carry the same printed dates; heal each
-      // distinct date once.
-      const key = `s${istDayKey(payload.statementDate)}`;
+      // distinct card/date once. Multiple cards can legitimately share a date.
+      const key = `s:${last4 || userCardId || 'unmatched'}:${istDayKey(payload.statementDate)}`;
       if (!seenDates.has(key)) {
         seenDates.add(key);
         const sync = await importResolvers.syncStatementDayFromFact(client, userId, {
@@ -174,8 +185,8 @@ async function applyFactSpecialists(client, userId, resolution, {
         statementDayUpdated = statementDayUpdated || Boolean(sync?.updated);
       }
     }
-    if (payload.dueDate) {
-      const key = `d${istDayKey(payload.dueDate)}`;
+    if (isCardBill && payload.dueDate) {
+      const key = `d:${last4 || userCardId || 'unmatched'}:${istDayKey(payload.dueDate)}`;
       if (!seenDates.has(key)) {
         seenDates.add(key);
         const sync = await importResolvers.syncDueDayFromFact(client, userId, {
