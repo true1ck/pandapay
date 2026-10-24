@@ -98,8 +98,26 @@ jobs:
             body: 'Synthetic connectivity fixture only: available bank balance Rs 1234.50 as of 24 October 2026.',
           };
 
-          new GeminiProvider().classify({ payload }).then((facts) => {
-            console.log(JSON.stringify({ provider: 'gemini', success: true, factCount: facts.length }));
+          const nativeFetch = globalThis.fetch;
+          let transportError = null;
+          const startedAt = Date.now();
+          const provider = new GeminiProvider({
+            fetchImpl: async (url, options) => {
+              try {
+                return await nativeFetch(url, options);
+              } catch (error) {
+                const cause = error.cause || error;
+                transportError = { name: cause.name || error.name, code: cause.code || error.code || null };
+                throw error;
+              }
+            },
+          });
+
+          provider.classify({ payload }).then((facts) => {
+            console.log(JSON.stringify({
+              provider: 'gemini', success: true, factCount: facts.length,
+              elapsedMs: Date.now() - startedAt,
+            }));
           }).catch((error) => {
             console.log(JSON.stringify({
               provider: 'gemini',
@@ -107,6 +125,8 @@ jobs:
               errorType: error.name,
               status: error.status || null,
               retryable: error.retryable === true,
+              transportError,
+              elapsedMs: Date.now() - startedAt,
             }));
             process.exitCode = 1;
           });
