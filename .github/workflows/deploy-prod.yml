@@ -87,6 +87,7 @@ jobs:
           NOTIFICATION_SERVICE_API_KEY: ${{ secrets.NOTIFICATION_SERVICE_API_KEY }}
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AI_WORKER_TOKEN: ${{ secrets.AI_WORKER_TOKEN }}
         run: |
           test -n "$NOTIFICATION_SERVICE_URL"
           test -n "$NOTIFICATION_SERVICE_API_KEY"
@@ -99,6 +100,9 @@ jobs:
             if [ -n "$GEMINI_API_KEY" ]; then
               printf 'export GEMINI_API_KEY=%q\n' "$GEMINI_API_KEY"
             fi
+            if [ -n "$AI_WORKER_TOKEN" ]; then
+              printf 'export AI_WORKER_TOKEN=%q\n' "$AI_WORKER_TOKEN"
+            fi
             cat deploy/deploy.sh
           } | ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
             "bash -s -- $SHA"
@@ -110,6 +114,47 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
             'curl -fsS -m 10 http://127.0.0.1:4000/ready && echo && curl -fsS -m 10 http://127.0.0.1:3210/ready'
+
+      - name: Check Gemini pipeline activity (aggregate only)
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/apps/pandapay
+          DBURL="$(sed -n 's/^ADMIN_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
+          test -n "$DBURL"
+          docker run --rm -e U="$DBURL" postgres:17-alpine sh -lc 'psql "$U" -X -qAt -v ON_ERROR_STOP=1' <<'SQL'
+          SELECT json_build_object(
+            'smsAiQueueEnabled', COALESCE((
+              SELECT is_enabled FROM public.feature_flags WHERE key = 'sms_ai_queue_enabled'
+            ), false),
+            'jobsLast24Hours', (
+              SELECT count(*) FROM public.ai_jobs WHERE created_at > now() - interval '24 hours'
+            ),
+            'jobsByStatusLast24Hours', COALESCE((
+              SELECT json_object_agg(status, job_count)
+              FROM (
+                SELECT status, count(*) AS job_count FROM public.ai_jobs
+                WHERE created_at > now() - interval '24 hours' GROUP BY status
+              ) AS counts
+            ), '{}'::json),
+            'providerReservationsLast24Hours', (
+              SELECT count(*) FROM public.ai_provider_reservations
+              WHERE created_at > now() - interval '24 hours'
+            ),
+            'successfulResultsLast24Hours', (
+              SELECT count(*) FROM public.ai_events
+              WHERE event_type = 'result' AND created_at > now() - interval '24 hours'
+            ),
+            'providerRetriesLast24Hours', (
+              SELECT count(*) FROM public.ai_events
+              WHERE event_type = 'provider_retry' AND created_at > now() - interval '24 hours'
+            )
+          );
+          SQL
+          REMOTE
 
       - name: Smoke test authenticated nearby discovery API
         env:

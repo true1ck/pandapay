@@ -127,7 +127,12 @@ if [ -n "${GOOGLE_PLACES_API_KEY:-}" ]; then
   echo "    google places api key configuration updated"
 fi
 
-if [ -n "${GEMINI_API_KEY:-}" ]; then
+if [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${AI_WORKER_TOKEN:-}" ]; then
+  [ -n "${GEMINI_API_KEY:-}" ] && [ -n "${AI_WORKER_TOKEN:-}" ] || {
+    echo "FATAL: AI_WORKER_TOKEN and GEMINI_API_KEY must be supplied together"
+    exit 1
+  }
+  upsert_env_value AI_WORKER_TOKEN "$AI_WORKER_TOKEN"
   upsert_env_value GEMINI_API_KEY "$GEMINI_API_KEY"
   echo "    Gemini worker configuration updated"
 fi
