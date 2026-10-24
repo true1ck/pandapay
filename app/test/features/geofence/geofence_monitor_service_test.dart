@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay/features/geofence/geofence_monitor_service.dart';
 import 'package:pandapay/features/geofence/nearby_merchants_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -20,6 +21,7 @@ void main() {
     var notificationsAllowed = true;
 
     setUp(() {
+      SharedPreferences.setMockInitialValues({});
       original = GeolocatorPlatform.instance;
       location = _LocationPlatform();
       GeolocatorPlatform.instance = location;
@@ -169,70 +171,190 @@ void main() {
         expect(service.isMonitoring, isFalse);
       },
     );
+
+    test('stop while preferences load cannot deliver or persist a visit', () async {
+      final preferences = Completer<SharedPreferences>();
+      repo.response = Future.value(const [
+        NearbyMerchantCandidate(
+          merchantId: 'near',
+          location: GeoPoint(lat: 15, lng: 73),
+        ),
+      ]);
+      service = GeofenceMonitorService(
+        repo: repo,
+        notifications: notifications,
+        preferences: preferences.future,
+      );
+      await service.start();
+      location.positions.add(_position());
+      await Future<void>.delayed(Duration.zero);
+      await service.stop();
+      final prefs = await SharedPreferences.getInstance();
+      preferences.complete(prefs);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(notifications.titles, isEmpty);
+      expect(prefs.getString('default:nearby_visit_state_v1'), isNull);
+      expect(service.status.value, GeofenceMonitorStatus.off);
+    });
   });
 
-  group('GeofenceMonitorService.shouldNotify', () {
-    test('a merchant never notified before should notify', () {
-      final result = GeofenceMonitorService.shouldNotify(
-        merchantId: 'm1',
-        now: DateTime(2026, 1, 1, 12, 0),
-        lastNotifiedAt: {},
-        cooldown: const Duration(minutes: 30),
-      );
-      expect(result, isTrue);
+  group('location alert policy', () {
+    late GeolocatorPlatform original;
+
+    setUp(() {
+      original = GeolocatorPlatform.instance;
+      SharedPreferences.setMockInitialValues({});
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            const MethodChannel('flutter.baseflow.com/permissions/methods'),
+            (_) async => 1,
+          );
+    });
+
+    tearDown(() {
+      GeolocatorPlatform.instance = original;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            const MethodChannel('flutter.baseflow.com/permissions/methods'),
+            null,
+          );
     });
 
     test(
-      'a merchant notified within the cooldown window should not notify again',
+      'allows two alerts, blocks the third until the rolling window passes',
       () {
-        final lastNotifiedAt = {'m1': DateTime(2026, 1, 1, 12, 0)};
-        final result = GeofenceMonitorService.shouldNotify(
-          merchantId: 'm1',
-          now: DateTime(2026, 1, 1, 12, 10),
-          lastNotifiedAt: lastNotifiedAt,
-          cooldown: const Duration(minutes: 30),
+        final now = DateTime(2026, 1, 1, 12, 30);
+        expect(
+          GeofenceMonitorService.locationQuotaReached([
+            now.subtract(const Duration(minutes: 29)),
+          ], now),
+          isFalse,
         );
-        expect(result, isFalse);
+        expect(
+          GeofenceMonitorService.locationQuotaReached([
+            now.subtract(const Duration(minutes: 29)),
+            now.subtract(const Duration(minutes: 1)),
+          ], now),
+          isTrue,
+        );
+        expect(
+          GeofenceMonitorService.locationQuotaReached([
+            now.subtract(const Duration(minutes: 30)),
+            now.subtract(const Duration(minutes: 1)),
+          ], now),
+          isFalse,
+        );
       },
     );
 
     test(
-      'a merchant notified exactly at the cooldown boundary should notify again',
-      () {
-        final lastNotifiedAt = {'m1': DateTime(2026, 1, 1, 12, 0)};
-        final result = GeofenceMonitorService.shouldNotify(
-          merchantId: 'm1',
-          now: DateTime(2026, 1, 1, 12, 30),
-          lastNotifiedAt: lastNotifiedAt,
-          cooldown: const Duration(minutes: 30),
+      'requires an accurate fix within 20m and persists once-per-visit',
+      () async {
+        final repo = _PollingRepo()
+          ..response = Future.value(const [
+            NearbyMerchantCandidate(
+              merchantId: 'near',
+              displayName: 'Example Cafe',
+              location: GeoPoint(lat: 15, lng: 73),
+            ),
+          ]);
+        final notifications = _Notifications();
+        final firstLocation = _LocationPlatform();
+        GeolocatorPlatform.instance = firstLocation;
+        final first = GeofenceMonitorService(
+          repo: repo,
+          notifications: notifications,
         );
-        expect(result, isTrue);
+        await first.start();
+        firstLocation.positions.add(_position(accuracy: 25));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(notifications.titles, isEmpty);
+        firstLocation.positions.add(_position());
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(notifications.titles, ["You're near Example Cafe"]);
+        await first.stop();
+
+        final secondLocation = _LocationPlatform();
+        GeolocatorPlatform.instance = secondLocation;
+        final second = GeofenceMonitorService(
+          repo: repo,
+          notifications: notifications,
+        );
+        await second.start();
+        secondLocation.positions.add(_position());
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(notifications.titles, hasLength(1));
+        await second.stop();
+        await firstLocation.positions.close();
+        await secondLocation.positions.close();
       },
     );
 
-    test(
-      'a merchant notified past the cooldown window should notify again',
-      () {
-        final lastNotifiedAt = {'m1': DateTime(2026, 1, 1, 12, 0)};
-        final result = GeofenceMonitorService.shouldNotify(
-          merchantId: 'm1',
-          now: DateTime(2026, 1, 1, 13, 0),
-          lastNotifiedAt: lastNotifiedAt,
-          cooldown: const Duration(minutes: 30),
-        );
-        expect(result, isTrue);
-      },
-    );
-
-    test('cooldown for one merchant does not affect a different merchant', () {
-      final lastNotifiedAt = {'m1': DateTime(2026, 1, 1, 12, 0)};
-      final result = GeofenceMonitorService.shouldNotify(
-        merchantId: 'm2',
-        now: DateTime(2026, 1, 1, 12, 5),
-        lastNotifiedAt: lastNotifiedAt,
-        cooldown: const Duration(minutes: 30),
+    test('caps a single nearby burst at two notifications', () async {
+      final repo = _PollingRepo()
+        ..response = Future.value(const [
+          NearbyMerchantCandidate(
+            merchantId: 'a',
+            location: GeoPoint(lat: 15, lng: 73),
+          ),
+          NearbyMerchantCandidate(
+            merchantId: 'b',
+            location: GeoPoint(lat: 15, lng: 73),
+          ),
+          NearbyMerchantCandidate(
+            merchantId: 'c',
+            location: GeoPoint(lat: 15, lng: 73),
+          ),
+        ]);
+      final location = _LocationPlatform();
+      GeolocatorPlatform.instance = location;
+      final notifications = _Notifications();
+      final service = GeofenceMonitorService(
+        repo: repo,
+        notifications: notifications,
       );
-      expect(result, isTrue);
+      await service.start();
+      location.positions.add(_position());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(notifications.titles, hasLength(2));
+      await service.stop();
+      await location.positions.close();
+    });
+
+    test('rearms a visit only after leaving and returning', () async {
+      final repo = _PollingRepo()
+        ..response = Future.value(const [
+          NearbyMerchantCandidate(
+            merchantId: 'near',
+            displayName: 'Example Cafe',
+            location: GeoPoint(lat: 15, lng: 73),
+          ),
+        ]);
+      final location = _LocationPlatform();
+      GeolocatorPlatform.instance = location;
+      final notifications = _Notifications();
+      final service = GeofenceMonitorService(
+        repo: repo,
+        notifications: notifications,
+      );
+      await service.start();
+
+      location.positions.add(_position());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      location.positions.add(_position(longitude: 73.001)); // ~107m away
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      location.positions.add(_position(longitude: 73.001));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      location.positions.add(_position());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(notifications.titles, [
+        "You're near Example Cafe",
+        "You're near Example Cafe",
+      ]);
+      await service.stop();
+      await location.positions.close();
     });
   });
 
@@ -254,11 +376,15 @@ void main() {
   });
 }
 
-Position _position() => Position(
-  latitude: 15,
-  longitude: 73,
+Position _position({
+  double latitude = 15,
+  double longitude = 73,
+  double accuracy = 5,
+}) => Position(
+  latitude: latitude,
+  longitude: longitude,
   timestamp: DateTime(2026, 10, 18),
-  accuracy: 5,
+  accuracy: accuracy,
   altitude: 0,
   altitudeAccuracy: 0,
   heading: 0,

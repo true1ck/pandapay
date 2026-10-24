@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../notifications/notification_gate.dart';
 import 'nearby_merchants_repository.dart';
@@ -36,6 +38,11 @@ abstract class BackgroundMerchantMonitor {
 /// A force-stop or reboot ends this stream; the controller restores it when
 /// the signed-in app opens again. This service never discovers map candidates.
 class GeofenceMonitorService implements BackgroundMerchantMonitor {
+  static const proximityMeters = 20.0;
+  static const visitExitMeters = 60.0;
+  static const maxAlertsPerWindow = 2;
+  static const alertWindow = Duration(minutes: 30);
+
   @override
   final ValueNotifier<GeofenceMonitorStatus> status = ValueNotifier(
     GeofenceMonitorStatus.off,
@@ -46,10 +53,11 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
   final NotificationGate? gate;
   final String? Function(NearbyMerchantMatch match)? recommendationTextBuilder;
   final double radiusMeters;
-  final Duration notifyCooldown;
+  final String namespace;
+  final Future<SharedPreferences> _preferences;
 
   StreamSubscription<Position>? _subscription;
-  final Map<String, DateTime> _lastNotifiedAt = {};
+  Future<void> _positionQueue = Future.value();
   bool _initialized = false;
 
   GeofenceMonitorService({
@@ -58,26 +66,17 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
     this.gate,
     this.recommendationTextBuilder,
     this.radiusMeters = 300,
-    this.notifyCooldown = const Duration(minutes: 30),
-  }) : notifications = notifications ?? FlutterLocalNotificationsPlugin();
+    this.namespace = 'default',
+    Future<SharedPreferences>? preferences,
+  }) : notifications = notifications ?? FlutterLocalNotificationsPlugin(),
+       _preferences = preferences ?? SharedPreferences.getInstance();
 
   @override
   bool get isMonitoring => _subscription != null;
 
-  /// Pure decision logic — given when a merchant was last notified (if
-  /// ever) and the current time, should this match fire another
-  /// notification? Separated out so the dedupe/cooldown behavior is
-  /// testable without a real GPS stream or notification plugin.
-  static bool shouldNotify({
-    required String merchantId,
-    required DateTime now,
-    required Map<String, DateTime> lastNotifiedAt,
-    required Duration cooldown,
-  }) {
-    final last = lastNotifiedAt[merchantId];
-    if (last == null) return true;
-    return now.difference(last) >= cooldown;
-  }
+  static bool locationQuotaReached(List<DateTime> sentAt, DateTime now) =>
+      sentAt.where((time) => now.difference(time) < alertWindow).length >=
+      maxAlertsPerWindow;
 
   Future<void> _ensureInitialized() async {
     if (_initialized) return;
@@ -196,8 +195,8 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
 
     final locationSettings = Platform.isAndroid
         ? AndroidSettings(
-            accuracy: LocationAccuracy.medium,
-            distanceFilter: 150,
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 5,
             foregroundNotificationConfig: const ForegroundNotificationConfig(
               notificationText: 'Checking for nearby businesses',
               notificationTitle: 'PandaPay is checking your location',
@@ -211,19 +210,25 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
           )
         : (Platform.isIOS
               ? AppleSettings(
-                  accuracy: LocationAccuracy.medium,
-                  distanceFilter: 150,
+                  accuracy: LocationAccuracy.high,
+                  distanceFilter: 5,
                   pauseLocationUpdatesAutomatically: false,
                   showBackgroundLocationIndicator: true,
                 )
               : const LocationSettings(
-                  accuracy: LocationAccuracy.medium,
-                  distanceFilter: 150,
+                  accuracy: LocationAccuracy.high,
+                  distanceFilter: 5,
                 ));
 
     _subscription =
         Geolocator.getPositionStream(locationSettings: locationSettings).listen(
-          (position) => _onPosition(position, generation),
+          (position) {
+            _positionQueue = _positionQueue
+                .then((_) => _onPosition(position, generation))
+                .catchError((Object error) {
+                  debugPrint('GeofenceMonitorService position failed: $error');
+                });
+          },
           // Surface failures without losing the user's saved opt-in. A later
           // successful fix or an app-resume retry can recover the monitor.
           onError: (Object e, StackTrace st) {
@@ -258,6 +263,7 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
   }
 
   Future<void> _onPosition(Position position, int generation) async {
+    if (generation != _generation) return;
     try {
       final candidates = await repo
           .fetchNearby(
@@ -268,32 +274,125 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
           .timeout(const Duration(seconds: 15));
       if (generation != _generation) return;
       status.value = GeofenceMonitorStatus.monitoring;
+      final origin = GeoPoint(lat: position.latitude, lng: position.longitude);
       final matches = findNearbyMerchants(
-        origin: GeoPoint(lat: position.latitude, lng: position.longitude),
+        origin: origin,
         candidates: candidates,
         radiusMeters: radiusMeters,
       );
       final now = DateTime.now();
-      for (final match in matches) {
-        if (!shouldNotify(
-          merchantId: match.candidate.merchantId,
-          now: now,
-          lastNotifiedAt: _lastNotifiedAt,
-          cooldown: notifyCooldown,
-        )) {
+      final prefs = await _preferences;
+      if (generation != _generation) return;
+      final stateKey = '$namespace:nearby_visit_state_v1';
+      final quotaKey = '$namespace:location_alert_times_v1';
+      final visits = _decodeVisits(prefs.getString(stateKey));
+      final sentAt = _decodeTimes(prefs.getString(quotaKey))
+        ..removeWhere((time) => now.difference(time) >= alertWindow);
+
+      // Keep an active visit latched until two accurate fixes confirm the user
+      // has moved beyond the wider exit boundary. This prevents GPS jitter and
+      // process restarts from turning one stay into repeated notifications.
+      for (final entry in visits.entries.toList()) {
+        final distance = haversineDistanceMeters(
+          origin,
+          GeoPoint(lat: entry.value.lat, lng: entry.value.lng),
+        );
+        if (position.accuracy <= proximityMeters) {
+          entry.value.outsideFixes = distance > visitExitMeters
+              ? entry.value.outsideFixes + 1
+              : 0;
+        }
+        if (entry.value.outsideFixes >= 2) visits.remove(entry.key);
+      }
+
+      for (final match in matches.where(
+        (m) =>
+            position.accuracy <= proximityMeters &&
+            m.distanceMeters <= proximityMeters,
+      )) {
+        final key = _visitKey(match.candidate);
+        if (visits.containsKey(key) || locationQuotaReached(sentAt, now)) {
           continue;
         }
         if (generation != _generation) return;
-        if (await _notify(match)) {
-          _lastNotifiedAt[match.candidate.merchantId] = now;
+        // Persist the reservation before delivery so a process death between
+        // showing the alert and writing state cannot cause an immediate repeat.
+        visits[key] = _VisitState(
+          match.candidate.location.lat,
+          match.candidate.location.lng,
+        );
+        sentAt.add(now);
+        await prefs.setString(stateKey, _encodeVisits(visits));
+        await prefs.setString(quotaKey, _encodeTimes(sentAt));
+        var delivered = false;
+        try {
+          delivered = generation == _generation && await _notify(match);
+        } catch (_) {
+          // A failed attempt must not pin the visit or consume its quota.
+          if (generation == _generation) {
+            status.value = GeofenceMonitorStatus.unavailable;
+          }
+        }
+        if (!delivered) {
+          visits.remove(key);
+          sentAt.removeLast();
+          await prefs.setString(stateKey, _encodeVisits(visits));
+          await prefs.setString(quotaKey, _encodeTimes(sentAt));
         }
       }
+      await prefs.setString(stateKey, _encodeVisits(visits));
+      await prefs.setString(quotaKey, _encodeTimes(sentAt));
     } catch (_) {
       if (generation == _generation) {
         status.value = GeofenceMonitorStatus.unavailable;
       }
     }
   }
+
+  static String _visitKey(NearbyMerchantCandidate candidate) =>
+      '${candidate.merchantId}:${candidate.location.lat.toStringAsFixed(6)}:${candidate.location.lng.toStringAsFixed(6)}';
+
+  static Map<String, _VisitState> _decodeVisits(String? value) {
+    try {
+      final decoded = jsonDecode(value ?? '{}') as Map<String, dynamic>;
+      return decoded.map((key, value) {
+        final item = value as Map<String, dynamic>;
+        return MapEntry(
+          key,
+          _VisitState(
+            (item['lat'] as num).toDouble(),
+            (item['lng'] as num).toDouble(),
+            outsideFixes: (item['outside'] as num?)?.toInt() ?? 0,
+          ),
+        );
+      });
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static String _encodeVisits(Map<String, _VisitState> visits) => jsonEncode({
+    for (final entry in visits.entries)
+      entry.key: {
+        'lat': entry.value.lat,
+        'lng': entry.value.lng,
+        'outside': entry.value.outsideFixes,
+      },
+  });
+
+  static List<DateTime> _decodeTimes(String? value) {
+    try {
+      return (jsonDecode(value ?? '[]') as List)
+          .cast<String>()
+          .map(DateTime.parse)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static String _encodeTimes(List<DateTime> times) =>
+      jsonEncode(times.map((time) => time.toIso8601String()).toList());
 
   Future<bool> _notify(NearbyMerchantMatch match) async {
     final name = match.candidate.displayName ?? 'a nearby business';
@@ -310,9 +409,8 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
       // existing as a setting for exactly this notification.
       //
       // The dedupe key is unique per attempt (timestamp-keyed), not
-      // per-merchant: this._lastNotifiedAt above is what already
-      // deduplicates repeat visits to the same merchant on a 30-minute
-      // cooldown, and the gate's own dedupe store is meant for a different
+      // per-merchant: the persisted visit state above already deduplicates
+      // alerts during a stay, and the gate's own dedupe store has a different
       // job (suppressing re-checks of an unresolved state, e.g. a cap
       // that's still over threshold next time the app foregrounds) — using
       // a per-merchant key here would let the FIRST visit of the day
@@ -350,4 +448,12 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
     await notifications.show(merchantId.hashCode, title, body, details);
     return true;
   }
+}
+
+class _VisitState {
+  final double lat;
+  final double lng;
+  int outsideFixes;
+
+  _VisitState(this.lat, this.lng, {this.outsideFixes = 0});
 }

@@ -5567,6 +5567,7 @@ final geofenceMonitorServiceProvider = Provider<GeofenceMonitorService>((ref) {
   final service = GeofenceMonitorService(
     repo: ref.watch(nearbyMerchantsRepositoryProvider),
     notifications: ref.watch(localNotificationsPluginProvider),
+    namespace: ref.watch(cacheNamespaceProvider),
     // UA-8.3 (B2): closes the one real spec violation this pass found —
     // _notify() used to call flutter_local_notifications directly, bypassing
     // category_location, quiet hours, and the daily cap entirely.
