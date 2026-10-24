@@ -212,8 +212,9 @@ jobs:
             }));
           }
 
-          // A deliberately invalid key should receive a fast auth rejection;
-          // it checks POST routing without spending model tokens.
+          // Empty contents should be rejected before generation. Using the
+          // configured key verifies generateContent authentication/routing
+          // without asking the model to run or spending output tokens.
           const postPathStarted = Date.now();
           try {
             const response = await fetch(
@@ -222,20 +223,20 @@ jobs:
                 method: 'POST',
                 headers: {
                   'content-type': 'application/json',
-                  'x-goog-api-key': 'invalid-connectivity-probe-key',
+                  'x-goog-api-key': process.env.GEMINI_API_KEY,
                 },
                 body: JSON.stringify({ contents: [] }),
                 signal: AbortSignal.timeout(8000),
               },
             );
             console.log(JSON.stringify({
-              generateEndpointPost: { responded: true, status: response.status, elapsedMs: Date.now() - postPathStarted },
+              authenticatedValidationPost: { responded: true, status: response.status, elapsedMs: Date.now() - postPathStarted },
             }));
             await response.body?.cancel();
           } catch (error) {
             const cause = error.cause || error;
             console.log(JSON.stringify({
-              generateEndpointPost: {
+              authenticatedValidationPost: {
                 responded: false,
                 errorType: cause.name || error.name,
                 errorCode: cause.code || error.code || null,
