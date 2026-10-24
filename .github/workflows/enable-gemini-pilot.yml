@@ -40,11 +40,36 @@ jobs:
             description = EXCLUDED.description,
             updated_at = now();
           SELECT json_build_object(
-            'key', key,
-            'enabled', is_enabled,
-            'rolloutPercent', rollout_percent,
-            'updatedAt', updated_at
-          ) FROM public.feature_flags WHERE key = 'sms_ai_queue_enabled';
+            'pilot', (
+              SELECT json_build_object(
+                'enabled', is_enabled,
+                'rolloutPercent', rollout_percent,
+                'updatedAt', updated_at
+              ) FROM public.feature_flags WHERE key = 'sms_ai_queue_enabled'
+            ),
+            'jobsLast24Hours', (
+              SELECT count(*) FROM public.ai_jobs WHERE created_at > now() - interval '24 hours'
+            ),
+            'jobsByStatusLast24Hours', COALESCE((
+              SELECT json_object_agg(status, job_count)
+              FROM (
+                SELECT status, count(*) AS job_count FROM public.ai_jobs
+                WHERE created_at > now() - interval '24 hours' GROUP BY status
+              ) AS counts
+            ), '{}'::json),
+            'providerReservationsLast24Hours', (
+              SELECT count(*) FROM public.ai_provider_reservations
+              WHERE created_at > now() - interval '24 hours'
+            ),
+            'successfulResultsLast24Hours', (
+              SELECT count(*) FROM public.ai_events
+              WHERE event_type = 'result' AND created_at > now() - interval '24 hours'
+            ),
+            'providerRetriesLast24Hours', (
+              SELECT count(*) FROM public.ai_events
+              WHERE event_type = 'provider_retry' AND created_at > now() - interval '24 hours'
+            )
+          );
           COMMIT;
           SQL
           REMOTE
