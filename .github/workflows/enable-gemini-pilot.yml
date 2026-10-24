@@ -208,8 +208,8 @@ jobs:
                     'x-goog-api-key': process.env.GEMINI_API_KEY,
                   },
                   body: JSON.stringify({
-                    contents: [{ parts: [{ text: 'Return exactly {"facts":[]} as JSON.' }] }],
-                    generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 32 },
+                    contents: [{ role: 'user', parts: [{ text: 'Reply with OK.' }] }],
+                    generationConfig: { maxOutputTokens: 8 },
                   }),
                   signal: AbortSignal.timeout(20000),
                 },
