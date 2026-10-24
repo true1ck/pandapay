@@ -46,6 +46,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   int _listenGeneration = 0;
   int _activeSession = 0;
   int _endedSession = 0;
+  int _listenReturnedSession = 0;
   Timer? _completionTimer;
   Timer? _restartTimer;
   bool _saving = false;
@@ -111,8 +112,10 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
             if (status == stt.SpeechToText.doneStatus) {
               if (_keepListening) {
                 _endedSession = _activeSession;
-                _scheduleSpeechRestart(generation, _activeSession);
-              } else {
+                if (_listenReturnedSession == _activeSession) {
+                  _scheduleSpeechRestart(_listenGeneration, _activeSession);
+                }
+              } else if (!_keepListening) {
                 _scheduleListeningCompletion();
               }
             }
@@ -139,28 +142,39 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
         }
         return;
       }
-      final session = ++_activeSession;
-      _transcriptBuffer.beginSession();
+      final session = _transcriptBuffer.beginSession();
+      _activeSession = session;
+      _endedSession = 0;
+      _listenReturnedSession = 0;
+      var listenCallReturned = false;
+      var restartRequested = false;
       if (mounted) setState(() => _listening = true);
       await _speech.listen(
         onResult: (result) {
           if (!mounted ||
               generation != _listenGeneration ||
-              session != _activeSession) {
+              _speechSessionCompleted) {
+            return;
+          }
+          final words = result.recognizedWords.trim();
+          if (words.isEmpty) {
+            if (!_keepListening) _scheduleListeningCompletion();
             return;
           }
           _completionTimer?.cancel();
-          if (_endedSession == session) _endedSession = 0;
-          final words = result.recognizedWords.trim();
-          if (words.isEmpty) return;
-          _transcriptBuffer.update(words, isFinal: result.finalResult);
+          _transcriptBuffer.update(session, words, isFinal: result.finalResult);
           setState(() {});
           if (result.finalResult) {
-            if (_keepListening) {
-              _scheduleSpeechRestart(generation, session);
-            } else {
+            if (session == _activeSession && _keepListening) {
+              restartRequested = true;
+              if (listenCallReturned) {
+                _scheduleSpeechRestart(generation, session);
+              }
+            } else if (!_keepListening) {
               _scheduleListeningCompletion();
             }
+          } else if (!_keepListening) {
+            _scheduleListeningCompletion();
           }
         },
         listenOptions: stt.SpeechListenOptions(
@@ -170,13 +184,15 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
           listenMode: stt.ListenMode.dictation,
         ),
       );
-      if (session != _activeSession || generation != _listenGeneration) {
+      listenCallReturned = true;
+      _listenReturnedSession = session;
+      if (generation != _listenGeneration) {
         // A newer native session superseded this start while listen() was
         // awaiting the platform channel.
         await _stopSpeechSafely();
         return;
       }
-      if (_endedSession == session && _keepListening) {
+      if ((_endedSession == session || restartRequested) && _keepListening) {
         _scheduleSpeechRestart(generation, session);
       }
     } catch (_) {
@@ -205,9 +221,11 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
           !_keepListening) {
         return;
       }
-      _transcriptBuffer.commitProvisional();
-      // Invalidate callbacks from the native session that just ended.
-      _activeSession++;
+      if (_speech.isListening) {
+        _scheduleSpeechRestart(generation, session);
+        return;
+      }
+      _transcriptBuffer.commitProvisional(session);
       if (mounted) setState(() {});
       _startSpeech(generation);
     });
@@ -226,6 +244,9 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     _completionTimer?.cancel();
     _completionTimer = null;
     _speechSessionCompleted = true;
+    // Fence late platform callbacks before parsing so the displayed transcript
+    // and the drafts being confirmed always represent the same speech.
+    _listenGeneration++;
     _transcriptBuffer.commitProvisional();
     final transcript = _transcriptBuffer.text.trim();
     setState(() {

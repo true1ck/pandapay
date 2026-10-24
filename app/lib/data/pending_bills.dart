@@ -21,6 +21,7 @@ class SmsBillRow {
   final String? accountLast4;
   final Money amountDue;
   final Money? minimumDue;
+  final bool isMinimumOnly;
   final DateTime? dueDate;
   final DateTime receivedAt;
   final bool isAutopay;
@@ -44,6 +45,7 @@ class SmsBillRow {
     this.accountLast4,
     required this.amountDue,
     required this.minimumDue,
+    required this.isMinimumOnly,
     required this.dueDate,
     required this.receivedAt,
     required this.isAutopay,
@@ -130,6 +132,8 @@ List<SmsBillRow> deriveSmsBillRows({
     final category = CommitmentCategory.fromText(
       '$title ${obs['sender_bank'] ?? ''}',
     );
+    // A minimum due is useful to display when the statement balance was not
+    // parsed, but it is never enough evidence to call the full bill paid.
     final anchor = amountDue ?? minimumDue!;
     final dueDate = iso(obs['due_date']);
     final monthKey = DateTime(
@@ -206,8 +210,10 @@ List<SmsBillRow> deriveSmsBillRows({
       if (!_amountCovers(raw, txn.amount)) continue;
       final txnLast4 = txn.cardLast4 ?? cardsLast4ById[txn.userCardId];
       final merchant = (txn.merchantName ?? '').toLowerCase();
-      final matchesCard = isCardBill && cardBillPayment && txnLast4 == raw.last4;
-      final matchesBiller = raw.last4 == null &&
+      final matchesCard =
+          isCardBill && cardBillPayment && txnLast4 == raw.last4;
+      final matchesBiller =
+          raw.last4 == null &&
           (tokensOverlap(raw.tokens, merchant) ||
               (raw.accountLast4 != null &&
                   txn.accountLast4 == raw.accountLast4));
@@ -250,6 +256,7 @@ List<SmsBillRow> deriveSmsBillRows({
         accountLast4: raw.accountLast4,
         amountDue: raw.anchor,
         minimumDue: raw.minimumDue,
+        isMinimumOnly: raw.amountDue == null && raw.minimumDue != null,
         dueDate: raw.dueDate,
         receivedAt: raw.received,
         isAutopay: raw.isAutopay,
@@ -272,25 +279,34 @@ List<SmsBillRow> deriveSmsBillRows({
 }
 
 bool _amountCovers(_Raw raw, Money amount) {
-  final anchor = raw.anchor.paise;
   if (raw.last4 != null) {
-    // Card-bill payments land at-or-above the issued amount; 2% tolerance
-    // mirrors the ledger match rule.
-    return amount.paise >= anchor - (anchor * 0.02).round();
+    // A minimum-only statement is not sufficient to conclude that the bill
+    // is settled. Require the full amount and a close payment amount, so a
+    // different/larger payment on the same card cannot mark this bill paid.
+    final due = raw.amountDue?.paise;
+    if (due == null) return false;
+    final calculatedTolerance = (due * 0.02).round();
+    final tolerance = calculatedTolerance < 100 ? 100 : calculatedTolerance;
+    return (amount.paise - due).abs() <= tolerance;
   }
   // Utility/scheduled bill: paid amount equals the reminder amount (±₹1).
-  return (amount.paise - anchor).abs() <= 100;
+  return (amount.paise - raw.anchor.paise).abs() <= 100;
 }
 
 bool tokensOverlap(List<String> tokens, String merchant) {
   if (merchant.isEmpty || tokens.isEmpty) return false;
-  return tokens.any(merchant.contains);
+  final merchantTokens = merchant
+      .toLowerCase()
+      .split(RegExp(r'[^a-z0-9]+'))
+      .where((token) => token.isNotEmpty)
+      .toSet();
+  return tokens.any(merchantTokens.contains);
 }
 
 List<String> _tokensOf(String title) {
-  final cleaned = smsBillSlug(title).replaceAll('-', ' ');
-  return cleaned
-      .split(RegExp(r'\s+'))
+  return title
+      .toLowerCase()
+      .split(RegExp(r'[^a-z0-9]+'))
       .where((t) => t.length >= 4 && !_digitsOnly(t))
       .toList();
 }

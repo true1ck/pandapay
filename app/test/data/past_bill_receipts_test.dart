@@ -42,6 +42,36 @@ void main() {
     repo.upsert(item);
     repo.upsert(item);
     expect(repo.fetchAll(), hasLength(1));
-    expect(PastBillReceiptRepository(db, namespace: 'user-b').fetchAll(), isEmpty);
+    expect(
+      PastBillReceiptRepository(db, namespace: 'user-b').fetchAll(),
+      isEmpty,
+    );
   });
+
+  test(
+    'archive changes refresh the namespace and uncapped history is available',
+    () async {
+      final db = openInMemoryForTesting();
+      addTearDown(db.close);
+      final repo = PastBillReceiptRepository(db, namespace: 'user-a');
+      final change = PastBillReceiptRepository.changes.first;
+      for (final id in ['one', 'two']) {
+        repo.upsert(
+          PastBillReceipt(
+            id: id,
+            sourceKey: id,
+            merchant: 'Biller',
+            amount: Money.fromPaise(10000),
+            occurredAt: DateTime(2026, 9, 28),
+            receivedAt: DateTime(2026, 9, 28),
+            status: PastBillReceiptStatus.needsConfirmation,
+          ),
+        );
+      }
+
+      expect(await change, 'user-a');
+      expect(repo.fetchAll(limit: 1), hasLength(1));
+      expect(repo.fetchAll(limit: null), hasLength(2));
+    },
+  );
 }

@@ -1190,10 +1190,118 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
   }
 });
 
-final pastBillReceiptsProvider = FutureProvider<List<PastBillReceipt>>((ref) async {
-  final db = await ref.watch(appDatabaseProvider.future);
+final _pastBillReceiptRevisionProvider = StreamProvider.family<int, String>((
+  ref,
+  namespace,
+) async* {
+  var version = 0;
+  await for (final changed in PastBillReceiptRepository.changes) {
+    if (changed == namespace) yield ++version;
+  }
+});
+
+final pastBillReceiptsProvider = FutureProvider<List<PastBillReceipt>>((
+  ref,
+) async {
+  var ready = false;
+  ref.listen(financialStoreRevisionProvider('observations'), (_, next) {
+    if (ready) ref.invalidateSelf();
+  });
   final namespace = ref.watch(cacheNamespaceProvider);
-  return PastBillReceiptRepository(db, namespace: namespace).fetchAll(limit: 100);
+  ref.listen(_pastBillReceiptRevisionProvider(namespace), (_, next) {
+    if (ready) ref.invalidateSelf();
+  });
+  final db = await ref.watch(appDatabaseProvider.future);
+  final repository = PastBillReceiptRepository(db, namespace: namespace);
+  final allArchived = repository.fetchAll(limit: null);
+  final archived = allArchived.take(1000).toList(growable: false);
+  final knownSources = allArchived.map((item) => item.sourceKey).toSet();
+  String cycleKey(
+    String merchant,
+    String? cardLast4,
+    String? accountLast4,
+    DateTime due,
+    int? amountPaise,
+  ) => [
+    smsBillSlug(merchant),
+    cardLast4 ?? '',
+    accountLast4 ?? '',
+    DateTime(due.year, due.month, due.day).toIso8601String(),
+    amountPaise ?? '',
+  ].join('|');
+  final archivedCycles = <String>{
+    for (final item in allArchived)
+      if (item.kind == PastBillReceiptKind.bill && item.dueDate != null)
+        cycleKey(
+          item.merchant,
+          RegExp(r'Card ending (\d{4})').firstMatch(item.body ?? '')?.group(1),
+          null,
+          item.dueDate!,
+          item.amount?.paise,
+        ),
+  };
+  final cache = await ref.watch(responseCacheProvider.future);
+  final today = DateTime.now();
+  final archiveCutoff = today.subtract(const Duration(days: 90));
+  final observedBillsByCycle = <String, PastBillReceipt>{};
+  for (final observation in cache.financialStore.entities(
+    namespace,
+    'sms_observations',
+  )) {
+    final event = observation['event_type'] as String?;
+    if (event != 'bill' && event != 'autopay') continue;
+    final id = observation['id'] as String?;
+    final received = DateTime.tryParse(
+      observation['received_at'] as String? ?? '',
+    );
+    final due = DateTime.tryParse(observation['due_date'] as String? ?? '');
+    if (id == null ||
+        knownSources.contains(id) ||
+        received == null ||
+        due == null) {
+      continue;
+    }
+    final dueDay = DateTime(due.year, due.month, due.day);
+    final todayDay = DateTime(today.year, today.month, today.day);
+    if (!dueDay.isBefore(todayDay) || !received.isBefore(archiveCutoff)) {
+      continue;
+    }
+    final biller = (observation['biller_name'] as String?)?.trim() ?? '';
+    final sender = (observation['sender_bank'] as String?)?.trim() ?? '';
+    final amountPaise =
+        observation['amount_due_paise'] as int? ??
+        observation['minimum_due_paise'] as int?;
+    if (biller.length < 3 && sender.length < 3) continue;
+    final merchant = biller.length >= 3 ? biller : sender;
+    // Reminder messages from the same bill cycle may have separate SMS IDs.
+    // Collapse only when the merchant, instrument, due day, and amount agree.
+    final billCycle = cycleKey(
+      merchant,
+      observation['card_last4'] as String?,
+      observation['account_last4'] as String?,
+      dueDay,
+      amountPaise,
+    );
+    if (archivedCycles.contains(billCycle)) continue;
+    final previous = observedBillsByCycle[billCycle];
+    if (previous != null && !received.isAfter(previous.receivedAt)) continue;
+    observedBillsByCycle[billCycle] = PastBillReceipt(
+      id: 'historical-sms-bill-$id',
+      sourceKey: id,
+      merchant: merchant,
+      kind: PastBillReceiptKind.bill,
+      amount: amountPaise == null ? null : Money.fromPaise(amountPaise),
+      occurredAt: due,
+      receivedAt: received,
+      dueDate: due,
+      status: PastBillReceiptStatus.needsConfirmation,
+      sender: sender,
+      body: observation['sample_body'] as String?,
+    );
+  }
+  ready = true;
+  return [...archived, ...observedBillsByCycle.values]
+    ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
 });
 
 /// Bills pane input: bill/autopay sms_observations resolved against the
@@ -1579,14 +1687,14 @@ final merchantCategoryRulesRepositoryProvider =
 /// rule accidentally.
 final merchantIssueRulesRepositoryProvider =
     Provider<MerchantIssueRulesRepository?>((ref) {
-  final token = _stableSessionToken(ref);
-  if (token == null) return null;
-  return MerchantIssueRulesRepository(
-    apiBaseUrl: _apiBaseUrl,
-    accessToken: token,
-    client: ref.read(authenticatedHttpClientProvider),
-  );
-});
+      final token = _stableSessionToken(ref);
+      if (token == null) return null;
+      return MerchantIssueRulesRepository(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: token,
+        client: ref.read(authenticatedHttpClientProvider),
+      );
+    });
 
 /// Invalidates all projections whose values can change after a category bulk
 /// apply. This is deliberately lazy: visible consumers fetch their own fresh

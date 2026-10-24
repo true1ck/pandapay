@@ -10,6 +10,7 @@ import 'local_sms_parser.dart';
 import 'user_cards_repository.dart';
 import 'investment_classifier.dart';
 import '../features/sms_import/sms_text_hint.dart';
+import 'pending_bills.dart';
 
 enum NeedsReviewKind {
   transaction,
@@ -64,16 +65,15 @@ class NeedsReviewItem {
   NeedsReviewItem copyWith({
     NeedsReviewKind? kind,
     List<Map<String, dynamic>>? aiSuggestions,
-  }) =>
-      NeedsReviewItem(
-        id: id,
-        sender: sender,
-        body: body,
-        reason: reason,
-        receivedAt: receivedAt,
-        kind: kind ?? this.kind,
-        aiSuggestions: aiSuggestions ?? this.aiSuggestions,
-      );
+  }) => NeedsReviewItem(
+    id: id,
+    sender: sender,
+    body: body,
+    reason: reason,
+    receivedAt: receivedAt,
+    kind: kind ?? this.kind,
+    aiSuggestions: aiSuggestions ?? this.aiSuggestions,
+  );
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -139,14 +139,24 @@ void addNeedsReviewSync(
       )) {
     return;
   }
-  if (NeedsReviewRepository.isMerchantReceiptOrEbill(item.body) &&
-      NeedsReviewRepository.hasMatchingSpendTransactionSync(
-        database,
-        namespace,
-        item,
-        transactions: existingTransactions,
-      )) {
-    return;
+  if (NeedsReviewRepository.isMerchantReceiptOrEbill(item.body)) {
+    final linkedId = NeedsReviewRepository.matchingSpendTransactionIdSync(
+      database,
+      namespace,
+      item,
+      transactions: existingTransactions,
+    );
+    if (linkedId != null) {
+      PastBillReceiptRepository(database, namespace: namespace).archiveReceipt(
+        id: item.id,
+        sender: item.sender,
+        body: item.body,
+        receivedAt: item.receivedAt,
+        linkedTransactionId: linkedId,
+        status: PastBillReceiptStatus.paidLinked,
+      );
+      return;
+    }
   }
   if (NeedsReviewRepository.isRefundOrReversal(item.body) &&
       NeedsReviewRepository.hasMatchingRefundDebitSync(
@@ -295,7 +305,10 @@ class NeedsReviewRepository {
           db.db.execute('RELEASE SAVEPOINT update_resolved_kinds');
         }
       }
-      final noise = items.where(_isNoiseOrStale).map((item) => item.id).toList();
+      final noise = items
+          .where(_isNoiseOrStale)
+          .map((item) => item.id)
+          .toList();
       if (noise.isNotEmpty) await removeAll(noise);
       final nonNoise = items.where((item) => !_isNoiseOrStale(item)).toList();
       final kept = <NeedsReviewItem>[];
@@ -314,37 +327,41 @@ class NeedsReviewRepository {
         }
         if (isInvestmentFolioAllotment(item.body)) {
           if (_hasMatchingInvestmentTransaction(
-                item,
-                database: db,
-                transactions: txns,
-              )) {
+            item,
+            database: db,
+            transactions: txns,
+          )) {
             toRemove.add(item.id);
             continue;
           }
         }
         if (isMerchantReceiptOrEbill(item.body)) {
-          if (_hasMatchingSpendTransaction(
-                item,
-                database: db,
-                transactions: txns,
-              )) {
+          final linkedId = matchingSpendTransactionIdSync(
+            db,
+            namespace,
+            item,
+            transactions: txns,
+          );
+          if (linkedId != null) {
             PastBillReceiptRepository(db, namespace: namespace).archiveReceipt(
               id: item.id,
               sender: item.sender,
               body: item.body,
               receivedAt: item.receivedAt,
+              linkedTransactionId: linkedId,
               status: PastBillReceiptStatus.paidLinked,
             );
             toRemove.add(item.id);
             continue;
           }
-          if (now.difference(item.receivedAt).abs() > const Duration(days: 30)) {
+          if (now.difference(item.receivedAt).abs() >
+              const Duration(days: 30)) {
             PastBillReceiptRepository(db, namespace: namespace).archiveReceipt(
               id: item.id,
               sender: item.sender,
               body: item.body,
               receivedAt: item.receivedAt,
-              status: PastBillReceiptStatus.paidUnlinked,
+              status: PastBillReceiptStatus.needsConfirmation,
             );
             toRemove.add(item.id);
             continue;
@@ -352,11 +369,7 @@ class NeedsReviewRepository {
         }
 
         if (isRefundOrReversal(item.body)) {
-          if (_hasMatchingRefundDebit(
-                item,
-                database: db,
-                transactions: txns,
-              )) {
+          if (_hasMatchingRefundDebit(item, database: db, transactions: txns)) {
             toRemove.add(item.id);
             continue;
           }
@@ -370,11 +383,13 @@ class NeedsReviewRepository {
         );
 
         if (parsed != null) {
-          final isCardBill = parsed.eventType == LocalSmsEventType.bill &&
+          final isCardBill =
+              parsed.eventType == LocalSmsEventType.bill &&
               parsed.cardLast4 != null &&
               parsed.disposition != LocalSmsDisposition.localCommitment &&
               !parsed.reasonCodes.contains('mandate_notice');
-          final isMandateOrAutopay = !isCardBill &&
+          final isMandateOrAutopay =
+              !isCardBill &&
               (parsed.isAutopay ||
                   parsed.disposition == LocalSmsDisposition.localCommitment ||
                   parsed.reasonCodes.contains('mandate_notice') ||
@@ -397,7 +412,59 @@ class NeedsReviewRepository {
           if (parsed.eventType == LocalSmsEventType.bill &&
               (parsed.cardLast4 != null || parsed.dueDate != null)) {
             final due = parsed.dueDate;
-            if (due != null && due.isBefore(DateTime.now())) {
+            final now = DateTime.now();
+            final dueDay = due == null
+                ? null
+                : DateTime(due.year, due.month, due.day);
+            final today = DateTime(now.year, now.month, now.day);
+            if (dueDay != null && dueDay.isBefore(today)) {
+              final cardLast4ById = <String, String>{};
+              try {
+                final cardRows = db.db.select(
+                  "SELECT id, payload FROM financial_entities WHERE namespace = ? AND entity = 'cards'",
+                  [namespace],
+                );
+                for (final row in cardRows) {
+                  final payload =
+                      jsonDecode(row['payload'] as String)
+                          as Map<String, dynamic>;
+                  final last4 = payload['last4'] as String?;
+                  if (last4 != null && last4.isNotEmpty) {
+                    cardLast4ById[row['id'] as String] = last4;
+                  }
+                }
+              } catch (_) {
+                // If the local card mapping is unavailable, keep the archive
+                // status conservative rather than inventing a match.
+              }
+              final matchTransactions = <TransactionEntry>[
+                ...?txns,
+                ..._loadTransactionsSync(db, namespace),
+              ];
+              final billRows = deriveSmsBillRows(
+                observations: [
+                  {
+                    'event_type': parsed.eventType.wireValue,
+                    'received_at': item.receivedAt.toIso8601String(),
+                    'biller_name': parsed.billerName,
+                    'card_last4': parsed.cardLast4,
+                    'account_last4': parsed.accountLast4,
+                    'amount_due_paise': parsed.amountDue?.paise,
+                    'minimum_due_paise': parsed.minimumDue?.paise,
+                    'due_date': parsed.dueDate?.toIso8601String(),
+                    'is_autopay': parsed.isAutopay,
+                  },
+                ],
+                transactions: matchTransactions,
+                cardsLast4ById: cardLast4ById,
+                now: now,
+                lookbackDays: 36525,
+              );
+              final matched =
+                  billRows.isEmpty ||
+                      billRows.single.state != SmsBillState.linked
+                  ? null
+                  : billRows.single;
               PastBillReceiptRepository(db, namespace: namespace).archiveBill(
                 id: item.id,
                 sender: item.sender,
@@ -406,6 +473,10 @@ class NeedsReviewRepository {
                 receivedAt: item.receivedAt,
                 dueDate: due,
                 cardLast4: parsed.cardLast4,
+                status: matched == null
+                    ? PastBillReceiptStatus.historicalUnpaid
+                    : PastBillReceiptStatus.paidLinked,
+                linkedTransactionId: matched?.linkedTxnId,
               );
             }
             _persistResolvedBillObservationSync(db, namespace, parsed, item);
@@ -416,8 +487,10 @@ class NeedsReviewRepository {
           if (parsed.disposition == LocalSmsDisposition.sync &&
               parsed.transaction != null &&
               parsed.transaction!.entryKind == TxnEntryKind.spend) {
-            final isWallet = parsed.transaction!.instrument == TxnInstrument.wallet;
-            final cardMatches = parsed.cardLast4 != null &&
+            final isWallet =
+                parsed.transaction!.instrument == TxnInstrument.wallet;
+            final cardMatches =
+                parsed.cardLast4 != null &&
                 _matchesUserCardSync(db, namespace, parsed.cardLast4!);
             final isNonCard = parsed.cardLast4 == null;
             if (isWallet || cardMatches || isNonCard) {
@@ -467,10 +540,7 @@ class NeedsReviewRepository {
         continue;
       }
       if (isMerchantReceiptOrEbill(item.body)) {
-        if (_hasMatchingSpendTransaction(
-              item,
-              transactions: txns,
-            )) {
+        if (_hasMatchingSpendTransaction(item, transactions: txns)) {
           toRemove.add(item.id);
           continue;
         }
@@ -480,10 +550,7 @@ class NeedsReviewRepository {
         }
       }
       if (isRefundOrReversal(item.body)) {
-        if (_hasMatchingRefundDebit(
-              item,
-              transactions: txns,
-            )) {
+        if (_hasMatchingRefundDebit(item, transactions: txns)) {
           toRemove.add(item.id);
           continue;
         }
@@ -495,11 +562,13 @@ class NeedsReviewRepository {
         namespace: namespace,
       );
       if (parsed != null) {
-        final isCardBill = parsed.eventType == LocalSmsEventType.bill &&
+        final isCardBill =
+            parsed.eventType == LocalSmsEventType.bill &&
             parsed.cardLast4 != null &&
             parsed.disposition != LocalSmsDisposition.localCommitment &&
             !parsed.reasonCodes.contains('mandate_notice');
-        final isMandateOrAutopay = !isCardBill &&
+        final isMandateOrAutopay =
+            !isCardBill &&
             (parsed.isAutopay ||
                 parsed.disposition == LocalSmsDisposition.localCommitment ||
                 parsed.reasonCodes.contains('mandate_notice') ||
@@ -525,7 +594,8 @@ class NeedsReviewRepository {
         if (parsed.disposition == LocalSmsDisposition.sync &&
             parsed.transaction != null &&
             parsed.transaction!.entryKind == TxnEntryKind.spend) {
-          final isWallet = parsed.transaction!.instrument == TxnInstrument.wallet;
+          final isWallet =
+              parsed.transaction!.instrument == TxnInstrument.wallet;
           final isNonCard = parsed.cardLast4 == null;
           if (isWallet || isNonCard) {
             toRemove.add(item.id);
@@ -683,7 +753,8 @@ class NeedsReviewRepository {
           amountMatched = paiseCol == extracted.paise;
         } else if (amountInr != null) {
           amountMatched = (amountInr * 100).round() == extracted.paise;
-        } else if (data['amount'] is Map && (data['amount'] as Map)['paise'] is int) {
+        } else if (data['amount'] is Map &&
+            (data['amount'] as Map)['paise'] is int) {
           amountMatched = (data['amount'] as Map)['paise'] == extracted.paise;
         }
         if (!amountMatched) continue;
@@ -751,6 +822,37 @@ class NeedsReviewRepository {
   static bool isMerchantReceiptOrEbill(String body) =>
       LocalSmsParser.isMerchantReceiptOrEbill(body);
 
+  static TransactionEntry? matchingSpendTransactionInList(
+    NeedsReviewItem item,
+    List<TransactionEntry>? transactions,
+  ) {
+    final extracted = LocalSmsParser.extractReceiptAmount(item.body);
+    if (extracted == null || extracted.paise <= 0) return null;
+    for (final txn in transactions ?? const <TransactionEntry>[]) {
+      final entryKind = txn.entryKind.name.toLowerCase();
+      final wireValue = txn.entryKind.wireValue.toLowerCase();
+      if (entryKind != 'spend' &&
+          entryKind != 'payment' &&
+          wireValue != 'spend' &&
+          wireValue != 'payment') {
+        continue;
+      }
+      if (txn.amount.paise != extracted.paise ||
+          txn.occurredAt.difference(item.receivedAt).abs() >
+              const Duration(hours: 72)) {
+        continue;
+      }
+      if (_merchantMatchesOrOverlaps(
+        txn.merchantName,
+        item.body,
+        item.sender,
+      )) {
+        return txn;
+      }
+    }
+    return null;
+  }
+
   static bool _merchantMatchesOrOverlaps(
     String? txnMerchant,
     String receiptBody,
@@ -761,10 +863,34 @@ class NeedsReviewRepository {
     }
     final merchantLower = txnMerchant.trim().toLowerCase();
     const stopWords = {
-      'pvt', 'ltd', 'limited', 'india', 'retail', 'store', 'stores',
-      'online', 'payment', 'payments', 'pay', 'corp', 'corporation',
-      'services', 'service', 'the', 'and', 'for', 'with', 'from',
-      'upi', 'pos', 'txn', 'bank', 'com', 'in', 'org', 'net',
+      'pvt',
+      'ltd',
+      'limited',
+      'india',
+      'retail',
+      'store',
+      'stores',
+      'online',
+      'payment',
+      'payments',
+      'pay',
+      'corp',
+      'corporation',
+      'services',
+      'service',
+      'the',
+      'and',
+      'for',
+      'with',
+      'from',
+      'upi',
+      'pos',
+      'txn',
+      'bank',
+      'com',
+      'in',
+      'org',
+      'net',
     };
     final rawTokens = merchantLower
         .split(RegExp(r'[^a-z0-9]+'))
@@ -775,8 +901,14 @@ class NeedsReviewRepository {
       return true;
     }
 
-    final cleanBody = receiptBody.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    final cleanSender = receiptSender.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final cleanBody = receiptBody.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '',
+    );
+    final cleanSender = receiptSender.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '',
+    );
     final lowerBody = receiptBody.toLowerCase();
     final lowerSender = receiptSender.toLowerCase();
 
@@ -787,7 +919,9 @@ class NeedsReviewRepository {
         }
       } else if (token.length == 3) {
         if (RegExp(r'\b' + RegExp.escape(token) + r'\b').hasMatch(lowerBody) ||
-            RegExp(r'\b' + RegExp.escape(token) + r'\b').hasMatch(lowerSender) ||
+            RegExp(
+              r'\b' + RegExp.escape(token) + r'\b',
+            ).hasMatch(lowerSender) ||
             cleanSender.contains(token)) {
           return true;
         }
@@ -802,29 +936,24 @@ class NeedsReviewRepository {
     String namespace,
     NeedsReviewItem item, {
     List<TransactionEntry>? transactions,
+  }) => matchingSpendTransactionIdSync(
+    database,
+    namespace,
+    item,
+    transactions: transactions,
+  ) != null;
+
+  static String? matchingSpendTransactionIdSync(
+    AppDatabase database,
+    String namespace,
+    NeedsReviewItem item, {
+    List<TransactionEntry>? transactions,
   }) {
     final extracted = LocalSmsParser.extractReceiptAmount(item.body);
-    if (extracted == null || extracted.paise <= 0) return false;
+    if (extracted == null || extracted.paise <= 0) return null;
 
-    if (transactions != null && transactions.isNotEmpty) {
-      for (final txn in transactions) {
-        final entryKindStr = txn.entryKind.name.toLowerCase();
-        final wireValueStr = txn.entryKind.wireValue.toLowerCase();
-        if (entryKindStr != 'spend' &&
-            entryKindStr != 'payment' &&
-            wireValueStr != 'spend' &&
-            wireValueStr != 'payment') {
-          continue;
-        }
-        if (txn.amount.paise != extracted.paise) continue;
-        if (txn.occurredAt.difference(item.receivedAt).abs() <=
-            const Duration(hours: 72)) {
-          if (_merchantMatchesOrOverlaps(txn.merchantName, item.body, item.sender)) {
-            return true;
-          }
-        }
-      }
-    }
+    final listed = matchingSpendTransactionInList(item, transactions);
+    if (listed != null) return listed.id;
 
     try {
       database.db.execute('''
@@ -837,7 +966,7 @@ class NeedsReviewRepository {
         );
       ''');
       final rows = database.db.select(
-        "SELECT payload, occurred_at, amount_paise FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
+        "SELECT id, payload, occurred_at, amount_paise FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
         [namespace],
       );
       for (final row in rows) {
@@ -846,7 +975,9 @@ class NeedsReviewRepository {
         final data = jsonDecode(payloadJson) as Map<String, dynamic>;
 
         final entryKind = (data['entry_kind'] as String?)?.toLowerCase();
-        if (entryKind != null && entryKind != 'spend' && entryKind != 'payment') continue;
+        if (entryKind != null && entryKind != 'spend' && entryKind != 'payment') {
+          continue;
+        }
 
         final paiseCol = row['amount_paise'] as int?;
         final amountInr = data['amount_inr'] as num?;
@@ -855,7 +986,8 @@ class NeedsReviewRepository {
           amountMatched = paiseCol == extracted.paise;
         } else if (amountInr != null) {
           amountMatched = (amountInr * 100).round() == extracted.paise;
-        } else if (data['amount'] is Map && (data['amount'] as Map)['paise'] is int) {
+        } else if (data['amount'] is Map &&
+            (data['amount'] as Map)['paise'] is int) {
           amountMatched = (data['amount'] as Map)['paise'] == extracted.paise;
         }
         if (!amountMatched) continue;
@@ -876,17 +1008,18 @@ class NeedsReviewRepository {
 
         if (occurredAt.difference(item.receivedAt).abs() <=
             const Duration(hours: 72)) {
-          final txnMerchant = data['merchant_name'] as String? ??
+          final txnMerchant =
+              data['merchant_name'] as String? ??
               data['merchant'] as String? ??
               data['merchantName'] as String?;
           if (_merchantMatchesOrOverlaps(txnMerchant, item.body, item.sender)) {
-            return true;
+            return row['id'] as String;
           }
         }
       }
     } catch (_) {}
 
-    return false;
+    return null;
   }
 
   bool _hasMatchingSpendTransaction(
@@ -918,7 +1051,11 @@ class NeedsReviewRepository {
         if (txn.amount.paise != extracted.paise) continue;
         if (txn.occurredAt.difference(item.receivedAt).abs() <=
             const Duration(hours: 72)) {
-          if (_merchantMatchesOrOverlaps(txn.merchantName, item.body, item.sender)) {
+          if (_merchantMatchesOrOverlaps(
+            txn.merchantName,
+            item.body,
+            item.sender,
+          )) {
             return true;
           }
         }
@@ -946,7 +1083,8 @@ class NeedsReviewRepository {
       receivedAt: item.receivedAt,
       namespace: namespace,
     );
-    final refundAmount = parsed?.transaction?.amount ??
+    final refundAmount =
+        parsed?.transaction?.amount ??
         LocalSmsParser.extractReceiptAmount(item.body);
     if (refundAmount == null || refundAmount.paise <= 0) return false;
 
@@ -1041,7 +1179,8 @@ class NeedsReviewRepository {
       receivedAt: item.receivedAt,
       namespace: namespace,
     );
-    final refundAmount = parsed?.transaction?.amount ??
+    final refundAmount =
+        parsed?.transaction?.amount ??
         LocalSmsParser.extractReceiptAmount(item.body);
     if (refundAmount == null || refundAmount.paise <= 0) return false;
 
@@ -1111,21 +1250,24 @@ class NeedsReviewRepository {
         'matched_at': DateTime.now().toUtc().toIso8601String(),
         'refund_sms_id': item.id,
       };
-      database.db.execute('''
+      database.db.execute(
+        '''
         INSERT INTO financial_entities(
           namespace, entity, id, payload, observed_at, pending, source_key, occurred_at, amount_paise
         ) VALUES (?, 'refund_adjustments', ?, ?, ?, 0, ?, ?, ?)
         ON CONFLICT(namespace, entity, id) DO UPDATE SET
           payload=excluded.payload, observed_at=excluded.observed_at
-      ''', [
-        namespace,
-        'refund_link:${item.id}',
-        jsonEncode(linkPayload),
-        item.receivedAt.millisecondsSinceEpoch,
-        item.id,
-        item.receivedAt.millisecondsSinceEpoch,
-        match.refundAmount.paise,
-      ]);
+      ''',
+        [
+          namespace,
+          'refund_link:${item.id}',
+          jsonEncode(linkPayload),
+          item.receivedAt.millisecondsSinceEpoch,
+          item.id,
+          item.receivedAt.millisecondsSinceEpoch,
+          match.refundAmount.paise,
+        ],
+      );
     } catch (_) {}
   }
 
@@ -1168,7 +1310,21 @@ class NeedsReviewRepository {
     if (isMerchantReceiptOrEbill(item.body)) {
       if (loadDatabase != null) {
         final db = await _database();
-        if (_hasMatchingSpendTransaction(item, database: db, transactions: txns)) {
+        final linkedId = matchingSpendTransactionIdSync(
+          db,
+          namespace,
+          item,
+          transactions: txns,
+        );
+        if (linkedId != null) {
+          PastBillReceiptRepository(db, namespace: namespace).archiveReceipt(
+            id: item.id,
+            sender: item.sender,
+            body: item.body,
+            receivedAt: item.receivedAt,
+            linkedTransactionId: linkedId,
+            status: PastBillReceiptStatus.paidLinked,
+          );
           return;
         }
       } else if (_hasMatchingSpendTransaction(item, transactions: txns)) {
@@ -1331,6 +1487,7 @@ class NeedsReviewRepository {
         .toList();
     await prefs.setStringList(_needsReviewKey, kept);
   }
+
   static void _persistResolvedTransactionSync(
     AppDatabase database,
     String namespace,
@@ -1347,7 +1504,8 @@ class NeedsReviewRepository {
           PRIMARY KEY(namespace, entity, id)
         );
       ''');
-      database.db.execute('''
+      database.db.execute(
+        '''
         INSERT INTO financial_entities(
           namespace, entity, id, payload, observed_at, pending, source_key, occurred_at, amount_paise
         ) VALUES (?, 'transactions', ?, ?, ?, 1, ?, ?, ?)
@@ -1355,15 +1513,17 @@ class NeedsReviewRepository {
           payload=excluded.payload, observed_at=excluded.observed_at,
           source_key=excluded.source_key, occurred_at=excluded.occurred_at,
           amount_paise=excluded.amount_paise
-      ''', [
-        namespace,
-        txn.id,
-        jsonEncode(txn.toJson()),
-        txn.occurredAt.millisecondsSinceEpoch,
-        sourceKey,
-        txn.occurredAt.millisecondsSinceEpoch,
-        txn.amount.paise,
-      ]);
+      ''',
+        [
+          namespace,
+          txn.id,
+          jsonEncode(txn.toJson()),
+          txn.occurredAt.millisecondsSinceEpoch,
+          sourceKey,
+          txn.occurredAt.millisecondsSinceEpoch,
+          txn.amount.paise,
+        ],
+      );
     } catch (_) {}
   }
 
@@ -1407,19 +1567,22 @@ class NeedsReviewRepository {
         'disposition': parsed.disposition.wireValue,
         'reason_codes': parsed.reasonCodes,
       };
-      database.db.execute('''
+      database.db.execute(
+        '''
         INSERT INTO financial_entities(
           namespace, entity, id, payload, observed_at, pending, source_key
         ) VALUES (?, 'sms_observations', ?, ?, ?, 0, ?)
         ON CONFLICT(namespace, entity, id) DO UPDATE SET
           payload=excluded.payload, observed_at=excluded.observed_at
-      ''', [
-        namespace,
-        item.id,
-        jsonEncode(obsPayload),
-        item.receivedAt.millisecondsSinceEpoch,
-        item.id,
-      ]);
+      ''',
+        [
+          namespace,
+          item.id,
+          jsonEncode(obsPayload),
+          item.receivedAt.millisecondsSinceEpoch,
+          item.id,
+        ],
+      );
     } catch (_) {}
   }
 
@@ -1439,7 +1602,8 @@ class NeedsReviewRepository {
         );
       ''');
       final commitmentId = 'commitment:${item.id}';
-      var title = (parsed.billerName != null && parsed.billerName!.trim().isNotEmpty)
+      var title =
+          (parsed.billerName != null && parsed.billerName!.trim().isNotEmpty)
           ? parsed.billerName!.trim()
           : 'Subscription / Mandate';
 
@@ -1450,7 +1614,8 @@ class NeedsReviewRepository {
       } else if (parsed.amountDue != null && !parsed.amountDue!.isZero) {
         amount = parsed.amountDue!;
       } else {
-        amount = parsed.amount ??
+        amount =
+            parsed.amount ??
             parsed.autopayLimit ??
             parsed.amountDue ??
             const Money.zero();
@@ -1467,7 +1632,8 @@ class NeedsReviewRepository {
               jsonDecode(r['payload'] as String) as Map<String, dynamic>;
           final old = Commitment.fromJson(payload);
           final oldTitle = old.title.trim();
-          final isOldGeneric = oldTitle.isEmpty ||
+          final isOldGeneric =
+              oldTitle.isEmpty ||
               oldTitle == 'Subscription / Mandate' ||
               oldTitle.toLowerCase() == 'subscription' ||
               oldTitle.toLowerCase() == 'mandate';
@@ -1519,15 +1685,15 @@ class NeedsReviewRepository {
         source: CommitmentSource.sms,
         isUserConfirmed: false,
       );
-      database.db.execute('''
+      database.db.execute(
+        '''
         INSERT OR REPLACE INTO local_commitments VALUES (?, ?, ?)
-      ''', [
-        namespace,
-        commitment.id,
-        jsonEncode(commitment.toJson()),
-      ]);
+      ''',
+        [namespace, commitment.id, jsonEncode(commitment.toJson())],
+      );
     } catch (_) {}
   }
+
   static bool _matchesUserCardSync(
     AppDatabase? database,
     String namespace,
@@ -1547,5 +1713,26 @@ class NeedsReviewRepository {
       }
     } catch (_) {}
     return false;
+  }
+
+  static List<TransactionEntry> _loadTransactionsSync(
+    AppDatabase database,
+    String namespace,
+  ) {
+    try {
+      final rows = database.db.select(
+        "SELECT payload FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
+        [namespace],
+      );
+      return rows
+          .map(
+            (row) => TransactionEntry.fromJson(
+              jsonDecode(row['payload'] as String) as Map<String, dynamic>,
+            ),
+          )
+          .toList(growable: false);
+    } catch (_) {
+      return const <TransactionEntry>[];
+    }
   }
 }

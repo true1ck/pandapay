@@ -1,85 +1,117 @@
-/// Keeps finalized speech and the current recognizer's provisional speech
-/// separate, so a recognizer session ending cannot discard visible words.
+/// Accumulates recognition results by native session. Android may deliver a
+/// session's final result after the next session has already started; keeping
+/// each session's text separate lets that final result replace its interim
+/// text without dropping later speech.
 class VoiceTranscriptBuffer {
-  String _finalized = '';
-  String _provisional = '';
-  String _sessionBase = '';
+  final Map<int, _VoiceTranscriptSession> _sessions =
+      <int, _VoiceTranscriptSession>{};
+  int _nextSessionId = 0;
 
-  String get finalized => _finalized;
-  String get provisional => _provisional;
+  String get text => _sessions.values
+      .map((session) => session.text.trim())
+      .where((part) => part.isNotEmpty)
+      .join(' ');
 
-  String get text => [
-    _finalized.trim(),
-    _provisional.trim(),
-  ].where((part) => part.isNotEmpty).join(' ');
+  String get finalized => _sessions.values
+      .map((session) => session.finalized.trim())
+      .where((part) => part.isNotEmpty)
+      .join(' ');
+
+  String get provisional => _sessions.values
+      .map((session) => session.provisional.trim())
+      .where((part) => part.isNotEmpty)
+      .join(' ');
 
   void clear() {
-    _finalized = '';
-    _provisional = '';
-    _sessionBase = '';
+    _sessions.clear();
+    _nextSessionId = 0;
   }
 
-  /// Marks the transcript already committed before opening a new native
-  /// recognition session. Results from that session may repeat this prefix.
-  void beginSession() {
-    _sessionBase = _finalized;
-    _provisional = '';
+  /// Starts a recognition session and returns the ID its callbacks must use.
+  int beginSession() {
+    final id = ++_nextSessionId;
+    _sessions[id] = _VoiceTranscriptSession(baseText: text);
+    return id;
   }
 
-  void update(String words, {required bool isFinal}) {
-    final normalized = words.trim();
-    if (normalized.isEmpty) return;
-    final sessionWords = _withoutSessionBase(normalized);
-    if (sessionWords.isEmpty) {
-      if (!isFinal) {
-        _provisional = '';
+  void update(int sessionId, String words, {required bool isFinal}) {
+    final session = _sessions[sessionId];
+    if (session == null) return;
+    final normalized = _withoutSessionBase(words.trim(), session.knownBases);
+    if (normalized.isEmpty) {
+      if (isFinal) {
+        session.finalized = '';
+        session.provisional = '';
+      } else if (session.finalized.isEmpty) {
+        session.provisional = '';
       }
+      _refreshLaterBaselines();
       return;
     }
-    if (!isFinal) {
-      _provisional = sessionWords;
-      return;
+    if (isFinal) {
+      // Final results may improve or correct the interim phrase for this
+      // specific session, even if a later recognition session has started.
+      session.finalized = normalized;
+      session.provisional = '';
+    } else if (session.finalized.isEmpty) {
+      // Interim results are revisions of the current utterance, not chunks.
+      session.provisional = normalized;
     }
-
-    _appendFinal(sessionWords);
-    _provisional = '';
+    _refreshLaterBaselines();
   }
 
-  String _withoutSessionBase(String words) {
-    if (_sessionBase.isEmpty) return words;
-    final base = _sessionBase.trim();
-    if (words.toLowerCase() == base.toLowerCase()) return '';
-    if (words.toLowerCase().startsWith('${base.toLowerCase()} ')) {
-      return words.substring(base.length).trim();
+  /// Commits visible interim words at a session boundary. A later final result
+  /// from this session can still replace them through [update].
+  void commitProvisional([int? sessionId]) {
+    if (sessionId != null) {
+      _sessions[sessionId]?.commitProvisional();
+      _refreshLaterBaselines();
+      return;
+    }
+    for (final session in _sessions.values) {
+      session.commitProvisional();
+    }
+    _refreshLaterBaselines();
+  }
+
+  void _refreshLaterBaselines() {
+    var prefix = '';
+    for (final session in _sessions.values) {
+      session.baseText = prefix;
+      session.knownBases.add(prefix);
+      final value = session.text.trim();
+      if (value.isNotEmpty) prefix = prefix.isEmpty ? value : '$prefix $value';
+    }
+  }
+
+  String _withoutSessionBase(String words, Set<String> knownBases) {
+    final lowerWords = words.toLowerCase();
+    final bases = knownBases.where((base) => base.isNotEmpty).toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+    for (final base in bases) {
+      final lowerBase = base.toLowerCase();
+      if (lowerWords == lowerBase) return '';
+      if (lowerWords.startsWith('$lowerBase ')) {
+        return words.substring(base.length).trim();
+      }
     }
     return words;
   }
+}
 
-  /// Commits the last visible partial when a platform ends a session without
-  /// delivering a final result. Duplicate final/partial callbacks are folded.
+class _VoiceTranscriptSession {
+  String baseText;
+  final Set<String> knownBases;
+  String finalized = '';
+  String provisional = '';
+
+  _VoiceTranscriptSession({required this.baseText}) : knownBases = {baseText};
+
+  String get text => finalized.isNotEmpty ? finalized : provisional;
+
   void commitProvisional() {
-    if (_provisional.isEmpty) return;
-    _appendFinal(_provisional);
-    _provisional = '';
-  }
-
-  void _appendFinal(String words) {
-    final current = _finalized.toLowerCase();
-    final next = words.toLowerCase();
-    if (_finalized.isEmpty) {
-      _finalized = words;
-    } else if (current == next || current.endsWith(next)) {
-      return;
-    } else if (next.startsWith(current)) {
-      // Some recognizers revise the same utterance cumulatively ("spent 1"
-      // then "spent 100"). Replace that prefix instead of duplicating it.
-      _finalized = words;
-    } else if (current.startsWith(next)) {
-      // A recognizer may emit a shortened final revision of the previous
-      // utterance. Keep the richer already committed transcript.
-      return;
-    } else {
-      _finalized = '$_finalized $words';
-    }
+    if (provisional.isEmpty) return;
+    finalized = provisional;
+    provisional = '';
   }
 }

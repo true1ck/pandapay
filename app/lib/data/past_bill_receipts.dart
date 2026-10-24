@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -85,21 +86,28 @@ class PastBillReceipt {
 }
 
 class PastBillReceiptRepository {
+  static final StreamController<String> _changes =
+      StreamController<String>.broadcast(sync: true);
+
+  static Stream<String> get changes => _changes.stream;
+
   final AppDatabase database;
   final String namespace;
 
   const PastBillReceiptRepository(this.database, {required this.namespace});
 
-  List<PastBillReceipt> fetchAll({int limit = 100}) {
+  List<PastBillReceipt> fetchAll({int? limit = 100}) {
     final rows = database.db.select(
       'SELECT payload FROM local_past_bill_receipts WHERE namespace = ? '
-      'ORDER BY updated_at DESC LIMIT ?',
-      [namespace, limit],
+      'ORDER BY updated_at DESC ${limit == null ? '' : 'LIMIT ?'}',
+      [namespace, ?limit],
     );
     return rows
-        .map((row) => PastBillReceipt.fromJson(
-              jsonDecode(row['payload'] as String) as Map<String, dynamic>,
-            ))
+        .map(
+          (row) => PastBillReceipt.fromJson(
+            jsonDecode(row['payload'] as String) as Map<String, dynamic>,
+          ),
+        )
         .toList(growable: false);
   }
 
@@ -114,6 +122,7 @@ class PastBillReceiptRepository {
            updated_at = excluded.updated_at''',
       [namespace, receipt.id, jsonEncode(receipt.toJson()), now, now],
     );
+    _changes.add(namespace);
   }
 
   /// Archives a completed merchant e-bill/receipt without creating spending.
@@ -159,6 +168,8 @@ class PastBillReceiptRepository {
     required DateTime receivedAt,
     required DateTime? dueDate,
     String? cardLast4,
+    PastBillReceiptStatus status = PastBillReceiptStatus.historicalUnpaid,
+    String? linkedTransactionId,
   }) {
     upsert(
       PastBillReceipt(
@@ -170,7 +181,8 @@ class PastBillReceiptRepository {
         occurredAt: dueDate ?? receivedAt,
         receivedAt: receivedAt,
         dueDate: dueDate,
-        status: PastBillReceiptStatus.historicalUnpaid,
+        status: status,
+        linkedTransactionId: linkedTransactionId,
         sender: sender,
         body: cardLast4 == null ? null : 'Card ending $cardLast4',
       ),

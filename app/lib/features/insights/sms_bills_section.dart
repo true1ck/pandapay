@@ -67,6 +67,7 @@ class _BillRow extends StatelessWidget {
     final detail = [
       if (bill.dueDate != null)
         'Due ${DateFormat('d MMM').format(bill.dueDate!)}',
+      if (bill.isMinimumOnly) 'Minimum due only',
       if (bill.cardLast4 != null) 'Card ••${bill.cardLast4}',
       if (bill.accountLast4 != null) 'Account ••${bill.accountLast4}',
       if (bill.isAutopay) 'AutoPay',
@@ -163,7 +164,7 @@ Future<void> _showBill(BuildContext context, WidgetRef ref, SmsBillRow bill) {
             ),
             const SizedBox(height: AppSpace.sm),
             Text(
-              'Amount ${bill.amountDue.format(hidePaise: true)}',
+              '${bill.isMinimumOnly ? 'Minimum due' : 'Amount'} ${bill.amountDue.format(hidePaise: true)}',
               style: BambooFonts.ui(15, color: BambooInk.ink900),
             ),
             if (bill.dueDate != null)

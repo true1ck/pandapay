@@ -9,6 +9,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_bill_ledger.dart';
 import '../../data/commitments_repository.dart';
+import '../../data/past_bill_receipts.dart';
 import '../../data/user_cards_repository.dart';
 import 'central_bills_section.dart';
 import 'sms_bills_section.dart';
@@ -102,7 +103,8 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
   for (final card in active) {
     final bill = ledger[card.id]?.current;
     final DateTime dueOn;
-    if (bill?.dueDate != null && (bill!.statementDateVerified || card.dueDay != null)) {
+    if (bill?.dueDate != null &&
+        (bill!.statementDateVerified || card.dueDay != null)) {
       dueOn = bill.dueDate!;
     } else if (card.dueDay != null) {
       dueOn = bill != null
@@ -288,12 +290,26 @@ class _PastBillsPreview extends ConsumerWidget {
       children: [
         Row(
           children: [
-            Expanded(child: _SectionHeader(label: 'Past bills & receipts', count: null)),
+            Expanded(
+              child: _SectionHeader(
+                label: 'Past bills & receipts',
+                count: null,
+              ),
+            ),
             TextButton(
               onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PastBillReceiptsScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const PastBillReceiptsScreen(),
+                ),
               ),
-              child: Text('View all', style: BambooFonts.ui(12, color: BambooInk.jade, weight: FontWeight.w600)),
+              child: Text(
+                'View all',
+                style: BambooFonts.ui(
+                  12,
+                  color: BambooInk.jade,
+                  weight: FontWeight.w600,
+                ),
+              ),
             ),
           ],
         ),
@@ -317,7 +333,9 @@ class _PastBillPreviewRow extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => PastBillReceiptDetailScreen(item: item)),
+        MaterialPageRoute(
+          builder: (_) => PastBillReceiptDetailScreen(item: item),
+        ),
       ),
       child: Container(
         padding: const EdgeInsets.all(AppSpace.md),
@@ -334,13 +352,37 @@ class _PastBillPreviewRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.merchant, style: BambooFonts.ui(14, weight: FontWeight.w600, color: BambooInk.ink900), overflow: TextOverflow.ellipsis),
+                  Text(
+                    item.merchant,
+                    style: BambooFonts.ui(
+                      14,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 2),
-                  Text(_pastBillStatusLabel(item), style: BambooFonts.ui(12, color: item.status == PastBillReceiptStatus.historicalUnpaid ? BambooInk.clayInk : BambooInk.jade)),
+                  Text(
+                    _pastBillStatusLabel(item),
+                    style: BambooFonts.ui(
+                      12,
+                      color:
+                          item.status ==
+                                  PastBillReceiptStatus.historicalUnpaid ||
+                              item.status ==
+                                  PastBillReceiptStatus.needsConfirmation
+                          ? BambooInk.clayInk
+                          : BambooInk.jade,
+                    ),
+                  ),
                 ],
               ),
             ),
-            if (item.amount != null) Text(item.amount!.format(hidePaise: true), style: BambooFonts.money(14, color: BambooInk.ink900)),
+            if (item.amount != null)
+              Text(
+                item.amount!.format(hidePaise: true),
+                style: BambooFonts.money(14, color: BambooInk.ink900),
+              ),
           ],
         ),
       ),
@@ -352,7 +394,10 @@ String _pastBillStatusLabel(PastBillReceipt item) => switch (item.status) {
   PastBillReceiptStatus.paidLinked => 'Paid · Linked',
   PastBillReceiptStatus.paidUnlinked => 'Paid · Unlinked',
   PastBillReceiptStatus.historicalUnpaid => 'Past bill · Payment not detected',
-  PastBillReceiptStatus.needsConfirmation => 'Needs confirmation',
+  PastBillReceiptStatus.needsConfirmation =>
+    item.kind == PastBillReceiptKind.bill
+        ? 'Past bill · Needs confirmation'
+        : 'Receipt · Needs confirmation',
   PastBillReceiptStatus.userSavedPurchase => 'Saved purchase',
 };
 
