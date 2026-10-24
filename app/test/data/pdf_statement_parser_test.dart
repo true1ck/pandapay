@@ -16,6 +16,52 @@ void main() {
       expect(result.transactions.first.isTransfer, isTrue);
       expect(result.transactions.last.isTransfer, isFalse);
     });
+
+    test('Axio expense flag does not classify a card repayment as spending', () {
+      final result = parseStatementText('''
+03/10/2026 CHEQ CREDIT CARD REPAYMENT 13,490.00 DR HDFC Bank Yes No Other
+04/10/2026 GROCERY STORE 1,250.00 DR HDFC Bank Yes No Shopping
+''', options: const StatementTableOptions(dateOrderConfirmed: true));
+
+      expect(result.transactions, hasLength(2));
+      final repayment = result.transactions.first;
+      expect(repayment.isTransfer, isTrue);
+      expect(
+        repayment.reviewReasons,
+        contains(
+          'Description indicates a card repayment, but Axio marks it as an expense. Verify the transaction type.',
+        ),
+      );
+
+      final purchase = result.transactions.last;
+      expect(purchase.isTransfer, isFalse);
+      expect(purchase.reviewReasons, isEmpty);
+    });
+
+    test('Axio recognizes credit card bill payment with expense flag Yes', () {
+      final result = parseStatementText(
+        '03/10/2026 CREDIT CARD BILL PAYMENT 3,350.00 DR HDFC Bank Yes No Other',
+        options: const StatementTableOptions(dateOrderConfirmed: true),
+      );
+
+      expect(result.transactions.single.isTransfer, isTrue);
+      expect(result.transactions.single.reviewReasons, isNotEmpty);
+    });
+
+    test('Axio card repayments use the same paid-to and bill-pay phrases', () {
+      for (final description in [
+        'PAID TO HDFC CREDIT CARD',
+        'CARD BILL PAY',
+      ]) {
+        final result = parseStatementText(
+          '03/10/2026 $description 3,350.00 DR HDFC Bank Yes No Other',
+          options: const StatementTableOptions(dateOrderConfirmed: true),
+        );
+        expect(result.transactions.single.isTransfer, isTrue);
+        expect(result.transactions.single.reviewReasons, isNotEmpty);
+      }
+    });
+
     test('extracts a well-formed transaction line', () {
       final result = parseStatementText(
         '12/05/2026  AMAZON PAY INDIA PVT LTD MUM   1,234.50',

@@ -66,6 +66,14 @@ bool _isRepaymentOrTransfer(String description) => RegExp(
   r'\b(?:TRANSFER|SELF\s+TRANSFER|OWN\s+ACCOUNT|REPAYMENT|EMI|LOAN\s+(?:PAYMENT|REPAYMENT|DISBURSEMENT)|SALARY\s+ADVANCE|CREDIT\s+CARD\s+(?:BILL\s+)?(?:PAYMENT|PMT)|CARD\s+BILL\s+PAY|WALLET\s+(?:LOAD|TOP[ -]?UP)|TOP[ -]?UP|CASH\s+WITHDRAW(?:AL)?|CASH\s+DEPOSIT|REFUND(?:ED)?|CHARGEBACK|REVERS(?:AL|ED)|CASHBACK|REWARD|STATEMENT\s+CREDIT|BALANCE\s+ADJUSTMENT|CARD\s+ADJUSTMENT|GIFT|REIMBURSE(?:MENT|D)?|INVESTMENT\s+PROCEEDS|REDEMPTION|FD\s+MATURITY|FIXED\s+DEPOSIT\s+MATURITY|(?:PAYMENT|PAID)\s+(?:TO|FOR)\s+(?:(?:AXIS|HDFC|ICICI|SBI|BANK|FLIPKART)\s+){0,5}CREDIT\s+CARD)\b',
   caseSensitive: false,
 ).hasMatch(description);
+
+// Keep this narrower than the general transfer classifier: an Axio expense
+// flag can conflict with a clearly labeled card bill repayment, but ordinary
+// card purchases and generic payments should continue to follow the flag.
+bool _isCardRepaymentDescription(String description) => RegExp(
+  r'\b(?:CREDIT\s+CARD\s+(?:BILL\s+)?(?:REPAY(?:MENT)?|PAYMENT|PMT)|CARD\s+BILL\s+(?:REPAY(?:MENT)?|PAY|PAYMENT|PMT)|(?:PAYMENT|PAID)\s+(?:TO|FOR)\s+(?:(?:AXIS|HDFC|ICICI|SBI|BANK|FLIPKART)\s+){0,5}CREDIT\s+CARD)\b',
+  caseSensitive: false,
+).hasMatch(description);
 final _monthNames = <String, int>{
   'jan': 1,
   'january': 1,
@@ -216,6 +224,13 @@ ParsedStatementLine? _parseTransactionBlock(
       r'^(.*?)\s+(Yes|No|-)\s+(Yes|No|-)\s+',
       caseSensitive: false,
     ).firstMatch(tail);
+    final expenseFlag = account?.group(2)?.toLowerCase();
+    final cardRepayment = _isCardRepaymentDescription(description);
+    if (account != null && expenseFlag == 'yes' && cardRepayment) {
+      reasons.add(
+        'Description indicates a card repayment, but Axio marks it as an expense. Verify the transaction type.',
+      );
+    }
     return ParsedStatementLine(
       date: date,
       description: description,
@@ -224,7 +239,7 @@ ParsedStatementLine? _parseTransactionBlock(
       sourceAccount: account?.group(1)?.trim(),
       reviewReasons: reasons,
       isTransfer: account != null
-          ? account.group(2)!.toLowerCase() == 'no'
+          ? expenseFlag == 'no' || cardRepayment
           : _isRepaymentOrTransfer(description),
       isInvestment: isInvestmentMovementDescription(description),
     );

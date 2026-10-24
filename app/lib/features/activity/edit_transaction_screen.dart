@@ -45,7 +45,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   bool _tagsEdited = false;
   TransactionEntry? _originalEntry;
   DateTime? _occurredAt;
-  TxnInstrument _instrument = TxnInstrument.creditCard;
+  TxnInstrument? _instrument;
   TxnEntryKind _entryKind = TxnEntryKind.spend;
   TxnRail _rail = TxnRail.unknown;
   bool _initialized = false;
@@ -76,11 +76,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     _categoryId = entry.categoryId;
     _occurredAt = entry.occurredAt;
     _entryKind = entry.entryKind;
-    _instrument = entry.instrumentKnown
-        ? entry.instrument
-        : (_entryKind == TxnEntryKind.spend
-              ? TxnInstrument.creditCard
-              : TxnInstrument.upiBank);
+    _instrument = entry.instrumentKnown ? entry.instrument : null;
     _rail = entry.rail;
     // The bottom action is built before the body's AsyncValue builder runs.
     // Request one safe rebuild after the first frame so Save is enabled for
@@ -93,7 +89,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
 
   Future<void> _save() async {
     final amount = double.tryParse(_amountController.text.trim());
-    if (amount == null || amount <= 0) {
+    if (amount == null || !amount.isFinite || amount <= 0) {
       setState(() => _error = 'Enter a valid amount greater than zero.');
       return;
     }
@@ -112,7 +108,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           original.userCardId != _userCardId ||
           original.occurredAt != _occurredAt ||
           (original.merchantName ?? '') != _merchantController.text.trim() ||
-          original.instrument != _instrument ||
+          (original.instrumentKnown
+              ? original.instrument != _instrument
+              : _instrument != null) ||
           original.entryKind != _entryKind ||
           original.rail != _rail;
       if (_tagsEdited) {
@@ -179,7 +177,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                 ? null
                 : _merchantController.text.trim(),
             'user_card_id': _userCardId,
-            'instrument': _instrument.wireValue,
+            if (_instrument != null) 'instrument': _instrument!.wireValue,
             'entry_kind': _entryKind.wireValue,
             'rail': _railWireValue(_rail),
           },
@@ -526,8 +524,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       },
                     ),
                     const SizedBox(height: AppSpace.lg),
-                    DropdownButtonFormField<TxnInstrument>(
+                    DropdownButtonFormField<TxnInstrument?>(
                       initialValue: _instrument,
+                      hint: const Text('Unknown — choose a method'),
                       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                       decoration: inputDecoration('Paid with'),
                       items: [
@@ -540,7 +539,6 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                             ),
                       ],
                       onChanged: (value) {
-                        if (value == null) return;
                         setState(() {
                           _instrument = value;
                           if (_instrument != TxnInstrument.creditCard)
