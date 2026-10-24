@@ -2,6 +2,12 @@ name: Enable Gemini 1% pilot
 
 on:
   workflow_dispatch:
+    inputs:
+      run_live_provider_probe:
+        description: Send one synthetic, non-persistent Gemini request to verify provider connectivity
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -72,4 +78,37 @@ jobs:
           );
           COMMIT;
           SQL
+          REMOTE
+
+      - name: Probe Gemini with a synthetic fixture
+        if: ${{ inputs.run_live_provider_probe }}
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/apps/pandapay
+          docker compose --profile sms-ai --env-file .env -f docker-compose.prod.yml exec -T gemini-worker node - <<'NODE'
+          const { GeminiProvider } = require('./src/gemini_worker');
+
+          const payload = {
+            sender: 'SYNTHETIC_TEST',
+            occurredAt: '2026-10-24T00:00:00.000Z',
+            body: 'Synthetic connectivity fixture only: available bank balance Rs 1234.50 as of 24 October 2026.',
+          };
+
+          new GeminiProvider().classify({ payload }).then((facts) => {
+            console.log(JSON.stringify({ provider: 'gemini', success: true, factCount: facts.length }));
+          }).catch((error) => {
+            console.log(JSON.stringify({
+              provider: 'gemini',
+              success: false,
+              errorType: error.name,
+              status: error.status || null,
+              retryable: error.retryable === true,
+            }));
+            process.exitCode = 1;
+          });
+          NODE
           REMOTE
