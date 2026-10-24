@@ -5866,13 +5866,13 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         // Network reconciliation drains durable local rows; it never rereads
         // inbox history and can fail without undoing completed local capture.
         changed = await flush() > 0 || changed;
-        // Repair rows imported by older builds: this suppresses only a
-        // high-confidence SMS replay and fills categories for legacy rows.
+        // Repair rows imported by older builds, including categories and
+        // cross-source duplicate candidates that need a user's decision.
         // Run once per migration revision/account, not every five minutes.
         final repo = ref.read(userCardsRepositoryProvider);
         final prefs = await SharedPreferences.getInstance();
         final repairKey =
-            'pandapay_app.sms_history_repaired_at_v1_${ref.read(cacheNamespaceProvider)}';
+            'pandapay_app.sms_history_repaired_at_v2_${ref.read(cacheNamespaceProvider)}';
         final lastRepair = prefs.getInt(repairKey);
         final repairDue = lastRepair == null;
         if (repo != null &&
@@ -5880,14 +5880,24 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
             ref.read(isOnlineProvider).valueOrNull != false) {
           try {
             final repaired = await repo.reconcileSmsHistory();
-            await prefs.setInt(
-              repairKey,
-              DateTime.now().millisecondsSinceEpoch,
-            );
+            // An older API may accept this route but not include the v2
+            // cross-source repair. Retry after the backend rollout.
+            if (repaired.reconciliationVersion >= 2) {
+              await prefs.setInt(
+                repairKey,
+                DateTime.now().millisecondsSinceEpoch,
+              );
+            }
+            if (repaired.crossSourceCandidatesCreated > 0) {
+              ref.invalidate(duplicateCandidatesProvider);
+            }
             changed =
                 repaired.duplicateSuppressed > 0 ||
+                repaired.crossSourceCandidatesCreated > 0 ||
                 repaired.linkedCards > 0 ||
                 repaired.reclassified > 0 ||
+                repaired.classificationReclassified > 0 ||
+                repaired.remappedTransactions > 0 ||
                 changed;
           } catch (_) {
             /* Retry the one-time migration after connectivity returns. */
