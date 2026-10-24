@@ -582,6 +582,45 @@ void main() {
     },
   );
 
+  testWidgets(
+    'dismisses an AI promotion fact without treating it as a transaction',
+    (tester) async {
+      final id = List.filled(64, 'e').join();
+      await reviews.add(
+        NeedsReviewItem(
+          id: id,
+          sender: 'VM-HDFCBK',
+          body: 'INR 499 spent at STORE. Get cashback on your next purchase.',
+          receivedAt: DateTime(2026, 10, 10),
+          aiSuggestions: [
+            {'factIndex': 0, 'factType': 'promotion', 'payload': <String, dynamic>{}},
+            {
+              'factIndex': 1,
+              'factType': 'posted_movement',
+              'payload': {
+                'amountInr': 499.0,
+                'merchant': 'STORE',
+                'instrument': 'credit_card',
+                'entryKind': 'spend',
+              },
+            },
+          ],
+        ),
+      );
+      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+      expect(find.text('Promotional message'), findsOneWidget);
+      expect(find.text('Not a transaction'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Dismiss'));
+      await tester.pumpAndSettle();
+
+      final remaining = await reviews.fetchAll();
+      expect(remaining, hasLength(1));
+      expect(remaining.single.aiSuggestions, hasLength(1));
+      expect(remaining.single.aiSuggestions!.single['factType'], 'posted_movement');
+    },
+  );
+
     testWidgets(
       'dismissing not-a-transaction preserves immediate optimistic UI dismissal and calls dismissSms',
       (tester) async {

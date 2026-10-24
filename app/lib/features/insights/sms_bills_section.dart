@@ -211,79 +211,94 @@ Future<void> _showBill(BuildContext context, WidgetRef ref, SmsBillRow bill) {
     isScrollControlled: true,
     showDragHandle: true,
     backgroundColor: BambooInk.paper,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    clipBehavior: Clip.antiAlias,
     builder: (context) => SafeArea(
-      child: SingleChildScrollView(
-        child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpace.lg,
-          AppSpace.sm,
-          AppSpace.lg,
-          AppSpace.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              bill.title,
-              style: BambooFonts.heading(20, color: BambooInk.ink900),
+      child: SizedBox(
+        // A modal route supplies loose horizontal constraints. Without an
+        // explicit width this compact sheet shrinks to its longest line of
+        // text, leaving the narrow floating panel seen on phones.
+        width: double.infinity,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              AppSpace.xs,
+              AppSpace.lg,
+              AppSpace.lg,
             ),
-            const SizedBox(height: AppSpace.sm),
-            Text(
-              '${bill.isMinimumOnly ? 'Minimum due' : 'Amount'} ${bill.amountDue.format(hidePaise: true)}',
-              style: BambooFonts.ui(15, color: BambooInk.ink900),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  bill.title,
+                  style: BambooFonts.heading(20, color: BambooInk.ink900),
+                ),
+                const SizedBox(height: AppSpace.sm),
+                Text(
+                  '${bill.isMinimumOnly ? 'Minimum due' : 'Amount'} ${bill.amountDue.format(hidePaise: true)}',
+                  style: BambooFonts.ui(15, color: BambooInk.ink900),
+                ),
+                if (bill.dueDate != null)
+                  Text(
+                    'Due ${DateFormat('d MMM yyyy').format(bill.dueDate!)}',
+                    style: BambooFonts.ui(13, color: BambooInk.ink500),
+                  ),
+                if (bill.linkedTxnAt != null)
+                  Text(
+                    'Matched payment ${DateFormat('d MMM yyyy').format(bill.linkedTxnAt!)}',
+                    style: BambooFonts.ui(13, color: BambooInk.jade),
+                  ),
+                if (bill.sampleBody?.isNotEmpty == true) ...[
+                  const SizedBox(height: AppSpace.md),
+                  Text(
+                    'Original message',
+                    style: BambooFonts.ui(
+                      12,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink500,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.xs),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpace.md),
+                    decoration: BoxDecoration(
+                      color: BambooInk.glassFillOnPaper,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: BambooInk.hairlineOnPaper),
+                    ),
+                    child: Text(
+                      bill.sampleBody!,
+                      style: BambooFonts.ui(12, color: BambooInk.ink700),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpace.lg),
+                if (bill.state != SmsBillState.linked) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => save(context, paid: true),
+                      child: const Text('Mark as paid'),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.xs),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: () => save(context, paid: false),
+                    icon: const Icon(Icons.visibility_off_outlined),
+                    label: const Text('Not a bill'),
+                  ),
+                ),
+              ],
             ),
-            if (bill.dueDate != null)
-              Text(
-                'Due ${DateFormat('d MMM yyyy').format(bill.dueDate!)}',
-                style: BambooFonts.ui(13, color: BambooInk.ink500),
-              ),
-            if (bill.linkedTxnAt != null)
-              Text(
-                'Matched payment ${DateFormat('d MMM yyyy').format(bill.linkedTxnAt!)}',
-                style: BambooFonts.ui(13, color: BambooInk.jade),
-              ),
-            if (bill.sampleBody?.isNotEmpty == true) ...[
-              const SizedBox(height: AppSpace.md),
-              Text(
-                'Original message',
-                style: BambooFonts.ui(
-                  12,
-                  weight: FontWeight.w600,
-                  color: BambooInk.ink500,
-                ),
-              ),
-              const SizedBox(height: AppSpace.xs),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpace.md),
-                decoration: BoxDecoration(
-                  color: BambooInk.glassFillOnPaper,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: BambooInk.hairlineOnPaper),
-                ),
-                child: Text(
-                  bill.sampleBody!,
-                  style: BambooFonts.ui(12, color: BambooInk.ink700),
-                ),
-              ),
-            ],
-            const SizedBox(height: AppSpace.lg),
-            if (bill.state != SmsBillState.linked)
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => save(context, paid: true),
-                  child: const Text('Mark as paid'),
-                ),
-              ),
-            TextButton.icon(
-              onPressed: () => save(context, paid: false),
-              icon: const Icon(Icons.visibility_off_outlined),
-              label: const Text('Not a bill'),
-            ),
-          ],
-        ),
+          ),
         ),
       ),
     ),

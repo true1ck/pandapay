@@ -118,7 +118,7 @@ function registerAiQueueRoutes(app, {
           ? await smsFacts.loadSmsSourceFacts(client, req.userId, req.params.sourceKey)
           : null;
         const suggestions = (source?.facts || [])
-          .filter((fact) => fact.status === 'active' && fact.provenance?.channel === 'ai')
+          .filter((fact) => fact.status === 'active' && fact.provenance?.channel === 'ai' && fact.overridden !== true)
           .map((fact) => ({
             factIndex: fact.factIndex,
             factType: fact.factType,

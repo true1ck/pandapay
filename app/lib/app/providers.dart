@@ -5791,6 +5791,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     var changed = false;
     for (final item in items) {
       if (ref.read(cacheNamespaceProvider) != namespace) break;
+      // A completed job returns its original fact list; do not restore facts
+      // the user already resolved from a still-open multi-fact review item.
+      if (item.aiSuggestions?.isNotEmpty == true) continue;
       if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(item.id) ||
           LocalSmsParser.sensitive(item.body) ||
           !capturesFinancialSms(item.body, sender: item.sender)) {

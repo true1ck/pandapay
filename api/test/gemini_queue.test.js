@@ -1073,6 +1073,62 @@ test('valid AI result endpoint completes review-only without invoking projection
   }
 });
 
+test('source status omits AI facts the user already confirmed or corrected', async () => {
+  const h = harness({});
+  const body = `${BILL_BODY} Available balance INR 5000 for A/c XX1234.`;
+  const accepted = await geminiQueue.acceptOneJob(h.client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body,
+  });
+  const job = h.state.jobs.get(accepted.jobId);
+  const balanceFact = {
+    factType: 'balance_snapshot',
+    payload: {
+      availableBalanceInr: 5000,
+      asOfAt: '2026-10-20T18:30:00.000Z',
+      accountLast4: '1234',
+      instrument: 'upi_bank',
+    },
+  };
+  await geminiQueue.completeJobWithResult(h.client, {
+    job,
+    facts: [...BILL_FACTS, balanceFact],
+  });
+  const source = [...h.state.sources.values()][0];
+  const confirmedIndex = [...source.facts.values()].find(
+    (fact) => fact.fact_type === 'bill_obligation',
+  ).fact_index;
+  source.overrides.set(confirmedIndex, { amountDueInr: 3000 });
+
+  const query = h.client.query;
+  h.client.query = async (sql, params) => {
+    if (sql.replace(/\s+/g, ' ').trim().startsWith(
+      'SELECT id, status, result, attempts, created_at, updated_at FROM ai_jobs',
+    )) {
+      return { rows: [{
+        id: job.id,
+        status: job.status,
+        result: job.result,
+        attempts: job.attempts,
+        created_at: job.created_at,
+        updated_at: job.created_at,
+      }] };
+    }
+    return query(sql, params);
+  };
+
+  const response = await h.call('/ai/jobs/source/:sourceKey', {
+    userId: PROFILE_A,
+    params: { sourceKey: SOURCE_KEY },
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.suggestions.map((fact) => fact.factType), [
+    'balance_snapshot',
+  ]);
+  assert.equal(response.body.suggestions[0].factIndex === confirmedIndex, false);
+});
+
 // Phase 6: Admin monitoring & Learning loop
 
 test('admin monitoring endpoints return redacted metrics and timeline without raw body', async () => {

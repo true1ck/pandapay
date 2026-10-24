@@ -1996,6 +1996,18 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
         payload['limitInr'] != null ? 'Limit ₹${(payload['limitInr'] as num).toStringAsFixed(2)}' : 'Recurring mandate',
         'Confirm',
       ),
+      'security_or_service_alert' => (
+        Icons.privacy_tip_outlined,
+        'Security or service alert',
+        'Not a transaction',
+        'Dismiss',
+      ),
+      'promotion' => (
+        Icons.local_offer_outlined,
+        'Promotional message',
+        'Not a transaction',
+        'Dismiss',
+      ),
       _ => (
         Icons.info_outline,
         'Financial detail',
@@ -2041,6 +2053,12 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                         break;
                       case 'mandate_lifecycle':
                         await _reviewMandate(s);
+                        break;
+                      case 'security_or_service_alert':
+                      case 'promotion':
+                        await _resolveFactSuggestion(
+                          (s['factIndex'] as int?) ?? 0,
+                        );
                         break;
                       case 'posted_movement':
                       default:
