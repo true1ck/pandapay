@@ -18,6 +18,17 @@ on:
         type: boolean
         required: false
         default: false
+      probe_model:
+        description: Model to inspect in the synthetic provider probe
+        type: choice
+        options:
+          - gemini-3.8-flash
+          - gemini-3.7-flash
+          - gemini-3.6-flash
+          - gemini-3.5-flash
+          - gemini-2.5-flash
+        required: false
+        default: gemini-3.8-flash
       run_minimal_generation_probe:
         description: Send a tiny synthetic request capped at 32 output tokens
         type: boolean
@@ -109,7 +120,8 @@ jobs:
           cd /home/ubuntu/apps/pandapay
           docker compose --profile sms-ai --env-file .env -f docker-compose.prod.yml exec -T \
             -e RUN_LIVE_PROVIDER_PROBE='${{ inputs.run_live_provider_probe }}' \
-            -e RUN_MINIMAL_GENERATION_PROBE='${{ inputs.run_minimal_generation_probe }}' gemini-worker node - <<'NODE'
+            -e RUN_MINIMAL_GENERATION_PROBE='${{ inputs.run_minimal_generation_probe }}' \
+            -e PROBE_GEMINI_MODEL='${{ inputs.probe_model }}' gemini-worker node - <<'NODE'
           (async () => {
           const { GeminiProvider } = require('./src/gemini_worker');
 
@@ -138,7 +150,7 @@ jobs:
             return;
           }
 
-          const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+          const model = process.env.PROBE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
           let modelAccess;
           try {
             const response = await fetch(
@@ -295,6 +307,7 @@ jobs:
           let transportError = null;
           const startedAt = Date.now();
           const provider = new GeminiProvider({
+            model,
             fetchImpl: async (url, options) => {
               try {
                 const { signal: _providerTimeout, ...requestOptions } = options;
