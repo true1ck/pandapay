@@ -96,7 +96,7 @@ class NotificationGate {
 
   Future<void> _ensurePluginInitialized() async {
     if (_pluginInitialized) return;
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings('ic_notification');
     const iosInit = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
@@ -165,7 +165,7 @@ class NotificationGate {
             'Cap, milestone, bill, and other card alerts you\'ve opted into',
         importance: Importance.defaultImportance,
         priority: Priority.defaultPriority,
-        icon: '@mipmap/ic_launcher',
+        icon: 'ic_notification',
         largeIcon: DrawableResourceAndroidBitmap('ic_notification_large'),
         color: AppColors.teal500,
       );
@@ -204,7 +204,7 @@ class NotificationGate {
             'Cap, milestone, bill, and other card alerts you\'ve opted into',
         importance: Importance.defaultImportance,
         priority: Priority.defaultPriority,
-        icon: '@mipmap/ic_launcher',
+        icon: 'ic_notification',
         largeIcon: DrawableResourceAndroidBitmap('ic_notification_large'),
         color: AppColors.teal500,
       );

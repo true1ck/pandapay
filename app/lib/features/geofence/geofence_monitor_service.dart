@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -38,6 +39,8 @@ abstract class BackgroundMerchantMonitor {
 /// A force-stop or reboot ends this stream; the controller restores it when
 /// the signed-in app opens again. This service never discovers map candidates.
 class GeofenceMonitorService implements BackgroundMerchantMonitor {
+  static const _locationNotificationChannel =
+      MethodChannel('app.pandapay/location_notification');
   static const proximityMeters = 20.0;
   static const visitExitMeters = 60.0;
   static const maxAlertsPerWindow = 2;
@@ -81,7 +84,7 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
   Future<void> _ensureInitialized() async {
     if (_initialized) return;
     try {
-      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidInit = AndroidInitializationSettings('ic_notification');
       const iosInit = DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
@@ -201,8 +204,8 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
               notificationText: 'Checking for nearby businesses',
               notificationTitle: 'PandaPay is checking your location',
               notificationIcon: AndroidResource(
-                name: 'ic_launcher',
-                defType: 'mipmap',
+                name: 'ic_notification',
+                defType: 'drawable',
               ),
               color: AppColors.teal500,
               enableWakeLock: true,
@@ -247,9 +250,23 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
           },
           cancelOnError: false,
         );
+    if (Platform.isAndroid) {
+      // Geolocator owns the persistent notification. Its Dart API exposes a
+      // small icon only, so Android adds our existing large logo once the
+      // foreground service posts the notification.
+      unawaited(_brandLocationNotification());
+    }
     if (generation == _generation &&
         status.value == GeofenceMonitorStatus.starting) {
       status.value = GeofenceMonitorStatus.monitoring;
+    }
+  }
+
+  Future<void> _brandLocationNotification() async {
+    try {
+      await _locationNotificationChannel.invokeMethod<void>('applyBrandIcons');
+    } on Exception catch (error) {
+      debugPrint('Could not brand location notification: $error');
     }
   }
 
@@ -437,7 +454,7 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
           'Alerts when nearby businesses are detected while monitoring is on',
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
-      icon: '@mipmap/ic_launcher',
+      icon: 'ic_notification',
       largeIcon: DrawableResourceAndroidBitmap('ic_notification_large'),
       color: AppColors.teal500,
     );
