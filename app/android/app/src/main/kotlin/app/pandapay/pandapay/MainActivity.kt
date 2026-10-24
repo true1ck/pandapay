@@ -132,7 +132,15 @@ class MainActivity : FlutterFragmentActivity() {
             LOCATION_NOTIFICATION_CHANNEL,
         ).setMethodCallHandler { call, result ->
             when (call.method) {
-                "applyBrandIcons" -> brandLocationNotification(result)
+                "applyBrandIcons" -> {
+                    val smallIconName = call.argument<String>("smallIcon")
+                    val largeIconName = call.argument<String>("largeIcon")
+                    if (smallIconName == null || largeIconName == null) {
+                        result.success(null)
+                    } else {
+                        brandLocationNotification(smallIconName, largeIconName, result)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -153,7 +161,18 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    private fun brandLocationNotification(result: MethodChannel.Result) {
+    private fun brandLocationNotification(
+        smallIconName: String,
+        largeIconName: String,
+        result: MethodChannel.Result,
+    ) {
+        val smallIconId = resources.getIdentifier(smallIconName, "drawable", packageName)
+        val largeIconId = resources.getIdentifier(largeIconName, "drawable", packageName)
+        if (smallIconId == 0 || largeIconId == 0) {
+            android.util.Log.w("PandaPay", "Notification branding resource is missing")
+            result.success(null)
+            return
+        }
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val handler = Handler(Looper.getMainLooper())
 
@@ -182,8 +201,8 @@ class MainActivity : FlutterFragmentActivity() {
                 // Keep Geolocator's foreground service notification, channel,
                 // content intent, and ongoing flags; change only its icons.
                 val notification = Notification.Builder.recoverBuilder(this, active.notification)
-                    .setSmallIcon(R.drawable.ic_notification)
-                    .setLargeIcon(Icon.createWithResource(this, R.drawable.ic_notification_large))
+                    .setSmallIcon(smallIconId)
+                    .setLargeIcon(Icon.createWithResource(this, largeIconId))
                     .build()
                 manager.notify(active.tag, active.id, notification)
             } catch (error: RuntimeException) {

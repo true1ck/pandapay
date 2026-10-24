@@ -131,7 +131,7 @@
              the full-color launcher artwork. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_notification" />
+            android:resource="@drawable/pandapay_notification_small_icon" />
 
         <!-- Launcher widgets. Providers are exported so Android's widget host
              can send APPWIDGET_UPDATE and open each item in the picker. -->

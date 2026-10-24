@@ -10,11 +10,9 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../notifications/notification_branding.dart';
 import '../notifications/notification_gate.dart';
 import 'nearby_merchants_repository.dart';
-
-// app_theme.dart supplies AppColors for notification accent colors.
-import '../../app/design/app_theme.dart' show AppColors;
 
 /// Runtime health is separate from the account's saved opt-in.
 enum GeofenceMonitorStatus {
@@ -84,14 +82,8 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
   Future<void> _ensureInitialized() async {
     if (_initialized) return;
     try {
-      const androidInit = AndroidInitializationSettings('ic_notification');
-      const iosInit = DarwinInitializationSettings(
-        requestAlertPermission: false,
-        requestBadgePermission: false,
-        requestSoundPermission: false,
-      );
       await notifications.initialize(
-        const InitializationSettings(android: androidInit, iOS: iosInit),
+        NotificationBranding.initializationSettings,
       );
     } catch (e) {
       // A second initialize() on the same plugin instance (NotificationGate
@@ -204,10 +196,10 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
               notificationText: 'Checking for nearby businesses',
               notificationTitle: 'PandaPay is checking your location',
               notificationIcon: AndroidResource(
-                name: 'ic_notification',
+                name: NotificationBranding.smallIcon,
                 defType: 'drawable',
               ),
-              color: AppColors.teal500,
+              color: NotificationBranding.accentColor,
               enableWakeLock: true,
             ),
           )
@@ -264,7 +256,13 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
 
   Future<void> _brandLocationNotification() async {
     try {
-      await _locationNotificationChannel.invokeMethod<void>('applyBrandIcons');
+      await _locationNotificationChannel.invokeMethod<void>(
+        'applyBrandIcons',
+        {
+          'smallIcon': NotificationBranding.smallIcon,
+          'largeIcon': NotificationBranding.largeIcon,
+        },
+      );
     } on Exception catch (error) {
       debugPrint('Could not brand location notification: $error');
     }
@@ -447,22 +445,12 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
     // wired to a NotificationGate yet) — same content, just without the
     // preference/quiet-hours/cap checks geofenceMonitorServiceProvider
     // always supplies in the real app.
-    const androidDetails = AndroidNotificationDetails(
-      'geofence_nearby_merchant',
-      'Nearby merchants',
-      channelDescription:
-          'Alerts when nearby businesses are detected while monitoring is on',
-      importance: Importance.defaultImportance,
-      priority: Priority.defaultPriority,
-      icon: 'ic_notification',
-      largeIcon: DrawableResourceAndroidBitmap('ic_notification_large'),
-      color: AppColors.teal500,
+    await notifications.show(
+      merchantId.hashCode,
+      title,
+      body,
+      NotificationBranding.nearbyMerchantDetails,
     );
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(),
-    );
-    await notifications.show(merchantId.hashCode, title, body, details);
     return true;
   }
 }
