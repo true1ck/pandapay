@@ -118,7 +118,6 @@ void main() {
         ),
       ], completeQuery: const TransactionQuery());
       await Future<void>.delayed(Duration.zero);
-      container.invalidate(cardBillLedgerProvider);
       final ledger = await container
           .read(cardBillLedgerProvider.future)
           .timeout(const Duration(seconds: 10));
@@ -126,6 +125,28 @@ void main() {
       expect(ledger['card']!.current!.outstanding, Money.fromRupees(0));
     },
   );
+
+  test('an empty ledger refreshes when its first bill arrives', () async {
+    final store = cache.financialStore;
+    store.replaceCards('user:account-a', [card]);
+    store.saveTransactions('user:account-a', [], completeQuery: const TransactionQuery());
+    final container = offlineContainer();
+    addTearDown(container.dispose);
+    final subscription = container.listen(cardBillLedgerProvider, (_, _) {});
+    addTearDown(subscription.close);
+    expect(await container.read(cardBillLedgerProvider.future), isEmpty);
+    store.saveObservation('user:account-a', 'first-bill', {
+      'id': 'first-bill', 'event_type': 'bill', 'card_last4': '7788',
+      'received_at': DateTime(2026, 10, 18).toIso8601String(),
+      'statement_date': DateTime(2026, 10, 18).toIso8601String(),
+      'statement_date_explicit': true,
+      'due_date': DateTime(2026, 11, 2).toIso8601String(),
+      'amount_due_paise': 10000,
+    });
+    await Future<void>.delayed(Duration.zero);
+    final ledger = await container.read(cardBillLedgerProvider.future);
+    expect(ledger['card']!.current!.amountDue, Money.fromRupees(100));
+  });
 
   test('reminder without a stated statement date keeps the unverified claim '
       'off the screen', () async {

@@ -4,6 +4,28 @@ import 'package:pandapay/data/past_bill_receipts.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 void main() {
+  test('bill identity is structured and original SMS stays unchanged', () {
+    final db = openInMemoryForTesting();
+    addTearDown(db.close);
+    final repo = PastBillReceiptRepository(db, namespace: 'identity');
+    const body = 'Your statement is ready. Please pay the bill in the bank app.';
+    repo.archiveBill(
+      id: 'bill', sender: 'BANK', merchant: 'Bank',
+      amount: Money.fromRupees(100), receivedAt: DateTime(2026, 1, 1),
+      dueDate: DateTime(2026, 1, 20), cardLast4: '1234', accountLast4: '5678',
+      body: body,
+    );
+    final restored = repo.fetchAll().single;
+    expect(restored.cardLast4, '1234');
+    expect(restored.accountLast4, '5678');
+    expect(restored.body, body);
+    final legacy = {...restored.toJson()}..remove('cardLast4');
+    expect(PastBillReceipt.fromJson({...legacy, 'body': 'Card ending 4321'})
+      .cardLast4, '4321');
+    expect(PastBillReceipt.fromJson({...legacy, 'body': 'Card ending 4321 is due'})
+      .cardLast4, isNull);
+  });
+
   test('past receipt round-trips status, amount, dates, and link', () {
     final original = PastBillReceipt(
       id: 'receipt-1',

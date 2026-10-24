@@ -155,7 +155,7 @@ void main() {
       NeedsReviewItem(
         id: '1',
         sender: 'VM-HDFCBK',
-        body: 'not really a txn',
+        body: 'Rs.499 spent on HDFC Bank Card ending 1234 at AMAZON.',
         receivedAt: DateTime.now(),
       ),
     );
@@ -199,16 +199,16 @@ void main() {
     await reviews.add(
       NeedsReviewItem(
         id: '1',
-        sender: 's1',
-        body: 'b1',
+        sender: 'VM-HDFCBK',
+        body: 'Rs.100 spent on HDFC Bank Card ending 1234 at FIRST SHOP.',
         receivedAt: DateTime.now(),
       ),
     );
     await reviews.add(
       NeedsReviewItem(
         id: '2',
-        sender: 's2',
-        body: 'b2',
+        sender: 'VM-HDFCBK',
+        body: 'Rs.200 spent on HDFC Bank Card ending 5678 at SECOND SHOP.',
         receivedAt: DateTime.now(),
       ),
     );
@@ -273,8 +273,8 @@ void main() {
     await reviews.add(
       NeedsReviewItem(
         id: 'bill-2',
-        sender: 'VZ-VICARE-S',
-        body: 'Your mobile invoice is ready for download.',
+        sender: 'HDFCBK',
+        body: 'Your bill of Rs. 2000 is generated. Due date 28-10-2026',
         receivedAt: DateTime(2026, 10, 1),
         kind: NeedsReviewKind.commitment,
       ),
@@ -663,16 +663,16 @@ void main() {
         await reviews.add(
           NeedsReviewItem(
             id: 'item-1',
-            sender: 's1',
-            body: 'b1',
+            sender: 'VM-HDFCBK',
+            body: 'Rs.100 spent on HDFC Bank Card ending 1234 at FIRST SHOP.',
             receivedAt: DateTime.now(),
           ),
         );
         await reviews.add(
           NeedsReviewItem(
             id: 'item-2',
-            sender: 's2',
-            body: 'b2',
+            sender: 'VM-HDFCBK',
+            body: 'Rs.200 spent on HDFC Bank Card ending 5678 at SECOND SHOP.',
             receivedAt: DateTime.now(),
           ),
         );

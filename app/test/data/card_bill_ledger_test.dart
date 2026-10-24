@@ -170,65 +170,71 @@ void main() {
     expect(bill.outstanding, Money.fromRupees(20482));
   });
 
-  test('a payment made before the next statement settles the previous bill', () {
-    final ledgers = deriveCardBills(
-      cards: twoCards,
-      evidence: [
-        _ev(
-          DateTime(2026, 10, 18),
-          due: DateTime(2026, 11, 2),
-          amount: Money.fromRupees(21560),
-        ),
-        _ev(
-          DateTime(2026, 9, 18),
-          due: DateTime(2026, 10, 2),
-          amount: Money.fromRupees(9500),
-        ),
-      ],
-      payments: [
-        _payment(
-          'p1',
-          occurredAt: DateTime(2026, 10, 10),
-          amount: Money.fromRupees(9500),
-          merchant: 'Credit card bill payment',
-          cardLast4: '8080',
-        ),
-      ],
-      now: now,
-    );
-    expect(ledgers['card-a']!.current!.isPaid, isFalse);
-    expect(ledgers['card-a']!.previous!.isPaid, isTrue);
-  });
+  test(
+    'a payment made before the next statement settles the previous bill',
+    () {
+      final ledgers = deriveCardBills(
+        cards: twoCards,
+        evidence: [
+          _ev(
+            DateTime(2026, 10, 18),
+            due: DateTime(2026, 11, 2),
+            amount: Money.fromRupees(21560),
+          ),
+          _ev(
+            DateTime(2026, 9, 18),
+            due: DateTime(2026, 10, 2),
+            amount: Money.fromRupees(9500),
+          ),
+        ],
+        payments: [
+          _payment(
+            'p1',
+            occurredAt: DateTime(2026, 10, 10),
+            amount: Money.fromRupees(9500),
+            merchant: 'Credit card bill payment',
+            cardLast4: '8080',
+          ),
+        ],
+        now: now,
+      );
+      expect(ledgers['card-a']!.current!.isPaid, isFalse);
+      expect(ledgers['card-a']!.previous!.isPaid, isTrue);
+    },
+  );
 
-  test('a late payment of the previous cycle does not mark the new bill paid', () {
-    final ledgers = deriveCardBills(
-      cards: twoCards,
-      evidence: [
-        _ev(
-          DateTime(2026, 10, 18),
-          due: DateTime(2026, 11, 2),
-          amount: Money.fromRupees(21560),
-        ),
-        _ev(
-          DateTime(2026, 9, 18),
-          due: DateTime(2026, 10, 2),
-          amount: Money.fromRupees(9500),
-        ),
-      ],
-      payments: [
-        _payment(
-          'p1',
-          occurredAt: DateTime(2026, 10, 25),
-          amount: Money.fromRupees(9500),
-          merchant: 'Credit card bill payment',
-          cardLast4: '8080',
-        ),
-      ],
-      now: now,
-    );
-    expect(ledgers['card-a']!.current!.isPaid, isFalse);
-    expect(ledgers['card-a']!.previous!.isPaid, isTrue);
-  });
+  test(
+    'a late payment of the previous cycle does not mark the new bill paid',
+    () {
+      final ledgers = deriveCardBills(
+        cards: twoCards,
+        evidence: [
+          _ev(
+            DateTime(2026, 10, 18),
+            due: DateTime(2026, 11, 2),
+            amount: Money.fromRupees(21560),
+          ),
+          _ev(
+            DateTime(2026, 9, 18),
+            due: DateTime(2026, 10, 2),
+            amount: Money.fromRupees(9500),
+          ),
+        ],
+        payments: [
+          _payment(
+            'p1',
+            occurredAt: DateTime(2026, 10, 25),
+            amount: Money.fromRupees(9500),
+            merchant: 'Credit card bill payment',
+            cardLast4: '8080',
+          ),
+        ],
+        now: now,
+      );
+      expect(ledgers['card-a']!.current!.isPaid, isFalse);
+      expect(ledgers['card-a']!.previous!.isPaid, isTrue);
+    },
+  );
 
   test('overpaid bill stays paid', () {
     final ledgers = deriveCardBills(
@@ -254,40 +260,43 @@ void main() {
     expect(ledgers['card-a']!.current!.isPaid, isTrue);
   });
 
-  test('two open windows and no card signal leave the payment unattributed', () {
-    final ledgers = deriveCardBills(
-      cards: twoCards,
-      evidence: [
-        _ev(
-          DateTime(2026, 10, 18),
-          due: DateTime(2026, 11, 2),
-          amount: Money.fromRupees(21560),
-          last4: '8080',
-        ),
-        _ev(
-          DateTime(2026, 10, 17),
-          due: DateTime(2026, 11, 3),
-          amount: Money.fromRupees(21560),
-          last4: '1234',
-        ),
-      ],
-      payments: [
-        _payment(
-          'p1',
-          occurredAt: DateTime(2026, 10, 21),
-          amount: Money.fromRupees(21560),
-          merchant: 'Credit card bill payment',
-        ),
-      ],
-      now: now,
-    );
-    expect(ledgers['card-a']!.current!.hasPayments, isFalse);
-    expect(ledgers['card-b']!.current!.hasPayments, isFalse);
-    expect(
-      ledgers.values.every((l) => l.current?.paidToward.paise == 0),
-      isTrue,
-    );
-  });
+  test(
+    'two open windows and no card signal leave the payment unattributed',
+    () {
+      final ledgers = deriveCardBills(
+        cards: twoCards,
+        evidence: [
+          _ev(
+            DateTime(2026, 10, 18),
+            due: DateTime(2026, 11, 2),
+            amount: Money.fromRupees(21560),
+            last4: '8080',
+          ),
+          _ev(
+            DateTime(2026, 10, 17),
+            due: DateTime(2026, 11, 3),
+            amount: Money.fromRupees(21560),
+            last4: '1234',
+          ),
+        ],
+        payments: [
+          _payment(
+            'p1',
+            occurredAt: DateTime(2026, 10, 21),
+            amount: Money.fromRupees(21560),
+            merchant: 'Credit card bill payment',
+          ),
+        ],
+        now: now,
+      );
+      expect(ledgers['card-a']!.current!.hasPayments, isFalse);
+      expect(ledgers['card-b']!.current!.hasPayments, isFalse);
+      expect(
+        ledgers.values.every((l) => l.current?.paidToward.paise == 0),
+        isTrue,
+      );
+    },
+  );
 
   test('a single open window infers the card', () {
     final ledgers = deriveCardBills(
@@ -332,7 +341,7 @@ void main() {
           merchant: 'Card bill pay',
         ),
       ],
-      now: now,
+      now: DateTime(2026, 12, 11),
     );
     final bill = ledgers['card-a']!.current!;
     expect(bill.isPaid, isFalse);
@@ -359,9 +368,111 @@ void main() {
           merchant: 'Card bill pay',
         ),
       ],
-      now: now,
+      now: DateTime(2026, 12, 11),
     );
     expect(ledgers['card-a']!.current!.isPaid, isTrue);
+  });
+
+  test('payments preserve bill metadata and do not count duplicate IDs twice', () {
+    final payment = _payment(
+      'same-payment', occurredAt: DateTime(2026, 10, 21),
+      amount: Money.fromRupees(500), merchant: 'Card bill payment',
+      cardLast4: '8080',
+    );
+    final bill = deriveCardBills(
+      cards: [card],
+      evidence: [CardBillEvidence(
+        cardLast4: '8080', statementDate: DateTime(2026, 10, 18),
+        statementDateExplicit: true, dueDate: DateTime(2026, 11, 2),
+        amountDue: Money.fromRupees(1000), minimumDue: null,
+        confidence: 0.9, isAutopay: true,
+      )],
+      payments: [payment, payment], now: now,
+    )['card-a']!.current!;
+    expect(bill.paidToward, Money.fromRupees(500));
+    expect(bill.isPaid, isFalse);
+    expect(bill.statementDateVerified, isTrue);
+    expect(bill.isAutopay, isTrue);
+  });
+
+  test('unknown card, old and future payments cannot settle an owned bill', () {
+    for (final payment in [
+      _payment('unknown', occurredAt: DateTime(2026, 10, 21),
+        amount: Money.fromRupees(1000), merchant: 'Card bill payment',
+        cardLast4: '9999'),
+      _payment('old', occurredAt: DateTime(2026, 8, 1),
+        amount: Money.fromRupees(1000), merchant: 'Card bill payment',
+        cardLast4: '8080'),
+      _payment('future', occurredAt: DateTime(2026, 11, 3),
+        amount: Money.fromRupees(1000), merchant: 'Card bill payment',
+        cardLast4: '8080'),
+    ]) {
+      final ledger = deriveCardBills(
+        cards: [card], evidence: [
+          _ev(DateTime(2026, 10, 18), amount: Money.fromRupees(1000)),
+          _ev(DateTime(2026, 9, 18), amount: Money.fromRupees(1000)),
+        ], payments: [payment], now: now,
+      )['card-a']!;
+      expect(ledger.current!.hasPayments, isFalse, reason: payment.id);
+      expect(ledger.previous!.hasPayments, isFalse, reason: payment.id);
+    }
+  });
+
+  test('a settled previous cycle cannot absorb the current cycle payment', () {
+    final ledger = deriveCardBills(
+      cards: [card], evidence: [
+        _ev(DateTime(2026, 10, 18), amount: Money.fromRupees(2000)),
+        _ev(DateTime(2026, 9, 18), amount: Money.fromRupees(1000)),
+      ], payments: [
+        _payment('current-partial', occurredAt: DateTime(2026, 10, 21),
+          amount: Money.fromRupees(1000), merchant: 'Card bill payment',
+          cardLast4: '8080'),
+        _payment('previous-full', occurredAt: DateTime(2026, 10, 1),
+          amount: Money.fromRupees(1000), merchant: 'Card bill payment',
+          cardLast4: '8080'),
+      ], now: now,
+    )['card-a']!;
+    expect(ledger.previous!.paidToward, Money.fromRupees(1000));
+    expect(ledger.current!.paidToward, Money.fromRupees(1000));
+    expect(ledger.current!.isPaid, isFalse);
+  });
+
+  test('a small positive bill without payments is not paid', () {
+    final bill = deriveCardBills(
+      cards: [card], evidence: [
+        _ev(DateTime(2026, 10, 18), amount: Money.fromPaise(50)),
+      ], payments: [], now: now,
+    )['card-a']!.current!;
+    expect(bill.isPaid, isFalse);
+  });
+
+  test('late reminders still merge with their older statement cycle', () {
+    final ledger = deriveCardBills(
+      cards: [card], evidence: [
+        _ev(DateTime(2026, 10, 30), explicitStatement: false,
+          due: DateTime(2026, 11, 2), minimum: Money.fromRupees(100)),
+        _ev(DateTime(2026, 10, 25), explicitStatement: false,
+          due: DateTime(2026, 10, 2), amount: Money.fromRupees(2000)),
+        _ev(DateTime(2026, 10, 18), due: DateTime(2026, 11, 2),
+          amount: Money.fromRupees(1000)),
+        _ev(DateTime(2026, 9, 18), due: DateTime(2026, 10, 2),
+          amount: Money.fromRupees(2000)),
+      ], payments: [], now: now,
+    )['card-a']!;
+    expect(ledger.current!.statementDate, DateTime(2026, 10, 18));
+    expect(ledger.current!.amountDue, Money.fromRupees(1000));
+    expect(ledger.previous!.amountDue, Money.fromRupees(2000));
+  });
+
+  test('shared last four digits do not duplicate one bill onto two cards', () {
+    final collision = UserCard.fromJson({
+      ...other.toJson(), 'last4': '8080',
+    });
+    expect(deriveCardBills(
+      cards: [card, collision], evidence: [
+        _ev(DateTime(2026, 10, 18), amount: Money.fromRupees(1000)),
+      ], payments: [], now: now,
+    ), isEmpty);
   });
 
   test('payment text naming the ending digits attributes explicitly', () {
@@ -486,233 +597,297 @@ void main() {
     expect(bill.dueDate, DateTime(2026, 11, 8));
     expect(bill.amountDue, Money.fromRupees(8331));
   });
-  test('aggregator HDFC bill triangulates by spend when multiple HDFC cards exist', () {
-    final moneyBack = UserCard.fromJson({
-      'id': 'card-mb',
-      'card_product_id': 'p1',
-      'card_name': 'MoneyBack+ Credit Card',
-      'last4': '8708',
-      'is_default': false,
-    });
-    final tataNeu = UserCard.fromJson({
-      'id': 'card-tn',
-      'card_product_id': 'p2',
-      'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
-      'last4': '1366',
-      'is_default': false,
-    });
+  test(
+    'aggregator HDFC bill triangulates by spend when multiple HDFC cards exist',
+    () {
+      final moneyBack = UserCard.fromJson({
+        'id': 'card-mb',
+        'card_product_id': 'p1',
+        'card_name': 'MoneyBack+ Credit Card',
+        'last4': '8708',
+        'is_default': false,
+      });
+      final tataNeu = UserCard.fromJson({
+        'id': 'card-tn',
+        'card_product_id': 'p2',
+        'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
+        'last4': '1366',
+        'is_default': false,
+      });
 
-    final txns = <TransactionEntry>[
-      TransactionEntry(
-        id: 't1',
-        amount: Money.fromRupees(500),
-        occurredAt: DateTime(2026, 10, 16),
-        userCardId: 'card-mb',
-        entryKind: TxnEntryKind.spend,
-        instrument: TxnInstrument.creditCard,
-        source: 'sms',
-        status: 'active',
-      ),
-      TransactionEntry(
-        id: 't2',
-        amount: Money.fromRupees(7831),
-        occurredAt: DateTime(2026, 10, 8),
-        userCardId: 'card-mb',
-        entryKind: TxnEntryKind.spend,
-        instrument: TxnInstrument.creditCard,
-        source: 'sms',
-        status: 'active',
-      ),
-      TransactionEntry(
-        id: 't3',
-        amount: Money.fromRupees(12),
-        occurredAt: DateTime(2026, 9, 23),
-        userCardId: 'card-tn',
-        entryKind: TxnEntryKind.spend,
-        instrument: TxnInstrument.creditCard,
-        source: 'sms',
-        status: 'active',
-      ),
-    ];
-
-    final ledgers = deriveCardBills(
-      cards: [moneyBack, tataNeu],
-      evidence: [
-        CardBillEvidence(
-          cardLast4: '8708',
-          statementDate: DateTime(2026, 10, 20),
-          statementDateExplicit: false,
-          dueDate: null,
-          amountDue: null,
-          minimumDue: null,
-          confidence: 0.6,
+      final txns = <TransactionEntry>[
+        TransactionEntry(
+          id: 't1',
+          amount: Money.fromRupees(500),
+          occurredAt: DateTime(2026, 10, 16),
+          userCardId: 'card-mb',
+          entryKind: TxnEntryKind.spend,
+          instrument: TxnInstrument.creditCard,
+          source: 'sms',
+          status: 'active',
         ),
-        CardBillEvidence(
-          cardLast4: '1366',
-          statementDate: DateTime(2026, 10, 20),
-          statementDateExplicit: false,
-          dueDate: null,
-          amountDue: null,
-          minimumDue: null,
-          confidence: 0.6,
+        TransactionEntry(
+          id: 't2',
+          amount: Money.fromRupees(7831),
+          occurredAt: DateTime(2026, 10, 8),
+          userCardId: 'card-mb',
+          entryKind: TxnEntryKind.spend,
+          instrument: TxnInstrument.creditCard,
+          source: 'sms',
+          status: 'active',
         ),
-        CardBillEvidence(
-          cardLast4: null,
-          family: 'MYTNEU',
-          statementDate: DateTime(2026, 10, 21),
-          statementDateExplicit: true,
-          dueDate: DateTime(2026, 11, 8),
-          amountDue: Money.fromRupees(8331),
-          minimumDue: null,
-          confidence: 0.95,
+        TransactionEntry(
+          id: 't3',
+          amount: Money.fromRupees(12),
+          occurredAt: DateTime(2026, 9, 23),
+          userCardId: 'card-tn',
+          entryKind: TxnEntryKind.spend,
+          instrument: TxnInstrument.creditCard,
+          source: 'sms',
+          status: 'active',
         ),
-      ],
-      payments: const [],
-      transactions: txns,
-      now: now,
-    );
+      ];
 
-    expect(ledgers['card-mb'], isNotNull);
-    final mbBill = ledgers['card-mb']!.current!;
-    expect(mbBill.amountDue, Money.fromRupees(8331));
-    expect(mbBill.dueDate, DateTime(2026, 11, 8));
-    expect(ledgers['card-tn']?.current?.amountDue, isNull);
-  });
+      final ledgers = deriveCardBills(
+        cards: [moneyBack, tataNeu],
+        evidence: [
+          CardBillEvidence(
+            cardLast4: '8708',
+            statementDate: DateTime(2026, 10, 20),
+            statementDateExplicit: false,
+            dueDate: null,
+            amountDue: null,
+            minimumDue: null,
+            confidence: 0.6,
+          ),
+          CardBillEvidence(
+            cardLast4: '1366',
+            statementDate: DateTime(2026, 10, 20),
+            statementDateExplicit: false,
+            dueDate: null,
+            amountDue: null,
+            minimumDue: null,
+            confidence: 0.6,
+          ),
+          CardBillEvidence(
+            cardLast4: null,
+            family: 'MYTNEU',
+            statementDate: DateTime(2026, 10, 21),
+            statementDateExplicit: true,
+            dueDate: DateTime(2026, 11, 8),
+            amountDue: Money.fromRupees(8331),
+            minimumDue: null,
+            confidence: 0.95,
+          ),
+        ],
+        payments: const [],
+        transactions: txns,
+        now: now,
+      );
 
-  test('aggregator HDFC bill resolves to card with historical AutoPay evidence when offline', () {
-    final moneyBack = UserCard.fromJson({
-      'id': 'card-mb',
-      'card_product_id': 'p1',
-      'card_name': 'MoneyBack+ Credit Card',
-      'last4': '8708',
-      'is_default': false,
-    });
-    final tataNeu = UserCard.fromJson({
-      'id': 'card-tn',
-      'card_product_id': 'p2',
-      'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
-      'last4': '1366',
-      'is_default': false,
-    });
+      expect(ledgers['card-mb'], isNotNull);
+      final mbBill = ledgers['card-mb']!.current!;
+      expect(mbBill.amountDue, Money.fromRupees(8331));
+      expect(mbBill.dueDate, DateTime(2026, 11, 8));
+      expect(ledgers['card-tn']?.current?.amountDue, isNull);
+    },
+  );
 
-    final ledgers = deriveCardBills(
-      cards: [moneyBack, tataNeu],
-      evidence: [
-        CardBillEvidence(
-          cardLast4: '8708',
-          family: 'JK-MYTNEU-S',
-          statementDate: DateTime(2026, 10, 20),
-          statementDateExplicit: false,
-          dueDate: null,
-          amountDue: null,
-          minimumDue: null,
-          confidence: 0.6,
+  test(
+    'aggregator bill stays unattributed when no card spend is close enough',
+    () {
+      final moneyBack = UserCard.fromJson({
+        'id': 'card-mb',
+        'card_product_id': 'p1',
+        'card_name': 'MoneyBack+ Credit Card',
+        'last4': '8708',
+        'is_default': false,
+      });
+      final tataNeu = UserCard.fromJson({
+        'id': 'card-tn',
+        'card_product_id': 'p2',
+        'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
+        'last4': '1366',
+        'is_default': false,
+      });
+      final txns = [
+        for (final entry in [('mb', 10857, 'card-mb'), ('tn', 1782, 'card-tn')])
+          TransactionEntry(
+            id: entry.$1,
+            amount: Money.fromRupees(entry.$2),
+            occurredAt: DateTime(2026, 10, 1),
+            userCardId: entry.$3,
+            entryKind: TxnEntryKind.spend,
+            instrument: TxnInstrument.creditCard,
+            source: 'sms',
+            status: 'active',
+          ),
+      ];
+
+      final ledgers = deriveCardBills(
+        cards: [moneyBack, tataNeu],
+        evidence: [
+          CardBillEvidence(
+            cardLast4: null,
+            family: 'JK-TNBPAY-S',
+            statementDate: DateTime(2026, 10, 20),
+            statementDateExplicit: true,
+            dueDate: DateTime(2026, 11, 8),
+            amountDue: Money.fromRupees(10148),
+            minimumDue: null,
+            confidence: 0.95,
+          ),
+        ],
+        payments: const [],
+        transactions: txns,
+        now: now,
+      );
+
+      expect(ledgers['card-mb'], isNull);
+      expect(ledgers['card-tn'], isNull);
+    },
+  );
+
+  test(
+    'aggregator HDFC bill resolves to card with historical AutoPay evidence when offline',
+    () {
+      final moneyBack = UserCard.fromJson({
+        'id': 'card-mb',
+        'card_product_id': 'p1',
+        'card_name': 'MoneyBack+ Credit Card',
+        'last4': '8708',
+        'is_default': false,
+      });
+      final tataNeu = UserCard.fromJson({
+        'id': 'card-tn',
+        'card_product_id': 'p2',
+        'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
+        'last4': '1366',
+        'is_default': false,
+      });
+
+      final ledgers = deriveCardBills(
+        cards: [moneyBack, tataNeu],
+        evidence: [
+          CardBillEvidence(
+            cardLast4: '8708',
+            family: 'JK-MYTNEU-S',
+            statementDate: DateTime(2026, 10, 20),
+            statementDateExplicit: false,
+            dueDate: null,
+            amountDue: null,
+            minimumDue: null,
+            confidence: 0.6,
+          ),
+          CardBillEvidence(
+            cardLast4: null,
+            family: 'JK-MYTNEU-S',
+            statementDate: DateTime(2026, 10, 21),
+            statementDateExplicit: true,
+            dueDate: DateTime(2026, 11, 8),
+            amountDue: Money.fromRupees(8331),
+            minimumDue: null,
+            confidence: 0.95,
+          ),
+        ],
+        payments: const [],
+        transactions: const [],
+        now: now,
+      );
+
+      expect(ledgers['card-mb'], isNotNull);
+      final mbBill = ledgers['card-mb']!.current!;
+      expect(mbBill.amountDue, Money.fromRupees(8331));
+      expect(mbBill.dueDate, DateTime(2026, 11, 8));
+      expect(ledgers['card-tn'], isNull);
+    },
+  );
+
+  test(
+    'candidate cycle spend ignores bill payments, autopay, and huge single anomalies',
+    () {
+      final moneyBack = UserCard.fromJson({
+        'id': 'card-mb',
+        'card_product_id': 'p1',
+        'card_name': 'MoneyBack+ Credit Card',
+        'last4': '8708',
+        'is_default': false,
+      });
+      final tataNeu = UserCard.fromJson({
+        'id': 'card-tn',
+        'card_product_id': 'p2',
+        'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
+        'last4': '1366',
+        'is_default': false,
+      });
+
+      final txns = <TransactionEntry>[
+        TransactionEntry(
+          id: 't1',
+          amount: Money.fromRupees(4000),
+          occurredAt: DateTime(2026, 10, 10),
+          userCardId: 'card-mb',
+          entryKind: TxnEntryKind.spend,
+          instrument: TxnInstrument.creditCard,
+          source: 'sms',
+          status: 'active',
         ),
-        CardBillEvidence(
-          cardLast4: null,
-          family: 'JK-MYTNEU-S',
-          statementDate: DateTime(2026, 10, 21),
-          statementDateExplicit: true,
-          dueDate: DateTime(2026, 11, 8),
-          amountDue: Money.fromRupees(8331),
-          minimumDue: null,
-          confidence: 0.95,
+        TransactionEntry(
+          id: 't2',
+          amount: Money.fromRupees(20000),
+          occurredAt: DateTime(2026, 10, 12),
+          merchantName: 'HDFC Credit Card Bill Payment',
+          userCardId: 'card-mb',
+          entryKind: TxnEntryKind.spend,
+          instrument: TxnInstrument.creditCard,
+          source: 'sms',
+          status: 'active',
         ),
-      ],
-      payments: const [],
-      transactions: const [],
-      now: now,
-    );
-
-    expect(ledgers['card-mb'], isNotNull);
-    final mbBill = ledgers['card-mb']!.current!;
-    expect(mbBill.amountDue, Money.fromRupees(8331));
-    expect(mbBill.dueDate, DateTime(2026, 11, 8));
-    expect(ledgers['card-tn'], isNull);
-  });
-
-  test('candidate cycle spend ignores bill payments, autopay, and huge single anomalies', () {
-    final moneyBack = UserCard.fromJson({
-      'id': 'card-mb',
-      'card_product_id': 'p1',
-      'card_name': 'MoneyBack+ Credit Card',
-      'last4': '8708',
-      'is_default': false,
-    });
-    final tataNeu = UserCard.fromJson({
-      'id': 'card-tn',
-      'card_product_id': 'p2',
-      'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
-      'last4': '1366',
-      'is_default': false,
-    });
-
-    final txns = <TransactionEntry>[
-      TransactionEntry(
-        id: 't1',
-        amount: Money.fromRupees(4000),
-        occurredAt: DateTime(2026, 10, 10),
-        userCardId: 'card-mb',
-        entryKind: TxnEntryKind.spend,
-        instrument: TxnInstrument.creditCard,
-        source: 'sms',
-        status: 'active',
-      ),
-      TransactionEntry(
-        id: 't2',
-        amount: Money.fromRupees(20000),
-        occurredAt: DateTime(2026, 10, 12),
-        merchantName: 'HDFC Credit Card Bill Payment',
-        userCardId: 'card-mb',
-        entryKind: TxnEntryKind.spend,
-        instrument: TxnInstrument.creditCard,
-        source: 'sms',
-        status: 'active',
-      ),
-      TransactionEntry(
-        id: 't3',
-        amount: Money.fromRupees(15000),
-        occurredAt: DateTime(2026, 10, 14),
-        merchantName: 'AutoPay Mandate Debit',
-        userCardId: 'card-tn',
-        entryKind: TxnEntryKind.spend,
-        instrument: TxnInstrument.creditCard,
-        source: 'sms',
-        status: 'active',
-      ),
-      TransactionEntry(
-        id: 't4',
-        amount: Money.fromRupees(60000),
-        occurredAt: DateTime(2026, 10, 20),
-        userCardId: 'card-tn',
-        entryKind: TxnEntryKind.spend,
-        instrument: TxnInstrument.creditCard,
-        source: 'sms',
-        status: 'active',
-      ),
-    ];
-
-    final ledgers = deriveCardBills(
-      cards: [moneyBack, tataNeu],
-      evidence: [
-        CardBillEvidence(
-          cardLast4: null,
-          family: 'JK-TNBPAY-S',
-          statementDate: DateTime(2026, 10, 21),
-          statementDateExplicit: true,
-          dueDate: DateTime(2026, 11, 8),
-          amountDue: Money.fromRupees(4000),
-          minimumDue: null,
-          confidence: 0.95,
+        TransactionEntry(
+          id: 't3',
+          amount: Money.fromRupees(15000),
+          occurredAt: DateTime(2026, 10, 14),
+          merchantName: 'AutoPay Mandate Debit',
+          userCardId: 'card-tn',
+          entryKind: TxnEntryKind.spend,
+          instrument: TxnInstrument.creditCard,
+          source: 'sms',
+          status: 'active',
         ),
-      ],
-      payments: const [],
-      transactions: txns,
-      now: now,
-    );
+        TransactionEntry(
+          id: 't4',
+          amount: Money.fromRupees(60000),
+          occurredAt: DateTime(2026, 10, 20),
+          userCardId: 'card-tn',
+          entryKind: TxnEntryKind.spend,
+          instrument: TxnInstrument.creditCard,
+          source: 'sms',
+          status: 'active',
+        ),
+      ];
 
-    expect(ledgers['card-mb'], isNotNull);
-    expect(ledgers['card-mb']!.current!.amountDue, Money.fromRupees(4000));
-    expect(ledgers['card-tn'], isNull);
-  });
+      final ledgers = deriveCardBills(
+        cards: [moneyBack, tataNeu],
+        evidence: [
+          CardBillEvidence(
+            cardLast4: null,
+            family: 'JK-TNBPAY-S',
+            statementDate: DateTime(2026, 10, 21),
+            statementDateExplicit: true,
+            dueDate: DateTime(2026, 11, 8),
+            amountDue: Money.fromRupees(4000),
+            minimumDue: null,
+            confidence: 0.95,
+          ),
+        ],
+        payments: const [],
+        transactions: txns,
+        now: now,
+      );
+
+      expect(ledgers['card-mb'], isNotNull);
+      expect(ledgers['card-mb']!.current!.amountDue, Money.fromRupees(4000));
+      expect(ledgers['card-tn'], isNull);
+    },
+  );
 }

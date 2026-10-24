@@ -309,8 +309,10 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ActionChip(
-      onPressed: onTap,
+    return ChoiceChip(
+      selected: selected,
+      selectedColor: BambooInk.slate,
+      onSelected: (_) => onTap(),
       label: Text(label),
       labelStyle: BambooFonts.ui(
         12.5,
@@ -323,7 +325,7 @@ class _FilterChip extends StatelessWidget {
       ),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
     );
   }
 }
@@ -399,6 +401,7 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                 await ref.read(needsReviewRepositoryProvider).removeAll(ids);
                 ref.invalidate(commitmentsProvider);
                 ref.invalidate(needsReviewItemsProvider);
+                ref.invalidate(needsReviewCountProvider);
               },
               child: const Text('Dismiss all'),
             ),
@@ -558,7 +561,8 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                       : ListView.builder(
                           padding: const EdgeInsets.all(AppSpace.lg),
                           itemCount: filteredList.length,
-                          itemBuilder: (context, index) => Padding(
+                           itemBuilder: (context, index) => Padding(
+                             key: ValueKey(filteredList[index].id),
                             padding: const EdgeInsets.only(bottom: AppSpace.md),
                             child: filteredList[index].kind == NeedsReviewKind.commitment
                                 ? _CommitmentNeedsReviewTile(filteredList[index])
@@ -603,6 +607,7 @@ class _CommitmentNeedsReviewTileState
       // Immediate optimistic UI dismissal: remove and invalidate before background sync
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo != null) {
         repo.dismissSms(
@@ -646,12 +651,33 @@ class _CommitmentNeedsReviewTileState
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(commitmentsProvider);
       ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
       // Phase 4: the confirmed decision also rides the typed-fact contract.
       // A structured override (source key + fact index + payload patch, no
       // raw text) makes the server's bill projection agree with the user
       // even if a later replay re-uploads the parser-derived payload — the
       // read path always applies user corrections first.
       await _overrideConfirmedBillFacts(ref, result);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _archivePastPremiumNotice() async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(needsReviewRepositoryProvider)
+          .archivePastPremiumNotice(widget.item);
+      ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
+      ref.invalidate(pastBillReceiptsProvider);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -717,6 +743,18 @@ class _CommitmentNeedsReviewTileState
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
+    final parsed = _parse();
+    final nextPremiumMonth = LocalSmsParser.nextPremiumDueMonth(item.body);
+    final monthOnlyPremium = parsed?.reasonCodes.contains(
+          'next_premium_due_month_only',
+        ) ==
+        true;
+    final pastPremiumNotice = monthOnlyPremium &&
+        nextPremiumMonth != null &&
+        DateTime(
+          nextPremiumMonth.year,
+          nextPremiumMonth.month,
+        ).isBefore(DateTime(DateTime.now().year, DateTime.now().month));
     return Container(
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
@@ -768,7 +806,15 @@ class _CommitmentNeedsReviewTileState
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ),
-          if (item.reason != null) ...[
+          if (monthOnlyPremium && nextPremiumMonth != null) ...[
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              pastPremiumNotice
+                  ? 'Next premium was due ${DateFormat('MMMM yyyy').format(nextPremiumMonth)}. This notice will be archived without assuming payment.'
+                  : 'Next premium is due in ${DateFormat('MMMM yyyy').format(nextPremiumMonth)}. Choose the exact day before saving.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+          ] else if (item.reason != null) ...[
             const SizedBox(height: AppSpace.sm),
             Text(
               'Needs confirmation: ${humanizeIdentifier(item.reason)}',
@@ -805,7 +851,11 @@ class _CommitmentNeedsReviewTileState
                     ),
                     textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
                   ),
-                  onPressed: _busy ? null : _reviewAndSaveCommitment,
+                  onPressed: _busy
+                      ? null
+                      : pastPremiumNotice
+                      ? _archivePastPremiumNotice
+                      : _reviewAndSaveCommitment,
                   child: _busy
                       ? const SizedBox(
                           width: 16,
@@ -815,7 +865,13 @@ class _CommitmentNeedsReviewTileState
                             color: BambooInk.lime,
                           ),
                         )
-                      : const Text('Save bill'),
+                      : Text(
+                          pastPremiumNotice
+                              ? 'Archive past notice'
+                              : monthOnlyPremium
+                              ? 'Review reminder'
+                              : 'Save bill',
+                        ),
                 ),
               ),
             ],
@@ -886,7 +942,13 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
             : CommitmentCadence.monthly,
     };
     final dueStr = payload?['dueDate'] as String?;
-    _dueOn = parsed?.dueDate ?? (dueStr != null ? DateTime.tryParse(dueStr) : null);
+    final monthOnlyPremium = parsed?.reasonCodes.contains(
+          'next_premium_due_month_only',
+        ) ==
+        true;
+    _dueOn = monthOnlyPremium
+        ? null
+        : parsed?.dueDate ?? (dueStr != null ? DateTime.tryParse(dueStr) : null);
   }
 
   @override
@@ -929,7 +991,7 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null) setState(() => _dueOn = picked);
+    if (picked != null && mounted) setState(() => _dueOn = picked);
   }
 
   void _save() {
@@ -939,7 +1001,9 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
     final amountValue = amountText.isEmpty ? null : double.tryParse(amountText);
     if (title.isEmpty ||
         dueOn == null ||
-        (amountValue != null && amountValue <= 0)) {
+        (amountText.isNotEmpty &&
+            (amountValue == null || !amountValue.isFinite ||
+                amountValue <= 0 || amountValue > 9999999999.99))) {
       return;
     }
     final identifier = _identifierController.text.trim();
@@ -955,12 +1019,17 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final nextPremiumMonth = LocalSmsParser.nextPremiumDueMonth(
+      widget.item.body,
+    );
     final amountText = _amountController.text.trim().replaceAll(',', '');
     final amountValue = amountText.isEmpty ? null : double.tryParse(amountText);
     final canSave =
         _titleController.text.trim().isNotEmpty &&
         _dueOn != null &&
-        (amountValue == null || amountValue > 0);
+        (amountText.isEmpty ||
+            (amountValue != null && amountValue.isFinite &&
+                amountValue > 0 && amountValue <= 9999999999.99));
     return Container(
       decoration: const BoxDecoration(
         color: BambooInk.paper,
@@ -1054,6 +1123,13 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
                 ),
               ),
             ),
+            if (nextPremiumMonth != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                'The SMS gives only ${DateFormat('MMMM yyyy').format(nextPremiumMonth)}, not an exact day. Select the verified day before saving; PandaPay will not assume the earlier premium was paid.',
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
+            ],
             const SizedBox(height: AppSpace.lg),
             DropdownButtonFormField<CommitmentCategory>(
               initialValue: _category,
@@ -1168,13 +1244,16 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null) setState(() => _asOfAt = picked);
+    if (picked != null && mounted) setState(() => _asOfAt = picked);
   }
 
   void _confirm() {
     final balText = _balanceController.text.trim().replaceAll(',', '');
     final balValue = double.tryParse(balText);
-    if (balValue == null || balValue < 0) return;
+    if (balValue == null || !balValue.isFinite || balValue < 0 ||
+        balValue > 9999999999.99) {
+      return;
+    }
     final acct = _accountController.text.trim().replaceAll(RegExp(r'[^\d]'), '');
     Navigator.of(context).pop((
       balance: balValue,
@@ -1187,7 +1266,8 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
   Widget build(BuildContext context) {
     final balText = _balanceController.text.trim().replaceAll(',', '');
     final balValue = double.tryParse(balText);
-    final canConfirm = balValue != null && balValue >= 0;
+    final canConfirm = balValue != null && balValue.isFinite &&
+        balValue >= 0 && balValue <= 9999999999.99;
 
     return Container(
       decoration: const BoxDecoration(
@@ -1372,6 +1452,11 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
     if (title.isEmpty) return;
     final amtText = _amountController.text.trim().replaceAll(',', '');
     final amtValue = amtText.isEmpty ? null : double.tryParse(amtText);
+    if (amtText.isNotEmpty &&
+        (amtValue == null || !amtValue.isFinite || amtValue < 0 ||
+            amtValue > 9999999999.99)) {
+      return;
+    }
     final identifier = _identifierController.text.trim();
     Navigator.of(context).pop((
       title: title,
@@ -1550,6 +1635,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       // Immediate optimistic UI dismissal: remove and invalidate before background sync
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo != null) {
         repo.dismissSms(
@@ -1580,6 +1666,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       await ref.read(needsReviewRepositoryProvider).updateAiSuggestions(widget.item.id, remaining);
     }
     ref.invalidate(needsReviewItemsProvider);
+    ref.invalidate(needsReviewCountProvider);
   }
 
   Future<void> _reviewMovement([Map<String, dynamic>? movementFact]) async {
@@ -1602,7 +1689,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           isScrollControlled: true,
           builder: (context) => _FillFieldsSheet(item: widget.item, suggestionFact: fact),
         );
-    if (result == null) return;
+    if (result == null || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref
@@ -1666,7 +1753,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       isScrollControlled: true,
       builder: (context) => _ReviewBalanceSheet(item: widget.item, fact: fact),
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
     setState(() => _busy = true);
     try {
       final namespace = ref.read(cacheNamespaceProvider);
@@ -1737,7 +1824,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
         },
       ),
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref
@@ -1797,7 +1884,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
         fact: fact,
       ),
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref
@@ -1940,8 +2027,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           TextButton(
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              minimumSize: const Size(0, 32),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(48, 48),
             ),
             onPressed: _busy
                 ? null
@@ -2202,7 +2288,7 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
       firstDate: earliest,
       lastDate: latest,
     );
-    if (picked != null) setState(() => _occurredAt = picked);
+    if (picked != null && mounted) setState(() => _occurredAt = picked);
   }
 
   String _dateLabel(DateTime date) =>
@@ -2431,7 +2517,9 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
               onPressed: () {
-                final amount = double.tryParse(_amountController.text.trim());
+                final amount = double.tryParse(
+                  _amountController.text.trim().replaceAll(',', ''),
+                );
                 if (amount == null ||
                     !amount.isFinite ||
                     amount <= 0 ||

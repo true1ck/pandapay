@@ -1021,21 +1021,48 @@ class DueDateRemindersController extends StateNotifier<Set<String>> {
 }
 
 /// Task D-4: on-device only, never uploaded — see NeedsReviewRepository's
-/// own doc-comment for why. `needsReviewItemsProvider` invalidates itself
-/// whenever an item is added/removed (each mutation site calls
-/// `ref.invalidate`), same pull-based refresh pattern as every other
-/// FutureProvider in this file rather than a StateNotifier — the store is
-/// a dumb list, not something with derived state worth a controller class.
-final needsReviewRepositoryProvider = Provider<NeedsReviewRepository>(
-  (ref) => NeedsReviewRepository(
-    namespace: ref.watch(cacheNamespaceProvider),
-    loadDatabase: () async =>
-        (await ref.read(responseCacheProvider.future)).financialStore.database,
-  ),
-);
+/// own doc-comment for why. Repository writes feed the existing financial
+/// revision stream, keeping the cheap badge count and reconciled list current.
+final _reviewFinancialChangesProvider = FutureProvider<void>((ref) async {
+  StreamSubscription<FinancialChange>? subscription;
+  var disposed = false;
+  ref.onDispose(() {
+    disposed = true;
+    subscription?.cancel();
+  });
+  final cache = await _cacheOrNull(ref);
+  if (disposed || cache == null) return;
+  final store = cache.financialStore;
+  subscription = NeedsReviewRepository.changesFor(store.database).listen(
+    (change) => store.notifyExternalChanges(change.namespace, [change.entity]),
+  );
+});
 
-final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((ref) {
-  return ref.watch(needsReviewRepositoryProvider).fetchAll();
+final needsReviewRepositoryProvider = Provider<NeedsReviewRepository>((ref) {
+  final namespace = ref.watch(cacheNamespaceProvider);
+  final cacheFuture = ref.watch(responseCacheProvider.future);
+  final notificationsReady = ref.watch(_reviewFinancialChangesProvider.future);
+  return NeedsReviewRepository(
+    namespace: namespace,
+    loadDatabase: () async {
+      await notificationsReady;
+      final store = (await cacheFuture).financialStore;
+      return store.database;
+    },
+  );
+});
+
+final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((
+  ref,
+) async {
+  final markReady = _financialChanges(ref, 'needs_review');
+  final markTransactionsReady = _financialChanges(ref, 'transactions');
+  final markObservationsReady = _financialChanges(ref, 'observations');
+  final items = await ref.watch(needsReviewRepositoryProvider).fetchAll();
+  markReady();
+  markTransactionsReady();
+  markObservationsReady();
+  return items;
 });
 
 /// The shared SMS rule bundle the server publishes: a versioned set of
@@ -1057,8 +1084,11 @@ final activeSmsRuleBundleProvider = FutureProvider<SmsRuleBundle?>((ref) async {
 /// D1's badge (ui-spec §1: "Activity... with badge for D4 count") and
 /// Insights Hub's tile both read this rather than the full list, so
 /// neither has to unwrap an AsyncValue just to show a number.
-final needsReviewCountProvider = Provider<int>((ref) {
-  return ref.watch(needsReviewItemsProvider).valueOrNull?.length ?? 0;
+final needsReviewCountProvider = FutureProvider<int>((ref) async {
+  final markReady = _financialChanges(ref, 'needs_review');
+  final count = await ref.watch(needsReviewRepositoryProvider).count();
+  markReady();
+  return count;
 });
 
 final commitmentsRepositoryProvider = Provider<CommitmentsRepository>((ref) {
@@ -1071,6 +1101,8 @@ final commitmentsRepositoryProvider = Provider<CommitmentsRepository>((ref) {
 });
 
 final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
+  final markCommitmentsReady = _financialChanges(ref, 'commitments');
+  final markObservationsReady = _financialChanges(ref, 'observations');
   final repo = ref.watch(commitmentsRepositoryProvider);
   final manualList = await repo.fetchAll();
 
@@ -1184,8 +1216,12 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
       );
     }
 
+    markCommitmentsReady();
+    markObservationsReady();
     return [...manualList, ...detectedByIdentity.values];
   } catch (_) {
+    markCommitmentsReady();
+    markObservationsReady();
     return manualList;
   }
 });
@@ -1234,8 +1270,8 @@ final pastBillReceiptsProvider = FutureProvider<List<PastBillReceipt>>((
       if (item.kind == PastBillReceiptKind.bill && item.dueDate != null)
         cycleKey(
           item.merchant,
-          RegExp(r'Card ending (\d{4})').firstMatch(item.body ?? '')?.group(1),
-          null,
+          item.cardLast4,
+          item.accountLast4,
           item.dueDate!,
           item.amount?.paise,
         ),
@@ -1295,6 +1331,8 @@ final pastBillReceiptsProvider = FutureProvider<List<PastBillReceipt>>((
       receivedAt: received,
       dueDate: due,
       status: PastBillReceiptStatus.needsConfirmation,
+      cardLast4: observation['card_last4'] as String?,
+      accountLast4: observation['account_last4'] as String?,
       sender: sender,
       body: observation['sample_body'] as String?,
     );
@@ -3426,6 +3464,7 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
   ref,
 ) async {
   final markReady = _financialChanges(ref, 'observations');
+  final markTransactionsReady = _financialChanges(ref, 'transactions');
   final repo = ref.watch(userCardsRepositoryProvider);
   List<UserCard> cards;
   try {
@@ -3498,8 +3537,9 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
     for (final txn in allTxns)
       if (isCardBillPaymentTxn(txn)) txn,
   ];
-  if (evidence.isEmpty && usable.isEmpty) return const {};
   markReady();
+  markTransactionsReady();
+  if (evidence.isEmpty && usable.isEmpty) return const {};
   return deriveCardBills(
     cards: cards,
     evidence: evidence,
@@ -3986,7 +4026,10 @@ final financialStoreRevisionProvider = StreamProvider.family<int, String>((
   entity,
 ) async* {
   final namespace = ref.watch(cacheNamespaceProvider);
-  final cache = await _cacheOrNull(ref);
+  final notificationsReady = ref.watch(_reviewFinancialChangesProvider.future);
+  final cacheFuture = _cacheOrNull(ref);
+  await notificationsReady;
+  final cache = await cacheFuture;
   if (cache == null) return;
   var version = 0;
   await for (final changed in cache.financialStore.changes) {

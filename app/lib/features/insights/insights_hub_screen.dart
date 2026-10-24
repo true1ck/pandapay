@@ -72,7 +72,8 @@ class InsightsHubScreen extends ConsumerWidget {
     // take up two permanent tiles in the grid. They appear as a single row
     // above it, and only when there is actually something to do — a queue
     // that is empty most of the time does not deserve standing real estate.
-    final needsReviewCount = ref.watch(needsReviewCountProvider);
+    final needsReviewCount =
+        ref.watch(needsReviewCountProvider).valueOrNull ?? 0;
     final duplicateCount =
         ref.watch(duplicateCandidatesProvider).valueOrNull?.length ?? 0;
 
@@ -531,10 +532,7 @@ class _PeriodChips extends ConsumerWidget {
     );
   }
 
-  Future<void> _chooseCustomRange(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _chooseCustomRange(BuildContext context, WidgetRef ref) async {
     final now = ref.read(clockProvider).now();
     final current = ref.read(insightsCustomRangeProvider);
     final existing = current == null
@@ -822,7 +820,10 @@ class _CategoryPieState extends State<_CategoryPie> {
                           children: [
                             Text(
                               'Rewards',
-                              style: BambooFonts.ui(11, color: BambooInk.ink500),
+                              style: BambooFonts.ui(
+                                11,
+                                color: BambooInk.ink500,
+                              ),
                             ),
                             SizedBox(
                               width: 76,
@@ -1114,8 +1115,7 @@ class _MissedPreview extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          row.entry.merchantName ??
-                              row.entry.categoryLabel,
+                          row.entry.merchantName ?? row.entry.categoryLabel,
                           style: BambooFonts.ui(
                             14,
                             weight: FontWeight.w600,

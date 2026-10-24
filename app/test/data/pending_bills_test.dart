@@ -4,6 +4,59 @@ import 'package:pandapay/data/pending_bills.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 
 void main() {
+  test('card settlement allows rupee rounding, not percentage underpayment', () {
+    for (final (paidPaise, linked) in [
+      (980000, false), // 2% short is still unpaid.
+      (999899, false),
+      (999900, true), // At most one rupee short.
+      (1000000, true),
+      (1010000, true), // Small overpayments can cover the statement.
+      (1030000, false), // A different cycle's larger payment cannot.
+      (0, false),
+    ]) {
+      final row = deriveSmsBillRows(
+        observations: [{
+          'event_type': 'bill', 'biller_name': 'HDFC Credit Card',
+          'card_last4': '1234', 'amount_due_paise': 1000000,
+          'received_at': '2026-01-01T00:00:00.000',
+          'due_date': '2026-01-15T00:00:00.000',
+        }],
+        transactions: [TransactionEntry(
+          id: 'payment', amount: Money.fromPaise(paidPaise),
+          occurredAt: DateTime(2026, 1, 15), cardLast4: '1234',
+          merchantName: 'Credit card bill payment', entryKind: TxnEntryKind.transfer,
+          source: 'sms', status: 'active',
+        )], now: DateTime(2026, 1, 25),
+      ).single;
+      expect(row.state == SmsBillState.linked, linked, reason: '$paidPaise paise');
+    }
+  });
+
+  test('utility rounding stays within one rupee and never accepts zero', () {
+    for (final (paidPaise, duePaise, linked) in [
+      (99900, 100000, true),
+      (99899, 100000, false),
+      (100100, 100000, true),
+      (100101, 100000, false),
+      (0, 50, false),
+    ]) {
+      final row = deriveSmsBillRows(
+        observations: [{
+          'event_type': 'bill', 'biller_name': 'Tata Power',
+          'amount_due_paise': duePaise,
+          'received_at': '2026-01-10T00:00:00.000',
+          'due_date': '2026-01-15T00:00:00.000',
+        }],
+        transactions: [TransactionEntry(
+          id: 'payment', amount: Money.fromPaise(paidPaise),
+          occurredAt: DateTime(2026, 1, 15), merchantName: 'Tata Power',
+          source: 'sms', status: 'active',
+        )], now: DateTime(2026, 1, 25),
+      ).single;
+      expect(row.state == SmsBillState.linked, linked, reason: '$paidPaise paise');
+    }
+  });
+
   test(
     'deduplicates bill reminders and resolves linked, upcoming, overdue',
     () {

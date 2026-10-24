@@ -47,6 +47,34 @@ void main() {
     );
   });
 
+  test(
+    'count reads the local review queue without reconciling every item',
+    () async {
+      final db = openInMemoryForTesting();
+      final repo = NeedsReviewRepository(
+        namespace: 'user-count',
+        loadDatabase: () async => db,
+      );
+      expect(await repo.count(), 0);
+      for (final id in ['count-1', 'count-2']) {
+        final item = NeedsReviewItem(
+          id: id,
+          sender: 'VM-HDFCBK',
+          body: 'Unparsed bank message',
+          receivedAt: DateTime(2026, 1, 1),
+        );
+        db.db.execute(
+          'INSERT INTO local_needs_review(namespace,id,payload) VALUES(?,?,?)',
+          ['user-count', id, jsonEncode(item.toJson())],
+        );
+      }
+
+      expect(await repo.count(), 2);
+
+      db.close();
+    },
+  );
+
   test('remove drops exactly the matching item', () async {
     final repo = NeedsReviewRepository();
     await repo.add(
@@ -71,6 +99,213 @@ void main() {
     final all = await repo.fetchAll();
     expect(all, hasLength(1));
     expect(all.first.id, '2');
+  });
+
+  test(
+    'month-only LIC renewal stays reviewable and archives as unconfirmed history',
+    () async {
+      final db = openInMemoryForTesting();
+      final repo = NeedsReviewRepository(
+        namespace: 'user-lic-review',
+        loadDatabase: () async => db,
+      );
+      final pastMonth = DateTime.now().subtract(const Duration(days: 60));
+      final monthYear =
+          '${pastMonth.month.toString().padLeft(2, '0')}/${pastMonth.year}';
+      final body =
+          'Dear Customer, premium due from 04/2026 to 04/2026 under policy no. 931670879 is adjusted on 16/04/2026. Next Premium falls due on $monthYear. -LIC of India';
+      final item = NeedsReviewItem(
+        id: 'lic-adjustment',
+        sender: 'VA-LICIND-S',
+        body: body,
+        receivedAt: DateTime(2026, 4, 17),
+        kind: NeedsReviewKind.commitment,
+      );
+      await repo.add(item);
+
+      expect((await repo.fetchAll()).single.id, item.id);
+      await repo.archivePastPremiumNotice(item);
+
+      expect(await repo.fetchAll(), isEmpty);
+      final archive = PastBillReceiptRepository(
+        db,
+        namespace: 'user-lic-review',
+      ).fetchAll(limit: null).single;
+      expect(archive.status, PastBillReceiptStatus.needsConfirmation);
+      expect(archive.amount, isNull);
+      expect(archive.body, body);
+      db.close();
+    },
+  );
+
+  test('inactive spends cannot link receipts in memory or SQLite', () {
+    final db = openInMemoryForTesting();
+    addTearDown(db.close);
+    final at = DateTime.now();
+    final receipt = NeedsReviewItem(
+      id: 'receipt', sender: 'VM-WLFRIN', receivedAt: at,
+      body: 'Thank you for choosing Wellness Forever. View e-bill of Rs 177.98',
+    );
+    db.db.execute('''CREATE TABLE financial_entities (
+      namespace TEXT, entity TEXT, id TEXT, payload TEXT,
+      observed_at INTEGER, pending INTEGER DEFAULT 0, source_key TEXT,
+      occurred_at INTEGER, amount_paise INTEGER,
+      PRIMARY KEY(namespace, entity, id))''');
+    for (final status in ['failed', 'deleted', 'ignored']) {
+      final spend = TransactionEntry(
+        id: 'spend', amount: Money.fromPaise(17798), occurredAt: at,
+        merchantName: 'Wellness Forever', entryKind: TxnEntryKind.spend,
+        source: 'sms', status: status,
+      );
+      expect(NeedsReviewRepository.matchingSpendTransactionInList(
+        receipt, [spend],
+      ), isNull, reason: status);
+      db.db.execute('INSERT OR REPLACE INTO financial_entities '
+        '(namespace,entity,id,payload,occurred_at,amount_paise) '
+        "VALUES ('review-test','transactions',?,?,?,?)", [
+          spend.id, jsonEncode(spend.toJson()), at.millisecondsSinceEpoch,
+          spend.amount.paise,
+        ]);
+      expect(NeedsReviewRepository.matchingSpendTransactionIdSync(
+        db, 'review-test', receipt,
+      ), isNull, reason: status);
+    }
+  });
+
+  test('unknown archived status never implies a paid bill', () {
+    final receipt = PastBillReceipt(
+      id: 'legacy', sourceKey: 'legacy', merchant: 'Biller',
+      amount: Money.fromRupees(100), occurredAt: DateTime(2026, 10, 1),
+      receivedAt: DateTime(2026, 10, 1),
+      status: PastBillReceiptStatus.historicalUnpaid,
+    );
+    expect(PastBillReceipt.fromJson({
+      ...receipt.toJson(), 'status': 'unknown-future-status',
+    }).status, PastBillReceiptStatus.needsConfirmation);
+  });
+
+  test('refunds do not resolve against an inactive debit', () {
+    final db = openInMemoryForTesting();
+    addTearDown(db.close);
+    final at = DateTime.now();
+    final refund = NeedsReviewItem(
+      id: 'refund', sender: 'VM-HDFCBK', receivedAt: at,
+      body: 'Refund of Rs.500 credited to your card XX1234 from AMAZON.',
+    );
+    final debit = TransactionEntry(
+      id: 'deleted-debit', amount: Money.fromRupees(500),
+      occurredAt: at.subtract(const Duration(days: 1)),
+      merchantName: 'AMAZON', entryKind: TxnEntryKind.spend,
+      source: 'sms', status: 'deleted',
+    );
+    expect(NeedsReviewRepository.hasMatchingRefundDebitSync(
+      db, 'refund-status', refund, transactions: [debit],
+      transactionsAreComplete: true,
+    ), isFalse);
+  });
+
+  test('local tombstones override a stale supplied receipt-match snapshot', () async {
+    final db = openInMemoryForTesting();
+    addTearDown(db.close);
+    const ns = 'review-snapshot';
+    final repo = NeedsReviewRepository(namespace: ns, loadDatabase: () async => db);
+    await repo.count();
+    final at = DateTime.now();
+    final spend = TransactionEntry(
+      id: 'spend', amount: Money.fromPaise(17798), occurredAt: at,
+      merchantName: 'Wellness Forever', entryKind: TxnEntryKind.spend,
+      source: 'sms', status: 'active',
+    );
+    final receipt = NeedsReviewItem(
+      id: 'receipt', sender: 'VM-WLFRIN', receivedAt: at,
+      body: 'Thank you for choosing Wellness Forever. View e-bill of Rs 177.98',
+    );
+    db.db.execute('''CREATE TABLE financial_entities (
+      namespace TEXT, entity TEXT, id TEXT, payload TEXT,
+      observed_at INTEGER, pending INTEGER DEFAULT 0, source_key TEXT,
+      occurred_at INTEGER, amount_paise INTEGER,
+      PRIMARY KEY(namespace, entity, id))''');
+    db.db.execute('INSERT INTO financial_entities '
+      '(namespace,entity,id,payload) VALUES (?,\'transactions\',?,?)', [
+        ns, spend.id, jsonEncode(spend.copyWith(status: 'deleted').toJson()),
+      ]);
+    db.db.execute('INSERT INTO local_needs_review VALUES (?,?,?)', [
+      ns, receipt.id, jsonEncode(receipt.toJson()),
+    ]);
+    expect((await repo.fetchAll(transactions: [spend])).single.id, receipt.id);
+    expect(PastBillReceiptRepository(db, namespace: ns).fetchAll(), isEmpty);
+    final fetching = repo.fetchAll(transactions: [spend]);
+    await repo.remove(receipt.id);
+    expect(await fetching, isEmpty);
+    expect(PastBillReceiptRepository(db, namespace: ns).fetchAll(), isEmpty);
+  });
+
+  test('failed reconciliation writes preserve the review item for retry', () async {
+    final db = openInMemoryForTesting();
+    addTearDown(db.close);
+    const ns = 'review-write-failure';
+    final repo = NeedsReviewRepository(namespace: ns, loadDatabase: () async => db);
+    await repo.count();
+    db.db.execute('''CREATE TABLE financial_entities (
+      namespace TEXT, entity TEXT, id TEXT, payload TEXT,
+      observed_at INTEGER, pending INTEGER DEFAULT 0, source_key TEXT,
+      occurred_at INTEGER, amount_paise INTEGER,
+      PRIMARY KEY(namespace, entity, id))''');
+    db.db.execute("CREATE TRIGGER reject_review_write BEFORE INSERT ON financial_entities "
+      "BEGIN SELECT RAISE(ABORT, 'disk unavailable'); END");
+    final item = NeedsReviewItem(
+      id: 'wallet', sender: 'VM-MBKWIK', receivedAt: DateTime.now(),
+      body: 'Rs.10.0 has been debited from your MobiKwik wallet. Remaining balance: Rs.12.17',
+    );
+    db.db.execute('INSERT INTO local_needs_review VALUES (?,?,?)', [
+      ns, item.id, jsonEncode(item.toJson()),
+    ]);
+    await expectLater(repo.fetchAll(), throwsA(isA<Exception>()));
+    expect(await repo.count(), 1);
+    db.db.execute('DROP TRIGGER reject_review_write');
+    expect(await repo.fetchAll(), isEmpty);
+    expect(db.db.select("SELECT id FROM financial_entities WHERE namespace=? "
+      "AND entity='transactions'", [ns]), hasLength(1));
+  });
+
+  test('reconciled bills retain evidence without calling a short payment paid', () async {
+    final db = openInMemoryForTesting();
+    addTearDown(db.close);
+    const ns = 'review-bill-evidence';
+    final repo = NeedsReviewRepository(namespace: ns, loadDatabase: () async => db);
+    await repo.count();
+    db.db.execute('''CREATE TABLE financial_entities (
+      namespace TEXT, entity TEXT, id TEXT, payload TEXT,
+      observed_at INTEGER, pending INTEGER DEFAULT 0, source_key TEXT,
+      occurred_at INTEGER, amount_paise INTEGER,
+      PRIMARY KEY(namespace, entity, id))''');
+    final shortPayment = TransactionEntry(
+      id: 'short-payment', amount: Money.fromRupees(10900),
+      occurredAt: DateTime(2026, 10, 9), cardLast4: '8708',
+      merchantName: 'Credit card bill payment',
+      entryKind: TxnEntryKind.transfer, source: 'sms', status: 'active',
+    );
+    db.db.execute('INSERT INTO financial_entities '
+      '(namespace,entity,id,payload) VALUES (?,\'transactions\',?,?)', [
+        ns, shortPayment.id, jsonEncode(shortPayment.toJson()),
+      ]);
+    final item = NeedsReviewItem(
+      id: 'autopay', sender: 'VD-HDFCBK-S', receivedAt: DateTime(2026, 10, 7),
+      body: 'AutoPay Alert! Your HDFC Bank Credit Card 8708 bill Total Amt: Rs.10944 will be deducted from your A/C 1797 on 09/OCT/2026. Ignore if paid',
+    );
+    db.db.execute('INSERT INTO local_needs_review VALUES (?,?,?)', [
+      ns, item.id, jsonEncode(item.toJson()),
+    ]);
+    expect(await repo.fetchAll(), isEmpty);
+    final rows = db.db.select("SELECT payload FROM financial_entities "
+      "WHERE namespace=? AND entity='sms_observations'", [ns]);
+    final observation = jsonDecode(rows.single['payload'] as String) as Map;
+    expect(observation['is_autopay'], isTrue);
+    expect(observation['sample_body'], item.body);
+    expect(observation['confidence'], isA<num>());
+    final archive = PastBillReceiptRepository(db, namespace: ns).fetchAll().single;
+    expect(archive.body, item.body);
+    expect(archive.status, PastBillReceiptStatus.historicalUnpaid);
   });
 
   test('AI suggestions update only an existing review item', () async {
@@ -613,21 +848,26 @@ void main() {
       db.close();
     },
   );
-  test('historical bill checks stored payments when supplied list is empty', () async {
-    final db = openInMemoryForTesting();
-    const ns = 'user:historical-bill';
-    final repo = NeedsReviewRepository(namespace: ns, loadDatabase: () async => db);
-    final payment = TransactionEntry(
-      id: 'stored-card-payment',
-      amount: Money.fromPaise(13200),
-      occurredAt: DateTime(2026, 10, 3),
-      cardLast4: '7105',
-      merchantName: 'Credit card bill payment',
-      entryKind: TxnEntryKind.transfer,
-      source: 'manual',
-      status: 'active',
-    );
-    db.db.execute('''
+  test(
+    'historical bill checks stored payments when supplied list is empty',
+    () async {
+      final db = openInMemoryForTesting();
+      const ns = 'user:historical-bill';
+      final repo = NeedsReviewRepository(
+        namespace: ns,
+        loadDatabase: () async => db,
+      );
+      final payment = TransactionEntry(
+        id: 'stored-card-payment',
+        amount: Money.fromPaise(13200),
+        occurredAt: DateTime(2026, 10, 3),
+        cardLast4: '7105',
+        merchantName: 'Credit card bill payment',
+        entryKind: TxnEntryKind.transfer,
+        source: 'manual',
+        status: 'active',
+      );
+      db.db.execute('''
       CREATE TABLE IF NOT EXISTS financial_entities (
         namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,
         payload TEXT NOT NULL, observed_at INTEGER NOT NULL,
@@ -636,29 +876,38 @@ void main() {
         PRIMARY KEY(namespace, entity, id)
       )
     ''');
-    db.db.execute(
-      "INSERT INTO financial_entities(namespace, entity, id, payload, observed_at, pending, occurred_at, amount_paise) VALUES (?, 'transactions', ?, ?, ?, 0, ?, ?)",
-      [ns, payment.id, jsonEncode(payment.toJson()), payment.occurredAt.millisecondsSinceEpoch, payment.occurredAt.millisecondsSinceEpoch, payment.amount.paise],
-    );
-    final bill = NeedsReviewItem(
-      id: 'historical-bill',
-      sender: 'AX-AxisBk',
-      body: 'Payment of INR 132 for Axis Bank Credit Card no. XX7105 is due on 03-10-26 with minimum amount due of INR 100. Ignore if paid.',
-      receivedAt: DateTime(2026, 10, 2),
-    );
-    db.db.execute(
-      'INSERT INTO local_needs_review(namespace, id, payload) VALUES (?, ?, ?)',
-      [ns, bill.id, jsonEncode(bill.toJson())],
-    );
+      db.db.execute(
+        "INSERT INTO financial_entities(namespace, entity, id, payload, observed_at, pending, occurred_at, amount_paise) VALUES (?, 'transactions', ?, ?, ?, 0, ?, ?)",
+        [
+          ns,
+          payment.id,
+          jsonEncode(payment.toJson()),
+          payment.occurredAt.millisecondsSinceEpoch,
+          payment.occurredAt.millisecondsSinceEpoch,
+          payment.amount.paise,
+        ],
+      );
+      final bill = NeedsReviewItem(
+        id: 'historical-bill',
+        sender: 'AX-AxisBk',
+        body:
+            'Payment of INR 132 for Axis Bank Credit Card no. XX7105 is due on 03-10-26 with minimum amount due of INR 100. Ignore if paid.',
+        receivedAt: DateTime(2026, 10, 2),
+      );
+      db.db.execute(
+        'INSERT INTO local_needs_review(namespace, id, payload) VALUES (?, ?, ?)',
+        [ns, bill.id, jsonEncode(bill.toJson())],
+      );
 
-    await repo.fetchAll(transactions: const <TransactionEntry>[]);
+      await repo.fetchAll(transactions: const <TransactionEntry>[]);
 
-    final archived = PastBillReceiptRepository(db, namespace: ns).fetchAll();
-    expect(archived, hasLength(1));
-    expect(archived.single.status, PastBillReceiptStatus.paidLinked);
-    expect(archived.single.linkedTransactionId, payment.id);
-    db.close();
-  });
+      final archived = PastBillReceiptRepository(db, namespace: ns).fetchAll();
+      expect(archived, hasLength(1));
+      expect(archived.single.status, PastBillReceiptStatus.paidLinked);
+      expect(archived.single.linkedTransactionId, payment.id);
+      db.close();
+    },
+  );
 
   test(
     'fetchAll auto-resolves legacy wallet spends, bill reminders, and AutoPay alerts from SQLite local_needs_review',
@@ -770,7 +1019,7 @@ void main() {
         id: 'car-insurance-1',
         sender: 'VM-RELGEN-S',
         body:
-            'Your car insurance will expire on 28-Oct-26. Renew today to avoid vehicle inspection: https://relgen.in/c',
+            'Your car insurance is due for renewal. Renew now with Policybazaar for 50% off.',
         receivedAt: DateTime(2026, 10, 3),
       );
       final loanOffer = NeedsReviewItem(
@@ -791,7 +1040,6 @@ void main() {
       final noiseItems = [
         cardUsageAlert,
         expiredInsurance,
-        carInsuranceExpiry,
         loanOffer,
         cardLimitOffer,
       ];
@@ -808,8 +1056,76 @@ void main() {
           reason: item.body,
         );
       }
+      expect(NeedsReviewRepository.isNoiseItem(carInsuranceExpiry), isTrue);
     },
   );
+
+  test('dated policy expiry is not classified as service noise', () {
+    const body =
+        'Your car insurance will expire on 28-Oct-26. Renew today to avoid vehicle inspection: https://relgen.in/c';
+    final item = NeedsReviewItem(
+      id: 'dated-expiry',
+      sender: 'VM-RELGEN-S',
+      body: body,
+      receivedAt: DateTime(2026, 10, 3),
+    );
+    expect(NeedsReviewRepository.isSecurityOrServiceAlert(body), isFalse);
+    expect(NeedsReviewRepository.isNoiseItem(item), isFalse);
+  });
+
+  test('dated policy expiry is saved under insurance commitments', () async {
+    final db = openInMemoryForTesting();
+    const namespace = 'user-insurance-renewal';
+    final repo = NeedsReviewRepository(
+      namespace: namespace,
+      loadDatabase: () async => db,
+    );
+    final receivedAt = DateTime.now();
+    final item = NeedsReviewItem(
+      id: 'insurance-renewal',
+      sender: 'VM-HDFCER-S',
+      body:
+          'Vehicle insurance for DL01CD5678 will expire tomorrow. Premium due Rs 2150.',
+      receivedAt: receivedAt,
+    );
+    await repo.fetchAll(); // Initializes the SQLite queue tables.
+    db.db.execute(
+      'INSERT INTO local_needs_review(namespace,id,payload) VALUES(?,?,?)',
+      [namespace, item.id, jsonEncode(item.toJson())],
+    );
+
+    expect(await repo.fetchAll(), isEmpty);
+    final rows = db.db.select(
+      'SELECT payload FROM local_commitments WHERE namespace=?',
+      [namespace],
+    );
+    final saved = Commitment.fromJson(
+      jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>,
+    );
+    expect(saved.category, CommitmentCategory.insurance);
+    expect(saved.amount, Money.fromRupees(2150));
+    expect(saved.cadence, CommitmentCadence.oneTime);
+    expect(
+      saved.dueOn,
+      DateTime(receivedAt.year, receivedAt.month, receivedAt.day + 1),
+    );
+    final unknownPremium = NeedsReviewItem(
+      id: 'unknown-insurance-premium', sender: item.sender,
+      body: 'Vehicle insurance for DL01CD5678 will expire tomorrow.',
+      receivedAt: receivedAt,
+    );
+    db.db.execute('INSERT INTO local_needs_review VALUES (?,?,?)', [
+      namespace, unknownPremium.id, jsonEncode(unknownPremium.toJson()),
+    ]);
+    expect(await repo.fetchAll(), isEmpty);
+    final unknownRows = db.db.select(
+      'SELECT payload FROM local_commitments WHERE namespace=? AND id=?',
+      [namespace, 'commitment:${unknownPremium.id}'],
+    );
+    expect(Commitment.fromJson(jsonDecode(unknownRows.single['payload'] as String)
+      as Map<String, dynamic>).amount, isNull);
+    db.close();
+  });
 
   test(
     'ASBA and IPO lien blocks are recognized as investmentSettlement and kept in queue',
@@ -1140,7 +1456,9 @@ void main() {
       );
       expect(storedRows.map((r) => r['id']).toList(), ['fresh-receipt']);
       final archived = PastBillReceiptRepository(db, namespace: ns).fetchAll();
-      final oldReceiptArchive = archived.singleWhere((r) => r.id == 'old-receipt');
+      final oldReceiptArchive = archived.singleWhere(
+        (r) => r.id == 'old-receipt',
+      );
       expect(oldReceiptArchive.status, PastBillReceiptStatus.needsConfirmation);
 
       // 3. Mandate alert was persisted to local_commitments

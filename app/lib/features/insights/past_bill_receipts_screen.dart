@@ -79,7 +79,6 @@ class PastBillReceiptDetailScreen extends StatelessWidget {
               item.amount?.format(hidePaise: true) ?? 'Amount not seen',
               style: BambooFonts.money(26, color: BambooInk.ink900),
             ),
-            const SizedBox(height: AppSpace.xs),
             Text(
               _pastBillStatusLabel(item),
               style: BambooFonts.ui(
@@ -93,32 +92,77 @@ class PastBillReceiptDetailScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpace.lg),
-            Text('Date', style: BambooFonts.ui(12, color: BambooInk.ink500)),
-            Text(
-              DateFormat('d MMM yyyy').format(item.occurredAt),
-              style: BambooFonts.ui(15, color: BambooInk.ink900),
+            Container(
+              padding: const EdgeInsets.all(AppSpace.md),
+              decoration: BoxDecoration(
+                color: BambooInk.glassFillOnPaper,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: BambooInk.hairlineOnPaper),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _detailLine(
+                    'Date',
+                    DateFormat('d MMM yyyy').format(item.occurredAt),
+                  ),
+                  if (item.sender?.isNotEmpty == true)
+                    _detailLine('From', item.sender!),
+                  _detailLine(
+                    'Received',
+                    DateFormat('d MMM yyyy, h:mm a').format(item.receivedAt.toLocal()),
+                  ),
+                  if (item.linkedTransactionId != null)
+                    _detailLine(
+                      'Linked transaction',
+                      item.linkedTransactionId!,
+                    ),
+                ],
+              ),
             ),
-            if (item.linkedTransactionId != null) ...[
-              const SizedBox(height: AppSpace.md),
-              Text(
-                'Linked transaction',
-                style: BambooFonts.ui(12, color: BambooInk.ink500),
+            if (item.body?.isNotEmpty == true &&
+                !RegExp(r'^Card ending \d{4}$').hasMatch(item.body!)) ...[
+              const SizedBox(height: AppSpace.lg),
+              Container(
+                padding: const EdgeInsets.all(AppSpace.md),
+                decoration: BoxDecoration(
+                  color: BambooInk.glassFillOnPaper,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: BambooInk.hairlineOnPaper),
+                ),
+                child: Theme(
+                  data: Theme.of(
+                    context,
+                  ).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: EdgeInsets.zero,
+                    initiallyExpanded: true,
+                    title: Text(
+                      'Original SMS',
+                      style: BambooFonts.ui(
+                        14,
+                        color: BambooInk.ink900,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: SelectableText(
+                          item.body!,
+                          style: BambooFonts.ui(14, color: BambooInk.ink700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              Text(
-                item.linkedTransactionId!,
-                style: BambooFonts.ui(14, color: BambooInk.ink900),
-              ),
-            ],
-            if (item.body != null) ...[
+            ] else ...[
               const SizedBox(height: AppSpace.lg),
               Text(
-                'Receipt evidence',
-                style: BambooFonts.ui(12, color: BambooInk.ink500),
-              ),
-              const SizedBox(height: AppSpace.xs),
-              Text(
-                item.body!,
-                style: BambooFonts.ui(14, color: BambooInk.ink700),
+                'Original SMS text is unavailable.',
+                style: BambooFonts.ui(13, color: BambooInk.ink500),
               ),
             ],
           ],
@@ -126,6 +170,17 @@ class PastBillReceiptDetailScreen extends StatelessWidget {
       ),
     );
   }
+
+  Widget _detailLine(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: BambooFonts.ui(12, color: BambooInk.ink500)),
+        Text(value, style: BambooFonts.ui(14, color: BambooInk.ink900)),
+      ],
+    ),
+  );
 }
 
 class _PastBillHistoryRow extends StatelessWidget {

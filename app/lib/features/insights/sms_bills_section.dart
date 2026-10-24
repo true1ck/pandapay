@@ -4,14 +4,23 @@ import 'package:intl/intl.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../../data/api_exception.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/pending_bills.dart';
 
-class SmsBillsSection extends ConsumerWidget {
+class SmsBillsSection extends ConsumerStatefulWidget {
   const SmsBillsSection({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SmsBillsSection> createState() => _SmsBillsSectionState();
+}
+
+class _SmsBillsSectionState extends ConsumerState<SmsBillsSection> {
+  bool _showAll = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final bills = ref.watch(smsBillRowsProvider);
     return bills.when(
       loading: () => const SizedBox.shrink(),
@@ -24,7 +33,7 @@ class SmsBillsSection extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Bills from messages',
+                'Bill payment status',
                 style: BambooFonts.heading(17, color: BambooInk.ink900),
               ),
               const SizedBox(height: AppSpace.xs),
@@ -33,12 +42,24 @@ class SmsBillsSection extends ConsumerWidget {
                 style: BambooFonts.ui(12, color: BambooInk.ink500),
               ),
               const SizedBox(height: AppSpace.md),
-              for (final bill in rows)
+              for (final bill in rows.take(_showAll ? rows.length : 3))
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpace.sm),
                   child: _BillRow(
                     bill: bill,
                     onTap: () => _showBill(context, ref, bill),
+                  ),
+                ),
+              if (rows.length > 3)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => setState(() => _showAll = !_showAll),
+                    icon: Icon(
+                      _showAll ? Icons.expand_less : Icons.expand_more,
+                      size: 18,
+                    ),
+                    label: Text(_showAll ? 'Show less' : 'Show all ${rows.length}'),
                   ),
                 ),
             ],
@@ -141,13 +162,58 @@ class _BillRow extends StatelessWidget {
 }
 
 Future<void> _showBill(BuildContext context, WidgetRef ref, SmsBillRow bill) {
+  final repository = ref.read(commitmentsRepositoryProvider);
+  final namespace = ref.read(cacheNamespaceProvider);
+  var saving = false;
+  Future<void> save(BuildContext sheetContext, {required bool paid}) async {
+    if (saving) return;
+    saving = true;
+    try {
+      final commitment = Commitment(
+        id: bill.id,
+        title: bill.title,
+        category: bill.category,
+        amount: bill.amountDue,
+        dueOn: bill.dueDate ?? bill.receivedAt,
+        identifier: (bill.accountLast4 ?? bill.cardLast4) == null
+            ? null : '••••${bill.accountLast4 ?? bill.cardLast4}',
+        cadence: CommitmentCadence.oneTime,
+        status: paid ? CommitmentStatus.due : CommitmentStatus.dismissed,
+        source: CommitmentSource.sms,
+        isUserConfirmed: true,
+      );
+      if (paid) {
+        await repository.markAsPaid(
+          bill.id, paidOn: DateTime.now(),
+          linkedTxnId: bill.linkedTxnId, detectedCommitment: commitment,
+        );
+      } else {
+        await repository.save(commitment);
+      }
+      if (ref.context.mounted && ref.read(cacheNamespaceProvider) == namespace) {
+        ref.invalidate(commitmentsProvider);
+        ref.invalidate(smsBillRowsProvider);
+      }
+      if (sheetContext.mounted) Navigator.pop(sheetContext);
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingErrorMessage(error))),
+        );
+      }
+    } finally {
+      saving = false;
+    }
+  }
+
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
     backgroundColor: BambooInk.paper,
     builder: (context) => SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
+        child: Padding(
         padding: const EdgeInsets.fromLTRB(
           AppSpace.lg,
           AppSpace.sm,
@@ -207,64 +273,17 @@ Future<void> _showBill(BuildContext context, WidgetRef ref, SmsBillRow bill) {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: () async {
-                    final commitment = Commitment(
-                      id: bill.id,
-                      title: bill.title,
-                      category: bill.category,
-                      amount: bill.amountDue,
-                      dueOn: bill.dueDate ?? bill.receivedAt,
-                      identifier: (bill.accountLast4 ?? bill.cardLast4) == null
-                          ? null
-                          : '••••${bill.accountLast4 ?? bill.cardLast4}',
-                      cadence: CommitmentCadence.oneTime,
-                      status: CommitmentStatus.due,
-                      source: CommitmentSource.sms,
-                      isUserConfirmed: true,
-                    );
-                    await ref
-                        .read(commitmentsRepositoryProvider)
-                        .markAsPaid(
-                          bill.id,
-                          paidOn: DateTime.now(),
-                          linkedTxnId: bill.linkedTxnId,
-                          detectedCommitment: commitment,
-                        );
-                    ref.invalidate(commitmentsProvider);
-                    ref.invalidate(smsBillRowsProvider);
-                    if (context.mounted) Navigator.pop(context);
-                  },
+                  onPressed: () => save(context, paid: true),
                   child: const Text('Mark as paid'),
                 ),
               ),
             TextButton.icon(
-              onPressed: () async {
-                await ref
-                    .read(commitmentsRepositoryProvider)
-                    .save(
-                      Commitment(
-                        id: bill.id,
-                        title: bill.title,
-                        category: bill.category,
-                        amount: bill.amountDue,
-                        dueOn: bill.dueDate ?? bill.receivedAt,
-                        identifier:
-                            (bill.accountLast4 ?? bill.cardLast4) == null
-                            ? null
-                            : '••••${bill.accountLast4 ?? bill.cardLast4}',
-                        cadence: CommitmentCadence.oneTime,
-                        status: CommitmentStatus.dismissed,
-                        source: CommitmentSource.sms,
-                      ),
-                    );
-                ref.invalidate(commitmentsProvider);
-                ref.invalidate(smsBillRowsProvider);
-                if (context.mounted) Navigator.pop(context);
-              },
+              onPressed: () => save(context, paid: false),
               icon: const Icon(Icons.visibility_off_outlined),
               label: const Text('Not a bill'),
             ),
           ],
+        ),
         ),
       ),
     ),

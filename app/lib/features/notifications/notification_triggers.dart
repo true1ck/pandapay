@@ -290,7 +290,7 @@ class NotificationTriggerRunner {
   }
 
   Future<void> _checkNeedsReview() async {
-    final count = ref.read(needsReviewCountProvider);
+    final count = await ref.read(needsReviewCountProvider.future);
     if (count <= 0) return;
     final gate = ref.read(notificationGateProvider);
     await gate.fire(

@@ -279,15 +279,18 @@ List<SmsBillRow> deriveSmsBillRows({
 }
 
 bool _amountCovers(_Raw raw, Money amount) {
+  if (amount.paise <= 0) return false;
   if (raw.last4 != null) {
     // A minimum-only statement is not sufficient to conclude that the bill
     // is settled. Require the full amount and a close payment amount, so a
     // different/larger payment on the same card cannot mark this bill paid.
     final due = raw.amountDue?.paise;
     if (due == null) return false;
-    final calculatedTolerance = (due * 0.02).round();
-    final tolerance = calculatedTolerance < 100 ? 100 : calculatedTolerance;
-    return (amount.paise - due).abs() <= tolerance;
+    // Allow rupee rounding below the bill, never a percentage shortfall.
+    // Keep bounded overpayment headroom to avoid matching a different cycle.
+    final overpaymentTolerance = (due * 0.02).round();
+    final headroom = overpaymentTolerance < 100 ? 100 : overpaymentTolerance;
+    return amount.paise >= due - 100 && amount.paise <= due + headroom;
   }
   // Utility/scheduled bill: paid amount equals the reminder amount (±₹1).
   return (amount.paise - raw.anchor.paise).abs() <= 100;
