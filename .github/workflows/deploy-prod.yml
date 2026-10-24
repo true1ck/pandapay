@@ -125,7 +125,7 @@ jobs:
           cd /home/ubuntu/apps/pandapay
           DBURL="$(sed -n 's/^ADMIN_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
           test -n "$DBURL"
-          docker run --rm -e U="$DBURL" postgres:17-alpine sh -lc 'psql "$U" -X -qAt -v ON_ERROR_STOP=1' <<'SQL'
+          docker run --rm -i -e U="$DBURL" postgres:17-alpine sh -lc 'psql "$U" -X -qAt -v ON_ERROR_STOP=1' <<'SQL'
           SELECT json_build_object(
             'smsAiQueueEnabled', COALESCE((
               SELECT is_enabled FROM public.feature_flags WHERE key = 'sms_ai_queue_enabled'
