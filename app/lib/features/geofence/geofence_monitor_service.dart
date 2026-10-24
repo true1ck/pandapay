@@ -340,6 +340,7 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
       icon: '@mipmap/ic_launcher',
+      largeIcon: DrawableResourceAndroidBitmap('ic_notification_large'),
       color: AppColors.teal500,
     );
     const details = NotificationDetails(
