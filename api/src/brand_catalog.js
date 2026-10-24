@@ -23,6 +23,7 @@ const BRANDS = [
   { match: /openaillc|openai|chatgpt/i, name: 'OpenAI', cadence: 30 },
   { match: /anthropic|claude\.ai|claudepro/i, name: 'Anthropic', cadence: 30 },
   { match: /google\s*one|googleone|googlegemini|gemini\.google/i, name: 'Google One', cadence: 30 },
+  { match: /google\s*play|googleplay/i, name: 'Google Play', cadence: 30 },
   { match: /perplexity/i, name: 'Perplexity', cadence: 12 },
   { match: /midjourney/i, name: 'Midjourney', cadence: 30 },
   { match: /notion\./i, name: 'Notion', cadence: 12 },

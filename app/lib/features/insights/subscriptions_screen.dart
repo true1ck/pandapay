@@ -6,7 +6,10 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/bills_projection_api.dart';
+import '../../data/commitments_repository.dart';
 import '../../data/spend_reports_repository.dart';
+import 'central_bills_section.dart';
 import 'subscription_detail_screen.dart';
 import '../cards/card_summary.dart';
 import '../../main.dart' show MoneyText;
@@ -116,7 +119,48 @@ class SubscriptionsScreen extends ConsumerWidget {
     final report = ref.watch(recurringReportProvider);
     // Keep the signed-out copy tied to the app-wide session, not to a
     // report's temporary null value while that session is being restored.
-    final signedIn = ref.watch(cacheNamespaceProvider) != 'signed-out';
+    final namespace = ref.watch(cacheNamespaceProvider);
+    final signedIn = namespace != 'signed-out';
+    final cache = ref.watch(responseCacheProvider).valueOrNull;
+    final localMandates = cache == null
+        ? <Map<String, dynamic>>[]
+        : cache.financialStore
+            .entities(namespace, 'sms_observations')
+            .where((row) =>
+                row['event_type'] == 'autopay' &&
+                row['autopay_limit_paise'] is num &&
+                isSubscriptionAutoPay(row['biller_name'] as String?))
+            .toList(growable: false);
+    final localMandateKeys = <String>{};
+    final uniqueLocalMandates = <Map<String, dynamic>>[];
+    for (final row in localMandates) {
+      final key = _cleanIdentity(row['biller_name'] as String?) +
+          '|${row['card_last4'] ?? row['account_last4'] ?? ''}';
+      if (localMandateKeys.add(key)) uniqueLocalMandates.add(row);
+    }
+
+    final snapshot = ref.watch(centralBillsProjectionProvider).valueOrNull;
+    final centralMandates = (snapshot?.available == true
+            ? snapshot!.projections
+            : const <BillProjection>[])
+        .where((row) =>
+            row.projectionKind == 'mandate' &&
+            isSubscriptionAutoPay(row.billerName ?? row.serviceName))
+        .where((row) {
+          final key = _cleanIdentity(row.billerName ?? row.serviceName) +
+              '|${row.last4 ?? ''}';
+          return !localMandateKeys.contains(key);
+        })
+        .toList(growable: false);
+    final centralMandateKeys = <String>{};
+    final uniqueCentralMandates = <BillProjection>[];
+    for (final row in centralMandates) {
+      final key = _cleanIdentity(row.billerName ?? row.serviceName) +
+          '|${row.last4 ?? ''}';
+      if (centralMandateKeys.add(key)) uniqueCentralMandates.add(row);
+    }
+    final hasSubscriptionAutopays =
+        uniqueLocalMandates.isNotEmpty || uniqueCentralMandates.isNotEmpty;
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -175,6 +219,50 @@ class SubscriptionsScreen extends ConsumerWidget {
                 .where(_isDisplayableSubscription)
                 .toList(growable: false);
             if (subscriptions.isEmpty) {
+              if (hasSubscriptionAutopays) {
+                return RefreshIndicator(
+                  onRefresh: () async => ref.invalidate(recurringReportProvider),
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpace.lg,
+                      AppSpace.sm,
+                      AppSpace.lg,
+                      AppShell.navClearance,
+                    ),
+                    children: [
+                      _SubscriptionAutopaySection(
+                        localMandates: uniqueLocalMandates,
+                        centralMandates: uniqueCentralMandates,
+                      ),
+                      const SizedBox(height: AppSpace.lg),
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpace.xs),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.verified_outlined,
+                              size: 16,
+                              color: BambooInk.ink500,
+                            ),
+                            const SizedBox(width: AppSpace.sm),
+                            Expanded(
+                              child: Text(
+                                'Renewal dates are shown only when the charge pattern or AutoPay alert confirms them.',
+                                style: BambooFonts.ui(
+                                  11.5,
+                                  color: BambooInk.ink500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
               // A service can be one-time, free, or still awaiting a charge.
               // Keep the empty state neutral and refreshable.
               return RefreshableEmptyState(
@@ -463,6 +551,14 @@ class SubscriptionsScreen extends ConsumerWidget {
                       _SeriesCard(series: needsCadence[i], toneIndex: i),
                       const SizedBox(height: AppSpace.md),
                     ],
+                  ],
+                  if (hasSubscriptionAutopays) ...[
+                    const SizedBox(height: AppSpace.lg),
+                    _SubscriptionAutopaySection(
+                      localMandates: uniqueLocalMandates,
+                      centralMandates: uniqueCentralMandates,
+                    ),
+                    const SizedBox(height: AppSpace.sm),
                   ],
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpace.xs),
@@ -1908,5 +2004,42 @@ class _SeriesCard extends ConsumerWidget {
         ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
       }
     }
+  }
+}
+
+String _cleanIdentity(String? value) => (value ?? '')
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^a-z0-9]+'), '');
+
+class _SubscriptionAutopaySection extends StatelessWidget {
+  final List<Map<String, dynamic>> localMandates;
+  final List<BillProjection> centralMandates;
+
+  const _SubscriptionAutopaySection({
+    required this.localMandates,
+    required this.centralMandates,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (localMandates.isEmpty && centralMandates.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Autopay authorizations',
+          style: BambooFonts.ui(
+            13,
+            color: BambooInk.ink700,
+            weight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpace.md),
+        for (final row in localMandates) LocalMandateRow(row: row),
+        for (final row in centralMandates) CentralRow(row: row),
+      ],
+    );
   }
 }

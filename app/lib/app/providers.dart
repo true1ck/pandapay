@@ -4362,14 +4362,18 @@ String? _namedServiceAutoPayName(String? raw) {
   }
   const serviceTokens = [
     'openai',
+    'openaillc',
     'chatgpt',
     'netflix',
     'spotify',
     'amazonprime',
     'primevideo',
     'googleone',
+    'googleplay',
+    'google',
     'youtube',
     'hotstar',
+    'jiocinema',
     'sonyliv',
     'zee5',
     'canva',
@@ -4378,13 +4382,21 @@ String? _namedServiceAutoPayName(String? raw) {
     'dropbox',
     'linkedinpremium',
     'microsoft365',
+    'apple',
+    'claude',
+    'anthropic',
+    'midjourney',
+    'cursor',
+    'github',
   ];
   if (!serviceTokens.any(normalized.contains)) return null;
   if (normalized.contains('creditcard') || normalized.contains('utility')) {
     return null;
   }
-  if (normalized.contains('openai')) return 'OpenAI';
+  if (normalized.contains('openai') || normalized.contains('openaillc')) return 'OpenAI';
   if (normalized.contains('chatgpt')) return 'ChatGPT';
+  if (normalized.contains('googleplay')) return 'Google Play';
+  if (normalized.contains('googleone')) return 'Google One';
   return name;
 }
 

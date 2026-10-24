@@ -54,7 +54,8 @@ class CentralBillsSection extends ConsumerWidget {
         ? <Map<String, dynamic>>[]
         : cache.financialStore.entities(namespace, 'sms_observations')
             .where((row) => row['event_type'] == 'autopay' &&
-                row['autopay_limit_paise'] is num)
+                row['autopay_limit_paise'] is num &&
+                !isSubscriptionAutoPay(row['biller_name'] as String?))
             .toList(growable: false);
     final localMandateKeys = <String>{};
     final uniqueLocalMandates = <Map<String, dynamic>>[];
@@ -69,34 +70,37 @@ class CentralBillsSection extends ConsumerWidget {
     final startOfToday = DateTime(today.year, today.month, today.day);
     final rows = (snapshot?.available == true ? snapshot!.projections : const <BillProjection>[])
         .where((row) => row.projectionKind == 'bill_obligation' || row.projectionKind == 'mandate')
+        .where((row) => row.projectionKind != 'mandate' ||
+            !isSubscriptionAutoPay(row.billerName ?? row.serviceName))
         .where((row) => row.projectionKind == 'mandate' ||
             (row.dueDate != null && !row.dueDate!.isBefore(startOfToday)))
         .where((row) => row.projectionKind == 'mandate' || !_duplicatesExistingBill(row, cardRows, localCommitments))
         .toList(growable: false);
-    if (rows.isEmpty && uniqueLocalMandates.isEmpty) return const SizedBox.shrink();
 
     final bills = rows.where((row) => row.projectionKind == 'bill_obligation').toList();
     final mandates = rows.where((row) {
       if (row.projectionKind != 'mandate') return false;
+      if (isSubscriptionAutoPay(row.billerName ?? row.serviceName)) return false;
       final key = _identity(row.billerName ?? row.serviceName) +
           '|${row.last4 ?? ''}';
       return !localMandateKeys.contains(key);
     }).toList();
+    if (bills.isEmpty && mandates.isEmpty && uniqueLocalMandates.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (bills.isNotEmpty) ...[
           const _CentralHeader(label: 'Bills from messages'),
           const SizedBox(height: AppSpace.md),
-          for (final row in bills) _CentralRow(row: row),
+          for (final row in bills) CentralRow(row: row),
           if (mandates.isNotEmpty || uniqueLocalMandates.isNotEmpty)
             const SizedBox(height: AppSpace.lg),
         ],
         if (mandates.isNotEmpty || uniqueLocalMandates.isNotEmpty) ...[
           const _CentralHeader(label: 'Autopay authorizations'),
           const SizedBox(height: AppSpace.md),
-          for (final row in uniqueLocalMandates) _LocalMandateRow(row: row),
-          for (final row in mandates) _CentralRow(row: row),
+          for (final row in uniqueLocalMandates) LocalMandateRow(row: row),
+          for (final row in mandates) CentralRow(row: row),
           const SizedBox(height: AppSpace.lg),
         ],
       ],
@@ -155,9 +159,9 @@ class _CentralHeader extends StatelessWidget {
   );
 }
 
-class _LocalMandateRow extends StatelessWidget {
+class LocalMandateRow extends StatelessWidget {
   final Map<String, dynamic> row;
-  const _LocalMandateRow({required this.row});
+  const LocalMandateRow({super.key, required this.row});
 
   @override
   Widget build(BuildContext context) {
@@ -190,9 +194,9 @@ class _LocalMandateRow extends StatelessWidget {
   }
 }
 
-class _CentralRow extends StatelessWidget {
+class CentralRow extends StatelessWidget {
   final BillProjection row;
-  const _CentralRow({required this.row});
+  const CentralRow({super.key, required this.row});
 
   @override
   Widget build(BuildContext context) {
