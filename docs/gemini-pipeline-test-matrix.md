@@ -47,20 +47,23 @@ fabricated prompts.
   status polling.
 - Full API suite in a clean worktree: **815 passed, 0 failed, 2 skipped**. The
   full Flutter app CI also passed. The shared working checkout separately had
-  one unrelated local/server SMS parity failure and four Needs Review button
-  assertions; the AI suggestion tests passed. Those changes were outside this
-  Gemini test patch.
+  unrelated parser/UI test failures in other in-flight changes; they were
+  outside this Gemini patch.
 - Live provider: key/model metadata succeeds; Google responds to authenticated
   request validation. A synthetic `gemini-3.6-flash` generation succeeded once,
-  but full classifications were inconsistent (503, success with a contract-
-  invalid fact, then 503). `gemini-3.8` timed out; `gemini-3.7` timed out;
-  `gemini-2.5` returned 404. The prompt now specifies required fields and
-  fail-closed abstention and is deployed, but the post-deploy full probe returned
-  503 before validating a successful model response.
-- Google AI Studio shows the project on Free Tier, with unused listed limits
-  (3.8 Flash: 0/5 RPM, 0/250K TPM, 0/20 RPD), no billing account, and API
-  Logs/Datasets disabled until billing setup. This does not by itself explain
-  the generation failures; no billing change was made.
+  but full classifications on that model returned 503, succeeded once with a
+  contract-invalid fact, then returned 503 again. `gemini-3.8` timed out at
+  20s and 60s; `gemini-3.7` timed out; `gemini-2.5` returned 404. The worker
+  prompt is now stricter and deployed, but the post-deploy 3.6 probe still got
+  503, so the model is not stable enough for rollout.
+- The AI Studio account accessible in my browser was **not** the account in
+  the user's screenshot. Its empty usage/no-billing information does not
+  diagnose the production key. The correct-account screenshot shows roughly
+  50 requests across 3.6/3.8 around Oct 22-24, 400/404/503 errors, and a
+  success-rate dip followed by recovery; aggregate charts do not identify the
+  caller. Grafana CLI is not configured here, so correlating this with worker
+  logs requires the correct Grafana connection or the correct signed-in AI
+  Studio account.
 - The production pilot is **paused** (`sms_ai_queue_enabled=false`, rollout
   0%). Final counters: no jobs, provider reservations, results, or retries.
   No real SMS content was sent and no production job was created.
