@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const {
   GeminiProvider,
   GeminiProviderError,
+  buildGeminiPrompt,
   nextAdaptiveBatchSize,
   runWorkerOnce,
 } = require('../src/gemini_worker');
@@ -45,6 +46,14 @@ test('Gemini provider requests JSON and parses the model fact envelope', async (
 test('Gemini worker defaults to the supported Flash model unless configured', () => {
   const provider = new GeminiProvider({ apiKey: 'test-key', fetchImpl: async () => response({}) });
   assert.equal(provider.model, process.env.GEMINI_MODEL || 'gemini-3.8-flash');
+});
+
+test('Gemini prompt states required fact fields and fail-closed abstention rules', () => {
+  const prompt = buildGeminiPrompt({ payload: { body: 'synthetic fixture' } });
+  assert.match(prompt, /balance_snapshot = availableBalanceInr, asOfAt/);
+  assert.match(prompt, /due_minimum=minimumDueInr\/dueDate/);
+  assert.match(prompt, /never omit required fields or invent values/i);
+  assert.match(prompt, /return \{"facts":\[\]\}/);
 });
 
 test('worker posts the leased result with the profile and lease token', async () => {
@@ -235,4 +244,135 @@ test('provider 429 extracts retryDelay from JSON error body or defaults to 30s+'
     async () => providerWithoutDelay.classify({ payload: { body: 'text' } }),
     (err) => err instanceof GeminiProviderError && err.retryAfterMs >= 30000 && err.retryable === true,
   );
+});
+
+test('Gemini batch response preserves ids and rejects cross-job, duplicate, or malformed items', async () => {
+  const jobs = [
+    { id: 'job-a', payload: { sender: 'BANK', body: 'Rs 100 debited' } },
+    { id: 'job-b', payload: { sender: 'BANK', body: 'Rs 200 credited' } },
+  ];
+  const providerFor = (items) => new GeminiProvider({
+    apiKey: 'test-key',
+    fetchImpl: async (_url, options) => {
+      const request = JSON.parse(options.body);
+      assert.match(request.contents[0].parts[0].text, /ITEM job-a/);
+      assert.match(request.contents[0].parts[0].text, /ITEM job-b/);
+      return response({ candidates: [{ content: { parts: [{ text: JSON.stringify({ items }) }] } }] });
+    },
+  });
+
+  const valid = await providerFor([
+    { id: 'job-a', facts: [] },
+    { id: 'job-b', facts: [] },
+  ]).classifyBatch(jobs);
+  assert.deepEqual([...valid.keys()], ['job-a', 'job-b']);
+
+  const partial = await providerFor([{ id: 'job-a', facts: [] }]).classifyBatch(jobs);
+  assert.equal(partial.has('job-a'), true);
+  assert.equal(partial.has('job-b'), false);
+
+  for (const items of [
+    [{ id: 'foreign-job', facts: [] }, { id: 'job-b', facts: [] }],
+    [{ id: 'job-a', facts: [] }, { id: 'job-a', facts: [] }],
+    [{ id: 'job-a', facts: 'not-an-array' }, { id: 'job-b', facts: [] }],
+  ]) {
+    await assert.rejects(
+      providerFor(items).classifyBatch(jobs),
+      (error) => error instanceof GeminiProviderError && error.retryable === false,
+    );
+  }
+});
+
+test('provider maps permanent 4xx separately from retryable 429 and 5xx', async () => {
+  for (const [status, retryable] of [[400, false], [401, false], [429, true], [503, true]]) {
+    const provider = new GeminiProvider({
+      apiKey: 'test-key',
+      fetchImpl: async () => response({ error: { code: status } }, status),
+    });
+    await assert.rejects(
+      provider.classify({ payload: { body: 'synthetic fixture' } }),
+      (error) => error instanceof GeminiProviderError &&
+        error.status === status && error.retryable === retryable,
+    );
+  }
+});
+
+test('batch omission fails only the omitted job while preserving the valid result', async () => {
+  const jobs = ['a', 'b'].map((id) => ({
+    id,
+    profileId: `profile-${id}`,
+    leaseToken: id.repeat(64),
+    payload: { body: `synthetic ${id}` },
+  }));
+  let leases = 0;
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/lease')) {
+      return leases < jobs.length
+        ? response({ leased: true, job: jobs[leases++] })
+        : response({ leased: false });
+    }
+    return response({ jobStatus: url.endsWith('/fail') ? 'failed' : 'done' });
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test',
+    workerToken: 'worker-token',
+    fetchImpl,
+    maxBatch: 2,
+    batchWindowMs: 0,
+    reserveCapacity: async () => ({ allowed: true }),
+    provider: { classifyBatch: async () => new Map([['a', []]]) },
+  });
+
+  assert.equal(result.completed, false);
+  assert.equal(result.batchSize, 2);
+  assert.equal(calls.filter((call) => call.url.endsWith('/result')).length, 1);
+  assert.equal(calls.filter((call) => call.url.endsWith('/fail')).length, 1);
+  assert.equal(calls.find((call) => call.url.endsWith('/result')).body.profileId, 'profile-a');
+  assert.equal(calls.find((call) => call.url.endsWith('/fail')).body.profileId, 'profile-b');
+});
+
+test('provider 503 releases the same leased job and preserves retry-after', async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: JSON.parse(options.body) });
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job: {
+      id: 'job-503', profileId: 'profile-503', leaseToken: '5'.repeat(64), payload: {},
+    } });
+    return response({ jobStatus: 'queued' });
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: {
+      classify: async () => {
+        throw new GeminiProviderError('temporary provider outage', {
+          retryable: true, retryAfterMs: 3500, status: 503,
+        });
+      },
+    },
+    reserveCapacity: async () => ({ allowed: true }),
+  });
+
+  assert.equal(result.retried, true);
+  assert.equal(calls[1].url, 'http://worker.test/ai/jobs/job-503/retry');
+  assert.equal(calls[1].body.retryAfterMs, 3500);
+  assert.equal(calls[1].body.profileId, 'profile-503');
+});
+
+test('missing Gemini key fails before opening a provider request', async () => {
+  let called = false;
+  const provider = new GeminiProvider({
+    apiKey: '',
+    fetchImpl: async () => {
+      called = true;
+      return response({ candidates: [] });
+    },
+  });
+
+  await assert.rejects(
+    provider.classify({ payload: { body: 'synthetic fixture' } }),
+    (error) => error instanceof GeminiProviderError && error.retryable === false,
+  );
+  assert.equal(called, false);
 });
