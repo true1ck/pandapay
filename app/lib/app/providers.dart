@@ -4490,6 +4490,18 @@ List<SpendBreakdownRow> _localBreakdownRows(
   ];
 }
 
+String _localSourceKey(TransactionEntry row) {
+  final instrument = row.instrumentKnown ? row.instrument : TxnInstrument.other;
+  return row.userCardId != null
+      ? 'card:${row.userCardId}'
+      : instrument == TxnInstrument.creditCard ||
+            instrument == TxnInstrument.debitCard
+      ? 'card-source:${instrument.wireValue}:${row.cardLast4 ?? 'unknown'}'
+      : row.accountLast4 != null
+      ? 'bank-account:${row.accountLast4}'
+      : 'source:${instrument.wireValue}';
+}
+
 List<CardSpendRow> _localCardRows(Iterable<TransactionEntry> rows) {
   final totals = <String, Money>{};
   final rewards = <String, Money>{};
@@ -4500,15 +4512,7 @@ List<CardSpendRow> _localCardRows(Iterable<TransactionEntry> rows) {
     final instrument = row.instrumentKnown
         ? row.instrument
         : TxnInstrument.other;
-    final sourceKey = row.userCardId != null
-        ? 'card:${row.userCardId}'
-        : instrument == TxnInstrument.creditCard ||
-              instrument == TxnInstrument.debitCard
-        ? 'card-source:${instrument.wireValue}:${row.cardLast4 ?? 'unknown'}'
-        : row.accountLast4 != null
-        ? 'bank-account:${row.accountLast4}'
-        : 'source:${instrument.wireValue}';
-    final key = sourceKey;
+    final key = _localSourceKey(row);
     totals[key] = (totals[key] ?? const Money.zero()) + row.amount;
     rewards[key] =
         (rewards[key] ?? const Money.zero()) +
@@ -4573,22 +4577,32 @@ List<CardCategorySpendRow> _localCardCategoryRows(
 ) {
   final totals = <String, Money>{};
   final counts = <String, int>{};
-  final names = <String, (String, String)>{};
+  final names = <String, (String?, String, String?, String)>{};
   for (final row in rows) {
     final card = SpendingSelection.sourceName(row);
     final category = row.categoryName ?? 'Other';
-    final key = '$card\u0000$category';
+    final categoryId =
+        row.parentCategoryId ??
+        row.parentUserCategoryId ??
+        row.userCategoryId ??
+        row.categoryId?.replaceFirst(RegExp(r'^custom:'), '');
+    final categoryKey = categoryId == null
+        ? 'label:$category'
+        : 'id:$categoryId';
+    final key = '${_localSourceKey(row)}\u0000$categoryKey';
     totals[key] = (totals[key] ?? const Money.zero()) + row.amount;
     counts[key] = (counts[key] ?? 0) + 1;
-    names[key] = (card, category);
+    names[key] = (row.userCardId, card, categoryId, category);
   }
   final keys = totals.keys.toList()
     ..sort((a, b) => totals[b]!.paise.compareTo(totals[a]!.paise));
   return [
     for (final key in keys)
       CardCategorySpendRow(
-        cardName: names[key]!.$1,
-        categoryName: names[key]!.$2,
+        cardId: names[key]!.$1,
+        cardName: names[key]!.$2,
+        categoryId: names[key]!.$3,
+        categoryName: names[key]!.$4,
         total: totals[key]!,
         txnCount: counts[key]!,
       ),

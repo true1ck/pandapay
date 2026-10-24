@@ -198,19 +198,23 @@ class InstrumentSpendRow {
     'upi_bank' => 'UPI from bank account',
     'cash' => 'Cash',
     'wallet' => 'Wallets',
-    _ => 'Unknown payment method',
+    _ => 'Other or unknown payment method',
   };
 }
 
 /// Spend split by both the payment method/card and category.
 class CardCategorySpendRow {
+  final String? cardId;
   final String cardName;
+  final String? categoryId;
   final String categoryName;
   final Money total;
   final int txnCount;
 
   const CardCategorySpendRow({
+    this.cardId,
     required this.cardName,
+    this.categoryId,
     required this.categoryName,
     required this.total,
     required this.txnCount,
@@ -396,7 +400,9 @@ class SpendReport {
           .cast<Map<String, dynamic>>()
           .map(
             (e) => CardCategorySpendRow(
+              cardId: e['cardId'] as String?,
               cardName: e['cardName'] as String? ?? 'Unknown source',
+              categoryId: e['categoryId'] as String?,
               categoryName: _displayCategoryName(e['categoryName'] as String?),
               total: _money(e['totalInr']),
               txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,

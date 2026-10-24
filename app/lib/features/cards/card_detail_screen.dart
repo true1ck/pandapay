@@ -10,7 +10,8 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import 'card_actions_screen.dart';
 import 'card_visual.dart';
-import '../insights/payments_due_screen.dart' show DuePayment, paymentsDueProvider;
+import '../insights/payments_due_screen.dart'
+    show DuePayment, paymentsDueProvider;
 import '../insights/lounge_access_screen.dart' show isInCurrentLoungeWindow;
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart';
@@ -121,14 +122,19 @@ class CardDetailScreen extends ConsumerWidget {
                     cardSpendSummaryProvider,
                   )[userCard.id];
                   final duePayments =
-                      ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
+                      ref.watch(paymentsDueProvider).valueOrNull ??
+                      const <DuePayment>[];
                   final duePayment = duePayments
                       .where((d) => d.card.id == userCard.id)
                       .firstOrNull;
                   final sections = [
                     (
                       label: 'Rewards',
-                      body: _RewardsTab(product: product, embedded: true),
+                      body: _RewardsTab(
+                        product: product,
+                        userCardId: userCard.id,
+                        embedded: true,
+                      ),
                     ),
                     (
                       label: 'Spend',
@@ -199,7 +205,8 @@ class CardDetailScreen extends ConsumerWidget {
                         cycleSpend: spendSummary?.cycleTotal,
                         latestSpend: spendSummary?.latestSpend,
                         effectiveBillingDay:
-                            duePayment?.bill?.statementDate.day ?? userCard.statementDay,
+                            duePayment?.bill?.statementDate.day ??
+                            userCard.statementDay,
                         effectiveDueDay:
                             duePayment?.dueOn.day ?? userCard.dueDay,
                       ),
@@ -555,12 +562,21 @@ class _CompactDisclosure extends StatelessWidget {
 
 class _RewardsTab extends ConsumerWidget {
   final CardProduct product;
+  final String userCardId;
   final bool embedded;
-  const _RewardsTab({required this.product, this.embedded = false});
+  const _RewardsTab({
+    required this.product,
+    required this.userCardId,
+    this.embedded = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final reportState = ref.watch(
+      spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
+    );
+    final report = reportState.valueOrNull;
     final fuelCategory = categories.where((c) => c.slug == 'fuel').firstOrNull;
     String categoryName(String? id) {
       if (id == null) return 'All other spends';
@@ -593,18 +609,48 @@ class _RewardsTab extends ConsumerWidget {
         product.fuelRule!.waiverPercent > 0) {
       grouped.putIfAbsent('Fuel', () => []);
     }
-    String rateFor(String label, List<RewardRule> group) {
-      final isFuel =
-          label == 'Fuel' ||
-          (fuelCategory != null && label == fuelCategory.name);
-      if (isFuel && product.fuelRule != null && group.length == 1) {
-        final waiver = _rate(product.fuelRule!.waiverPercent);
-        return group.first.rate == 0
-            ? '$waiver% waiver'
-            : '${_rate(group.first.rate)}% + $waiver% waiver';
+    bool matchesCategory(CardCategorySpendRow row, String label) {
+      final ids = grouped[label]!
+          .map((rule) => rule.categoryId)
+          .whereType<String>()
+          .toSet();
+      if (label == 'Fuel' && grouped[label]!.isEmpty) {
+        // The report can arrive before category metadata. Its Fuel label is
+        // still usable for this synthesized waiver row until the ID resolves.
+        if (fuelCategory == null) {
+          return row.categoryId == 'fuel' ||
+              row.categoryName.toLowerCase() == 'fuel';
+        }
+        ids.add(fuelCategory.id);
       }
-      return group.length == 1 ? _rateLabel(group.first, product) : 'Multiple';
+      return row.categoryId != null
+          ? ids.contains(row.categoryId)
+          : row.categoryName.toLowerCase() == label.toLowerCase();
     }
+
+    String? categorySpendFor(String label) {
+      if (report == null) return null;
+      return report.byCardCategory
+          .where(
+            (row) =>
+                row.cardId == userCardId &&
+                (label == 'All other spends'
+                    ? !grouped.keys
+                          .where((key) => key != 'All other spends')
+                          .any((key) => matchesCategory(row, key))
+                    : matchesCategory(row, label)),
+          )
+          .fold<Money>(Money.zero(), (sum, row) => sum + row.total)
+          .format(compact: true);
+    }
+
+    final spendUnavailable = report == null
+        ? reportState.isLoading
+              ? 'Loading this month’s spend'
+              : reportState.hasError
+              ? 'Spend unavailable'
+              : 'Sign in to see actual spend'
+        : null;
 
     CapRule? capFor(RewardRule rule) => uniqueCapRules(product.capRules)
         .where(
@@ -630,14 +676,28 @@ class _RewardsTab extends ConsumerWidget {
         for (final entry in grouped.entries)
           _CompactDisclosure(
             title: entry.key,
-            subtitle: entry.value.isEmpty
-                ? 'Surcharge waiver'
-                : entry.value.length == 1
-                ? _ruleSummary(entry.value.first)
-                : '${entry.value.length} reward rules · expand for rails and limits',
-            trailing: entry.value.isEmpty
-                ? '${_rate(product.fuelRule!.waiverPercent)}% waiver'
-                : rateFor(entry.key, entry.value),
+            subtitle: <String>[
+              entry.value.isEmpty
+                  ? 'Surcharge waiver'
+                  : entry.value.length == 1
+                  ? _ruleSummary(entry.value.first)
+                  : '${entry.value.length} reward rules · expand for rails and limits',
+              if (entry.value.isEmpty)
+                '${_rate(product.fuelRule!.waiverPercent)}% waiver'
+              else if (entry.value.length == 1)
+                'Reward ${_rateLabel(entry.value.first, product)}',
+              if (entry.key == 'Fuel' &&
+                  product.fuelRule != null &&
+                  entry.value.isNotEmpty)
+                '${_rate(product.fuelRule!.waiverPercent)}% waiver',
+              if (spendUnavailable != null)
+                spendUnavailable
+              else
+                'Spent this month ${categorySpendFor(entry.key)}',
+            ].join(' · '),
+            trailing:
+                categorySpendFor(entry.key) ??
+                (reportState.isLoading ? '…' : '—'),
             details: entry.value.isEmpty
                 ? [_fuelDetail(product.fuelRule!)]
                 : [

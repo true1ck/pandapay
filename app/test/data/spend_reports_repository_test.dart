@@ -6,6 +6,36 @@ import 'package:http/testing.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
 
 void main() {
+  test('card/category breakdown retains IDs for card-level matching', () {
+    final report = SpendReport.fromJson({
+      'period': 'month',
+      'periodStart': '2026-08-01T00:00:00.000Z',
+      'periodEnd': '2026-09-01T00:00:00.000Z',
+      'elapsedFraction': 0.5,
+      'totals': <String, dynamic>{},
+      'previousTotals': <String, dynamic>{},
+      'byCategory': [],
+      'byMerchant': [],
+      'byCard': [],
+      'byInstrument': [],
+      'byCardCategory': [
+        {
+          'cardId': 'card-1',
+          'cardName': 'Fuel Card',
+          'categoryId': 'category-fuel',
+          'categoryName': 'Fuel',
+          'totalInr': 1200,
+          'txnCount': 2,
+        },
+      ],
+      'series': [],
+    });
+
+    expect(report.byCardCategory.single.cardId, 'card-1');
+    expect(report.byCardCategory.single.categoryId, 'category-fuel');
+    expect(report.byCardCategory.single.total.rupees, 1200);
+  });
+
   test('subscription wire model keeps free distinct from unstated price', () {
     final base = <String, dynamic>{
       'id': 'service:openai',
@@ -18,10 +48,7 @@ void main() {
       ...base,
       'typicalAmountInr': null,
     });
-    final free = RecurringSeries.fromJson({
-      ...base,
-      'typicalAmountInr': 0,
-    });
+    final free = RecurringSeries.fromJson({...base, 'typicalAmountInr': 0});
     expect(unknown.amountKnown, isFalse);
     expect(unknown.toJson()['typicalAmountInr'], isNull);
     expect(free.amountKnown, isTrue);

@@ -12,6 +12,66 @@ import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 void main() {
+  test('local card/category totals retain IDs and separate unlinked sources', () async {
+    final db = openInMemoryForTesting();
+    final cache = ResponseCache(db);
+    final client = MockClient((_) async => throw http.ClientException('offline'));
+    const ns = 'user:category-totals';
+    final container = ProviderContainer(overrides: [
+      cacheNamespaceProvider.overrideWithValue(ns),
+      responseCacheProvider.overrideWith((ref) async => cache),
+      userCardsRepositoryProvider.overrideWithValue(null),
+      transactionsProvider.overrideWith((ref) async => []),
+      spendReportsRepositoryProvider.overrideWithValue(SpendReportsRepository(
+        apiBaseUrl: 'http://api.test', accessToken: 'test', client: client,
+      )),
+    ]);
+    addTearDown(() {
+      container.dispose();
+      client.close();
+      cache.financialStore.dispose();
+      db.close();
+    });
+    final now = DateTime.now();
+    for (final (id, cardId, cardLast4, accountLast4, amount) in [
+      ('linked-a', 'card-a', null, null, 100),
+      ('linked-b', 'card-b', null, null, 200),
+      ('unlinked-a', null, '1111', null, 300),
+      ('unlinked-b', null, '2222', null, 400),
+      ('account-a', null, null, '3333', 500),
+      ('account-b', null, null, '4444', 600),
+    ]) {
+      cache.financialStore.saveProvisional(ns, TransactionEntry(
+        id: id, amount: Money.fromRupees(amount),
+        occurredAt: DateTime(now.year, now.month, 1),
+        userCardId: cardId, cardDisplayName: 'Same card name',
+        cardLast4: cardLast4, accountLast4: accountLast4,
+        instrument: accountLast4 == null ? TxnInstrument.creditCard : TxnInstrument.upiBank,
+        categoryId: 'fuel-child', parentCategoryId: 'fuel-root', categoryName: 'Fuel',
+        source: 'sms', status: 'active',
+      ));
+    }
+    cache.financialStore.saveProvisional(ns, TransactionEntry(
+      id: 'custom', amount: Money.fromRupees(50),
+      occurredAt: DateTime(now.year, now.month, 1), userCardId: 'card-a',
+      cardDisplayName: 'Same card name', categoryId: 'custom:child',
+      parentUserCategoryId: 'custom-parent', userCategoryId: 'child',
+      categoryName: 'Personal', source: 'sms', status: 'active',
+    ));
+    final report = await container.read(spendReportProvider(
+      const SpendReportQuery.preset(SpendPeriod.month),
+    ).future);
+    final rows = report!.byCardCategory;
+    expect(rows, hasLength(7));
+    expect(rows.singleWhere((row) => row.cardId == 'card-a' && row.categoryId == 'fuel-root')
+      .total, Money.fromRupees(100));
+    expect(rows.singleWhere((row) => row.cardId == 'card-b').total, Money.fromRupees(200));
+    expect(rows.singleWhere((row) => row.categoryId == 'custom-parent').total, Money.fromRupees(50));
+    expect(rows.where((row) => row.cardId == null).map((row) => row.total.rupees),
+      unorderedEquals([300, 400, 500, 600]));
+    expect(rows.fold(0, (sum, row) => sum + row.total.paise), report.spend.total.paise);
+  });
+
   test('pending SMS preserves established subscription series', () async {
     final database = openInMemoryForTesting();
     final cache = ResponseCache(database);

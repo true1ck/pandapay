@@ -118,4 +118,55 @@ void main() {
     expect(SpendingSelection.sourceName(upi), 'Bank account ••1234');
     expect(selection.matches(upi), isTrue);
   });
+
+  test('a bank account and unlinked card with the same suffix stay separate', () {
+    final card = TransactionEntry(
+      id: 'card',
+      amount: Money.fromRupees(100),
+      occurredAt: DateTime(2026, 10, 20),
+      cardLast4: '9080',
+      instrument: TxnInstrument.creditCard,
+      source: 'sms',
+      status: 'active',
+    );
+    final account = TransactionEntry(
+      id: 'account',
+      amount: Money.fromRupees(100),
+      occurredAt: DateTime(2026, 10, 20),
+      accountLast4: '9080',
+      instrument: TxnInstrument.upiBank,
+      source: 'sms',
+      status: 'active',
+    );
+
+    const cardName = 'Credit card ••9080 (unlinked)';
+    expect(SpendingSelection.sourceName(card), cardName);
+    const accountName = 'Bank account ••9080';
+    expect(SpendingSelection.sourceName(account), accountName);
+    final entries = [card, account];
+    const cardSelection = SpendingSelection(card: cardName);
+    const accountSelection = SpendingSelection(card: accountName);
+    expect(
+      entries.where(cardSelection.matches).map((entry) => entry.id),
+      ['card'],
+    );
+    expect(
+      entries.where(accountSelection.matches).map((entry) => entry.id),
+      ['account'],
+    );
+    expect(
+      const SpendingSelection(
+        card: cardName,
+        payment: TxnInstrument.creditCard,
+      ).matches(account),
+      isFalse,
+    );
+    expect(
+      const SpendingSelection(
+        card: accountName,
+        payment: TxnInstrument.upiBank,
+      ).matches(account),
+      isTrue,
+    );
+  });
 }

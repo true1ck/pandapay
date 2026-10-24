@@ -142,7 +142,7 @@ void main() {
     (tester) async {
       await _pump(tester, catalogue: [_fullCard()], owned: [_ownedCard()]);
       expect(find.text('Bills & Utilities'), findsOneWidget);
-      expect(find.text('5%'), findsOneWidget);
+      expect(find.textContaining('Reward 5%'), findsOneWidget);
       expect(find.textContaining('Verified March 2026'), findsOneWidget);
     },
   );

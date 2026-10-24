@@ -1162,8 +1162,10 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       ? entry.merchantName!.trim()
       : 'Unknown merchant';
 
-  String _cardName(TransactionEntry entry) =>
-      SpendingSelection.sourceName(entry, bankAccounts: _bankAccounts);
+  String _cardName(TransactionEntry entry) => SpendingSelection.sourceName(
+    entry,
+    bankAccounts: _bankAccounts,
+  );
 
   List<TransactionEntry> _transactionsForCard(CardSpendRow row) {
     return _visibleEntries.where((entry) {
@@ -3978,13 +3980,18 @@ class _ExpandableCategoryRow extends StatelessWidget {
 
   List<MapEntry<String, List<TransactionEntry>>> _merchantGroups() {
     final grouped = <String, List<TransactionEntry>>{};
+    final unnamed = <MapEntry<String, List<TransactionEntry>>>[];
     for (final entry in entries) {
-      final merchant = (entry.merchantName?.trim().isNotEmpty ?? false)
-          ? entry.merchantName!.trim()
-          : 'Unknown merchant';
+      final merchant = entry.merchantName?.trim();
+      if (merchant == null || merchant.isEmpty) {
+        // Missing names do not identify a shared merchant. Keep each payment
+        // separate so unrelated cards and dates cannot look like one shop.
+        unnamed.add(MapEntry('Merchant not captured', [entry]));
+        continue;
+      }
       grouped.putIfAbsent(merchant, () => []).add(entry);
     }
-    final result = grouped.entries.toList()
+    final result = [...grouped.entries, ...unnamed]
       ..sort((a, b) {
         final aTotal = a.value.fold<int>(
           0,
@@ -4142,6 +4149,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final needsMethodReview = row.instrument == 'other';
     final ratio = total.isZero
         ? 0.0
         : (row.total.paise / total.paise).clamp(0.0, 1.0);
@@ -4183,41 +4191,67 @@ class _ExpandableInstrumentRow extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    row.label,
-                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
-                    overflow: TextOverflow.ellipsis,
+            if (needsMethodReview) ...[
+              Text(
+                row.label,
+                maxLines: 2,
+                style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Text(
+                    '${(ratio * 100).toStringAsFixed(0)}%',
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
                   ),
-                ),
-                const SizedBox(width: AppSpace.sm),
-                Text(
-                  '${(ratio * 100).toStringAsFixed(0)}%',
-                  style: BambooFonts.ui(12, color: BambooInk.ink500),
-                ),
-                const SizedBox(width: AppSpace.sm),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerRight,
-                    child: MoneyText(
-                      row.total,
-                      confidence: Confidence.estimated,
-                      style: BambooFonts.ui(
-                        13.5,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink900,
+                  const Spacer(),
+                  MoneyText(
+                    row.total,
+                    confidence: Confidence.estimated,
+                    style: BambooFonts.ui(
+                      13.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                ],
+              ),
+            ] else
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      row.label,
+                      style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  Text(
+                    '${(ratio * 100).toStringAsFixed(0)}%',
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: MoneyText(
+                        row.total,
+                        confidence: Confidence.estimated,
+                        style: BambooFonts.ui(
+                          13.5,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink900,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
             const SizedBox(height: 2),
             Text(
-              '${row.txnCount} ${row.txnCount == 1 ? 'transaction' : 'transactions'} · Tap to see payees',
+              '${row.txnCount} ${row.txnCount == 1 ? 'transaction' : 'transactions'} · ${needsMethodReview ? 'Tap to review transactions' : 'Tap to see payees'}',
               style: BambooFonts.ui(11.5, color: BambooInk.ink500),
             ),
             const SizedBox(height: 4),
@@ -4455,6 +4489,13 @@ class _MerchantGroup extends StatelessWidget {
             '${entries.length} ${entries.length == 1 ? 'transaction' : 'transactions'} · $cards',
             style: BambooFonts.ui(11, color: BambooInk.ink500),
           ),
+          if (entries.every(
+            (entry) => entry.merchantName?.trim().isEmpty ?? true,
+          ))
+            Text(
+              'Tap the payment to add its merchant.',
+              style: BambooFonts.ui(11, color: BambooInk.ink500),
+            ),
           if (hasRewardData)
             Text(
               'Rewards earned ${rewards.format()}',
