@@ -238,16 +238,21 @@ class SmsImportStore {
             (observation.reasonCodes.contains('mandate_notice') &&
                 observation.cardLast4 == null)) {
           final title = observation.billerName ?? 'Subscription';
-          final category = CommitmentCategory.fromText('$title ${message.sender}');
+          final category = CommitmentCategory.fromText(
+            '$title ${message.sender}',
+          );
           final commitment = Commitment(
             id: 'commitment:$key',
             title: title,
             category: category,
             amount: observation.amountDue,
             dueOn: observation.dueDate ?? message.receivedAt,
-            cadence: observation.cadenceHint == 'annual'
-                ? CommitmentCadence.annual
-                : CommitmentCadence.monthly,
+            cadence: CommitmentCadence.values.firstWhere(
+              (value) => value.name == observation.cadenceHint,
+              orElse: () => LocalSmsParser.isActionableInsuranceRenewal(message.body)
+                  ? CommitmentCadence.oneTime
+                  : CommitmentCadence.monthly,
+            ),
             source: CommitmentSource.sms,
             status: CommitmentStatus.due,
           );
@@ -282,24 +287,55 @@ class SmsImportStore {
         if (observation.eventType == LocalSmsEventType.bill &&
             observation.confidence >= .85 &&
             observation.statementDate != null) {
+          final sender = message.sender.toUpperCase();
+          final eligibleCards = cards
+              .where((card) => !card.isArchived && card.cardType != 'debit')
+              .toList();
+          final isHdfcAggregator =
+              RegExp(r'(?:MYTNEU|TNBPAY|TATANU)').hasMatch(sender) &&
+              RegExp(
+                r'\bhdfc\b[\s\S]{0,40}\bcredit\s+card\b',
+                caseSensitive: false,
+              ).hasMatch(message.body);
+          final hdfcCards = isHdfcAggregator
+              ? eligibleCards.where((candidate) {
+                  final name = candidate.cardName.toLowerCase();
+                  return RegExp(
+                    r'\b(?:hdfc|moneyback|millennia|regalia|infinia|tata\s+neu|swiggy)\b',
+                  ).hasMatch(name);
+                }).toList()
+              : const <UserCard>[];
+          final suffixCards = eligibleCards
+              .where(
+                (card) => observation.cardLast4 != null &&
+                    card.last4 == observation.cardLast4,
+              )
+              .toList();
           if (observation.dueDate != null ||
               observation.statementDate != null) {
-            for (final card in cards) {
+            for (final card in eligibleCards) {
               final matchesLast4 =
-                  observation.cardLast4 != null &&
-                  card.last4 == observation.cardLast4;
+                  suffixCards.length == 1 && suffixCards.single.id == card.id;
               final matchesFamily =
                   observation.cardLast4 == null &&
-                  message.sender.toUpperCase().contains('TNEU') &&
-                  card.cardName.toLowerCase().contains('tata');
+                  isHdfcAggregator &&
+                  hdfcCards.length == 1 &&
+                  hdfcCards.single.id == card.id;
               if (matchesLast4 || matchesFamily) {
                 final patch = <String, dynamic>{};
-                if (card.dueDay == null && observation.dueDate != null) {
+                if (card.dueDay == null &&
+                    card.dueDaySource != 'user' &&
+                    observation.dueDate != null) {
                   patch['due_day'] = observation.dueDate!.day;
+                  patch['due_day_source'] = 'sms';
                 }
                 if (card.statementDay == null &&
-                    observation.statementDate != null) {
+                    card.statementDaySource != 'user' &&
+                    observation.statementDate != null &&
+                    (!observation.isAutopay ||
+                        observation.statementDateExplicit)) {
                   patch['statement_day'] = observation.statementDate!.day;
+                  patch['statement_day_source'] = 'sms';
                 }
                 if (patch.isNotEmpty) {
                   store.patchCard(namespace, card.id, patch);

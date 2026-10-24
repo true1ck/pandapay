@@ -3,9 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
+import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 
 TransactionEntry row(String id, {int day = 15, String? key, String? note}) =>
     TransactionEntry(
@@ -306,7 +308,9 @@ void main() {
         isDefault: false,
         last4: '7105',
         statementDay: 26,
+        statementDaySource: 'sms',
         dueDay: 2,
+        dueDaySource: 'sms',
       );
       store.replaceCards('a', [card]);
       store.saveObservation('a', 'obs1', {
@@ -364,7 +368,9 @@ void main() {
         isDefault: false,
         last4: '7105',
         statementDay: 26,
+        statementDaySource: 'sms',
         dueDay: 2,
+        dueDaySource: 'sms',
       );
       store.replaceCards('a', [card]);
       store.saveObservation('a', 'obs-axis', {
@@ -381,6 +387,144 @@ void main() {
       expect(updated['due_day'], 2);
     },
   );
+
+  test('SMS observations never overwrite user-entered card days', () {
+    final card = UserCard(
+      id: 'c-user',
+      cardProductId: 'axis_fk',
+      cardName: 'Flipkart Axis Bank Credit Card',
+      isDefault: false,
+      last4: '7105',
+      statementDay: 26,
+      statementDaySource: 'user',
+      dueDay: 2,
+      dueDaySource: 'user',
+    );
+    store.replaceCards('a', [card]);
+    store.saveObservation('a', 'obs-user-days', {
+      'event_type': 'bill',
+      'card_last4': '7105',
+      'statement_date': '2026-10-14T10:00:00.000',
+      'statement_date_explicit': true,
+      'due_date': '2026-11-03T00:00:00.000',
+      'received_at': '2026-10-14T10:00:00.000',
+    });
+
+    store.syncCardDatesFromObservations('a');
+
+    final updated = store.entities('a', 'cards').single;
+    expect(updated['statement_day'], 26);
+    expect(updated['due_day'], 2);
+    expect(updated['statement_day_source'], 'user');
+    expect(updated['due_day_source'], 'user');
+  });
+
+  for (final historical in [false, true]) {
+    test('${historical ? 'historical repair' : 'date sync'} only learns unique active card dates', () {
+      UserCard card(String id, String suffix, {
+        String? type, bool archived = false, String? source, int? day,
+      }) => UserCard(
+        id: id, cardProductId: id, cardName: 'Card $id', isDefault: false,
+        last4: suffix, cardType: type, isArchived: archived,
+        dueDay: day, dueDaySource: source,
+        statementDay: day, statementDaySource: source,
+      );
+      store.replaceCards('a', [
+        card('active', '1001'),
+        card('debit', '1001', type: 'debit'),
+        card('archived', '1001', archived: true),
+        card('collision-one', '1002'), card('collision-two', '1002'),
+        card('only-debit', '1003', type: 'debit'),
+        card('only-archived', '1003', archived: true),
+        card('user', '1004', source: 'user', day: 7),
+        card('user-cleared', '1005', source: 'user'),
+        card('legacy', '1006', day: 8),
+      ]);
+      store.replaceCards('b', [card('active', '1001')]);
+      for (final suffix in ['1001', '1002', '1003', '1004', '1005', '1006']) {
+        if (historical) {
+          SmsIntakeRepository(db).capture('a', QueuedSms(
+            sender: 'HDFCBK',
+            body: 'AutoPay scheduled for your credit card ending in $suffix on 25-Oct-2026 for Rs 4500. Maintain sufficient balance in your account.',
+            receivedAt: DateTime(2026, 10, 20),
+          ));
+        } else {
+          store.saveObservation('a', suffix, {
+            'event_type': 'bill', 'card_last4': suffix,
+            'due_date': '2026-10-25', 'statement_date': '2026-10-20',
+            'received_at': '2026-10-20', 'is_autopay': true,
+          });
+        }
+      }
+      if (historical) {
+        store.repairAutoPayArtifacts('a');
+      } else {
+        store.syncCardDatesFromObservations('a');
+      }
+      final cards = store.entities('a', 'cards');
+      final active = cards.singleWhere((card) => card['id'] == 'active');
+      expect(active['due_day'], 25);
+      expect(active['due_day_source'], 'sms');
+      expect(active['statement_day'], isNull);
+      for (final card in cards.where((card) => card['id'] != 'active')) {
+        final id = card['id'];
+        final day = id == 'user' ? 7 : id == 'legacy' ? 8 : null;
+        expect(card['due_day'], day, reason: '$id due day');
+        expect(card['statement_day'], day, reason: '$id statement day');
+        final source = id == 'user' || id == 'user-cleared' ? 'user' : null;
+        expect(card['due_day_source'], source, reason: '$id due source');
+        expect(card['statement_day_source'], source, reason: '$id statement source');
+      }
+      expect(store.entities('b', 'cards').single['due_day'], isNull);
+    });
+  }
+
+  test('newer AutoPay uses an older verified statement day, not arrival day', () {
+    store.replaceCards('a', [const UserCard(
+      id: 'card', cardProductId: 'credit', cardName: 'Credit Card',
+      isDefault: false, last4: '7105',
+    )]);
+    store.saveObservation('a', 'statement', {
+      'event_type': 'bill', 'card_last4': '7105',
+      'statement_date': '2026-10-14', 'statement_date_explicit': true,
+      'due_date': '2026-11-02', 'received_at': '2026-10-15',
+    });
+    store.saveObservation('a', 'autopay', {
+      'event_type': 'bill', 'card_last4': '7105',
+      'statement_date': '2026-10-20', 'statement_date_explicit': false,
+      'due_date': '2026-11-03', 'received_at': '2026-10-20',
+      'reason_codes': ['mandate_notice'],
+    });
+    store.syncCardDatesFromObservations('a');
+    final updated = store.entities('a', 'cards').single;
+    expect(updated['due_day'], 3);
+    expect(updated['statement_day'], 14);
+    expect(updated['due_day_source'], 'sms');
+    expect(updated['statement_day_source'], 'sms');
+    store.saveObservation('a', 'printed-autopay-statement', {
+      'event_type': 'bill', 'card_last4': '7105',
+      'statement_date': '2026-10-16', 'statement_date_explicit': true,
+      'received_at': '2026-10-21', 'is_autopay': true,
+    });
+    store.syncCardDatesFromObservations('a');
+    expect(store.entities('a', 'cards').single['statement_day'], 16);
+  });
+
+  test('historical insurance repair keeps explicit cadence or one-time renewal', () {
+    for (final (evidence, cadence) in [('', 'oneTime'), ('Half-yearly premium.', 'halfYearly')]) {
+      final namespace = 'insurance-$cadence';
+      SmsIntakeRepository(db).capture(namespace, QueuedSms(
+        sender: 'HDFCER',
+        body: 'Your insurance expires on 25-Oct-2026. Premium of Rs 2000. AutoPay will be debited on 25-Oct-2026. $evidence',
+        receivedAt: DateTime(2026, 10, 20),
+      ));
+      store.repairAutoPayArtifacts(namespace);
+      final commitments = db.db.select(
+        'SELECT payload FROM local_commitments WHERE namespace=?', [namespace],
+      );
+      expect(jsonDecode(commitments.single['payload'] as String)['cadence'], cadence);
+    }
+  });
 
   test(
     'historical balance-bearing bank SMS resurfaces through the repair pass',

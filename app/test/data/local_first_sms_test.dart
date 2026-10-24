@@ -14,6 +14,7 @@ import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/insights/payments_due_screen.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
+import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 
 void main() {
   const body =
@@ -22,6 +23,10 @@ void main() {
       'e30.${base64Url.encode(utf8.encode('{"sub":"account-a"}')).replaceAll('=', '')}.sig';
   late AppDatabase db;
   late ResponseCache cache;
+  List<UserCard> capturedCards() => cache.financialStore
+      .entities('user:account-a', 'cards')
+      .map(UserCard.fromJson)
+      .toList();
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     db = openInMemoryForTesting();
@@ -62,8 +67,48 @@ void main() {
     expect(SmsIntakeRepository(db).pending('user:account-a'), isEmpty);
   });
 
+  test(
+    'generic Tata Neu HDFC bill does not teach the wrong card when two HDFC cards exist',
+    () {
+      cache.financialStore.replaceCards('user:account-a', [
+        UserCard.fromJson({
+          'id': 'moneyback',
+          'card_product_id': 'moneyback',
+          'card_name': 'MoneyBack+ Credit Card',
+          'last4': '8708',
+          'is_default': false,
+        }),
+        UserCard.fromJson({
+          'id': 'tata-neu',
+          'card_product_id': 'tata-neu',
+          'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
+          'last4': '1366',
+          'is_default': false,
+        }),
+      ]);
+
+      SmsImportStore(cache.financialStore).capture(
+        'user:account-a',
+        QueuedSms(
+          sender: 'JX-TNBPAY-S',
+          body:
+              'Your HDFC BANK CREDIT CARD bill of Rs.1147.00 is generated. Pay by 2026-09-08 to avoid late charges.',
+          receivedAt: DateTime(2026, 8, 29),
+        ),
+      );
+
+      final cards = cache.financialStore
+          .entities('user:account-a', 'cards')
+          .map(UserCard.fromJson)
+          .toList();
+      expect(cards.every((card) => card.dueDay == null), isTrue);
+      expect(cards.every((card) => card.statementDay == null), isTrue);
+    },
+  );
+
   test('rich local bill commitments are acknowledged without raw upload', () {
-    const bill = 'Alegra Broadband ... Payment of Rs.800/- is due on 24-10-2026.';
+    const bill =
+        'Alegra Broadband ... Payment of Rs.800/- is due on 24-10-2026.';
     SmsImportStore(cache.financialStore).capture(
       'user:account-a',
       QueuedSms(
@@ -74,19 +119,124 @@ void main() {
     );
 
     expect(SmsIntakeRepository(db).pending('user:account-a'), isEmpty);
-    final observation = cache.financialStore.entities(
-      'user:account-a',
-      'sms_observations',
-    ).single;
+    final observation = cache.financialStore
+        .entities('user:account-a', 'sms_observations')
+        .single;
     expect(observation['sample_body'], bill);
     expect(observation['event_type'], 'bill');
     expect(
-      db.db.select(
-        'SELECT id FROM local_commitments WHERE namespace=?',
-        ['user:account-a'],
-      ),
+      db.db.select('SELECT id FROM local_commitments WHERE namespace=?', [
+        'user:account-a',
+      ]),
       hasLength(1),
     );
+  });
+
+  test('insurance renewals survive triage and use only evidenced cadence', () {
+    for (final (evidence, cadence) in [
+      ('', 'oneTime'),
+      ('Monthly premium.', 'monthly'),
+      ('Quarterly premium.', 'quarterly'),
+      ('Half-yearly premium.', 'halfYearly'),
+      ('Annual premium.', 'annual'),
+    ]) {
+      final namespace = 'user:insurance-$cadence';
+      final body = 'Your vehicle insurance expires on 25-Oct-2026. $evidence';
+      expect(classifySmsTriage('VM-HDFCER-S', body).kind,
+          SmsTriageKind.financialCandidate);
+      SmsImportStore(cache.financialStore).capture(namespace, QueuedSms(
+        sender: 'VM-HDFCER-S', body: body,
+        receivedAt: DateTime(2026, 10, 22),
+      ));
+      final commitments = db.db.select(
+        'SELECT payload FROM local_commitments WHERE namespace=?', [namespace],
+      );
+      final commitment = jsonDecode(commitments.single['payload'] as String);
+      expect(commitment['cadence'], cadence);
+      expect(cache.financialStore.entities(namespace, 'sms_observations'), hasLength(1));
+      expect(cache.financialStore.entities(namespace, 'transactions'), isEmpty);
+    }
+    const expiry = 'Your vehicle insurance expires tomorrow. Renew now.';
+    expect(classifySmsTriage('VM-HDFCER-P', expiry).kind,
+        SmsTriageKind.financialCandidate);
+    expect(classifySmsTriage('VM-HDFCER-S', '$expiry OTP 123456').kind,
+        SmsTriageKind.sensitive);
+    expect(classifySmsTriage('9876543210', expiry).kind,
+        SmsTriageKind.unrelated);
+    expect(capturesFinancialSms('Buy insurance now! Premium Rs 1000.',
+        sender: 'VM-HDFCER-P'), isFalse);
+  });
+
+  test('capture and historical reads preserve explicitly cleared user dates', () {
+    cache.financialStore.replaceCards('user:account-a', [
+      const UserCard(
+        id: 'user-cleared', cardProductId: 'credit', cardName: 'Credit Card',
+        isDefault: false, last4: '8708',
+        dueDaySource: 'user', statementDaySource: 'user',
+      ),
+    ]);
+    SmsImportStore(cache.financialStore).capture('user:account-a', QueuedSms(
+      sender: 'HDFCBK',
+      body: 'Your credit card XX8708 statement is generated. Total amount due Rs 800. Pay by 24-10-2026.',
+      receivedAt: DateTime(2026, 10, 20),
+    ));
+    final card = capturedCards().single;
+    expect(card.dueDay, isNull);
+    expect(card.statementDay, isNull);
+    expect(card.dueDaySource, 'user');
+    expect(card.statementDaySource, 'user');
+  });
+
+  test('aggregator utility notices cannot teach a saved HDFC card cycle', () {
+    cache.financialStore.replaceCards('user:account-a', [
+      UserCard(id: 'hdfc', cardProductId: 'hdfc', cardName: 'HDFC Credit Card',
+        cardType: 'credit', last4: '8708', isDefault: false),
+    ]);
+    SmsImportStore(cache.financialStore).capture('user:account-a', QueuedSms(
+      sender: 'JX-TNBPAY-S',
+      body: 'Alegra Broadband ... Payment of Rs.800/- is due on 24-10-2026.',
+      receivedAt: DateTime(2026, 10, 20),
+    ));
+    final card = capturedCards().single;
+    expect(card.dueDay, isNull);
+    expect(card.statementDay, isNull);
+  });
+
+  test('ambiguous card suffixes never teach multiple credit-card cycles', () {
+    cache.financialStore.replaceCards('user:account-a', [
+      for (final id in ['one', 'two'])
+        UserCard(id: id, cardProductId: id, cardName: 'Credit Card $id',
+          cardType: 'credit', last4: '8708', isDefault: false),
+    ]);
+    SmsImportStore(cache.financialStore).capture('user:account-a', QueuedSms(
+      sender: 'HDFCBK',
+      body: 'Your credit card XX8708 statement is generated. Total amount due Rs 800. Pay by 24-10-2026.',
+      receivedAt: DateTime(2026, 10, 20),
+    ));
+    final cards = capturedCards();
+    expect(cards.every((card) => card.dueDay == null && card.statementDay == null), isTrue);
+  });
+
+  test('AutoPay learns due day without claiming reminder arrival as statement day', () {
+    cache.financialStore.replaceCards('user:account-a', [
+      UserCard(id: 'active', cardProductId: 'hdfc', cardName: 'HDFC Credit Card',
+        cardType: 'credit', last4: '8708', isDefault: false),
+      UserCard(id: 'archived', cardProductId: 'hdfc', cardName: 'HDFC Credit Card',
+        cardType: 'credit', last4: '8708', isDefault: false, isArchived: true),
+      UserCard(id: 'debit', cardProductId: 'debit', cardName: 'HDFC Debit Card',
+        cardType: 'debit', last4: '8708', isDefault: false),
+    ]);
+    SmsImportStore(cache.financialStore).capture('user:account-a', QueuedSms(
+      sender: 'HDFCBK',
+      body: 'AutoPay scheduled for your credit card ending in 8708 on 25-Oct-2026 for Rs 4500. Maintain sufficient balance in your account.',
+      receivedAt: DateTime(2026, 10, 20),
+    ));
+    final cards = capturedCards();
+    final active = cards.singleWhere((card) => card.id == 'active');
+    expect(active.dueDay, 25);
+    expect(active.dueDaySource, 'sms');
+    expect(cards.every((card) => card.statementDay == null), isTrue);
+    expect(cards.where((card) => card.id != 'active').every((card) => card.dueDay == null), isTrue);
   });
 
   test(
@@ -104,10 +254,9 @@ void main() {
             'AutoPay activation successful. Txn amt: INR 0.00 Merchant: OpenAI LLC Axis Bank Card no.: XX7105 Max limit: INR 1999.00.',
         receivedAt: DateTime(2026, 10, 18),
       );
-      SmsImportStore(cache.financialStore).captureBatch(
-        'user:account-a',
-        [jio, axis],
-      );
+      SmsImportStore(
+        cache.financialStore,
+      ).captureBatch('user:account-a', [jio, axis]);
 
       expect(SmsIntakeRepository(db).pending('user:account-a'), isEmpty);
       expect(
@@ -121,11 +270,7 @@ void main() {
       // retained, no spending, no pending intake — per the SMS intelligence
       // contract (see sms_intelligence_scenarios_test.dart Scenario 1).
       final intake = SmsIntakeRepository(db);
-      final promoKey = smsSourceKey(
-        'user:account-a',
-        jio.sender,
-        jio.body,
-      );
+      final promoKey = smsSourceKey('user:account-a', jio.sender, jio.body);
       final promoDecision = intake.decision('user:account-a', promoKey);
       expect(promoDecision, isNotNull);
       expect(promoDecision!.decision, 'ignored_promotion');
@@ -134,10 +279,7 @@ void main() {
         'user:account-a',
         'sms_observations',
       );
-      expect(
-        observations.map((row) => row['event_type']),
-        contains('autopay'),
-      );
+      expect(observations.map((row) => row['event_type']), contains('autopay'));
     },
   );
 

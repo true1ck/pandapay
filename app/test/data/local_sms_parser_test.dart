@@ -3,20 +3,62 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
-import 'package:pandapay/data/user_cards_repository.dart' show TxnEntryKind, TxnInstrument;
+import 'package:pandapay/data/local/sms_rule_bundle.dart';
+import 'package:pandapay/data/user_cards_repository.dart'
+    show TxnEntryKind, TxnInstrument;
 import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 
 void main() {
+  test(
+    'purchase confirmation with downloadable bill is classified as receipt',
+    () {
+      const body =
+          'Dear GUEST USER, Thank you for your purchase @ Apollo Pharmacy. '
+          'Click here http://ms1.in/APLPHR/Vut/3RfdG to download your bill '
+          'for Rs.413.10 APLPHR';
+
+      expect(LocalSmsParser.isMerchantReceiptOrEbill(body), isTrue);
+      expect(LocalSmsParser.extractReceiptAmount(body)?.paise, 41310);
+      expect(
+        NeedsReviewRepository.resolveItemKind(
+          NeedsReviewItem(
+            id: 'apollo-receipt',
+            sender: 'CP-APLPHR-S',
+            body: body,
+            receivedAt: DateTime(2026, 9, 28, 22, 8),
+          ),
+        ).kind,
+        NeedsReviewKind.receipt,
+      );
+    },
+  );
+
   test('completed auto-debit is not treated as a future reminder', () {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'HDFCBK',
-      body: 'Rs 500 was auto-debited from A/c XX1797 for NETFLIX on 20-10-2026.',
+      body:
+          'Rs 500 was auto-debited from A/c XX1797 for NETFLIX on 20-10-2026.',
       receivedAt: DateTime(2026, 10, 20),
     );
     expect(result?.eventType, LocalSmsEventType.transaction);
     expect(result?.transaction, isNotNull);
+  });
+  test('Axis card merchant after transaction date and time is extracted', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-AXISBK-S',
+      body:
+          'Spent INR 505 Axis Bank Card no. XX0000 02-10-26 23:11:37 IST FLIPKART PA Avl Limit: INR 77901 Not you? SMS BLOCK 0000 to 9000000000',
+      receivedAt: DateTime(2026, 10, 2, 23, 12),
+    );
+    expect(result?.transaction?.merchantName, 'FLIPKART PA');
+    expect(result?.transaction?.cardLast4, '0000');
+    expect(
+      result?.transaction?.occurredAt.toUtc(),
+      DateTime.utc(2026, 10, 2, 17, 41, 37),
+    );
   });
   test(
     'both legs of an explicit own-bank transfer stay out of spending and income',
@@ -43,7 +85,7 @@ void main() {
   );
 
   test(
-    'an unclear bank debit needs review, while a named recipient is spending',
+    'a completed bank debit counts as spending even without a named recipient',
     () {
       final unclear = LocalSmsParser.parse(
         namespace: 'user:test',
@@ -59,8 +101,8 @@ void main() {
             'Sent Rs.5000.00 From HDFC Bank A/C *1797 To ANOTHER PERSON On 13/10/26 Ref 131234538577',
         receivedAt: DateTime(2026, 10, 18),
       );
-      expect(unclear?.transaction, isNull);
-      expect(unclear?.disposition, LocalSmsDisposition.review);
+      expect(unclear?.transaction?.entryKind, TxnEntryKind.spend);
+      expect(unclear?.transaction?.merchantName, 'Bank debit');
       expect(person?.transaction?.entryKind, TxnEntryKind.spend);
     },
   );
@@ -414,6 +456,133 @@ void main() {
     expect(reminder?.accountLast4, isNull);
   });
 
+  test(
+    'LIC adjusted installment uses the next premium month without inventing a day',
+    () {
+      const body =
+          'Dear Customer, premium due from 04/2026 to 04/2026 under policy no. 931670879 is adjusted on 16/04/2026. Next Premium falls due on 05/2026. -LIC of India';
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VA-LICIND-S',
+        body: body,
+        receivedAt: DateTime(2026, 4, 17),
+      );
+
+      expect(LocalSmsParser.nextPremiumDueMonth(body), DateTime(2026, 5));
+      expect(result?.eventType, LocalSmsEventType.bill);
+      expect(result?.dueDate, isNull);
+      expect(result?.disposition, LocalSmsDisposition.review);
+      expect(result?.reasonCodes, contains('next_premium_due_month_only'));
+      expect(result?.transaction, isNull);
+    },
+  );
+
+  test(
+    'LIC next premium exact date takes precedence over an older due phrase',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VA-LICIND-S',
+        body:
+            'Premium due for April was adjusted. Next premium falls due on 15-May-2027.',
+        receivedAt: DateTime(2026, 4, 17),
+      );
+
+      expect(result?.dueDate, DateTime(2027, 5, 15));
+      expect(result?.disposition, LocalSmsDisposition.localCommitment);
+    },
+  );
+
+  test('dated insurance expiry becomes a renewal commitment, not noise', () {
+    const body =
+        'Vehicle insurance for DL01CD5678 will expire tomorrow. Premium Rs 2150.';
+    final receivedAt = DateTime(2026, 10, 22, 9);
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-HDFCER-S',
+      body: body,
+      receivedAt: receivedAt,
+    );
+
+    expect(LocalSmsParser.isActionableInsuranceRenewal(body), isTrue);
+    expect(LocalSmsParser.isNonTransactionNoise('VM-HDFCER-S', body), isFalse);
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.disposition, LocalSmsDisposition.localCommitment);
+    expect(result?.dueDate, DateTime(2026, 10, 23));
+    expect(result?.billerName, 'Insurance policy');
+    expect(result?.transaction, isNull);
+  });
+
+  test(
+    'downloaded posted rules cannot turn merchant receipts into spending',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'APLPHR',
+        body: 'Thank you for your purchase. Download your bill. Paid Rs 420.',
+        receivedAt: DateTime(2026, 10, 22),
+        downloadedRules: SmsRuleBundle(
+          bundleVersion: 1,
+          sha256: '',
+          publishedAt: DateTime(2026),
+          minClientVersion: '1.0.0',
+          rules: [
+            RestrictedSmsRule.fromJson({
+              'id': 'receipt-rule',
+              'family': 'posted_movement',
+              'senderPattern': 'APLPHR',
+              'regex': r'Paid Rs (\d+)',
+              'fieldMap': {'amount': 1},
+            })!,
+          ],
+        ),
+      );
+      expect(result?.transaction, isNull);
+      expect(result?.reasonCodes, contains('merchant_ebill_receipt'));
+    },
+  );
+
+  test(
+    'month-only insurance premium bypasses neither review nor date precision',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'LICIND',
+        body:
+            'Life insurance premium due on 16/04/2026 was adjusted for the month of April. Next premium falls due on 05/2027.',
+        receivedAt: DateTime(2026, 4, 17),
+      );
+      expect(result?.dueDate, isNull);
+      expect(result?.disposition, LocalSmsDisposition.review);
+      expect(result?.reasonCodes, contains('next_premium_due_month_only'));
+    },
+  );
+
+  test('renew-today advertising does not replace a later insurance expiry', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'HDFCER',
+      body: 'Renew today! Your policy expires in 10 days. Premium Rs 2150.',
+      receivedAt: DateTime(2026, 10, 22),
+    );
+    expect(result?.dueDate, DateTime(2026, 11, 1));
+  });
+
+  test(
+    'insurance expiry without the word premium still has a commitment biller',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'HDFCER',
+        body: 'Your vehicle insurance expires on 25-Oct-2026.',
+        receivedAt: DateTime(2026, 10, 22),
+      );
+      expect(result?.disposition, LocalSmsDisposition.localCommitment);
+      expect(result?.billerName, 'Insurance policy');
+      expect(result?.dueDate, DateTime(2026, 10, 25));
+    },
+  );
+
   final fixtures =
       jsonDecode(File('test/fixtures/local_sms_cases.json').readAsStringSync())
           as List;
@@ -524,10 +693,7 @@ void main() {
           'VM-PAYTMW-P',
           'Your Paytm wallet balance is Rs 0. Add money to wallet to enjoy seamless payments.',
         ),
-        (
-          'VZ-ViCARE-S',
-          'Call Forwarding is now active on your mobile number.',
-        ),
+        ('VZ-ViCARE-S', 'Call Forwarding is now active on your mobile number.'),
         (
           'VM-HDFCBK-S',
           'Transaction Check Alert! We tried to contact you to confirm txn on Card 1234',
@@ -682,6 +848,24 @@ void main() {
     expect(result?.statementDateExplicit, isFalse);
   });
 
+  test(
+    'parses Kotak statement amount and due date after earlier due amounts',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'KOTAKB',
+        body:
+            'Sep-2026 statement for Kotak Credit Card X1234 Total Due: INR 30.00 Min Due: INR 30.00 Due date: 23-Sep-2026. Pay at the bank app.',
+        receivedAt: DateTime(2026, 9, 6),
+      );
+      expect(result?.eventType, LocalSmsEventType.bill);
+      expect(result?.cardLast4, '1234');
+      expect(result?.amountDue?.rupees, 30);
+      expect(result?.minimumDue?.rupees, 30);
+      expect(result?.dueDate, DateTime(2026, 9, 23));
+    },
+  );
+
   test('keeps the statement-generation day separately from the due date', () {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
@@ -735,99 +919,121 @@ void main() {
     expect(result?.confidence, greaterThanOrEqualTo(0.85));
   });
 
-  test('classifies AutoPay alert deduction as a bill observation without creating spend', () {
-    final result = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'VD-HDFCBK-S',
-      body:
-          'AutoPay Alert! Your HDFC Bank Credit Card 8708 bill Total Amt: Rs.10944 will be deducted from your A/C 1797 on 09/OCT/2026. Ignore if paid',
-      receivedAt: DateTime(2026, 10, 7),
-    );
-    expect(result?.transaction, isNull);
-    expect(result?.eventType, LocalSmsEventType.bill);
-    expect(result?.cardLast4, '8708');
-    expect(result?.amountDue?.rupees, 10944);
-    expect(result?.dueDate, DateTime(2026, 10, 9));
-    expect(result?.disposition, LocalSmsDisposition.localObservation);
-    expect(result?.isAutopay, isTrue);
-    expect(result?.reasonCodes, containsAll(['due_date_detected', 'autopay_notice']));
-    expect(result?.billerName, contains('Credit Card 8708'));
-  });
+  test(
+    'classifies AutoPay alert deduction as a bill observation without creating spend',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VD-HDFCBK-S',
+        body:
+            'AutoPay Alert! Your HDFC Bank Credit Card 8708 bill Total Amt: Rs.10944 will be deducted from your A/C 1797 on 09/OCT/2026. Ignore if paid',
+        receivedAt: DateTime(2026, 10, 7),
+      );
+      expect(result?.transaction, isNull);
+      expect(result?.eventType, LocalSmsEventType.bill);
+      expect(result?.cardLast4, '8708');
+      expect(result?.amountDue?.rupees, 10944);
+      expect(result?.dueDate, DateTime(2026, 10, 9));
+      expect(result?.disposition, LocalSmsDisposition.localObservation);
+      expect(result?.isAutopay, isTrue);
+      expect(
+        result?.reasonCodes,
+        containsAll(['due_date_detected', 'autopay_notice']),
+      );
+      expect(result?.billerName, contains('Credit Card 8708'));
+    },
+  );
 
-  test('classifies AutoPay reminder deduction as a bill observation without creating spend', () {
-    final result = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'VD-HDFCBN-S',
-      body:
-          'AutoPay Reminder: Rs.4150 will be deducted from HDFC Bank A/c 1797 on 09/JUL/2026 for Credit Card 8708 bill.',
-      receivedAt: DateTime(2026, 7, 6),
-    );
-    expect(result?.transaction, isNull);
-    expect(result?.eventType, LocalSmsEventType.bill);
-    expect(result?.cardLast4, '8708');
-    expect(result?.amountDue?.rupees, 4150);
-    expect(result?.dueDate, DateTime(2026, 7, 9));
-  });
+  test(
+    'classifies AutoPay reminder deduction as a bill observation without creating spend',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VD-HDFCBN-S',
+        body:
+            'AutoPay Reminder: Rs.4150 will be deducted from HDFC Bank A/c 1797 on 09/JUL/2026 for Credit Card 8708 bill.',
+        receivedAt: DateTime(2026, 7, 6),
+      );
+      expect(result?.transaction, isNull);
+      expect(result?.eventType, LocalSmsEventType.bill);
+      expect(result?.cardLast4, '8708');
+      expect(result?.amountDue?.rupees, 4150);
+      expect(result?.dueDate, DateTime(2026, 7, 9));
+    },
+  );
 
-  test('classifies credit card scheduled AutoPay notice with card ending, amount, due date and isAutopay', () {
-    final result = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'AX-AXISBK-S',
-      body:
-          'AutoPay scheduled for your credit card ending in 4567 on 25-Oct-2026 for Rs 4,500.00. Maintain sufficient balance in your account.',
-      receivedAt: DateTime(2026, 10, 18),
-    );
-    expect(result?.transaction, isNull);
-    expect(result?.eventType, LocalSmsEventType.bill);
-    expect(result?.cardLast4, '4567');
-    expect(result?.amountDue?.rupees, 4500);
-    expect(result?.dueDate, DateTime(2026, 10, 25));
-    expect(result?.isAutopay, isTrue);
-    expect(result?.disposition, LocalSmsDisposition.localObservation);
-  });
+  test(
+    'classifies credit card scheduled AutoPay notice with card ending, amount, due date and isAutopay',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'AX-AXISBK-S',
+        body:
+            'AutoPay scheduled for your credit card ending in 4567 on 25-Oct-2026 for Rs 4,500.00. Maintain sufficient balance in your account.',
+        receivedAt: DateTime(2026, 10, 18),
+      );
+      expect(result?.transaction, isNull);
+      expect(result?.eventType, LocalSmsEventType.bill);
+      expect(result?.cardLast4, '4567');
+      expect(result?.amountDue?.rupees, 4500);
+      expect(result?.dueDate, DateTime(2026, 10, 25));
+      expect(result?.isAutopay, isTrue);
+      expect(result?.disposition, LocalSmsDisposition.localObservation);
+    },
+  );
 
-  test('classifies Standing Instruction towards Credit Card with amount, card last 4, due date and isAutopay', () {
-    final result = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'VD-HDFCBK-S',
-      body:
-          'Standing Instruction of Rs 5,000 towards HDFC Bank Credit Card ending in 5678 will be debited on 20-Oct-2026.',
-      receivedAt: DateTime(2026, 10, 12),
-    );
-    expect(result?.transaction, isNull);
-    expect(result?.eventType, LocalSmsEventType.bill);
-    expect(result?.cardLast4, '5678');
-    expect(result?.amountDue?.rupees, 5000);
-    expect(result?.dueDate, DateTime(2026, 10, 20));
-    expect(result?.isAutopay, isTrue);
-    expect(result?.billerName, 'HDFC Bank Credit Card');
-    expect(result?.disposition, LocalSmsDisposition.localObservation);
-  });
+  test(
+    'classifies Standing Instruction towards Credit Card with amount, card last 4, due date and isAutopay',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VD-HDFCBK-S',
+        body:
+            'Standing Instruction of Rs 5,000 towards HDFC Bank Credit Card ending in 5678 will be debited on 20-Oct-2026.',
+        receivedAt: DateTime(2026, 10, 12),
+      );
+      expect(result?.transaction, isNull);
+      expect(result?.eventType, LocalSmsEventType.bill);
+      expect(result?.cardLast4, '5678');
+      expect(result?.amountDue?.rupees, 5000);
+      expect(result?.dueDate, DateTime(2026, 10, 20));
+      expect(result?.isAutopay, isTrue);
+      expect(result?.billerName, 'HDFC Bank Credit Card');
+      expect(result?.disposition, LocalSmsDisposition.localObservation);
+    },
+  );
 
-  test('classifies Atal Pension Yojana contribution notice as a local commitment', () {
-    const body =
-        'Dear customer, your Atal Pension Yojana contribution amount for the Month April is Rs 46/-, Kindly maintain sufficient bal in your account for auto debit on 15/04/2026.';
-    expect(LocalSmsParser.isAutoPayNotice(body), isTrue);
-    expect(LocalSmsParser.isNonTransactionNoise('AD-ATALPY', body), isFalse);
-    final result = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'AD-ATALPY',
-      body: body,
-      receivedAt: DateTime(2026, 4, 10),
-    );
-    expect(result?.transaction, isNull);
-    expect(result?.eventType, LocalSmsEventType.bill);
-    expect(result?.disposition, LocalSmsDisposition.localCommitment);
-    expect(result?.reasonCodes, containsAll(['commitment_detected', 'mandate_notice']));
-    expect(result?.isAutopay, isTrue);
-    expect(result?.billerName, 'Atal Pension Yojana');
-    expect(result?.amountDue?.rupees, 46);
-    expect(result?.dueDate, DateTime(2026, 4, 15));
-    expect(result?.cadenceHint, 'monthly');
-  });
+  test(
+    'classifies Atal Pension Yojana contribution notice as a local commitment',
+    () {
+      const body =
+          'Dear customer, your Atal Pension Yojana contribution amount for the Month April is Rs 46/-, Kindly maintain sufficient bal in your account for auto debit on 15/04/2026.';
+      expect(LocalSmsParser.isAutoPayNotice(body), isTrue);
+      expect(LocalSmsParser.isNonTransactionNoise('AD-ATALPY', body), isFalse);
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'AD-ATALPY',
+        body: body,
+        receivedAt: DateTime(2026, 4, 10),
+      );
+      expect(result?.transaction, isNull);
+      expect(result?.eventType, LocalSmsEventType.bill);
+      expect(result?.disposition, LocalSmsDisposition.localCommitment);
+      expect(
+        result?.reasonCodes,
+        containsAll(['commitment_detected', 'mandate_notice']),
+      );
+      expect(result?.isAutopay, isTrue);
+      expect(result?.billerName, 'Atal Pension Yojana');
+      expect(result?.amountDue?.rupees, 46);
+      expect(result?.dueDate, DateTime(2026, 4, 15));
+      expect(result?.cadenceHint, 'monthly');
+    },
+  );
 
   test('classifies Broadband payment due alert as a local commitment', () {
-    const body = 'Alegra Broadband ... Payment of Rs.800/- is due on 24-10-2026.';
+    const body =
+        'Alegra Broadband ... Payment of Rs.800/- is due on 24-10-2026.';
     expect(LocalSmsParser.isAutoPayNotice(body), isTrue);
     expect(LocalSmsParser.isNonTransactionNoise('TNBPAY', body), isFalse);
     final result = LocalSmsParser.parse(
@@ -839,7 +1045,10 @@ void main() {
     expect(result?.transaction, isNull);
     expect(result?.eventType, LocalSmsEventType.bill);
     expect(result?.disposition, LocalSmsDisposition.localCommitment);
-    expect(result?.reasonCodes, containsAll(['commitment_detected', 'mandate_notice']));
+    expect(
+      result?.reasonCodes,
+      containsAll(['commitment_detected', 'mandate_notice']),
+    );
     expect(result?.isAutopay, isTrue);
     expect(result?.billerName, 'Alegra Broadband');
     expect(result?.amountDue?.rupees, 800);
@@ -880,20 +1089,24 @@ void main() {
     expect(promotion.amount, isNull);
     expect(promotion.merchantName, isNull);
   });
-  test('MobiKwik wallet debit parses as TxnInstrument.wallet and TxnEntryKind.spend', () {
-    final result = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'VM-MBKWIK',
-      body: 'Rs.10.0 has been debited from your MobiKwik wallet. Remaining balance: Rs.12.17',
-      receivedAt: DateTime(2026, 10, 18),
-    );
-    expect(result?.transaction, isNotNull);
-    expect(result?.transaction?.instrument, TxnInstrument.wallet);
-    expect(result?.transaction?.entryKind, TxnEntryKind.spend);
-    expect(result?.transaction?.amount.rupees, 10.0);
-    expect(result?.transaction?.accountLast4, 'MobiKwik');
-    expect(result?.availableBalance?.rupees, 12.17);
-  });
+  test(
+    'MobiKwik wallet debit parses as TxnInstrument.wallet and TxnEntryKind.spend',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VM-MBKWIK',
+        body:
+            'Rs.10.0 has been debited from your MobiKwik wallet. Remaining balance: Rs.12.17',
+        receivedAt: DateTime(2026, 10, 18),
+      );
+      expect(result?.transaction, isNotNull);
+      expect(result?.transaction?.instrument, TxnInstrument.wallet);
+      expect(result?.transaction?.entryKind, TxnEntryKind.spend);
+      expect(result?.transaction?.amount.rupees, 10.0);
+      expect(result?.transaction?.accountLast4, 'MobiKwik');
+      expect(result?.availableBalance?.rupees, 12.17);
+    },
+  );
 
   test('Generic wallet debit parses as wallet spend', () {
     final result = LocalSmsParser.parse(
@@ -910,7 +1123,8 @@ void main() {
   });
 
   test('Card setting update is identified as noise and service alert', () {
-    const body = 'Modification Success! Card usage settings for Credit Card ending with XX8708 modified';
+    const body =
+        'Modification Success! Card usage settings for Credit Card ending with XX8708 modified';
     expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', body), isTrue);
     expect(NeedsReviewRepository.isSecurityOrServiceAlert(body), isTrue);
     final result = LocalSmsParser.parse(
@@ -924,7 +1138,8 @@ void main() {
   });
 
   test('Delivery memo alert is identified as non-transaction noise', () {
-    const body = 'Bharatgas cylinder is out for delivery with Cash Memo Amount Rs 926.5. Pls share Delivery Code 734900';
+    const body =
+        'Bharatgas cylinder is out for delivery with Cash Memo Amount Rs 926.5. Pls share Delivery Code 734900';
     expect(LocalSmsParser.isNonTransactionNoise('BP-BHARAT', body), isTrue);
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
@@ -937,7 +1152,8 @@ void main() {
   });
 
   test('Union Bank of India SMS parses payee from Fvg clause', () {
-    const body = 'Union Bank of India A/c *8565 Debited Rs:2900.00 on 21-10-2026 19:28:42 by Mob Bk ref no 629453274545, Fvg: gaudeshi Avl Bal Rs:594.92. Not you?Call 18002333/SMS BLOCK 8565 to 8879365472';
+    const body =
+        'Union Bank of India A/c *8565 Debited Rs:2900.00 on 21-10-2026 19:28:42 by Mob Bk ref no 629453274545, Fvg: gaudeshi Avl Bal Rs:594.92. Not you?Call 18002333/SMS BLOCK 8565 to 8879365472';
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'VK-UBIN',
@@ -952,8 +1168,25 @@ void main() {
     expect(result?.availableBalance?.rupees, 594.92);
   });
 
+  test('completed bank debit without a payee still counts as spending', () {
+    const body =
+        'A/c *8565 Debited for Rs:3000.00 on 14-08-2025 21:18:19 by Mob Bk ref no 559227806547 Avl Bal Rs:4583.22. If not you, Call 1800222243 -Union Bank of India';
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'JX-UNIONB-S',
+      body: body,
+      receivedAt: DateTime(2025, 8, 14, 21, 18),
+    );
+    expect(result?.transaction, isNotNull);
+    expect(result?.transaction?.amount.rupees, 3000.0);
+    expect(result?.transaction?.merchantName, 'Bank debit');
+    expect(result?.transaction?.accountLast4, '8565');
+    expect(result?.transaction?.entryKind, TxnEntryKind.spend);
+  });
+
   test('Slice credit card transaction parses correctly', () {
-    const body = 'Rs. 859 spent on your credit card xx9080 at slice on 22-Oct-26 (UPI Ref: 629534133759). Not you? Call 080-4832-9999 - slice';
+    const body =
+        'Rs. 859 spent on your credit card xx9080 at slice on 22-Oct-26 (UPI Ref: 629534133759). Not you? Call 080-4832-9999 - slice';
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'AD-SLICE',
@@ -969,7 +1202,8 @@ void main() {
   });
 
   test('Co-operative bank debit parses account and payee', () {
-    const body = 'Dear Customer, A/c *1234 is debited for Rs. 1500.00 on 20-10-2026 by UPI/629453274545/TeaStall. Avl Bal Rs. 8500.00. - Goa Urban Co-op Bank';
+    const body =
+        'Dear Customer, A/c *1234 is debited for Rs. 1500.00 on 20-10-2026 by UPI/629453274545/TeaStall. Avl Bal Rs. 8500.00. - Goa Urban Co-op Bank';
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'JX-GUCBNK-S',
@@ -985,7 +1219,8 @@ void main() {
   });
 
   test('ASBA / IPO application block is classified as investment lien', () {
-    const body = 'Dear Customer, your request for ASBA application no. 1789027578CB90FY for RENTOMOJO LIMITED of Rs. 2,09,272.00 has been accepted successfully on 10/09/2026. - Kotak Bank';
+    const body =
+        'Dear Customer, your request for ASBA application no. 1789027578CB90FY for RENTOMOJO LIMITED of Rs. 2,09,272.00 has been accepted successfully on 10/09/2026. - Kotak Bank';
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'Kotak Bank',
@@ -997,43 +1232,92 @@ void main() {
     expect(result?.transaction?.entryKind, TxnEntryKind.investment);
   });
 
-  test('extractReceiptAmount sanitizes order ID and AWB sequences before extraction', () {
-    expect(
-      LocalSmsParser.extractReceiptAmount('Order ID: 987654321 for Rs. 450.00 confirmed')?.rupees,
-      450.0,
-    );
-    expect(
-      LocalSmsParser.extractReceiptAmount('Order No. 123456 total Rs 1,299 paid')?.rupees,
-      1299.0,
-    );
-    expect(
-      LocalSmsParser.extractReceiptAmount('AWB 8876543210 shipment fee INR 250.50')?.rupees,
-      250.5,
-    );
-    expect(
-      LocalSmsParser.extractReceiptAmount('order number #54321 Rs. 99')?.rupees,
-      99.0,
-    );
-  });
+  test(
+    'extractReceiptAmount sanitizes order ID and AWB sequences before extraction',
+    () {
+      expect(
+        LocalSmsParser.extractReceiptAmount(
+          'Order ID: 987654321 for Rs. 450.00 confirmed',
+        )?.rupees,
+        450.0,
+      );
+      expect(
+        LocalSmsParser.extractReceiptAmount(
+          'Order No. 123456 total Rs 1,299 paid',
+        )?.rupees,
+        1299.0,
+      );
+      expect(
+        LocalSmsParser.extractReceiptAmount(
+          'AWB 8876543210 shipment fee INR 250.50',
+        )?.rupees,
+        250.5,
+      );
+      expect(
+        LocalSmsParser.extractReceiptAmount(
+          'order number #54321 Rs. 99',
+        )?.rupees,
+        99.0,
+      );
+    },
+  );
 
   test('new noise patterns are identified as non-transaction noise', () {
     final noiseAlerts = <(String sender, String body)>[
       ('CDSLIN', 'CDSL: Unpledge confirmed for 100 shares in demat account.'),
       ('NSDLIN', 'NSDL: Pledge setup request initiated for a/c 1234.'),
-      ('KFINTECH', 'Updated your address under folio 98765432 based on feed received from KRA.'),
-      ('CAMS', 'Address in folio 12345/6 is updated based on feed received from KRA.'),
-      ('HDFCBK', 'Due to scheduled maintenance NetBanking services will be unavailable from 02:00 to 05:00.'),
-      ('ICICIB', 'Registration alert: device name iPhone 15 was registered on iMobile Pay.'),
-      ('AMAZON', 'Reminder: 5 cashback coupons expire at midnight. Use code FESTIVE.'),
-      ('DELHIV', 'Order is dispatched through Delhivery with tracking 123456789.'),
-      ('BLUEDART', 'Your order is dispatched through Blue Dart express logistics.'),
-      ('FLIPKT', 'We have received your order ID OD123456789. We are preparing it for shipment.'),
-      ('AXISBK', 'Lifetime-free credit card facility has been enabled for your account. Limit Rs. 2,00,000.'),
-      ('BAJAJA', 'Two wheeler insurance for MH01AB1234 has expired. Renew today at Rs. 1499.'),
-      ('ACKOIN', 'Car insurance expired! Renew before midnight to protect your NCB.'),
-      ('HDFCER', 'Vehicle insurance for DL01CD5678 will expire tomorrow. Premium Rs 2150.'),
-      ('JIOFBR', 'Help us serve you better. Rate your experience with JioFiber.'),
-      ('VICARE', 'Your experience matters to us. Take a quick survey and share your feedback.'),
+      (
+        'KFINTECH',
+        'Updated your address under folio 98765432 based on feed received from KRA.',
+      ),
+      (
+        'CAMS',
+        'Address in folio 12345/6 is updated based on feed received from KRA.',
+      ),
+      (
+        'HDFCBK',
+        'Due to scheduled maintenance NetBanking services will be unavailable from 02:00 to 05:00.',
+      ),
+      (
+        'ICICIB',
+        'Registration alert: device name iPhone 15 was registered on iMobile Pay.',
+      ),
+      (
+        'AMAZON',
+        'Reminder: 5 cashback coupons expire at midnight. Use code FESTIVE.',
+      ),
+      (
+        'DELHIV',
+        'Order is dispatched through Delhivery with tracking 123456789.',
+      ),
+      (
+        'BLUEDART',
+        'Your order is dispatched through Blue Dart express logistics.',
+      ),
+      (
+        'FLIPKT',
+        'We have received your order ID OD123456789. We are preparing it for shipment.',
+      ),
+      (
+        'AXISBK',
+        'Lifetime-free credit card facility has been enabled for your account. Limit Rs. 2,00,000.',
+      ),
+      (
+        'BAJAJA',
+        'Two wheeler insurance for MH01AB1234 has expired. Renew today at Rs. 1499.',
+      ),
+      (
+        'ACKOIN',
+        'Car insurance expired! Renew before midnight to protect your NCB.',
+      ),
+      (
+        'JIOFBR',
+        'Help us serve you better. Rate your experience with JioFiber.',
+      ),
+      (
+        'VICARE',
+        'Your experience matters to us. Take a quick survey and share your feedback.',
+      ),
     ];
 
     for (final (sender, body) in noiseAlerts) {
@@ -1044,11 +1328,14 @@ void main() {
       );
     }
   });
-  test('feedback text after a completed recharge does not hide the transaction', () {
-    const body =
-        'Recharge of Rs 239 successful. Rate your experience with Jio.';
-    expect(LocalSmsParser.isNonTransactionNoise('JIOFBR', body), isFalse);
-  });
+  test(
+    'feedback text after a completed recharge does not hide the transaction',
+    () {
+      const body =
+          'Recharge of Rs 239 successful. Rate your experience with Jio.';
+      expect(LocalSmsParser.isNonTransactionNoise('JIOFBR', body), isFalse);
+    },
+  );
   test('mutual fund folio unit allotment does not create a cash spend transaction', () {
     const amcMessages = [
       'Folio 12345/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',
@@ -1069,7 +1356,11 @@ void main() {
       );
 
       expect(obs, isNotNull);
-      expect(obs!.transaction, isNull, reason: 'Must not mint a cash spend transaction!');
+      expect(
+        obs!.transaction,
+        isNull,
+        reason: 'Must not mint a cash spend transaction!',
+      );
       expect(obs.eventType, LocalSmsEventType.investment);
       expect(obs.disposition, LocalSmsDisposition.localObservation);
       expect(obs.reasonCodes, contains('mf_folio_unit_allotment'));
@@ -1139,7 +1430,8 @@ void main() {
     final union = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'VK-UNIONB',
-      body: 'An amount of INR 500.00 debited from a/c ...8565. Avl Bal Rs: 594.92',
+      body:
+          'An amount of INR 500.00 debited from a/c ...8565. Avl Bal Rs: 594.92',
       receivedAt: DateTime(2026, 10, 1),
     );
     expect(union?.accountLast4, '8565');

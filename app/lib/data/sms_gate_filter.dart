@@ -113,8 +113,12 @@ class SmsGateFilter {
     }
 
     // Check promotional route suffix (-P)
+    final actionableInsuranceRenewal =
+        LocalSmsParser.isActionableInsuranceRenewal(body);
     final isPromoRoute = RegExp(r'-[Pp]$').hasMatch(trimmedSender);
-    if (isPromoRoute && !LocalSmsParser.isCompletedTransactionOrBill(body)) {
+    if (isPromoRoute &&
+        !LocalSmsParser.isCompletedTransactionOrBill(body) &&
+        !actionableInsuranceRenewal) {
       return const SmsGateVerdict.drop(SmsGateDropReason.promotionalNoise);
     }
 
@@ -123,7 +127,9 @@ class SmsGateFilter {
       return const SmsGateVerdict.drop(SmsGateDropReason.dematOrSecuritiesAlert);
     }
 
-    if (_earlyNoiseRe.hasMatch(body) && !_balanceSnapshotRe.hasMatch(body)) {
+    if (_earlyNoiseRe.hasMatch(body) &&
+        !_balanceSnapshotRe.hasMatch(body) &&
+        !actionableInsuranceRenewal) {
       return const SmsGateVerdict.drop(SmsGateDropReason.promotionalNoise);
     }
 
@@ -131,7 +137,9 @@ class SmsGateFilter {
     final hasAmountOrBalance = _currencyOrAmountIndicatorRe.hasMatch(body);
     final hasMovementVerb = _movementVerbIndicatorRe.hasMatch(body);
 
-    if (!hasAmountOrBalance && !hasMovementVerb) {
+    if (!hasAmountOrBalance &&
+        !hasMovementVerb &&
+        !actionableInsuranceRenewal) {
       return const SmsGateVerdict.drop(SmsGateDropReason.noFinancialKeywords);
     }
 

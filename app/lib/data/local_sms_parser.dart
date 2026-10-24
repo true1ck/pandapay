@@ -118,13 +118,18 @@ class LocalSmsReviewDraft {
 /// formats remain durable intake for server parsing; they never become guessed
 /// spending. Values are local observations until server reconciliation.
 class LocalSmsParser {
+  // 10: preserve uncertain card types, insurance date precision, and explicit
+  // due-date labels; re-evaluate older review observations with this grammar.
+  // 11: merchant names that follow an Axis transaction date/time are captured
+  // from the alert rather than treated as unknown.
+  // 12: explicitly zoned IST transaction times are retained for card spends.
   // 9: AutoPay setup and reminder observations no longer invent a monthly
   // cadence, receive-date due date, or due amount from a mandate ceiling.
   // 8: the server can now resolve a card bill notice whose suffix is printed
   // straight after the instrument ("Credit Card 8708 bill"), so the open
   // review queue is re-examined once more and a card's due day can finally be
   // learned from its own AutoPay message.
-  static const version = 9;
+  static const version = 12;
 
   static bool isInvestmentFolioAllotment(String body) {
     final text = body.toLowerCase();
@@ -142,7 +147,7 @@ class LocalSmsParser {
   static bool isMerchantReceiptOrEbill(String body) {
     final text = body.toLowerCase();
     return RegExp(
-      r'\b(?:view\s+(?:e[- ]?bill|bill|invoice|tax\s+invoice)|e[- ]?bill\s+of\b|view\s+bill\s+of\b|thanks?\s+for\s+(?:your\s+)?payment\s+of\s+(?:rs\.?|inr))\b',
+      r'\b(?:view\s+(?:e[- ]?bill|bill|invoice|tax\s+invoice)|e[- ]?bill\s+of\b|view\s+bill\s+of\b|thanks?\s+for\s+(?:your\s+)?payment\s+of\s+(?:rs\.?|inr)|thank\s+you\s+for\s+your\s+purchase\b[\s\S]{0,240}\b(?:download|view)\b[\s\S]{0,80}\b(?:bill|invoice|receipt)\b)',
     ).hasMatch(text);
   }
 
@@ -187,6 +192,22 @@ class LocalSmsParser {
         _re(
           r'\bpayment\s+of\s*(?:₹|rs\.?|inr)?\s*[\d,]+(?:\.\d{1,2})?\s*is\s+due\b',
         ).hasMatch(text);
+  }
+
+  /// A dated insurance expiry/due notice is actionable even if it also says
+  /// "renew now". Date-less renewal advertising remains noise.
+  static bool isActionableInsuranceRenewal(String body) {
+    final hasInsurance = _re(
+      r'\b(?:insurance|policy|premium|lic)\b',
+    ).hasMatch(body);
+    if (!hasInsurance) return false;
+    final hasExpiryCue = _re(
+      r'\b(?:will\s+expire|expires?\b|expiry\b|premium\s+due|renewal\s+due|due\s+for\s+renewal|next\s+premium)\b',
+    ).hasMatch(body);
+    if (!hasExpiryCue) return false;
+    return _re(dateToken).hasMatch(body) ||
+        nextPremiumDueMonth(body) != null ||
+        _re(r'\b(?:today|tomorrow|in\s+\d{1,2}\s+days?)\b').hasMatch(body);
   }
 
   /// True if the message represents an unambiguous completed transaction, bill obligation,
@@ -346,6 +367,7 @@ class LocalSmsParser {
       r'\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+(?:credit\s+)?card\s+with\s+limit|eligible\s+for\s+(?:a\s+)?(?:[\w\s]{0,20}\s+)?loan\b|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application|pre[-\s]?approved\s+loan)\b|'
       r'\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b',
     ).hasMatch(text);
+    if (isActionableInsuranceRenewal(body)) return false;
     return offer || serviceNotice || operationalNotice || promotionalSender;
   }
 
@@ -522,8 +544,42 @@ class LocalSmsParser {
             _re(r'\b(?:posted|applied|credited)\b').hasMatch(body));
   }
 
+  static TxnInstrument? _savedCardInstrument(
+    List<UserCard> cards,
+    String? last4,
+  ) {
+    if (last4 == null) return null;
+    final types = cards
+        .where((card) => !card.isArchived && card.last4 == last4)
+        .map((card) => card.cardType?.toLowerCase())
+        .where((type) => type == 'credit' || type == 'debit')
+        .toSet();
+    if (types.length != 1) return null;
+    return types.single == 'debit'
+        ? TxnInstrument.debitCard
+        : TxnInstrument.creditCard;
+  }
+
+  static TxnInstrument? _explicitCardInstrument(String body) {
+    if (_re(r'\bcredit\s+card\b').hasMatch(body)) {
+      return TxnInstrument.creditCard;
+    }
+    if (_re(
+      r'\bdebit\s+card\b|\b(?:atm|withdrawn|cash\s+withdrawal|block\s+dc)\b',
+    ).hasMatch(body)) {
+      return TxnInstrument.debitCard;
+    }
+    if (_re(r'\bcard\b').hasMatch(body) &&
+        _re(
+          r'\b(?:avl\.?\s*(?:lmt|limit)|available\s+(?:credit|limit)|credit\s+limit|outstanding|statement|minimum\s+amount\s+due|total\s+amount\s+due|amount\s+due)\b',
+        ).hasMatch(body)) {
+      return TxnInstrument.creditCard;
+    }
+    return null;
+  }
+
   static bool sensitive(String body) => RegExp(
-    r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
+    r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin|passcode|secret code)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
     caseSensitive: false,
   ).hasMatch(body);
   static RegExp _re(String s) => RegExp(s, caseSensitive: false);
@@ -673,6 +729,83 @@ class LocalSmsParser {
         : null;
   }
 
+  static DateTime? _transactionTimestamp(
+    String body,
+    DateTime? parsedDate,
+    DateTime receivedAt,
+  ) {
+    if (parsedDate == null) return null;
+    final match = _re(
+      r'\b(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s+IST\b',
+    ).firstMatch(body);
+    if (match == null) return parsedDate;
+    final printedDate = parseDate(match.group(1)!);
+    if (printedDate == null ||
+        printedDate.year != parsedDate.year ||
+        printedDate.month != parsedDate.month ||
+        printedDate.day != parsedDate.day) {
+      return parsedDate;
+    }
+    final hour = int.parse(match.group(2)!);
+    final minute = int.parse(match.group(3)!);
+    final second = int.parse(match.group(4) ?? '0');
+    if (hour > 23 || minute > 59 || second > 59) return parsedDate;
+    final timestamp = DateTime.utc(
+      printedDate.year,
+      printedDate.month,
+      printedDate.day,
+      hour,
+      minute,
+      second,
+    ).subtract(const Duration(minutes: 330)).toLocal();
+    return timestamp.isAfter(receivedAt.add(const Duration(days: 1)))
+        ? parsedDate
+        : timestamp;
+  }
+
+  /// Returns the month named by an explicit "next premium ... due" phrase.
+  /// Month-only dates deliberately stay month-only; callers must not invent a
+  /// due day from them.
+  static DateTime? nextPremiumDueMonth(String body) {
+    final match = _re(
+      r'\bnext\s+premium\b[\s\S]{0,30}?\b(?:falls?\s+)?due\s+(?:on|in)?\s*(0?[1-9]|1[0-2])\s*[./-]\s*(20\d{2})\b|\bnext\s+premium\b[\s\S]{0,30}?\b(?:falls?\s+)?due\s+(?:on|in)?\s*([A-Za-z]{3,9})\s+(20\d{2})\b',
+    ).firstMatch(body);
+    if (match == null) return null;
+    final numericMonth = int.tryParse(match.group(1) ?? '');
+    final month = numericMonth ?? _monthNumber(match.group(3)!);
+    final year = int.tryParse(match.group(2) ?? match.group(4)!);
+    return month == null || year == null ? null : DateTime(year, month);
+  }
+
+  static DateTime? _nextPremiumDueDate(String body) {
+    final match = _re(
+      r'\bnext\s+premium\b[\s\S]{0,30}?\b(?:falls?\s+)?due\s+(?:on|in)?\s*(' +
+          dateToken +
+          r')',
+    ).firstMatch(body);
+    return match == null ? null : parseDate(match.group(1)!);
+  }
+
+  static int? _monthNumber(String value) {
+    const months = [
+      'jan',
+      'feb',
+      'mar',
+      'apr',
+      'may',
+      'jun',
+      'jul',
+      'aug',
+      'sep',
+      'oct',
+      'nov',
+      'dec',
+    ];
+    final normalized = value.toLowerCase();
+    final index = months.indexWhere((month) => normalized.startsWith(month));
+    return index < 0 ? null : index + 1;
+  }
+
   /// Extracts review suggestions without changing the automatic transaction
   /// grammar. This is intentionally allowed to be incomplete because it is
   /// only used to reduce typing in a user-confirmed form.
@@ -765,7 +898,7 @@ class LocalSmsParser {
         !localOnly &&
             parsedDate != null &&
             !parsedDate.isAfter(receivedAt.add(const Duration(days: 1)))
-        ? parsedDate
+        ? _transactionTimestamp(body, parsedDate, receivedAt) ?? parsedDate
         : receivedAt;
     final asbaOrIpoBlock = _re(
       r'\b(?:asba\s+application|asba\s+(?:req(?:uest)?|bid|block|lien)|towards\s+asba|for\s+asba|asba\b[\s\S]{0,50}\b(?:accepted|blocked|lien|created)|(?:blocked|lien\s+marked)\b[\s\S]{0,50}\b(?:for|towards)?\s*(?:ipo|asba|rights\s+issue)|(?:ipo\s+(?:application|bid|mandate|block|lien)))\b',
@@ -1055,7 +1188,9 @@ class LocalSmsParser {
       );
     }
 
-    if (downloadedRules != null && downloadedRules.rules.isNotEmpty) {
+    if (downloadedRules != null &&
+        downloadedRules.rules.isNotEmpty &&
+        !isMerchantReceiptOrEbill(body)) {
       for (final rule in downloadedRules.rules) {
         if (!rule.matchesSender(sender)) continue;
         final match = rule.regExp.firstMatch(body);
@@ -1094,7 +1229,7 @@ class LocalSmsParser {
             r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX.\s-]*(\d{4})\b',
           ).firstMatch(body)?.group(1);
     final isInsuranceReminder = _re(
-      r'\b(?:lic|life insurance|policy|premium)\b',
+      r'\b(?:lic|insurance|policy|premium)\b',
     ).hasMatch('$sender $body');
     final policyLast4 = isInsuranceReminder
         ? _re(
@@ -1103,6 +1238,10 @@ class LocalSmsParser {
         : null;
     DateTime? due;
     for (final phrase in [
+      // Some issuers list "Total Due: INR ..." before the actual
+      // "Due date: 23-Sep-2026" field; keep this explicit label ahead of the
+      // broader `due` matcher so the earlier amount cannot shadow the date.
+      r'\bdue\s+date\s*(?:is|on|by)?\s*[:\-]?\s*',
       r'\bdue\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
       r'\bpay\s+by\s*[:\-]?\s*',
       r'\b(?:payment|bill|amount)\s+due\s+date\b[\s\S]{0,120}?\b(?:is|on|by)\s*[:\-]?\s*',
@@ -1130,7 +1269,33 @@ class LocalSmsParser {
         if (due != null) break;
       }
     }
-    if (due == null) {
+    if (due == null && isActionableInsuranceRenewal(body)) {
+      final relative = _re(
+        r'\b(?:expires?|expiry|premium\s+due|renewal\s+due|due\s+for\s+renewal)\s*(?:is\s+|on\s+)?(today|tomorrow|in\s+(\d{1,2})\s+days?)\b',
+      ).firstMatch(body);
+      final days = switch (relative?.group(1)?.toLowerCase()) {
+        'today' => 0,
+        'tomorrow' => 1,
+        _ => int.tryParse(relative?.group(2) ?? ''),
+      };
+      if (days != null) {
+        due = DateTime(
+          receivedAt.year,
+          receivedAt.month,
+          receivedAt.day + days,
+        );
+      }
+    }
+    final nextPremiumDue = _nextPremiumDueDate(body);
+    final nextPremiumMonth = nextPremiumDueMonth(body);
+    if (nextPremiumDue != null) {
+      due = nextPremiumDue;
+    } else if (nextPremiumMonth != null) {
+      // A month/year reminder has no reliable day. Do not use the earlier
+      // installment's date or silently turn the first of the month into a due day.
+      due = null;
+    }
+    if (due == null && nextPremiumMonth == null) {
       final monthMatch = _re(
         r'\b(?:for\s+the\s+month\s+(?:of\s+)?|month\s+of\s+|month\s+)([A-Za-z]{3,9})\b',
       ).firstMatch(body);
@@ -1262,7 +1427,9 @@ class LocalSmsParser {
     }
 
     final balance = money(balanceText);
-    final billerName = extractBillerName(body);
+    final billerName =
+        extractBillerName(body) ??
+        (isInsuranceReminder ? 'Insurance policy' : null);
     final cadenceHint =
         _re(r'\b(?:monthly|month)\b').hasMatch(body) ||
             _re(r'\b(?:for\s+the\s+month|month\s+of)\b').hasMatch(body)
@@ -1435,6 +1602,17 @@ class LocalSmsParser {
         const ['merchant_ebill_receipt'],
       );
     }
+    // Keep month-only dates out of AutoPay's fallback date/commitment path too.
+    if (nextPremiumMonth != null &&
+        nextPremiumDue == null &&
+        !hasCompletedMovement) {
+      return observation(
+        null,
+        LocalSmsEventType.bill,
+        LocalSmsDisposition.review,
+        const ['next_premium_due_month_only'],
+      );
+    }
     if (!failed &&
         isAutoPayNotice(body) &&
         (!hasCompletedMovement || futureDebit || autopaySetup)) {
@@ -1467,11 +1645,15 @@ class LocalSmsParser {
       return observation(
         null,
         LocalSmsEventType.bill,
-        isInsuranceOrUtility
+        nextPremiumMonth != null && nextPremiumDue == null
+            ? LocalSmsDisposition.review
+            : isInsuranceOrUtility
             ? LocalSmsDisposition.localCommitment
             : LocalSmsDisposition.localObservation,
         [
           if (due != null) 'due_date_detected',
+          if (nextPremiumMonth != null && nextPremiumDue == null)
+            'next_premium_due_month_only',
           if (isInsuranceOrUtility) 'commitment_detected',
         ],
       );
@@ -1582,6 +1764,8 @@ class LocalSmsParser {
       r'\b(?:reimburse(?:ment|d)?|expense\s+claim)\b',
     ).hasMatch(body);
     final cardCredit = _cardCredit(body);
+    final explicitCardInstrument = _explicitCardInstrument(body);
+    final savedCardInstrument = _savedCardInstrument(cards, cardLast4);
     if (!credit &&
         !cardCredit &&
         !billPayment &&
@@ -1614,28 +1798,27 @@ class LocalSmsParser {
         ).hasMatch(body);
     var instrument = billPayment
         ? (bankDebit ? TxnInstrument.upiBank : TxnInstrument.other)
-        : cardCredit
-        ? TxnInstrument.creditCard
         : credit && _re(r'\bwallet\b').hasMatch(body)
         ? TxnInstrument.wallet
         : isWalletDebit
         ? TxnInstrument.wallet
-        : _re(
-            r'\bdebit\s+card\b|\b(?:atm|withdrawn|cash\s+withdrawal|block\s+dc)\b',
-          ).hasMatch(body)
-        ? TxnInstrument.debitCard
-        : _re(r'\bcredit\s+card\b').hasMatch(body) ||
-              (cardLast4 != null && accountLast4 == null)
-        ? TxnInstrument.creditCard
-        : bankDebit ||
-              credit ||
-              asbaOrIpoBlock ||
-              _re(r'\bupi\b').hasMatch(body)
-        ? TxnInstrument.upiBank
-        : cardLast4 != null
-        ? TxnInstrument.creditCard
-        : null;
+        : explicitCardInstrument ??
+              savedCardInstrument ??
+              (bankDebit ||
+                      credit ||
+                      asbaOrIpoBlock ||
+                      _re(r'\bupi\b').hasMatch(body)
+                  ? TxnInstrument.upiBank
+                  : cardLast4 != null
+                  ? TxnInstrument.other
+                  : null);
     if (instrument == null) return observation();
+    final instrumentKnown =
+        instrument != TxnInstrument.other ||
+        cardLast4 == null ||
+        accountLast4 != null ||
+        explicitCardInstrument != null ||
+        savedCardInstrument != null;
     if (isWalletDebit) {
       instrument = TxnInstrument.wallet;
       final amazonPay = _re(
@@ -1725,6 +1908,15 @@ class LocalSmsParser {
       merchant = ipoCompanyMatch?.group(1)?.trim() ?? 'IPO Application';
     }
 
+    if ((instrument == TxnInstrument.creditCard ||
+            instrument == TxnInstrument.debitCard) &&
+        (merchant == null || merchant.isEmpty)) {
+      final afterTimestamp = _re(
+        r'\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:IST\s+)?([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,60}?)(?=\s+(?:avl|available|limit|not\s+you|sms\s+block|call)\b|[.;]|$)',
+      ).firstMatch(body);
+      merchant = afterTimestamp?.group(1)?.trim();
+    }
+
     if (merchant == null || merchant.isEmpty) {
       final merchantMatch = _re(
         r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
@@ -1755,18 +1947,6 @@ class LocalSmsParser {
         merchant != null &&
         ownUserName != null &&
         _isOwnPersonName(merchant, ownUserName);
-    if (bankDebit &&
-        !credit &&
-        !transfer &&
-        !investmentDebit &&
-        merchant == null) {
-      return observation(
-        null,
-        LocalSmsEventType.unknown,
-        LocalSmsDisposition.review,
-        ['ambiguous_account_debit'],
-      );
-    }
     if (billPayment) {
       merchant = 'Credit card bill payment';
     } else if (ownNameTransfer) {
@@ -1823,7 +2003,7 @@ class LocalSmsParser {
     } else if (credit) {
       merchant ??= 'Money received';
     } else {
-      merchant ??= bankDebit ? 'Bank transfer' : null;
+      merchant ??= bankDebit ? 'Bank debit' : null;
     }
     final ownNameCredit = credit && _ownNameInFromClause(body, ownUserName);
     if (ownNameCredit) merchant = 'Transfer between own accounts';
@@ -1835,6 +2015,7 @@ class LocalSmsParser {
         .where(
           (c) =>
               !c.isArchived &&
+              cardLast4 != null &&
               c.last4 == cardLast4 &&
               ((instrument == TxnInstrument.debitCard &&
                       c.cardType == 'debit') ||
@@ -1850,7 +2031,7 @@ class LocalSmsParser {
     final date =
         parsedDate != null &&
             !parsedDate.isAfter(receivedAt.add(const Duration(days: 1)))
-        ? parsedDate
+        ? _transactionTimestamp(body, parsedDate, receivedAt) ?? parsedDate
         : receivedAt;
     final key = smsSourceKey(namespace, sender, body);
     return observation(
@@ -1865,6 +2046,7 @@ class LocalSmsParser {
         cardLast4: cardLast4,
         accountLast4: accountLast4,
         instrument: instrument,
+        instrumentKnown: instrumentKnown,
         entryKind: kind,
         source: 'sms',
         status: 'active',
@@ -1929,22 +2111,48 @@ class LocalSmsParser {
       final amount = parseMoney(getGroup('amount') ?? getGroup('amountInr'));
       if (amount == null) return null;
       final merchant = getGroup('merchant') ?? 'Unknown Merchant';
-      final last4 =
-          getGroup('last4') ??
-          getGroup('cardLast4') ??
-          getGroup('accountLast4');
-
       var instrument = TxnInstrument.upiBank;
       final rawInst =
           (rule.defaultFields['instrument'] ?? getGroup('instrument'))
               ?.toString()
               .toLowerCase();
+      final genericIsAccount =
+          const {'upibank', 'upi_bank', 'upi', 'bank'}.contains(rawInst) ||
+          (rawInst == null &&
+              !_re(r'\bcard\b').hasMatch(body) &&
+              _re(r'\b(?:a\/?c\.?|account)\b').hasMatch(body));
+      final accountLast4 =
+          getGroup('accountLast4') ??
+          (genericIsAccount ? getGroup('last4') : null);
+      final cardLast4 =
+          getGroup('cardLast4') ??
+          (!genericIsAccount && accountLast4 == null
+              ? getGroup('last4')
+              : null);
+      // Downloaded captures are a trust boundary: never retain full numbers or
+      // use account digits to validate a claimed card suffix.
+      if ([cardLast4, accountLast4].any(
+        (suffix) => suffix != null && !RegExp(r'^\d{4}$').hasMatch(suffix),
+      )) {
+        return null;
+      }
+      final explicitCardInstrument = _explicitCardInstrument(body);
+      final savedCardInstrument = _savedCardInstrument(cards, cardLast4);
       if (rawInst == 'creditcard' || rawInst == 'credit_card') {
         instrument = TxnInstrument.creditCard;
       } else if (rawInst == 'debitcard' || rawInst == 'debit_card') {
         instrument = TxnInstrument.debitCard;
       } else if (rawInst == 'wallet') {
         instrument = TxnInstrument.wallet;
+      }
+      var instrumentKnown = true;
+      if (explicitCardInstrument != null) {
+        instrument = explicitCardInstrument;
+      } else if (savedCardInstrument != null) {
+        instrument = savedCardInstrument;
+      } else if (rawInst == null && cardLast4 != null) {
+        instrument = TxnInstrument.other;
+        instrumentKnown = false;
       }
 
       var entryKind = TxnEntryKind.spend;
@@ -1959,21 +2167,28 @@ class LocalSmsParser {
         entryKind = TxnEntryKind.investment;
       }
 
-      String? matchedCardId;
-      if (last4 != null) {
-        for (final c in cards) {
-          if (c.last4 == last4) {
-            matchedCardId = c.id;
-            break;
-          }
-        }
-      }
+      final matchingCards = cards
+          .where(
+            (card) =>
+                !card.isArchived &&
+                cardLast4 != null &&
+                card.last4 == cardLast4 &&
+                ((instrument == TxnInstrument.debitCard &&
+                        card.cardType == 'debit') ||
+                    (instrument == TxnInstrument.creditCard &&
+                        card.cardType != 'debit')),
+          )
+          .toList();
+      final matchedCardId = matchingCards.length == 1
+          ? matchingCards.single.id
+          : null;
 
       // Instrument safety: if card is claimed but last4 is missing/invalid, default away from card
       if ((instrument == TxnInstrument.creditCard ||
               instrument == TxnInstrument.debitCard) &&
-          (last4 == null || last4.length != 4)) {
+          cardLast4 == null) {
         instrument = TxnInstrument.other;
+        instrumentKnown = false;
       }
 
       // Calibrate confidence: an unassigned card cannot be auto-accepted at ultra-high confidence
@@ -1991,8 +2206,10 @@ class LocalSmsParser {
         merchantName: merchant,
         occurredAt: receivedAt,
         instrument: instrument,
+        instrumentKnown: instrumentKnown,
         entryKind: entryKind,
-        cardLast4: last4,
+        cardLast4: cardLast4,
+        accountLast4: accountLast4,
         source: 'sms',
         status: 'active',
         rewardState: 'estimated',
@@ -2001,7 +2218,8 @@ class LocalSmsParser {
       return LocalSmsObservation(
         eventType: LocalSmsEventType.transaction,
         transaction: txn,
-        cardLast4: last4,
+        cardLast4: cardLast4,
+        accountLast4: accountLast4,
         confidence: calibratedConfidence,
         disposition: LocalSmsDisposition.sync,
         reasonCodes: ['downloaded_rule_match', rule.id],

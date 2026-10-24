@@ -8,7 +8,7 @@
   {
     "body": "INR 250 spent on ICICI Bank Card XX7788 at SWIGGY on 05-Aug-26.",
     "amount": 250,
-    "instrument": "credit_card",
+    "instrument": "other",
     "kind": "spend"
   },
   {

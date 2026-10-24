@@ -958,11 +958,12 @@ class FinancialStore {
                 final limitOrDue = (obs.autopayLimit != null && !obs.autopayLimit!.isZero)
                     ? obs.autopayLimit!
                     : (obs.amountDue != null && !obs.amountDue!.isZero ? obs.amountDue! : Money.zero());
-                final cadence = obs.cadenceHint == 'annual'
-                    ? CommitmentCadence.annual
-                    : (obs.cadenceHint == 'quarterly'
-                        ? CommitmentCadence.quarterly
-                        : CommitmentCadence.monthly);
+                final cadence = CommitmentCadence.values.firstWhere(
+                  (value) => value.name == obs.cadenceHint,
+                  orElse: () => LocalSmsParser.isActionableInsuranceRenewal(body)
+                      ? CommitmentCadence.oneTime
+                      : CommitmentCadence.monthly,
+                );
                 final cat = CommitmentCategory.fromText(obs.billerName!);
                 final category = cat == CommitmentCategory.other ? CommitmentCategory.subscription : cat;
                 final c = Commitment(
@@ -985,24 +986,6 @@ class FinancialStore {
             }
           }
 
-          if (obs.cardLast4 != null && obs.dueDate != null && (isAutopayOrMandate || obs.statementDate != null)) {
-            final cardRows = database.db.select(
-              "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='cards'",
-              [ns],
-            );
-            for (final cardRow in cardRows) {
-              final cardBody =
-                  jsonDecode(cardRow['payload'] as String)
-                      as Map<String, dynamic>;
-              if (cardBody['last4'] == obs.cardLast4) {
-                if (cardBody['due_day'] == null) {
-                  patchCard(ns, cardRow['id'] as String, {
-                    'due_day': obs.dueDate!.day,
-                  });
-                }
-              }
-            }
-          }
           changed = true;
         }
       }
@@ -1043,6 +1026,9 @@ class FinancialStore {
         }
       }
 
+      // Use the same matching, date-evidence and user-source safeguards as a
+      // wallet refresh instead of patching every card sharing a suffix here.
+      syncCardDatesFromObservations(ns);
       database.db.execute(
         'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
         [ns, 'bill_and_autopay_repair_v6'],
@@ -1143,14 +1129,20 @@ class FinancialStore {
         [ns],
       );
       if (cardRows.isEmpty) return;
+      final eligibleCards = cardRows
+          .map(
+            (row) => jsonDecode(row['payload'] as String) as Map<String, dynamic>,
+          )
+          .where(
+            (card) => card['is_archived'] != true && card['card_type'] != 'debit',
+          )
+          .toList();
       final obsRows = database.db.select(
         "SELECT payload FROM financial_entities WHERE namespace=? AND entity='sms_observations'",
         [ns],
       );
       var changed = false;
-      for (final cardRow in cardRows) {
-        final card =
-            jsonDecode(cardRow['payload'] as String) as Map<String, dynamic>;
+      for (final card in eligibleCards) {
         final currentDueDay = card['due_day'] as int?;
         final currentStmtDay = card['statement_day'] as int?;
 
@@ -1173,6 +1165,15 @@ class FinancialStore {
                   familyNamesCardDisplayName(biller, cardName));
 
           if (!matchesLast4 && !matchesFamily) continue;
+          final matches = eligibleCards.where((candidate) {
+            if (obsLast4 != null) {
+              return candidate['last4'] == obsLast4;
+            }
+            final name = (candidate['card_name'] as String? ?? '').toLowerCase();
+            return familyNamesCardDisplayName(sender, name) ||
+                familyNamesCardDisplayName(biller, name);
+          });
+          if (matches.length != 1) continue;
           matchingBills.add(obs);
         }
 
@@ -1190,8 +1191,13 @@ class FinancialStore {
         int? newStmtDay;
         for (final obs in matchingBills) {
           final isExplicit = obs['statement_date_explicit'] == true;
-          final isAutopay = obs['is_autopay'] == true ||
-              (obs['reason_codes'] as List?)?.contains('autopay_notice') == true;
+          final isAutopay =
+              obs['is_autopay'] == true ||
+              (obs['reason_codes'] as List?)?.any(
+                    (reason) =>
+                        reason == 'autopay_notice' || reason == 'mandate_notice',
+                  ) ==
+                  true;
           final hasStatementAlert = obs['statement_date'] != null;
           // Only trust dates attached to a statement generation notice, an explicit
           // statement date, or an established AutoPay schedule. A mere payment reminder
@@ -1201,7 +1207,9 @@ class FinancialStore {
             final dt = DateTime.tryParse(obs['due_date'] as String);
             if (dt != null) newDueDay = dt.day;
           }
-          if (newStmtDay == null && obs['statement_date'] != null) {
+          if (newStmtDay == null &&
+              obs['statement_date'] != null &&
+              (!isAutopay || isExplicit)) {
             final dt = DateTime.tryParse(obs['statement_date'] as String);
             if (dt != null) newStmtDay = dt.day;
           }
@@ -1209,14 +1217,22 @@ class FinancialStore {
         }
 
         final patch = <String, dynamic>{};
-        if (newDueDay != null && newDueDay != currentDueDay) {
+        if (newDueDay != null &&
+            newDueDay != currentDueDay &&
+            card['due_day_source'] != 'user' &&
+            (currentDueDay == null || card['due_day_source'] == 'sms')) {
           patch['due_day'] = newDueDay;
+          patch['due_day_source'] = 'sms';
         }
-        if (newStmtDay != null && newStmtDay != currentStmtDay) {
+        if (newStmtDay != null &&
+            newStmtDay != currentStmtDay &&
+            card['statement_day_source'] != 'user' &&
+            (currentStmtDay == null || card['statement_day_source'] == 'sms')) {
           patch['statement_day'] = newStmtDay;
+          patch['statement_day_source'] = 'sms';
         }
         if (patch.isNotEmpty) {
-          patchCard(ns, cardRow['id'] as String, patch);
+          patchCard(ns, card['id'] as String, patch);
           changed = true;
         }
       }
