@@ -2,6 +2,10 @@
 
 const AMOUNT_TOLERANCE_INR = 0.005;
 const MAX_TIME_DISTANCE_MS = 10 * 60 * 1000;
+// Search a full accounting day because SMS and statements can carry different
+// precision (the SMS transaction date may be midnight while its observation
+// time and the statement row retain the actual swipe time).
+const MAX_CROSS_SOURCE_CANDIDATE_MS = 24 * 60 * 60 * 1000;
 // SMS delivery timestamps distinguish a duplicated alert from two purchases
 // that happen to have the same bank-supplied calendar date.
 const MAX_SMS_NOTIFICATION_DISTANCE_MS = 15 * 60 * 1000;
@@ -38,8 +42,18 @@ function compareMerchants(left, right) {
 }
 
 function asMillis(value) {
+  if (value == null || value === '') return null;
   const result = new Date(value).getTime();
   return Number.isFinite(result) ? result : null;
+}
+
+function comparisonTime(row, source) {
+  const occurred = asMillis(row.occurred ?? row.occurred_at);
+  if (source === 'sms' && (row.transactionTimePrecise === true || row.transaction_time_precise === true)
+      && occurred !== null) return occurred;
+  const observed = asMillis(row.observedAt ?? row.observed_at);
+  if (source === 'sms' && observed !== null) return observed;
+  return occurred;
 }
 
 // App-local row IDs and invoice numbers are not portable bank identities.
@@ -126,8 +140,11 @@ function evaluateDuplicate(incoming, candidate) {
     };
   }
 
-  const incomingTime = asMillis(incoming.occurred ?? incoming.occurred_at);
-  const candidateTime = asMillis(candidate.occurred ?? candidate.occurred_at);
+  // Compare SMS delivery/observation time when available. Its accounting date
+  // may be date-only and therefore land at midnight despite the bank alert
+  // carrying the actual transaction time.
+  const incomingTime = comparisonTime(incoming, incomingSource);
+  const candidateTime = comparisonTime(candidate, candidateSource);
   if (incomingTime === null || candidateTime === null) return null;
   const timeDifferenceMs = Math.abs(incomingTime - candidateTime);
   if (timeDifferenceMs > MAX_TIME_DISTANCE_MS && !sameReference) return null;
@@ -190,6 +207,7 @@ function bestDuplicate(incoming, candidates) {
 module.exports = {
   AMOUNT_TOLERANCE_INR,
   MAX_TIME_DISTANCE_MS,
+  MAX_CROSS_SOURCE_CANDIDATE_MS,
   MAX_SMS_NOTIFICATION_DISTANCE_MS,
   REVIEW_THRESHOLD,
   sourceFamily,

@@ -57,6 +57,7 @@ class UserCard {
   /// day (no capture flow exists yet — C4 Edit Card, deferred) — Billing
   /// Cycle Float must degrade to a prompt rather than fabricate a date.
   final int? statementDay;
+  final String? statementDaySource;
   final DateTime? openedOn;
 
   /// Task E-0 (Group E plan): all three already existed in Postgres
@@ -73,6 +74,7 @@ class UserCard {
   /// vary by customer even when the card product is the same.
   final Money? annualFeeOverride;
   final int? dueDay;
+  final String? dueDaySource;
   final DateTime? anniversaryOn;
 
   /// Task C-1: only ever true when the caller passed `includeArchived` to
@@ -124,10 +126,12 @@ class UserCard {
     this.pointsBalance,
     this.feeWaiverStates = const [],
     this.statementDay,
+    this.statementDaySource,
     this.openedOn,
     this.creditLimit,
     this.annualFeeOverride,
     this.dueDay,
+    this.dueDaySource,
     this.anniversaryOn,
     this.isArchived = false,
     this.autopayMode = AutopayMode.off,
@@ -171,6 +175,7 @@ class UserCard {
           : _num(json['points_balance']),
       feeWaiverStates: feeWaiverStates.map(FeeWaiverProgress.fromJson).toList(),
       statementDay: json['statement_day'] as int?,
+      statementDaySource: json['statement_day_source'] as String?,
       openedOn: json['opened_on'] == null
           ? null
           : DateTime.parse(json['opened_on'] as String),
@@ -181,6 +186,7 @@ class UserCard {
           ? null
           : Money.fromRupees(_num(json['annual_fee_override_inr'])),
       dueDay: json['due_day'] as int?,
+      dueDaySource: json['due_day_source'] as String?,
       anniversaryOn: json['anniversary_on'] == null
           ? null
           : DateTime.parse(json['anniversary_on'] as String),
@@ -217,10 +223,12 @@ class UserCard {
     'total_points_earned': totalPointsEarned,
     'points_balance': pointsBalance,
     'statement_day': statementDay,
+    'statement_day_source': statementDaySource,
     'opened_on': openedOn?.toIso8601String(),
     'credit_limit_inr': creditLimit?.rupees,
     'annual_fee_override_inr': annualFeeOverride?.rupees,
     'due_day': dueDay,
+    'due_day_source': dueDaySource,
     'anniversary_on': anniversaryOn?.toIso8601String(),
     'is_archived': isArchived,
     'autopay_mode': autopayMode.wireValue,
@@ -1802,9 +1810,17 @@ class UserCardsRepository {
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return SmsReconciliationResult(
+      reconciliationVersion:
+          (json['reconciliationVersion'] as num?)?.toInt() ?? 0,
       duplicateSuppressed: (json['duplicateSuppressed'] as num?)?.toInt() ?? 0,
+      crossSourceCandidatesCreated:
+          (json['crossSourceCandidatesCreated'] as num?)?.toInt() ?? 0,
       linkedCards: (json['linkedCards'] as num?)?.toInt() ?? 0,
       reclassified: (json['reclassified'] as num?)?.toInt() ?? 0,
+      classificationReclassified:
+          (json['classificationReclassified'] as num?)?.toInt() ?? 0,
+      remappedTransactions:
+          (json['remappedTransactions'] as num?)?.toInt() ?? 0,
       remainingLegacyRows: (json['remainingLegacyRows'] as num?)?.toInt() ?? 0,
     );
   }
@@ -3252,22 +3268,34 @@ class SmsImportState {
 }
 
 class SmsReconciliationResult {
+  final int reconciliationVersion;
   final int duplicateSuppressed;
+  final int crossSourceCandidatesCreated;
   final int linkedCards;
   final int reclassified;
+  final int classificationReclassified;
+  final int remappedTransactions;
   final int remainingLegacyRows;
 
   const SmsReconciliationResult({
+    required this.reconciliationVersion,
     required this.duplicateSuppressed,
+    required this.crossSourceCandidatesCreated,
     required this.linkedCards,
     required this.reclassified,
+    required this.classificationReclassified,
+    required this.remappedTransactions,
     required this.remainingLegacyRows,
   });
 
   const SmsReconciliationResult.zero()
-    : duplicateSuppressed = 0,
+    : reconciliationVersion = 0,
+      duplicateSuppressed = 0,
+      crossSourceCandidatesCreated = 0,
       linkedCards = 0,
       reclassified = 0,
+      classificationReclassified = 0,
+      remappedTransactions = 0,
       remainingLegacyRows = 0;
 }
 

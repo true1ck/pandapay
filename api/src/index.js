@@ -26,6 +26,7 @@ const {
   redactSmsShape,
   senderMatches,
   parseTransactionDate,
+  parseSmsTransactionTimestamp,
   isBankAccountMessage,
 } = require('./sms_parser');
 const { parseSubscriptionMandate } = require('./subscription_parser');
@@ -47,7 +48,7 @@ const rewardMath = require('./reward_math');
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
 const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
-const { AMOUNT_TOLERANCE_INR, MAX_TIME_DISTANCE_MS, bestDuplicate } = require('./transaction_dedup');
+const { AMOUNT_TOLERANCE_INR, MAX_CROSS_SOURCE_CANDIDATE_MS, bestDuplicate } = require('./transaction_dedup');
 const { emailSourceKey } = require('./source_identity');
 const spendReports = require('./spend_reports');
 const { buildAssistantSpendingSummary } = require('./assistant_spending');
@@ -2731,7 +2732,8 @@ app.get('/user-cards', requireAuth, async (req, res) => {
       // E5 (Fee Waivers' days-to-anniversary) all stalled on this exact gap.
       const cards = await client.query(
         `SELECT uc.id, uc.card_product_id, uc.nickname, uc.is_default, uc.sort_order,
-                uc.created_at, uc.statement_day, uc.due_day, uc.opened_on,
+                uc.created_at, uc.statement_day, uc.due_day,
+                uc.statement_day_source, uc.due_day_source, uc.opened_on,
                 uc.credit_limit_inr, uc.annual_fee_override_inr, uc.anniversary_on, uc.is_archived, uc.last4,
                 uc.points_balance, uc.points_balance_state, uc.autopay_mode,
                 cp.name AS card_name, cp.network, cp.card_type, cp.is_upi_linkable
@@ -2880,7 +2882,9 @@ app.post('/user-cards', requireAuth, async (req, res) => {
           [normalizedLast4, nickname || null, conflict.userCard.id, req.userId],
         );
         if (linked.rows.length > 0) {
-          await repairSmsHistory(client, req.userId);
+          await repairSmsHistory(client, req.userId, {
+            reviewCrossSource: true, reviewCardId: linked.rows[0].id,
+          });
           return { linkedExisting: true, userCard: linked.rows[0] };
         }
       }
@@ -2899,7 +2903,9 @@ app.post('/user-cards', requireAuth, async (req, res) => {
       // latency. Discovery/import paths that know the suffix still get the
       // immediate attribution repair.
       if (inserted.rows.length > 0 && normalizedLast4) {
-        await repairSmsHistory(client, req.userId);
+        await repairSmsHistory(client, req.userId, {
+          reviewCrossSource: true, reviewCardId: inserted.rows[0].id,
+        });
       }
       return inserted.rows[0];
     });
@@ -3939,7 +3945,9 @@ async function insertTransactionAndUpdateState(client, userId, {
       source: resolvedSource,
       sourceKey,
       observedAt: observedAt || occurred,
-      metadata: { ...(observationMetadata || {}), exactRetry: true },
+      // The stored row keeps its original occurred_at on an exact retry.
+      // Do not claim second-level time precision for an older date-only row.
+      metadata: { ...(observationMetadata || {}), transactionTimePrecise: undefined, exactRetry: true },
     });
     // Keep the extracted ingestion writer used by the duplicate-ingestion
     // tests self-contained; the production module always has this helper in
@@ -3992,6 +4000,7 @@ async function insertTransactionAndUpdateState(client, userId, {
         accountLast4: resolvedAccountLast4,
         bankReference: observationMetadata?.bankReference,
         observedAt: observedAt || occurred,
+        transactionTimePrecise: observationMetadata?.transactionTimePrecise === true,
         instrument: resolvedInstrument,
         entryKind: resolvedEntryKind,
       });
@@ -4086,6 +4095,10 @@ async function importParsedMessage(client, userId, {
     : null;
   const importMetadata = {
     ...(observationMetadata || {}),
+    // Precision belongs to this parsed timestamp, not every canonical row
+    // that later receives the observation through replay or duplicate merge.
+    ...(observationMetadata?.transactionTimePrecise === true
+      ? { transactionTimeMillis: new Date(occurred).getTime() } : {}),
     // A bank-account suffix is masked evidence for grouping only. It is not a
     // card last-4 and must never participate in physical-card resolution.
     ...(parsed.fields.accountLast4 ? { accountLast4: parsed.fields.accountLast4 } : {}),
@@ -4110,12 +4123,23 @@ async function importParsedMessage(client, userId, {
   // A QR payment can produce either a credit-card alert or a bank-account
   // UPI debit alert. Account-number suffixes are not card last-4 digits and
   // must never be used to attach a cardless bank payment to the wrong card.
-  // The parser supplies this hint; unknown legacy card patterns retain the
-  // historical credit-card default.
-  let instrument = parsed.fields.instrument || (parsed.fields.last4 ? 'credit_card' : 'upi_bank');
+  // A remembered selection cannot establish type. A unique owned card with
+  // the printed card suffix can, provided there is no bank-account evidence.
+  let instrument = parsed.fields.instrument || 'other';
   const entryKind = parsed.fields.entryKind || 'spend';
   let userCardId = explicitUserCardId || null;
   let matchBasis = userCardId ? 'caller-supplied' : null;
+  if (instrument === 'other' && parsed.fields.last4 && !parsed.fields.accountLast4
+      && /\bcard\b/i.test(rawText)) {
+    const resolved = await importResolvers.resolveUserCardForImport(client, userId, {
+      last4: parsed.fields.last4, patternIssuerId, instrument: 'other',
+    });
+    userCardId = resolved?.userCardId || null;
+    if (resolved) {
+      instrument = resolved.instrument;
+      matchBasis = resolved.basis;
+    }
+  }
 
   // A selected card is only an override for physical-card alerts. A bank
   // account UPI debit is deliberately cardless even if the settings screen
@@ -4136,6 +4160,8 @@ async function importParsedMessage(client, userId, {
       userId,
       userCardId,
       instrument,
+      parsed.fields.last4 || null,
+      patternIssuerId || null,
     );
     if (!compatible) {
       userCardId = null;
@@ -4351,7 +4377,7 @@ async function profileDisplayName(db, userId) {
   }
 }
 
-async function repairSmsHistory(client, userId) {
+async function repairSmsHistory(client, userId, { reviewCrossSource = false, reviewCardId = null } = {}) {
   const cardReplacement = await reconcileArchivedCardReferences(client, userId);
   // Parser upgrades retain their strongest decision in observation metadata.
   // Reconcile those rows before duplicate repair so a card-bill/transfer row
@@ -4699,6 +4725,109 @@ async function repairSmsHistory(client, userId) {
     reclassified += 1;
   }
 
+  let crossSourceCandidatesCreated = 0;
+  if (reviewCrossSource) {
+    // Serialize historical scans so a second scan sees the first one's
+    // reservations even when the surviving statement row is still active.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended('duplicate-review:' || $1::text, 0))", [userId]);
+    // Legacy imports predate cross-channel duplicate detection. Compare active
+    // SMS rows with statement/manual/import rows using the SMS delivery time
+    // when present (the transaction date in many bank alerts is date-only).
+    // Only create a review item here: the user can merge it or keep both.
+    const crossSourceRows = await client.query(
+      `SELECT t.id, t.amount_inr, t.occurred_at, t.merchant_name, t.source,
+              t.user_card_id, t.instrument, t.entry_kind, t.source_account_last4,
+              (SELECT COALESCE(o.external_ref, o.metadata->>'bankReference')
+                 FROM transaction_observations o WHERE o.transaction_id = t.id AND o.profile_id = t.profile_id
+                  AND COALESCE(o.external_ref, o.metadata->>'bankReference') IS NOT NULL LIMIT 1) AS bank_reference,
+              (SELECT MIN(o.observed_at) FROM transaction_observations o
+                WHERE o.transaction_id = t.id AND o.profile_id = t.profile_id
+                  AND o.source IN ('sms', 'sms_bulk')
+                  AND o.metadata->>'legacy' IS DISTINCT FROM 'true') AS observed_at,
+              EXISTS (SELECT 1 FROM transaction_observations o
+                WHERE o.transaction_id = t.id AND o.profile_id = t.profile_id
+                  AND o.source IN ('sms', 'sms_bulk')
+                  AND o.metadata->>'transactionTimePrecise' = 'true'
+                  AND o.metadata->>'transactionTimeMillis' =
+                      (extract(epoch FROM t.occurred_at) * 1000)::bigint::text) AS transaction_time_precise,
+              t.category_id, t.rail, t.state_applied, t.is_backfill, t.note
+         FROM transactions t
+        WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+          AND t.source IN ('sms', 'sms_bulk', 'statement', 'manual', 'imported')
+          AND t.user_card_id IS NOT NULL
+          AND ($2::uuid IS NULL OR t.user_card_id = $2::uuid)
+          AND NOT EXISTS (
+            SELECT 1 FROM duplicate_candidates d
+             WHERE d.profile_id = t.profile_id AND d.state = 'pending'
+               AND (d.txn_a_id = t.id OR d.txn_b_id = t.id)
+          )
+        ORDER BY t.occurred_at DESC, t.id
+        LIMIT 5000
+        FOR UPDATE OF t`,
+      [userId, reviewCardId],
+    );
+    const smsHistoryRows = crossSourceRows.rows.filter((row) => ['sms', 'sms_bulk'].includes(row.source));
+    const otherHistoryRows = crossSourceRows.rows.filter((row) => !['sms', 'sms_bulk'].includes(row.source));
+    const reservedRows = new Set();
+    for (const smsRow of smsHistoryRows) {
+      const smsComparisonTime = new Date(
+        smsRow.transaction_time_precise ? smsRow.occurred_at : (smsRow.observed_at || smsRow.occurred_at)
+      ).getTime();
+      const selected = bestDuplicate({
+        amount: smsRow.amount_inr,
+        occurred: smsRow.occurred_at,
+        merchantName: smsRow.merchant_name,
+        source: smsRow.source,
+        userCardId: smsRow.user_card_id,
+        instrument: smsRow.instrument,
+        entryKind: smsRow.entry_kind,
+        accountLast4: smsRow.source_account_last4,
+        bankReference: smsRow.bank_reference,
+        observedAt: smsRow.observed_at,
+        transactionTimePrecise: smsRow.transaction_time_precise,
+      }, otherHistoryRows.filter((row) => {
+        if (reservedRows.has(row.id) || row.id === smsRow.id || row.user_card_id !== smsRow.user_card_id
+            || Number(row.amount_inr) !== Number(smsRow.amount_inr)
+            || row.instrument !== smsRow.instrument || row.entry_kind !== smsRow.entry_kind) return false;
+        const candidateTime = new Date(row.occurred_at).getTime();
+        return Number.isFinite(smsComparisonTime) && Number.isFinite(candidateTime)
+          && Math.abs(smsComparisonTime - candidateTime) <= MAX_CROSS_SOURCE_CANDIDATE_MS;
+      }));
+      // Even a reference match stays reviewable during historical repair:
+      // existing rows may already have user edits that should not be merged
+      // without a decision.
+      if (!selected) continue;
+      const [txnA, txnB] = [smsRow.id, selected.candidate.id].sort();
+      const inserted = await client.query(
+        `INSERT INTO duplicate_candidates
+           (profile_id, txn_a_id, txn_b_id, match_score, match_reason, suppressed_txn_id)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (txn_a_id, txn_b_id) DO NOTHING
+         RETURNING id`,
+        [userId, txnA, txnB, selected.match.score, `Historical review: ${selected.match.reason}`, smsRow.id],
+      );
+      if (inserted.rowCount === 0) continue;
+      reservedRows.add(smsRow.id);
+      reservedRows.add(selected.candidate.id);
+
+      // Keep totals and card state count-once while this pair awaits a decision.
+      if (smsRow.instrument === 'credit_card' && !smsRow.is_backfill
+          && smsRow.state_applied !== false) {
+        const card = await loadUserCardForState(client, userId, smsRow.user_card_id);
+        if (!card) throw new Error('cannot suppress historical duplicate without its active card');
+        await reverseTransactionState(client, userId, card, smsRow);
+      }
+      await client.query(
+        `UPDATE transactions
+            SET status = 'ignored', state_applied = false,
+                note = trim(concat('[pending duplicate of ', $1::text, '] ', coalesce(note, '')))
+          WHERE id = $2 AND profile_id = $3 AND status = 'active'`,
+        [selected.candidate.id, smsRow.id, userId],
+      );
+      crossSourceCandidatesCreated += 1;
+    }
+  }
+
   return {
     duplicateSuppressed: duplicateRows.rowCount + notificationDuplicateRows.rowCount,
     linkedCards,
@@ -4708,6 +4837,7 @@ async function repairSmsHistory(client, userId) {
     replacementCards: cardReplacement.replacementCards,
     remappedTransactions: cardReplacement.remappedTransactions,
     remappedReferences: cardReplacement.remappedReferences,
+    crossSourceCandidatesCreated,
   };
 }
 
@@ -4829,8 +4959,9 @@ async function reconcileCurrentCapStates(client, userId) {
  * a duplicate duplicate-flag.
  */
 async function detectDuplicates(client, userId, {
-  newTxnId, amount, occurred, merchantName, source, userCardId, instrument, entryKind, accountLast4, bankReference, observedAt,
+  newTxnId, amount, occurred, merchantName, source, userCardId, instrument, entryKind, accountLast4, bankReference, observedAt, transactionTimePrecise,
 }) {
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended('duplicate-review:' || $1::text, 0))", [userId]);
   const candidates = await client.query(
     `SELECT t.id, t.amount_inr, t.occurred_at, t.merchant_name, t.source, t.user_card_id, t.instrument, t.entry_kind, t.status, t.source_account_last4,
             (SELECT COALESCE(o.external_ref, o.metadata->>'bankReference')
@@ -4838,18 +4969,25 @@ async function detectDuplicates(client, userId, {
                 AND COALESCE(o.external_ref, o.metadata->>'bankReference') IS NOT NULL LIMIT 1) AS bank_reference,
             (SELECT MIN(o.observed_at)
                FROM transaction_observations o WHERE o.transaction_id = t.id AND o.profile_id = t.profile_id
-                 AND o.source IN ('sms', 'sms_bulk')) AS observed_at
+                 AND o.source IN ('sms', 'sms_bulk')
+                 AND o.metadata->>'legacy' IS DISTINCT FROM 'true') AS observed_at,
+            EXISTS (SELECT 1 FROM transaction_observations o
+               WHERE o.transaction_id = t.id AND o.profile_id = t.profile_id
+                 AND o.source IN ('sms', 'sms_bulk')
+                 AND o.metadata->>'transactionTimePrecise' = 'true'
+                 AND o.metadata->>'transactionTimeMillis' =
+                     (extract(epoch FROM t.occurred_at) * 1000)::bigint::text) AS transaction_time_precise
        FROM transactions t
       WHERE profile_id = $1 AND status = 'active' AND id != $2
         AND amount_inr BETWEEN $3::numeric - $6::numeric AND $3::numeric + $6::numeric
         AND entry_kind = $7
         AND occurred_at BETWEEN $4::timestamptz - ($5::bigint * interval '1 millisecond')
                             AND $4::timestamptz + ($5::bigint * interval '1 millisecond')`,
-    [userId, newTxnId, amount, occurred, MAX_TIME_DISTANCE_MS, AMOUNT_TOLERANCE_INR, entryKind || 'spend']
+    [userId, newTxnId, amount, occurred, MAX_CROSS_SOURCE_CANDIDATE_MS, AMOUNT_TOLERANCE_INR, entryKind || 'spend']
   );
 
   const selected = bestDuplicate(
-    { amount, occurred, merchantName, source, userCardId, instrument, entryKind, accountLast4, bankReference, observedAt },
+    { amount, occurred, merchantName, source, userCardId, instrument, entryKind, accountLast4, bankReference, observedAt, transactionTimePrecise },
     candidates.rows,
   );
   if (!selected) return { candidateId: null };
@@ -5493,7 +5631,8 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       // occasionally the next morning; filing it under the moment the
       // device happened to forward it puts spend in the wrong week and, at
       // a month boundary, the wrong month.
-      const parsedDate = parseTransactionDate(parsed.fields.date, occurred);
+      const parsedTimestamp = parseSmsTransactionTimestamp(parsed.fields.date, body, occurred);
+      const parsedDate = parsedTimestamp.date;
       // The request timestamp is the SMS-received time and is used for the
       // accounting date only when the bank's own date cannot be parsed. The
       // idempotency key deliberately does not use either timestamp: Android
@@ -5524,6 +5663,7 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
         rail,
         observationMetadata: {
           transport: 'sms',
+          ...(parsedTimestamp.precise ? { transactionTimePrecise: true } : {}),
           ...(parsed.fields.last4 ? { cardLast4: parsed.fields.last4 } : {}),
           ...(patternRow?.issuer_id ? { patternIssuerId: patternRow.issuer_id } : {}),
         },
@@ -5766,7 +5906,8 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
         // The bank's transaction date is the accounting date. Using the
         // received time here moves backfilled purchases into the wrong
         // week/month whenever a message arrives later than the purchase.
-        const effectiveOccurred = parseTransactionDate(parsed.fields.date, occurred) || occurred;
+        const parsedTimestamp = parseSmsTransactionTimestamp(parsed.fields.date, body, occurred);
+        const effectiveOccurred = parsedTimestamp.date || occurred;
         const inserted = await importParsedMessage(client, req.userId, {
           parsed,
           patternIssuerId: patternRow ? patternRow.issuer_id : null,
@@ -5782,6 +5923,7 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           rail,
           observationMetadata: {
             transport: 'sms',
+            ...(parsedTimestamp.precise ? { transactionTimePrecise: true } : {}),
             ...(parsed.fields.last4 ? { cardLast4: parsed.fields.last4 } : {}),
             ...(patternRow?.issuer_id ? { patternIssuerId: patternRow.issuer_id } : {}),
           },
@@ -5859,8 +6001,9 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
  */
 app.post('/transactions/reconcile-sms', requireAuth, async (req, res) => {
   try {
-    const result = await withUserClient(req.userId, (client) => repairSmsHistory(client, req.userId));
-    res.json(result);
+    const result = await withUserClient(req.userId, (client) =>
+      repairSmsHistory(client, req.userId, { reviewCrossSource: true }));
+    res.json({ ...result, reconciliationVersion: 2 });
   } catch (err) {
     console.error('POST /transactions/reconcile-sms error', err);
     res.status(500).json({ error: 'internal_error' });
@@ -6420,6 +6563,9 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // Candidate creation uses the same transaction lock: no new edge may
+      // appear after we enumerate the neighbors that this decision releases.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('duplicate-review:' || $1::text, 0))", [req.userId]);
       const pair = await client.query(
         `SELECT id, txn_a_id, txn_b_id, suppressed_txn_id, state
            FROM duplicate_candidates WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
@@ -6433,16 +6579,35 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
         state,
       } = pair.rows[0];
       if (state !== 'pending') return { status: 409, error: `already resolved ('${state}')` };
+      if (resolution !== 'kept_both' && keepTransactionId !== txnA && keepTransactionId !== txnB) {
+        return { status: 400, error: 'keepTransactionId must be one of the pair' };
+      }
+      const dropId = resolution === 'kept_both' ? null : keepTransactionId === txnA ? txnB : txnA;
+      // Live imports and older repairs can share a canonical row. Cancelling
+      // those edges must release their suppressed rows, not just their cards.
+      const neighbors = dropId ? await client.query(
+        `SELECT id, suppressed_txn_id FROM duplicate_candidates
+          WHERE profile_id = $1 AND state = 'pending' AND id <> $2
+            AND (txn_a_id = $3 OR txn_b_id = $3)
+          ORDER BY id FOR UPDATE`,
+        [req.userId, req.params.id, dropId],
+      ) : { rows: [] };
+      const resolvedCandidateIds = [req.params.id, ...neighbors.rows.map((row) => row.id)];
+      const suppressedIds = new Set([suppressedTxnId, ...neighbors.rows.map((row) => row.suppressed_txn_id)].filter(Boolean));
 
       const transactionRows = await client.query(
         `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail,
                 merchant_name, status, note, instrument, entry_kind,
-                state_applied, is_backfill
-           FROM transactions
+                state_applied, is_backfill,
+                EXISTS (SELECT 1 FROM duplicate_candidates d
+                         WHERE d.profile_id = t.profile_id AND d.state = 'pending'
+                           AND d.suppressed_txn_id = t.id
+                           AND NOT (d.id = ANY($3::uuid[]))) AS suppressed_elsewhere
+           FROM transactions t
           WHERE profile_id = $1 AND id = ANY($2::uuid[])
           ORDER BY id
           FOR UPDATE`,
-        [req.userId, [txnA, txnB]]
+        [req.userId, [...new Set([txnA, txnB, ...suppressedIds])], resolvedCandidateIds]
       );
       const byId = new Map(transactionRows.rows.map((row) => [row.id, row]));
       if (!byId.has(txnA) || !byId.has(txnB)) {
@@ -6454,9 +6619,9 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
         .trim() || null;
 
       const activateIfSuppressed = async (transactionId) => {
-        if (!transactionId || transactionId !== suppressedTxnId) return;
+        if (!transactionId || !suppressedIds.has(transactionId)) return;
         const txn = byId.get(transactionId);
-        if (!txn || txn.status !== 'ignored') return;
+        if (!txn || txn.status !== 'ignored' || txn.suppressed_elsewhere) return;
         const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend' && Boolean(txn.user_card_id);
         if (!txn.is_backfill && movesCardState && txn.state_applied !== true) {
           const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
@@ -6501,10 +6666,6 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
       if (resolution === 'kept_both') {
         await activateIfSuppressed(suppressedTxnId);
       } else {
-        if (keepTransactionId !== txnA && keepTransactionId !== txnB) {
-          return { status: 400, error: 'keepTransactionId must be one of the pair' };
-        }
-        const dropId = keepTransactionId === txnA ? txnB : txnA;
         await transactionTags.mergeTransactionTags(client, req.userId, dropId, keepTransactionId);
         await deactivateIfActive(dropId, keepTransactionId);
         await activateIfSuppressed(keepTransactionId);
@@ -6516,13 +6677,15 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
           [keepTransactionId, dropId]
         );
 
-        // A dropped row must not strand another pending review card.
+        for (const row of neighbors.rows) {
+          if (row.suppressed_txn_id !== dropId) await activateIfSuppressed(row.suppressed_txn_id);
+        }
+        // No duplicate decision was made about a neighbor's other spend.
         await client.query(
           `UPDATE duplicate_candidates
-              SET state = 'resolved', resolution = 'merged', resolved_at = now(), suppressed_txn_id = NULL
-            WHERE profile_id = $1 AND state = 'pending' AND id <> $2
-              AND (txn_a_id = $3 OR txn_b_id = $3)`,
-          [req.userId, req.params.id, dropId]
+              SET state = 'resolved', resolution = 'kept_both', resolved_at = now(), suppressed_txn_id = NULL
+            WHERE profile_id = $1 AND id = ANY($2::uuid[]) AND state = 'pending'`,
+          [req.userId, neighbors.rows.map((row) => row.id)]
         );
       }
 

@@ -8,6 +8,8 @@ const {
   isBankAccountMessage,
   isNonTransactionNoise,
   isInvestmentFolioAllotment,
+  parseTransactionDate,
+  parseSmsTransactionTimestamp,
 } = require('../src/sms_parser');
 
 // Realistic synthetic (not real customer) Indian bank SMS formats.
@@ -39,6 +41,73 @@ test('successful parse: HDFC-style SMS extracts all fields', () => {
   assert.equal(result.fields.date, '04-08-26');
 });
 
+test('a configured card pattern without merchant mapping retains an independently verified payee', () => {
+  const pattern = {
+    ...HDFC_PATTERN,
+    field_map: { amount: 1, last4: 2, date: 4 },
+  };
+  const result = parseSmsAgainstPatterns([pattern], {
+    sender: 'VM-HDFCBK-S',
+    body: 'Rs.1,499.00 spent on your HDFC Bank Card ending 4321 at AMAZON RETAIL on 04-08-26. Avl limit Rs.85,000.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'configured_pattern');
+  assert.equal(result.fields.merchant, 'AMAZON RETAIL');
+});
+
+test('merchant enrichment leaves payee absent when the card alert names none', () => {
+  const pattern = {
+    ...HDFC_PATTERN,
+    regex: 'Rs\\.?\\s?([\\d,]+\\.?\\d*) spent on your HDFC Bank Card ending (\\d{4})',
+    field_map: { amount: 1, last4: 2 },
+  };
+  const result = parseSmsAgainstPatterns([pattern], {
+    sender: 'VM-HDFCBK-S',
+    body: 'Rs.1,499.00 spent on your HDFC Bank Card ending 4321. Avl limit Rs.85,000.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.merchant, undefined);
+});
+
+test('Axis card alerts with merchant after date and time capture it before the support number', () => {
+  const sms = {
+    sender: 'VM-AXISBK-S',
+    body: 'Spent INR 505 Axis Bank Card no. XX0000 02-10-26 23:11:37 IST FLIPKART PA Avl Limit: INR 77901 Not you? SMS BLOCK 0000 to 9000000000',
+  };
+  const result = parseSmsAgainstPatterns([], sms);
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.merchant, 'FLIPKART PA');
+  assert.notEqual(result.fields.merchant, '9000000000');
+
+  const pattern = {
+    id: 'axis-card-partial',
+    sender_pattern: 'AXISBK',
+    regex: 'Spent INR ([0-9,]+) Axis Bank Card no\\. XX(\\d{4}) (\\d{2}-\\d{2}-\\d{2})',
+    field_map: { amount: 1, last4: 2, date: 3 },
+  };
+  const configured = parseSmsAgainstPatterns([pattern], sms);
+  assert.equal(configured.parserKind, 'configured_pattern');
+  assert.equal(configured.fields.merchant, 'FLIPKART PA');
+});
+
+test('explicit IST swipe time is retained and uncertain times use the bank date', () => {
+  const received = new Date('2026-10-02T17:42:00.000Z');
+  const exact = parseSmsTransactionTimestamp(
+    '02-10-26', 'Card XX0000 02-10-26 23:11:37 IST FLIPKART PA', received,
+  );
+  assert.equal(exact.date.toISOString(), '2026-10-02T17:41:37.000Z');
+  assert.equal(exact.precise, true);
+  const dateOnly = parseTransactionDate('02-10-26', received);
+  assert.equal(
+    parseSmsTransactionTimestamp('02-10-26', 'Card XX0000 02-10-26 23:11:37 FLIPKART PA', received).date.getTime(),
+    dateOnly.getTime(),
+  );
+  assert.equal(
+    parseSmsTransactionTimestamp('02-10-26', 'Card XX0000 02-10-26 25:11:37 IST FLIPKART PA', received).date.getTime(),
+    dateOnly.getTime(),
+  );
+});
+
 test('successful parse: ICICI-style SMS with alphabetic month in date', () => {
   const sms = {
     sender: 'AD-ICICIB',
@@ -49,6 +118,80 @@ test('successful parse: ICICI-style SMS with alphabetic month in date', () => {
   assert.equal(result.fields.amountInr, 250);
   assert.equal(result.fields.last4, '7788');
   assert.equal(result.fields.merchant, 'SWIGGY');
+});
+
+test('card suffixes retain spend details but require evidence for a credit/debit type on every parser path', () => {
+  const pattern = {
+    id: 'card-type-evidence',
+    regex: 'INR (\\d+) spent on .*?Card (?:XX)?(\\d{4}) at (\\w+)',
+    field_map: { amount: 1, last4: 2, merchant: 3 },
+  };
+  const cases = [
+    ['Bank Card XX7788', '', 'other'],
+    ['Bank Card 7788', ' Bal Rs.9000.', 'other'],
+    ['Bank Credit Card XX7788', '', 'credit_card'],
+    ['Bank Card XX7788', ' Avl Limit Rs.9000.', 'credit_card'],
+    ['Bank Card XX7788', ' Available credit limit Rs.9000.', 'credit_card'],
+    ['Bank Card XX7788', ' Avl. lmt Rs.9000.', 'credit_card'],
+    ['Bank Debit Card XX7788', ' Avl Limit Rs.9000.', 'debit_card'],
+    ['Bank Card XX7788', ' SMS BLOCK DC 7788.', 'debit_card'],
+  ];
+  for (const [cardLabel, footer, instrument] of cases) {
+    const sms = { sender: 'ICICIB', body: `INR 250 spent on ICICI ${cardLabel} at SWIGGY on 05-Aug-26.${footer}` };
+    for (const result of [
+      parseSms(pattern, sms),
+      parseConservativeBankSpend(sms),
+      parseSmsAgainstPatterns([], sms),
+      parseSmsAgainstPatterns([pattern], sms),
+    ]) {
+      assert.equal(result.ok, true, sms.body);
+      assert.equal(result.fields.instrument, instrument, sms.body);
+      assert.equal(result.fields.last4, '7788');
+      assert.equal(result.fields.amountInr, 250);
+      assert.equal(result.fields.merchant, 'SWIGGY');
+      assert.equal(result.fields.entryKind, 'spend');
+    }
+  }
+});
+
+test('last-resort card parser preserves an untyped paid alert and merchant enrichment', () => {
+  const sms = {
+    sender: 'BANK', body: 'INR 250 paid on Bank Card XX7788 at SWIGGY on 05-Aug-26.',
+  };
+  const pattern = {
+    id: 'paid-card', regex: 'INR (\\d+) paid on Bank Card XX(\\d{4})',
+    field_map: { amount: 1, last4: 2 },
+  };
+  for (const patterns of [[], [pattern]]) {
+    const result = parseSmsAgainstPatterns(patterns, sms);
+    assert.equal(result.ok, true);
+    assert.equal(result.fields.instrument, 'other');
+    assert.equal(result.fields.last4, '7788');
+    assert.equal(result.fields.merchant, 'SWIGGY');
+    assert.equal(result.fields.entryKind, 'spend');
+  }
+});
+
+test('card credits do not assume a generic or explicitly debit card is a credit card', () => {
+  for (const [label, instrument] of [
+    ['card', 'other'], ['debit card', 'debit_card'], ['credit card', 'credit_card'],
+  ]) {
+    const result = parseSmsAgainstPatterns([], {
+      sender: 'BANK', body: `INR 250 refunded to your ${label} XX7788.`,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.fields.instrument, instrument);
+    assert.equal(result.fields.last4, '7788');
+    assert.equal(result.fields.entryKind, 'transfer');
+  }
+});
+
+test('cardless configured patterns and suffix-free generic cards have no implicit credit type', () => {
+  const pattern = { regex: 'INR (\\d+) spent at (\\w+)', field_map: { amount: 1, merchant: 2 } };
+  assert.equal(parseSms(pattern, { body: 'INR 250 spent at SWIGGY.' }).fields.instrument, 'other');
+  const result = parseConservativeBankSpend({ body: 'INR 250 spent on Bank Card at SWIGGY.' });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.instrument, 'other');
 });
 
 test('built-in SMS parsing preserves UPI merchant and MCC metadata', () => {
@@ -963,12 +1106,12 @@ test('synthetic live-SMS matrix auto-parses completed spend alerts and rejects n
     {
       name: 'HDFC x-mask card spend',
       body: 'Spent Rs.210 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2026-10-02:13:50:00 Bal Rs.91903.82 Not You?',
-      expected: { amountInr: 210, last4: '8406', merchant: 'QUALITY FUEL STATION', instrument: 'credit_card' },
+      expected: { amountInr: 210, last4: '8406', merchant: 'QUALITY FUEL STATION', instrument: 'other' },
     },
     {
       name: 'HDFC bare card suffix spend',
       body: 'Rs.1229 spent on HDFC Bank Card 8708 at _ABHIKSHA PALACE. on 2026-10-02:13:51:00 Not U?',
-      expected: { amountInr: 1229, last4: '8708', merchant: 'ABHIKSHA PALACE', instrument: 'credit_card' },
+      expected: { amountInr: 1229, last4: '8708', merchant: 'ABHIKSHA PALACE', instrument: 'other' },
     },
     {
       name: 'UPI debit',

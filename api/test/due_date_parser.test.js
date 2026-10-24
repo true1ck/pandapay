@@ -60,6 +60,14 @@ test('supports Axis statement wording with a colon after due on', () => {
   assert.equal(extractLast4(body), '7105');
 });
 
+test('extracts Kotak due date when total due amount appears earlier', () => {
+  const body = 'Sep-2026 statement for Kotak Credit Card X0592 Total Due: INR 30.00 Min Due: INR 30.00 Due date: 23-Sep-2026.';
+  const result = extractDueDate(body);
+  assert.equal(result?.day, 23);
+  assert.equal(result?.date.getMonth(), 8);
+  assert.equal(extractLast4(body), '0592');
+});
+
 test('extracts a due date from a pay-by instruction', () => {
   const result = extractDueDate(
     'Please pay the minimum amount of Rs. 500 by 16/10/2026 to avoid late fees.',

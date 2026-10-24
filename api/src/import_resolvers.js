@@ -74,9 +74,12 @@ async function resolveUserCardForImport(client, userId, {
   messageText,
 }) {
   const cardType = cardTypeForInstrument(instrument);
+  // Unknown card type requires an exact, unique suffix match across both
+  // types. Never fall through to sole-issuer/product heuristics in this case.
+  if (instrument === 'other' && !/^[0-9]{4}$/.test(last4 || '')) return null;
   if (last4 && /^[0-9]{4}$/.test(last4)) {
     const byLast4 = await client.query(
-      `SELECT uc.id
+      `SELECT uc.id, cp.card_type
          FROM user_cards uc
          JOIN card_products cp ON cp.id = uc.card_product_id
         WHERE uc.profile_id = $1 AND uc.is_archived = false AND uc.last4 = $2
@@ -85,9 +88,12 @@ async function resolveUserCardForImport(client, userId, {
       [userId, last4, patternIssuerId || null, cardType]
     );
     if (byLast4.rows.length === 1) {
+      const matchedType = byLast4.rows[0].card_type;
+      if (instrument === 'other' && !['credit', 'debit'].includes(matchedType)) return null;
       return {
         userCardId: byLast4.rows[0].id,
         basis: patternIssuerId ? `issuer+last4:${last4}` : `last4:${last4}`,
+        ...(instrument === 'other' ? { instrument: matchedType === 'credit' ? 'credit_card' : 'debit_card' } : {}),
       };
     }
     // Two or more matches: ambiguous. Deliberately does NOT fall through to
@@ -101,6 +107,7 @@ async function resolveUserCardForImport(client, userId, {
     // often omit the suffix, while a named product such as MoneyBack+ is
     // strong evidence when it resolves to exactly one owned card.
   }
+  if (instrument === 'other') return null;
 
   // Historical statement reminders are not always parser-pattern matches,
   // and some omit the last four digits entirely. When the SMS names a
@@ -186,7 +193,7 @@ async function resolveUserCardForImport(client, userId, {
  * an already-selected card in the UI, but it must not be allowed to cross the
  * credit/debit boundary established by the SMS itself.
  */
-async function userCardMatchesInstrument(client, userId, userCardId, instrument, smsLast4 = null) {
+async function userCardMatchesInstrument(client, userId, userCardId, instrument, smsLast4 = null, patternIssuerId = null) {
   const cardType = cardTypeForInstrument(instrument);
   if (!cardType || !userCardId) return true;
   const result = await client.query(
@@ -194,9 +201,10 @@ async function userCardMatchesInstrument(client, userId, userCardId, instrument,
        FROM user_cards uc
        JOIN card_products cp ON cp.id = uc.card_product_id
       WHERE uc.id = $1 AND uc.profile_id = $2 AND uc.is_archived = false
-        AND cp.card_type::text = $3::text
-        AND ($4::text IS NULL OR uc.last4 = $4::text)`,
-    [userCardId, userId, cardType, smsLast4]
+         AND cp.card_type::text = $3::text
+         AND ($4::text IS NULL OR uc.last4 = $4::text)
+         AND ($5::uuid IS NULL OR cp.issuer_id = $5::uuid)`,
+    [userCardId, userId, cardType, smsLast4, patternIssuerId]
   );
   return result.rows.length === 1;
 }

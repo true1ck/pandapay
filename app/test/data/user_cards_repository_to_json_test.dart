@@ -26,10 +26,12 @@ void main() {
         ),
       ],
       statementDay: 5,
+      statementDaySource: 'sms',
       openedOn: DateTime.utc(2024, 1, 1),
       creditLimit: Money.fromRupees(300000),
       annualFeeOverride: Money.zero(),
       dueDay: 25,
+      dueDaySource: 'user',
       anniversaryOn: DateTime.utc(2024, 1, 15),
       isArchived: false,
     );
@@ -49,10 +51,12 @@ void main() {
     expect(roundTripped.feeWaiverStates.single.waivedAt, DateTime.utc(2026, 3, 1));
     expect(roundTripped.feeWaiverStates.single.periodEnd, DateTime.utc(2026, 12, 31));
     expect(roundTripped.statementDay, 5);
+    expect(roundTripped.statementDaySource, 'sms');
     expect(roundTripped.openedOn, DateTime.utc(2024, 1, 1));
     expect(roundTripped.creditLimit!.paise, Money.fromRupees(300000).paise);
     expect(roundTripped.annualFeeOverride!.paise, 0);
     expect(roundTripped.dueDay, 25);
+    expect(roundTripped.dueDaySource, 'user');
     expect(roundTripped.anniversaryOn, DateTime.utc(2024, 1, 15));
     expect(roundTripped.isArchived, false);
   });

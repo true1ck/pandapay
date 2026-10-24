@@ -100,6 +100,10 @@ function extractDueDate(body) {
   if (!text) return null;
 
   const patterns = [
+    // Some issuers put an earlier "Total Due" amount before the actual due
+    // date (e.g. "Total Due: INR 30 ... Due date: 23-Sep-2026"). Match the
+    // explicit label first so the earlier amount cannot shadow the date.
+    new RegExp(`\\bdue\\s+date\\s*(?:is|on|by)?\\s*[:\\-]?\\s*(${DATE_TOKEN})`, 'i'),
     // Keep punctuation separate from the connector so issuer formats such as
     // "Due on: 02-11-26" and "Due by - 02/11/2026" are both accepted.
     new RegExp(`\\b(?:payment|amount|minimum|bill|total)?\\s*(?:is\\s+)?due\\s*(?:date\\s*)?(?:is|on|by)?\\s*[:\\-]?\\s*(${DATE_TOKEN})`, 'i'),

@@ -618,7 +618,7 @@ function parseBuiltInWalletSpend(sms) {
   };
 }
 
-function inferInstrument(body, hasLast4) {
+function inferInstrument(body) {
   const text = String(body || '').toLowerCase();
   const walletDebit = /\b(?:debited\s+from|paid\s+from|deducted\s+from|spent\s+from|debited\s+using)\b[\s\S]{0,35}\b([a-zA-Z0-9]+)\s+wallet\b|\b([a-zA-Z0-9]+)\s+wallet\b[\s\S]{0,35}\b(?:debited|paid|deducted)\b/i.test(text);
   if (walletDebit || /\bfrom\s+(?:your\s+)?wallet\b|\bwallet\s+balance\b/i.test(text)) {
@@ -632,7 +632,10 @@ function inferInstrument(body, hasLast4) {
   // the card as DC in the fraud footer. They are not credit-card purchases.
   if (/\b(?:atm|withdrawn|cash\s+withdrawal)\b/.test(text) && !/\bcredit\s+card\b/.test(text)) return 'debit_card';
   if (/\b(?:block\s+dc|dc\s*\d{4})\b/.test(text) && !/\bcredit\s+card\b/.test(text)) return 'debit_card';
-  if (/\bcredit\s+card\b/.test(text) || (hasLast4 && /\bcard\b/.test(text))) return 'credit_card';
+  if (/\bcredit\s+card\b/.test(text)) return 'credit_card';
+  // A suffix identifies a card, not its type. Match the device's explicit
+  // credit-account evidence; an ordinary balance or bank name is insufficient.
+  if (/\bcard\b/.test(text) && /\b(?:avl\.?\s*(?:lmt|limit)|available\s+(?:credit|limit)|credit\s+limit|outstanding|statement|minimum\s+amount\s+due|total\s+amount\s+due|amount\s+due)\b/.test(text)) return 'credit_card';
   return null;
 }
 
@@ -749,7 +752,7 @@ function parseBuiltInCardCredit(sms) {
       ...(last4Match ? { last4: last4Match[1] } : {}),
       merchant: refund ? 'Refund' : reward ? 'Reward or cashback' : transferKind === 'reversal' ? 'Reversal' : 'Card statement adjustment',
       transferKind,
-      instrument: 'credit_card',
+      instrument: inferInstrument(body) || 'other',
       entryKind: 'transfer',
     }, body),
   };
@@ -879,7 +882,7 @@ function parseBuiltInInvestmentMovement(sms) {
 function parseBuiltInUpiDebit(sms) {
   const body = String(sms?.body || '');
   if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_builtin_upi_match' };
-  const instrument = inferInstrument(body, false);
+  const instrument = inferInstrument(body);
   if (instrument !== 'upi_bank') return { ok: false, reason: 'no_builtin_upi_match' };
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_builtin_upi_match' };
@@ -941,8 +944,8 @@ function parseBuiltInCardSpend(sms) {
     || body.match(/\bcard\s+(?:no\.?\s*)?(\d{4})\b/i)
     || body.match(/\bcard\b[\s\S]{0,40}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|\.{3,}|last\s*4|no\.?)\D{0,5}(\d{4})/i);
   if (!last4Match) return { ok: false, reason: 'no_builtin_card_match' };
-  const instrument = inferInstrument(body, true);
-  if (instrument !== 'credit_card' && instrument !== 'debit_card') return { ok: false, reason: 'no_builtin_card_match' };
+  const instrument = inferInstrument(body) || 'other';
+  if (!['credit_card', 'debit_card', 'other'].includes(instrument)) return { ok: false, reason: 'no_builtin_card_match' };
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_builtin_card_match' };
   const amountInr = Number(amountMatch[1].replace(/,/g, ''));
@@ -954,6 +957,7 @@ function parseBuiltInCardSpend(sms) {
   // the merchant when the message also contains "to 921...".
   const merchantMatch = body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block|card|bank|account|a\/c|max\s*limit|txn)\b|\s*\(|[.,;]|$|\r|\n)/i)
     || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|\s*\(|[.,;]|$|\r|\n)/i)
+    || body.match(/\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:IST\s+)?([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:avl|available|limit|not\s+you|sms\s+block|call)\b|[.;]|$|\r|\n)/i)
     || body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
     || body.match(/\b(?:at|to|for)\s+([A-Za-z_][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|was|is|has|successful|completed)\b|[.,]|$)/i);
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
@@ -1103,11 +1107,11 @@ function parseSms(pattern, sms) {
     // This prevents a stale/broad pattern from turning a debit-card alert
     // into a credit-card spend merely because its field_map says
     // `instrument=credit_card`.
-    const inferredInstrument = inferInstrument(sms.body, Boolean(fields.last4));
+    const inferredInstrument = inferInstrument(sms.body);
     const mappedInstrument = String(fields.instrument || '').trim().toLowerCase();
     fields.instrument = inferredInstrument
       || (['credit_card', 'debit_card'].includes(mappedInstrument) ? mappedInstrument : null)
-      || 'credit_card';
+      || 'other';
   }
   fields.entryKind = 'spend';
   return { ok: true, fields };
@@ -1146,9 +1150,7 @@ function parseConservativeBankSpend(sms) {
   if (!/\b(spent|spend|debited|purchase|purchased|used|transaction|txn)\b/i.test(body)) {
     return { ok: false, reason: 'no_spend_marker' };
   }
-  // Current auto-resolution is a credit-card pipeline. Requiring card
-  // evidence prevents an account debit/UPI notification from being assigned
-  // to an unrelated card just because amount and merchant look plausible.
+  // Require card context, but leave the card type unknown without evidence.
   if (!/\b(card|credit card)\b/i.test(body)) {
     return { ok: false, reason: 'no_card_marker' };
   }
@@ -1166,7 +1168,7 @@ function parseConservativeBankSpend(sms) {
     // Keep the fallback conservative, but preserve an explicit debit-card
     // signal so a purchase on a debit card is not labelled as credit-card
     // spend before the richer built-in parser gets a chance to run.
-    instrument: inferInstrument(body, Boolean(last4)) || 'credit_card',
+    instrument: inferInstrument(body) || 'other',
     entryKind: 'spend',
   };
   if (last4) fields.last4 = last4[1];
@@ -1174,10 +1176,11 @@ function parseConservativeBankSpend(sms) {
   const merchant = body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$|\r|\n)/i)
     || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$|\r|\n)/i)
     || body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
+    || body.match(/\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:IST\s+)?([A-Za-z_][-A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:avl|available|limit|not\s+you|sms\s+block|call)\b|[.;]|$|\r|\n)/i)
     || body.match(/\b(?:at|to)\s+([A-Za-z0-9_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block|for\s+card)\b|[.;]|$)/i);
   if (merchant) {
     const value = merchant[1].trim().replace(/^_+/, '').replace(/[.,;:-]+$/, '').trim();
-    if (value && !/^(your|card|account|a\/c)$/i.test(value)) fields.merchant = value;
+    if (value && !/^(your|card|account|a\/c)$/i.test(value) && !/^\+?\d[\d\s-]{5,}$/.test(value)) fields.merchant = value;
   }
 
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
@@ -1191,6 +1194,20 @@ function patternPriority(pattern, result) {
   const senderSpecific = pattern.sender_pattern ? 1000 : 0;
   const version = Number(pattern.version) || 0;
   return senderSpecific + mappedFields * 100 + version;
+}
+
+// A configured pattern can identify a payment without mapping its payee.
+// Reuse the card parser only for the missing display field, and only when its
+// amount, card suffix and instrument agree with the accepted parse.
+function enrichMissingCardMerchant(result, sms) {
+  if (!result.ok || result.fields?.merchant) return result;
+  const card = parseBuiltInCardSpend(sms);
+  if (!card.ok || !card.fields.merchant) return result;
+  const fields = result.fields;
+  if (fields.amountInr !== card.fields.amountInr ||
+      !fields.last4 || fields.last4 !== card.fields.last4 ||
+      fields.instrument !== card.fields.instrument) return result;
+  return { ...result, fields: { ...fields, merchant: card.fields.merchant } };
 }
 
 function parseSmsAgainstPatterns(patterns, sms) {
@@ -1254,13 +1271,13 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (matches.length > 0) {
     matches.sort((left, right) => right.priority - left.priority);
     const { priority: _, ...best } = matches[0];
-    return best;
+    return enrichMissingCardMerchant(best, sms);
   }
 
   const builtin = parseBuiltInUpiDebit(sms);
   if (builtin.ok) return builtin;
   const fallback = parseConservativeBankSpend(sms);
-  if (fallback.ok) return { ...fallback, patternId: null };
+  if (fallback.ok) return enrichMissingCardMerchant({ ...fallback, patternId: null }, sms);
 
   // Keep the issuer-independent card parser as a final fallback for card
   // alerts whose wording is outside the conservative generic grammar.
@@ -1384,6 +1401,28 @@ function parseTransactionDate(raw, reference = new Date()) {
   return parsed;
 }
 
+// Some card alerts print the actual swipe time immediately after the bank's
+// transaction date. Use it only when the timezone is explicit; otherwise a
+// guessed timezone could move a purchase into the wrong day or month.
+function parseSmsTransactionTimestamp(rawDate, body, reference = new Date()) {
+  const explicit = String(body || '').match(/\b(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s+IST\b/i);
+  const date = parseTransactionDate(rawDate || explicit?.[1], reference);
+  if (!date || !explicit) return { date, precise: false };
+  const printedDate = parseTransactionDate(explicit[1], reference);
+  if (!printedDate || printedDate.getFullYear() !== date.getFullYear()
+      || printedDate.getMonth() !== date.getMonth()
+      || printedDate.getDate() !== date.getDate()) return { date, precise: false };
+  const hour = Number(explicit[2]);
+  const minute = Number(explicit[3]);
+  const second = Number(explicit[4] || 0);
+  if (hour > 23 || minute > 59 || second > 59) return { date, precise: false };
+  const timestamp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, second)
+    - 330 * 60 * 1000);
+  return timestamp <= new Date(reference.getTime() + 24 * 60 * 60 * 1000)
+    ? { date: timestamp, precise: true }
+    : { date, precise: false };
+}
+
 module.exports = {
   parseSms,
   parseSmsAgainstPatterns,
@@ -1397,6 +1436,7 @@ module.exports = {
   senderMatches,
   redactSmsShape,
   parseTransactionDate,
+  parseSmsTransactionTimestamp,
   isAmbiguousAccountDebit,
   isExplicitOwnAccountTransfer,
   KNOWN_FIELDS,
