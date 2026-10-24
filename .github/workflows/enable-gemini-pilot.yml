@@ -95,7 +95,8 @@ jobs:
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           cd /home/ubuntu/apps/pandapay
-          docker compose --profile sms-ai --env-file .env -f docker-compose.prod.yml exec -T gemini-worker node - <<'NODE'
+          docker compose --profile sms-ai --env-file .env -f docker-compose.prod.yml exec -T \
+            -e RUN_LIVE_PROVIDER_PROBE='${{ inputs.run_live_provider_probe }}' gemini-worker node - <<'NODE'
           (async () => {
           const { GeminiProvider } = require('./src/gemini_worker');
 
