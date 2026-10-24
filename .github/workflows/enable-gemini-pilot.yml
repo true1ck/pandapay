@@ -166,7 +166,13 @@ jobs:
           const provider = new GeminiProvider({
             fetchImpl: async (url, options) => {
               try {
-                return await nativeFetch(url, options);
+                const { signal: _providerTimeout, ...requestOptions } = options;
+                // Diagnostic only: see whether Gemini completes just beyond the
+                // production 20-second request timeout.
+                return await nativeFetch(url, {
+                  ...requestOptions,
+                  signal: AbortSignal.timeout(60000),
+                });
               } catch (error) {
                 const cause = error.cause || error;
                 transportError = { name: cause.name || error.name, code: cause.code || error.code || null };
