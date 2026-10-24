@@ -3,6 +3,11 @@ name: Enable Gemini 1% pilot
 on:
   workflow_dispatch:
     inputs:
+      enable_pilot:
+        description: Explicitly enable the 1% SMS AI pilot
+        type: boolean
+        required: false
+        default: false
       run_live_provider_probe:
         description: Send one synthetic, non-persistent Gemini request to verify provider connectivity
         type: boolean
@@ -37,6 +42,7 @@ jobs:
           chmod 644 ~/.ssh/known_hosts
 
       - name: Set 1% SMS AI rollout
+        if: ${{ inputs.enable_pilot }}
         env:
           HOST: ${{ secrets.PROD_HOST }}
           DEPLOY_USER: ${{ secrets.PROD_USER }}
@@ -160,6 +166,38 @@ jobs:
           if (!modelAccess.success) {
             process.exitCode = 1;
             return;
+          }
+
+          const listStartedAt = Date.now();
+          try {
+            const response = await fetch(
+              'https://generativelanguage.googleapis.com/v1beta/models',
+              {
+                headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY },
+                signal: AbortSignal.timeout(8000),
+              },
+            );
+            const data = response.ok ? await response.json() : {};
+            const models = Array.isArray(data.models) ? data.models : [];
+            console.log(JSON.stringify({
+              availableFlashModels: {
+                status: response.status,
+                names: models
+                  .filter((item) => item.supportedGenerationMethods?.includes('generateContent') && /flash/i.test(item.name || ''))
+                  .map((item) => item.name)
+                  .slice(0, 20),
+                elapsedMs: Date.now() - listStartedAt,
+              },
+            }));
+          } catch (error) {
+            const cause = error.cause || error;
+            console.log(JSON.stringify({
+              availableFlashModels: {
+                errorType: cause.name || error.name,
+                errorCode: cause.code || error.code || null,
+                elapsedMs: Date.now() - listStartedAt,
+              },
+            }));
           }
 
           // A deliberately invalid key should receive a fast auth rejection;
