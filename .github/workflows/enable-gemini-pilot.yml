@@ -337,7 +337,9 @@ jobs:
               success: valid,
               factCount: facts.length,
               contractValid: contract.valid,
+              contractErrors: contract.errors.slice(0, 5),
               evidenceValid: evidence.valid,
+              evidenceErrors: evidence.errors.slice(0, 5),
               elapsedMs: Date.now() - startedAt,
             }));
             if (!valid) process.exitCode = 1;
