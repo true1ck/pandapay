@@ -338,7 +338,26 @@ class NeedsReviewScreen extends ConsumerStatefulWidget {
 class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
   String? _selectedMonth;
   String? _selectedMonthLabel;
+  DateTimeRange? _customDateRange;
   _ReviewFilterCategory _selectedCategory = _ReviewFilterCategory.all;
+
+  Future<void> _chooseCustomDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialDateRange: _customDateRange,
+      helpText: 'Choose review dates',
+      saveText: 'Apply dates',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _customDateRange = picked;
+      _selectedMonth = null;
+      _selectedMonthLabel = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -429,6 +448,21 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
             )).toList()..sort((a, b) => b.date.compareTo(a.date));
 
             final filteredList = sortedList.where((item) {
+              if (_customDateRange != null) {
+                final date = item.receivedAt;
+                final start = _customDateRange!.start;
+                final end = _customDateRange!.end;
+                final rangeStart = DateTime(start.year, start.month, start.day);
+                final rangeEndExclusive = DateTime(
+                  end.year,
+                  end.month,
+                  end.day + 1,
+                );
+                if (date.isBefore(rangeStart) ||
+                    !date.isBefore(rangeEndExclusive)) {
+                  return false;
+                }
+              }
               if (_selectedMonth != null) {
                 final itemMonthKey = '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
                 if (itemMonthKey != _selectedMonth) return false;
@@ -458,11 +492,20 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                           children: [
                             _FilterChip(
                               label: 'All time',
-                              selected: _selectedMonth == null,
+                              selected: _selectedMonth == null && _customDateRange == null,
                               onTap: () => setState(() {
                                 _selectedMonth = null;
                                 _selectedMonthLabel = null;
+                                _customDateRange = null;
                               }),
+                            ),
+                            const SizedBox(width: AppSpace.xs),
+                            _FilterChip(
+                              label: _customDateRange == null
+                                  ? 'Custom'
+                                  : '${DateFormat(_customDateRange!.start.year == _customDateRange!.end.year ? 'd MMM' : 'd MMM yy').format(_customDateRange!.start)}–${DateFormat('d MMM yy').format(_customDateRange!.end)}',
+                              selected: _customDateRange != null,
+                              onTap: _chooseCustomDateRange,
                             ),
                             for (final m in availableMonths) ...[
                               const SizedBox(width: AppSpace.xs),
@@ -472,6 +515,7 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                                 onTap: () => setState(() {
                                   _selectedMonth = m.key;
                                   _selectedMonthLabel = m.label;
+                                  _customDateRange = null;
                                 }),
                               ),
                             ],
@@ -506,8 +550,10 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                           icon: Icons.filter_alt_off_outlined,
                           title: _selectedMonthLabel != null
                               ? 'No review items in $_selectedMonthLabel'
+                              : _customDateRange != null
+                              ? 'No review items in selected dates'
                               : 'No review items in ${_selectedCategory.label}',
-                          message: 'Try changing your month or type filter.',
+                          message: 'Try changing your date or type filter.',
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.all(AppSpace.lg),
