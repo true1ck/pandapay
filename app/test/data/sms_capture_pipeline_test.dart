@@ -181,4 +181,109 @@ void main() {
       expect(inbox.queries, [0]);
     },
   );
+
+  test(
+    'unmatched financial SMS stays in Needs Review when Gemini queue accepts or refuses it',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final db = openInMemoryForTesting();
+      final cache = ResponseCache(db);
+      final inbox = _Inbox();
+      const namespace = 'user:account-a';
+      const sender = 'VM-HDFCBK';
+      var aiIndex = 0;
+      final requests = <http.Request>[];
+      final client = AuthenticatedHttpClient(
+        refreshAccessToken: () async => null,
+        inner: MockClient((request) async {
+          requests.add(request);
+          switch (request.url.path) {
+            case '/transactions/from-sms/batch':
+              return http.Response(
+                jsonEncode({
+                  'summary': {'needsReview': 2},
+                  'results': [
+                    {
+                      'index': 0,
+                      'outcome': 'needs_review',
+                      'reason': 'ambiguous_account_debit',
+                    },
+                    {
+                      'index': 1,
+                      'outcome': 'needs_review',
+                      'reason': 'unparseable_amount',
+                    },
+                  ],
+                }),
+                200,
+              );
+            case '/transactions':
+              return http.Response(jsonEncode({'transactions': []}), 200);
+            case '/ai/jobs':
+              return http.Response(
+                jsonEncode({'jobId': 'synthetic-job', 'reused': false}),
+                [200, 503][aiIndex++],
+              );
+            default:
+              return http.Response('unexpected ${request.method} ${request.url.path}', 404);
+          }
+        }),
+      );
+      final token =
+          'e30.${base64Url.encode(utf8.encode('{"sub":"account-a"}')).replaceAll('=', '')}.sig';
+      final scope = ProviderContainer(
+        overrides: [
+          accessTokenProvider.overrideWith((ref) => token),
+          responseCacheProvider.overrideWith((ref) async => cache),
+          smsListenerServiceProvider.overrideWithValue(inbox),
+          authenticatedHttpClientProvider.overrideWithValue(client),
+          isOnlineProvider.overrideWith((ref) => Stream.value(true)),
+        ],
+      );
+      addTearDown(() {
+        scope.dispose();
+        client.close();
+        cache.financialStore.dispose();
+        db.close();
+      });
+      await scope.read(isOnlineProvider.future);
+
+      final bodies = [
+        'Your credit card XX1234 was charged at AMAZON on 24-10-26.',
+        'Your credit card XX5678 was charged at SWIGGY on 24-10-26.',
+      ];
+      for (var i = 0; i < bodies.length; i++) {
+        inbox.rows.add(
+          InboxSms(
+            id: i + 1,
+            sender: sender,
+            body: bodies[i],
+            receivedAt: DateTime(2026, 10, 24, 10, i),
+          ),
+        );
+      }
+      final owner = scope.read(smsAutoImportProvider);
+      await owner.captureExistingInbox();
+      final summary = await owner.syncPendingMessages();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(summary.needsReview, 2);
+      final aiRequests = requests
+          .where((request) => request.url.path == '/ai/jobs')
+          .toList();
+      expect(aiRequests, hasLength(2));
+      for (var i = 0; i < bodies.length; i++) {
+        final body = bodies[i];
+        final aiBody = jsonDecode(aiRequests[i].body) as Map<String, dynamic>;
+        expect(aiBody['sourceKey'], smsSourceKey(namespace, sender, body));
+        expect(aiBody['body'], body);
+      }
+      final reviewItems = await scope
+          .read(needsReviewRepositoryProvider)
+          .fetchAll();
+      expect(reviewItems.map((item) => item.body).toSet(), bodies.toSet());
+      expect(SmsIntakeRepository(db).pending(namespace), isEmpty);
+      expect(inbox.queries, [0]);
+    },
+  );
 }
