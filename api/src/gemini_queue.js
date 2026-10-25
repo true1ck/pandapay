@@ -69,7 +69,39 @@ async function acceptOneJob(client, profileId, { sourceKey, sender, body, occurr
   }
 
   const existing = await findJobBySourceKey(client, profileId, sourceKey);
-  if (existing) return { accepted: true, jobId: existing.id, reused: true };
+  if (existing) {
+    if (existing.status !== 'failed') {
+      return { accepted: true, jobId: existing.id, reused: true };
+    }
+    // Failed jobs can be re-queued when resubmitted by the device with fresh payload.
+    if (!(await withinDailyQuota(client, profileId))) {
+      return { accepted: false, reason: 'daily_quota_exhausted' };
+    }
+    const smsFacts = require('./sms_facts');
+    await client.query(
+      `UPDATE ai_jobs
+          SET status = 'queued',
+              payload = $2,
+              attempts = 0,
+              lease_token = NULL,
+              lease_expires_at = NULL,
+              updated_at = now()
+        WHERE id = $1`,
+      [
+        existing.id,
+        JSON.stringify({
+          sender,
+          body: redactBodyForAi(body),
+          bodyHash: smsFacts.bodyHashOf(sender, body),
+          occurredAt,
+          kind: 'classify_sms',
+        }),
+      ],
+    );
+    await bumpDailyQuota(client, profileId);
+    await recordEvent(client, existing.id, profileId, 'requeued', {});
+    return { accepted: true, jobId: existing.id, reused: false };
+  }
 
   if (!(await withinDailyQuota(client, profileId))) {
     return { accepted: false, reason: 'daily_quota_exhausted' };
@@ -110,7 +142,7 @@ async function acceptOneJob(client, profileId, { sourceKey, sender, body, occurr
 
 async function findJobBySourceKey(client, profileId, sourceKey) {
   const rows = await client.query(
-    `SELECT id FROM ai_jobs WHERE profile_id = $1 AND source_key = $2`,
+    `SELECT id, status FROM ai_jobs WHERE profile_id = $1 AND source_key = $2`,
     [profileId, sourceKey],
   );
   return rows.rows[0] || null;

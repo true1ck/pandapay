@@ -154,11 +154,11 @@ function makeFakeClient() {
     }
 
     // --- ai_jobs -----------------------------------------------------------
-    if (norm.startsWith('SELECT id FROM ai_jobs WHERE profile_id')) {
+    if (norm.startsWith('SELECT id FROM ai_jobs WHERE profile_id') || norm.startsWith('SELECT id, status FROM ai_jobs WHERE profile_id')) {
       const job = [...state.jobs.values()].find(
         (j) => j.profile_id === params[0] && j.source_key === params[1],
       );
-      return { rows: job ? [{ id: job.id }] : [], rowCount: job ? 1 : 0 };
+      return { rows: job ? [{ id: job.id, status: job.status }] : [], rowCount: job ? 1 : 0 };
     }
     if (norm.startsWith('INSERT INTO ai_jobs')) {
       const key = `${params[0]}:${params[1]}`;
@@ -226,6 +226,16 @@ function makeFakeClient() {
         } }],
         rowCount: 1,
       };
+    }
+    if (norm.startsWith("UPDATE ai_jobs SET status = 'queued', payload =")) {
+      const job = state.jobs.get(params[0]);
+      if (!job) return { rows: [], rowCount: 0 };
+      job.status = 'queued';
+      job.payload = JSON.parse(params[1]);
+      job.attempts = 0;
+      job.lease_token = null;
+      job.lease_expires_at = null;
+      return { rows: [{ id: job.id }], rowCount: 1 };
     }
     if (norm.startsWith("UPDATE ai_jobs SET status = 'queued'")) {
       const job = state.jobs.get(params[0]);
@@ -459,6 +469,28 @@ test('acceptance is replay-safe: same source twice, one job, one event, one quot
   assert.equal(client.state.jobs.size, 1);
   assert.equal(client.state.events.filter((e) => e.event_type === 'accepted').length, 1);
   assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 1);
+});
+
+test('failed job can be re-queued with fresh payload', async () => {
+  const client = makeUserClient();
+  const first = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+  });
+  assert.equal(first.accepted, true);
+  await geminiQueue.failJob(client, first.jobId, PROFILE_A, 'test_failure');
+  assert.equal(client.state.jobs.get(first.jobId).status, 'failed');
+
+  const retry = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+  });
+  assert.equal(retry.accepted, true);
+  assert.equal(retry.reused, false);
+  assert.equal(retry.jobId, first.jobId);
+  assert.equal(client.state.jobs.get(first.jobId).status, 'queued');
 });
 
 test('sensitive payloads are refused before any job or quota write', async () => {

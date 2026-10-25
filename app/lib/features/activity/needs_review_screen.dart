@@ -616,8 +616,14 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                               : 'No review items in ${_selectedCategory.label}',
                           message: 'Try changing your date or type filter.',
                         )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(AppSpace.lg),
+                      : RefreshIndicator(
+                          onRefresh: () async {
+                            ref.read(smsFlushTriggerProvider.notifier).state++;
+                            ref.invalidate(needsReviewItemsProvider);
+                            await Future.delayed(const Duration(milliseconds: 600));
+                          },
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(AppSpace.lg),
                           itemCount: filteredList.length,
                           itemBuilder: (context, index) => Padding(
                             key: ValueKey(filteredList[index].id),
@@ -631,6 +637,7 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                                 : _NeedsReviewTile(filteredList[index]),
                           ),
                         ),
+                      ),
                 ),
               ],
             );

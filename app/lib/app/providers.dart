@@ -5876,6 +5876,10 @@ final notificationTriggerLifecycleProvider = Provider<void>((ref) {
 ///
 /// A message stays queued unless the upload actually dealt with it, so a
 /// resume while offline loses nothing.
+/// Incremented to request an immediate on-demand reconciliation of pending SMS
+/// and AI review status (e.g. on pull-to-refresh).
+final smsFlushTriggerProvider = StateProvider<int>((ref) => 0);
+
 final smsBackgroundFlushProvider = Provider<void>((ref) {
   var workInProgress = false;
   var rerunRequested = false;
@@ -5974,7 +5978,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       }
       try {
         final status = await repo.fetchAiJobStatus(cleanId);
-        if (status == null) {
+        if (status == null || status['status'] == 'failed') {
           final jobId = await repo.submitAiJob(
             sourceKey: cleanId,
             sender: item.sender,
