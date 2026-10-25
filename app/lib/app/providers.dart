@@ -2748,6 +2748,39 @@ myCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   }
 });
 
+/// Cards the user has removed from their wallet. Wallet itself reads
+/// [myCardsProvider] (active cards only); this is the one surface that needs
+/// archived rows, so it keeps its own include-archived read rather than
+/// making every ranking/spend consumer filter them out.
+///
+/// Deliberately network-first through [_loadUserCardsWithOfflineCache]: the
+/// shared entity cache can legitimately hold active cards only after the last
+/// Wallet refresh, and treating that as "no archived cards" would wrongly
+/// render an empty Deleted cards screen. The include-archived snapshot is
+/// still used when the device is offline.
+final archivedCardsProvider = FutureProvider<List<UserCard>>((ref) async {
+  final markReady = _financialChanges(ref, 'cards');
+  try {
+    final repo = ref.watch(userCardsRepositoryProvider);
+    if (repo == null) {
+      final local = await ref.watch(localUserCardsRepositoryProvider.future);
+      final catalogue = await ref.watch(catalogueProvider.future);
+      final cards = await local.fetchUserCards(
+        includeArchived: true,
+        catalogue: catalogue,
+      );
+      return cards.where((card) => card.isArchived).toList();
+    }
+    return await _loadUserCardsWithOfflineCache(
+      ref,
+      repo,
+      includeArchived: true,
+    );
+  } finally {
+    markReady();
+  }
+});
+
 Future<List<UserCard>?> _readUserCardsCache(
   Ref ref, {
   required bool includeArchived,

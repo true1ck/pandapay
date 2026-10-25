@@ -70,6 +70,12 @@ Future<void> _pumpBills(
   await tester.pumpAndSettle();
 }
 
+void _setHorizon(WidgetTester tester, BillsHorizon horizon) {
+  ProviderScope.containerOf(
+    tester.element(find.byType(BillsAndCommitmentsTab)),
+  ).read(billsHorizonProvider.notifier).state = horizon;
+}
+
 List<Override> _deterministicOverrides() => [
   clockProvider.overrideWithValue(TestClock(DateTime(2026, 10, 25, 12))),
   smsBillRowsProvider.overrideWith((ref) async => const <SmsBillRow>[]),
@@ -174,5 +180,210 @@ void main() {
     expect(find.text('Sep 2026'), findsOneWidget);
     expect(find.text('Credit cards'), findsOneWidget);
     expect(find.textContaining('Due 16 Sep'), findsOneWidget);
+  });
+
+  testWidgets('upcoming keeps a recently overdue unpaid commitment', (
+    tester,
+  ) async {
+    final overdue = Commitment(
+      id: 'c-overdue',
+      title: 'Overdue power bill',
+      category: CommitmentCategory.utility,
+      dueOn: DateTime(2026, 10, 20),
+      status: CommitmentStatus.due,
+      confidence: 1.0,
+    );
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+        commitmentsProvider.overrideWith((ref) async => [overdue]),
+        billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+      ],
+    );
+
+    expect(find.text('Overdue power bill'), findsOneWidget);
+    expect(find.textContaining('Past due date'), findsOneWidget);
+    expect(find.text('No upcoming bills'), findsNothing);
+  });
+
+  testWidgets('paid commitments stay in their due month, not upcoming', (
+    tester,
+  ) async {
+    final paid = Commitment(
+      id: 'c-paid',
+      title: 'September internet',
+      category: CommitmentCategory.telecom,
+      dueOn: DateTime(2026, 9, 10),
+      status: CommitmentStatus.paid,
+      paidOn: DateTime(2026, 9, 9),
+      confidence: 1.0,
+    );
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+        commitmentsProvider.overrideWith((ref) async => [paid]),
+      ],
+    );
+
+    expect(find.text('September internet'), findsNothing);
+
+    _setHorizon(tester, BillsHorizon.lastMonth);
+    await tester.pumpAndSettle();
+
+    expect(find.text('September internet'), findsOneWidget);
+    expect(find.text('Paid · due 10 Sep'), findsOneWidget);
+  });
+
+  testWidgets('autopay mandates stay out of past horizons', (tester) async {
+    const mandate = BillProjection(
+      id: 'm1',
+      projectionKind: 'mandate',
+      projectionKey: 'k1',
+      status: 'active',
+      projection: {
+        'billerName': 'ACT Fibernet',
+        'authorizationLimitInr': 2000.0,
+        'asOfAt': '2026-10-20',
+      },
+      sourceKey: 's1',
+      sourceFactIds: [],
+      projectionVersion: 1,
+      updatedAt: null,
+    );
+    await _pumpBills(
+      tester,
+      overrides: [
+        clockProvider.overrideWithValue(TestClock(DateTime(2026, 10, 25, 12))),
+        smsBillRowsProvider.overrideWith((ref) async => const <SmsBillRow>[]),
+        pastBillReceiptsProvider.overrideWith(
+          (ref) async => const <PastBillReceipt>[],
+        ),
+        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+        commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+        centralBillsProjectionProvider.overrideWith(
+          (ref) async =>
+              const BillProjectionSnapshot(available: true, projections: [mandate]),
+        ),
+      ],
+    );
+
+    _setHorizon(tester, BillsHorizon.currentMonth);
+    await tester.pumpAndSettle();
+    expect(find.text('Autopay authorizations'), findsOneWidget);
+
+    _setHorizon(tester, BillsHorizon.lastMonth);
+    await tester.pumpAndSettle();
+    expect(find.text('Autopay authorizations'), findsNothing);
+    expect(find.text('No bills in Sep 2026'), findsOneWidget);
+  });
+
+  testWidgets('switching months swaps linked history for open bills', (
+    tester,
+  ) async {
+    SmsBillRow bill({
+      required String id,
+      required String title,
+      required DateTime dueDate,
+      required SmsBillState state,
+    }) => SmsBillRow(
+      id: id,
+      title: title,
+      category: CommitmentCategory.telecom,
+      amountDue: Money.fromRupees(799),
+      minimumDue: null,
+      isMinimumOnly: false,
+      dueDate: dueDate,
+      receivedAt: dueDate.subtract(const Duration(days: 5)),
+      isAutopay: false,
+      sawFailedAttempt: false,
+      state: state,
+    );
+    final linked = bill(
+      id: 's-linked',
+      title: 'September broadband',
+      dueDate: DateTime(2026, 9, 15),
+      state: SmsBillState.linked,
+    );
+    final pending = bill(
+      id: 's-pending',
+      title: 'October electricity',
+      dueDate: DateTime(2026, 10, 28),
+      state: SmsBillState.pending,
+    );
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        smsBillRowsProvider.overrideWith((ref) async => [linked, pending]),
+        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+        commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+      ],
+    );
+
+    expect(find.text('Bill payment status'), findsOneWidget);
+    expect(find.text('October electricity'), findsOneWidget);
+    expect(find.text('September broadband'), findsNothing);
+
+    _setHorizon(tester, BillsHorizon.lastMonth);
+    await tester.pumpAndSettle();
+    expect(find.text('Bill payment status'), findsOneWidget);
+    expect(find.text('September broadband'), findsOneWidget);
+    expect(find.text('October electricity'), findsNothing);
+  });
+
+  testWidgets('past empty state names the next card due and jumps back', (
+    tester,
+  ) async {
+    final futureDue = DuePayment(
+      card: _card(id: 'uc-future', name: 'Future card'),
+      dueOn: DateTime(2026, 11, 16),
+      daysUntilDue: 22,
+      loggedThisCycle: Money.zero(),
+    );
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        paymentsDueProvider.overrideWith((ref) async => [futureDue]),
+        commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+      ],
+    );
+    _setHorizon(tester, BillsHorizon.lastMonth);
+    await tester.pumpAndSettle();
+
+    expect(find.text('No bills in Sep 2026'), findsOneWidget);
+    expect(find.text('Next card due 16 Nov'), findsOneWidget);
+
+    await tester.tap(find.text('View upcoming'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Upcoming'), findsOneWidget);
+    expect(find.text('Future card'), findsOneWidget);
+    expect(find.text('No upcoming bills'), findsNothing);
+  });
+
+  testWidgets('the longest horizon label fits a 320px header', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+        commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+        billsHorizonProvider.overrideWith(
+          (ref) => BillsHorizon.lastThreeMonths,
+        ),
+      ],
+    );
+
+    expect(find.text('Aug – Oct 2026'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

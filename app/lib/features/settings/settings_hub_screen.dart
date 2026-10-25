@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import '../../app/providers.dart';
 import '../account/account_screen.dart' show AccountTile;
-import '../cards/my_cards_screen.dart';
+import '../cards/deleted_cards_screen.dart';
 import '../home_widget/widget_settings_screen.dart';
 import '../import/import_hub_screen.dart';
 import '../sms_import/sms_import_screen.dart';
@@ -48,11 +46,11 @@ import 'transaction_tags_screen.dart';
 /// payment gate (PandaPay never moves money — the nearest real control is the
 /// app-open biometric lock, which lives on Account). Not stubbed here; it
 /// stays absent until the thing behind it exists.
-class SettingsHubScreen extends ConsumerWidget {
+class SettingsHubScreen extends StatelessWidget {
   const SettingsHubScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     void open(Widget screen) {
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
     }
@@ -107,17 +105,9 @@ class SettingsHubScreen extends ConsumerWidget {
 
             const _GroupHeader('Cards'),
             AccountTile(
-              icon: Icons.archive_outlined,
-              label: 'Manage archived cards',
-              onTap: () async {
-                ref.read(showArchivedCardsProvider.notifier).state = true;
-                await Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const MyCardsScreen()),
-                );
-                if (context.mounted) {
-                  ref.read(showArchivedCardsProvider.notifier).state = false;
-                }
-              },
+              icon: Icons.delete_outline_rounded,
+              label: 'Manage deleted cards',
+              onTap: () => open(const DeletedCardsScreen()),
             ),
             const SizedBox(height: AppSpace.xxl),
 

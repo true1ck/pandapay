@@ -150,6 +150,18 @@ void main() {
         isFalse,
       );
     });
+
+    test('falls back to receivedAt when the SMS has no due date', () {
+      final noDue = _smsBill(receivedAt: DateTime(2026, 9, 20));
+      expect(_filter(BillsHorizon.lastMonth).matchesSmsBill(noDue), isTrue);
+      expect(_filter(BillsHorizon.currentMonth).matchesSmsBill(noDue), isFalse);
+      expect(
+        _filter(
+          BillsHorizon.upcoming,
+        ).matchesSmsBill(_smsBill(receivedAt: DateTime(2026, 10, 1))),
+        isTrue,
+      );
+    });
   });
 
   group('matchesReceipt', () {
@@ -160,6 +172,51 @@ void main() {
       expect(
         _filter(BillsHorizon.currentMonth).matchesReceipt(receipt),
         isFalse,
+      );
+    });
+  });
+
+  group('year and month boundaries', () {
+    test('rolls windows and labels across a year boundary', () {
+      final january = BillsHorizonFilter(
+        BillsHorizon.currentMonth,
+        DateTime(2026, 1, 10),
+      );
+      expect(january.label, 'Jan 2026');
+      expect(january.matchesDue(DateTime(2026, 1, 1)), isTrue);
+      expect(january.matchesDue(DateTime(2025, 12, 31)), isFalse);
+
+      final december = BillsHorizonFilter(
+        BillsHorizon.lastMonth,
+        DateTime(2026, 1, 10),
+      );
+      expect(december.label, 'Dec 2025');
+      expect(december.matchesDue(DateTime(2025, 12, 1)), isTrue);
+      expect(december.matchesDue(DateTime(2026, 1, 1)), isFalse);
+
+      final quarter = BillsHorizonFilter(
+        BillsHorizon.lastThreeMonths,
+        DateTime(2026, 1, 10),
+      );
+      expect(quarter.label, 'Nov 2025 – Jan 2026');
+      expect(quarter.matchesDue(DateTime(2025, 11, 1)), isTrue);
+      expect(quarter.matchesDue(DateTime(2025, 10, 31)), isFalse);
+    });
+
+    test('clamps a 31st due day to the real end of February', () {
+      expect(
+        BillsHorizonFilter(
+          BillsHorizon.lastMonth,
+          DateTime(2026, 3, 10),
+        ).scheduledOccurrence(31),
+        DateTime(2026, 2, 28),
+      );
+      expect(
+        BillsHorizonFilter(
+          BillsHorizon.lastMonth,
+          DateTime(2028, 3, 10),
+        ).scheduledOccurrence(31),
+        DateTime(2028, 2, 29),
       );
     });
   });

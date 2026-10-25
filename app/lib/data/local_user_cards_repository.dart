@@ -127,6 +127,26 @@ class LocalUserCardsRepository {
   }
 
   Future<void> unarchiveCard(String userCardId) async {
+    // Mirrors the API's 409 `card_already_added`: a product removed and then
+    // added again already has an active row, so restoring the old one must
+    // not leave two copies of the same card in the wallet.
+    final rows = _raw.select(
+      'SELECT card_product_id FROM local_user_cards WHERE id = ?',
+      [userCardId],
+    );
+    if (rows.isNotEmpty) {
+      final productId = rows.first['card_product_id'] as String;
+      final activeClash = _raw.select(
+        'SELECT 1 FROM local_user_cards '
+        'WHERE card_product_id = ? AND is_archived = 0 AND id <> ? LIMIT 1',
+        [productId, userCardId],
+      );
+      if (activeClash.isNotEmpty) {
+        throw const CardAlreadyAddedException(
+          'You already have an active copy of this card. Remove it first.',
+        );
+      }
+    }
     _raw.execute('UPDATE local_user_cards SET is_archived = 0 WHERE id = ?', [
       userCardId,
     ]);

@@ -115,4 +115,42 @@ void main() {
       );
     },
   );
+
+  test('unarchiveCard puts a removed card back in the active list', () async {
+    final id = await local.addCard('p-removed');
+    await local.archiveCard(id);
+
+    expect(await local.fetchUserCards(catalogue: const []), isEmpty);
+
+    await local.unarchiveCard(id);
+
+    final active = await local.fetchUserCards(catalogue: const []);
+    expect(active.map((card) => card.id), [id]);
+    expect(active.single.isArchived, isFalse);
+  });
+
+  test(
+    'unarchiveCard refuses when an active copy of the same product exists',
+    () async {
+      final archivedId = await local.addCard('p-replaced');
+      await local.archiveCard(archivedId);
+      final replacementId = await local.addCard('p-replaced');
+
+      expect(
+        () => local.unarchiveCard(archivedId),
+        throwsA(isA<CardAlreadyAddedException>()),
+      );
+
+      final active = await local.fetchUserCards(catalogue: const []);
+      expect(active.map((card) => card.id), [replacementId]);
+      final all = await local.fetchUserCards(
+        includeArchived: true,
+        catalogue: const [],
+      );
+      expect(
+        all.singleWhere((card) => card.id == archivedId).isArchived,
+        isTrue,
+      );
+    },
+  );
 }
