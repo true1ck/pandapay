@@ -97,6 +97,7 @@
          exact same validated URI parser as voice fulfillment. -->
     <shortcut
         android:shortcutId="show_spending"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_spending_short"
         android:shortcutLongLabel="@string/shortcut_spending_long">
         <intent
@@ -105,6 +106,7 @@
     </shortcut>
     <shortcut
         android:shortcutId="add_spend"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_add_spend_short"
         android:shortcutLongLabel="@string/shortcut_add_spend_long">
         <intent
@@ -113,6 +115,7 @@
     </shortcut>
     <shortcut
         android:shortcutId="due_dates"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_due_dates_short"
         android:shortcutLongLabel="@string/shortcut_due_dates_long">
         <intent
@@ -121,6 +124,7 @@
     </shortcut>
     <shortcut
         android:shortcutId="best_card"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_best_card_short"
         android:shortcutLongLabel="@string/shortcut_best_card_long">
         <intent
@@ -129,6 +133,7 @@
     </shortcut>
     <shortcut
         android:shortcutId="scan_upi"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_scan_upi_short"
         android:shortcutLongLabel="@string/shortcut_scan_upi_long">
         <intent
