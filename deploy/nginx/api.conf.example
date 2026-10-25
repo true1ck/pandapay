@@ -18,18 +18,6 @@ server {
     # webroot/plugin handle this location if you use --webroot instead of
     # --nginx (the --nginx plugin rewrites this file directly and you can
     # ignore this comment).
-    # Recovery ciphertext has its own authenticated binary media and bound;
-    # all shared JSON routes retain their existing 100 KiB parser limit.
-    location = /account/recovery/snapshots {
-        client_max_body_size 6m;
-        proxy_pass http://127.0.0.1:4000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Request-ID $req_id;
-        proxy_read_timeout 35s;
-    }
-
     location / {
         return 301 https://$host$request_uri;
     }
@@ -52,6 +40,31 @@ server {
     ssl_prefer_server_ciphers off;
 
     client_max_body_size 5m;
+
+    # Five-MiB ciphertext plus its bounded metadata envelope. Keep both
+    # authenticated upload paths on HTTPS; ordinary JSON keeps its API limit.
+    location = /account/recovery/snapshots {
+        client_max_body_size 6m;
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $req_id;
+        proxy_read_timeout 35s;
+    }
+
+    location = /account/recovery/automatic/snapshots {
+        client_max_body_size 6m;
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $req_id;
+        proxy_read_timeout 35s;
+    }
+
 
     location /health {
         proxy_pass http://127.0.0.1:4000;

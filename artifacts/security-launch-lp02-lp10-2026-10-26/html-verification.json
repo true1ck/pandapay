@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-26",
+  "priority_rows": 10,
+  "columns": 5,
+  "markdown_html_match": true,
+  "local_priority_links": 11,
+  "missing_link_files": 0,
+  "statuses": {
+    "partial": 9,
+    "open": 1,
+    "accepted_for_launch": 0
+  },
+  "execution_tracker_rows": 10,
+  "existing_script_blocks_unchanged": 2,
+  "visual_browser_acceptance": false
+}

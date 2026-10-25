@@ -26,6 +26,8 @@ const {createConsoleBrowserRuntime}=require('./services/consoleBrowserRuntime');
 const {createAccountLifecycleRuntime}=require('./services/accountLifecycleRuntime');
 
 const app = express();
+require('./services/newAccountAdmission').newAccountsPaused();
+let shuttingDown = false;
 const consoleBrowser=createConsoleBrowserRuntime();
 const authLifecycle=createAccountLifecycleRuntime();
 const {createAccountDeletionHandler}=require('./services/accountLifecycle');
@@ -127,6 +129,7 @@ app.get('/health', (req, res) => {
 // Readiness verifies ordinary DB queries and, in hosted PostgreSQL mode, the
 // runtime identity's actual auth abuse-bucket access without writing buckets.
 app.get('/ready', createReadinessHandler({
+  isDraining: () => shuttingDown,
   query: async (...args) => {
     if (consoleBrowser) await consoleBrowser.readiness();
     if (authLifecycle) await authLifecycle.readiness();
@@ -215,7 +218,6 @@ const server = app.listen(PORT, () => {
   console.info('Auth service started');
 });
 
-let shuttingDown = false;
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;

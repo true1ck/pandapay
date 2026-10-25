@@ -1,0 +1,17 @@
+{
+  "scope": "owned synthetic directories; no restore markers",
+  "baseline": "02f4c53",
+  "results": {
+    "before": {
+      "intact_generations": [],
+      "damaged_marked_generations_preserved": true
+    },
+    "after": {
+      "intact_generations": [
+        7,
+        8
+      ],
+      "damaged_marked_generations_preserved": true
+    }
+  }
+}

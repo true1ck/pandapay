@@ -40,10 +40,13 @@ async function checkAuthReadiness(query, { env = process.env } = {}) {
   return { ok: true, database: 'ready' };
 }
 
-function createReadinessHandler({ query, env = process.env, logger = console } = {}) {
+function createReadinessHandler({ query, env = process.env, logger = console, isDraining = () => false } = {}) {
   return async (_req, res) => {
+    res.set?.('Cache-Control', 'no-store');
+    if (isDraining()) return res.status(503).json({ ok: false, database: 'draining' });
     try {
       const status = await checkAuthReadiness(query, { env });
+      if (isDraining()) return res.status(503).json({ ok: false, database: 'draining' });
       return res.json(status);
     } catch (error) {
       logger.error('Auth readiness dependency check failed', safeErrorCode(error));

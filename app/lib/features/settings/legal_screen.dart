@@ -7,34 +7,8 @@ import '../../app/design/app_theme.dart';
 /// zero network calls, and is reachable via a plain Navigator.push from
 /// anywhere (including before sign-in) exactly like G4 Emergency Card Info.
 ///
-/// Copy provenance, section by section:
-/// - Terms of Service / Privacy Policy: `product-plan.md` §8.4 states *what*
-///   these documents must cover (reward-data staleness, no liability,
-///   crowdsource usage, anonymization guarantee); the bodies below satisfy
-///   that checklist with real, launch-ready text — no longer the earlier
-///   "[Draft — pending legal review]" placeholder, replaced ahead of the
-///   Play Store submission (a page telling Google's reviewers "this will be
-///   replaced before general release" is a rejection risk in itself for a
-///   financial app). Every data-handling claim here was checked against
-///   actual app/API behavior, not written from assumption — see PROGRESS.md
-///   for the verification pass. This is founder-drafted copy grounded in
-///   real behavior, not a substitute for review by a lawyer familiar with
-///   India's DPDP Act if that hasn't happened yet; update this screen (and
-///   the hosted copy at https://api.pandapath.site/legal/) together if it
-///   does.
-/// - Not-financial-advice disclaimer: `product-plan.md` §8.1 (⭐ REQUIRED)
-///   — paraphrased into one clear paragraph per that section's own
-///   required framing ("informational suggestions based on publicly
-///   available reward terms", "not a regulated financial advisor",
-///   "verify terms with their issuer"). This is exact required framing,
-///   not draft copy, so it carries no Draft badge.
-/// - ODbL attribution: exact required copy per the plan's DoD ("verify
-///   wording against osm.org's own attribution guideline page"). This
-///   repo's merchant data really is OSM-derived — `nearby_merchants_repository.dart`
-///   fetches `GET /merchants/nearby`, backed by `merchants` rows carrying
-///   `osm_matched`/`osm_ref` columns (db/supabase/migrations/0007_crowdsource.sql)
-///   — so this is a real legal obligation, not decorative filler. Exact
-///   required copy, not a draft, so it carries no Draft badge either.
+/// The hosted and in-app privacy text are maintained together from source
+/// behavior. Owner/legal/store review remains a separate launch requirement.
 class LegalScreen extends StatelessWidget {
   const LegalScreen({super.key});
 
@@ -102,41 +76,48 @@ class LegalScreen extends StatelessWidget {
           const SizedBox(height: AppSpace.xl),
           const _SectionHeader(title: 'Privacy Policy'),
           const SizedBox(height: AppSpace.xs),
-          const _BodyText('Last updated: 13 August 2026', muted: true),
+          const _BodyText('Last updated: 26 October 2026', muted: true),
           const SizedBox(height: AppSpace.sm),
           const _BodyText(
             'This Privacy Policy describes what data PandaPay collects, why, and '
             'what you can do about it. We are committed to collecting only what the '
             'app actually needs to function.\n\n'
             '1. Account data\n'
-            'If you create an account, we collect your email address (used to sign '
-            'in via a one-time code) and optionally a phone number. This data is '
-            'never sold to third parties. Sensitive account fields are encrypted at '
-            'rest, and all traffic between the app and our servers is encrypted in '
-            'transit (HTTPS/TLS).\n\n'
+            'If you create an account, we retain the account identifiers needed for '
+            'email or phone sign-in and supported Google sign-in. We do not sell this '
+            'data. Account data is stored on our servers with access controls, and '
+            'traffic between the app and our servers uses HTTPS/TLS.\n\n'
             '2. Card and transaction data\n'
-            'We never store your full card number, PIN, CVV, or expiry date — not '
-            'even the last 4 digits. What we do store, scoped to your account: the '
-            'card products you tell us you hold, and transactions you add manually, '
-            'scan, or import (see below), used to estimate rewards and track caps.\n\n'
+            'We do not ask you to save your full card number, PIN or CVV. Card or '
+            'account last-four digits may be stored to match the cards and '
+            'transactions you choose to add. Your card products and transactions are '
+            'scoped to your account and used to estimate rewards and track spending, '
+            'balances and caps.\n\n'
             '3. How you can add transactions\n'
-            '• Manual entry, or scanning a card with your camera to identify it — '
-            'card scanning happens entirely on your device; no photo is ever '
-            'uploaded.\n'
-            '• Importing a bank statement PDF, or an SMS backup file you export '
-            'from another app — both are files you explicitly choose to import; '
-            'we do not read your device\'s SMS messages or inbox automatically.\n'
-            '• Forwarding transaction emails to a personal inbound address, or '
-            'connecting an email account via IMAP for automatic import, if you '
-            'choose to set that up.\n\n'
+            'You can add transactions manually or import statement and backup files '
+            'you choose. On supported Android devices, enabling SMS import and '
+            'granting permission lets the app read existing and incoming messages for '
+            'financial parsing; unrelated personal messages are not intended for '
+            'upload. Depending on the feature you use, financial message content or '
+            'derived records can be sent to our backend for processing. If enabled '
+            'and configured, server-assisted AI processing can send redacted '
+            'financial message content to the configured AI provider. Optional '
+            'shared-learning contributions use a separate opt-in. You can also '
+            'forward transaction emails or connect IMAP for automatic import. Receipt '
+            'images and unsynced records may exist only on your phone. If encrypted '
+            'account recovery is available and you enable it, the app can upload '
+            'encrypted recovery copies, including receipts when you select them, and '
+            'update them automatically while connectivity and app activity permit. '
+            'Recovery uses your existing account verification and adds no separate '
+            'password. Work created after the last successful copy remains at risk if '
+            'the phone is lost before another copy completes.\n\n'
             '4. Location\n'
-            'If you grant location access, your device\'s precise location is sent '
-            'to PandaPay\'s API when nearby checks or background alerts run. The API '
-            'forwards it to OpenStreetMap-based place-search providers to find '
-            'nearby map places and suggest a card. This is optional and only used '
-            'while the feature is active. '
-            'Merchant location data shown in the app (not your own location) is '
-            'rounded to roughly 11 metres before it is ever stored or shared.\n\n'
+            'If you grant location access, your precise location may be sent to the '
+            'PandaPay API for nearby searches or enabled background alerts. The API '
+            'can forward search coordinates to Google Places or OpenStreetMap-based '
+            'providers, depending on the configured route. This feature is optional. '
+            'Stored merchant location coordinates are rounded to roughly 11 metres; '
+            'that rounding does not describe the precision sent for a nearby search.\n\n'
             '5. Crowdsourced contributions\n'
             'Contributions (e.g. confirming a merchant accepts a card, or '
             'correcting a category) are stored without your name, email, account '
@@ -164,10 +145,11 @@ class LegalScreen extends StatelessWidget {
             'information. We record that the click happened (to measure which '
             'recommendations are useful); the issuer does not receive your name, '
             'email, or any other account data from us.\n\n'
-            '9. Data we never collect\n'
-            'We do not read your contacts, call log, photos, or files (other than '
-            'a statement/backup file you explicitly choose to import), and we do '
-            'not access your device\'s SMS inbox automatically.\n\n'
+            '9. Data access choices\n'
+            'We do not read your contacts or call log. Access to selected receipt '
+            'images, statement files and backups is used for the import or recovery '
+            'actions you choose. You can control optional Android SMS access through '
+            'device permissions and the import settings described above.\n\n'
             '10. Retention and deletion\n'
             'Your data is retained while your account is active. Requesting '
             'deletion from Settings starts a 30-day grace period (cancelable any '

@@ -16,6 +16,27 @@ const {
 process.env.PHONE_LOOKUP_HMAC_KEY ||= 'test-phone-lookup-hmac-key-0123456789abcdef';
 process.env.NODE_ENV = 'test';
 
+test('paused admission prevents new OTP-created accounts without blocking existing phone sign-in', async t => {
+  const prior=process.env.NEW_ACCOUNT_REGISTRATIONS_PAUSED;
+  process.env.NEW_ACCOUNT_REGISTRATIONS_PAUSED='true';
+  t.after(()=>{if(prior===undefined)delete process.env.NEW_ACCOUNT_REGISTRATIONS_PAUSED;else process.env.NEW_ACCOUNT_REGISTRATIONS_PAUSED=prior;});
+  const fresh=await harness(t,{overrideV2Verification:true});
+  for(const [route,payload] of [
+    ['verify-otp',{phone_number:'+919876543210',code:'1234',device_id:'pause-test-device'}],
+    ['verify-email-otp',{email:'fresh@example.com',code:'1234',device_id:'pause-test-device'}],
+    ['v2/verify-otp',{phone_number:'+919876543210',code:'123456',device_id:'pause-test-device',challenge_id:'00000000-0000-4000-8000-000000000001'}],
+    ['v2/verify-email-otp',{email:'fresh@example.com',code:'123456',device_id:'pause-test-device',challenge_id:'00000000-0000-4000-8000-000000000001'}],
+  ]){
+    const result=await fresh.post(route,payload);
+    assert.equal(result.status,503,JSON.stringify(result.body));
+    assert.equal(result.body.code,'NEW_ACCOUNT_REGISTRATION_PAUSED');
+  }
+  assert.equal(fresh.userWrites.some(value=>value.sql?.startsWith('INSERT INTO users')),false);
+  const existing=await harness(t,{phoneUser:{id:'known-user',name:'Known',phone_lookup_hash:'+919876543210',role:'user',token_version:1}});
+  const signin=await existing.post('verify-otp',{phone_number:'+919876543210',code:'1234',device_id:'pause-existing-device'});
+  assert.equal(signin.status,200,JSON.stringify(signin.body));
+});
+
 // Load the real route/service code with isolated provider and storage doubles.
 // No database, SMTP server, production secrets, or test OTP bypass is used.
 function load(relativePath, dependencies) {
@@ -40,6 +61,7 @@ async function harness(t, {
   enumerationAdmission = null, failEnumerationAdmission = false,
   googleVerificationError = null, googleResolve = null,
   otpCapacityError = false, providerBusy = false,
+  overrideV2Verification = false,
 } = {}) {
   const rows = [];
   abuseStore ||= createMemoryRateLimitStore();
@@ -195,7 +217,9 @@ async function harness(t, {
       if (currentSessionError) throw currentSessionError;
       return currentSession;
     } },
-    '../services/otpService': { ...otp, verifyOtp: async () => { if (otpCapacityError) throw new OtpCapacityError(); return verifyOtpResult; } },
+    '../services/otpService': { ...otp,
+      ...(overrideV2Verification ? { verifyOtpV2: async () => verifyOtpResult } : {}),
+      verifyOtp: async () => { if (otpCapacityError) throw new OtpCapacityError(); return verifyOtpResult; } },
     '../services/tokenService': {
       signAccessToken: () => 'synthetic-access-token',
       issueRefreshToken: async () => 'synthetic-refresh-token',

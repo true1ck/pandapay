@@ -16,6 +16,17 @@ const fullAccess = {
   can_delete: true,
 };
 
+test('readiness rejects draining auth both before and during a dependency probe', async () => {
+  for (const initiallyDraining of [true, false]) {
+    let draining = initiallyDraining, calls = 0;
+    const handler = createReadinessHandler({ env: { NODE_ENV: 'test' }, isDraining: () => draining,
+      query: async () => { calls++; draining=true; return { rows: [] }; } });
+    const res = { code: 200, status(code) { this.code=code;return this; }, json(body) { this.body=body;return this; } };
+    await handler({},res);
+    assert.equal(res.code,503);assert.equal(res.body.database,'draining');assert.equal(calls,initiallyDraining?0:1);
+  }
+});
+
 test('enabled optional access audit checks migrated storage and INSERT without reading records', async () => {
   const statements = [];
   const query = async sql => {

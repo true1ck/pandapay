@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { validateStatementImport, createStatementImportHandler, maskAccount, inferStatementEntryKind } = require('../src/statement_import');
+const { validateStatementImport, createStatementImportHandler, createStatementImportAdmission, maskAccount, inferStatementEntryKind } = require('../src/statement_import');
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const cardId = '11111111-1111-4111-8111-111111111111';
 const categoryId = '22222222-2222-4222-8222-222222222222';
@@ -11,6 +11,29 @@ function body(overrides = {}) {
     importSource: 'csv', importKey: hash('batch'), transactions: [{ amountInr: 123.45,
       occurredAt: '2026-10-01T18:30:00.000Z', merchantName: 'Coffee', importRowKey: hash('row') }], ...overrides };
 }
+
+test('statement imports reject concurrent same-account and excess work before DB use, then recover after failure', async () => {
+  let finish;
+  const pending = new Promise(resolve => { finish = resolve; });
+  let dbCalls = 0;
+  const logs = [];
+  const handler = createStatementImportHandler({ withUserClient: async () => {
+    dbCalls++; await pending; throw Object.assign(new Error('private SQL and financial payload'), { code: '23514' });
+  }, admission: createStatementImportAdmission({ maxConcurrent: 2 }), logger: { error: (...args) => logs.push(args) } });
+  const response = () => ({ code: 200, headers: {}, status(code) { this.code=code;return this; },
+    set(name,value) { this.headers[name]=value;return this; },json(value) { this.body=value;return this; } });
+  const first=response(),other=response();
+  const running=handler({userId:'one',body:body()},first);
+  const duplicate=response();await handler({userId:'one',body:body()},duplicate);
+  assert.equal(duplicate.code,503);assert.equal(dbCalls,1);
+  const second=handler({userId:'two',body:body()},other);
+  const overloaded=response();await handler({userId:'three',body:body()},overloaded);
+  assert.equal(overloaded.code,503);assert.equal(overloaded.headers['Retry-After'],'5');assert.equal(dbCalls,2);
+  finish();await Promise.all([running,second]);
+  assert.equal(first.code,500);assert.doesNotMatch(JSON.stringify(logs),/private SQL|financial payload/);
+  const retried=response();await handler({userId:'one',body:body()},retried);
+  assert.equal(dbCalls,3);assert.equal(retried.code,500,'the released account can retry');
+});
 
 test('validates all file sources, accounting timezone offsets and legacy clients', () => {
   for (const importSource of ['statement', 'screenshot', 'csv', 'xlsx', 'json']) {

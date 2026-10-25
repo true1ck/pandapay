@@ -36,6 +36,24 @@ test('Google provider subject wins over changed email without contact mutation',
   assert.ok(!f.queries.some(q => /SET email|is_email_verified =/.test(q.sql)));
 });
 
+test('new-account pause rejects Google creation but preserves established provider sign-in', async () => {
+  const original = process.env.NEW_ACCOUNT_REGISTRATIONS_PAUSED;
+  process.env.NEW_ACCOUNT_REGISTRATIONS_PAUSED = 'true';
+  try {
+    const fresh = fakePool(() => ({ rows: [] }));
+    await assert.rejects(resolveGoogleAccount({ pool: fresh.pool, googleUser }), { code: 'NEW_ACCOUNT_REGISTRATION_PAUSED', status: 503 });
+    assert.equal(fresh.queries.some(query => /INSERT INTO public.users|INSERT INTO public.oauth_accounts/.test(query.sql)), false);
+    assert.equal(fresh.queries.some(query => query.sql === 'ROLLBACK'), true);
+    const existing = fakePool(sql => ({ rows: sql.includes('FROM public.oauth_accounts') ? [{ ...account }] : [] }));
+    const result = await resolveGoogleAccount({ pool: existing.pool, googleUser });
+    assert.equal(result.user.id, account.id);
+    assert.equal(result.isNewAccount, false);
+  } finally {
+    if (original === undefined) delete process.env.NEW_ACCOUNT_REGISTRATIONS_PAUSED;
+    else process.env.NEW_ACCOUNT_REGISTRATIONS_PAUSED = original;
+  }
+});
+
 test('matching email alone cannot acquire an existing UUID', async () => {
   const f = fakePool(sql => ({ rows: sql.includes('FROM public.oauth_accounts') ? [] : [{ id: account.id }] }));
   await assert.rejects(resolveGoogleAccount({ pool: f.pool, googleUser }), { code: 'GOOGLE_ACCOUNT_LINK_REQUIRED', status: 409 });

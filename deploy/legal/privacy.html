@@ -16,25 +16,21 @@
 </head>
 <body>
 <h1>PandaPay — Privacy Policy</h1>
-<p class="updated">Last updated: 13 August 2026</p>
+<p class="updated">Last updated: 26 October 2026</p>
 
 <p>This Privacy Policy describes what data PandaPay collects, why, and what you can do about it. We are committed to collecting only what the app actually needs to function.</p>
 
 <h2>1. Account data</h2>
-<p>If you create an account, we collect your email address (used to sign in via a one-time code) and optionally a phone number. This data is never sold to third parties. Sensitive account fields are encrypted at rest, and all traffic between the app and our servers is encrypted in transit (HTTPS/TLS).</p>
+<p>If you create an account, we retain the account identifiers needed for email or phone sign-in and supported Google sign-in. We do not sell this data. Account data is stored on our servers with access controls, and traffic between the app and our servers uses HTTPS/TLS.</p>
 
 <h2>2. Card and transaction data</h2>
-<p>We never store your full card number, PIN, CVV, or expiry date — not even the last 4 digits. What we do store, scoped to your account: the card products you tell us you hold, and transactions you add manually, scan, or import (see below), used to estimate rewards and track caps.</p>
+<p>We do not ask you to save your full card number, PIN or CVV. Card or account last-four digits may be stored to match the cards and transactions you choose to add. Your card products and transactions are scoped to your account and used to estimate rewards and track spending, balances and caps.</p>
 
 <h2>3. How you can add transactions</h2>
-<ul>
-  <li>Manual entry, or scanning a card with your camera to identify it — card scanning happens entirely on your device; no photo is ever uploaded.</li>
-  <li>Importing a bank statement PDF, or an SMS backup file you export from another app — both are files you explicitly choose to import; we do not read your device's SMS messages or inbox automatically.</li>
-  <li>Forwarding transaction emails to a personal inbound address, or connecting an email account via IMAP for automatic import, if you choose to set that up.</li>
-</ul>
+<p>You can add transactions manually or import statement and backup files you choose. On supported Android devices, enabling SMS import and granting permission lets the app read existing and incoming messages for financial parsing; unrelated personal messages are not intended for upload. Depending on the feature you use, financial message content or derived records can be sent to our backend for processing. If enabled and configured, server-assisted AI processing can send redacted financial message content to the configured AI provider. Optional shared-learning contributions use a separate opt-in. You can also forward transaction emails or connect IMAP for automatic import. Receipt images and unsynced records may exist only on your phone. If encrypted account recovery is available and you enable it, the app can upload encrypted recovery copies, including receipts when you select them, and update them automatically while connectivity and app activity permit. Recovery uses your existing account verification and adds no separate password. Work created after the last successful copy remains at risk if the phone is lost before another copy completes.</p>
 
 <h2>4. Location</h2>
-<p>If you grant location access, your device's precise location is sent to PandaPay's API when nearby checks or background alerts run. The API forwards it to OpenStreetMap-based place-search providers to find nearby map places and suggest a card. This is optional and only used while the feature is active. Merchant location data shown in the app (not your own location) is rounded to roughly 11 metres before it is ever stored or shared.</p>
+<p>If you grant location access, your precise location may be sent to the PandaPay API for nearby searches or enabled background alerts. The API can forward search coordinates to Google Places or OpenStreetMap-based providers, depending on the configured route. This feature is optional. Stored merchant location coordinates are rounded to roughly 11 metres; that rounding does not describe the precision sent for a nearby search.</p>
 
 <h2>5. Crowdsourced contributions</h2>
 <p>Contributions (e.g. confirming a merchant accepts a card, or correcting a category) are stored without your name, email, account ID, or any other identifying field — enforced by an automated check that runs before every release and blocks deployment if it finds an identifying column. Merchant coordinates are rounded to ~11m, amounts are excluded entirely, and timestamps are stored to the day only, never the minute. Internally, contributions are linked across a single calendar month using a one-way hash that is rotated and discarded at the end of each month, so contributions from different months cannot be linked to each other or back to you.</p>
@@ -48,8 +44,8 @@
 <h2>8. Card issuer "Apply" links</h2>
 <p>Tapping "Apply" for a card sends you to the issuer's own site via a link containing a random reference code, not your personal information. We record that the click happened (to measure which recommendations are useful); the issuer does not receive your name, email, or any other account data from us.</p>
 
-<h2>9. Data we never collect</h2>
-<p>We do not read your contacts, call log, photos, or files (other than a statement/backup file you explicitly choose to import), and we do not access your device's SMS inbox automatically.</p>
+<h2>9. Data access choices</h2>
+<p>We do not read your contacts or call log. Access to selected receipt images, statement files and backups is used for the import or recovery actions you choose. You can control optional Android SMS access through device permissions and the import settings described above.</p>
 
 <h2>10. Retention and deletion</h2>
 <p>Your data is retained while your account is active. Requesting deletion from Settings starts a 30-day grace period (cancelable any time in that window, in case of accidental or unauthorized requests) after which your profile, cards, and transactions are permanently deleted from our live database. Encrypted backups are retained separately for disaster recovery and age out on their own schedule, so a small delay beyond the 30 days can occur before every backup copy is gone.</p>

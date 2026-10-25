@@ -1,6 +1,7 @@
 'use strict';
 
 const { createHash } = require('node:crypto');
+const { newAccountsPaused, CODE: REGISTRATION_PAUSED, MESSAGE: REGISTRATION_PAUSED_MESSAGE } = require('./newAccountAdmission');
 
 class GoogleIdentityError extends Error {
   constructor(code, status, message) {
@@ -102,6 +103,7 @@ async function resolveGoogleAccount({ pool, googleUser, deviceInfo = {}, linking
         throw new GoogleIdentityError('GOOGLE_EMAIL_PROOF_REQUIRED', 409,
           'Sign in with your email OTP to continue.');
       }
+      if (newAccountsPaused()) throw new GoogleIdentityError(REGISTRATION_PAUSED, 503, REGISTRATION_PAUSED_MESSAGE);
       const created = await client.query(
         `INSERT INTO public.users (email, name, avatar_url, language, timezone, is_email_verified)
          VALUES ($1, $2, $3, $4, $5, TRUE) RETURNING ${USER_FIELDS}`,

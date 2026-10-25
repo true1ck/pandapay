@@ -8,6 +8,7 @@ from unittest.mock import patch
 import importlib.util
 import io
 import ssl
+import hashlib
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -38,8 +39,15 @@ class BackupStorageTest(unittest.TestCase):
     def complete(self, number, verified=False):
         path = self.root / f'{number:032x}'
         path.mkdir()
-        (path / 'OFFSITE_COMPLETE').write_text(f'set_id={path.name}\ncompleted_epoch={number}\n')
-        (path / 'product.dump.age').write_bytes(b'x' * 100)
+        checksums = []
+        for name, payload in (('product.dump.age', b'product' + bytes([number])),
+                              ('auth.dump.age', b'auth' + bytes([number])),
+                              ('manifest.json.age', b'manifest' + bytes([number]))):
+            (path / name).write_bytes(payload)
+            checksums.append(f'{hashlib.sha256(payload).hexdigest()}  {name}')
+        (path / 'checksums.sha256').write_text('\n'.join(checksums) + '\n')
+        (path / 'OFFSITE_COMPLETE').write_text(
+            f'set_id={path.name}\nstatus=offsite_uploaded\ncompleted_epoch={number}\n')
         if verified:
             (path / 'RESTORE_VERIFIED').write_text('verified')
         return path
@@ -51,13 +59,47 @@ class BackupStorageTest(unittest.TestCase):
         self.assertEqual({p.name for _, p in storage.inventory(self.root)},
                          {f'{i:032x}' for i in (3, 5, 9, 10)})
 
+    def test_corrupt_recent_marked_sets_cannot_displace_intact_paired_recovery(self):
+        for number in range(1, 11):
+            self.complete(number, verified=number in (1, 3))
+        # A completion marker alone must not make a partial/corrupt recent set
+        # count as recoverable or cause an older intact pair to be pruned.
+        (self.root / f'{9:032x}' / 'auth.dump.age').write_bytes(b'corrupt')
+        (self.root / f'{10:032x}' / 'manifest.json.age').unlink()
+        storage.prepare(self.root, incoming=False)
+        self.assertEqual({p.name for _, p in storage.inventory(self.root)},
+                         {f'{i:032x}' for i in (1, 3, 7, 8)})
+
+    def test_no_restore_markers_still_preserves_two_intact_generations(self):
+        for number in range(1, 11):
+            self.complete(number)
+        (self.root / f'{9:032x}' / 'auth.dump.age').write_bytes(b'corrupt')
+        (self.root / f'{10:032x}' / 'manifest.json.age').unlink()
+        storage.prepare(self.root, incoming=False)
+        self.assertEqual({p.name for _, p in storage.inventory(self.root)},
+                         {f'{i:032x}' for i in (7, 8)})
+        self.assertTrue((self.root / f'{9:032x}').exists())
+        self.assertTrue((self.root / f'{10:032x}').exists())
+
     def test_count_limit_applies_to_recent_predeploy_generations_too(self):
         import time
         for number in range(1, 11):
             path = self.complete(number)
-            (path / 'OFFSITE_COMPLETE').write_text(f'set_id={path.name}\ncompleted_epoch={int(time.time()) + number}\n')
+            (path / 'OFFSITE_COMPLETE').write_text(f'set_id={path.name}\nstatus=offsite_uploaded\ncompleted_epoch={int(time.time()) + number}\n')
         storage.prepare(self.root)
         self.assertEqual(len(storage.inventory(self.root)), 6)  # room for incoming seventh
+
+    def test_integrity_scan_is_once_per_set_and_invalid_metadata_is_preserved(self):
+        for number in range(1, 11):
+            self.complete(number)
+        with patch.object(storage, 'valid_ciphertext_set', wraps=storage.valid_ciphertext_set) as checked:
+            storage.prepare(self.root, incoming=False)
+        self.assertEqual(checked.call_count, 10)
+        invalid = self.complete(11)
+        (invalid / 'checksums.sha256').write_text('x' * 4097)
+        self.assertFalse(storage.valid_ciphertext_set(invalid))
+        storage.prepare(self.root, incoming=False)
+        self.assertTrue(invalid.exists(), 'damaged marked sets require operator review')
 
     def test_prepare_removes_only_exact_unmarked_generated_residues(self):
         pending = self.root / ('.pending-' + 'a' * 32)

@@ -1,0 +1,276 @@
+{
+  "review": "Ordered LP02\u2013LP10 continuation after LP01 source batch",
+  "date": "2026-10-26",
+  "base_commit": "02f4c53b3b45eb3b35b17dfd3fbe9659f0c4a681",
+  "candidate_sha256": "01864e8cc8731024f5f4a422cddf7059df0455053474a5d4dd6bb02e398c81ba",
+  "source_file_count": 1409,
+  "priorities": {
+    "LP01": "Prior verified source retained; deployed/current-data role acceptance open",
+    "LP02": "Retention integrity fix and bounded synthetic backup verification; independent custody and target recovery open",
+    "LP03": "Runtime pool/URL coverage guard added; actual quotas and measured host headroom open",
+    "LP04": "Existing OTP safeguards reviewed and tested; real provider quotas/delivery/NAT acceptance open",
+    "LP05": "Synthetic migration/financial/restore proof repeated; current-data, historical and target failback open",
+    "LP06": "Immediate process/account import admission and redacted errors; durable continuation/shared budgets unfinished",
+    "LP07": "25 selected recovery/encryption components passed; normal encryption integration and signed native acceptance unfinished",
+    "LP08": "Draining readiness and default-off new-account pause added; monitoring/load/progressive replica admission unfinished",
+    "LP09": "Matching technical privacy sections corrected; full owner/legal/store/OAuth acceptance open",
+    "LP10": "TLS recovery envelope/forwarding config corrected; real Nginx/TLS and target rollout/failback acceptance open"
+  },
+  "checks": {
+    "service_and_tool_suites": {
+      "node": "v24.15.0",
+      "groups": {
+        "api": {
+          "exit_code": 0,
+          "tests": 1127,
+          "pass": 1125,
+          "fail": 0,
+          "skipped": 2,
+          "scope": "api/test/*.test.js"
+        },
+        "auth": {
+          "exit_code": 0,
+          "tests": 344,
+          "pass": 344,
+          "fail": 0,
+          "skipped": 0,
+          "scope": "auth/test/*.test.js"
+        },
+        "tools": {
+          "exit_code": 0,
+          "tests": 221,
+          "pass": 221,
+          "fail": 0,
+          "skipped": 0,
+          "scope": "db/tests/*.test.js"
+        }
+      }
+    },
+    "postgres": {
+      "scope": "synthetic-owned-loopback-only",
+      "customer_data_or_live_provider": false,
+      "source": {
+        "candidate_sha256": "01864e8cc8731024f5f4a422cddf7059df0455053474a5d4dd6bb02e398c81ba",
+        "file_count": 1409
+      },
+      "postgres_version": "18.4 (Homebrew)",
+      "seeded_upgrade": {
+        "all_nonledger_data_digest_equal": true,
+        "routine_oids_preserved": true,
+        "repeat_passed": true,
+        "before_state": {
+          "tables": 153,
+          "table_data_sha256": "0cbead4cea4c5aa4d03c43f8139e3a399137a5552a6af840dda85b4056d48a14",
+          "sequence_state_sha256": "8c6935a27ea534684833a6a23846da79d8100095054f953f31160a54aafa96d7"
+        },
+        "request_rollback_table_rows_preserved": true,
+        "sequence_gaps_after_rolled_back_writes_expected": true
+      },
+      "independent_login_guards": "passed",
+      "full_dump_restore_and_isolation_reopen": "passed",
+      "legacy-transport": "passed",
+      "typed-sync": "passed",
+      "financial-sync": "passed",
+      "result": "passed",
+      "source_unchanged": true
+    },
+    "additional": {
+      "syntax": "passed",
+      "compose_production": "passed via docker compose config --quiet with example inputs",
+      "compose_staging": "passed via docker compose config --quiet with example inputs",
+      "dart_legal_screen_analysis": {
+        "errors": 0,
+        "warnings": 0,
+        "result": "No issues found"
+      },
+      "flutter_component_tests": {
+        "passed": 25,
+        "failed": 0,
+        "files": [
+          "test/data/portable_backup/automatic_recovery_test.dart",
+          "test/data/portable_backup/account_recovery_gate_test.dart",
+          "test/data/portable_backup/account_recovery_completeness_test.dart",
+          "test/data/local_encryption/encrypted_database_copy_test.dart",
+          "test/data/local_encryption/encrypted_receipt_file_test.dart"
+        ]
+      },
+      "python": {
+        "backup_database": {
+          "passed": 48,
+          "failed": 0,
+          "log_sha256": "11019ab00906ea838b4f1ac0a84372f71ca5c1c8868250d5d76c1e8013687060"
+        },
+        "deployment": {
+          "passed": 23,
+          "failed": 0,
+          "log_sha256": "ef858399f9f0a24dc40d98bdd26e0b2dc9ff5ad1e18437dac441a95964f375ed"
+        }
+      }
+    },
+    "report": {
+      "date": "2026-10-26",
+      "priority_rows": 10,
+      "columns": 5,
+      "markdown_html_match": true,
+      "local_priority_links": 11,
+      "missing_link_files": 0,
+      "statuses": {
+        "partial": 9,
+        "open": 1,
+        "accepted_for_launch": 0
+      },
+      "execution_tracker_rows": 10,
+      "existing_script_blocks_unchanged": 2,
+      "visual_browser_acceptance": false
+    },
+    "privacy": {
+      "matching_technical_sections": [
+        1,
+        2,
+        3,
+        4,
+        9
+      ],
+      "app_and_hosted_source_agree": true,
+      "date": "2026-10-26",
+      "published": false,
+      "owner_legal_store_approval": "not_recorded"
+    },
+    "backup_regression": {
+      "scope": "owned synthetic directories; no restore markers",
+      "baseline": "02f4c53",
+      "results": {
+        "before": {
+          "intact_generations": [],
+          "damaged_marked_generations_preserved": true
+        },
+        "after": {
+          "intact_generations": [
+            7,
+            8
+          ],
+          "damaged_marked_generations_preserved": true
+        }
+      }
+    },
+    "strict_release": {
+      "exit_code": 2,
+      "release_ready": false
+    },
+    "git_diff_check": "passed"
+  },
+  "counts": {
+    "launch_priorities": {
+      "partial": 9,
+      "open": 1,
+      "accepted_for_launch": 0
+    },
+    "findings": 76,
+    "implementation_packages": 14,
+    "release_gates": 6,
+    "findings_closed_by_this_batch": 0
+  },
+  "agents": {
+    "lp02_backup_retention": "Initial code by gpt-6-luna; parent bounded/reviewed/tested it",
+    "lp03_and_lp04": "Workers reached account usage limit; parent continued directly. A saved LP04 source review was retained."
+  },
+  "sha256": {
+    ".env.prod.example": "eb1bcac6e71cec72c73a087462c7c06365b82b118e9a436e0454c4c0def44607",
+    ".env.staging.example": "6e2d2f49dbd740e9afbff3372918ee7cbda1324e6a196de48dcb388910b5bcb3",
+    "api/package.json": "125c3c53ae2ddf0d1adc9cb5246bf5851388c38857a16d50a4a53b4529996963",
+    "api/src/index.js": "99d1da7c9f112499e3349eba260f9576d0bc492170bba655c295e7146716ac94",
+    "api/src/readiness.js": "c823116617680cefb5fae030f21dce8ae31b695e19a309284b03c6b4212563a3",
+    "api/src/statement_import.js": "e2fbb238bfe5d97d10a7a12e690400971490f9345b7628839d8ee4be90310e29",
+    "api/test/readiness.test.js": "572e042a16429a19371aee324c42fb4bc2d4b886a53211f9685dbb7aee3a5a7e",
+    "api/test/statement_import.test.js": "d9d7e186a46585a28f5ecd7c16e9ab92e6c41f3ca0ae2d1987e06c1dbb88ac7a",
+    "app/lib/features/settings/legal_screen.dart": "909a129d0fb3e4a5591676c1f354dff553c8f22fbdb6dc21731d6900fa9ec909",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/additional-checks.json": "cbac560b103b74c5b7444b2b2384aa7bdfa765ab60c3b0d7a83a48705fa9914e",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/backup-before-after.json": "2badf1f2e200b33d9ec3c3bfb48892a98f3d1c62d4e54f3a8ae50e26c21d20e9",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/candidate-source.json": "5216b3f97bda2ef15ece056e8ec1124693262c93b49cdd994bf11623de6ce0c0",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/html-verification.json": "cb9b016a070e3ccff94bc04b5580255b07d119ac120918ef12bf0e1583b8042f",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/postgres-results.json": "8642587d8567fcefaa71158f260977ceb7c133435d92a3aa55b5a65af604d54f",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/privacy-parity.json": "45b3e88a8cc6c9ebf7f04372c2263b6edbbbd1f8f542f08cf8427e56d5e84a2d",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/release-check.json": "5deab8dfb78743aa1faf0d0281f0224f745f9cd9a0da8f5d6acfc14c978c7018",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/run_local_checks.py": "0d38139fa1ce87c4721d1eb5739a104bb2c11413078c296866ed8566b7a1fe7e",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/run_synthetic_postgres.py": "2d71fa9ececd2b564e4061a29a59086dc7e8156c6bf8a475592360eb64e56e72",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/test-summary.json": "18f09c2af97a51ca02c8589c5f9d4c13894ac667a3775fcd7a8e2ed5fa39b41a",
+    "auth/example.env": "27d01678ac7168f58c757e78a3aa510c29efd774fed9b68b88b919206d559166",
+    "auth/src/index.js": "a328bd4ddb221027ad717b0818e5aadd11bd2eaf470fa29a3a76f23d15bb15fc",
+    "auth/src/routes/authRoutes.js": "27195db655178aadc3d96c263b8d74a5f0bf53af331d9e415a1e6a450d8a219c",
+    "auth/src/services/authReadiness.js": "7fbdf1c134c724935d07a9e712b08fdd5394cd267a3ca4261db15067c2697f41",
+    "auth/src/services/googleIdentity.js": "4ab89425360abc7a26c921eea39a3466a17bdbceafd2bb4f89a74ce2a34fe6d3",
+    "auth/src/services/newAccountAdmission.js": "fb6111e33865caf974b5a059eb47570dfa21d90d5c65e42a56afb517a3bbfec9",
+    "auth/test/auth_readiness.test.js": "ca813d0d7c20e6d03f349170c530396779bfa7feebfbf66546d6583744006cbb",
+    "auth/test/google_identity.test.js": "a8ef6698c1c2fcb323e2b6a786b8f50b4e659a242d8e0f325768975eaed098fd",
+    "auth/test/new_account_admission.test.js": "d5cf770bb1eebdfe7c69efa37c14f950e16b88efa37450c52de232715f88b15d",
+    "auth/test/otp_delivery.test.js": "d318b642b6f75a044e893addf391540ea41dc7a8bde68e9931f8ae4151c48eb9",
+    "db/scripts/backup_storage.py": "748c2d41da22d0a136e0a8606a0df9baabd92b4711ab462dd5600e32160147b4",
+    "db/scripts/release_security_check.js": "d2a80b6a090ed8d1b04f5702c3d154d3b7b1719039da2cfa2717e2b7799ef361",
+    "db/tests/backup_flow_test.py": "391e4d4154b9429436d5955e2600103f59586f1ecc1204a0e2fb9d6d063b59ab",
+    "db/tests/release_security_check.test.js": "10041ff4703b70d071109d046761dfb4f27efd048136c2a3440f42fed89e0408",
+    "deploy/legal/privacy.html": "6a64fdf54d6d47653ae4f44cae68ebf63e34df4cd9ec9242d254c4a6b87fbdc3",
+    "deploy/nginx/api.conf.example": "bee3dc81804da8292844ae4c623c24113d938e5d536d04010793815d88b9891b",
+    "deploy/tests/test_recovery_ingress.py": "ddf9c3bb5518845ec3e75b43796c2060c1fb20577e67bfee883159f1fff6ca7e",
+    "docker-compose.prod.yml": "1bae43444150a0efe6fb1a74b4524aadcf5b0ec78c6c873084d97b611c92bb37",
+    "docker-compose.staging.yml": "bed9dfd6e79850ba21b22c4a7aecd9530aea018ee454a7f5b9a9a7ba8580b95d",
+    "docs/security-and-backend-audit-2026-10-20.html": "072529bb9ec04f6f4b09104e90c8494e450896ee66f6a2b53abe28d4694328b3",
+    "docs/security-and-backend-audit-2026-10-20.md": "e1bdcb9cea4e27fa21bf2902c96c16f4bad57da21a7bd0a9e6823f427bc805e9",
+    "docs/security-launch-implementation-plan-2026-10-26.md": "ab723af42b1a80abf774317a8321bac2685c189d37740b689fb00b69e45d05d6",
+    "docs/security-launch-lp02-lp10-implementation-2026-10-26.md": "55de84393e9cd1e6557af18b59359796a2cc9080a96922f420780e366942ea87",
+    "docs/security-launch-lp04-review-2026-10-26.md": "68d50d8a81cc693415b4d3fd29b347434dab7e9a5c0e615da1cbd8cee4b99aa1"
+  },
+  "log_sha256": {
+    "artifacts/security-launch-lp02-lp10-2026-10-26/upgrade-create.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/pg-start.log": "66afd0411ccc09366e99fdd99b85f21899c8d2d064f5835126859618802153ad",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/tools-tests.log": "be9f0b17a21fd247fd05786a81163034d0d1875bb7dfecfa99dbde1600025084",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/api-tests.log": "c3776b0ed858465a34cb4dd0f40e8cb1518e0bd619e88a51be73dcea59217d69",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/upgrade-data-after.log": "e896b2ab24953e9d2e456f34a61ff17b119a72475257f5bd837f38dcf5a79a99",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/independent-login-isolation.log": "396f6140755c53441978d9babc2d33d9924e59007b4b77fd1e6b7f371c99c88f",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/product-restore.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/pre-isolation-migration.log": "ef984ab66588969b1ee69a073ffe0ee8eb3dae88a45a690872bf86466ee9bc20",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/financial-sync.log": "73a95bda2e67aa3a40812b66b3151e25091b5f776e066d705c9cceec05ca24d9",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/upgrade-data-before.log": "e896b2ab24953e9d2e456f34a61ff17b119a72475257f5bd837f38dcf5a79a99",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/owned-restore-drop.log": "6e0504038d9284f24a4e629866b4a95050b3e6c28d03d72a3068b6023026ad30",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/restore-create.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/fresh-create.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/upgrade-oids-after.log": "4d7b6f90797f17fc289da86b585f9b5d49b6ed7567c211d916279505599b9154",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/upgrade-oids-before.log": "4d7b6f90797f17fc289da86b585f9b5d49b6ed7567c211d916279505599b9154",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/fresh-migration.log": "3f4203a4f07448c28ecae6f6598c701d1916436575d5149d2b5b3811ff376d37",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/pg-init.log": "3f015569053165440cbf40bd5aa3a91977fba7d5928d3d65e1a0471b7fd75c4a",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/pg-stop.log": "ca19178a35ab4153b75b494963b66ce8243e1b94c173107c87b44d09db23652d",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/typed-sync.log": "428f19fd394d4dea21fa45f1de29e80a0ff22c923667e9d0feef4020e25ff5cc",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/restored-isolation.log": "396f6140755c53441978d9babc2d33d9924e59007b4b77fd1e6b7f371c99c88f",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/legacy-transport.log": "4706d871ba8dfc92c18b8f01447a1e021109e5c36991317e2a473b08e4ae9ee9",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/product-dump.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/isolation-migration-repeat.log": "a513ada1fc71a826a4de3937fc0175343485fc237e023135c05a3d72fef182a6",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/repeat-data-after.log": "e896b2ab24953e9d2e456f34a61ff17b119a72475257f5bd837f38dcf5a79a99",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/upgrade-seed.log": "b6b585bc7c4bf7ebbc968057dafe84f698740755037d79df6bc052be4c591905",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/isolation-data-after.log": "fe7306a8617b3c6b2c16eeb98620d4ab7a15e25a11bfedb2d84770590ccc49c8",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/pg-version.log": "9f37d3232c3d9c760ab750e986131361f48d3a9ab5ded13c3e2b322b13c48aa2",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/auth-tests.log": "68ddd2b79cdf2b9f47efc256d3abaf8520eedfde5370d67a3d37a722a5d1eb0d",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/restored-data.log": "fe7306a8617b3c6b2c16eeb98620d4ab7a15e25a11bfedb2d84770590ccc49c8",
+    "artifacts/security-launch-lp02-lp10-2026-10-26/isolation-upgrade-migration.log": "36fe6becf7c76446aff3dbb1cc0f1e8f34410a84c0e8a3f9a6b67a3da618e0b2"
+  },
+  "limits": [
+    "Synthetic PostgreSQL18 does not establish current-data or intended PostgreSQL17/provider acceptance",
+    "Selected mobile component tests are not signed-device or full native encryption integration",
+    "Configuration contract checks are not live Nginx syntax/TLS/upload acceptance",
+    "Local admission is per process; no cluster-wide lock or 100000/day capacity claim",
+    "Signup pause stops creation after identity proof, not OTP sends; consumed OTP may need reissue after pause",
+    "Damaged marked backups are retained for review and can stop new backups at the byte cap"
+  ],
+  "live_actions": {
+    "live_database_connections": false,
+    "saved_customer_backups_or_credentials_read": false,
+    "new_sql_migrations": 0,
+    "production_deployed": false,
+    "new_signup_pause_enabled": false,
+    "other_recovery_ai_sync_encryption_flags_changed": false,
+    "keys_rotated": false,
+    "backup_schedule_changed": false,
+    "real_provider_sends": false,
+    "purchases": false,
+    "privacy_published_or_legally_approved": false
+  },
+  "log_retention": "Full synthetic console logs are retained locally in a temporary folder; summaries and original log hashes are committed."
+}

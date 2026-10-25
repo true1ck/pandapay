@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Bound encrypted backup storage, preserving recent and proven recovery sets."""
 import argparse
+import hashlib
 import fcntl
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -48,11 +50,84 @@ def inventory(root):
             marker = path / "LOCAL_COMPLETE"
         if not marker.is_file() or marker.is_symlink():
             continue
-        values = dict(line.split("=", 1) for line in marker.read_text().splitlines() if "=" in line)
-        if values.get("set_id") != path.name or not values.get("completed_epoch", "").isdigit():
+        try:
+            values = dict(line.split("=", 1) for line in bounded_metadata(marker).splitlines() if "=" in line)
+            status = values.get("status")
+            expected_status = "offsite_uploaded" if marker.name == "OFFSITE_COMPLETE" else "local_saved"
+            if (values.get("set_id") != path.name or status != expected_status or
+                    not values.get("completed_epoch", "").isdigit() or
+                    not valid_ciphertext_set(path)):
+                continue
+        except (OSError, UnicodeError, ValueError):
             continue
         sets.append((int(values["completed_epoch"]), path))
     return sorted(sets, key=lambda row: (row[0], row[1].name), reverse=True)
+
+
+def bounded_metadata(path):
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 4096:
+            raise ValueError("backup metadata must be a bounded regular file")
+        contents = os.read(descriptor, 4097)
+        if len(contents) > 4096:
+            raise ValueError("backup metadata exceeds bounds")
+        return contents.decode("ascii")
+    finally:
+        os.close(descriptor)
+
+
+def valid_ciphertext_set(path):
+    """Return true only for a complete paired set with matching ciphertext hashes.
+
+    Retention must not treat a marker by itself as evidence that its paired
+    product/auth archives are intact. Invalid marked folders are deliberately
+    left on disk for operator review, but they cannot displace a verified
+    recovery generation from the retention window.
+    """
+    expected = {"product.dump.age", "auth.dump.age", "manifest.json.age"}
+    checksum_file = path / "checksums.sha256"
+    if checksum_file.is_symlink() or not checksum_file.is_file():
+        return False
+    entries = {}
+    try:
+        for line in bounded_metadata(checksum_file).splitlines():
+            match = re.fullmatch(r"([a-f0-9]{64})  ([A-Za-z0-9_.-]+)", line)
+            if not match or match.group(2) in entries:
+                return False
+            entries[match.group(2)] = match.group(1)
+        if set(entries) != expected:
+            return False
+        total_bytes = 0
+        maximum_bytes = limits()[0]
+        for name, digest in entries.items():
+            artifact = path / name
+            if artifact.is_symlink() or not artifact.is_file():
+                return False
+            hasher = hashlib.sha256()
+            descriptor = os.open(artifact, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(descriptor, "rb") as stream:
+                before = os.fstat(stream.fileno())
+                if not stat.S_ISREG(before.st_mode) or before.st_size <= 0:
+                    return False
+                total_bytes += before.st_size
+                if total_bytes > maximum_bytes:
+                    return False
+                read_bytes = 0
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    read_bytes += len(chunk)
+                    if read_bytes > before.st_size:
+                        return False
+                    hasher.update(chunk)
+                after = os.fstat(stream.fileno())
+                if read_bytes != before.st_size or (before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+                    return False
+            if hasher.hexdigest() != digest:
+                return False
+    except (OSError, UnicodeError, ValueError):
+        return False
+    return True
 
 
 def cleanup_incomplete(root):
@@ -98,10 +173,11 @@ def prepare(root, reserve=0, incoming=True):
     protected = protected_sets(sets)
     cutoff = time.time() - days * 86400
     target = maximum_sets - int(incoming)
+    remaining = len(sets)
     for epoch, path in reversed(sets):
         if path in protected:
             continue
-        count_exceeded = len(inventory(root)) > target
+        count_exceeded = remaining > target
         try:
             check_capacity(root, reserve)
             space_needed = False
@@ -109,8 +185,9 @@ def prepare(root, reserve=0, incoming=True):
             space_needed = True
         if epoch < cutoff or count_exceeded or space_needed:
             shutil.rmtree(path)
+            remaining -= 1
             print(f"BACKUP_RETENTION_STATUS=set={path.name} status=pruned", flush=True)
-    if len(inventory(root)) > target:
+    if remaining > target:
         raise ValueError("set limit cannot accommodate another backup without deleting protected recovery sets")
     check_capacity(root, reserve)
 

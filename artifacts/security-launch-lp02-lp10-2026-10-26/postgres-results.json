@@ -1,0 +1,28 @@
+{
+  "scope": "synthetic-owned-loopback-only",
+  "customer_data_or_live_provider": false,
+  "source": {
+    "candidate_sha256": "01864e8cc8731024f5f4a422cddf7059df0455053474a5d4dd6bb02e398c81ba",
+    "file_count": 1409
+  },
+  "postgres_version": "18.4 (Homebrew)",
+  "seeded_upgrade": {
+    "all_nonledger_data_digest_equal": true,
+    "routine_oids_preserved": true,
+    "repeat_passed": true,
+    "before_state": {
+      "tables": 153,
+      "table_data_sha256": "0cbead4cea4c5aa4d03c43f8139e3a399137a5552a6af840dda85b4056d48a14",
+      "sequence_state_sha256": "8c6935a27ea534684833a6a23846da79d8100095054f953f31160a54aafa96d7"
+    },
+    "request_rollback_table_rows_preserved": true,
+    "sequence_gaps_after_rolled_back_writes_expected": true
+  },
+  "independent_login_guards": "passed",
+  "full_dump_restore_and_isolation_reopen": "passed",
+  "legacy-transport": "passed",
+  "typed-sync": "passed",
+  "financial-sync": "passed",
+  "result": "passed",
+  "source_unchanged": true
+}

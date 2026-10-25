@@ -10,6 +10,7 @@ const { sendOtpSms } = require('../services/smsService');
 const { sendOtpEmail } = require('../services/emailService');
 const { verifyGoogleToken } = require('../services/googleAuthService');
 const { resolveGoogleAccount, GoogleIdentityError } = require('../services/googleIdentity');
+const { newAccountsPaused, respondPaused, CODE: REGISTRATION_PAUSED } = require('../services/newAccountAdmission');
 const { verifyAccessToken } = require('../services/accessTokenVerification');
 const { verifyCurrentSession } = require('../services/currentSessionVerification');
 const {
@@ -599,6 +600,7 @@ router.post(
             message: 'OTP invalid or expired. Please request a new one.',
           });
         }
+        if (newAccountsPaused()) return respondPaused(res);
         // User not found - create a minimal user for signup flow
         // Extract country code from phone number
         const countryCode = normalizedPhone.startsWith('+')
@@ -1008,6 +1010,7 @@ router.post(
         if (recovery_only === true || foundByPhone.rows.length > 0) {
           return res.status(400).json({ error: 'Invalid or expired code' });
         }
+        if (newAccountsPaused()) return respondPaused(res);
         const newUserResult = await db.query(
           `INSERT INTO users (email, language, timezone, is_email_verified)
            VALUES ($1, $2, $3, TRUE)
@@ -1228,6 +1231,7 @@ router.post(
         active_devices_count: parseInt(deviceCountResult.rows[0].count, 10),
       });
     } catch (err) {
+      if (err.code === REGISTRATION_PAUSED) return respondPaused(res);
       if (err instanceof GoogleIdentityError) {
         return res.status(err.status).json({ error: err.message, code: err.code });
       }

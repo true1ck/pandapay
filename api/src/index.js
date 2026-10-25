@@ -28,6 +28,7 @@ const { registerPortableBackupRoutes } = require('./portable_backup/routes');
 const { registerPortableBackupRestoreRoutes } = require('./portable_backup/restore_routes');
 const { registerSupportTicketRoute } = require('./support_tickets');
 const { registerDataErrorReportRoute } = require('./data_error_reports');
+const { createReadinessHandler } = require('./readiness');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
 const { replayCurrentCapConsumption } = require('./card_state_reconciliation');
 const {
@@ -304,6 +305,7 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
 }
 
 const app = express();
+let shuttingDown = false;
 // Trust only the explicitly configured proxy-hop count. Local development
 // defaults to no forwarded-header trust; staging/production set one hop for
 // their loopback-bound Nginx ingress.
@@ -322,19 +324,16 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 // Liveness stays dependency-free for the process supervisor. Readiness is the
 // deployment/load-balancer probe: it must prove that this instance can reach
 // the database before traffic is sent to it.
-app.get('/ready', async (req, res) => {
-  try {
+app.get('/ready', createReadinessHandler({
+  isDraining: () => shuttingDown,
+  checkDependencies: async () => {
     await pool.query('SELECT 1');
     await checkPartnerWebhookReadiness(partnerWebhookPool);
     await checkImapWorkerReadiness(imapWorkerPool);
     await require('./service_pools').checkAccountLifecycleReadiness(accountLifecyclePool);
     if(lifecycleJournalRuntime)await lifecycleJournalRuntime.readiness();
-    res.json({ ok: true, database: 'ready' });
-  } catch (err) {
-    console.error('GET /ready error', safeErrorCode(err));
-    res.status(503).json({ ok: false, database: 'unavailable' });
-  }
-});
+  },
+}));
 
 if(lifecycleJournalRuntime)app.use(async(req,res,next)=>{
   try{await lifecycleJournalRuntime.readiness();next();}catch(_){res.status(503).json({error:'account_lifecycle_recovery_required'});}
@@ -11308,7 +11307,6 @@ if(config.accountLifecycleEnabled&&lifecycleInterval>0){
   lifecycleTimer.unref();
 }
 
-let shuttingDown = false;
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;

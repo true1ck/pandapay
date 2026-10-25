@@ -1,0 +1,33 @@
+{
+  "syntax": "passed",
+  "compose_production": "passed via docker compose config --quiet with example inputs",
+  "compose_staging": "passed via docker compose config --quiet with example inputs",
+  "dart_legal_screen_analysis": {
+    "errors": 0,
+    "warnings": 0,
+    "result": "No issues found"
+  },
+  "flutter_component_tests": {
+    "passed": 25,
+    "failed": 0,
+    "files": [
+      "test/data/portable_backup/automatic_recovery_test.dart",
+      "test/data/portable_backup/account_recovery_gate_test.dart",
+      "test/data/portable_backup/account_recovery_completeness_test.dart",
+      "test/data/local_encryption/encrypted_database_copy_test.dart",
+      "test/data/local_encryption/encrypted_receipt_file_test.dart"
+    ]
+  },
+  "python": {
+    "backup_database": {
+      "passed": 48,
+      "failed": 0,
+      "log_sha256": "11019ab00906ea838b4f1ac0a84372f71ca5c1c8868250d5d76c1e8013687060"
+    },
+    "deployment": {
+      "passed": 23,
+      "failed": 0,
+      "log_sha256": "ef858399f9f0a24dc40d98bdd26e0b2dc9ff5ad1e18437dac441a95964f375ed"
+    }
+  }
+}

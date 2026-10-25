@@ -6,6 +6,7 @@ const NOW=Date.parse('2026-10-24T12:00:00.000Z');
 function source(){return {commit:'a'.repeat(40),candidate_sha256:'b'.repeat(64),dirty:true,file_sha256:Object.fromEntries(LOCKFILES.map(name=>[name,'c'.repeat(64)]))};}
 function fixture(){
  const inputs=template(),s=source(),env=Object.fromEntries(KEY_NAMES.map(name=>[name,'synthetic-secret-never-output']));
+ env.DB_POOL_MAX='4';
  inputs.postgres={sourceMajor:17,targetMajor:17,dumpClientMajor:18};inputs.quotas={verified:true,databaseMaxBytes:100000,maxConnections:10,configuredConnectionBudget:8,backupMaxBytes:100000,backupKeepSets:7,backupKeepDays:7};
  inputs.connectionBudget.inventoryReviewed=true;inputs.connectionBudget.reviewedAt=new Date(NOW).toISOString();
  Object.assign(inputs.connectionBudget.clusters[0],{limitsVerified:true,verifiedAt:new Date(NOW).toISOString(),maxConnections:10,reservedConnections:0,providerConnections:0,operationalConnections:1,safetyConnections:1});
@@ -23,6 +24,31 @@ function fixture(){
 
 test('default template preserves missing actual host/custody/device gates and no deployment',()=>{const report=evaluateRelease({source:source(),inputs:template(),now:NOW});assert.equal(report.release_ready,false);assert.equal(report.read_only,true);assert.equal(report.deployment_performed,false);for(const name of ['exact_candidate_evidence','actual_data_restore','free_host_resource_limits','off_host_backup_custody','retained_key_inventory'])assert.ok(report.missing_gates.includes(name));assert.equal(template().postgres.sourceMajor,17);assert.equal(template().postgres.targetMajor,null);});
 test('consistent synthetic metadata fixture exercises fully supplied gate logic without reading external systems',()=>{assert.equal(evaluateRelease(fixture()).release_ready,true);});
+test('new-account pause preserves older off manifests and requires exact pause acceptance before enabling',()=>{
+ const value=fixture();delete value.inputs.features.newAccountsPaused;
+ value.evidence.configuration_sha256=configurationDigest(value.inputs);
+ assert.equal(evaluateRelease(value).release_ready,true);
+ value.env.NEW_ACCOUNT_REGISTRATIONS_PAUSED='true';
+ assert.equal(evaluateRelease(value).release_ready,false);
+ value.inputs.features.newAccountsPaused=true;value.evidence.configuration_sha256=configurationDigest(value.inputs);
+ assert.ok(evaluateRelease(value).missing_gates.includes('feature_acceptance_newAccountsPaused'));
+ const check={status:'passed',enabled:true,failed:0,candidate_sha256:value.source.candidate_sha256,proof_sha256:'d'.repeat(64)};
+ value.evidence.checks.signup_pause_acceptance=check;value.proofs.signup_pause_acceptance={sha256:'d'.repeat(64)};
+ assert.equal(evaluateRelease(value).release_ready,true);
+ value.env.NEW_ACCOUNT_REGISTRATIONS_PAUSED='1';
+ assert.ok(evaluateRelease(value).missing_gates.includes('feature_configuration_newAccountsPaused'));
+});
+test('runtime pool defaults and scheduler-independent dedicated URLs cannot be omitted from capacity acceptance',()=>{
+ for(const mutate of [
+  value=>delete value.env.DB_POOL_MAX,
+  value=>value.env.DB_POOL_MAX='10',
+  value=>value.env.PARTNER_WEBHOOK_DATABASE_URL='postgresql://private-never-output',
+  value=>value.env.IMAP_POLL_DATABASE_URL='postgresql://private-never-output',
+ ]){const value=fixture();mutate(value);const result=evaluateRelease(value);
+  assert.ok(result.missing_gates.includes('runtime_connection_configuration'));
+  assert.equal(JSON.stringify(result).includes('private-never-output'),false);
+ }
+});
 test('prior partial batch record and stale/foreign source evidence never become full-candidate proof',()=>{for(const mutate of [value=>value.evidence.format='pandapay-remaining-security-batch-verification-v1',value=>value.evidence.scope='partial',value=>value.evidence.candidate_sha256='0'.repeat(64),value=>value.evidence.verified_at_utc='2026-10-20T00:00:00.000Z']){const value=fixture();mutate(value);assert.ok(evaluateRelease(value).missing_gates.includes('exact_candidate_evidence'));}});
 test('synthetic restore/upgrade tests cannot satisfy actual-data/provider release acceptance',()=>{const value=fixture();value.evidence.checks.actual_data_restore.data_scope='synthetic';value.evidence.checks.target_provider_upgrade.data_scope='synthetic';const report=evaluateRelease(value);assert.ok(report.missing_gates.includes('actual_data_restore'));assert.ok(report.missing_gates.includes('target_provider_upgrade'));});
 test('freshness, proof hash, failures and per-check candidate binding are enforced',()=>{for(const mutate of [value=>value.proofs.api.sha256='0'.repeat(64),value=>value.evidence.checks.api.failed=1,value=>value.evidence.checks.api.candidate_sha256='0'.repeat(64),value=>value.evidence.checks.api.status='not_run']){const value=fixture();mutate(value);assert.ok(evaluateRelease(value).missing_gates.includes('api'));}});

@@ -1,0 +1,29 @@
+{
+  "node": "v24.15.0",
+  "groups": {
+    "api": {
+      "exit_code": 0,
+      "tests": 1127,
+      "pass": 1125,
+      "fail": 0,
+      "skipped": 2,
+      "scope": "api/test/*.test.js"
+    },
+    "auth": {
+      "exit_code": 0,
+      "tests": 344,
+      "pass": 344,
+      "fail": 0,
+      "skipped": 0,
+      "scope": "auth/test/*.test.js"
+    },
+    "tools": {
+      "exit_code": 0,
+      "tests": 221,
+      "pass": 221,
+      "fail": 0,
+      "skipped": 0,
+      "scope": "db/tests/*.test.js"
+    }
+  }
+}

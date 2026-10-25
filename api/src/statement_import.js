@@ -6,6 +6,26 @@ function maskAccount(value) { return value?.replace(/\d{6,}/g, (digits) => `****
 const HASH = /^[a-f0-9]{64}$/i;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const { importTagNames } = require('./transaction_tags');
+const { safeErrorCode } = require('./safeErrorCode');
+
+function createStatementImportAdmission({ maxConcurrent = 2 } = {}) {
+  if (!Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1 || maxConcurrent > 4) {
+    throw new TypeError('Invalid statement import concurrency');
+  }
+  const accounts = new Set();
+  let active = 0;
+  return {
+    acquire(userId) {
+      if (!userId || accounts.has(userId) || active >= maxConcurrent) return null;
+      accounts.add(userId); active++;
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true; active--; accounts.delete(userId);
+      };
+    },
+  };
+}
 
 /**
  * Statement rows do not always carry a trustworthy type column. Apply the
@@ -106,7 +126,7 @@ function validateStatementImport(body) {
   return null;
 }
 
-function createStatementImportHandler({ withUserClient, importResolvers, clientMutationSourceKey, insertTransactionAndUpdateState, logger = console }) {
+function createStatementImportHandler({ withUserClient, importResolvers, clientMutationSourceKey, insertTransactionAndUpdateState, logger = console, admission = createStatementImportAdmission() }) {
   return async (req, res) => {
   const {
     userCardId,
@@ -124,6 +144,11 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
   } = req.body || {};
   const validationError = validateStatementImport(req.body);
   if (validationError) return res.status(400).json({ error: validationError });
+  const release = admission.acquire(req.userId);
+  if (!release) {
+    res.set?.('Retry-After', '5');
+    return res.status(503).json({ error: 'statement_import_busy' });
+  }
 
   try {
     const result = await withUserClient(req.userId, async (client) => {
@@ -308,14 +333,14 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
   } catch (err) {
     logger.error('POST /statement-imports error', {
       requestId: req.requestId || null,
-      error: err,
+      error: safeErrorCode(err),
     });
     res.status(500).json({
       error: 'internal_error',
       ...(req.requestId ? { requestId: req.requestId } : {}),
     });
-  }
+  } finally { release(); }
   };
 }
 
-module.exports = { validateStatementImport, createStatementImportHandler, maskAccount, inferStatementEntryKind };
+module.exports = { validateStatementImport, createStatementImportHandler, createStatementImportAdmission, maskAccount, inferStatementEntryKind };
