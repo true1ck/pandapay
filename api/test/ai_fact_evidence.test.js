@@ -42,6 +42,7 @@ test('posted movements require completed-event language and reject declined or f
     payload: { amountRole: 'posted', amountInr: 250, entryKind: 'spend', occurredAt: '2026-10-20T10:00:00Z' },
   };
   assert.equal(verifyModelFacts([fact], { body: 'Rs 250 debited from your account' }).valid, true);
+  assert.equal(verifyModelFacts([fact], { body: 'payout for Rs. 250 is processed with reference ID: 12345' }).valid, true);
   assert.equal(verifyModelFacts([fact], { body: 'Rs 250 debit declined' }).valid, false);
   assert.equal(verifyModelFacts([fact], { body: 'Rs 250 will be debited' }).valid, false);
 });

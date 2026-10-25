@@ -38,7 +38,7 @@ function verifyModelFacts(facts, payload) {
       errors.push(`facts[${index}].reference: reference absent from SMS`);
     }
     if (fact.factType === 'posted_movement' &&
-        (!/\b(debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred)\b/i.test(body) ||
+        (!/\b(debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred|transfer|processed|payout|settled)\b/i.test(body) ||
          /\b(failed|declined|unsuccessful|will be|to be|scheduled|offer|eligible)\b/i.test(body))) {
       errors.push(`facts[${index}]: posted movement lacks unambiguous completion`);
     }
