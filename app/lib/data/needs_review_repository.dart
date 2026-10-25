@@ -539,6 +539,9 @@ class NeedsReviewRepository {
             toRemove.add(item.id);
             continue;
           }
+          // Unmatched refunds wait for matching debit transaction or user review.
+          kept.add(item);
+          continue;
         }
 
         if (parsed != null) {

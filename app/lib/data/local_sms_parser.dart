@@ -361,7 +361,7 @@ class LocalSmsParser {
       r'\b(?:offer|sale|discount|cashback|voucher|coupon|rewarding|shop\s+at|grab|buy\s+now|apply\s+now|prices?\s+slashed|treat\s+yourself|festive\s+shopping|eligible\s+for\s+conversion|convert\s+(?:to|into)\s+emi|international\s+roaming\s+pack)\b|\b(?:get|earn|save)\b[\s\S]{0,45}\b(?:reward|cashback|off|free|voucher)\b',
     ).hasMatch(text);
     final serviceNotice = _re(
-      r'\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service|transaction\s+check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|sim\s+swap|reported\s+(?:your\s+)?fund\s+bal(?:ance)?|securities\s+bal(?:ance)?|excludes\s+your\s+bank|beware\s+(?:of\s+)?dealing\s+(?:in|on)\s+unsolicited\s+tips|unsolicited\s+tips|due\s+for\s+renewal|renew\s+now\s+with\s+policybazaar|wallet\s+balance\s+is\s+(?:rs\.?|inr)\s*0|add\s+money\s+to\s+wallet|report\s+spam|trai\s+dnd|telecommunications\s+act|sanchar\s+saathi|chakshu|share\s+yours?\s+feedback\b|help\s+us\s+serve\b|rate\s+yours?\s+(?:experience|service|stay|purchase|ride)\b|experience\s+(?:matters\s+to\s+us|and\s+feedback)|csat\s+score|nps\s+survey|net\s+promoter\s+score|take\s+(?:a\s+)?(?:quick\s+)?survey\b|survey\s+(?:link|earn)|online\s+investment\s+scams|traded\s+value\s+for\b|has\s+been\s+dispatched|has\s+been\s+delivered|modification\s+success!?|card\s+usage\s+settings?|card\s+(?:usage\s+)?settings?\s+(?:for|modified|updated)|card\s+controls?\s+(?:modified|updated)|card\s+usage\s+(?:limits?|controls?|preferences?)|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated|ckyc\s+record|central\s+kyc\s+registry|out\s+for\s+delivery\s+with\s+cash\s+memo|pls\s+share\s+delivery\s+code|delivery\s+code\s+\d+)\b',
+      r'\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account|call\s+forwarding\s+is\s+(?:now\s+)?active|calls?\s+are\s+being\s+forwarded|to\s+deactivate\s+(?:this\s+)?service|transaction\s+check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|sim\s+swap|reported\s+(?:your\s+)?fund\s+bal(?:ance)?|securities\s+bal(?:ance)?|excludes\s+your\s+bank|beware\s+(?:of\s+)?dealing\s+(?:in|on)\s+unsolicited\s+tips|unsolicited\s+tips|due\s+for\s+renewal|renew\s+now\s+with\s+policybazaar|wallet\s+balance\s+is\s+(?:rs\.?|inr)\s*0|add\s+money\s+to\s+wallet|report\s+spam|trai\s+dnd|telecommunications\s+act|sanchar\s+saathi|chakshu|share\s+yours?\s+feedback\b|help\s+us\s+serve\b|rate\s+yours?\s+(?:experience|service|stay|purchase|ride)\b|experience\s+(?:matters\s+to\s+us|and\s+feedback)|csat\s+score|nps\s+survey|net\s+promoter\s+score|take\s+(?:a\s+)?(?:quick\s+)?survey\b|survey\s+(?:link|earn)|online\s+investment\s+scams|traded\s+value\s+for\b|has\s+been\s+dispatched|has\s+been\s+delivered|modification\s+success!?|card\s+usage\s+settings?|card\s+(?:usage\s+)?settings?\s+(?:for|modified|updated)|card\s+controls?\s+(?:modified|updated)|card\s+usage\s+(?:limits?|controls?|preferences?)|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated|ckyc\s+record|central\s+kyc\s+registry|out\s+for\s+delivery\s+with\s+cash\s+memo|pls\s+share\s+delivery\s+code|delivery\s+code\s+\d+|talktime\s+bal(?:ance)?|prepaid\s+bal(?:ance)?|low\s+talktime|recharge\s+now\s+to\s+stay\s+connected|data\s+pack\s+expired|data\s+exhausted|\d+%\s+daily\s+data\s+used)\b',
     ).hasMatch(text);
     final balance =
         (_re(
@@ -1523,6 +1523,9 @@ class LocalSmsParser {
             r'\b(?:total|full|statement|amount|premium)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
+            r'\b(?:bill|invoice|premium)\b[\s\S]{0,35}?\b(?:is|of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1) ??
+          _re(
             r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|standing\s+instruction|si\s+debit)\s*(?:of\s+|is\s+|:\s*|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
@@ -1540,7 +1543,7 @@ class LocalSmsParser {
     );
     final billAmount = money(
       _re(
-            r'\b(?:bill|invoice|premium)\s+(?:of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+            r'\b(?:bill|invoice|premium)\b[\s\S]{0,35}?\b(?:is|of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
             r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|standing\s+instruction|si\s+debit)\s*(?:of\s+|is\s+|:\s*|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',

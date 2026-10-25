@@ -249,8 +249,11 @@ class SmsImportStore {
         final isPastDueBill =
             hasDueDate && observation.dueDate!.isBefore(startOfToday);
 
-        if (isMandate ||
-            (!isPastDueBill &&
+        final isUpcomingBill = isBillObligation && hasDueDate && !isPastDueBill;
+
+        if (!isPastDueBill &&
+            (isMandate ||
+                isUpcomingBill ||
                 observation.disposition ==
                     LocalSmsDisposition.localCommitment)) {
           final title = (observation.billerName?.trim().isNotEmpty == true)
@@ -289,7 +292,7 @@ class SmsImportStore {
             'INSERT OR REPLACE INTO local_commitments VALUES (?, ?, ?)',
             [namespace, commitment.id, jsonEncode(commitment.toJson())],
           );
-        } else if (isBillObligation && isPastDueBill) {
+        } else if ((isBillObligation || isMandate) && isPastDueBill) {
           // Pre-filtration: An expired bill with dueDate < today is historical.
           // Archive it into PastBillReceiptRepository rather than cluttering Needs Review.
           final transactions = store

@@ -1486,4 +1486,78 @@ void main() {
     expect(result.transaction, isNull);
     expect(LocalSmsParser.isBankAccountMessage(body, 'VM-axioFS'), isFalse);
   });
+
+  test('auto-categorizes Indian corporate merchant entities with FlashText', () {
+    // Bundl Technologies -> Swiggy / Dining
+    final swiggy = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'HDFCBK',
+      body: 'Rs 349.00 spent on HDFC Bank Card ending 1234 at BUNDL TECHNOLOGIES on 20-Oct-26.',
+      receivedAt: DateTime(2026, 10, 20),
+    );
+    expect(swiggy?.transaction?.categoryName, 'Dining');
+    expect(swiggy?.transaction?.categoryId, 'dining');
+
+    // Eternal Limited -> Zomato / Dining
+    final zomato = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'ICICIB',
+      body: 'Dear Customer, your Ac XX5678 is debited for INR 450.00 on 21-Oct-26 by UPI: ETERNAL LIMITED. UPI Ref 123456.',
+      receivedAt: DateTime(2026, 10, 21),
+    );
+    expect(zomato?.transaction?.categoryName, 'Dining');
+    expect(zomato?.transaction?.categoryId, 'dining');
+
+    // Blink Commerce -> Blinkit / Groceries
+    final blinkit = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'AXISBK',
+      body: 'INR 620.00 spent on your Axis Bank Card 4321 at BLINK COMMERCE on 22-Oct-26.',
+      receivedAt: DateTime(2026, 10, 22),
+    );
+    expect(blinkit?.transaction?.categoryName, 'Groceries');
+    expect(blinkit?.transaction?.categoryId, 'groceries');
+
+    // Kiranakart -> Zepto / Groceries
+    final zepto = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'SBINB',
+      body: 'Your A/c 9988 debited by Rs 280.00 on 23-Oct-26 at KIRANAKART. Bal: Rs 15000.',
+      receivedAt: DateTime(2026, 10, 23),
+    );
+    expect(zepto?.transaction?.categoryName, 'Groceries');
+    expect(zepto?.transaction?.categoryId, 'groceries');
+
+    // Avenue Supermarts -> DMart / Groceries
+    final dmart = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'KOTAKB',
+      body: 'Sent Rs.1450.00 from Kotak Bank AC 1122 to AVENUE SUPERMARTS on 24-Oct-26.',
+      receivedAt: DateTime(2026, 10, 24),
+    );
+    expect(dmart?.transaction?.categoryName, 'Groceries');
+    expect(dmart?.transaction?.categoryId, 'groceries');
+
+    // ANI Technologies -> Ola / Travel
+    final ola = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'HDFCBK',
+      body: 'Rs 199.00 debited from A/c XX1234 on 25-Oct-26 to ANI TECHNOLOGIES.',
+      receivedAt: DateTime(2026, 10, 25),
+    );
+    expect(ola?.transaction?.categoryName, 'Travel');
+    expect(ola?.transaction?.categoryId, 'travel');
+  });
+
+  test('pre-filters order delivery updates and talktime notices as non-transaction noise', () {
+    const swiggyDelivery = 'Your Swiggy order of Rs 450 is out for delivery with our delivery partner. Enjoy your meal!';
+    expect(LocalSmsParser.isNonTransactionNoise('SWIGGY', swiggyDelivery), isTrue);
+    expect(LocalSmsParser.isCompletedTransactionOrBill(swiggyDelivery), isFalse);
+
+    const zeptoDelivery = 'Your Zepto order of Rs 299 is arriving in 7 mins! Track here: https://zepto.app/t/123';
+    expect(LocalSmsParser.isNonTransactionNoise('ZEPTO', zeptoDelivery), isTrue);
+
+    const talktimeAlert = 'Your talktime balance is Rs 5.50. Recharge now to stay connected: https://airtel.in/r';
+    expect(LocalSmsParser.isNonTransactionNoise('AIRTEL', talktimeAlert), isTrue);
+  });
 }
