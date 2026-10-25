@@ -1,0 +1,225 @@
+{
+  "format": "pandapay-security-dependency-evidence-v1",
+  "generated_on": "2026-10-25",
+  "review_status": "incomplete",
+  "network_for_dependency_resolution": "offline",
+  "legal_or_release_clearance": "not asserted",
+  "lock_only_scan": {
+    "path": "db/scripts/review_dependency_licenses.js",
+    "status": "incomplete",
+    "unknown_license_entries": 92,
+    "package_count": 786,
+    "locks": [
+      {
+        "path": "api/package-lock.json",
+        "ecosystem": "npm",
+        "lock_sha256": "78d576e00816012541e0c414ec45351d07b9e327fa194ed726193351bba9ef5c",
+        "package_count": 98,
+        "license_evidence": {
+          "known": 98,
+          "unknown": 0,
+          "basis": "package-lock license fields; values are not approval"
+        },
+        "source_evidence": {
+          "integrity": 98,
+          "absentIntegrity": 0
+        }
+      },
+      {
+        "path": "auth/package-lock.json",
+        "ecosystem": "npm",
+        "lock_sha256": "802ee82ef90e7b557bd077a4591fd7342e86f74761c912e4830449a000345497",
+        "package_count": 186,
+        "license_evidence": {
+          "known": 186,
+          "unknown": 0,
+          "basis": "package-lock license fields; values are not approval"
+        },
+        "source_evidence": {
+          "integrity": 186,
+          "absentIntegrity": 0
+        }
+      },
+      {
+        "path": "app/pubspec.lock",
+        "ecosystem": "dart",
+        "lock_sha256": "a37b99c5b9e62e28c9075053285449e18b2267c6c27a80ee57d838cb54574bfe",
+        "package_count": 235,
+        "license_evidence": {
+          "known": 226,
+          "unknown": 9,
+          "basis": "cached hosted package LICENSE file existence only; contents/terms not reviewed"
+        },
+        "source_evidence": {
+          "hosted": 225,
+          "sdk": 7,
+          "path": 3,
+          "git": 0
+        }
+      },
+      {
+        "path": "console/pubspec.lock",
+        "ecosystem": "dart",
+        "lock_sha256": "e7f59fc389ccc15499f1745d5d0f93e04b6451fa6ae6ce9cdf6c1a6539facbdf",
+        "package_count": 98,
+        "license_evidence": {
+          "known": 93,
+          "unknown": 5,
+          "basis": "cached hosted package LICENSE file existence only; contents/terms not reviewed"
+        },
+        "source_evidence": {
+          "hosted": 93,
+          "sdk": 4,
+          "path": 1,
+          "git": 0
+        }
+      },
+      {
+        "path": "packages/pandapay_lints/pubspec.lock",
+        "ecosystem": "dart",
+        "lock_sha256": "94e9cc9da7cdd52a62359a1fed5ca12c4c9d10cd137412310f153e73f902929c",
+        "package_count": 43,
+        "license_evidence": {
+          "known": 43,
+          "unknown": 0,
+          "basis": "cached hosted package LICENSE file existence only; contents/terms not reviewed"
+        },
+        "source_evidence": {
+          "hosted": 43,
+          "sdk": 0,
+          "path": 0,
+          "git": 0
+        }
+      },
+      {
+        "path": "packages/pandapay_domain/pubspec.lock",
+        "ecosystem": "dart",
+        "lock_sha256": "5c82228a2202581e22dd481041d643c66faee327e8f2f927fde1f12ed6e33098",
+        "package_count": 48,
+        "license_evidence": {
+          "known": 48,
+          "unknown": 0,
+          "basis": "cached hosted package LICENSE file existence only; contents/terms not reviewed"
+        },
+        "source_evidence": {
+          "hosted": 48,
+          "sdk": 0,
+          "path": 0,
+          "git": 0
+        }
+      },
+      {
+        "path": "app/ios/Podfile.lock",
+        "ecosystem": "pod",
+        "lock_sha256": "c51e6dfaf93dd8550e2b40ac243bf501a0912c2de7f9a1366f52d34a10adcfb8",
+        "package_count": 77,
+        "license_evidence": {
+          "known": 0,
+          "unknown": 77,
+          "basis": "Podfile.lock has no license terms; no package license review performed"
+        },
+        "source_evidence": {
+          "specRepos": 1,
+          "checksums": 1
+        }
+      },
+      {
+        "path": "app/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+        "ecosystem": "swift",
+        "lock_sha256": "862e34bd50494de33fe88711a4cca6a3494f2c341ec2efce323189ed317c0f79",
+        "package_count": 1,
+        "license_evidence": {
+          "known": 0,
+          "unknown": 1,
+          "basis": "Package.resolved pins source revisions, not license terms"
+        },
+        "source_evidence": {
+          "pins": 1,
+          "withRevision": 1
+        }
+      }
+    ],
+    "report_sha256": "a2d608be077eff105f5c3e625a4b3cd68390271b43cafb3d9dedb0bb6a76e86f"
+  },
+  "npm_audit": {
+    "api": {
+      "checked_at_utc": "2026-10-25T06:03:30.092170+00:00",
+      "lock_sha256": "78d576e00816012541e0c414ec45351d07b9e327fa194ed726193351bba9ef5c",
+      "exit_code": 0,
+      "vulnerability_total": 0
+    },
+    "auth": {
+      "checked_at_utc": "2026-10-25T06:03:30.539904+00:00",
+      "lock_sha256": "802ee82ef90e7b557bd077a4591fd7342e86f74761c912e4830449a000345497",
+      "exit_code": 0,
+      "vulnerability_total": 0
+    }
+  },
+  "local_native_evidence": {
+    "pod_evidence_file": "pod-license-evidence.json",
+    "pod_evidence_sha256": "b071d6dd665e43a569be512437007794b7b00b0ef6781b4d9ab7d3b26faf46eb",
+    "pod_entries": 77,
+    "unique_base_specs": 53,
+    "public_cached_specs": 26,
+    "local_podspecs": 27,
+    "installed_external_license_files": 19,
+    "flutter_sdk_license_sha256": "a598db94b6290ffbe10b5ecf911057b6a943351c727fdda9e5f2891d68700a20",
+    "first_party_packages_without_LICENSE": [
+      "packages/pandapay_domain",
+      "packages/pandapay_lints"
+    ]
+  },
+  "swiftpm_csqlite": {
+    "identity": "csqlite",
+    "location": "https://github.com/simolus3/CSQLite.git",
+    "revision": "1ee46d19a4f451a7aa64ffc64fc99b4748131e62",
+    "local_checkout_or_cache_found": false,
+    "exact_revision_license_status": "unverified",
+    "note": "The official repository current page describes SQLite as public domain, but that is not assigned to the pinned commit. Exact immutable revision paths could not be retrieved and no current-HEAD inference is made.",
+    "official_repository_current_page": "https://github.com/simolus3/CSQLite",
+    "exact_revision_read_attempts": [
+      {
+        "url": "https://github.com/simolus3/CSQLite/tree/1ee46d19a4f451a7aa64ffc64fc99b4748131e62",
+        "result": "web-tool cache miss"
+      },
+      {
+        "url": "https://github.com/simolus3/CSQLite/commit/1ee46d19a4f451a7aa64ffc64fc99b4748131e62",
+        "result": "web-tool cache miss"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/simolus3/CSQLite/1ee46d19a4f451a7aa64ffc64fc99b4748131e62/LICENSE.md",
+        "result": "web-tool cache miss"
+      },
+      {
+        "url": "https://api.github.com/repos/simolus3/CSQLite/contents/LICENSE.md?ref=1ee46d19a4f451a7aa64ffc64fc99b4748131e62",
+        "result": "URL inaccessible via web tool"
+      }
+    ],
+    "immutable_license_file_or_hash_available": false
+  },
+  "android": {
+    "configuration": "devReleaseRuntimeClasspath",
+    "report_file": "android-resolved.txt",
+    "report_sha256": "4472044f74385882fbea92fcc13d8aff301ee8fcf5fe2550485b61d334cbed0d",
+    "external_coordinates": 197,
+    "flutter_project_modules": 28,
+    "cache_evidence_file": "android-cache-evidence.json",
+    "cache_evidence_sha256": "3efd9ee5af251ce197be7c5275cca6c3e522cdb64108ba4c558d59f9106f01dd",
+    "apk_built": false,
+    "lockfile_updated": false,
+    "caveat": "Cached artifact fingerprints do not prove APK inclusion; production/staging graphs and license applicability remain."
+  },
+  "telephony": {
+    "path": "app/third_party/telephony",
+    "version": "0.2.0",
+    "license": "MIT",
+    "license_sha256": "a7621da7b781a8ad679f1321c633120265e92b7f76c1ce06b523a25dd8e5741e",
+    "upstream": "https://github.com/shounakmulay/Telephony",
+    "immutable_upstream_source_revision": "not established"
+  },
+  "files": {
+    "android-resolved.txt": "4472044f74385882fbea92fcc13d8aff301ee8fcf5fe2550485b61d334cbed0d",
+    "android-cache-evidence.json": "3efd9ee5af251ce197be7c5275cca6c3e522cdb64108ba4c558d59f9106f01dd",
+    "pod-license-evidence.json": "b071d6dd665e43a569be512437007794b7b00b0ef6781b4d9ab7d3b26faf46eb"
+  }
+}

@@ -161,20 +161,21 @@ async function readRequestBody(req, maxBytes = MAX_SECTION_BYTES) {
 
 async function inTransaction(pool, profileId, fn) {
   const client = await pool.connect();
-  let done = false;
+  let done = false,discard;
   try {
     await client.query('BEGIN');
     await client.query("SELECT set_config('app.user_id', $1, true)", [profileId]);
+    if(pool.accountAccessFence)await pool.accountAccessFence(client,profileId);
     const result = await fn(client);
     await client.query('COMMIT');
     done = true;
     return result;
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
+    try{await client.query('ROLLBACK');}catch(rollbackError){discard=rollbackError;}
     throw error;
   } finally {
-    if (!done) await client.query('ROLLBACK').catch(() => {});
-    client.release();
+    if (!done)try{await client.query('ROLLBACK');}catch(error){discard=error;}
+    client.release(discard);
   }
 }
 

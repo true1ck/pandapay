@@ -1,0 +1,16 @@
+
+#13 [runtime 6/6] COPY --chown=node:node src ./src
+#13 DONE 0.0s
+
+#14 exporting to image
+#14 exporting layers
+#14 exporting layers 0.7s done
+#14 exporting manifest sha256:db82fdb23a8b0199b8bba8aa6803b7362f9e58f13986303e5db8df191c832732
+#14 exporting manifest sha256:db82fdb23a8b0199b8bba8aa6803b7362f9e58f13986303e5db8df191c832732 done
+#14 exporting config sha256:f17f844685db5e2da50c8cf707a71349b44a97b27384807498dd18bc39916408 done
+#14 exporting attestation manifest sha256:463f7f836d5dbaf7701a1f64b94990ea602797bbc80f1c7f306611db607eae24 done
+#14 exporting manifest list sha256:7b4532fb086c07dd64783572c6f63101267387791f07e21f6748803bdcbcc9a2 done
+#14 naming to docker.io/library/pandapay-security-followup-auth:patched done
+#14 unpacking to docker.io/library/pandapay-security-followup-auth:patched
+#14 unpacking to docker.io/library/pandapay-security-followup-auth:patched 0.4s done
+#14 DONE 1.1s

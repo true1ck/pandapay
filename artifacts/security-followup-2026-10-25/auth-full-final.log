@@ -1,0 +1,16 @@
+  ...
+# Subtest: protected auth routes reject tokens without the shared claims
+ok 309 - protected auth routes reject tokens without the shared claims
+  ---
+  duration_ms: 0.156583
+  type: 'test'
+  ...
+1..309
+# tests 309
+# suites 0
+# pass 309
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 11077.149755

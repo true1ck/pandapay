@@ -24,7 +24,7 @@ function routes() {
   }, { requireAuth() {}, withUserClient: async (user, fn) => fn(client) });
   return { state, async call(method, body) {
     const res = { code: 200, status(code) { this.code = code; return this; }, json(value) { this.body = value; return this; } };
-    await handlers[method]({ params: { id: 't1' }, userId: 'owner', body }, res);
+    await handlers[method]({ params: { id: '00000000-0000-0000-0000-000000000001' }, userId: 'owner', body }, res);
     return res;
   } };
 }
@@ -54,6 +54,23 @@ test('route contract: rejects ownership, totals and references before replacemen
   assert.equal((await r.call('put', { splits: [{ amountInr: 1000.01 }] })).code, 400);
   assert.equal((await r.call('put', { splits: [{ amountInr: 10, userCardId: '00000000-0000-0000-0000-000000000001' }] })).code, 400);
   assert.equal(r.state.writes, 0);
+});
+
+test('split routes reject malformed transaction IDs before querying the database', async () => {
+  const r = routes();
+  const before = r.state.queries.length;
+  for (const method of ['get', 'put']) {
+    const res = { code: 200, status(code) { this.code = code; return this; }, json(value) { this.body = value; return this; } };
+    const handlers = {};
+    registerSplitRoutes({
+      get(path, auth, fn) { handlers.get = fn; }, put(path, auth, fn) { handlers.put = fn; },
+    }, { requireAuth() {}, withUserClient: async (_user, fn) => fn({ query: (...args) => {
+      r.state.queries.push(args[0]); throw new Error('database should not be queried');
+    } }) });
+    await handlers[method]({ params: { id: 'not-a-uuid' }, userId: 'owner', body: { splits: [] } }, res);
+    assert.equal(res.code, 400);
+  }
+  assert.equal(r.state.queries.length, before);
 });
 
 test('fingerprints ignore row IDs, ordering and display names', () => {

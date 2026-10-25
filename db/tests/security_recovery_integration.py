@@ -31,15 +31,21 @@ def port():
 
 
 def main():
-    for tool in ('initdb', 'pg_ctl', 'psql', 'pg_dumpall', 'age', 'age-keygen', 'sha256sum', 'node'):
+    for tool in ('initdb', 'pg_ctl', 'psql', 'pg_dumpall', 'age', 'age-keygen', 'node'):
         if not shutil.which(tool):
             raise SystemExit(f'Required integration-test tool is missing: {tool}')
+    # backup_common.sh supports macOS's shasum as well as GNU sha256sum.
+    # Match that contract so the local recovery rehearsal can run on a Mac.
+    if not (shutil.which('sha256sum') or shutil.which('shasum')):
+        raise SystemExit('Required integration-test tool is missing: sha256sum or shasum')
     with tempfile.TemporaryDirectory(prefix='pp-security-', dir='/tmp') as temporary:
         work = Path(temporary)
-        env = dict(os.environ, NODE_ENV='test', DB_SSL='false', ENCRYPTION_ENABLED='true',
+        basic = {name: os.environ[name] for name in ('PATH','HOME','TMPDIR','SYSTEMROOT') if name in os.environ}
+        env = dict(basic, LC_ALL='C', LANG='C', NODE_ENV='test', DB_SSL='false', ENCRYPTION_ENABLED='true',
                    ENCRYPTION_KEY=base64.b64encode(bytes([9]) * 32).decode(),
                    PHONE_LOOKUP_HMAC_KEY='synthetic-security-recovery-hmac-key-32bytes',
                    APP_USER_PASSWORD='synthetic-app-password', REWARD_WORKER_DB_PASSWORD='synthetic-worker-password',
+                   BACKUP_STATUS_WRITER_DB_PASSWORD='synthetic-backup-status-password-32bytes',
                    SEED_DEMO_DATA='false', DB_SSL_CA='', DB_SSL_CA_FILE='', BACKUP_MAX_USAGE_PERCENT='99',
                    MIGRATION_ADOPT_LEGACY_CHECKSUMS='false', MIGRATION_LEGACY_BASELINE_FILE='')
         # Never inherit a caller's live libpq defaults into this fixture.
@@ -188,6 +194,21 @@ await p.query('INSERT INTO profiles(id,display_name) VALUES ($1,$2)',[id,'Synthe
             run(['psql', target + '/postgres', '-X', '-v', 'ON_ERROR_STOP=1', '-c',
                  'DROP DATABASE recovery_unexpected'], env)
             run(['bash', 'db/scripts/restore_drill.sh'], env)
+            proof_file = sets[0].parent / 'RESTORE_VERIFIED'
+            proof = dict(line.split('=', 1) for line in proof_file.read_text().splitlines())
+            import hashlib
+            assert proof['proof_format'] == 'pandapay-paired-postgresql-restore-proof-v1'
+            for filename, field in [('manifest.json.age', 'manifest_ciphertext_sha256'),
+                                    ('product.dump.age', 'product_ciphertext_sha256'),
+                                    ('auth.dump.age', 'auth_ciphertext_sha256')]:
+                assert proof[field] == hashlib.sha256((sets[0].parent / filename).read_bytes()).hexdigest()
+            publication_env = dict(env,
+                BACKUP_STATUS_DATABASE_URL=f'postgresql://backup_status_runtime:synthetic-backup-status-password-32bytes@127.0.0.1:{source_port}/product_test',
+                BACKUP_STATUS_DB_SSL='false', BACKUP_STATUS_AGE_IDENTITY_FILE=str(work / 'identity.txt'))
+            published = run(['node', 'db/scripts/publish_backup_status.js', '--set-dir', str(sets[0].parent)], publication_env)
+            assert 'BACKUP_STATUS_PUBLICATION=verified' in published
+            count = run(['psql', source + '/product_test', '-X', '-qAt', '-c', 'SELECT count(*) FROM backup_status.attestations'], env)
+            assert count.strip() == '1', 'Verified restore status was not published by the narrow publisher'
             status = next((work / 'status').glob('RESTORE_VERIFIED-*')).read_text()
             assert 'application_check=passed' in status
             # The owner's initial destination is a local PC: exercise the same
@@ -211,7 +232,7 @@ await p.query('INSERT INTO profiles(id,display_name) VALUES ($1,$2)',[id,'Synthe
                 raise AssertionError('Restore incorrectly accepted the source host')
             assert not list((work / 'backups').rglob('*.dump'))
             assert not list((work / 'backups').rglob('manifest.json'))
-            print('PASS: empty-install, repeat, mixed legacy phone backfill, wrong-key rejection, runtime ledger denial, snapshot consistency under writes, paired age-encrypted v5 export, independent PostgreSQL restore, table/schema/ACL/global-parameter comparison, grantor/grant-option preservation, fresh-cluster attestation and preflight refusal, key/identity verification, local PC mode and source-host restore rejection')
+            print('PASS: empty-install, repeat, mixed legacy phone backfill, wrong-key rejection, runtime ledger denial, snapshot consistency under writes, paired age-encrypted v5 export, independent PostgreSQL restore, table/schema/ACL/global-parameter comparison, grantor/grant-option preservation, fresh-cluster attestation and preflight refusal, key/identity verification, hash-bound restore proof and narrow verified-status publication, local PC mode and source-host restore rejection')
         finally:
             for folder in reversed(clusters):
                 subprocess.run(['pg_ctl', '-D', str(folder), '-m', 'immediate', 'stop'], env=env, capture_output=True)

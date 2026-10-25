@@ -1,0 +1,1 @@
+PASS sync transport PostgreSQL route and RLS fixture; known_numeric_update_rejection=42804; numeric_write_remediation=pending

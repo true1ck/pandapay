@@ -1,5 +1,7 @@
 # PandaPay Console — Detailed Implementation Plan (Flutter Web, Internal Only)
 
+> **Historical/product design reference — reviewed 25 October 2026.** Feature and architecture statements here may describe intended or earlier designs. The [current source architecture](docs/security-current-architecture-2026-10-25.md), [security progress](docs/security-implementation-progress-2026-10-22.md) and [deployment guide](deploy/DEPLOY.md) are the implementation/operations entrypoints. Do not infer a deployed feature, database topology or encryption state from this plan.
+
 **Companion to:** [`admin-console-plan.md`](./admin-console-plan.md) · [`product-plan.md`](./product-plan.md) · [`database.sql`](./database.sql) · [`Userappimplementation_plan.md`](./Userappimplementation_plan.md)
 
 **What this is:** the internal, single-operator back-office application that (1) builds and maintains the card-reward dataset the recommendation engine depends on, (2) detects policy changes from four independent signals and propagates approved corrections to every user automatically, and (3) makes the crowdsourced merchant/location/acceptance data visible and correctable.

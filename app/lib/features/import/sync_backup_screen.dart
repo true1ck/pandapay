@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/env.dart';
+import '../recovery/account_data_recovery.dart';
 import '../sync/split_sync.dart';
 import '../../data/api_exception.dart';
 import '../../data/import_repository.dart';
@@ -95,6 +97,19 @@ class SyncBackupScreen extends ConsumerWidget {
                 // server, so no amount of signing in elsewhere recovers it.
                 const _PendingOutboxCard(),
                 const _PendingRecoveryCard(),
+                if (Env.accountDataRecoveryEnabled)
+                  ListTile(
+                    leading: const Icon(Icons.lock_outline),
+                    title: const Text('Encrypted account recovery'),
+                    subtitle: const Text(
+                      'Save or recover pending changes and receipts',
+                    ),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AccountDataRecoveryScreen(),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: AppSpace.md),
                 _StatusCard(
                   icon: Icons.backup_outlined,

@@ -1,23 +1,36 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Chunk 10: the only thing standing between "signed in" and "OTP again on
-/// every reload" was that nothing ever wrote the tokens anywhere. Wraps
-/// SharedPreferences (works on Flutter Web via localStorage) rather than
-/// anything more elaborate — this is a refresh token for an internal admin
-/// tool, not a payment credential.
+/// Native compatibility storage. Browser builds erase legacy credentials and
+/// use only the server's HttpOnly cookie; no bearer token is persisted here.
+/// Native admin refresh tokens remain sensitive privileged credentials.
 class TokenStore {
   static const _accessKey = 'pandapay_console.access_token';
   static const _refreshKey = 'pandapay_console.refresh_token';
 
   final SharedPreferences _prefs;
-  const TokenStore(this._prefs);
+  final bool browserSessions;
+  const TokenStore(this._prefs, {this.browserSessions = kIsWeb});
 
-  static Future<TokenStore> load() async => TokenStore(await SharedPreferences.getInstance());
+  static Future<TokenStore> load({bool browserSessions = kIsWeb}) async {
+    final store = TokenStore(
+      await SharedPreferences.getInstance(),
+      browserSessions: browserSessions,
+    );
+    if (store.browserSessions) await store.clear();
+    return store;
+  }
 
-  String? get accessToken => _prefs.getString(_accessKey);
-  String? get refreshToken => _prefs.getString(_refreshKey);
+  String? get accessToken =>
+      browserSessions ? null : _prefs.getString(_accessKey);
+  String? get refreshToken =>
+      browserSessions ? null : _prefs.getString(_refreshKey);
 
   Future<void> save({required String accessToken, String? refreshToken}) async {
+    if (browserSessions) {
+      await clear();
+      return;
+    }
     await _prefs.setString(_accessKey, accessToken);
     if (refreshToken != null) {
       await _prefs.setString(_refreshKey, refreshToken);

@@ -65,3 +65,18 @@ test('contact, header injection, arrays and overlong request IDs are replaced', 
     assert.equal(result.responseId, result.reqId);
   }
 });
+
+test('auth ordinary request logs omit account identifiers', () => {
+  const output = process.stdout.write;
+  const lines = [];
+  process.stdout.write = line => { lines.push(JSON.parse(line)); return true; };
+  try {
+    const req = { get: () => 'support-case', method: 'GET', route: { path: '/users/me' }, user: { id: 'private-account-uuid' } };
+    const res = new EventEmitter();
+    res.statusCode = 200; res.setHeader = () => {};
+    requestLogger(req, res, () => {}); res.emit('finish');
+    assert.equal(lines[0].authenticated, true);
+    assert.equal('userId' in lines[0], false);
+    assert.equal(JSON.stringify(lines).includes(req.user.id), false);
+  } finally { process.stdout.write = output; }
+});

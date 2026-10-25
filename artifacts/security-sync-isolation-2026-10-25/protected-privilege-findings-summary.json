@@ -1,0 +1,62 @@
+{
+  "format": "pandapay-restored-privilege-review-summary-v1",
+  "source": "existing-local-encrypted-backup",
+  "candidate_sha256": "f8b289111ab85f098eaaf4287fb996837a0412f3dd72bddf46c6b5c659365d10",
+  "read_only": true,
+  "live_connection_opened": false,
+  "role_mapping": "saved_explicit_product_and_auth_urls",
+  "scopes": {
+    "product": {
+      "complete": true,
+      "strict_pass": false,
+      "blocking": 225,
+      "codes": {
+        "broad_default_privileges": 6,
+        "definer_owner_privileged": 33,
+        "definer_owner_unreviewed": 33,
+        "definer_search_path_requires_review": 53,
+        "definer_search_path_unfixed": 2,
+        "effective_access_without_rls": 9,
+        "forbidden_routine_execute": 14,
+        "future_public_routine_execute": 4,
+        "public_definer_execute": 19,
+        "required_routine_access_missing": 8,
+        "runtime_migration_ledger_access": 3,
+        "table_force_rls_disabled": 31,
+        "table_rls_disabled": 3,
+        "unreviewed_schema_access": 1,
+        "view_owner_execution": 6
+      }
+    },
+    "auth": {
+      "complete": true,
+      "strict_pass": false,
+      "blocking": 82,
+      "codes": {
+        "effective_access_without_rls": 8,
+        "future_public_routine_execute": 3,
+        "membership_admin_option": 12,
+        "privileged_membership": 2,
+        "privileged_role": 1,
+        "runtime_database_create": 1,
+        "runtime_ddl_like_privilege": 8,
+        "runtime_migration_ledger_access": 1,
+        "runtime_owns_database": 1,
+        "runtime_owns_relation": 8,
+        "runtime_schema_create": 1,
+        "table_force_rls_disabled": 8,
+        "table_rls_disabled": 8,
+        "unreviewed_membership": 20
+      }
+    }
+  },
+  "history": {
+    "entries": 102,
+    "unknown": 0,
+    "mismatched": 0,
+    "missing_checksum": 102,
+    "duplicate": 0
+  },
+  "encrypted_details": "status/privilege-review.json.age",
+  "production_accepted": false
+}

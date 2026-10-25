@@ -1,0 +1,26 @@
+{
+  "docker-compose.prod.yml": {
+    "parsed": true,
+    "auth_and_migration_reader_passthrough": [
+      "auth",
+      "db-migrate"
+    ],
+    "recovery_reader_passthrough": [
+      "api"
+    ],
+    "reader_defaults_blank": true,
+    "recovery_activation_default_false": true
+  },
+  "docker-compose.staging.yml": {
+    "parsed": true,
+    "auth_and_migration_reader_passthrough": [
+      "auth",
+      "db-migrate"
+    ],
+    "recovery_reader_passthrough": [
+      "api"
+    ],
+    "reader_defaults_blank": true,
+    "recovery_activation_default_false": true
+  }
+}

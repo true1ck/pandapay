@@ -1,108 +1,247 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-/// Talks to auth/ (OTP + JWT) and api/'s /admin/* surface. AD-0.3.1: no
-/// signup path — this only ever calls the OTP login flow, same as the user
-/// app; whether the resulting account is actually an operator is entirely
-/// determined server-side by api/'s requireAdmin (pandapay.is_admin()), not
-/// by anything client-side.
+/// Browser builds use the same-origin gateway. Upstream bearer credentials
+/// never enter Dart or browser storage. Native callers retain the OTP API.
+class ConsoleOtpChallenge {
+  final String id, identifier, deviceId;
+  final bool email;
+  final DateTime expiresAt;
+  const ConsoleOtpChallenge._(
+    this.id,
+    this.identifier,
+    this.deviceId,
+    this.email,
+    this.expiresAt,
+  );
+}
+
 class AuthApi {
   final String authBaseUrl;
+  final String browserBaseUrl;
+  final bool browserSessions;
   final http.Client _client;
-  AuthApi({required this.authBaseUrl, http.Client? client})
-    : _client = client ?? http.Client();
+  final bool versionedOtpEnabled;
+  int get otpCodeLength => versionedOtpEnabled ? 6 : 4;
+  String? _csrf;
+  String? get browserCsrf => _csrf;
+  AuthApi({
+    required this.authBaseUrl,
+    http.Client? client,
+    this.browserSessions = kIsWeb,
+    this.browserBaseUrl = '/browser',
+    this.versionedOtpEnabled = false,
+  }) : _client = client ?? http.Client();
 
-  Future<void> requestOtp(String phoneNumber) async {
-    final response = await _client.post(
-      Uri.parse('$authBaseUrl/auth/request-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone_number': phoneNumber}),
-    );
+  Uri _uri(String path) => Uri.parse(
+    browserSessions ? '$browserBaseUrl/$path' : '$authBaseUrl/auth/$path',
+  );
+  Map<String, String> get _headers => {
+    'Content-Type': 'application/json',
+    if (browserSessions) 'X-Console-Request': '1',
+    if (browserSessions && _csrf != null) 'X-CSRF-Token': _csrf!,
+  };
+  String _otpPath(String path) => '${versionedOtpEnabled ? 'v2/' : ''}$path';
+  String _contact(String value, bool email) =>
+      email ? value.trim().toLowerCase() : value.trim();
+  Future<ConsoleOtpChallenge?> requestOtp(
+    String phoneNumber, {
+    String? deviceId,
+  }) => _request('request-otp', 'phone_number', phoneNumber, false, deviceId);
+  Future<ConsoleOtpChallenge?> requestEmailOtp(
+    String email, {
+    String? deviceId,
+  }) => _request('request-email-otp', 'email', email, true, deviceId);
+  Future<ConsoleOtpChallenge?> _request(
+    String path,
+    String field,
+    String identifier,
+    bool email,
+    String? deviceId,
+  ) async {
+    if (versionedOtpEnabled &&
+        (deviceId == null ||
+            !RegExp(r'^[A-Za-z0-9:_-]{4,128}$').hasMatch(deviceId))) {
+      throw AdminApiException('Please request a new sign-in code.');
+    }
+    final response = await _client
+        .post(
+          _uri(_otpPath(path)),
+          headers: _headers,
+          body: jsonEncode({
+            field: identifier,
+            if (versionedOtpEnabled) 'device_id': deviceId,
+          }),
+        )
+        .timeout(const Duration(seconds: 8));
     if (response.statusCode != 200) {
       throw AdminApiException(
-        'OTP request failed: ${response.statusCode} ${response.body}',
+        'OTP request failed.',
+        statusCode: response.statusCode,
+      );
+    }
+    if (!versionedOtpEnabled) return null;
+    try {
+      final b = jsonDecode(response.body) as Map<String, dynamic>,
+          id = b['challenge_id'];
+      if (b['ok'] != true ||
+          b['version'] != 2 ||
+          b['code_length'] != 6 ||
+          b['expires_in'] != 120 ||
+          id is! String ||
+          !RegExp(
+            r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
+            caseSensitive: false,
+          ).hasMatch(id)) {
+        throw const FormatException();
+      }
+      return ConsoleOtpChallenge._(
+        id,
+        _contact(identifier, email),
+        deviceId!,
+        email,
+        DateTime.now().add(const Duration(seconds: 120)),
+      );
+    } catch (_) {
+      throw AdminApiException(
+        'Unable to start sign-in. Please try again shortly.',
       );
     }
   }
 
-  Future<void> requestEmailOtp(String email) async {
-    final response = await _client.post(
-      Uri.parse('$authBaseUrl/auth/request-email-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email}),
-    );
-    if (response.statusCode != 200) {
-      throw AdminApiException(
-        'Email OTP request failed: ${response.statusCode} ${response.body}',
-      );
-    }
-  }
-
-  /// Returns both tokens — AD-0.3's session needs the refresh token too, to
-  /// survive a page reload without asking for OTP again (Chunk 10).
   Future<AuthTokens> verifyOtp(
     String phoneNumber,
     String code,
-    String deviceId,
-  ) async {
-    final response = await _client.post(
-      Uri.parse('$authBaseUrl/auth/verify-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'phone_number': phoneNumber,
-        'code': code,
-        'device_id': deviceId,
-      }),
-    );
-    if (response.statusCode != 200) {
-      throw AdminApiException(
-        'OTP verify failed: ${response.statusCode} ${response.body}',
-      );
-    }
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return AuthTokens(accessToken: body['access_token'] as String, refreshToken: body['refresh_token'] as String?);
-  }
-
+    String deviceId, {
+    ConsoleOtpChallenge? challenge,
+  }) => _verifyOtp(
+    'verify-otp',
+    'phone_number',
+    phoneNumber,
+    code,
+    deviceId,
+    false,
+    challenge,
+  );
   Future<AuthTokens> verifyEmailOtp(
     String email,
     String code,
+    String deviceId, {
+    ConsoleOtpChallenge? challenge,
+  }) => _verifyOtp(
+    'verify-email-otp',
+    'email',
+    email,
+    code,
+    deviceId,
+    true,
+    challenge,
+  );
+  Future<AuthTokens> _verifyOtp(
+    String path,
+    String field,
+    String identifier,
+    String code,
     String deviceId,
-  ) async {
-    final response = await _client.post(
-      Uri.parse('$authBaseUrl/auth/verify-email-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'code': code, 'device_id': deviceId}),
-    );
-    if (response.statusCode != 200) {
+    bool email,
+    ConsoleOtpChallenge? challenge,
+  ) {
+    if (versionedOtpEnabled &&
+            (challenge == null ||
+                challenge.identifier != _contact(identifier, email) ||
+                challenge.email != email ||
+                challenge.deviceId != deviceId ||
+                !DateTime.now().isBefore(challenge.expiresAt) ||
+                !RegExp(r'^\d{6}$').hasMatch(code)) ||
+        !versionedOtpEnabled && challenge != null) {
       throw AdminApiException(
-        'Email OTP verify failed: ${response.statusCode} ${response.body}',
+        'Please request a new sign-in code for this device.',
       );
     }
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return AuthTokens(accessToken: body['access_token'] as String, refreshToken: body['refresh_token'] as String?);
+    return _verify(_otpPath(path), {
+      field: identifier,
+      'code': code,
+      'device_id': deviceId,
+      if (versionedOtpEnabled) 'challenge_id': challenge!.id,
+      if (versionedOtpEnabled && !browserSessions) 'recovery_only': true,
+    });
   }
 
-  /// Exchanges a stored refresh token for a fresh access token on startup —
-  /// the real auth/'s POST /auth/refresh, not a stub. A 401 here means the
-  /// refresh token is invalid/expired/reused; callers should treat that as
-  /// signed-out, not retry.
-  Future<AuthTokens> refresh(String refreshToken) async {
-    final response = await _client.post(
-      Uri.parse('$authBaseUrl/auth/refresh'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'refresh_token': refreshToken}),
-    );
+  Future<AuthTokens> _verify(String path, Map<String, dynamic> payload) async {
+    final response = await _client
+        .post(_uri(path), headers: _headers, body: jsonEncode(payload))
+        .timeout(const Duration(seconds: 8));
+    return _tokens(response);
+  }
+
+  AuthTokens _tokens(http.Response response) {
     if (response.statusCode != 200) {
       throw AdminApiException(
-        'Refresh failed: ${response.statusCode} ${response.body}',
+        'Sign-in could not be completed.',
         statusCode: response.statusCode,
       );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (browserSessions) {
+      if (body['authenticated'] != true || body['csrfToken'] is! String) {
+        throw AdminApiException('Browser session unavailable.');
+      }
+      _csrf = body['csrfToken'] as String;
+      // An in-memory UI marker, never a bearer credential.
+      return const AuthTokens(accessToken: 'console-browser-session');
+    }
     return AuthTokens(
       accessToken: body['access_token'] as String,
-      refreshToken: body['refresh_token'] as String? ?? refreshToken,
+      refreshToken: body['refresh_token'] as String?,
     );
+  }
+
+  Future<AuthTokens> refresh(String refreshToken) async {
+    final response = browserSessions
+        ? await _client.get(_uri('session'), headers: _headers)
+        : await _client.post(
+            _uri('refresh'),
+            headers: _headers,
+            body: jsonEncode({'refresh_token': refreshToken}),
+          );
+    try {
+      return _tokens(response);
+    } on AdminApiException {
+      if (response.statusCode == 401) _csrf = null;
+      rethrow;
+    }
+  }
+
+  Future<void> logout() async {
+    if (!browserSessions) return;
+    final response = await _client.post(
+      _uri('logout'),
+      headers: _headers,
+      body: '{}',
+    );
+    if (response.statusCode != 200 && response.statusCode != 401) {
+      throw AdminApiException(
+        'Sign-out could not be completed. Try again.',
+        statusCode: response.statusCode,
+      );
+    }
+    _csrf = null;
+  }
+
+  Future<List<Map<String, dynamic>>> categories() async {
+    final uri = browserSessions
+        ? Uri.parse('$browserBaseUrl/api/categories')
+        : throw StateError('Browser session required');
+    final response = await _client.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'Categories unavailable.',
+        statusCode: response.statusCode,
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['categories'] as List).cast<Map<String, dynamic>>();
   }
 }
 
@@ -115,16 +254,20 @@ class AuthTokens {
 class AdminApi {
   final String apiBaseUrl;
   final String accessToken;
+  final String? Function()? csrfToken;
   final http.Client _client;
 
   AdminApi({
     required this.apiBaseUrl,
     required this.accessToken,
+    this.csrfToken,
     http.Client? client,
   }) : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-    'Authorization': 'Bearer $accessToken',
+    if (csrfToken == null) 'Authorization': 'Bearer $accessToken',
+    if (csrfToken != null) 'X-Console-Request': '1',
+    if (csrfToken?.call() case final String csrf) 'X-CSRF-Token': csrf,
     'Content-Type': 'application/json',
   };
 
@@ -331,7 +474,11 @@ class AdminApi {
     return (body['requestGroups'] as List).cast<Map<String, dynamic>>();
   }
 
-  Future<void> startScrapingSource({required String issuerName, String? productName, required String baseUrl}) async {
+  Future<void> startScrapingSource({
+    required String issuerName,
+    String? productName,
+    required String baseUrl,
+  }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/card-requests/start-scraping'),
       headers: _headers,
@@ -486,7 +633,12 @@ class AdminApi {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/merchants/$merchantId/override'),
       headers: _headers,
-      body: jsonEncode({'displayName': ?displayName, 'categoryId': ?categoryId, 'mcc': ?mcc, 'reason': ?reason}),
+      body: jsonEncode({
+        'displayName': ?displayName,
+        'categoryId': ?categoryId,
+        'mcc': ?mcc,
+        'reason': ?reason,
+      }),
     );
     if (response.statusCode != 200) {
       throw AdminApiException(
@@ -722,7 +874,10 @@ class AdminApi {
   /// separately, the CI gate — see .github/workflows/anonymization-audit.yml,
   /// which calls the SQL function directly rather than through this route).
   Future<Map<String, dynamic>> runAnonymizationAuditNow() async {
-    final response = await _client.post(Uri.parse('$apiBaseUrl/admin/anonymization-audit-runs/run'), headers: _headers);
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/anonymization-audit-runs/run'),
+      headers: _headers,
+    );
     if (response.statusCode != 201) {
       throw AdminApiException(
         'run failed: ${response.statusCode} ${response.body}',
@@ -797,7 +952,12 @@ class AdminApi {
     final response = await _client.put(
       Uri.parse('$apiBaseUrl/admin/parser-patterns/$id'),
       headers: _headers,
-      body: jsonEncode({'regex': ?regex, 'fieldMap': ?fieldMap, 'isActive': ?isActive, 'reason': ?reason}),
+      body: jsonEncode({
+        'regex': ?regex,
+        'fieldMap': ?fieldMap,
+        'isActive': ?isActive,
+        'reason': ?reason,
+      }),
     );
     if (response.statusCode != 200) {
       throw AdminApiException(
@@ -940,26 +1100,37 @@ class AdminApi {
   // ---- SMS AI Operations & Rollout ------------------------------------------
 
   Future<Map<String, dynamic>> fetchSmsAiSummary() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sms-ai/summary'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sms-ai/summary'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/sms-ai/summary failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/sms-ai/summary failed: ${response.statusCode} ${response.body}',
+      );
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<List<Map<String, dynamic>>> fetchSmsLearningCandidates({int limit = 100}) async {
+  Future<List<Map<String, dynamic>>> fetchSmsLearningCandidates({
+    int limit = 100,
+  }) async {
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/admin/sms-learning/candidates?limit=$limit'),
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/sms-learning/candidates failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/sms-learning/candidates failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['candidates'] as List).cast<Map<String, dynamic>>();
   }
 
-  Future<Map<String, dynamic>> fetchSmsLearningOperations({int limit = 100}) async {
+  Future<Map<String, dynamic>> fetchSmsLearningOperations({
+    int limit = 100,
+  }) async {
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/admin/sms-learning/operations?limit=$limit'),
       headers: _headers,
@@ -1012,51 +1183,80 @@ class AdminApi {
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchSmsAiJobs({String? status, int limit = 50}) async {
-    final query = status != null ? '?status=$status&limit=$limit' : '?limit=$limit';
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sms-ai/jobs$query'), headers: _headers);
+  Future<List<Map<String, dynamic>>> fetchSmsAiJobs({
+    String? status,
+    int limit = 50,
+  }) async {
+    final query = status != null
+        ? '?status=$status&limit=$limit'
+        : '?limit=$limit';
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sms-ai/jobs$query'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/sms-ai/jobs failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/sms-ai/jobs failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['jobs'] as List).cast<Map<String, dynamic>>();
   }
 
   Future<List<Map<String, dynamic>>> fetchSmsAiJobTimeline(String jobId) async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sms-ai/jobs/$jobId/events'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sms-ai/jobs/$jobId/events'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/sms-ai/jobs/$jobId/events failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/sms-ai/jobs/$jobId/events failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['events'] as List).cast<Map<String, dynamic>>();
   }
 
   Future<List<Map<String, dynamic>>> fetchSmsAiQuota() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sms-ai/quota'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sms-ai/quota'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/sms-ai/quota failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/sms-ai/quota failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['quota'] as List).cast<Map<String, dynamic>>();
   }
 
-  Future<Map<String, dynamic>> runSmsAiDryRun(List<Map<String, dynamic>> observations) async {
+  Future<Map<String, dynamic>> runSmsAiDryRun(
+    List<Map<String, dynamic>> observations,
+  ) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/sms-ai/dry-run'),
       headers: _headers,
       body: jsonEncode({'observations': observations}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('POST /admin/sms-ai/dry-run failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'POST /admin/sms-ai/dry-run failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['report'] as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> fetchSmsRolloutStatus() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sms-ai/rollout'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sms-ai/rollout'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/sms-ai/rollout failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/sms-ai/rollout failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['rollout'] as Map<String, dynamic>;

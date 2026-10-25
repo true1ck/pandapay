@@ -28,6 +28,8 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
   final _contactCheckController = TextEditingController();
   final _replacementController = TextEditingController();
   final _codeFocus = FocusNode();
+  OtpChallenge? _challenge;
+  int get _codeLength => ref.read(authApiProvider).otpCodeLength;
   bool _otpRequested = false;
   bool _recoveryComplete = false;
   bool _identifierIsEmail = true;
@@ -40,6 +42,7 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
   AuthTokens? _pendingTokens;
   bool _replacingContact = false;
   String? _replacementChallenge;
+  RecoveryContactReplacementChallenge? _replacementV2Challenge;
 
   @override
   void dispose() {
@@ -110,13 +113,21 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
     });
     try {
       final auth = ref.read(authApiProvider);
+      final deviceId = auth.versionedOtpEnabled
+          ? await ref.read(localDeviceIdProvider.future)
+          : null;
       if (_identifierIsEmail) {
-        await auth.requestEmailOtp(
+        _challenge = await auth.requestEmailOtp(
           _identifierController.text.trim(),
           recoveryOnly: true,
+          deviceId: deviceId,
         );
       } else {
-        await auth.requestOtp(_normalizedPhone!, recoveryOnly: true);
+        _challenge = await auth.requestOtp(
+          _normalizedPhone!,
+          recoveryOnly: true,
+          deviceId: deviceId,
+        );
       }
       if (mounted) {
         setState(() {
@@ -132,6 +143,8 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
       }
     } catch (error) {
       final activeOtp =
+          (!ref.read(authApiProvider).versionedOtpEnabled ||
+              _challenge != null) &&
           error is ApiException &&
           error.statusCode == 429 &&
           error.userMessage.toLowerCase().contains('otp') &&
@@ -155,8 +168,10 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
   }
 
   Future<void> _verifyCode() async {
-    if (_codeController.text.trim().length != 4) {
-      setState(() => _error = 'Enter the 4-digit code we sent you.');
+    if (!RegExp(
+      '^[0-9]{$_codeLength}\$',
+    ).hasMatch(_codeController.text.trim())) {
+      setState(() => _error = 'Enter the $_codeLength-digit code we sent you.');
       return;
     }
     setState(() {
@@ -176,6 +191,7 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
                   deviceId,
                   recoveryOnly: true,
                   deviceInfo: deviceInfo,
+                  challenge: _challenge,
                 )
               : await auth.verifyOtp(
                   _normalizedPhone!,
@@ -183,6 +199,7 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
                   deviceId,
                   recoveryOnly: true,
                   deviceInfo: deviceInfo,
+                  challenge: _challenge,
                 ));
       _pendingTokens = tokens;
       // Keep credentials local until the user has seen the linked contact
@@ -255,13 +272,23 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
       _error = null;
     });
     try {
-      final challenge = await ref
-          .read(authApiProvider)
-          .recoveryApiFor(_pendingTokens!.accessToken)
-          .requestContactReplacement(value);
+      final auth = ref.read(authApiProvider);
+      final api = auth.recoveryApiFor(_pendingTokens!.accessToken);
+      String? legacyChallenge;
+      RecoveryContactReplacementChallenge? v2Challenge;
+      if (auth.versionedOtpEnabled) {
+        final deviceId = await ref.read(localDeviceIdProvider.future);
+        v2Challenge = await api.requestContactReplacementV2(
+          value,
+          deviceId: deviceId,
+        );
+      } else {
+        legacyChallenge = await api.requestContactReplacement(value);
+      }
       if (!mounted) return;
       setState(() {
-        _replacementChallenge = challenge;
+        _replacementChallenge = legacyChallenge;
+        _replacementV2Challenge = v2Challenge;
         _codeController.clear();
       });
       _startResendCooldown();
@@ -273,9 +300,14 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
   }
 
   Future<void> _saveReplacement() async {
-    if (_codeController.text.trim().length != 4) {
+    final auth = ref.read(authApiProvider);
+    final codeLength = auth.versionedOtpEnabled ? 6 : 4;
+    if (!RegExp(
+      '^[0-9]{$codeLength}\$',
+    ).hasMatch(_codeController.text.trim())) {
       setState(
-        () => _error = 'Enter the 4-digit code sent to your new contact.',
+        () => _error =
+            'Enter the $codeLength-digit code sent to your new contact.',
       );
       return;
     }
@@ -284,18 +316,24 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
       _error = null;
     });
     try {
-      final api = ref
-          .read(authApiProvider)
-          .recoveryApiFor(_pendingTokens!.accessToken);
-      final status = await api.verifyContactReplacement(
-        _replacementChallenge!,
-        _codeController.text.trim(),
-      );
+      final api = auth.recoveryApiFor(_pendingTokens!.accessToken);
+      final status = auth.versionedOtpEnabled
+          ? await api.verifyContactReplacementV2(
+              _replacementV2Challenge!,
+              _codeController.text.trim(),
+              identifier: _replacementController.text.trim(),
+              deviceId: await ref.read(localDeviceIdProvider.future),
+            )
+          : await api.verifyContactReplacement(
+              _replacementChallenge!,
+              _codeController.text.trim(),
+            );
       if (mounted) {
         setState(() {
           _recoveryStatus = status;
           _replacingContact = false;
           _replacementChallenge = null;
+          _replacementV2Challenge = null;
         });
       }
     } catch (error) {
@@ -307,7 +345,10 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
 
   Widget _replacementForm() {
     final channel = _identifierIsEmail ? 'phone number' : 'email address';
-    final hasChallenge = _replacementChallenge != null;
+    final versioned = ref.read(authApiProvider).versionedOtpEnabled;
+    final codeLength = versioned ? 6 : 4;
+    final hasChallenge =
+        _replacementChallenge != null || _replacementV2Challenge != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -318,7 +359,7 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
         const SizedBox(height: AppSpace.md),
         Text(
           hasChallenge
-              ? 'Enter the code sent to ${_replacementController.text.trim()}. Your linked contact changes only after this code is verified.'
+              ? 'Enter the code sent to ${_replacementV2Challenge?.contactHint ?? _replacementController.text.trim()}. Your linked contact changes only after this code is verified.'
               : 'You verified the contact you can still access. Enter a new $channel, then verify the code we send there.',
           style: BambooFonts.ui(14, color: BambooInk.ink500, height: 1.5),
         ),
@@ -334,7 +375,7 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
           inputFormatters: hasChallenge
               ? [
                   FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(4),
+                  LengthLimitingTextInputFormatter(codeLength),
                 ]
               : null,
           decoration: InputDecoration(
@@ -369,6 +410,7 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
               : () => setState(() {
                   _replacingContact = false;
                   _replacementChallenge = null;
+                  _replacementV2Challenge = null;
                   _error = null;
                 }),
           child: const Text('Back to linked contacts'),
@@ -570,12 +612,12 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
                     autofillHints: const [AutofillHints.oneTimeCode],
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(4),
+                      LengthLimitingTextInputFormatter(_codeLength),
                     ],
                     onSubmitted: (_) => _loading ? null : _verifyCode(),
                     style: BambooFonts.ui(15, color: BambooInk.ink900),
                     decoration: InputDecoration(
-                      hintText: '4-digit code',
+                      hintText: '$_codeLength-digit code',
                       hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
                       prefixIcon: const Icon(
                         Icons.pin_outlined,

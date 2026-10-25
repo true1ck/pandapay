@@ -1,0 +1,13 @@
+{
+  "removed": [
+    "pandapay-completion24-pg17",
+    "pandapay-completion24-smoke-api",
+    "pandapay-completion24-smoke-auth"
+  ],
+  "remaining_owned_containers": [],
+  "fixture_database_storage": "tmpfs released",
+  "application_images_retained": [
+    "pandapay-security-completion-api:local",
+    "pandapay-security-completion-auth:local"
+  ]
+}

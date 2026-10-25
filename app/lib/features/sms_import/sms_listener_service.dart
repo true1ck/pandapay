@@ -1,5 +1,8 @@
 import 'dart:ui';
 
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+
 import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +16,7 @@ import '../../data/local/financial_store.dart';
 import '../../data/local_sms_parser.dart';
 import '../../data/local/sms_import_store.dart';
 import '../../data/local/sms_rule_bundle_store.dart';
+import '../../data/local/recovery_deferred_sms.dart';
 
 /// The background-isolate entry point for an SMS that arrives while the app
 /// is closed or backgrounded.
@@ -54,30 +58,42 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
     final messageTimestamp = message.date ?? message.dateSent;
     await prefs.reload();
     final namespace = prefs.getString(smsCaptureNamespaceKey) ?? 'signed-out';
-    final database = await AppDatabase.open();
+    final queued = QueuedSms(
+      sender: sender,
+      body: body,
+      receivedAt: messageTimestamp == null
+          ? DateTime.now()
+          : DateTime.fromMillisecondsSinceEpoch(messageTimestamp),
+    );
     try {
-      final queued = QueuedSms(
-        sender: sender,
-        body: body,
-        receivedAt: messageTimestamp == null
-            ? DateTime.now()
-            : DateTime.fromMillisecondsSinceEpoch(messageTimestamp),
-      );
-      final store = FinancialStore(database);
-      // Background isolates still have access to the verified SQLite rule
-      // cache. Apply the same active and assigned candidate rules that the
-      // foreground worker uses so a message is classified once consistently;
-      // the next foreground flush only uploads durable outbox evidence.
-      final ruleStore = SmsRuleBundleStore(database);
-      final bundle = ruleStore.loadActiveBundleSync();
-      SmsImportStore(
-        store,
-        downloadedRules: bundle,
-        candidateRules: ruleStore.loadCandidateBundlesSync(namespace: namespace),
-      ).capture(namespace, queued);
-      store.dispose();
-    } finally {
-      database.close();
+      final database = await AppDatabase.open();
+      try {
+        final store = FinancialStore(database);
+        try {
+          final ruleStore = SmsRuleBundleStore(database);
+          final bundle = ruleStore.loadActiveBundleSync();
+          SmsImportStore(
+            store,
+            downloadedRules: bundle,
+            candidateRules: ruleStore.loadCandidateBundlesSync(namespace: namespace),
+          ).capture(namespace, queued);
+        } finally {
+          store.dispose();
+        }
+      } finally {
+        database.close();
+      }
+    } catch (_) {
+      // Recovery may own the main SQLite writer lock in another isolate.
+      // Preserve this event in an account-labelled, separate durable spool;
+      // foreground reconciliation drains it only after the main DB is free.
+      final root = await getApplicationDocumentsDirectory();
+      final deferred = RecoveryDeferredSms.open(path.join(root.path, 'pandapay.sqlite'));
+      try {
+        deferred.enqueue(namespace, queued);
+      } finally {
+        deferred.close();
+      }
     }
   } catch (_) {
     // Nothing in a background isolate can surface an error to the user, and

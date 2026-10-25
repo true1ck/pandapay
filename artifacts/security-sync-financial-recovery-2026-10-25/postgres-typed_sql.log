@@ -1,0 +1,1 @@
+PASS typed sync RPC PostgreSQL fixture; legacy_function_unchanged=true; fixture_rolled_back=true

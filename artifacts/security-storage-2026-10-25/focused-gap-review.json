@@ -1,0 +1,245 @@
+{
+  "format": "pandapay-focused-gap-review-v1",
+  "date": "25 October 2026 (IST)",
+  "review_type": "Current source and dated local evidence, including catalogue implementation/fixtures; no live, signed-device or intended-provider acceptance",
+  "scope_total": 26,
+  "implemented_in_source": [
+    "N01",
+    "N03",
+    "W01",
+    "W04"
+  ],
+  "unfinished": 22,
+  "partial": 19,
+  "open": 3,
+  "status_changes": {
+    "D05": "Open -> Partial: additive source and synthetic PostgreSQL/API/dump-restore verification; actual-data acceptance remains"
+  },
+  "feature_activation_performed": false,
+  "items": [
+    {
+      "id": "D01",
+      "section": "Data",
+      "status": "Open",
+      "work_type": "Implementation/reconciliation",
+      "present": "Read-only duplicate/reference/digest review and fresh protected restore. Latest checked cap-rule extra-row count: zero.",
+      "missing": "Historical canonical ID mapping and cap/financial-state reconciliation are not demonstrated. Zero current duplicates cannot prove the earlier merge preserved consumption.",
+      "next_action": "Review historical dedupe and reconcile original IDs/state against source transactions before any further repair.",
+      "evidence": "docs/security-storage-implementation-2026-10-25.md"
+    },
+    {
+      "id": "D02",
+      "section": "Data",
+      "status": "Open",
+      "work_type": "Implementation/reconciliation",
+      "present": "Read-only benefit/usage/reference checks. Latest checked benefit extra-row count: zero.",
+      "missing": "Historical benefit identity/entitlement/lounge-usage reconciliation and a recoverable mapping remain absent.",
+      "next_action": "Reconcile history and retain semantically different benefits; do not run another blind row merge.",
+      "evidence": "artifacts/security-dnmw-2026-10-25/restored-data-summary.json"
+    },
+    {
+      "id": "D03",
+      "section": "Data",
+      "status": "Partial",
+      "work_type": "Review/rehearsal",
+      "present": "Reviewed index inspector/planner, rollback rehearsal/apply receipt and synthetic uniqueness/RLS/CRUD tests.",
+      "missing": "Real change_log workload/EXPLAIN comparison and concrete retain/drop decision are not recorded.",
+      "next_action": "Measure the exact clone, choose retain/drop and rehearse that exact decision.",
+      "evidence": "db/scripts/reviewed_index_reconciliation.js"
+    },
+    {
+      "id": "D04",
+      "section": "Data",
+      "status": "Partial",
+      "work_type": "Review/rehearsal",
+      "present": "Tool can retain an exactly matching unique constraint while dropping only a reviewed redundant nonunique index.",
+      "missing": "Actual partner-click definitions, dependencies, callback workload and target decision remain unaccepted.",
+      "next_action": "Keep uniqueness; measure and rehearse only a concrete reviewed decision.",
+      "evidence": "db/tests/reviewed_index_reconciliation_postgres.js"
+    },
+    {
+      "id": "D05",
+      "section": "Data",
+      "status": "Partial",
+      "work_type": "Review/rehearsal",
+      "present": "Additive v1 uniqueness/reviewer and safe admin conflicts pass synthetic preservation tests. Protected PostgreSQL restore now completes v1 checks with zero collisions; original keys/identities verify.",
+      "missing": "Historical cap/benefit reconciliation, exact full-candidate actual-data upgrade/import and intended-provider acceptance remain. Read-only collision checks did not apply the migration.",
+      "next_action": "Review pending history and private historical evidence before the complete clone upgrade; retain original IDs/state and verify imports/clients/provider.",
+      "evidence": "docs/security-execution-implementation-2026-10-25.md"
+    },
+    {
+      "id": "N02",
+      "section": "Dependencies",
+      "status": "Partial",
+      "work_type": "Review/rehearsal",
+      "present": "Targeted split/tag/sync boundaries and typed SQL constraint tests now cover UUID, enum/date, numeric and mixed-item rejection. Broader route/fuzz and exact release dependency/advisory applicability remain.",
+      "missing": "Broader sensitive-route field/schema/fuzz coverage and exact release dependency/advisory applicability remain.",
+      "next_action": "Extend remaining route/fuzz coverage and exact release dependency/advisory applicability; preserve current client contracts.",
+      "evidence": "docs/security-sync-financial-recovery-implementation-2026-10-25.md"
+    },
+    {
+      "id": "N04",
+      "section": "Dependencies",
+      "status": "Partial",
+      "work_type": "Target acceptance",
+      "present": "Patched provider chain, fixed safe errors, 10-second SMS timeout and local transport/redirect/retry tests.",
+      "missing": "Configured provider delivery, credentials/destinations, quotas and exact deployed tree are not verified.",
+      "next_action": "Run the accepted test-recipient/provider and deployed-tree matrix before activation.",
+      "evidence": "auth/test/provider_transport_boundaries.test.js"
+    },
+    {
+      "id": "M1",
+      "section": "Mobile",
+      "status": "Partial",
+      "work_type": "Review/rehearsal",
+      "present": "Frozen-source retained-ref recognized-text scan completed 655 commits / 4,246 blobs with bounded containing-commit/blob provenance for all 32 historical flags. No values emitted; flagged locations are review leads.",
+      "missing": "Flagged-record contextual classification, excluded history paths and exact native/Dex/binary release coverage remain. A complete scoped text traversal is not a clean-release conclusion.",
+      "next_action": "Classify locations privately and inspect exact release artifacts/native payloads; preserve decryptability during any separately coordinated exposure response.",
+      "evidence": "docs/security-sync-financial-recovery-implementation-2026-10-25.md"
+    },
+    {
+      "id": "M2",
+      "section": "Mobile",
+      "status": "Partial",
+      "work_type": "Review/rehearsal",
+      "present": "npm/Dart/Pod/Swift/vendor inventories plus resolved Android devRelease graph and cached artifact/spec hashes.",
+      "missing": "Production/staging graph comparison, native applicability/support and unresolved license/provenance decisions remain.",
+      "next_action": "Review exact shipped release components; keep unresolved metadata explicit.",
+      "evidence": "docs/security-dependency-applicability-2026-10-25.md"
+    },
+    {
+      "id": "M3",
+      "section": "Mobile",
+      "status": "Partial",
+      "work_type": "Implementation/reconciliation",
+      "present": "Current-session checks and tested source role/ownership controls remain; opt-in V2 also binds profile/device and denies low-privilege execution. The complete route/capability/abuse matrix remains unfinished.",
+      "missing": "Complete route-family policy/role matrix and remaining general/admin capability/abuse work are not finished.",
+      "next_action": "Close the missing route/capability cases across anonymous, guest, revoked, disabled, deleted and cross-account access.",
+      "evidence": "docs/security-sync-financial-recovery-implementation-2026-10-25.md"
+    },
+    {
+      "id": "M4",
+      "section": "Mobile",
+      "status": "Partial",
+      "work_type": "Implementation/reconciliation",
+      "present": "Opt-in V2 repairs typed sync writes and reconciles actual accepted transaction inputs through the financial core; raw transaction status/delete sync is rejected. Default writer stays legacy; actual-data/concurrency/client and broader entity contracts remain.",
+      "missing": "V2 is default-off. Complete current-data/PostgreSQL17/provider, concurrency/replay/rule-boundary and supported-client acceptance, plus broader entity/import contracts remain.",
+      "next_action": "Rehearse the typed domain path on the exact protected clone and required role/client/concurrent-edit matrix before activation; preserve financial/history replay.",
+      "evidence": "docs/security-sync-financial-recovery-implementation-2026-10-25.md"
+    },
+    {
+      "id": "M5",
+      "section": "Mobile",
+      "status": "Partial",
+      "work_type": "Target acceptance",
+      "present": "Verified backend TLS source configuration, release origin requirements and platform communication controls.",
+      "missing": "The actual signed release endpoint/TLS/cleartext behavior on supported devices is not accepted.",
+      "next_action": "Inspect/run the signed target artifacts; choose pinning only under an explicit rotation/recovery policy.",
+      "evidence": "app/lib/app/env.dart"
+    },
+    {
+      "id": "M6",
+      "section": "Mobile",
+      "status": "Partial",
+      "work_type": "Implementation/reconciliation",
+      "present": "Explicit consent, receipt/temp components and compatible snapshot coverage now validate declared tables, independent row counts and receipt bytes before restore writes. Complete phone recovery and cross-store retention/deletion/privacy remain.",
+      "missing": "Complete fresh-phone receipt/queue/deferred-SMS recovery, consent/deletion races and cross-store retention/privacy remain; legacy archives cannot prove complete producer coverage.",
+      "next_action": "Accept integrated new-phone recovery and measured copy limits, then complete retention/deletion across stores before storage activation.",
+      "evidence": "docs/security-sync-financial-recovery-implementation-2026-10-25.md"
+    },
+    {
+      "id": "M7",
+      "section": "Mobile",
+      "status": "Open",
+      "work_type": "Target acceptance",
+      "present": "Source documents the Room/R8 failure; minification/resource shrinking remain deliberately disabled.",
+      "missing": "No current signed release reproduction/accepted shrinking/Room/OCR/import matrix exists. This is an evidence gap, not proof of an auth bypass.",
+      "next_action": "Reproduce on the isolated signed release, fix or explicitly retain the compatible policy; never enable shrinking blindly.",
+      "evidence": "app/android/app/build.gradle.kts"
+    },
+    {
+      "id": "M8",
+      "section": "Mobile",
+      "status": "Partial",
+      "work_type": "Target acceptance",
+      "present": "Source manifest/backup, capability-role and deployment configuration safeguards exist.",
+      "missing": "Installed signed manifest/entitlements/exported component and actual provider/proxy/bootstrap-role acceptance remain.",
+      "next_action": "Compare built/installed artifacts and actual target roles with the reviewed source policy.",
+      "evidence": "app/android/app/src/main/AndroidManifest.xml"
+    },
+    {
+      "id": "M9",
+      "section": "Mobile",
+      "status": "Partial",
+      "work_type": "Implementation/reconciliation",
+      "present": "Native writer fences, verified complete-schema encrypted copy, receipt codec, private temp cleanup and authenticated journal; focused/native tests pass.",
+      "missing": "Normal AppDatabase.open/openFile still use plaintext SQLite. Copy/journal/receipt components are not wired through startup, all writers, attachment viewing/OCR/export and restore. Atomic switch/forward repair/crash coverage remains.",
+      "next_action": "Finish authenticated startup/manifest/writer admission, then dual receipt readers and all export/restore paths before enabling new writes.",
+      "evidence": "app/lib/data/local/app_database.dart"
+    },
+    {
+      "id": "M10",
+      "section": "Mobile",
+      "status": "Partial",
+      "work_type": "Implementation/reconciliation",
+      "present": "Original keys retained; versioned phone and retained recovery-ID readers, strict config/release registration, Node 22 and synthetic SQL/dump-restore proof now exist. Legacy current-key restore still passes.",
+      "missing": "Complete IMAP/lookup key-version support, bounded new-write/backfill/rotation, actual retained-key custody and integrated device loss/reboot/locked-store recovery remain.",
+      "next_action": "Preserve original keys; finish remaining reader/lookup formats and separately gated backfill plus device/provider recovery acceptance before any key change.",
+      "evidence": "docs/security-key-readers-implementation-2026-10-25.md"
+    },
+    {
+      "id": "W02",
+      "section": "Documentation",
+      "status": "Partial",
+      "work_type": "Implementation/reconciliation",
+      "present": "Current reader formats, optional recovery coverage and typed-writer rollout contracts are documented. Original keys/cipher writers remain; full server format/backfill and effective target acceptance remain.",
+      "missing": "Full server IMAP/lookup/backfill contracts and effective target/retained-custody evidence remain.",
+      "next_action": "Finish key/cipher format evolution and backfill notes against effective target evidence; retain reader and snapshot compatibility.",
+      "evidence": "docs/security-sync-financial-recovery-implementation-2026-10-25.md"
+    },
+    {
+      "id": "W03",
+      "section": "Documentation",
+      "status": "Partial",
+      "work_type": "Implementation/reconciliation",
+      "present": "Catalogue comments now describe migration 0015 and public-view filtering accurately; actual 0015 non-owner public/admin local fixtures pass.",
+      "missing": "Effective target publication/RLS, migration history and runtime-role acceptance remain separate from source and local fixtures.",
+      "next_action": "Verify the actual deployed view, policy and non-owner roles on the intended target before closing the claim.",
+      "evidence": "api/src/index.js"
+    },
+    {
+      "id": "W05",
+      "section": "Documentation",
+      "status": "Partial",
+      "work_type": "Implementation/reconciliation",
+      "present": "Current entrypoints are PandaPay; historical plans are labelled and legacy wording/consumers are inventoried.",
+      "missing": "Older active auth/signup/domain guides and any remaining consumers still need compatible wording/retirement decisions.",
+      "next_action": "Correct harmless active labels; preserve/version external route/schema contracts and keep history linked.",
+      "evidence": "docs/security-current-architecture-2026-10-25.md"
+    },
+    {
+      "id": "W06",
+      "section": "Documentation",
+      "status": "Partial",
+      "work_type": "Target acceptance",
+      "present": "PandaPay OTP template/sender source and synthetic delivery behavior are recorded.",
+      "missing": "Real approved sender/domain authentication, message rendering/reply/link and provider delivery acceptance remain.",
+      "next_action": "Verify the configured test-recipient/provider path; branding alone does not prove sender legitimacy.",
+      "evidence": "auth/src/services/emailService.js"
+    },
+    {
+      "id": "W07",
+      "section": "Documentation",
+      "status": "Partial",
+      "work_type": "Implementation/reconciliation",
+      "present": "Safe sync errors and source/local proof boundaries are recorded, including disabled typed writes and legacy archive limits. Deployed logs, retention, revocation and operational evidence remain.",
+      "missing": "Complete logging/retention/revocation/operational contracts and deployed captured-log evidence are not finished.",
+      "next_action": "Remove remaining broad claims and finish relevant retention/revocation checks; publish only the bound actually observed.",
+      "evidence": "docs/security-sync-financial-recovery-implementation-2026-10-25.md"
+    }
+  ],
+  "new_source_implementation_performed": true,
+  "latest_execution_record": "docs/security-sync-financial-recovery-implementation-2026-10-25.md",
+  "updated_at_utc": "2026-10-25T09:33:41.266685+00:00",
+  "runtime_activation_performed": false
+}

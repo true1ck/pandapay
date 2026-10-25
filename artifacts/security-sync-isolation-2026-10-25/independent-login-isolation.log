@@ -1,0 +1,1 @@
+PASS: seven legacy sync RPCs deny PUBLIC even with forged context; independent app LOGIN rejects absent/wrong identity and foreign/null devices; temp shadows ignored; registration/category/note/pull/monotonic ack preserved; status/delete denied; transaction-local identity cleared; all synthetic data digests preserved

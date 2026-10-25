@@ -1,3 +1,4 @@
+import '../portable_backup/account_recovery_operation_gate.dart';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -92,7 +93,7 @@ class TransactionAttachmentsRepository {
     required String fileName,
     required String? mimeType,
     required Future<File> Function(String destination) copy,
-  }) async {
+  }) => AccountRecoveryOperationGate.process.run(() async {
     final root = await getApplicationDocumentsDirectory();
     final directory = Directory(
       p.join(root.path, 'transaction_attachments', transactionId),
@@ -137,16 +138,17 @@ class TransactionAttachmentsRepository {
       mimeType: mimeType,
       createdAt: DateTime.now(),
     );
-  }
+  });
 
-  Future<void> delete(TransactionAttachment attachment) async {
+  Future<void> delete(TransactionAttachment attachment) =>
+      AccountRecoveryOperationGate.process.run(() async {
     _database.db.execute(
       'DELETE FROM transaction_attachments WHERE id = ?',
       [attachment.id],
     );
     final file = File(attachment.localPath);
     if (await file.exists()) await file.delete();
-  }
+  });
 
   static String _safeFileName(String value) {
     final base = p.basename(value).trim();

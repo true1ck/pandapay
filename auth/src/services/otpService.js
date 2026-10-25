@@ -3,6 +3,7 @@ const { safeErrorCode } = require('../utils/safeErrorCode');
 const bcrypt = require('bcrypt');
 const db = require('../db');
 const config = require('../config');
+const otpAdmission = require('./otpWorkAdmission').getOtpWorkAdmission();
 const {
   markActiveOtp,
   clearActiveOtp,
@@ -12,7 +13,7 @@ const { TEST_OTP_CODE, isTestOtpIdentifier } = require('../utils/testOtp');
 // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
 const { encryptPhoneNumber } = require('../utils/fieldEncryption');
 const { phoneLookupHash } = require('../utils/encryptedPhoneSearch');
-const { randomInt, randomUUID } = require('node:crypto');
+const { randomInt, randomUUID, createHash } = require('node:crypto');
 
 // === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY ===
 // These fixed identifiers + code "1234" exist solely so local development
@@ -34,6 +35,27 @@ const OTP_EXPIRY_MS = OTP_TTL_SECONDS * 1000;
 const MAX_OTP_ATTEMPTS = Number(process.env.OTP_VERIFY_MAX_ATTEMPTS || process.env.OTP_MAX_ATTEMPTS || 5);
 const OTP_TYPES = new Set(['phone', 'email']);
 const OTP_PURPOSES = new Set(['signin', 'recovery', 'replacement']);
+const V2_TTL_SECONDS = 120;
+const V2_MAX_ATTEMPTS = 5;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function v2Binding(deviceId, requestId) {
+  if (typeof deviceId !== 'string' || !/^[A-Za-z0-9:_-]{4,128}$/.test(deviceId)) {
+    throw new TypeError('v2 OTP requires a stable device_id');
+  }
+  if (requestId !== undefined && !UUID.test(requestId)) throw new TypeError('v2 OTP requires a challenge_id');
+  return { version: 2, deviceHash: createHash('sha256').update('pandapay-otp-device-v2\0').update(deviceId).digest('hex'), requestId };
+}
+
+// The version is always selected by trusted server code. Client fields cannot
+// change legacy OTP semantics or turn an arbitrary request into proof.
+function protocolPredicate(binding, startIndex) {
+  return binding
+    ? `protocol_version = 2 AND device_binding_hash = $${startIndex} AND id = $${startIndex + 1}`
+    : 'protocol_version = 1';
+}
+function scopeArgs(binding) { return binding ? [binding.deviceHash, binding.requestId] : []; }
+
 
 function validateOtpScope(type, purpose) {
   if (!OTP_TYPES.has(type)) throw new TypeError('OTP type must be phone or email');
@@ -49,17 +71,20 @@ function purposePredicate(purpose, parameterIndex) {
 }
 
 // === SECURITY HARDENING: TIMING ATTACK PROTECTION ===
-// Pre-computed dummy hash for constant-time comparison when OTP not found
-// This ensures bcrypt.compare() always executes with similar timing
-// Generated once at module load to avoid performance impact
-let dummyOtpHash = null;
-async function getDummyOtpHash() {
-  if (!dummyOtpHash) {
-    // Generate a dummy hash that will never match any real OTP
-    const dummyCode = 'DUMMY_OTP_' + Math.random().toString(36).substring(2, 15) + Date.now();
-    dummyOtpHash = await bcrypt.hash(dummyCode, 10);
+// A lazily shared dummy hash keeps bcrypt comparison on missing-code paths.
+// This reduces one source of timing differences; it is not a constant-time
+// guarantee for the complete database/HTTP authentication flow.
+let dummyOtpHashPromise = null;
+function getDummyOtpHash() {
+  if (!dummyOtpHashPromise) {
+    // Share the pending initialization as well as its result. Concurrent
+    // misses must not enqueue one native hash per request. Retry after failure.
+    dummyOtpHashPromise = Promise.resolve().then(() => bcrypt.hash(randomUUID(), 10)).catch(error => {
+      dummyOtpHashPromise = null;
+      throw error;
+    });
   }
-  return dummyOtpHash;
+  return dummyOtpHashPromise;
 }
 
 /**
@@ -89,17 +114,18 @@ function generateOtpCode() {
  * @param {string} type - 'phone' or 'email'
  * @returns {Promise<{code: string}>} - The generated OTP code
  */
-async function createOtp(identifier, type = 'phone', purpose = 'signin') {
+async function createOtpInternal(identifier, type, purpose, binding = null) {
   validateOtpScope(type, purpose);
   if (typeof identifier !== 'string' || !identifier.trim()) throw new TypeError('OTP identifier is required');
   // === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY, see constants above ===
   const normalizedIdentifier = identifier.trim().toLowerCase();
-  const isTestIdentifier = isTestOtpIdentifier(normalizedIdentifier);
+  const isTestIdentifier = !binding && isTestOtpIdentifier(normalizedIdentifier);
 
-  const code = isTestIdentifier ? TEST_OTP_CODE : generateOtpCode();
+  const code = binding ? randomInt(100000, 1000000).toString() : (isTestIdentifier ? TEST_OTP_CODE : generateOtpCode());
 
   const requestId = randomUUID();
-  const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
+  const ttl = binding ? V2_TTL_SECONDS : OTP_TTL_SECONDS;
+  const expiresAt = new Date(Date.now() + ttl * 1000);
   const otpHash = await bcrypt.hash(code, 10);
 
   let encryptedPhone = null;
@@ -117,7 +143,7 @@ async function createOtp(identifier, type = 'phone', purpose = 'signin') {
 
   // Atomically reserve this identifier/purpose before touching OTP rows. A
   // concurrent request sees the live claim and cannot send a second code.
-  const claimed = await markActiveOtp(identifier, OTP_TTL_SECONDS, requestId, purpose);
+  const claimed = await markActiveOtp(identifier, ttl, requestId, purpose);
   if (claimed === false) {
     throw typeof ActiveOtpError === 'function'
       ? new ActiveOtpError()
@@ -131,7 +157,7 @@ async function createOtp(identifier, type = 'phone', purpose = 'signin') {
         `UPDATE otp_requests
          SET deleted = TRUE
          WHERE phone_lookup_hash = $1 AND type = 'phone' AND deleted = FALSE
-           AND ${purposePredicate(purpose, 2)}`,
+           AND ${purposePredicate(purpose, 2)} AND protocol_version = ${binding ? 2 : 1}`,
         [phoneHash, purpose]
       );
     } else {
@@ -139,7 +165,7 @@ async function createOtp(identifier, type = 'phone', purpose = 'signin') {
         `UPDATE otp_requests
          SET deleted = TRUE
          WHERE email = $1 AND type = 'email' AND deleted = FALSE
-           AND ${purposePredicate(purpose, 2)}`,
+           AND ${purposePredicate(purpose, 2)} AND protocol_version = ${binding ? 2 : 1}`,
         [email, purpose]
       );
     }
@@ -147,10 +173,10 @@ async function createOtp(identifier, type = 'phone', purpose = 'signin') {
     // Append the generated UUID as $9 so historical parameter positions stay
     // stable for existing SQL instrumentation and integration fixtures.
     await db.query(
-      `INSERT INTO otp_requests (phone_number, phone_lookup_hash, email, type, country_code, otp_hash, expires_at, attempt_count, deleted, purpose, id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 0, FALSE, $8, $9)
+      `INSERT INTO otp_requests (phone_number, phone_lookup_hash, email, type, country_code, otp_hash, expires_at, attempt_count, deleted, purpose, id, protocol_version, device_binding_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 0, FALSE, $8, $9, $10, $11)
        RETURNING id`,
-      [encryptedPhone, phoneHash, email, type, countryCode, otpHash, expiresAt, purpose, requestId]
+      [encryptedPhone, phoneHash, email, type, countryCode, otpHash, expiresAt, purpose, requestId, binding ? 2 : 1, binding?.deviceHash || null]
     );
   } catch (error) {
     try {
@@ -171,10 +197,15 @@ async function createOtp(identifier, type = 'phone', purpose = 'signin') {
  * @param {string} type - 'phone' or 'email'
  * @returns {Promise<{ok: boolean, reason?: string}>} - Whether the OTP is valid
  */
-async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
+async function verifyOtpInternal(identifier, code, type, purpose, binding = null) {
   validateOtpScope(type, purpose);
   if (typeof identifier !== 'string' || !identifier.trim()) throw new TypeError('OTP identifier is required');
   const codeStr = String(code).trim();
+  const maxAttempts = binding ? V2_MAX_ATTEMPTS : MAX_OTP_ATTEMPTS;
+  if (binding && (typeof code !== 'string' || !/^\d{6}$/.test(code))) {
+    await bcrypt.compare(codeStr.slice(0, 128), await getDummyOtpHash());
+    return { ok: false, reason: 'invalid' };
+  }
   const normalizedIdentifier = identifier.trim().toLowerCase();
 
   let result;
@@ -189,9 +220,10 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
          AND consumed_at IS NULL
          AND type = 'phone'
          AND ${purposePredicate(purpose, 2)}
+         AND ${protocolPredicate(binding, 3)}
        ORDER BY created_at DESC
        LIMIT 1`,
-      [lookupHash, purpose]
+      [lookupHash, purpose, ...scopeArgs(binding)]
     );
   } else if (type === 'email') {
     result = await db.query(
@@ -202,9 +234,10 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
          AND consumed_at IS NULL
          AND type = 'email'
          AND ${purposePredicate(purpose, 2)}
+         AND ${protocolPredicate(binding, 3)}
        ORDER BY created_at DESC
        LIMIT 1`,
-      [normalizedIdentifier, purpose]
+      [normalizedIdentifier, purpose, ...scopeArgs(binding)]
     );
   }
 
@@ -235,7 +268,7 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
     isExpired = new Date() > new Date(otpRecord.expires_at);
     
     // Check if max attempts exceeded (but don't return early - continue to bcrypt.compare)
-    isMaxAttempts = otpRecord.attempt_count >= MAX_OTP_ATTEMPTS;
+    isMaxAttempts = otpRecord.attempt_count >= maxAttempts;
     
   }
 
@@ -258,8 +291,8 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
     // Expired OTPs are consumed only if another request has not already won.
     await db.query(
       `UPDATE otp_requests SET consumed_at = NOW() WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE
-         AND ${purposePredicate(purpose, 2)}`,
-      [otpRecord.id, purpose]
+         AND ${purposePredicate(purpose, 2)} AND ${protocolPredicate(binding, 3)}`,
+      [otpRecord.id, purpose, ...scopeArgs(binding)]
     );
     return { ok: false, reason: 'expired' };
   }
@@ -268,8 +301,8 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
     // Max attempts exceeded - mark as consumed (but we already did bcrypt.compare for constant time)
     await db.query(
       `UPDATE otp_requests SET consumed_at = NOW() WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE
-         AND ${purposePredicate(purpose, 2)}`,
-      [otpRecord.id, purpose]
+         AND ${purposePredicate(purpose, 2)} AND ${protocolPredicate(binding, 3)}`,
+      [otpRecord.id, purpose, ...scopeArgs(binding)]
     );
     return { ok: false, reason: 'max_attempts' };
   }
@@ -282,17 +315,17 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
       const updateResult = await db.query(
         `UPDATE otp_requests SET attempt_count = attempt_count + 1
          WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE
-           AND ${purposePredicate(purpose, 2)} RETURNING attempt_count`,
-        [otpRecord.id, purpose]
+           AND ${purposePredicate(purpose, 2)} AND ${protocolPredicate(binding, 3)} RETURNING attempt_count`,
+        [otpRecord.id, purpose, ...scopeArgs(binding)]
       );
       const newAttemptCount = updateResult.rows[0]?.attempt_count || 0;
       
       // If max attempts reached, mark as consumed
-      if (newAttemptCount >= MAX_OTP_ATTEMPTS) {
+      if (newAttemptCount >= maxAttempts) {
         await db.query(
           `UPDATE otp_requests SET consumed_at = NOW() WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE
-             AND ${purposePredicate(purpose, 2)}`,
-          [otpRecord.id, purpose]
+             AND ${purposePredicate(purpose, 2)} AND ${protocolPredicate(binding, 3)}`,
+          [otpRecord.id, purpose, ...scopeArgs(binding)]
         );
       }
     }
@@ -306,9 +339,9 @@ async function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
     `UPDATE otp_requests SET consumed_at = NOW()
      WHERE id = $1 AND consumed_at IS NULL AND deleted = FALSE
        AND expires_at > NOW() AND attempt_count < $2
-       AND ${purposePredicate(purpose, 3)}
+       AND ${purposePredicate(purpose, 3)} AND ${protocolPredicate(binding, 4)}
      RETURNING id`,
-    [otpRecord.id, MAX_OTP_ATTEMPTS, purpose],
+    [otpRecord.id, maxAttempts, purpose, ...scopeArgs(binding)],
   );
   if (consumed.rows.length !== 1) return { ok: false, reason: 'consumed_or_expired' };
   // Clear only this code's resend marker. The helper compares the stored
@@ -340,7 +373,7 @@ async function cleanupExpiredOtps() {
 }
 
 /** Discard an OTP that could not be delivered so the user can retry at once. */
-async function discardUndeliveredOtp(identifier, type, requestId, purpose = 'signin') {
+async function discardUndeliveredOtpInternal(identifier, type, requestId, purpose, binding = null) {
   validateOtpScope(type, purpose);
   if (typeof identifier !== 'string' || !identifier.trim()) throw new TypeError('OTP identifier is required');
   if (!requestId) throw new Error('OTP request id is required for delivery cleanup');
@@ -350,8 +383,8 @@ async function discardUndeliveredOtp(identifier, type, requestId, purpose = 'sig
       `UPDATE otp_requests
        SET deleted = TRUE
        WHERE id = $1 AND email = $2 AND type = 'email' AND deleted = FALSE AND consumed_at IS NULL
-         AND ${purposePredicate(purpose, 3)}`,
-      [requestId, normalizedIdentifier, purpose]
+         AND ${purposePredicate(purpose, 3)} AND ${protocolPredicate(binding, 4)}`,
+      [requestId, normalizedIdentifier, purpose, ...scopeArgs(binding)]
     );
   } else {
     const lookupHash = phoneLookupHash(identifier);
@@ -360,15 +393,38 @@ async function discardUndeliveredOtp(identifier, type, requestId, purpose = 'sig
        SET deleted = TRUE
        WHERE id = $1 AND phone_lookup_hash = $2 AND type = 'phone'
          AND deleted = FALSE AND consumed_at IS NULL
-         AND ${purposePredicate(purpose, 3)}`,
-      [requestId, lookupHash, purpose]
+         AND ${purposePredicate(purpose, 3)} AND ${protocolPredicate(binding, 4)}`,
+      [requestId, lookupHash, purpose, ...scopeArgs(binding)]
     );
   }
   await clearActiveOtp(identifier, requestId, purpose);
 }
 
+function createOtp(identifier, type = 'phone', purpose = 'signin') {
+  return otpAdmission.run('work', () => createOtpInternal(identifier, type, purpose));
+}
+function verifyOtp(identifier, code, type = 'phone', purpose = 'signin') {
+  return otpAdmission.run('work', () => verifyOtpInternal(identifier, code, type, purpose));
+}
+function discardUndeliveredOtp(identifier, type, requestId, purpose = 'signin') {
+  return discardUndeliveredOtpInternal(identifier, type, requestId, purpose);
+}
+function createOtpV2(identifier, type, purpose, deviceId) {
+  return otpAdmission.run('work', () => createOtpInternal(identifier, type, purpose, v2Binding(deviceId)));
+}
+function verifyOtpV2(identifier, code, type, purpose, deviceId, challengeId) {
+  return otpAdmission.run('work', () => verifyOtpInternal(identifier, code, type, purpose, v2Binding(deviceId, challengeId)));
+}
+function discardUndeliveredOtpV2(identifier, type, requestId, purpose, deviceId) {
+  return discardUndeliveredOtpInternal(identifier, type, requestId, purpose, v2Binding(deviceId, requestId));
+}
+
 module.exports = {
   createOtp,
+  createOtpV2,
+  verifyOtpV2,
+  discardUndeliveredOtpV2,
+  V2_TTL_SECONDS,
   verifyOtp,
   cleanupExpiredOtps,
   discardUndeliveredOtp,

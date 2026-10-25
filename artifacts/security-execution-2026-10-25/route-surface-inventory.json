@@ -1,0 +1,2684 @@
+{
+  "format": "pandapay-static-route-surface-inventory-v1",
+  "captured_at": "2026-10-25T08:09:56.659277+00:00",
+  "scope": "Literal app/router HTTP declarations only; source text inventory, not effective middleware, runtime reachability, role coverage or complete dynamic route discovery",
+  "routes": [
+    {
+      "method": "GET",
+      "declared_path": "/admin/referrals/operations",
+      "file": "api/src/admin_referral_operations.js",
+      "line": 8,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PUT",
+      "declared_path": "/admin/referrals/holds/:scope",
+      "file": "api/src/admin_referral_operations.js",
+      "line": 20,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PUT",
+      "declared_path": "/admin/${urlSegment}/by-card/:cardProductId",
+      "file": "api/src/admin_rule_families.js",
+      "line": 104,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/${urlSegment}",
+      "file": "api/src/admin_rule_families.js",
+      "line": 149,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PUT",
+      "declared_path": "/admin/${urlSegment}/:id",
+      "file": "api/src/admin_rule_families.js",
+      "line": 181,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "DELETE",
+      "declared_path": "/admin/${urlSegment}/:id",
+      "file": "api/src/admin_rule_families.js",
+      "line": 222,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/ai/provider/reserve",
+      "file": "api/src/ai_provider_quota_route.js",
+      "line": 11,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/ai/jobs",
+      "file": "api/src/ai_queue_route.js",
+      "line": 67,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/ai/jobs/source/:sourceKey",
+      "file": "api/src/ai_queue_route.js",
+      "line": 106,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/ai/jobs/lease",
+      "file": "api/src/ai_queue_route.js",
+      "line": 149,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/ai/jobs/:id/heartbeat",
+      "file": "api/src/ai_queue_route.js",
+      "line": 164,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/ai/jobs/:id/result",
+      "file": "api/src/ai_queue_route.js",
+      "line": 183,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/ai/jobs/:id/retry",
+      "file": "api/src/ai_queue_route.js",
+      "line": 234,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/ai/jobs/:id/fail",
+      "file": "api/src/ai_queue_route.js",
+      "line": 270,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/sms-ai/summary",
+      "file": "api/src/ai_queue_route.js",
+      "line": 296,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/sms-ai/jobs",
+      "file": "api/src/ai_queue_route.js",
+      "line": 317,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/sms-ai/jobs/:id/events",
+      "file": "api/src/ai_queue_route.js",
+      "line": 332,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/sms-ai/quota",
+      "file": "api/src/ai_queue_route.js",
+      "line": 345,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/sms-ai/dry-run",
+      "file": "api/src/ai_queue_route.js",
+      "line": 358,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/sms-ai/rollout",
+      "file": "api/src/ai_queue_route.js",
+      "line": 372,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/bills/projections",
+      "file": "api/src/bills_projection_route.js",
+      "line": 52,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/health",
+      "file": "api/src/index.js",
+      "line": 309,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/ready",
+      "file": "api/src/index.js",
+      "line": 314,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/profile",
+      "file": "api/src/index.js",
+      "line": 350,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/profile",
+      "file": "api/src/index.js",
+      "line": 369,
+      "inline_guard_markers": [
+        "requireVerifiedSession"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/catalogue",
+      "file": "api/src/index.js",
+      "line": 474,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/me",
+      "file": "api/src/index.js",
+      "line": 514,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/cards",
+      "file": "api/src/index.js",
+      "line": 533,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/issuers",
+      "file": "api/src/index.js",
+      "line": 556,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/cards",
+      "file": "api/src/index.js",
+      "line": 621,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PUT",
+      "declared_path": "/admin/reward-rules/:id",
+      "file": "api/src/index.js",
+      "line": 691,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/parser-patterns",
+      "file": "api/src/index.js",
+      "line": 871,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/parser-patterns",
+      "file": "api/src/index.js",
+      "line": 908,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PUT",
+      "declared_path": "/admin/parser-patterns/:id",
+      "file": "api/src/index.js",
+      "line": 956,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "DELETE",
+      "declared_path": "/admin/parser-patterns/:id",
+      "file": "api/src/index.js",
+      "line": 1031,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/cards/:id/status",
+      "file": "api/src/index.js",
+      "line": 1074,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/categories",
+      "file": "api/src/index.js",
+      "line": 1138,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/user-categories",
+      "file": "api/src/index.js",
+      "line": 1151,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/app-status",
+      "file": "api/src/index.js",
+      "line": 1180,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/merchants/nearby",
+      "file": "api/src/index.js",
+      "line": 1221,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/merchants/nearby/google",
+      "file": "api/src/index.js",
+      "line": 1285,
+      "inline_guard_markers": [
+        "requireValidJwt"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/merchants/nearby/discover",
+      "file": "api/src/index.js",
+      "line": 1398,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/merchants/nearby/discover",
+      "file": "api/src/index.js",
+      "line": 1399,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/merchants/nearby/search",
+      "file": "api/src/index.js",
+      "line": 1492,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/merchants/nearby/search",
+      "file": "api/src/index.js",
+      "line": 1493,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/card-requests",
+      "file": "api/src/index.js",
+      "line": 1507,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/data-error-reports",
+      "file": "api/src/index.js",
+      "line": 1568,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/sync/register-device",
+      "file": "api/src/index.js",
+      "line": 1634,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/notification-devices",
+      "file": "api/src/index.js",
+      "line": 1659,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/notifications/test",
+      "file": "api/src/index.js",
+      "line": 1717,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/sync/push",
+      "file": "api/src/index.js",
+      "line": 1792,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/sync/pull",
+      "file": "api/src/index.js",
+      "line": 1943,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/sync/ack",
+      "file": "api/src/index.js",
+      "line": 1982,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/sync/conflicts/:id/acknowledge",
+      "file": "api/src/index.js",
+      "line": 1999,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/analytics/events",
+      "file": "api/src/index.js",
+      "line": 2040,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/partner-clicks",
+      "file": "api/src/index.js",
+      "line": 2090,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/partner-conversions/webhook",
+      "file": "api/src/index.js",
+      "line": 2134,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/acceptance-reports",
+      "file": "api/src/index.js",
+      "line": 2166,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/merchants/search",
+      "file": "api/src/index.js",
+      "line": 2219,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/merchants/resolve",
+      "file": "api/src/index.js",
+      "line": 2308,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/card-requests",
+      "file": "api/src/index.js",
+      "line": 2343,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/card-requests/start-scraping",
+      "file": "api/src/index.js",
+      "line": 2377,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/error-reports",
+      "file": "api/src/index.js",
+      "line": 2427,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/error-reports/:id/approve",
+      "file": "api/src/index.js",
+      "line": 2460,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/error-reports/:id/reject",
+      "file": "api/src/index.js",
+      "line": 2542,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/alerts",
+      "file": "api/src/index.js",
+      "line": 2570,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/alerts/:id",
+      "file": "api/src/index.js",
+      "line": 2596,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/alerts/:id/decide",
+      "file": "api/src/index.js",
+      "line": 2641,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/user-cards",
+      "file": "api/src/index.js",
+      "line": 2683,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/user-cards",
+      "file": "api/src/index.js",
+      "line": 2782,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/user-cards/import",
+      "file": "api/src/index.js",
+      "line": 2929,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/user-cards/:id/archive",
+      "file": "api/src/index.js",
+      "line": 3097,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/user-cards/:id/default",
+      "file": "api/src/index.js",
+      "line": 3132,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/card-overrides",
+      "file": "api/src/index.js",
+      "line": 3162,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/card-overrides",
+      "file": "api/src/index.js",
+      "line": 3193,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PATCH",
+      "declared_path": "/card-overrides/:id",
+      "file": "api/src/index.js",
+      "line": 3245,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "DELETE",
+      "declared_path": "/card-overrides/:id",
+      "file": "api/src/index.js",
+      "line": 3300,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/user-cards/:id/unarchive",
+      "file": "api/src/index.js",
+      "line": 3321,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/user-cards/reorder",
+      "file": "api/src/index.js",
+      "line": 3383,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PATCH",
+      "declared_path": "/user-cards/:id",
+      "file": "api/src/index.js",
+      "line": 3434,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/user-cards/:id/points-ledger",
+      "file": "api/src/index.js",
+      "line": 3524,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/user-cards/:id/points-adjustment",
+      "file": "api/src/index.js",
+      "line": 3558,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/transactions",
+      "file": "api/src/index.js",
+      "line": 5166,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/transactions/from-sms",
+      "file": "api/src/index.js",
+      "line": 5355,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/transactions/from-sms/batch",
+      "file": "api/src/index.js",
+      "line": 5576,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/transactions/reconcile-sms",
+      "file": "api/src/index.js",
+      "line": 5827,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/transactions/sms-import-state",
+      "file": "api/src/index.js",
+      "line": 5845,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/account-summaries",
+      "file": "api/src/index.js",
+      "line": 5880,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/transactions",
+      "file": "api/src/index.js",
+      "line": 6080,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/transactions/:id",
+      "file": "api/src/index.js",
+      "line": 6241,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/duplicate-candidates",
+      "file": "api/src/index.js",
+      "line": 6329,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/duplicate-candidates/:id/resolve",
+      "file": "api/src/index.js",
+      "line": 6382,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PATCH",
+      "declared_path": "/transactions/:id",
+      "file": "api/src/index.js",
+      "line": 6527,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/transactions/:id/category-related-preview",
+      "file": "api/src/index.js",
+      "line": 6806,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/transactions/category-bulk-apply",
+      "file": "api/src/index.js",
+      "line": 6946,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PATCH",
+      "declared_path": "/transactions/:id/note",
+      "file": "api/src/index.js",
+      "line": 7194,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/transactions/:id/ignore",
+      "file": "api/src/index.js",
+      "line": 7243,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/transactions/:id/restore",
+      "file": "api/src/index.js",
+      "line": 7296,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/lounge-usage",
+      "file": "api/src/index.js",
+      "line": 7355,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/lounge-usage",
+      "file": "api/src/index.js",
+      "line": 7373,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/monthly-reports",
+      "file": "api/src/index.js",
+      "line": 7393,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/spend-by-category",
+      "file": "api/src/index.js",
+      "line": 7557,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/spend-report",
+      "file": "api/src/index.js",
+      "line": 7619,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/assistant/spending-summary",
+      "file": "api/src/index.js",
+      "line": 7710,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/export/transactions.csv",
+      "file": "api/src/index.js",
+      "line": 7774,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/budgets",
+      "file": "api/src/index.js",
+      "line": 7847,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/budgets",
+      "file": "api/src/index.js",
+      "line": 7923,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "DELETE",
+      "declared_path": "/budgets/:id",
+      "file": "api/src/index.js",
+      "line": 7998,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/recurring",
+      "file": "api/src/index.js",
+      "line": 8031,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/recurring",
+      "file": "api/src/index.js",
+      "line": 8352,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PATCH",
+      "declared_path": "/recurring/:id",
+      "file": "api/src/index.js",
+      "line": 8406,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/recurring/:id/dismiss",
+      "file": "api/src/index.js",
+      "line": 8440,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/card-discovery",
+      "file": "api/src/index.js",
+      "line": 8480,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/referrals",
+      "file": "api/src/index.js",
+      "line": 8589,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/notifications",
+      "file": "api/src/index.js",
+      "line": 8627,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/notifications/read",
+      "file": "api/src/index.js",
+      "line": 8655,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/notifications",
+      "file": "api/src/index.js",
+      "line": 8692,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/notifications/broadcast",
+      "file": "api/src/index.js",
+      "line": 8778,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/home-summary",
+      "file": "api/src/index.js",
+      "line": 8854,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/my-contributions",
+      "file": "api/src/index.js",
+      "line": 8962,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/profile/contributions-opt-in",
+      "file": "api/src/index.js",
+      "line": 8986,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/consents",
+      "file": "api/src/index.js",
+      "line": 9035,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/consents/history",
+      "file": "api/src/index.js",
+      "line": 9057,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/consents",
+      "file": "api/src/index.js",
+      "line": 9081,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/notification-preferences",
+      "file": "api/src/index.js",
+      "line": 9144,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PUT",
+      "declared_path": "/notification-preferences",
+      "file": "api/src/index.js",
+      "line": 9162,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/notification-preferences/muted-merchants",
+      "file": "api/src/index.js",
+      "line": 9196,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/notification-preferences/muted-merchants",
+      "file": "api/src/index.js",
+      "line": 9215,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "DELETE",
+      "declared_path": "/notification-preferences/muted-merchants/:merchantId",
+      "file": "api/src/index.js",
+      "line": 9233,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/user-settings",
+      "file": "api/src/index.js",
+      "line": 9258,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PUT",
+      "declared_path": "/user-settings",
+      "file": "api/src/index.js",
+      "line": 9300,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/account/delete-request",
+      "file": "api/src/index.js",
+      "line": 9361,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "DELETE",
+      "declared_path": "/account/delete-request",
+      "file": "api/src/index.js",
+      "line": 9362,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/support-tickets",
+      "file": "api/src/index.js",
+      "line": 9372,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/changelog",
+      "file": "api/src/index.js",
+      "line": 9401,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/merchants",
+      "file": "api/src/index.js",
+      "line": 9429,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/merchants/:id",
+      "file": "api/src/index.js",
+      "line": 9484,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/merchants/:id/override",
+      "file": "api/src/index.js",
+      "line": 9533,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/merchants/:id/unpublish",
+      "file": "api/src/index.js",
+      "line": 9576,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/merchant-conflicts",
+      "file": "api/src/index.js",
+      "line": 9613,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/merchant-conflicts/:id/resolve",
+      "file": "api/src/index.js",
+      "line": 9640,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/abuse-signals",
+      "file": "api/src/index.js",
+      "line": 9700,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/abuse-signals/:id/block",
+      "file": "api/src/index.js",
+      "line": 9723,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/acceptance-summary",
+      "file": "api/src/index.js",
+      "line": 9771,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/acceptance-summary/:merchantId",
+      "file": "api/src/index.js",
+      "line": 9812,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/acceptance-summary/publish",
+      "file": "api/src/index.js",
+      "line": 9851,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/effective-rate-summary",
+      "file": "api/src/index.js",
+      "line": 9904,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/effective-rate-summary/:cardProductId/:categoryId/samples",
+      "file": "api/src/index.js",
+      "line": 9949,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/sources",
+      "file": "api/src/index.js",
+      "line": 10000,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/sources",
+      "file": "api/src/index.js",
+      "line": 10029,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PATCH",
+      "declared_path": "/admin/sources/:id",
+      "file": "api/src/index.js",
+      "line": 10073,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/scrape-runs",
+      "file": "api/src/index.js",
+      "line": 10123,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/source-pages/:id/snapshots",
+      "file": "api/src/index.js",
+      "line": 10150,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/sources/:id/pages",
+      "file": "api/src/index.js",
+      "line": 10168,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/data-quality-dashboard",
+      "file": "api/src/index.js",
+      "line": 10184,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/anonymization-audit-runs",
+      "file": "api/src/index.js",
+      "line": 10206,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/anonymization-audit-runs/latest",
+      "file": "api/src/index.js",
+      "line": 10223,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/anonymization-audit-runs/run",
+      "file": "api/src/index.js",
+      "line": 10242,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/forwarding-addresses",
+      "file": "api/src/index.js",
+      "line": 10296,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/forwarding-addresses/me",
+      "file": "api/src/index.js",
+      "line": 10330,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/inbound-emails/webhook",
+      "file": "api/src/index.js",
+      "line": 10371,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/forwarding-addresses/verification",
+      "file": "api/src/index.js",
+      "line": 10520,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/inbound-emails/me",
+      "file": "api/src/index.js",
+      "line": 10563,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/inbound-emails/:id/create-transaction",
+      "file": "api/src/index.js",
+      "line": 10589,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/statement-imports",
+      "file": "api/src/index.js",
+      "line": 10673,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/statement-imports",
+      "file": "api/src/index.js",
+      "line": 10678,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/sms-import-batches",
+      "file": "api/src/index.js",
+      "line": 10702,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/sms-import-batches",
+      "file": "api/src/index.js",
+      "line": 10720,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/backup-status",
+      "file": "api/src/index.js",
+      "line": 10749,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/backup-runs",
+      "file": "api/src/index.js",
+      "line": 10773,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/export",
+      "file": "api/src/index.js",
+      "line": 10785,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/imap-connections",
+      "file": "api/src/index.js",
+      "line": 10877,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/imap-connections/me",
+      "file": "api/src/index.js",
+      "line": 10931,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/imap-connections/:id/test",
+      "file": "api/src/index.js",
+      "line": 10963,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/issuer-emergency-contacts",
+      "file": "api/src/index.js",
+      "line": 11027,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/access-policy",
+      "file": "api/src/referral_routes.js",
+      "line": 105,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/internal/referral-outbox-event",
+      "file": "api/src/referral_routes.js",
+      "line": 120,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/invitations/validate",
+      "file": "api/src/referral_routes.js",
+      "line": 179,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/access",
+      "file": "api/src/referral_routes.js",
+      "line": 215,
+      "inline_guard_markers": [
+        "requireVerifiedSession"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/onboarding/complete",
+      "file": "api/src/referral_routes.js",
+      "line": 233,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/referrals/v2",
+      "file": "api/src/referral_routes.js",
+      "line": 247,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/referrals/mine",
+      "file": "api/src/referral_routes.js",
+      "line": 264,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/referrals/code",
+      "file": "api/src/referral_routes.js",
+      "line": 274,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/rewards",
+      "file": "api/src/referral_routes.js",
+      "line": 285,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/rewards/:entitlementId/spin-config",
+      "file": "api/src/referral_routes.js",
+      "line": 295,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/rewards/:entitlementId/spin",
+      "file": "api/src/referral_routes.js",
+      "line": 314,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/subscription-credits",
+      "file": "api/src/referral_routes.js",
+      "line": 344,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/subscription-credits/ledger",
+      "file": "api/src/referral_routes.js",
+      "line": 354,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/engagement/check-in",
+      "file": "api/src/referral_routes.js",
+      "line": 367,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/sms/rule-exposures",
+      "file": "api/src/sms_facts_route.js",
+      "line": 206,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/sms/facts",
+      "file": "api/src/sms_facts_route.js",
+      "line": 296,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/sms/facts/overrides",
+      "file": "api/src/sms_facts_route.js",
+      "line": 356,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/sms/dismiss",
+      "file": "api/src/sms_facts_route.js",
+      "line": 452,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/sms-learning/cycle",
+      "file": "api/src/sms_facts_route.js",
+      "line": 632,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/sms-learning/operations",
+      "file": "api/src/sms_learning.js",
+      "line": 253,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/sms-learning/candidates",
+      "file": "api/src/sms_learning.js",
+      "line": 311,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/sms-learning/candidates/:id/decision",
+      "file": "api/src/sms_learning.js",
+      "line": 323,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/sms-learning/candidates/:id/pause",
+      "file": "api/src/sms_learning.js",
+      "line": 347,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/sms-learning/candidates/:id/resume",
+      "file": "api/src/sms_learning.js",
+      "line": 373,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/sms/rules/active",
+      "file": "api/src/sms_rule_bundle.js",
+      "line": 185,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/sms-rules/publish",
+      "file": "api/src/sms_rule_bundle.js",
+      "line": 337,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/admin/sms-rules/:bundleVersion/rollback",
+      "file": "api/src/sms_rule_bundle.js",
+      "line": 382,
+      "inline_guard_markers": [
+        "requireAdmin"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/transactions/:id/splits",
+      "file": "api/src/transaction_splits.js",
+      "line": 57,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PUT",
+      "declared_path": "/transactions/:id/splits",
+      "file": "api/src/transaction_splits.js",
+      "line": 105,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/transaction-tags",
+      "file": "api/src/transaction_tags.js",
+      "line": 157,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/transaction-tags/changes",
+      "file": "api/src/transaction_tags.js",
+      "line": 170,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/merchant-category-rules",
+      "file": "api/src/user_merchant_category_rules.js",
+      "line": 401,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/merchant-category-rules/preview",
+      "file": "api/src/user_merchant_category_rules.js",
+      "line": 428,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/merchant-category-rules",
+      "file": "api/src/user_merchant_category_rules.js",
+      "line": 458,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PATCH",
+      "declared_path": "/merchant-category-rules/:id",
+      "file": "api/src/user_merchant_category_rules.js",
+      "line": 469,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "DELETE",
+      "declared_path": "/merchant-category-rules/:id",
+      "file": "api/src/user_merchant_category_rules.js",
+      "line": 504,
+      "inline_guard_markers": [
+        "requireAuth"
+      ],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/health",
+      "file": "auth/src/index.js",
+      "line": 123,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/ready",
+      "file": "auth/src/index.js",
+      "line": 129,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/auth/v2/account-status",
+      "file": "auth/src/index.js",
+      "line": 140,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/internal/account/deletion/apply",
+      "file": "auth/src/index.js",
+      "line": 159,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/admin/security-dashboard",
+      "file": "auth/src/index.js",
+      "line": 188,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/users/me/change-phone",
+      "file": "auth/src/middleware/stepUpAuth.js",
+      "line": 15,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/security-events",
+      "file": "auth/src/routes/adminRoutes.js",
+      "line": 58,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/request-otp",
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 174,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/check-user",
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 309,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/guest-login",
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 414,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/verify-otp",
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 486,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/request-email-otp",
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 763,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/verify-email-otp",
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 884,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/google",
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 1108,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/refresh",
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 1247,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/logout",
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 1408,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/signup",
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 1463,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/validate-token",
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 1726,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/session/verify",
+      "file": "auth/src/routes/internalRoutes.js",
+      "line": 27,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/request",
+      "file": "auth/src/routes/recoveryContactRoutes.js",
+      "line": 244,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/verify",
+      "file": "auth/src/routes/recoveryContactRoutes.js",
+      "line": 245,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/v2/request",
+      "file": "auth/src/routes/recoveryContactRoutes.js",
+      "line": 246,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/v2/verify",
+      "file": "auth/src/routes/recoveryContactRoutes.js",
+      "line": 247,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/me",
+      "file": "auth/src/routes/userRoutes.js",
+      "line": 34,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/me/recovery-status",
+      "file": "auth/src/routes/userRoutes.js",
+      "line": 103,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/me/recovery-contact-check",
+      "file": "auth/src/routes/userRoutes.js",
+      "line": 147,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PUT",
+      "declared_path": "/me",
+      "file": "auth/src/routes/userRoutes.js",
+      "line": 189,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/me/devices",
+      "file": "auth/src/routes/userRoutes.js",
+      "line": 232,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "DELETE",
+      "declared_path": "/me/devices/:device_id",
+      "file": "auth/src/routes/userRoutes.js",
+      "line": 264,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/me/logout-all-other-devices",
+      "file": "auth/src/routes/userRoutes.js",
+      "line": 316,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/me/logout-all-devices",
+      "file": "auth/src/routes/userRoutes.js",
+      "line": 386,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "PUT",
+      "declared_path": "/me/device/fcm-token",
+      "file": "auth/src/routes/userRoutes.js",
+      "line": 430,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/",
+      "file": "auth/src/services/consoleBrowser.js",
+      "line": 86,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/",
+      "file": "auth/src/services/consoleBrowser.js",
+      "line": 101,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/session",
+      "file": "auth/src/services/consoleBrowser.js",
+      "line": 124,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "POST",
+      "declared_path": "/logout",
+      "file": "auth/src/services/consoleBrowser.js",
+      "line": 135,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/test",
+      "file": "auth/src/utils/testHarnessAccess.js",
+      "line": 10,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    },
+    {
+      "method": "GET",
+      "declared_path": "/testpage",
+      "file": "auth/src/utils/testHarnessAccess.js",
+      "line": 13,
+      "inline_guard_markers": [],
+      "effective_policy_status": "not_verified_by_static_inventory"
+    }
+  ],
+  "mount_locations": [
+    {
+      "file": "api/src/index.js",
+      "line": 302
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 303
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 304
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 305
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 306
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 307
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 328
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 11050
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 48
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 49
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 70
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 103
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 104
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 111
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 112
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 116
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 153
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 154
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 155
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 156
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 157
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 158
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 180
+    },
+    {
+      "file": "auth/src/index.js",
+      "line": 211
+    },
+    {
+      "file": "auth/src/routes/authRoutes.js",
+      "line": 83
+    },
+    {
+      "file": "auth/src/routes/recoveryContactRoutes.js",
+      "line": 30
+    },
+    {
+      "file": "auth/src/routes/recoveryContactRoutes.js",
+      "line": 78
+    },
+    {
+      "file": "auth/src/routes/versionedOtpRoutes.js",
+      "line": 11
+    },
+    {
+      "file": "auth/src/routes/versionedOtpRoutes.js",
+      "line": 25
+    },
+    {
+      "file": "auth/src/services/consoleBrowser.js",
+      "line": 38
+    },
+    {
+      "file": "auth/src/services/consoleBrowser.js",
+      "line": 144
+    },
+    {
+      "file": "auth/src/utils/testHarnessAccess.js",
+      "line": 9
+    }
+  ],
+  "factory_or_dynamic_review_locations": [
+    {
+      "file": "api/src/account_recovery_routes.js",
+      "line": 54
+    },
+    {
+      "file": "api/src/admin_referral_operations.js",
+      "line": 7
+    },
+    {
+      "file": "api/src/admin_rule_families.js",
+      "line": 81
+    },
+    {
+      "file": "api/src/ai_queue_route.js",
+      "line": 53
+    },
+    {
+      "file": "api/src/automatic_account_recovery.js",
+      "line": 79
+    },
+    {
+      "file": "api/src/bills_projection_route.js",
+      "line": 51
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 336
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 337
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 338
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 339
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 343
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 527
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 752
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 769
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 785
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 797
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 812
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 825
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 837
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 851
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 5316
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 5322
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 5325
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 5330
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 7228
+    },
+    {
+      "file": "api/src/index.js",
+      "line": 7229
+    },
+    {
+      "file": "api/src/portable_backup/restore_routes.js",
+      "line": 41
+    },
+    {
+      "file": "api/src/portable_backup/routes.js",
+      "line": 21
+    },
+    {
+      "file": "api/src/referral_routes.js",
+      "line": 104
+    },
+    {
+      "file": "api/src/sms_facts_route.js",
+      "line": 200
+    },
+    {
+      "file": "api/src/sms_facts_route.js",
+      "line": 639
+    },
+    {
+      "file": "api/src/sms_facts_route.js",
+      "line": 640
+    },
+    {
+      "file": "api/src/sms_learning.js",
+      "line": 249
+    },
+    {
+      "file": "api/src/sms_rule_bundle.js",
+      "line": 183
+    },
+    {
+      "file": "api/src/transaction_splits.js",
+      "line": 56
+    },
+    {
+      "file": "api/src/transaction_tags.js",
+      "line": 156
+    },
+    {
+      "file": "api/src/user_merchant_category_rules.js",
+      "line": 396
+    }
+  ],
+  "source_sha256": {
+    "api/src/admin_referral_operations.js": "b25e2594ccc4a56c90a91b692128f70f55f38a43faba20114d277a065d2f5f46",
+    "api/src/admin_rule_families.js": "bfbff2988deb7d4f060161909dbf04851330ede598e66e02a5c3437a3206fdbd",
+    "api/src/ai_provider_quota_route.js": "53ad49980d383ec18f887c1a6fbac4be5327c9e5afe2c0478a7618055cc1ec64",
+    "api/src/ai_queue_route.js": "2233854ea98acafd5636806deb729d7786abeb734da4a977907773f887c524a1",
+    "api/src/bills_projection_route.js": "f6de8f044ec5c9ce409b408e4f7f5d0cd5f4ca4ce20937c855d8b50f01bd9a6c",
+    "api/src/index.js": "804a02c9e2b1cd8cf83bd70b94dfacf41496a7357d2c5fc4558c135c7df5c537",
+    "api/src/referral_routes.js": "e1b47dfd22988175ce85af1fc2d7ef508a960150705c9e411548b2fdee1b3502",
+    "api/src/sms_facts_route.js": "e9f60cce2e29bc480b8760dd088f7f7b5d855524ae06837218ff900275f4d606",
+    "api/src/sms_learning.js": "6e54c1da16d4cef6a5a00105f639db1061066f26294d8daf0341327c190fe315",
+    "api/src/sms_rule_bundle.js": "94614670a5a2ee8df53b010f1bf577b181597ac2b6aafca0e195c99c458db720",
+    "api/src/transaction_splits.js": "27cbe6eeb56350fad6196e4980a4d6f9e309b8e95ae88fd57f1bb7a1c1d7e615",
+    "api/src/transaction_tags.js": "439796bf7c3c96fddf99ac1ee57c20a009267c2d4da5e5d8e78a7160f367a667",
+    "api/src/user_merchant_category_rules.js": "0a94c97061b93f0b54bbbde0aa18a412ed3e4a69a74eb9a569e19a00b13e30c2",
+    "auth/src/index.js": "bba72fc0429fa478c856433fafc46689746e2f1d99cf50704460360daf9d4a27",
+    "auth/src/middleware/stepUpAuth.js": "d996cd07fd8dd2ddf2a4b4b864015ff32b9f22591ec0a6e31e03ab0ef23cb20d",
+    "auth/src/routes/adminRoutes.js": "0efd127133a65565e8e7b2cee9cab7cfdc0054e8ba450918242c96cc88b8cc34",
+    "auth/src/routes/authRoutes.js": "c4436b4db3a49121f1131ffe50674788f0fa431c77916a2efd6065c5edc6d5dc",
+    "auth/src/routes/internalRoutes.js": "5b4ab0e0cdb8ce125ff6a223dbddd543e9fdb225e5f8793f6e3fdbcf9160def4",
+    "auth/src/routes/recoveryContactRoutes.js": "5d96275d2e921cc0070b2f5f4734c3083bb2399ee83239d6a83ef2d9c5fc27bd",
+    "auth/src/routes/userRoutes.js": "01d87383113bb101932d1823e5f389878d8b4d8d43cf7f9efae82c2241d69a0c",
+    "auth/src/services/consoleBrowser.js": "05ec75f77d4da6d682ee9c19beb225d00b5e0896d3b456c4bacfc8abc27b5cec",
+    "auth/src/utils/testHarnessAccess.js": "f05101eb74068bd4e1722ddd69e2e6addf2e5af4c4de9115c47252c272d8fa31"
+  },
+  "counts": {
+    "literal_declarations": 249,
+    "mount_locations": 32,
+    "factory_or_dynamic_locations": 37
+  },
+  "remaining": [
+    "Resolve mount prefixes and inherited middleware per route family",
+    "Expand declarative rule-family and factory routes",
+    "Validate effective policy against supported normal/guest/admin/revoked/deleted and cross-account fixtures",
+    "Verify released current/oldest client contracts from actual release evidence"
+  ]
+}

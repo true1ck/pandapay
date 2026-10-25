@@ -7,6 +7,8 @@ const { createHash } = require('node:crypto');
 const { createRequire } = require('node:module');
 const { execFileSync } = require('node:child_process');
 const { schemaFingerprint } = require('./schema_fingerprint');
+const { validateMigrationPrefixPolicy } = require('./migration_prefix_policy');
+const { configureServiceCapabilities } = require('./service_capabilities');
 
 // Split only top-level statements, preserving strings, quoted identifiers,
 // nested comments and PL/pgSQL dollar blocks. Historical files may contain
@@ -75,6 +77,7 @@ function transactionalSql(sql) {
 
 async function runProductMigrations(client, options = {}) {
   const dbDir = options.dbDir || path.resolve(__dirname, '..');
+  const files = migrationInventory(dbDir);
   const log = options.log || (() => {});
   const timeout = options.statementTimeoutMs || 120000;
   await client.query("SELECT set_config('lock_timeout', '10000', false), set_config('statement_timeout', $1, false)", [`${timeout}ms`]);
@@ -85,7 +88,6 @@ async function runProductMigrations(client, options = {}) {
       filename text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now(), checksum text)`);
     await client.query('ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum text');
     const applied = new Map((await client.query('SELECT filename, checksum FROM schema_migrations')).rows.map(row => [row.filename, row.checksum]));
-    const files = migrationInventory(dbDir);
     const pending = await validateProductHistory(client, files, applied, options);
     await options.runRoleSetup?.();
     for (const { name, checksum, sql } of pending) {
@@ -149,6 +151,7 @@ async function validateProductHistory(client, files, applied, options = {}) {
 }
 
 async function preflightProductMigrations(client, options = {}) {
+  const files = migrationInventory(options.dbDir || path.resolve(__dirname, '..'));
   await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
   try {
     await client.query("SET LOCAL statement_timeout = '120000ms'");
@@ -160,7 +163,6 @@ async function preflightProductMigrations(client, options = {}) {
     // is added. No DDL or ledger adoption happens during this command.
     const rows = exists ? (await client.query("SELECT filename, to_jsonb(t)->>'checksum' AS checksum FROM public.schema_migrations t")).rows : [];
     const applied = new Map(rows.map(row => [row.filename, row.checksum]));
-    const files = migrationInventory(options.dbDir || path.resolve(__dirname, '..'));
     const pending = await validateProductHistory(client, files, applied, { ...options, snapshot });
     await client.query('COMMIT');
     return { applied: applied.size, legacy: rows.filter(row => !row.checksum).length, pending: pending.filter(item => item.sql !== null).length };
@@ -178,6 +180,17 @@ function migrationInventory(dbDir) {
       files.push([`seed:${name}`, path.join(dbDir, 'seed', name)]);
     }
   }
+  const inventories = {
+    product_migrations: files.filter(([name]) => !name.startsWith('seed:')).map(([name]) => name),
+    product_seeds: files.filter(([name]) => name.startsWith('seed:')).map(([name]) => name.slice(5)),
+  };
+  // Synthetic fixture inventories have no historical exceptions. Actual
+  // packaged DB directories must carry the reviewed exact-file manifest.
+  const manifest = path.join(dbDir, 'migration-prefix-exceptions.json');
+  const canonicalDbDir = path.resolve(__dirname, '..');
+  validateMigrationPrefixPolicy(inventories, {
+    manifestPath: fs.existsSync(manifest) || path.resolve(dbDir) === canonicalDbDir ? manifest : null,
+  });
   return files;
 }
 
@@ -291,6 +304,7 @@ async function main() {
         catch (_) { throw new Error('Application role setup failed; review privileges in the isolated migration rehearsal'); }
       },
     });
+    await configureServiceCapabilities(client, process.env);
   } finally {
     client?.release(); await pool.end(); fs.rmSync(temp, { recursive: true, force: true });
   }

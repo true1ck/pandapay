@@ -1,0 +1,273 @@
+{
+  "format": "pandapay-dependency-inventory-v1",
+  "generated_from": "working-tree",
+  "network": "none",
+  "built_artifacts": "not assessed",
+  "files": [
+    {
+      "path": "api/package-lock.json",
+      "kind": "npm-lock",
+      "state": "resolved-lock",
+      "sha256": "78d576e00816012541e0c414ec45351d07b9e327fa194ed726193351bba9ef5c",
+      "package_count": 99,
+      "license_count": 98,
+      "license_status": "unknown",
+      "provenance_count": 98
+    },
+    {
+      "path": "app/android/app/build.gradle.kts",
+      "kind": "gradle-declaration",
+      "state": "declared-only",
+      "sha256": "1b29427003757aa96c439895e7ee21dbba8368c95825b7c21c57504f4ca8ea0a",
+      "package_count": null,
+      "license_count": null,
+      "license_status": "unknown",
+      "provenance_count": null
+    },
+    {
+      "path": "app/android/app/gradle.lockfile",
+      "kind": "gradle-lock",
+      "state": "missing-unresolved",
+      "sha256": null,
+      "package_count": null,
+      "license_count": null,
+      "license_status": "unknown",
+      "provenance_count": null
+    },
+    {
+      "path": "app/android/build.gradle.kts",
+      "kind": "gradle-declaration",
+      "state": "declared-only",
+      "sha256": "c41db55f62c275529f91712e75f55990e9a2ed9d89e2c099f888b235897c3e37",
+      "package_count": null,
+      "license_count": null,
+      "license_status": "unknown",
+      "provenance_count": null
+    },
+    {
+      "path": "app/android/gradle.lockfile",
+      "kind": "gradle-lock",
+      "state": "missing-unresolved",
+      "sha256": null,
+      "package_count": null,
+      "license_count": null,
+      "license_status": "unknown",
+      "provenance_count": null
+    },
+    {
+      "path": "app/ios/Podfile",
+      "kind": "pod-declaration",
+      "state": "declared-only",
+      "sha256": "7b008a9ceea08978afcd883cdc4a15deba8f3f6f45a04c995a0079c9a011271e",
+      "package_count": null,
+      "license_count": null,
+      "license_status": "unknown",
+      "provenance_count": null
+    },
+    {
+      "path": "app/ios/Podfile.lock",
+      "kind": "cocoapods-lock",
+      "state": "resolved-lock",
+      "sha256": "c51e6dfaf93dd8550e2b40ac243bf501a0912c2de7f9a1366f52d34a10adcfb8",
+      "package_count": 76,
+      "license_count": null,
+      "license_status": "unknown",
+      "provenance_count": 1
+    },
+    {
+      "path": "app/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+      "kind": "swiftpm-lock",
+      "state": "resolved-lock",
+      "sha256": "862e34bd50494de33fe88711a4cca6a3494f2c341ec2efce323189ed317c0f79",
+      "package_count": 1,
+      "license_count": null,
+      "license_status": "unknown",
+      "provenance_count": 1
+    },
+    {
+      "path": "app/ios/Runner.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+      "kind": "swiftpm-lock",
+      "state": "missing-unresolved",
+      "sha256": null,
+      "package_count": null,
+      "license_count": null,
+      "license_status": "unknown",
+      "provenance_count": null
+    },
+    {
+      "path": "app/pubspec.lock",
+      "kind": "dart-lock",
+      "state": "resolved-lock",
+      "sha256": "a37b99c5b9e62e28c9075053285449e18b2267c6c27a80ee57d838cb54574bfe",
+      "package_count": 235,
+      "license_count": 235,
+      "license_status": "unknown",
+      "provenance_count": 235
+    },
+    {
+      "path": "app/third_party/telephony",
+      "kind": "vendored-source",
+      "state": "source-hashed",
+      "sha256": "5fee56abaf01240b3e01c3bd39d39ce545878f97f9666f85bede0b0a24a5353e",
+      "file_count": 24,
+      "files": [
+        {
+          "path": "app/third_party/telephony/android/build.gradle",
+          "sha256": "e3a7d853596a18cb9f0c89be3add0ba23f522b766e64bdcdab645fc2f61e1e54"
+        },
+        {
+          "path": "app/third_party/telephony/android/gradle.properties",
+          "sha256": "b1e114bf6dc9c036895d0909014ffc9f6e8fe30cce98c109786f49bb3d29bcf4"
+        },
+        {
+          "path": "app/third_party/telephony/android/settings.gradle",
+          "sha256": "d5ee972264f762e551cf7838cfb7ed7d8c8d197f8509d2ed89240fd6c878d4e1"
+        },
+        {
+          "path": "app/third_party/telephony/android/src/main/AndroidManifest.xml",
+          "sha256": "a464c19fe1506b5702dca17a501b6abc7dea43e06a69b549aaff67893d9ed377"
+        },
+        {
+          "path": "app/third_party/telephony/android/src/main/kotlin/com/shounakmulay/telephony/PermissionsController.kt",
+          "sha256": "a7221b0d622a9cd874c400992e1a7a6c1cf88a1864c2a680eb4962aa3c122f76"
+        },
+        {
+          "path": "app/third_party/telephony/android/src/main/kotlin/com/shounakmulay/telephony/sms/ContextHolder.kt",
+          "sha256": "df79683acfade2f07770d09517abe379d1a87dc335fd25942256be58be66fd0c"
+        },
+        {
+          "path": "app/third_party/telephony/android/src/main/kotlin/com/shounakmulay/telephony/sms/IncomingSmsHandler.kt",
+          "sha256": "4c6574dd995643e3d4f9a43588e693d5ba2c3ad7eda76cd0fd3209a236f960d6"
+        },
+        {
+          "path": "app/third_party/telephony/android/src/main/kotlin/com/shounakmulay/telephony/sms/SmsController.kt",
+          "sha256": "83b26cebb8668d4cb2c11a8a19c04d8d6d0e6dd46ba22d15fd77e5454ced8aeb"
+        },
+        {
+          "path": "app/third_party/telephony/android/src/main/kotlin/com/shounakmulay/telephony/sms/SmsMethodCallHandler.kt",
+          "sha256": "6bd06f97cf97bca37592b3d5de9080bceaa455243815ca75533f676fb09b3233"
+        },
+        {
+          "path": "app/third_party/telephony/android/src/main/kotlin/com/shounakmulay/telephony/TelephonyPlugin.kt",
+          "sha256": "a200a0addd9aa3aa48140eee372b7131e590dee4cfd3c87c9f3d42700e48621b"
+        },
+        {
+          "path": "app/third_party/telephony/android/src/main/kotlin/com/shounakmulay/telephony/utils/Constants.kt",
+          "sha256": "52d8fbc0fca844d2f9ccfa12050dc28afbe56482558133775d59ac78334a882e"
+        },
+        {
+          "path": "app/third_party/telephony/android/src/main/kotlin/com/shounakmulay/telephony/utils/SmsEnums.kt",
+          "sha256": "17fac9102203172f092f3411c746346ce1e31bd839e3d53aad34d0a969b560b1"
+        },
+        {
+          "path": "app/third_party/telephony/CHANGELOG.md",
+          "sha256": "d935c17108d5dd40a21e38eb1d95b95e9d334300e4c24b854ac1fe30c54eb186"
+        },
+        {
+          "path": "app/third_party/telephony/ios/Classes/SwiftTelephonyPlugin.swift",
+          "sha256": "5469aaea6e78cb16480071d75544be003ba685fb3de07f60c936830343844cfb"
+        },
+        {
+          "path": "app/third_party/telephony/ios/Classes/TelephonyPlugin.h",
+          "sha256": "9efd57b406d69aa272caa3c6400e479cce08408c5c78cd645b39d9023cfc1dd2"
+        },
+        {
+          "path": "app/third_party/telephony/ios/Classes/TelephonyPlugin.m",
+          "sha256": "409234afffe581dd3a60dcd22e6fd686a5d6915494052b2da30523052628d366"
+        },
+        {
+          "path": "app/third_party/telephony/ios/telephony.podspec",
+          "sha256": "2facb446b99baf3efe4f746145e5b87547b24f4a81e49646479ddd5625755888"
+        },
+        {
+          "path": "app/third_party/telephony/lib/constants.dart",
+          "sha256": "17f90ec42abfe3d805080a3b0e474c9478ccdc2b032acee42967b8373debe107"
+        },
+        {
+          "path": "app/third_party/telephony/lib/filter.dart",
+          "sha256": "ac632882330061186bdc58e8ac76a2c8617e9185865a6ce366f25a6ab0b1bee4"
+        },
+        {
+          "path": "app/third_party/telephony/lib/telephony.dart",
+          "sha256": "0b22ec969953b8da30bd59786113c8a58ca936f6786996bebca0db7b9d6de821"
+        },
+        {
+          "path": "app/third_party/telephony/LICENSE",
+          "sha256": "a7621da7b781a8ad679f1321c633120265e92b7f76c1ce06b523a25dd8e5741e"
+        },
+        {
+          "path": "app/third_party/telephony/PANDAPAY_PATCH.md",
+          "sha256": "d85b915d0d1e2e7a20856794be3b9aee0588926a46a721de1a141681f3baf13b"
+        },
+        {
+          "path": "app/third_party/telephony/pubspec.yaml",
+          "sha256": "05837fa68d70ab178cd94e9d164a0d08240b944e2fe51ddde1b4657ba9d24dd2"
+        },
+        {
+          "path": "app/third_party/telephony/README.md",
+          "sha256": "f3bf89e3279ffb1d07f821ab1de5c379506c7fa443afac0af9e7451ec639e1d2"
+        }
+      ]
+    },
+    {
+      "path": "auth/package-lock.json",
+      "kind": "npm-lock",
+      "state": "resolved-lock",
+      "sha256": "802ee82ef90e7b557bd077a4591fd7342e86f74761c912e4830449a000345497",
+      "package_count": 187,
+      "license_count": 187,
+      "license_status": "known",
+      "provenance_count": 186
+    },
+    {
+      "path": "console/android/app/gradle.lockfile",
+      "kind": "gradle-lock",
+      "state": "missing-unresolved",
+      "sha256": null,
+      "package_count": null,
+      "license_count": null,
+      "license_status": "unknown",
+      "provenance_count": null
+    },
+    {
+      "path": "console/android/gradle.lockfile",
+      "kind": "gradle-lock",
+      "state": "missing-unresolved",
+      "sha256": null,
+      "package_count": null,
+      "license_count": null,
+      "license_status": "unknown",
+      "provenance_count": null
+    },
+    {
+      "path": "console/pubspec.lock",
+      "kind": "dart-lock",
+      "state": "resolved-lock",
+      "sha256": "e7f59fc389ccc15499f1745d5d0f93e04b6451fa6ae6ce9cdf6c1a6539facbdf",
+      "package_count": 98,
+      "license_count": 98,
+      "license_status": "unknown",
+      "provenance_count": 98
+    },
+    {
+      "path": "packages/pandapay_domain/pubspec.lock",
+      "kind": "dart-lock",
+      "state": "resolved-lock",
+      "sha256": "5c82228a2202581e22dd481041d643c66faee327e8f2f927fde1f12ed6e33098",
+      "package_count": 48,
+      "license_count": 48,
+      "license_status": "unknown",
+      "provenance_count": 48
+    },
+    {
+      "path": "packages/pandapay_lints/pubspec.lock",
+      "kind": "dart-lock",
+      "state": "resolved-lock",
+      "sha256": "94e9cc9da7cdd52a62359a1fed5ca12c4c9d10cd137412310f153e73f902929c",
+      "package_count": 43,
+      "license_count": 43,
+      "license_status": "unknown",
+      "provenance_count": 43
+    }
+  ]
+}

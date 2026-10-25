@@ -1,0 +1,14 @@
+{
+  "image": "pandapay-security-next25-api:local",
+  "image_id": "sha256:00822714a313c7a85dd80c142d5b30c148d117798223b25c333fbd86493f096c",
+  "exit_code": 0,
+  "summary": [
+    "# tests 16",
+    "# pass 16",
+    "# fail 0",
+    "# skipped 0"
+  ],
+  "network": "none",
+  "source_mount": "sanitized read-only api/src and api/test",
+  "runtime": "Node22 cached image"
+}

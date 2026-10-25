@@ -1,0 +1,226 @@
+TAP version 13
+# Subtest: registration preserves omitted values and normalizes optional client fields
+ok 1 - registration preserves omitted values and normalizes optional client fields
+  ---
+  duration_ms: 2.110375
+  type: 'test'
+  ...
+# Subtest: registration rejects non-object shapes and malformed non-empty UUIDs
+ok 2 - registration rejects non-object shapes and malformed non-empty UUIDs
+  ---
+  duration_ms: 0.212709
+  type: 'test'
+  ...
+# Subtest: push request validates envelope while retaining array ordering and partial-item handling
+ok 3 - push request validates envelope while retaining array ordering and partial-item handling
+  ---
+  duration_ms: 0.171209
+  type: 'test'
+  ...
+# Subtest: push item accepts Dart JSON shapes and leaves unknown entity policy to SQL
+ok 4 - push item accepts Dart JSON shapes and leaves unknown entity policy to SQL
+  ---
+  duration_ms: 0.127708
+  type: 'test'
+  ...
+# Subtest: push item rejects malformed shapes, UUIDs, payload maps, and unsafe or fractional integer fields
+ok 5 - push item rejects malformed shapes, UUIDs, payload maps, and unsafe or fractional integer fields
+  ---
+  duration_ms: 0.517959
+  type: 'test'
+  ...
+# Subtest: pull uses current defaults and clamps the SQL limit range
+ok 6 - pull uses current defaults and clamps the SQL limit range
+  ---
+  duration_ms: 0.175375
+  type: 'test'
+  ...
+# Subtest: pull rejects malformed UUIDs, fractional, exponential, non-scalar, and unsafe query integers
+ok 7 - pull rejects malformed UUIDs, fractional, exponential, non-scalar, and unsafe query integers
+  ---
+  duration_ms: 0.134459
+  type: 'test'
+  ...
+# Subtest: ack accepts only non-negative safe integer server sequences
+ok 8 - ack accepts only non-negative safe integer server sequences
+  ---
+  duration_ms: 0.09225
+  type: 'test'
+  ...
+# Subtest: conflict acknowledgement path validates UUID shape without deciding row existence
+ok 9 - conflict acknowledgement path validates UUID shape without deciding row existence
+  ---
+  duration_ms: 0.302416
+  type: 'test'
+  ...
+# Subtest: sync rejection details map SQLSTATEs to fixed safe strings
+ok 10 - sync rejection details map SQLSTATEs to fixed safe strings
+  ---
+  duration_ms: 0.357416
+  type: 'test'
+  ...
+# Subtest: sync rejection details expose the split invariant only through its explicit safe code
+ok 11 - sync rejection details expose the split invariant only through its explicit safe code
+  ---
+  duration_ms: 0.122792
+  type: 'test'
+  ...
+# Subtest: sync rejection details use a fixed fallback and never echo arbitrary error text
+ok 12 - sync rejection details use a fixed fallback and never echo arbitrary error text
+  ---
+  duration_ms: 0.071584
+  type: 'test'
+  ...
+# Subtest: uses only the fixed, fully-qualified typed transaction RPC and preserves its row shape
+ok 13 - uses only the fixed, fully-qualified typed transaction RPC and preserves its row shape
+  ---
+  duration_ms: 2.079584
+  type: 'test'
+  ...
+# Subtest: stale-clock wins, same-value retries, and note-only writes do no reward-state work
+ok 14 - stale-clock wins, same-value retries, and note-only writes do no reward-state work
+  ---
+  duration_ms: 0.70925
+  type: 'test'
+  ...
+# Subtest: effective financial edit reverses old state and reapplies final stored values
+ok 15 - effective financial edit reverses old state and reapplies final stored values
+  ---
+  duration_ms: 0.326209
+  type: 'test'
+  ...
+# Subtest: private category edits calculate rewards from owned public parents without rewriting stored payload values
+ok 16 - private category edits calculate rewards from owned public parents without rewriting stored payload values
+  ---
+  duration_ms: 0.261625
+  type: 'test'
+  ...
+# Subtest: nested private category resolves through owned ancestors to its public reward category
+ok 17 - nested private category resolves through owned ancestors to its public reward category
+  ---
+  duration_ms: 0.16375
+  type: 'test'
+  ...
+# Subtest: explicit stored public category keeps PATCH precedence over private parent
+ok 18 - explicit stored public category keeps PATCH precedence over private parent
+  ---
+  duration_ms: 0.123042
+  type: 'test'
+  ...
+# Subtest: missing owned user category parent rejects before any state work
+ok 19 - missing owned user category parent rejects before any state work
+  ---
+  duration_ms: 0.396917
+  type: 'test'
+  ...
+# Subtest: cyclic and over-depth private category parent chains reject before state work
+ok 20 - cyclic and over-depth private category parent chains reject before state work
+  ---
+  duration_ms: 0.471417
+  type: 'test'
+  ...
+# Subtest: suppressed old state is not reversed, but a non-backfill final spend is applied
+ok 21 - suppressed old state is not reversed, but a non-backfill final spend is applied
+  ---
+  duration_ms: 0.40775
+  type: 'test'
+  ...
+# Subtest: instrument and entry-kind transition reverses the old card spend without applying a cash transfer
+ok 22 - instrument and entry-kind transition reverses the old card spend without applying a cash transfer
+  ---
+  duration_ms: 0.428708
+  type: 'test'
+  ...
+# Subtest: backfilled edit validates card but leaves derived reward state untouched
+ok 23 - backfilled edit validates card but leaves derived reward state untouched
+  ---
+  duration_ms: 0.164709
+  type: 'test'
+  ...
+# Subtest: missing transaction is delegated to SQL and preserves not_found
+ok 24 - missing transaction is delegated to SQL and preserves not_found
+  ---
+  duration_ms: 0.501125
+  type: 'test'
+  ...
+# Subtest: split guard uses final stored amount and rejects over-allocation before state calls
+ok 25 - split guard uses final stored amount and rejects over-allocation before state calls
+  ---
+  duration_ms: 0.182375
+  type: 'test'
+  ...
+# Subtest: invalid card ownership, archive state, type, or missing credit card aborts before reversal
+ok 26 - invalid card ownership, archive state, type, or missing credit card aborts before reversal
+  ---
+  duration_ms: 0.300916
+  type: 'test'
+  ...
+# Subtest: rejects inactive financial edits, transaction deletes, status writes, and non-card card references
+ok 27 - rejects inactive financial edits, transaction deletes, status writes, and non-card card references
+  ---
+  duration_ms: 0.331709
+  type: 'test'
+  ...
+# Subtest: propagates state-core failures so the caller can roll back its item savepoint
+ok 28 - propagates state-core failures so the caller can roll back its item savepoint
+  ---
+  duration_ms: 0.137375
+  type: 'test'
+  ...
+# Subtest: prototype property names cannot select alternate SQL
+ok 29 - prototype property names cannot select alternate SQL
+  ---
+  duration_ms: 0.116125
+  type: 'test'
+  ...
+# Subtest: wired sync routes reject malformed IDs/sequences before any database call
+ok 30 - wired sync routes reject malformed IDs/sequences before any database call
+  ---
+  duration_ms: 1.870458
+  type: 'test'
+  ...
+# Subtest: registration defaults and stale-device ID still reach the original RPC
+ok 31 - registration defaults and stale-device ID still reach the original RPC
+  ---
+  duration_ms: 1.56775
+  type: 'test'
+  ...
+# Subtest: push preserves ordered per-item outcomes and never returns SQL error contents
+ok 32 - push preserves ordered per-item outcomes and never returns SQL error contents
+  ---
+  duration_ms: 1.426291
+  type: 'test'
+  ...
+# Subtest: pull and acknowledgement retain existing successful response contracts
+ok 33 - pull and acknowledgement retain existing successful response contracts
+  ---
+  duration_ms: 0.829375
+  type: 'test'
+  ...
+# Subtest: status/delete cannot use raw transaction sync and later valid work continues
+ok 34 - status/delete cannot use raw transaction sync and later valid work continues
+  ---
+  duration_ms: 0.757625
+  type: 'test'
+  ...
+# Subtest: typed activation dispatches transactions to domain applier and other entities to V2
+ok 35 - typed activation dispatches transactions to domain applier and other entities to V2
+  ---
+  duration_ms: 0.739583
+  type: 'test'
+  ...
+# Subtest: actual runtime config keeps typed sync off unless explicitly true
+ok 36 - actual runtime config keeps typed sync off unless explicitly true
+  ---
+  duration_ms: 124.509709
+  type: 'test'
+  ...
+1..36
+# tests 36
+# suites 0
+# pass 36
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 175.057625

@@ -1,0 +1,13 @@
+✔ real database: app_user RLS, worker separation, advisory locks, and deletion lineage (12.822167ms)
+✔ tag filters validate IDs and never interpolate user input (1.078959ms)
+✔ invalid definitions, future clocks and malformed operations are rejected (0.764333ms)
+✔ real database: overlap counts once, stale removals, replay, budgets, aliases and isolation (27.919709ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 80.552
+

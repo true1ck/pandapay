@@ -1,0 +1,16 @@
+  ...
+# Subtest: rule listing cursor is opaque, bounded, and validates its owner-visible shape
+ok 936 - rule listing cursor is opaque, bounded, and validates its owner-visible shape
+  ---
+  duration_ms: 0.138792
+  type: 'test'
+  ...
+1..936
+# tests 957
+# suites 0
+# pass 955
+# fail 0
+# cancelled 0
+# skipped 2
+# todo 0
+# duration_ms 765.764333

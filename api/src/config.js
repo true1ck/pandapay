@@ -124,7 +124,13 @@ module.exports = {
   productTermsVersion: process.env.PRODUCT_TERMS_VERSION || '2026-08-07',
   inboundEmailWebhookSecret: process.env.INBOUND_EMAIL_WEBHOOK_SECRET || null,
   partnerWebhookSecret: process.env.PARTNER_WEBHOOK_SECRET || null,
+  partnerWebhookDatabaseUrl: process.env.PARTNER_WEBHOOK_DATABASE_URL || null,
   imapEncryptionKey: process.env.IMAP_ENCRYPTION_KEY || null,
+  imapPollDatabaseUrl: process.env.IMAP_POLL_DATABASE_URL || null,
+  accountLifecycleEnabled: ['true','1'].includes(process.env.ACCOUNT_LIFECYCLE_ENABLED),
+  // Schema-first rollout: typed sync requires financial-state acceptance.
+  syncTypedWritesEnabled: process.env.SYNC_TYPED_WRITES_ENABLED === 'true',
+  accountLifecycleDatabaseUrl: process.env.ACCOUNT_LIFECYCLE_DATABASE_URL || null,
   notificationServiceUrl:
     process.env.NOTIFICATION_SERVICE_URL
     || process.env.NOVU_NOTIFICATION_URL

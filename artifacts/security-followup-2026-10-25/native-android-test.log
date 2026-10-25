@@ -1,0 +1,9 @@
+00:00 +0: loading /private/tmp/pandapay-next-20261025/native-harness/integration_test/security_recovery_native_test.dart
+Running Gradle task 'assembleDebug'...                             92.3s
+✓ Built build/app/outputs/flutter-apk/app-debug.apk
+Installing build/app/outputs/flutter-apk/app-debug.apk...        1,485ms
+00:00 +0: native writer lease blocks another isolate and restores rollback
+00:04 +1: committed native SQLite data survives closing and reopening
+00:05 +2: native receipt cleanup preserves references and gallery files
+00:06 +3: (tearDownAll)
+00:10 +3: All tests passed!

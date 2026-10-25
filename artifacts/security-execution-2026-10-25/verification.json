@@ -1,0 +1,236 @@
+{
+  "format": "pandapay-execution-source-verification-v1",
+  "verified_at_utc": "2026-10-25T08:22:21.573Z",
+  "branch": "dev",
+  "head": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+  "scope": "Targeted P00/P01/P03/P04/P11 source/local/protected-read-only slices; no entire batch/finding closed",
+  "agents": {
+    "implementation_model": "gpt-6-luna",
+    "agent_count": 3,
+    "coordinator_review": true,
+    "independent_review": true,
+    "corrections": [
+      "first imported display spelling preserved",
+      "object/path deduplication, truthful early-stop counters/completeness",
+      "whole sensitive-path redaction and bounded finding output",
+      "shallow-history incomplete detection"
+    ]
+  },
+  "source_manifest": "candidate-source-sha256.json",
+  "source_sha256": "091d155579bd9aea6ba35e032ee07a545de422088dce8a778ea464f2856745d1",
+  "changed_existing_source": [
+    "api/src/transaction_splits.js",
+    "api/src/transaction_tags.js",
+    "api/test/transaction_splits.test.js",
+    "api/test/transaction_tags.test.js",
+    "db/scripts/release_secret_audit.js",
+    "db/tests/release_secret_audit.test.js"
+  ],
+  "tests": {
+    "api": {
+      "exit_code": 0,
+      "summary": [
+        "# tests 987",
+        "# pass 985",
+        "# fail 0",
+        "# skipped 2"
+      ]
+    },
+    "database-tools": {
+      "exit_code": 0,
+      "summary": [
+        "# tests 164",
+        "# pass 164",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    }
+  },
+  "postgres_synthetic": {
+    "fresh_product_migration": "passed",
+    "checksummed_migration_repeat": "passed",
+    "api_postgres_summary": [
+      "# tests 13",
+      "# pass 13",
+      "# fail 0",
+      "# skipped 0"
+    ]
+  },
+  "node22_docker": {
+    "image": "pandapay-security-next25-api:local",
+    "network": "none",
+    "source_read_only": true,
+    "pass": 24,
+    "skip": 1,
+    "log": "node22-boundary-tests.log",
+    "skipped_database_case_exercised_separately": true,
+    "image_id": null,
+    "post_run_image_metadata": "The tag was unavailable during later image inspection; completed test log retained. No image was pulled or rebuilt."
+  },
+  "protected_actual_data": {
+    "paired_set": "4f383a48d3111523e663f8791e4819f0",
+    "application_check": "passed",
+    "upgrade_check": "not_run",
+    "read_only_review": "protected-restored-data-summary.json",
+    "scopes": {
+      "product": {
+        "complete": true,
+        "label_identity_version": "pandapay-catalogue-label-identity-v1",
+        "checks": 357,
+        "foreign_keys": 217,
+        "orphan_rows": 0,
+        "catalogue_checks": [
+          {
+            "name": "cap_rule_business_equivalence",
+            "status": "completed",
+            "duplicate_groups": "0",
+            "extra_rows": "0"
+          },
+          {
+            "name": "benefit_business_equivalence",
+            "status": "completed",
+            "duplicate_groups": "0",
+            "extra_rows": "0"
+          },
+          {
+            "name": "cap_rule_normalized_identity_v1",
+            "status": "completed",
+            "duplicate_groups": "0",
+            "extra_rows": "0"
+          },
+          {
+            "name": "benefit_normalized_identity_v1",
+            "status": "completed",
+            "duplicate_groups": "0",
+            "extra_rows": "0"
+          }
+        ]
+      },
+      "auth": {
+        "complete": true,
+        "label_identity_version": "pandapay-catalogue-label-identity-v1",
+        "checks": 10,
+        "foreign_keys": 5,
+        "orphan_rows": 0,
+        "catalogue_checks": []
+      }
+    },
+    "live_source_connection_opened": false,
+    "first_two_local_attempts_stopped_at_missing_command_prerequisites": true,
+    "disposable_container_removed": true,
+    "restore_image": "supabase/postgres:17.6.1.136",
+    "restore_image_id": "sha256:f371b5f3f2ac0a05703f33d6e6134515fb2498cab708fb948a0aeb7481467c00"
+  },
+  "retained_text_audit": {
+    "report": "retained-history-secret-audit.json",
+    "scope": "retained-git-refs/release-source/recognized-text",
+    "history": {
+      "mode": "full-retained",
+      "scan_scope": "retained-git-refs/release-source/recognized-text",
+      "incomplete": false,
+      "shallow_repository": false,
+      "commits_listed": 646,
+      "commits_selected": 646,
+      "commits_attempted": 646,
+      "commits_examined": 646,
+      "blobs_attempted": 4204,
+      "blobs_read": 4204,
+      "blobs_examined": 4204,
+      "blobs_failed": 0,
+      "blobs_limit_rejected": 0,
+      "bytes_examined": 126116355,
+      "tree_entries_examined": 631006,
+      "tree_bytes_examined": 61244409,
+      "limits": {
+        "maxCommits": 20000,
+        "maxFiles": 5000,
+        "maxBytes": 134217728,
+        "maxTreeBytes": 16777216,
+        "maxTreeTotalBytes": 536870912,
+        "maxTreeEntries": 20000000,
+        "maxMs": 120000
+      },
+      "retained_history_complete": true
+    },
+    "incomplete": false,
+    "flag_records": 52,
+    "raw_values_emitted": false,
+    "flag_classification_complete": false,
+    "binary_release_review_complete": false
+  },
+  "preservation": {
+    "app_and_lockfile_hashes_unchanged": 682,
+    "original_unrelated_edits_preserved": true,
+    "original_server_keys_and_live_data_unchanged": true,
+    "flutter_rerun": false,
+    "auth_rerun": false,
+    "reason": "No Flutter/auth runtime/dependency source changed in this batch"
+  },
+  "status": {
+    "unfinished_scope_findings": 22,
+    "partial": 19,
+    "open": 3,
+    "status_promotions": [],
+    "live_migration_or_deployment": false,
+    "feature_activation": false
+  },
+  "remaining": [
+    "P00 effective route/entity and released-client/support matrix",
+    "Historical D01/D02 reconciliation and complete actual-data candidate upgrade",
+    "Measured D03/D04 index decisions",
+    "Flag classification and excluded/native/binary dependency and secret acceptance",
+    "Broad route/capability/abuse/payload matrix",
+    "Retained-key version readers, complete recovery and integrated mobile startup/receipts",
+    "Intended-provider, signed-device, independent custody and monitored rollout acceptance"
+  ],
+  "html": {
+    "result": "passed",
+    "postgres_tables": 96,
+    "columns": 934,
+    "foreign_keys": 139,
+    "sqlite_tables": 19,
+    "source_only_tables": 2,
+    "remediation_items": 68,
+    "optimization_inventory_rows": 96,
+    "table_retirement_candidates": 4,
+    "local_links": 475,
+    "remaining_implementation_packages": 14,
+    "remaining_release_gates": 6,
+    "full_findings": 76,
+    "unfinished_findings": 50,
+    "focused_page_verified": true,
+    "checks": [
+      "remaining-work counts and complete finding mapping",
+      "focused remaining-work HTML",
+      "tab switching",
+      "keyboard tabs",
+      "database filter",
+      "domain filter",
+      "column search",
+      "empty state",
+      "reset",
+      "table inspection",
+      "relationship navigation",
+      "zoom",
+      "unique IDs",
+      "local links",
+      "offline scripts",
+      "remediation coverage and proposal status",
+      "optimization inventory completeness",
+      "scalability section and cross-tab shortcut"
+    ]
+  },
+  "html_reproducible": true,
+  "markdown_links_checked": 48,
+  "current_source_hashes_match": true,
+  "finding_statuses_unchanged": true,
+  "documentation_sha256": {
+    "docs/security-execution-implementation-2026-10-25.md": "d56439d1ad2d9902f3463f6fa7d8f88d3458f601ae9a2dd14502272bd41c1bb3",
+    "docs/security-and-backend-audit-2026-10-20.md": "137024ad61a3f544c37f537bac98d99ebc248c172865ae065f2b85fefc6e4419",
+    "docs/security-and-backend-audit-2026-10-20.html": "222c6c5544e2a962cfd47979a4934daa2672baf8c873ecead63c68e55ad05e1f",
+    "docs/security-focused-gap-review-2026-10-25.md": "92d684a3881f35c98c165d1bd471738750eb0306a135f53590fe0439e498e830",
+    "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md": "1255efd3b27da2916c1c4b26dc98e22bc87ec1f9b384845c8069b4ab6de8eb4f",
+    "artifacts/security-review-2026-10-20/data-dependency-mobile-documentation-plan-2026-10-25.json": "65fa35d856b14dc82623cbf684ee51ccc887db37a98f8f164438eee1da87e60e",
+    "artifacts/security-storage-2026-10-25/focused-gap-review.json": "619de8f2d96500663b3b83dc41f4cd492bf68c967e04b0810c422b16e4d08b3d"
+  }
+}

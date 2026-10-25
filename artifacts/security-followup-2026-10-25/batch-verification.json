@@ -1,0 +1,358 @@
+{
+  "format": "pandapay-security-followup-verification-v1",
+  "verified_at_utc": "2026-10-24T18:53:42.667785+00:00",
+  "verified_at_ist": "2026-10-25T00:23:42.667785+05:30",
+  "scope": "current source; local synthetic Docker/Flutter/PostgreSQL verification only; not production release approval",
+  "branch": "dev",
+  "base_commit": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+  "uncommitted": true,
+  "candidate_sha256": "ccedf1d4229b85f1ea9b87bb35f845a683ff2474cddad0573d2a70797fc97fd5",
+  "source_files": 1272,
+  "source_manifest": "candidate-source-sha256.json",
+  "environments": {
+    "docker_server": "29.4.0",
+    "node": [
+      "22.23.4 current service images",
+      "24.15.0 native synthetic database/tool harness"
+    ],
+    "postgresql": [
+      "18.4 Homebrew owned temporary clusters",
+      "Docker supabase/postgres:17.6.1.136, PostgreSQL17.6"
+    ],
+    "flutter": "3.44.8 / Dart3.12.2, offline dependencies",
+    "managed_fixture_operator": "NOSUPERUSER CREATEDB CREATEROLE, runtime identities NOBYPASSRLS",
+    "new_alert_transport": "Fake DNS/HTTPS only; no actual external delivery"
+  },
+  "checks": {
+    "api": {
+      "passed": 964,
+      "skipped": 2,
+      "failed": 0
+    },
+    "supplemental_api_database": {
+      "passed": 4,
+      "skipped": 0,
+      "failed": 0,
+      "previously_skipped_cases_executed": 2,
+      "overlap_with_api_unit_cases": 2
+    },
+    "auth": {
+      "passed": 309,
+      "failed": 0
+    },
+    "database_tool_subset": {
+      "passed": 149,
+      "failed": 0,
+      "overlaps_with_api_auth": true
+    },
+    "backup_setup": {
+      "passed": 45,
+      "failed": 0
+    },
+    "deployment": {
+      "passed": 22,
+      "failed": 0
+    },
+    "app": {
+      "passed": 1595,
+      "failed": 0
+    },
+    "console": {
+      "passed": 31,
+      "failed": 0
+    },
+    "domain": {
+      "passed": 227,
+      "failed": 0
+    },
+    "analysis": {
+      "app_errors": 0,
+      "app_warnings": 0,
+      "app_infos": 72,
+      "console_issues": 0
+    },
+    "console_csp_web_build": {
+      "status": "passed",
+      "actual_browser_acceptance": false
+    },
+    "postgres18": {
+      "status": "passed",
+      "scripts": 14,
+      "fresh_databases": 15,
+      "scenarios": 15
+    },
+    "postgres17_docker": {
+      "status": "passed",
+      "scripts": 2,
+      "fresh_databases": 2,
+      "cases": [
+        "maintenance",
+        "otp"
+      ]
+    },
+    "paired_encrypted_recovery": {
+      "status": "passed",
+      "schema_format": "v5",
+      "data": "synthetic",
+      "independent_cluster_restore": true
+    },
+    "alert_adapter": {
+      "passed": 17,
+      "actual_delivery": false,
+      "dry_run_no_connections": true,
+      "actual_restricted_reader_postgres_fixture": "passed"
+    },
+    "native_android": {
+      "status": "passed",
+      "test_cases": 3,
+      "isolated_package": "app.pandapay.securityfixture.pandapay",
+      "signed_production_acceptance": false,
+      "source_manifest": "native-harness-source.json",
+      "platform_verification": "native-platform-verification.json",
+      "platform_verification_sha256": "89879cee69bc2ec34a62695e7cfe1195ba3c5d4dd1ff94529f3934aff7e9b9a7"
+    },
+    "javascript_syntax": {
+      "files": 332,
+      "status": "passed"
+    },
+    "images": {
+      "api": {
+        "image": "sha256:00822714a313c7a85dd80c142d5b30c148d117798223b25c333fbd86493f096c",
+        "source_files": 88,
+        "uid": 1000,
+        "node": "v22.23.4",
+        "body_parser": "2.4.0",
+        "dockerfile_sha256": "79a201b199a749625d59be0ccc7e93adbdec8272507fc151ef2475d210e5d6c6"
+      },
+      "auth": {
+        "image": "sha256:4ec4930497d4213b0e1670c97f2753c9707fac5d3f3fb920c5227f640077d0ec",
+        "source_files": 58,
+        "uid": 1000,
+        "node": "v22.23.4",
+        "body_parser": "2.4.0",
+        "dockerfile_sha256": "d7e0e38265b01ce1b3ae1f4f34ae224bc6bbc2071d7647562b49832bf8f4d686"
+      }
+    },
+    "production_dependency_audits": {
+      "api_known_vulnerabilities": 0,
+      "auth_known_vulnerabilities": 0
+    },
+    "notification_wip": {
+      "files_unchanged": 12,
+      "sha256_match": true
+    },
+    "docker_cleanup": {
+      "removed": [
+        "pandapay-next25-pg17"
+      ],
+      "remaining_owned_containers": [],
+      "synthetic_storage": "tmpfs released",
+      "images_retained": [
+        "pandapay-security-next25-api:local",
+        "pandapay-security-next25-auth:local"
+      ]
+    },
+    "release_gate": {
+      "exit": 2,
+      "release_ready": false,
+      "missing_gates": [
+        "exact_candidate_evidence",
+        "api",
+        "auth",
+        "database",
+        "backup",
+        "deployment",
+        "app",
+        "console",
+        "actual_data_restore",
+        "target_provider_upgrade",
+        "oldest_supported_client",
+        "signed_device_recovery",
+        "provider_delivery",
+        "operator_alerts",
+        "rollout_recovery",
+        "backup_custody",
+        "productPrivileges",
+        "authPrivileges",
+        "productData",
+        "authData",
+        "postgres_provider_portability",
+        "free_host_resource_limits",
+        "off_host_backup_custody",
+        "retained_key_inventory",
+        "hash_bound_backup_restore"
+      ]
+    }
+  },
+  "proofs": {
+    "api-full-final": {
+      "proof_file": "api-full-final.log",
+      "sha256": "05ec5c0960285f31624d704aaa6f21489f8f94aa4d2dfc65e44028f3b01a02f6",
+      "original_log_sha256": "b4ec2e1c28365ee5b1ad96ce8d3cd5504fa8d94647c9124384e88a41f5ebff18",
+      "original_log_bytes": 203803,
+      "scope": "final summary excerpt"
+    },
+    "auth-full-final": {
+      "proof_file": "auth-full-final.log",
+      "sha256": "06ea2e3414d8dd5f82a8f9c63d43739163054374effae7789ea312b61ab96dc2",
+      "original_log_sha256": "78cd3f34c1427bd4766db1eca14688b71aef3bd72ba0d02306d2785f7d736249",
+      "original_log_bytes": 72685,
+      "scope": "final summary excerpt"
+    },
+    "unit-tools-final": {
+      "proof_file": "unit-tools-final.log",
+      "sha256": "74997375595b5faaccf4ca77176ef10a37ad1e4dc57aed1e74600e3b28a9fc59",
+      "original_log_sha256": "6322a3da565302ec1cfae56ba40501a8cf91830596203dbb67de6c57c8a1ef12",
+      "original_log_bytes": 14265,
+      "scope": "final summary excerpt"
+    },
+    "optional-database-final": {
+      "proof_file": "optional-database-final.log",
+      "sha256": "a3941d4ee2124f8a8e90a1f3863bacdbc3337c4a6d023ebe3e51649f4f21fed0",
+      "original_log_sha256": "a3941d4ee2124f8a8e90a1f3863bacdbc3337c4a6d023ebe3e51649f4f21fed0",
+      "original_log_bytes": 489,
+      "scope": "final summary excerpt"
+    },
+    "backup-final": {
+      "proof_file": "backup-final.log",
+      "sha256": "0aa1ee407382f6e2ac1e4711cc473a6cb26a6becb86eda8288cf80a862a52269",
+      "original_log_sha256": "b0293d14e2bb4a4366631c9670a702542bd269b69e609048b033bc43770466c2",
+      "original_log_bytes": 8839,
+      "scope": "final summary excerpt"
+    },
+    "deployment-final": {
+      "proof_file": "deployment-final.log",
+      "sha256": "3bc9cbf936e4edb7c9d9c2716d5bd31b9348c8d31e20277bd474cfe804a505e9",
+      "original_log_sha256": "14b1a1f2c2e068a15f7973d6f0a007646f241410c093ebf7bc1922f95bcaec6f",
+      "original_log_bytes": 4106,
+      "scope": "final summary excerpt"
+    },
+    "app-tests-integrated": {
+      "proof_file": "app-tests-integrated.log",
+      "sha256": "9d286cbd8396e1681fb4ef476d5b377c89cb1a91c03a0bed6a4a6cf6b3edaf07",
+      "original_log_sha256": "a5214cadeb462fc3a45f5fcc96e31a0ece97753b885680736662e3b2f7a8e89f",
+      "original_log_bytes": 360257,
+      "scope": "final summary excerpt"
+    },
+    "console-tests-final": {
+      "proof_file": "console-tests-final.log",
+      "sha256": "2e3f8511dbe004e7c11874ece9be0fef20f4db234f29bd1d9ee8d13fc523efa0",
+      "original_log_sha256": "8df47b7500b05432ad77d7ad06d8e275d556781342fc730dc29a8f6de9f9b5ed",
+      "original_log_bytes": 6007,
+      "scope": "final summary excerpt"
+    },
+    "domain-tests-final": {
+      "proof_file": "domain-tests-final.log",
+      "sha256": "401f7235896c638f49ea8c55c9d6e7580c28cf973c2f9044ed62f7d331ecc8ad",
+      "original_log_sha256": "9621b1d182ecf8091952457e97661a2c77070aebe4871cf8c127c0c4b81c7f77",
+      "original_log_bytes": 25767,
+      "scope": "final summary excerpt"
+    },
+    "app-analysis-integrated": {
+      "proof_file": "app-analysis-integrated.log",
+      "sha256": "11dd51ca64a81311c4eee437c446c30bfb5ab7314e52fa923fccd9f10089ab66",
+      "original_log_sha256": "11dd51ca64a81311c4eee437c446c30bfb5ab7314e52fa923fccd9f10089ab66",
+      "original_log_bytes": 14531,
+      "scope": "complete diagnostic log"
+    },
+    "console-analysis-final": {
+      "proof_file": "console-analysis-final.log",
+      "sha256": "48ed8500925891979ebea53cc0d4f98d6aff6789c25769a128bd7649f7503235",
+      "original_log_sha256": "48ed8500925891979ebea53cc0d4f98d6aff6789c25769a128bd7649f7503235",
+      "original_log_bytes": 96,
+      "scope": "complete diagnostic log"
+    },
+    "console-build-final": {
+      "proof_file": "console-build-final.log",
+      "sha256": "49b76d88349d7492b53734b9ce49782413b0e82bdf40651adf68b8f6258a6361",
+      "original_log_sha256": "49b76d88349d7492b53734b9ce49782413b0e82bdf40651adf68b8f6258a6361",
+      "original_log_bytes": 836,
+      "scope": "complete diagnostic log"
+    },
+    "postgres-final": {
+      "proof_file": "postgres-final.log",
+      "sha256": "a180979fc6cbd07e32fa512d0df269d2440945f82c966dc9f015d3c8b6f27c88",
+      "original_log_sha256": "a180979fc6cbd07e32fa512d0df269d2440945f82c966dc9f015d3c8b6f27c88",
+      "original_log_bytes": 3582,
+      "scope": "complete diagnostic log"
+    },
+    "recovery-final": {
+      "proof_file": "recovery-final.log",
+      "sha256": "a5c965ffa1fa9bfcf0b92b17138cbd0a3988c402c9f7f7dd105bca8ce3b67485",
+      "original_log_sha256": "a5c965ffa1fa9bfcf0b92b17138cbd0a3988c402c9f7f7dd105bca8ce3b67485",
+      "original_log_bytes": 471,
+      "scope": "complete diagnostic log"
+    },
+    "alerts-final": {
+      "proof_file": "alerts-final.log",
+      "sha256": "78f11ff7da00736b88a68a112859dbff7bce458b24bdb12d5a1abc0d6ffb1793",
+      "original_log_sha256": "78f11ff7da00736b88a68a112859dbff7bce458b24bdb12d5a1abc0d6ffb1793",
+      "original_log_bytes": 1624,
+      "scope": "complete diagnostic log"
+    },
+    "alert-cli-default": {
+      "proof_file": "alert-cli-default.log",
+      "sha256": "f7e96cbf824eff84dcd0e8500673a2746ac8173c832e11bf9948939f6835a02b",
+      "original_log_sha256": "f7e96cbf824eff84dcd0e8500673a2746ac8173c832e11bf9948939f6835a02b",
+      "original_log_bytes": 75,
+      "scope": "complete diagnostic log"
+    },
+    "syntax-final": {
+      "proof_file": "syntax-final.log",
+      "sha256": "56e92bcb63f42c05c6611215c459e281cba2a0ee7e78ec7e4a42f304a78f2797",
+      "original_log_sha256": "56e92bcb63f42c05c6611215c459e281cba2a0ee7e78ec7e4a42f304a78f2797",
+      "original_log_bytes": 50,
+      "scope": "complete diagnostic log"
+    },
+    "managed17-current-maintenance": {
+      "proof_file": "managed17-current-maintenance.log",
+      "sha256": "fa95c494cab7202cb67c3a160423cef6f018e5fd1932eaf3b303994bf0463a39",
+      "original_log_sha256": "fa95c494cab7202cb67c3a160423cef6f018e5fd1932eaf3b303994bf0463a39",
+      "original_log_bytes": 246,
+      "scope": "complete diagnostic log"
+    },
+    "managed17-current-otp": {
+      "proof_file": "managed17-current-otp.log",
+      "sha256": "d270853ead501a317adab256fa8dcd32060b0dfccb7f6a30d8f720f9774c61f3",
+      "original_log_sha256": "d270853ead501a317adab256fa8dcd32060b0dfccb7f6a30d8f720f9774c61f3",
+      "original_log_bytes": 673,
+      "scope": "complete diagnostic log"
+    },
+    "native-android-test": {
+      "proof_file": "native-android-test.log",
+      "sha256": "4cb1a2f2b35c63a428b966ca3304651ed319029caba2b5b133e95ee349c5a090",
+      "original_log_sha256": "4cb1a2f2b35c63a428b966ca3304651ed319029caba2b5b133e95ee349c5a090",
+      "original_log_bytes": 590,
+      "scope": "complete diagnostic log"
+    }
+  },
+  "new_source": [
+    "compatible opt-in six-digit verified contact replacement with signed account/device/previous-contact/purpose/protocol/request binding and shared account budgets",
+    "bounded journaled receipt reconciliation under operation/native SQLite lease with conservative all-namespace reference preflight",
+    "disabled operational webhook adapter with strict TLS/identity/destination/state/retry bounds and exact-candidate release gate"
+  ],
+  "native_android_harness": {
+    "status": "passed",
+    "scope": "isolated emulator debug harness only; not full signed application/device-key acceptance"
+  },
+  "previous_evidence": "../security-local-docker-verification-2026-10-24/batch-verification.json",
+  "agents": "Three Luna agents provided disjoint slices; coordinator reviewed and hardened partial receipt/alert followups after agent usage limits.",
+  "not_performed": [
+    "live database/key/credential/contact changes",
+    "provider sends or actual browser/operator acceptance",
+    "signed-device/process-death/key-loss/native custody acceptance",
+    "actual-data intended-provider upgrade/cutover/failback/load acceptance",
+    "independent physical backup/journal/private-key custody provisioning",
+    "feature activation or live SQLite/receipt encryption",
+    "deployment/service restart or Git commit/push"
+  ],
+  "remaining_source_and_acceptance": [
+    "supported contact-replacement client/provider acceptance and monitored retirement",
+    "whole actual-data privilege/data/index reconciliation",
+    "complete native writer/process-death/power-loss and hostile-local-process safe orphan repair coverage",
+    "native key custody and resumable live SQLite/receipt conversion",
+    "real receiver/operator alert acceptance, customer notification outboxes and actual monitored schedules",
+    "actual-data/provider/oldest-client/signed-device/free-host and independent custody acceptance"
+  ],
+  "safety_state": "new feature flags remain off; existing login and masked-email recovery retained; no extra user password or silent phone-only upload; original data/keys/history preserved"
+}

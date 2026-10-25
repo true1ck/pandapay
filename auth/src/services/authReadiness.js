@@ -2,6 +2,14 @@
 
 const { safeErrorCode } = require('../utils/safeErrorCode');
 
+async function checkOptionalAuditReadiness(query, env) {
+  if (!['true', '1'].includes(env.DB_ACCESS_LOGGING_ENABLED)) return;
+  const exists = await query("SELECT to_regclass('public.db_access_log') IS NOT NULL AS table_exists");
+  if (exists.rows?.[0]?.table_exists !== true) throw new Error('Auth database access audit is unavailable');
+  const privilege = await query("SELECT has_table_privilege(current_user, 'public.db_access_log', 'INSERT') AS can_insert");
+  if (privilege.rows?.[0]?.can_insert !== true) throw new Error('Auth database access audit is unavailable');
+}
+
 function requiresPostgresAbuseStorage(env = process.env) {
   const nodeEnv = String(env.NODE_ENV || '').trim().toLowerCase();
   return ['production', 'staging'].includes(nodeEnv) || env.AUTH_ABUSE_STORE === 'postgres';
@@ -10,6 +18,7 @@ function requiresPostgresAbuseStorage(env = process.env) {
 async function checkAuthReadiness(query, { env = process.env } = {}) {
   if (typeof query !== 'function') throw new TypeError('A database query function is required');
   await query('SELECT 1');
+  await checkOptionalAuditReadiness(query, env);
   if (!requiresPostgresAbuseStorage(env)) return { ok: true, database: 'ready' };
 
   const result = await query(

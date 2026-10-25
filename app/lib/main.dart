@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'data/portable_backup/app_private_temporary_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +17,7 @@ import 'app/router.dart';
 import 'data/spend_reports_repository.dart';
 import 'data/product_access_api.dart';
 import 'features/settings/appearance_providers.dart';
+import 'features/recovery/automatic_account_recovery.dart';
 
 void main() {
   // error_handling.dart: catches the class of error that isn't caught by
@@ -70,6 +74,7 @@ void main() {
       SemanticsBinding.instance.ensureSemantics();
     }
     runApp(const ProviderScope(child: PandaPayApp()));
+    unawaited(AppPrivateTemporaryStorage.reapOnStartup());
   });
 }
 
@@ -312,6 +317,7 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     // Restore saved location monitoring for every entry point, including
     // assistant links that open a screen outside the tab shell.
     ref.watch(backgroundAlertsLifecycleProvider);
+    ref.watch(automaticAccountRecoveryProvider);
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'PandaPay',

@@ -1,0 +1,64 @@
+TAP version 13
+# Subtest: existing authenticated ciphertext survives a provider move using the same key
+ok 1 - existing authenticated ciphertext survives a provider move using the same key
+  ---
+  duration_ms: 5.762709
+  type: 'test'
+  ...
+# Subtest: hosted startup rejects missing, disabled, malformed and short keys
+ok 2 - hosted startup rejects missing, disabled, malformed and short keys
+  ---
+  duration_ms: 8.431
+  type: 'test'
+  ...
+# Subtest: wrong keys, tampering and unknown formats cannot become plaintext
+ok 3 - wrong keys, tampering and unknown formats cannot become plaintext
+  ---
+  duration_ms: 2.722542
+  type: 'test'
+  ...
+# Subtest: legacy local mode and plaintext reads preserve existing records
+ok 4 - legacy local mode and plaintext reads preserve existing records
+  ---
+  duration_ms: 2.011958
+  type: 'test'
+  ...
+# Subtest: v2 reader opens independently manufactured AAD-bound envelopes without changing the writer
+ok 5 - v2 reader opens independently manufactured AAD-bound envelopes without changing the writer
+  ---
+  duration_ms: 1.656917
+  type: 'test'
+  ...
+# Subtest: read key config accepts empty forms, enforces limits and keeps IDs prototype safe
+ok 6 - read key config accepts empty forms, enforces limits and keeps IDs prototype safe
+  ---
+  duration_ms: 12.360333
+  type: 'test'
+  ...
+# Subtest: v2 rejects missing, unknown, wrong and tampered keys or envelope fields safely
+ok 7 - v2 rejects missing, unknown, wrong and tampered keys or envelope fields safely
+  ---
+  duration_ms: 2.617084
+  type: 'test'
+  ...
+# Subtest: v2 can be read in explicit local-off mode while hosted mode still requires the original key
+ok 8 - v2 can be read in explicit local-off mode while hosted mode still requires the original key
+  ---
+  duration_ms: 1.412125
+  type: 'test'
+  ...
+# Subtest: legacy envelopes never fall back to optional read keys when the original key is wrong
+ok 9 - legacy envelopes never fall back to optional read keys when the original key is wrong
+  ---
+  duration_ms: 2.36725
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 91.452791

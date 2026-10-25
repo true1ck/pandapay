@@ -1,0 +1,16 @@
+test_libpq_urls_force_verified_tls_and_keep_password_out_of_process_url (backup_flow_test.PairedBackupFlowTest.test_libpq_urls_force_verified_tls_and_keep_password_out_of_process_url) ... ok
+test_local_pc_mode_needs_no_remote_paths_and_is_recoverable (backup_flow_test.PairedBackupFlowTest.test_local_pc_mode_needs_no_remote_paths_and_is_recoverable) ... ok
+test_private_identity_is_rejected_on_backup_host (backup_flow_test.PairedBackupFlowTest.test_private_identity_is_rejected_on_backup_host) ... ok
+test_production_rejects_unencrypted_database_transport (backup_flow_test.PairedBackupFlowTest.test_production_rejects_unencrypted_database_transport) ... ok
+test_publishes_one_encrypted_complete_pair_to_both_destinations (backup_flow_test.PairedBackupFlowTest.test_publishes_one_encrypted_complete_pair_to_both_destinations) ... ok
+test_restore_automatically_selects_newest_complete_pair (backup_flow_test.PairedBackupFlowTest.test_restore_automatically_selects_newest_complete_pair) ... ok
+test_restore_uses_separate_recovery_host_and_marks_restore_status (backup_flow_test.PairedBackupFlowTest.test_restore_uses_separate_recovery_host_and_marks_restore_status) ... ok
+test_storage_cap_failure_preserves_previous_complete_pair_and_cleans_pending (backup_flow_test.PairedBackupFlowTest.test_storage_cap_failure_preserves_previous_complete_pair_and_cleans_pending) ... ok
+test_streaming_quota_failure_keeps_old_pair_and_removes_partial_ciphertext (backup_flow_test.PairedBackupFlowTest.test_streaming_quota_failure_keeps_old_pair_and_removes_partial_ciphertext) ... ok
+test_copy_tool_accepts_same_file_and_keeps_private_mode (setup_local_recovery_test.SetupLocalRecoveryTest.test_copy_tool_accepts_same_file_and_keeps_private_mode) ... ok
+test_repeated_setup_preserves_existing_identity_and_installed_tools (setup_local_recovery_test.SetupLocalRecoveryTest.test_repeated_setup_preserves_existing_identity_and_installed_tools) ... ok
+
+----------------------------------------------------------------------
+Ran 45 tests in 23.621s
+
+OK

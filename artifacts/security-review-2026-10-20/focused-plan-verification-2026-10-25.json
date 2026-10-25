@@ -1,0 +1,60 @@
+{
+  "verified_at_utc": "2026-10-25T05:42:25.586284+00:00",
+  "scope": "planning and documentation verification only",
+  "plan_sha256": "4a1f2bf389de55b4d294378e048197c77a1700d9f7a9922463df6e9be4ef4959",
+  "focused_register_sha256": "448e15f4c1156e9fcb8fa2a76de6404f5fbc9f5ab4ea378850e101cc1d92ad40",
+  "unfinished_findings": 23,
+  "coverage": "all 23 mapped",
+  "phase_count": 6,
+  "current_plan_sections": 10,
+  "checked_local_links": 23,
+  "html_reproducible": true,
+  "html": {
+    "docs/security-and-backend-audit-2026-10-20.html": "22e5b8b3c51428212c90638c6cb7d502359d85fbc454167013aa51a0fa5e1d49",
+    "docs/security-remaining-work-2026-10-25.html": "6bf61d9518276975a564b9d136d19dcbb0d7c997e659c9225313c7795e8708d3"
+  },
+  "dom": {
+    "result": "passed",
+    "postgres_tables": 96,
+    "columns": 934,
+    "foreign_keys": 139,
+    "sqlite_tables": 19,
+    "source_only_tables": 2,
+    "remediation_items": 68,
+    "optimization_inventory_rows": 96,
+    "table_retirement_candidates": 4,
+    "local_links": 461,
+    "remaining_implementation_packages": 14,
+    "remaining_release_gates": 6,
+    "full_findings": 76,
+    "unfinished_findings": 51,
+    "focused_page_verified": true,
+    "checks": [
+      "remaining-work counts and complete finding mapping",
+      "focused remaining-work HTML",
+      "tab switching",
+      "keyboard tabs",
+      "database filter",
+      "domain filter",
+      "column search",
+      "empty state",
+      "reset",
+      "table inspection",
+      "relationship navigation",
+      "zoom",
+      "unique IDs",
+      "local links",
+      "offline scripts",
+      "remediation coverage and proposal status",
+      "optimization inventory completeness",
+      "scalability section and cross-tab shortcut"
+    ]
+  },
+  "application_source_unchanged": {
+    "candidate_sha256": "ccedf1d4229b85f1ea9b87bb35f845a683ff2474cddad0573d2a70797fc97fd5",
+    "files": 1272
+  },
+  "implementation_started": false,
+  "application_tests_run": false,
+  "live_access_or_deployment": false
+}

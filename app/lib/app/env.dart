@@ -33,6 +33,19 @@ enum AppEnvironment { dev, staging, prod }
 class Env {
   const Env._();
 
+  /// Manual account-bound recovery remains off until signed-device acceptance.
+  static const bool accountDataRecoveryEnabled = bool.fromEnvironment(
+    'PANDAPAY_ACCOUNT_RECOVERY_ENABLED',
+    defaultValue: false,
+  );
+
+  /// Enable only after auth v2 migrations, providers and supported clients pass
+  /// acceptance. A v2 request never falls back to a legacy code.
+  static const bool versionedOtpEnabled = bool.fromEnvironment(
+    'PANDAPAY_OTP_V2_ENABLED',
+    defaultValue: false,
+  );
+
   static const String _rawEnv = String.fromEnvironment(
     'PANDAPAY_ENV',
     defaultValue: 'dev',

@@ -1,0 +1,20 @@
+{
+  "filename": "20261023180000_user_merchant_rule_actions.sql",
+  "git_commit": "c0112f7",
+  "sha256": "e79f45e59c503a86a2742f038240ed515d94d3513a2fa6f0fccb24284ddf7e4a",
+  "saved_ledger_present": true,
+  "routines": [
+    {
+      "name": "sync_fields_for",
+      "body_matches_saved_database": true
+    },
+    {
+      "name": "sync_apply_user_merchant_category_rule",
+      "body_matches_saved_database": true
+    }
+  ],
+  "original_bytes_preserved": true,
+  "prior_reviewed_baseline_contains_file": false,
+  "full_ddl_checksum_not_available_in_saved_ledger": true,
+  "actual_upgrade_requires_new_independently_reviewed_baseline": true
+}

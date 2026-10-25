@@ -1,0 +1,244 @@
+TAP version 13
+# Subtest: default template preserves missing actual host/custody/device gates and no deployment
+ok 1 - default template preserves missing actual host/custody/device gates and no deployment
+  ---
+  duration_ms: 2.829959
+  type: 'test'
+  ...
+# Subtest: consistent synthetic metadata fixture exercises fully supplied gate logic without reading external systems
+ok 2 - consistent synthetic metadata fixture exercises fully supplied gate logic without reading external systems
+  ---
+  duration_ms: 0.591875
+  type: 'test'
+  ...
+# Subtest: prior partial batch record and stale/foreign source evidence never become full-candidate proof
+ok 3 - prior partial batch record and stale/foreign source evidence never become full-candidate proof
+  ---
+  duration_ms: 1.486209
+  type: 'test'
+  ...
+# Subtest: synthetic restore/upgrade tests cannot satisfy actual-data/provider release acceptance
+ok 4 - synthetic restore/upgrade tests cannot satisfy actual-data/provider release acceptance
+  ---
+  duration_ms: 0.202333
+  type: 'test'
+  ...
+# Subtest: freshness, proof hash, failures and per-check candidate binding are enforced
+ok 5 - freshness, proof hash, failures and per-check candidate binding are enforced
+  ---
+  duration_ms: 0.637125
+  type: 'test'
+  ...
+# Subtest: privilege policy drift, incomplete reports and wrong report scope cannot pass
+ok 6 - privilege policy drift, incomplete reports and wrong report scope cannot pass
+  ---
+  duration_ms: 1.033792
+  type: 'test'
+  ...
+# Subtest: one local PC and absent independent key custody stay missing; connection budgets must fit verified host limits
+ok 7 - one local PC and absent independent key custody stay missing; connection budgets must fit verified host limits
+  ---
+  duration_ms: 0.206458
+  type: 'test'
+  ...
+# Subtest: key inventory exports only names/presence and never hashes or reveals actual key values/IDs
+ok 8 - key inventory exports only names/presence and never hashes or reveals actual key values/IDs
+  ---
+  duration_ms: 0.376958
+  type: 'test'
+  ...
+# Subtest: feature manifest mismatches cannot silently enable browser/worker/recovery behavior
+ok 9 - feature manifest mismatches cannot silently enable browser/worker/recovery behavior
+  ---
+  duration_ms: 0.18825
+  type: 'test'
+  ...
+# Subtest: enabled optional features require their own acceptance proof, including IMAP interval configuration
+ok 10 - enabled optional features require their own acceptance proof, including IMAP interval configuration
+  ---
+  duration_ms: 0.236042
+  type: 'test'
+  ...
+# Subtest: provider, role, feature or retained-key version metadata changes invalidate imported release evidence
+ok 11 - provider, role, feature or retained-key version metadata changes invalidate imported release evidence
+  ---
+  duration_ms: 0.943041
+  type: 'test'
+  ...
+# Subtest: unknown/credential-containing manifest properties are rejected before output
+ok 12 - unknown/credential-containing manifest properties are rejected before output
+  ---
+  duration_ms: 0.232875
+  type: 'test'
+  ...
+# Subtest: source scope excludes .env, private key material, generated artifacts and unrelated files
+ok 13 - source scope excludes .env, private key material, generated artifacts and unrelated files
+  ---
+  duration_ms: 0.31275
+  type: 'test'
+  ...
+# Subtest: candidate hashing includes dirty/untracked/deleted release code and refuses concurrent edits
+ok 14 - candidate hashing includes dirty/untracked/deleted release code and refuses concurrent edits
+  ---
+  duration_ms: 124.105208
+  type: 'test'
+  ...
+# Subtest: input files are bounded regular non-symlinks; evidence cannot escape through relative paths or directory symlinks
+ok 15 - input files are bounded regular non-symlinks; evidence cannot escape through relative paths or directory symlinks
+  ---
+  duration_ms: 0.846625
+  type: 'test'
+  ...
+# Subtest: report/proof imports verify bytes without exposing their raw contents
+ok 16 - report/proof imports verify bytes without exposing their raw contents
+  ---
+  duration_ms: 1.177791
+  type: 'test'
+  ...
+# Subtest: template CLI is bounded read-only and does not import secret values from environment
+ok 17 - template CLI is bounded read-only and does not import secret values from environment
+  ---
+  duration_ms: 26.88575
+  type: 'test'
+  ...
+# Subtest: stable source fingerprints do not depend on object insertion order
+ok 18 - stable source fingerprints do not depend on object insertion order
+  ---
+  duration_ms: 0.070459
+  type: 'test'
+  ...
+# Subtest: enabled account lifecycle requires independent journal custody and separate retained authentication key
+ok 19 - enabled account lifecycle requires independent journal custody and separate retained authentication key
+  ---
+  duration_ms: 0.621958
+  type: 'test'
+  ...
+# Subtest: retiring legacy OTP or public lookup requires exact supported-client acceptance proof
+ok 20 - retiring legacy OTP or public lookup requires exact supported-client acceptance proof
+  ---
+  duration_ms: 0.443334
+  type: 'test'
+  ...
+# Subtest: new retirement and maintenance flags reject spellings not accepted by their runtime parsers
+ok 21 - new retirement and maintenance flags reject spellings not accepted by their runtime parsers
+  ---
+  duration_ms: 0.676291
+  type: 'test'
+  ...
+# Subtest: operational webhook delivery needs explicit manifest and exact receiver acceptance
+ok 22 - operational webhook delivery needs explicit manifest and exact receiver acceptance
+  ---
+  duration_ms: 0.23
+  type: 'test'
+  ...
+# Subtest: unset retained-reader environment preserves prior input and configuration-digest compatibility
+ok 23 - unset retained-reader environment preserves prior input and configuration-digest compatibility
+  ---
+  duration_ms: 0.219958
+  type: 'test'
+  ...
+# Subtest: configured retained readers need a registered label for every ID and expose no secret JSON
+ok 24 - configured retained readers need a registered label for every ID and expose no secret JSON
+  ---
+  duration_ms: 0.541166
+  type: 'test'
+  ...
+# Subtest: malformed, duplicate, oversized, and active-key-duplicate retained lists fail through a safe missing gate
+ok 25 - malformed, duplicate, oversized, and active-key-duplicate retained lists fail through a safe missing gate
+  ---
+  duration_ms: 1.239833
+  type: 'test'
+  ...
+# Subtest: retained-reader version labels are configuration evidence and invalidate stale exact-candidate proof
+ok 26 - retained-reader version labels are configuration evidence and invalidate stale exact-candidate proof
+  ---
+  duration_ms: 0.36925
+  type: 'test'
+  ...
+# Subtest: typed sync defaults off and older manifests without it remain compatible while off
+ok 27 - typed sync defaults off and older manifests without it remain compatible while off
+  ---
+  duration_ms: 0.206125
+  type: 'test'
+  ...
+# Subtest: typed sync activation requires exact acceptance proof and strict environment parity
+ok 28 - typed sync activation requires exact acceptance proof and strict environment parity
+  ---
+  duration_ms: 0.50675
+  type: 'test'
+  ...
+# Subtest: legacy scalar connection totals alone never approve the aggregate release budget
+ok 29 - legacy scalar connection totals alone never approve the aggregate release budget
+  ---
+  duration_ms: 0.16125
+  type: 'test'
+  ...
+# Subtest: rollout/reserve overflow, stale limits and mismatched primary totals remain missing gates despite passed proof labels
+ok 30 - rollout/reserve overflow, stale limits and mismatched primary totals remain missing gates despite passed proof labels
+  ---
+  duration_ms: 1.27825
+  type: 'test'
+  ...
+# Subtest: replica, mapping or reserve changes invalidate exact-source configuration acceptance
+ok 31 - replica, mapping or reserve changes invalidate exact-source configuration acceptance
+  ---
+  duration_ms: 0.388167
+  type: 'test'
+  ...
+# Subtest: enabled lifecycle, console and IMAP cannot omit their dedicated API/auth pools
+ok 32 - enabled lifecycle, console and IMAP cannot omit their dedicated API/auth pools
+  ---
+  duration_ms: 0.473375
+  type: 'test'
+  ...
+# Subtest: OTP process limits must be explicit, bounded and identical to the runtime environment
+ok 33 - OTP process limits must be explicit, bounded and identical to the runtime environment
+  ---
+  duration_ms: 1.221417
+  type: 'test'
+  ...
+# Subtest: OTP concurrency changes invalidate configuration evidence and require exact-source acceptance
+ok 34 - OTP concurrency changes invalidate configuration evidence and require exact-source acceptance
+  ---
+  duration_ms: 0.272292
+  type: 'test'
+  ...
+# Subtest: synthetic sync isolation alone cannot approve actual-data routine and consumer acceptance
+ok 35 - synthetic sync isolation alone cannot approve actual-data routine and consumer acceptance
+  ---
+  duration_ms: 0.446959
+  type: 'test'
+  ...
+# Subtest: requires both exact-copy attestations, generated loopback targets, explicit roles and encrypted output
+ok 36 - requires both exact-copy attestations, generated loopback targets, explicit roles and encrypted output
+  ---
+  duration_ms: 0.962792
+  type: 'test'
+  ...
+# Subtest: migration comparison retains unknown history, mismatches, missing checksums and duplicates without adopting them
+ok 37 - migration comparison retains unknown history, mismatches, missing checksums and duplicates without adopting them
+  ---
+  duration_ms: 0.9325
+  type: 'test'
+  ...
+# Subtest: complete review is encrypted, count-only result remains unaccepted, and every database operation is read only
+ok 38 - complete review is encrypted, count-only result remains unaccepted, and every database operation is read only
+  ---
+  duration_ms: 36.240208
+  type: 'test'
+  ...
+# Subtest: ledger query failure rolls back and releases; encryption failure emits no plaintext file
+ok 39 - ledger query failure rolls back and releases; encryption failure emits no plaintext file
+  ---
+  duration_ms: 4.809792
+  type: 'test'
+  ...
+1..39
+# tests 39
+# suites 0
+# pass 39
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 218.661792

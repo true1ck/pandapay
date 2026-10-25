@@ -1,0 +1,216 @@
+{
+  "format": "pandapay-remaining-security-batch-verification-v1",
+  "verified_at_utc": "2026-10-23T19:12:13.262079+00:00",
+  "branch": "dev",
+  "base_commit": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+  "candidate_state": "uncommitted working changes; not deployed",
+  "scope": [
+    "R1/R2/R3 regression from previous source batch",
+    "R4 dedicated IMAP/partner/backup-status capabilities and expiring auth-dashboard access",
+    "R5 canonical Google provider subject identity and safe explicit linking",
+    "Hash-bound paired restore proof and real age-based narrow status publication"
+  ],
+  "source_file_sha256": {
+    ".env.prod.example": "7f96825c86607cbb3025938d4308df3956b208a33789dd3fb5983a213c712cdf",
+    ".env.staging.example": "e77df26b4df14585b7945e02cac9201cd3e19da020334af8e1cda80c05818066",
+    ".github/workflows/build-and-test.yml": "4bd3d60038843ee90dccf697c2fd450dfc6aaa1ebb266b1461ca68c01381b2b1",
+    "api/src/backup_status_routes.js": "6ea63ffa23d26af43e10693e753edaaad30d4f6470faf1c123e97c1af45774a6",
+    "api/src/config.js": "f28d327759b1ff2d530e70c5bc494a7057bfb302ae463a079d79c2d6e9f41449",
+    "api/src/cors_policy.js": "7db34b23a427460fac457cf12047afff7616ffb4ed99511134c67a1ce728b72d",
+    "api/src/db.js": "c7016248486362903472ff27832d8bba4bf0a97ed455cbe83f2d222646e68ebf",
+    "api/src/imap_poller.js": "cb61789b0a70b0db47f4f34e9fac5ed281826ffb806feb446872ee8c7863cdf3",
+    "api/src/imap_worker_capability.js": "8d2961643c22cbdfed98857bb02ef351435d75131053eae9c40f86172638dfbb",
+    "api/src/index.js": "2fb2fa64bd5a3f547a7f75937f9d1b47af12b96a338494428e7941de109e1f6b",
+    "api/src/lounge_usage_route.js": "64473167dd4b11bae327e2262e2cc490cf92ddf9d3513959af7cf13521c7460c",
+    "api/src/observability.js": "eb8a83e76a9f82f321f07f9e2569304330ff1ab26d5c9cbac24f8a867dfb840a",
+    "api/src/partner_conversion_route.js": "51d479b2091452a027f2f3d03dcfb2731cddb8dc275fb99a7dd5ed08cd88aded",
+    "api/src/portable_backup/coverage.json": "ef1e23b2b89a1bbc4aca3540b0dd3bbb4ef840b6198992ba901daa70963d761a",
+    "api/src/request_limits.js": "b98dff46e845735e9c4e7bd970948834ee03bd308aeb022eb4d506250bb128c8",
+    "api/src/service_pools.js": "2902e967492662923a507d276a9b0f130b576df47176a3b1e9ce82c13c070638",
+    "api/test/backup_status_postgres.js": "b2eff4ba31a6d99c1bb92f2fc4d3f8d7a4df0573c59915a77262a004cc578a96",
+    "api/test/backup_status_publisher.test.js": "9e7de0dcf7c73e4346cb83ca491e26f5b53c8988bce91e92e1cceb89eec56f55",
+    "api/test/backup_status_routes.test.js": "d1c2d9c0ac27b2b53a005a67facf5313839520c66d338a8f96deda086e279473",
+    "api/test/imap_poller.test.js": "8873132575c824bb99694daf79b0d3d903a3f1ad1dab21e374d5321176dc69b2",
+    "api/test/imap_worker_capability.test.js": "a95233b1b8da42f544367ef55ce8489e30b74c0503980dd3e0c35a404f13f47f",
+    "api/test/imap_worker_postgres.js": "b05a9e9a7f42346c2e56792978a8901f6d6827511d1019a5d1f23fb53e43d6a6",
+    "api/test/lounge_usage_postgres.js": "f0841b0d22e8d117e925c3cd278347422f7728d4f19ca375c423b40a1877e2b4",
+    "api/test/lounge_usage_route.test.js": "1a7289a1c9fc854fe55955f7e909ce24a4f1110eadcca9368bec8aa908b5a574",
+    "api/test/observability.test.js": "be05f1be6aff4f4b7d6e072c52c141d50a68c3b9b512840e83c932d532c4312e",
+    "api/test/partner_conversion_postgres.js": "8592e0e71e700fb1cfb2e54804ca86d0f3332be06f9a19d92fe9fbd2038b1757",
+    "api/test/partner_conversion_route.test.js": "c6a3559df81132883af9c12d9c4e038bf4a91cbbd3b0835d3e412356ede74a29",
+    "api/test/portable_backup_export.test.js": "c30578a7f51bd16de32abdcaf50612911797c530d836ac5f3da7f7a2b4d592b4",
+    "api/test/request_boundaries.test.js": "0348349bdaabaa0c563f8a5d26f47fe071f4d0003610d184d956b704155264f8",
+    "api/test/service_pools.test.js": "89520210a774d6915fcb7eb5b86d10b0f27dc1b835290909458bad601ae782ac",
+    "auth/db/migrations/0005_db_access_log.sql": "6f42cc59d995197847ebc13d62a39bb908ff0e9f741ad03284a1999990befe38",
+    "auth/db/migrations/0006_google_oauth_identity.sql": "bcae527fd5f7f431654a9762e17f0daaa8c7bea357478dec37e430f1382cc8d8",
+    "auth/db/migrations/0007_security_dashboard_capability.sql": "35ed6030f0800bf3baed5f28035518aec0639ae56c77420b48daba0f4a41d156",
+    "auth/scripts/migrate.js": "40f9734194f9ca46b61d3751850f3768631dba731f385dbadbb76ee4b0f17a2b",
+    "auth/scripts/runtimePermissions.js": "962441029f1cebc5d332bd4f6c18ffcdd3342d100dd2964b5ecc3cfac1cf3a10",
+    "auth/scripts/security_admin_access.js": "32c82b3afe7c1fd4a5781edb2942431f0ba797a39bed97e2149494cf61e8cb32",
+    "auth/src/index.js": "e26d8ec6131159e7aecf025b10af0b88bb4971c83cc12d6d545aa2429eaf7432",
+    "auth/src/middleware/adminAuth.js": "c48783aeebfd01e3b6edb82d861de21e288083ca177c3429c11a5460e005a042",
+    "auth/src/middleware/dbAccessLogger.js": "72ea82a506db58a83820067e5b0d708dafc564c7619f716ada35dd3b29c04c7e",
+    "auth/src/middleware/requestLimits.js": "07b8829c9306e434238b6a7b2295f7d615194babb535812957f3d575183204b2",
+    "auth/src/observability.js": "f7acbe554275927a8974d88eaceaaf71b8a0b56b82bdbe89355d356de225b16d",
+    "auth/src/routes/authRoutes.js": "51d6271ef34e8c57eb153d957e15e128425d932a20ea4c6fd81072f7e5c1725f",
+    "auth/src/services/authReadiness.js": "3a182e482cb59850841c098850da3655d6f1c0b27acea0abfbbb0786026668b3",
+    "auth/src/services/googleAuthService.js": "ba47f446f9aa57b6a8af9ec2259ef761ce1f9a8d6d577d1426762558773dc1e2",
+    "auth/src/services/googleIdentity.js": "6df058aa22752c2545f58bfa09cb812ee95c3b38b210edb0603a9679e8d21f09",
+    "auth/test/admin_capability.test.js": "79b30b9b3696553d0c5e6e4d7f9863eb8a9d0269532c0327f52cd35ec53a5402",
+    "auth/test/admin_capability_postgres.js": "fe14e031383bbaf006375d8346d00b749babfb6b1eef657ca96cb881d36567b0",
+    "auth/test/auth_readiness.test.js": "57cc74993edb74fb6de4aa2112e2c54d752eed89e9b3d5c63c122ad6cee20380",
+    "auth/test/auth_runtime_permissions_postgres.js": "7e23805d46be78b2b78ec736156828003ac9cb94d23bf1dd8558582c77e5b85e",
+    "auth/test/db_access_logger.test.js": "ea3f059cc5ceadf557ade689ab43d69b1f6a9a7f2aa8b2f4011dd67999e4df7c",
+    "auth/test/google_auth_service.test.js": "1ca5f1636496f1b0f68b271a795cbe01996414b781fb968823a6f560e0383103",
+    "auth/test/google_identity.test.js": "9d4cdfa0a0c7c1dfd4bb3c9ec7f3411c845152abfda9ef0a41dc65bc73911e6f",
+    "auth/test/google_identity_postgres.js": "6de651963f140ee12e8400a82586fe82af3727b4434be4458313727718bbccc2",
+    "auth/test/observability.test.js": "cf17d788bcd78df81d8db944b1f7819b3787a7c82440d06e0e53e0dd9af2e328",
+    "auth/test/otp_delivery.test.js": "7552972132fa6f9b3318c0c7ca0466c773b5eb17188c1a977e63f83c08bdfe25",
+    "auth/test/request_limits.test.js": "4b853026614cd776d614a9ec8d37f144c8b9114a183466a1748c97bc9bbd24b9",
+    "auth/test/runtime_permissions.test.js": "ec48f9be05961632a2e20e86844fd5efd898c73fd56fb0d0da32743ece0cc0fc",
+    "auth/test/security_admin_access.test.js": "3e67d718181db5b09d98fb04afdd5fd5e6089c7f37c0b392138d9188a8933612",
+    "db/migration-prefix-exceptions.json": "119b28fe86abf8482bcf24c6ed15017c2c552275b45dde2fcef363e0a983089a",
+    "db/scripts/migration_prefix_policy.js": "111eceb83157dac21986b7102566e2a25d10195ed95880a498cd639041e883d0",
+    "db/scripts/product_migrate.js": "aee748c5706258cc1ff30e389bf18dad710ce867c2baefef06a3366dcf0fa482",
+    "db/scripts/publish_backup_status.js": "719c8303d461b96d5d7267a271187993b5763dcb0c965cc745ce5fae21d067d8",
+    "db/scripts/restore_drill.sh": "4aa36d2cf36b5e3247d7311d9fad3bfbd738e85aaf501f1bf731a19d33250f4f",
+    "db/scripts/service_capabilities.js": "452ed4fbc09e144ba4e8c10c7cf62e00fec66daabc3c0821ef3f3733414006f1",
+    "db/supabase/migrations/20261023185353_verified_backup_status.sql": "fb2d7b686527f7d0984b16c77f337c464c9017205cae7e035fe888c1a38ba6c5",
+    "db/supabase/migrations/20261023185355_partner_conversion_capability.sql": "0ec3d5846502c498f929b06d1a967639671c86d23a011763ee6eb83abbe39d75",
+    "db/supabase/migrations/20261023190128_imap_worker_capability.sql": "e2fb88a10e6c5e20253c802c84ebab73664307d672310d595be8568274ae2903",
+    "db/tests/migration_prefix_policy.test.js": "0aaa75b3da9f20c585cdf63c8ec8b0ee83e984c908aa14b08426c0cc17a0e5e9",
+    "db/tests/security_recovery_integration.py": "0fff6fa6173a0b262c81949fba66a59a52a8eb890cb2ba6f1b1e11be472ac1ea",
+    "db/tests/security_remaining_postgres.py": "a75869e43f6f9c1fa1cc5a22f4ad257754578ccc8da8f701a1bfb5cd5b5c0bf8",
+    "db/tests/service_capabilities.test.js": "55945ce1cb8345ecb209c3e047ae0c5a845e5fe265fef43538793e00de4146ef",
+    "deploy/DEPLOY.md": "7483860874920f885c2e4712f1df23cc68a09c690872a2b9cd70a84d2c9b3d43",
+    "docker-compose.prod.yml": "d3d224b748b8586ec38a06f1bcb6a6b6571f2cc3a9d6ef051aaf2c26cf48b4d0",
+    "docker-compose.staging.yml": "7dad14d45dc72b4a413f9d5099064aaf9e7e7789d40b7b3ba75818c01556193d"
+  },
+  "checks": {
+    "api": {
+      "status": "passed",
+      "node": "22.23.4",
+      "passed": 918,
+      "skipped": 2,
+      "failed": 0,
+      "skips": [
+        "real database: app_user RLS, worker separation, advisory locks, and deletion lineage",
+        "real database: overlap counts once, stale removals, replay, budgets, aliases and isolation"
+      ]
+    },
+    "auth": {
+      "status": "passed",
+      "node": "22.23.4",
+      "passed": 215,
+      "skipped": 0,
+      "failed": 0
+    },
+    "database_unit": {
+      "status": "passed",
+      "node": "22.23.4",
+      "passed": 56,
+      "failed": 0
+    },
+    "backup_setup_unit": {
+      "status": "passed",
+      "passed": 45,
+      "failed": 0
+    },
+    "deployment_unit": {
+      "status": "passed",
+      "passed": 21,
+      "failed": 0
+    },
+    "postgres_role_fixtures": {
+      "status": "passed",
+      "postgres": "18.4 Homebrew",
+      "fixtures": 7,
+      "proof": "postgres-proof.txt",
+      "coverage": [
+        "lounge ownership/product/archive RLS and locking",
+        "optional log migration/replay and INSERT-only runtime",
+        "partner real login private ingestion, replay and concurrency",
+        "backup verified-only caller projection and independent writer/reader/anonymous logins",
+        "Google fresh/legacy/replay/concurrent/deleted identities and metadata bounds",
+        "dashboard grant/revoke/expiry, disabled/deleted/unverified restoration and no self-promotion",
+        "IMAP active-row worker RLS, 100-row durable resumption, corrupt keys, locks and pgcrypto schema relocation"
+      ]
+    },
+    "managed_postgres_capabilities": {
+      "status": "passed",
+      "postgres": "Supabase PostgreSQL 17.6.1.136 disposable image",
+      "migration_role": "postgres: NOSUPERUSER CREATEROLE",
+      "fixtures": [
+        "partner_conversion_test",
+        "backup_status_test",
+        "imap_worker_test"
+      ],
+      "actual_service_login": "partner root bootstrap/readiness and credential-preserving replay passed",
+      "proofs": [
+        "partner-managed17-proof.txt",
+        "backup-status-managed-proof.txt",
+        "imap-managed-proof.txt"
+      ],
+      "note": "Synthetic fixtures only; not the current actual-data or intended-host release rehearsal"
+    },
+    "encrypted_recovery": {
+      "status": "passed",
+      "postgres": "18.4 Homebrew",
+      "data": "synthetic only",
+      "proof": "recovery-proof.txt",
+      "coverage": [
+        "fresh complete merged migrations and replay",
+        "retained-key failure rejection and runtime ledger denial",
+        "snapshot-consistent paired age-encrypted v5 export",
+        "independent fresh-cluster restore and table/schema/owner/ACL/global-parameter comparison",
+        "key/identity verification and fresh-target refusal",
+        "exact ciphertext hash-bound restore proof",
+        "real age publisher with independent narrow writer LOGIN",
+        "local PC mode and source-host restore rejection"
+      ]
+    },
+    "report_dom": {
+      "status": "passed",
+      "remediation_items": 68,
+      "current_security_status_rows": 18,
+      "local_links": 445,
+      "historical_database_snapshot_tables": 96,
+      "coverage": "Markdown status parity; offline tabs/filters/search/navigation/anchors; no live database snapshot or visual-browser certification"
+    },
+    "source_consistency": {
+      "status": "passed",
+      "tested_implementation_files": 74,
+      "preserved_preexisting_notification_files": 12
+    }
+  },
+  "test_environment": {
+    "external_network": "disabled for Node container tests",
+    "source_mount": "sanitized read-only candidate without .env/private key material",
+    "runtime_images": {
+      "api": "sha256:a10498c11416162589db386e5a0e7c7d351fad813c23a04138884e746b5e0224",
+      "auth": "sha256:5f998d4b59a685505d3d9a117ee6c2aecf1cc6533d77b25652069e2c0051faee"
+    },
+    "initial_runner_correction": "Initial Docker invocation inherited NODE_ENV=production and rejected missing synthetic config; rerun with explicit NODE_ENV=test passes without production-code relaxation",
+    "owned_resources": "Temporary native clusters stopped; exact shared synthetic Supabase container removed"
+  },
+  "limitations": [
+    "No live query/mutation, provider send, deployment, credential creation/rotation or historical data cleanup",
+    "No exact-candidate actual-data PostgreSQL 17 upgrade/cutover/failback certification",
+    "App/console implementation and full signed/oldest-client suites were not changed or rerun",
+    "Active partner release requires dedicated URL; no ordinary app-pool fallback",
+    "IMAP polling/dashboard/optional logging remain disabled by default pending respective acceptance gates",
+    "Whole-schema/PUBLIC/default/definer privilege matrix and log access/retention/load acceptance remain incomplete",
+    "Browser cookies/CSRF/CSP, uniform public lookup, durable erasure, password-free device-only recovery and further cleanup remain planned",
+    "One Mac remains one recovery location; independent off-host copies and separate key custody remain gates",
+    "Cached dependencies used; final clean release images, current advisories and live provider acceptance remain required"
+  ],
+  "documentation_file_sha256": {
+    "docs/security-and-backend-audit-2026-10-20.md": "6330063beca93c342415efdab6501f227e417c8277b270eb445aa7fa6f2bc80b",
+    "docs/security-and-backend-audit-2026-10-20.html": "0b7ae37f59bd51f0892d64d68e1474ee2ac060e28ea04fc949dd52af12a7305f",
+    "docs/security-remaining-implementation-plan-2026-10-23.md": "267b13abfdf8137d6c01dd577a5d0270bc9f65e4a77d4ea630dfe05b1590d9ad",
+    "docs/security-service-capabilities-2026-10-24.md": "4d3ce00742286f7341fbf878fc4e4b986345b5c76058abdfd49bc111bc1167d7",
+    "docs/security-implementation-progress-2026-10-22.md": "93f6ab87b89153f1a0715e720fbcdcc25bb024cd5aa8a696c3a27e0b6c697efe",
+    "docs/security-completion-checklist-2026-10-23.md": "4bd47da5055b836909d48de9ac91b7e7587aa940c9a3dc9a8631c727e8f4cf6e",
+    "docs/security-secrets-inventory-2026-10-23.md": "9d9487f8dc3be6b3a986997704ed287eb755ba8f13b4c300fb5fc0a8e6776f90"
+  }
+}

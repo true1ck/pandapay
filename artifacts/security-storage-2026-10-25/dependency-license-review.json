@@ -1,0 +1,4806 @@
+{
+  "format": "pandapay-dependency-license-review-v1",
+  "generated_from": "working-tree",
+  "network": "none",
+  "status": "incomplete",
+  "unknown_license_entries": 92,
+  "lock_count": 8,
+  "packages": 786,
+  "licenses": "package evidence summarized; legal/application approval not asserted",
+  "locks": [
+    {
+      "path": "api/package-lock.json",
+      "ecosystem": "npm",
+      "lock_sha256": "78d576e00816012541e0c414ec45351d07b9e327fa194ed726193351bba9ef5c",
+      "package_count": 98,
+      "license_evidence": {
+        "known": 98,
+        "unknown": 0,
+        "basis": "package-lock license fields; values are not approval"
+      },
+      "source_evidence": {
+        "integrity": 98,
+        "absentIntegrity": 0
+      },
+      "packages": [
+        {
+          "name": "accepts",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "body-parser",
+          "version": "2.4.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "body-parser/node_modules/content-type",
+          "version": "2.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "buffer-equal-constant-time",
+          "version": "1.0.1",
+          "license": "BSD-3-Clause",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "bytes",
+          "version": "3.1.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "call-bind-apply-helpers",
+          "version": "1.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "call-bound",
+          "version": "1.0.4",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "content-disposition",
+          "version": "1.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "content-type",
+          "version": "1.0.5",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "cookie",
+          "version": "0.7.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "cookie-signature",
+          "version": "1.2.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "cors",
+          "version": "2.8.6",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "debug",
+          "version": "4.4.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "depd",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "dotenv",
+          "version": "17.4.2",
+          "license": "BSD-2-Clause",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "dunder-proto",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "ecdsa-sig-formatter",
+          "version": "1.0.11",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "ee-first",
+          "version": "1.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "encodeurl",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "es-define-property",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "es-errors",
+          "version": "1.3.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "es-object-atoms",
+          "version": "1.1.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "escape-html",
+          "version": "1.0.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "etag",
+          "version": "1.8.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "express",
+          "version": "5.2.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "finalhandler",
+          "version": "2.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "forwarded",
+          "version": "0.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "fresh",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "function-bind",
+          "version": "1.1.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "get-intrinsic",
+          "version": "1.3.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "get-proto",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "gopd",
+          "version": "1.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "has-symbols",
+          "version": "1.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "hasown",
+          "version": "2.0.4",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "http-errors",
+          "version": "2.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "iconv-lite",
+          "version": "0.7.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "inherits",
+          "version": "2.0.4",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "ipaddr.js",
+          "version": "1.9.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "is-promise",
+          "version": "4.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "jsonwebtoken",
+          "version": "9.0.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "jwa",
+          "version": "2.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "jws",
+          "version": "4.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.includes",
+          "version": "4.3.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.isboolean",
+          "version": "3.0.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.isinteger",
+          "version": "4.0.4",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.isnumber",
+          "version": "3.0.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.isplainobject",
+          "version": "4.0.6",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.isstring",
+          "version": "4.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.once",
+          "version": "4.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "math-intrinsics",
+          "version": "1.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "media-typer",
+          "version": "1.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "merge-descriptors",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "mime-db",
+          "version": "1.54.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "mime-types",
+          "version": "3.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "ms",
+          "version": "2.1.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "negotiator",
+          "version": "1.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "object-assign",
+          "version": "4.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "object-inspect",
+          "version": "1.13.4",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "on-finished",
+          "version": "2.4.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "once",
+          "version": "1.4.0",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "parseurl",
+          "version": "1.3.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "path-to-regexp",
+          "version": "8.4.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg",
+          "version": "8.22.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-cloudflare",
+          "version": "1.4.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-connection-string",
+          "version": "2.14.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-int8",
+          "version": "1.0.1",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-pool",
+          "version": "3.14.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-protocol",
+          "version": "1.15.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-types",
+          "version": "2.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pgpass",
+          "version": "1.0.5",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "postgres-array",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "postgres-bytea",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "postgres-date",
+          "version": "1.0.7",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "postgres-interval",
+          "version": "1.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "proxy-addr",
+          "version": "2.0.8",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "qs",
+          "version": "6.16.1",
+          "license": "BSD-3-Clause",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "range-parser",
+          "version": "1.3.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "raw-body",
+          "version": "3.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "router",
+          "version": "2.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "safe-buffer",
+          "version": "5.2.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "safer-buffer",
+          "version": "2.1.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "semver",
+          "version": "7.8.5",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "send",
+          "version": "1.2.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "serve-static",
+          "version": "2.2.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "setprototypeof",
+          "version": "1.2.0",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "side-channel",
+          "version": "1.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "side-channel-list",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "side-channel-map",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "side-channel-weakmap",
+          "version": "1.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "split2",
+          "version": "4.2.0",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "statuses",
+          "version": "2.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "toidentifier",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "type-is",
+          "version": "2.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "type-is/node_modules/content-type",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "unpipe",
+          "version": "1.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "vary",
+          "version": "1.1.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "wrappy",
+          "version": "1.0.2",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "xtend",
+          "version": "4.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        }
+      ]
+    },
+    {
+      "path": "auth/package-lock.json",
+      "ecosystem": "npm",
+      "lock_sha256": "802ee82ef90e7b557bd077a4591fd7342e86f74761c912e4830449a000345497",
+      "package_count": 186,
+      "license_evidence": {
+        "known": 186,
+        "unknown": 0,
+        "basis": "package-lock license fields; values are not approval"
+      },
+      "source_evidence": {
+        "integrity": 186,
+        "absentIntegrity": 0
+      },
+      "packages": [
+        {
+          "name": "@aws-crypto/crc32",
+          "version": "5.2.0",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-crypto/sha256-browser",
+          "version": "5.2.0",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-crypto/sha256-js",
+          "version": "5.2.0",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-crypto/supports-web-crypto",
+          "version": "5.2.0",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-crypto/util",
+          "version": "5.2.0",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/client-ssm",
+          "version": "3.1054.0",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/core",
+          "version": "3.974.14",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/credential-provider-env",
+          "version": "3.972.40",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/credential-provider-http",
+          "version": "3.972.42",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/credential-provider-ini",
+          "version": "3.972.44",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/credential-provider-login",
+          "version": "3.972.44",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/credential-provider-node",
+          "version": "3.972.45",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/credential-provider-process",
+          "version": "3.972.40",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/credential-provider-sso",
+          "version": "3.972.44",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/credential-provider-web-identity",
+          "version": "3.972.44",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/nested-clients",
+          "version": "3.997.12",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/signature-v4-multi-region",
+          "version": "3.996.29",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/token-providers",
+          "version": "3.1054.0",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/types",
+          "version": "3.973.9",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/util-locate-window",
+          "version": "3.965.5",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws-sdk/xml-builder",
+          "version": "3.972.26",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@aws/lambda-invoke-store",
+          "version": "0.2.4",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@nodable/entities",
+          "version": "2.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@redis/bloom",
+          "version": "1.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@redis/client",
+          "version": "1.6.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@redis/graph",
+          "version": "1.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@redis/json",
+          "version": "1.0.7",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@redis/search",
+          "version": "1.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@redis/time-series",
+          "version": "1.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@smithy/core",
+          "version": "3.24.4",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@smithy/credential-provider-imds",
+          "version": "4.3.4",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@smithy/fetch-http-handler",
+          "version": "5.4.4",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@smithy/is-array-buffer",
+          "version": "2.2.0",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@smithy/node-http-handler",
+          "version": "4.7.4",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@smithy/signature-v4",
+          "version": "5.4.4",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@smithy/types",
+          "version": "4.14.2",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@smithy/util-buffer-from",
+          "version": "2.2.0",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "@smithy/util-utf8",
+          "version": "2.3.0",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "accepts",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "agent-base",
+          "version": "7.1.4",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "asynckit",
+          "version": "0.4.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "axios",
+          "version": "1.20.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "axios/node_modules/agent-base",
+          "version": "6.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "axios/node_modules/https-proxy-agent",
+          "version": "5.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "base64-js",
+          "version": "1.5.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "bcrypt",
+          "version": "6.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "bignumber.js",
+          "version": "9.3.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "body-parser",
+          "version": "2.4.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "body-parser/node_modules/content-type",
+          "version": "2.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "bowser",
+          "version": "2.14.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "buffer-equal-constant-time",
+          "version": "1.0.1",
+          "license": "BSD-3-Clause",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "bytes",
+          "version": "3.1.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "call-bind-apply-helpers",
+          "version": "1.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "call-bound",
+          "version": "1.0.4",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "cluster-key-slot",
+          "version": "1.1.2",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "combined-stream",
+          "version": "1.0.8",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "content-disposition",
+          "version": "1.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "content-type",
+          "version": "1.0.5",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "cookie",
+          "version": "0.7.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "cookie-signature",
+          "version": "1.2.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "cors",
+          "version": "2.8.6",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "data-uri-to-buffer",
+          "version": "4.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "dayjs",
+          "version": "1.11.21",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "debug",
+          "version": "4.4.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "delayed-stream",
+          "version": "1.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "depd",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "dotenv",
+          "version": "17.4.2",
+          "license": "BSD-2-Clause",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "dunder-proto",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "ecdsa-sig-formatter",
+          "version": "1.0.11",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "ee-first",
+          "version": "1.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "encodeurl",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "es-define-property",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "es-errors",
+          "version": "1.3.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "es-object-atoms",
+          "version": "1.1.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "es-set-tostringtag",
+          "version": "2.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "escape-html",
+          "version": "1.0.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "etag",
+          "version": "1.8.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "express",
+          "version": "5.2.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "extend",
+          "version": "3.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "fast-xml-builder",
+          "version": "1.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "fast-xml-parser",
+          "version": "5.7.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "fetch-blob",
+          "version": "3.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "finalhandler",
+          "version": "2.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "follow-redirects",
+          "version": "1.16.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "form-data",
+          "version": "4.0.6",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "form-data/node_modules/mime-db",
+          "version": "1.52.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "form-data/node_modules/mime-types",
+          "version": "2.1.35",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "formdata-polyfill",
+          "version": "4.0.10",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "forwarded",
+          "version": "0.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "fresh",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "function-bind",
+          "version": "1.1.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "gaxios",
+          "version": "7.1.4",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "gcp-metadata",
+          "version": "8.1.2",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "generic-pool",
+          "version": "3.9.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "get-intrinsic",
+          "version": "1.3.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "get-proto",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "google-auth-library",
+          "version": "10.6.2",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "google-logging-utils",
+          "version": "1.1.3",
+          "license": "Apache-2.0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "gopd",
+          "version": "1.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "has-symbols",
+          "version": "1.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "has-tostringtag",
+          "version": "1.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "hasown",
+          "version": "2.0.4",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "http-errors",
+          "version": "2.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "https-proxy-agent",
+          "version": "7.0.6",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "iconv-lite",
+          "version": "0.7.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "inherits",
+          "version": "2.0.4",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "ipaddr.js",
+          "version": "1.9.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "is-promise",
+          "version": "4.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "json-bigint",
+          "version": "1.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "jsonwebtoken",
+          "version": "9.0.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "jwa",
+          "version": "2.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "jws",
+          "version": "4.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.includes",
+          "version": "4.3.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.isboolean",
+          "version": "3.0.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.isinteger",
+          "version": "4.0.4",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.isnumber",
+          "version": "3.0.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.isplainobject",
+          "version": "4.0.6",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.isstring",
+          "version": "4.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "lodash.once",
+          "version": "4.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "math-intrinsics",
+          "version": "1.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "media-typer",
+          "version": "1.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "merge-descriptors",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "mime-db",
+          "version": "1.54.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "mime-types",
+          "version": "3.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "ms",
+          "version": "2.1.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "negotiator",
+          "version": "1.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "node-addon-api",
+          "version": "8.8.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "node-domexception",
+          "version": "1.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "node-fetch",
+          "version": "3.3.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "node-gyp-build",
+          "version": "4.8.4",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "nodemailer",
+          "version": "10.2.1",
+          "license": "MIT-0",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "object-assign",
+          "version": "4.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "object-inspect",
+          "version": "1.13.4",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "on-finished",
+          "version": "2.4.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "once",
+          "version": "1.4.0",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "parseurl",
+          "version": "1.3.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "path-expression-matcher",
+          "version": "1.5.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "path-to-regexp",
+          "version": "8.4.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg",
+          "version": "8.21.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-cloudflare",
+          "version": "1.4.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-connection-string",
+          "version": "2.13.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-int8",
+          "version": "1.0.1",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-pool",
+          "version": "3.14.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-protocol",
+          "version": "1.14.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pg-types",
+          "version": "2.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "pgpass",
+          "version": "1.0.5",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "postgres-array",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "postgres-bytea",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "postgres-date",
+          "version": "1.0.7",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "postgres-interval",
+          "version": "1.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "proxy-addr",
+          "version": "2.0.8",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "proxy-from-env",
+          "version": "2.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "qs",
+          "version": "6.16.1",
+          "license": "BSD-3-Clause",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "range-parser",
+          "version": "1.2.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "raw-body",
+          "version": "3.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "redis",
+          "version": "4.7.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "router",
+          "version": "2.2.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "safe-buffer",
+          "version": "5.2.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "safer-buffer",
+          "version": "2.1.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "scmp",
+          "version": "2.1.0",
+          "license": "BSD-3-Clause",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "semver",
+          "version": "7.8.1",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "send",
+          "version": "1.2.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "serve-static",
+          "version": "2.2.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "setprototypeof",
+          "version": "1.2.0",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "side-channel",
+          "version": "1.1.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "side-channel-list",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "side-channel-map",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "side-channel-weakmap",
+          "version": "1.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "split2",
+          "version": "4.2.0",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "statuses",
+          "version": "2.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "strnum",
+          "version": "2.3.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "toidentifier",
+          "version": "1.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "tslib",
+          "version": "2.8.1",
+          "license": "0BSD",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "twilio",
+          "version": "5.13.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "twilio/node_modules/agent-base",
+          "version": "6.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "twilio/node_modules/https-proxy-agent",
+          "version": "5.0.1",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "type-is",
+          "version": "2.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "type-is/node_modules/content-type",
+          "version": "2.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "unpipe",
+          "version": "1.0.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "vary",
+          "version": "1.1.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "web-streams-polyfill",
+          "version": "3.3.3",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "wrappy",
+          "version": "1.0.2",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "xml-naming",
+          "version": "0.1.0",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "xmlbuilder",
+          "version": "13.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "xtend",
+          "version": "4.0.2",
+          "license": "MIT",
+          "evidence": "lock-license-field"
+        },
+        {
+          "name": "yallist",
+          "version": "4.0.0",
+          "license": "ISC",
+          "evidence": "lock-license-field"
+        }
+      ]
+    },
+    {
+      "path": "app/pubspec.lock",
+      "ecosystem": "dart",
+      "lock_sha256": "a37b99c5b9e62e28c9075053285449e18b2267c6c27a80ee57d838cb54574bfe",
+      "package_count": 235,
+      "license_evidence": {
+        "known": 226,
+        "unknown": 9,
+        "basis": "cached hosted package LICENSE file existence only; contents/terms not reviewed"
+      },
+      "source_evidence": {
+        "hosted": 225,
+        "sdk": 7,
+        "path": 3,
+        "git": 0
+      },
+      "packages": [
+        {
+          "name": "_fe_analyzer_shared",
+          "version": "85.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "_flutterfire_internals",
+          "version": "1.3.77",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "alchemist",
+          "version": "0.14.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "analyzer",
+          "version": "7.6.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "analyzer_plugin",
+          "version": "0.13.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "archive",
+          "version": "4.3.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "args",
+          "version": "2.7.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "async",
+          "version": "2.13.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "boolean_selector",
+          "version": "2.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build",
+          "version": "2.5.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build_config",
+          "version": "1.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build_daemon",
+          "version": "4.1.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build_resolvers",
+          "version": "2.5.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build_runner",
+          "version": "2.5.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build_runner_core",
+          "version": "9.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "built_collection",
+          "version": "5.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "built_value",
+          "version": "8.12.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "camera",
+          "version": "0.12.0+2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "camera_android_camerax",
+          "version": "0.7.4+5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "camera_avfoundation",
+          "version": "0.10.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "camera_platform_interface",
+          "version": "2.13.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "camera_web",
+          "version": "0.3.5+5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "characters",
+          "version": "1.4.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "checked_yaml",
+          "version": "2.0.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "ci",
+          "version": "0.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "cli_util",
+          "version": "0.4.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "clock",
+          "version": "1.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "code_assets",
+          "version": "1.2.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "code_builder",
+          "version": "4.11.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "collection",
+          "version": "1.19.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "connectivity_plus",
+          "version": "7.3.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "connectivity_plus_platform_interface",
+          "version": "2.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "convert",
+          "version": "3.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "cross_file",
+          "version": "0.3.5+4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "crypto",
+          "version": "3.0.7",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "cryptography",
+          "version": "2.9.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "cupertino_icons",
+          "version": "1.0.9",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "custom_lint",
+          "version": "0.7.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "custom_lint_builder",
+          "version": "0.7.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "custom_lint_core",
+          "version": "0.7.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "custom_lint_visitor",
+          "version": "1.0.0+7.7.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "dart_style",
+          "version": "3.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "dbus",
+          "version": "0.7.13",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "equatable",
+          "version": "2.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "extension",
+          "version": "1.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "fake_async",
+          "version": "1.3.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "ffi",
+          "version": "2.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "ffi_leak_tracker",
+          "version": "0.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "file",
+          "version": "7.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "file_picker",
+          "version": "12.0.0-beta.7",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "file_selector_linux",
+          "version": "0.9.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "file_selector_macos",
+          "version": "0.9.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "file_selector_platform_interface",
+          "version": "2.7.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "file_selector_windows",
+          "version": "0.9.3+5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "firebase_core",
+          "version": "4.15.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "firebase_core_platform_interface",
+          "version": "8.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "firebase_core_web",
+          "version": "3.12.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "firebase_messaging",
+          "version": "16.7.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "firebase_messaging_platform_interface",
+          "version": "4.10.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "firebase_messaging_web",
+          "version": "4.2.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "fixnum",
+          "version": "1.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flex_color_scheme",
+          "version": "8.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flex_seed_scheme",
+          "version": "4.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter",
+          "version": "0.0.0",
+          "source": "sdk",
+          "evidence": "unknown"
+        },
+        {
+          "name": "flutter_animate",
+          "version": "4.5.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_driver",
+          "version": "0.0.0",
+          "source": "sdk",
+          "evidence": "unknown"
+        },
+        {
+          "name": "flutter_lints",
+          "version": "6.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_local_notifications",
+          "version": "18.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_local_notifications_linux",
+          "version": "5.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_local_notifications_platform_interface",
+          "version": "8.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_plugin_android_lifecycle",
+          "version": "2.0.35",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_riverpod",
+          "version": "2.6.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_secure_storage",
+          "version": "11.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_secure_storage_darwin",
+          "version": "0.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_secure_storage_linux",
+          "version": "3.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_secure_storage_platform_interface",
+          "version": "2.0.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_secure_storage_web",
+          "version": "2.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_secure_storage_windows",
+          "version": "4.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_shaders",
+          "version": "0.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_test",
+          "version": "0.0.0",
+          "source": "sdk",
+          "evidence": "unknown"
+        },
+        {
+          "name": "flutter_web_plugins",
+          "version": "0.0.0",
+          "source": "sdk",
+          "evidence": "unknown"
+        },
+        {
+          "name": "freezed_annotation",
+          "version": "3.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "frontend_server_client",
+          "version": "4.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "fuchsia_remote_debug_protocol",
+          "version": "0.0.0",
+          "source": "sdk",
+          "evidence": "unknown"
+        },
+        {
+          "name": "geolocator",
+          "version": "13.0.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "geolocator_android",
+          "version": "4.6.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "geolocator_apple",
+          "version": "2.3.14",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "geolocator_platform_interface",
+          "version": "4.2.8",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "geolocator_web",
+          "version": "4.1.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "geolocator_windows",
+          "version": "0.2.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "glob",
+          "version": "2.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "go_router",
+          "version": "14.8.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "google_fonts",
+          "version": "6.3.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "google_identity_services_web",
+          "version": "0.3.3+1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "google_mlkit_commons",
+          "version": "0.13.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "google_mlkit_text_recognition",
+          "version": "0.17.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "google_sign_in",
+          "version": "6.3.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "google_sign_in_android",
+          "version": "6.2.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "google_sign_in_ios",
+          "version": "5.9.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "google_sign_in_platform_interface",
+          "version": "2.5.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "google_sign_in_web",
+          "version": "0.12.4+4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "graphs",
+          "version": "2.3.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "home_widget",
+          "version": "0.7.0+1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "hooks",
+          "version": "2.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "hotreloader",
+          "version": "4.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "http",
+          "version": "1.6.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "http_multi_server",
+          "version": "3.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "http_parser",
+          "version": "4.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "image",
+          "version": "4.10.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "image_picker",
+          "version": "1.2.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "image_picker_android",
+          "version": "0.8.13+19",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "image_picker_for_web",
+          "version": "3.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "image_picker_ios",
+          "version": "0.8.13+6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "image_picker_linux",
+          "version": "0.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "image_picker_macos",
+          "version": "0.2.2+1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "image_picker_platform_interface",
+          "version": "2.11.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "image_picker_windows",
+          "version": "0.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "integration_test",
+          "version": "0.0.0",
+          "source": "sdk",
+          "evidence": "unknown"
+        },
+        {
+          "name": "intl",
+          "version": "0.20.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "io",
+          "version": "1.0.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "jni",
+          "version": "1.0.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "jni_flutter",
+          "version": "1.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "jni_util",
+          "version": "1.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "js",
+          "version": "0.7.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "json_annotation",
+          "version": "4.12.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "leak_tracker",
+          "version": "11.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "leak_tracker_flutter_testing",
+          "version": "3.0.10",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "leak_tracker_testing",
+          "version": "3.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "lints",
+          "version": "6.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "local_auth",
+          "version": "3.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "local_auth_android",
+          "version": "2.0.9",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "local_auth_darwin",
+          "version": "2.0.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "local_auth_platform_interface",
+          "version": "1.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "local_auth_windows",
+          "version": "2.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "logging",
+          "version": "1.3.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "matcher",
+          "version": "0.12.19",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "material_color_utilities",
+          "version": "0.13.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "meta",
+          "version": "1.18.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "mime",
+          "version": "2.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "mobile_scanner",
+          "version": "7.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "nm",
+          "version": "0.5.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "objective_c",
+          "version": "9.5.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "package_config",
+          "version": "2.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "package_info_plus",
+          "version": "10.2.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "package_info_plus_platform_interface",
+          "version": "4.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pandapay_domain",
+          "version": "1.0.0",
+          "source": "path",
+          "evidence": "unknown"
+        },
+        {
+          "name": "pandapay_lints",
+          "version": "0.0.1",
+          "source": "path",
+          "evidence": "unknown"
+        },
+        {
+          "name": "path",
+          "version": "1.9.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "path_provider",
+          "version": "2.1.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "path_provider_android",
+          "version": "2.3.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "path_provider_foundation",
+          "version": "2.6.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "path_provider_linux",
+          "version": "2.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "path_provider_platform_interface",
+          "version": "2.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "path_provider_windows",
+          "version": "2.3.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pdfx",
+          "version": "2.11.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "permission_handler",
+          "version": "11.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "permission_handler_android",
+          "version": "12.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "permission_handler_apple",
+          "version": "9.5.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "permission_handler_html",
+          "version": "0.1.4+1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "permission_handler_platform_interface",
+          "version": "4.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "permission_handler_windows",
+          "version": "0.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "petitparser",
+          "version": "7.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "photo_view",
+          "version": "0.15.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "platform",
+          "version": "3.1.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "plugin_platform_interface",
+          "version": "2.1.8",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pool",
+          "version": "1.5.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "posix",
+          "version": "6.5.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "process",
+          "version": "5.0.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pub_semver",
+          "version": "2.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pubspec_parse",
+          "version": "1.5.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "record_use",
+          "version": "0.6.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "responsive_framework",
+          "version": "1.5.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "rive",
+          "version": "0.14.11",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "rive_native",
+          "version": "0.1.11",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "riverpod",
+          "version": "2.6.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "riverpod_analyzer_utils",
+          "version": "0.5.10",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "riverpod_annotation",
+          "version": "2.6.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "riverpod_generator",
+          "version": "2.6.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "riverpod_lint",
+          "version": "2.6.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "rxdart",
+          "version": "0.28.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "share_plus",
+          "version": "13.3.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "share_plus_platform_interface",
+          "version": "7.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences",
+          "version": "2.5.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_android",
+          "version": "2.4.27",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_foundation",
+          "version": "2.5.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_linux",
+          "version": "2.4.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_platform_interface",
+          "version": "2.4.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_web",
+          "version": "2.4.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_windows",
+          "version": "2.4.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shelf",
+          "version": "1.4.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shelf_web_socket",
+          "version": "3.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "sky_engine",
+          "version": "0.0.0",
+          "source": "sdk",
+          "evidence": "unknown"
+        },
+        {
+          "name": "source_gen",
+          "version": "2.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "source_span",
+          "version": "1.10.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "speech_to_text",
+          "version": "7.5.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "speech_to_text_platform_interface",
+          "version": "2.5.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "speech_to_text_windows",
+          "version": "1.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "sqlite3",
+          "version": "2.9.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "sqlite3_flutter_libs",
+          "version": "0.5.42",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "stack_trace",
+          "version": "1.12.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "state_notifier",
+          "version": "1.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "stream_channel",
+          "version": "2.1.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "stream_transform",
+          "version": "2.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "string_scanner",
+          "version": "1.4.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "sync_http",
+          "version": "0.3.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "syncfusion_flutter_core",
+          "version": "34.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "syncfusion_flutter_pdf",
+          "version": "34.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "synchronized",
+          "version": "3.5.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "telephony",
+          "version": "0.2.0",
+          "source": "path",
+          "license": "MIT",
+          "evidence": "vendored-license-file-present"
+        },
+        {
+          "name": "term_glyph",
+          "version": "1.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "test_api",
+          "version": "0.7.11",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "timezone",
+          "version": "0.10.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "timing",
+          "version": "1.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "typed_data",
+          "version": "1.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "universal_platform",
+          "version": "1.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "url_launcher",
+          "version": "6.3.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "url_launcher_android",
+          "version": "6.3.32",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "url_launcher_ios",
+          "version": "6.4.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "url_launcher_linux",
+          "version": "3.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "url_launcher_macos",
+          "version": "3.2.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "url_launcher_platform_interface",
+          "version": "2.3.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "url_launcher_web",
+          "version": "2.4.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "url_launcher_windows",
+          "version": "3.1.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "uuid",
+          "version": "4.6.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "vector_math",
+          "version": "2.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "vm_service",
+          "version": "15.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "watcher",
+          "version": "1.2.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "web",
+          "version": "1.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "web_socket",
+          "version": "1.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "web_socket_channel",
+          "version": "3.0.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "webdriver",
+          "version": "3.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "win32",
+          "version": "6.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "xdg_directories",
+          "version": "1.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "xml",
+          "version": "7.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "yaml",
+          "version": "3.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        }
+      ]
+    },
+    {
+      "path": "console/pubspec.lock",
+      "ecosystem": "dart",
+      "lock_sha256": "e7f59fc389ccc15499f1745d5d0f93e04b6451fa6ae6ce9cdf6c1a6539facbdf",
+      "package_count": 98,
+      "license_evidence": {
+        "known": 93,
+        "unknown": 5,
+        "basis": "cached hosted package LICENSE file existence only; contents/terms not reviewed"
+      },
+      "source_evidence": {
+        "hosted": 93,
+        "sdk": 4,
+        "path": 1,
+        "git": 0
+      },
+      "packages": [
+        {
+          "name": "_fe_analyzer_shared",
+          "version": "85.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "analyzer",
+          "version": "7.6.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "analyzer_plugin",
+          "version": "0.13.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "args",
+          "version": "2.7.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "async",
+          "version": "2.13.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "boolean_selector",
+          "version": "2.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build",
+          "version": "2.5.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build_config",
+          "version": "1.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build_daemon",
+          "version": "4.1.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build_resolvers",
+          "version": "2.5.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build_runner",
+          "version": "2.5.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "build_runner_core",
+          "version": "9.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "built_collection",
+          "version": "5.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "built_value",
+          "version": "8.12.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "characters",
+          "version": "1.4.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "checked_yaml",
+          "version": "2.0.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "clock",
+          "version": "1.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "code_builder",
+          "version": "4.11.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "collection",
+          "version": "1.19.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "convert",
+          "version": "3.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "crypto",
+          "version": "3.0.7",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "cupertino_icons",
+          "version": "1.0.9",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "custom_lint_core",
+          "version": "0.7.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "custom_lint_visitor",
+          "version": "1.0.0+7.7.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "dart_style",
+          "version": "3.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "fake_async",
+          "version": "1.3.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "ffi",
+          "version": "2.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "file",
+          "version": "7.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "fixnum",
+          "version": "1.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter",
+          "version": "0.0.0",
+          "source": "sdk",
+          "evidence": "unknown"
+        },
+        {
+          "name": "flutter_lints",
+          "version": "6.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_riverpod",
+          "version": "2.6.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "flutter_test",
+          "version": "0.0.0",
+          "source": "sdk",
+          "evidence": "unknown"
+        },
+        {
+          "name": "flutter_web_plugins",
+          "version": "0.0.0",
+          "source": "sdk",
+          "evidence": "unknown"
+        },
+        {
+          "name": "freezed_annotation",
+          "version": "3.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "frontend_server_client",
+          "version": "4.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "glob",
+          "version": "2.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "graphs",
+          "version": "2.3.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "http",
+          "version": "1.6.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "http_multi_server",
+          "version": "3.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "http_parser",
+          "version": "4.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "io",
+          "version": "1.0.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "js",
+          "version": "0.7.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "json_annotation",
+          "version": "4.12.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "leak_tracker",
+          "version": "11.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "leak_tracker_flutter_testing",
+          "version": "3.0.10",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "leak_tracker_testing",
+          "version": "3.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "lints",
+          "version": "6.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "logging",
+          "version": "1.3.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "matcher",
+          "version": "0.12.19",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "material_color_utilities",
+          "version": "0.13.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "meta",
+          "version": "1.18.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "mime",
+          "version": "2.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "package_config",
+          "version": "2.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pandapay_domain",
+          "version": "1.0.0",
+          "source": "path",
+          "evidence": "unknown"
+        },
+        {
+          "name": "path",
+          "version": "1.9.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "path_provider_linux",
+          "version": "2.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "path_provider_platform_interface",
+          "version": "2.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "path_provider_windows",
+          "version": "2.3.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "platform",
+          "version": "3.1.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "plugin_platform_interface",
+          "version": "2.1.8",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pool",
+          "version": "1.5.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pub_semver",
+          "version": "2.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pubspec_parse",
+          "version": "1.5.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "riverpod",
+          "version": "2.6.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "riverpod_analyzer_utils",
+          "version": "0.5.10",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "riverpod_annotation",
+          "version": "2.6.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "riverpod_generator",
+          "version": "2.6.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences",
+          "version": "2.5.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_android",
+          "version": "2.4.27",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_foundation",
+          "version": "2.5.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_linux",
+          "version": "2.4.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_platform_interface",
+          "version": "2.4.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_web",
+          "version": "2.4.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shared_preferences_windows",
+          "version": "2.4.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shelf",
+          "version": "1.4.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shelf_web_socket",
+          "version": "3.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "sky_engine",
+          "version": "0.0.0",
+          "source": "sdk",
+          "evidence": "unknown"
+        },
+        {
+          "name": "source_gen",
+          "version": "2.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "source_span",
+          "version": "1.10.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "stack_trace",
+          "version": "1.12.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "state_notifier",
+          "version": "1.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "stream_channel",
+          "version": "2.1.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "stream_transform",
+          "version": "2.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "string_scanner",
+          "version": "1.4.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "term_glyph",
+          "version": "1.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "test_api",
+          "version": "0.7.11",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "timing",
+          "version": "1.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "typed_data",
+          "version": "1.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "uuid",
+          "version": "4.6.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "vector_math",
+          "version": "2.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "vm_service",
+          "version": "15.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "watcher",
+          "version": "1.2.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "web",
+          "version": "1.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "web_socket",
+          "version": "1.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "web_socket_channel",
+          "version": "3.0.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "xdg_directories",
+          "version": "1.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "yaml",
+          "version": "3.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        }
+      ]
+    },
+    {
+      "path": "packages/pandapay_lints/pubspec.lock",
+      "ecosystem": "dart",
+      "lock_sha256": "94e9cc9da7cdd52a62359a1fed5ca12c4c9d10cd137412310f153e73f902929c",
+      "package_count": 43,
+      "license_evidence": {
+        "known": 43,
+        "unknown": 0,
+        "basis": "cached hosted package LICENSE file existence only; contents/terms not reviewed"
+      },
+      "source_evidence": {
+        "hosted": 43,
+        "sdk": 0,
+        "path": 0,
+        "git": 0
+      },
+      "packages": [
+        {
+          "name": "_fe_analyzer_shared",
+          "version": "85.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "analyzer",
+          "version": "7.6.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "analyzer_plugin",
+          "version": "0.13.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "args",
+          "version": "2.7.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "async",
+          "version": "2.13.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "boolean_selector",
+          "version": "2.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "checked_yaml",
+          "version": "2.0.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "ci",
+          "version": "0.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "cli_util",
+          "version": "0.4.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "collection",
+          "version": "1.19.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "convert",
+          "version": "3.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "crypto",
+          "version": "3.0.7",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "custom_lint",
+          "version": "0.7.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "custom_lint_builder",
+          "version": "0.7.6",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "custom_lint_core",
+          "version": "0.7.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "custom_lint_visitor",
+          "version": "1.0.0+7.7.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "dart_style",
+          "version": "3.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "file",
+          "version": "7.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "fixnum",
+          "version": "1.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "freezed_annotation",
+          "version": "3.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "glob",
+          "version": "2.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "hotreloader",
+          "version": "4.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "json_annotation",
+          "version": "4.12.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "logging",
+          "version": "1.3.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "matcher",
+          "version": "0.12.20",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "meta",
+          "version": "1.19.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "package_config",
+          "version": "2.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "path",
+          "version": "1.9.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pub_semver",
+          "version": "2.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pubspec_parse",
+          "version": "1.5.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "rxdart",
+          "version": "0.28.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "source_span",
+          "version": "1.10.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "stack_trace",
+          "version": "1.12.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "stream_channel",
+          "version": "2.1.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "stream_transform",
+          "version": "2.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "string_scanner",
+          "version": "1.4.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "term_glyph",
+          "version": "1.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "test_api",
+          "version": "0.7.13",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "typed_data",
+          "version": "1.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "uuid",
+          "version": "4.6.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "vm_service",
+          "version": "15.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "watcher",
+          "version": "1.2.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "yaml",
+          "version": "3.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        }
+      ]
+    },
+    {
+      "path": "packages/pandapay_domain/pubspec.lock",
+      "ecosystem": "dart",
+      "lock_sha256": "5c82228a2202581e22dd481041d643c66faee327e8f2f927fde1f12ed6e33098",
+      "package_count": 48,
+      "license_evidence": {
+        "known": 48,
+        "unknown": 0,
+        "basis": "cached hosted package LICENSE file existence only; contents/terms not reviewed"
+      },
+      "source_evidence": {
+        "hosted": 48,
+        "sdk": 0,
+        "path": 0,
+        "git": 0
+      },
+      "packages": [
+        {
+          "name": "_fe_analyzer_shared",
+          "version": "105.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "analyzer",
+          "version": "14.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "args",
+          "version": "2.7.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "async",
+          "version": "2.13.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "boolean_selector",
+          "version": "2.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "cli_config",
+          "version": "0.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "collection",
+          "version": "1.19.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "convert",
+          "version": "3.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "coverage",
+          "version": "1.15.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "crypto",
+          "version": "3.0.7",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "file",
+          "version": "7.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "frontend_server_client",
+          "version": "4.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "glob",
+          "version": "2.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "http_multi_server",
+          "version": "3.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "http_parser",
+          "version": "4.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "io",
+          "version": "1.0.5",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "lints",
+          "version": "6.1.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "logging",
+          "version": "1.3.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "matcher",
+          "version": "0.12.20",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "meta",
+          "version": "1.19.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "mime",
+          "version": "2.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "node_preamble",
+          "version": "2.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "package_config",
+          "version": "3.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "path",
+          "version": "1.9.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pool",
+          "version": "1.5.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "pub_semver",
+          "version": "2.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shelf",
+          "version": "1.4.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shelf_packages_handler",
+          "version": "3.0.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shelf_static",
+          "version": "1.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "shelf_web_socket",
+          "version": "3.0.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "source_map_stack_trace",
+          "version": "2.1.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "source_maps",
+          "version": "0.10.13",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "source_span",
+          "version": "1.10.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "stack_trace",
+          "version": "1.12.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "stream_channel",
+          "version": "2.1.4",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "string_scanner",
+          "version": "1.4.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "term_glyph",
+          "version": "1.2.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "test",
+          "version": "1.31.2",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "test_api",
+          "version": "0.7.13",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "test_core",
+          "version": "0.6.19",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "typed_data",
+          "version": "1.4.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "vm_service",
+          "version": "15.2.0",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "watcher",
+          "version": "1.2.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "web",
+          "version": "1.1.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "web_socket",
+          "version": "1.0.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "web_socket_channel",
+          "version": "3.0.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "webkit_inspection_protocol",
+          "version": "1.2.1",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        },
+        {
+          "name": "yaml",
+          "version": "3.1.3",
+          "source": "hosted",
+          "evidence": "cached-license-file-present"
+        }
+      ]
+    },
+    {
+      "path": "app/ios/Podfile.lock",
+      "ecosystem": "pod",
+      "lock_sha256": "c51e6dfaf93dd8550e2b40ac243bf501a0912c2de7f9a1366f52d34a10adcfb8",
+      "package_count": 77,
+      "license_evidence": {
+        "known": 0,
+        "unknown": 77,
+        "basis": "Podfile.lock has no license terms; no package license review performed"
+      },
+      "source_evidence": {
+        "specRepos": 1,
+        "checksums": 1
+      },
+      "packages": [
+        {
+          "name": "AppAuth",
+          "version": "1.7.6",
+          "evidence": "unknown"
+        },
+        {
+          "name": "AppAuth/Core",
+          "version": "1.7.6",
+          "evidence": "unknown"
+        },
+        {
+          "name": "AppAuth/ExternalUserAgent",
+          "version": "1.7.6",
+          "evidence": "unknown"
+        },
+        {
+          "name": "AppCheckCore",
+          "version": "11.3.2",
+          "evidence": "unknown"
+        },
+        {
+          "name": "camera_avfoundation",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "connectivity_plus",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "CwlCatchException",
+          "version": "2.2.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "CwlCatchExceptionSupport",
+          "version": "2.2.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "file_picker",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "Firebase/CoreOnly",
+          "version": "12.19.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "Firebase/Messaging",
+          "version": "12.19.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "firebase_core",
+          "version": "4.15.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "firebase_messaging",
+          "version": "16.7.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "FirebaseCore",
+          "version": "12.19.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "FirebaseCoreInternal",
+          "version": "12.19.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "FirebaseInstallations",
+          "version": "12.19.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "FirebaseMessaging",
+          "version": "12.19.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "Flutter",
+          "version": "1.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "flutter_local_notifications",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "flutter_secure_storage_darwin",
+          "version": "10.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "geolocator_apple",
+          "version": "1.2.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "google_mlkit_commons",
+          "version": "0.13.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "google_mlkit_text_recognition",
+          "version": "0.17.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "google_sign_in_ios",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleDataTransport",
+          "version": "10.1.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleMLKit/MLKitCore",
+          "version": "9.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleMLKit/TextRecognition",
+          "version": "9.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleSignIn",
+          "version": "8.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleToolboxForMac/Defines",
+          "version": "4.2.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleToolboxForMac/Logger",
+          "version": "4.2.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleToolboxForMac/NSData+zlib",
+          "version": "4.2.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleUtilities/AppDelegateSwizzler",
+          "version": "8.1.2",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleUtilities/Environment",
+          "version": "8.1.2",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleUtilities/Logger",
+          "version": "8.1.2",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleUtilities/Network",
+          "version": "8.1.2",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleUtilities/NSData+zlib",
+          "version": "8.1.2",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleUtilities/Privacy",
+          "version": "8.1.2",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleUtilities/Reachability",
+          "version": "8.1.2",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GoogleUtilities/UserDefaults",
+          "version": "8.1.2",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GTMAppAuth",
+          "version": "4.1.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GTMSessionFetcher",
+          "version": "3.5.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GTMSessionFetcher/Core",
+          "version": "3.5.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "GTMSessionFetcher/Full",
+          "version": "3.5.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "home_widget",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "image_picker_ios",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "integration_test",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "local_auth_darwin",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "MLImage",
+          "version": "1.0.0-beta8",
+          "evidence": "unknown"
+        },
+        {
+          "name": "MLKitCommon",
+          "version": "14.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "MLKitTextRecognition",
+          "version": "7.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "MLKitTextRecognitionCommon",
+          "version": "6.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "MLKitVision",
+          "version": "10.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "mobile_scanner",
+          "version": "7.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "nanopb",
+          "version": "3.30910.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "nanopb/decode",
+          "version": "3.30910.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "nanopb/encode",
+          "version": "3.30910.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "package_info_plus",
+          "version": "0.4.5",
+          "evidence": "unknown"
+        },
+        {
+          "name": "pdfx",
+          "version": "1.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "permission_handler_apple",
+          "version": "9.4.8",
+          "evidence": "unknown"
+        },
+        {
+          "name": "PromisesObjC",
+          "version": "2.4.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "PromisesSwift",
+          "version": "2.4.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "RecaptchaInterop",
+          "version": "101.0.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "rive_native",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "share_plus",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "shared_preferences_foundation",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "speech_to_text",
+          "version": "7.2.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "sqlite3",
+          "version": "3.52.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "sqlite3/common",
+          "version": "3.52.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "sqlite3/dbstatvtab",
+          "version": "3.52.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "sqlite3/fts5",
+          "version": "3.52.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "sqlite3/math",
+          "version": "3.52.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "sqlite3/perf-threadsafe",
+          "version": "3.52.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "sqlite3/rtree",
+          "version": "3.52.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "sqlite3/session",
+          "version": "3.52.0",
+          "evidence": "unknown"
+        },
+        {
+          "name": "sqlite3_flutter_libs",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "telephony",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        },
+        {
+          "name": "url_launcher_ios",
+          "version": "0.0.1",
+          "evidence": "unknown"
+        }
+      ]
+    },
+    {
+      "path": "app/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+      "ecosystem": "swift",
+      "lock_sha256": "862e34bd50494de33fe88711a4cca6a3494f2c341ec2efce323189ed317c0f79",
+      "package_count": 1,
+      "license_evidence": {
+        "known": 0,
+        "unknown": 1,
+        "basis": "Package.resolved pins source revisions, not license terms"
+      },
+      "source_evidence": {
+        "pins": 1,
+        "withRevision": 1
+      },
+      "packages": [
+        {
+          "name": "csqlite",
+          "version": null,
+          "revision": "1ee46d19a4f451a7aa64ffc64fc99b4748131e62",
+          "evidence": "unknown"
+        }
+      ]
+    }
+  ],
+  "vendored": {
+    "path": "app/third_party/telephony",
+    "version": "0.2.0",
+    "license": "MIT",
+    "license_path": "app/third_party/telephony/LICENSE",
+    "license_sha256": "a7621da7b781a8ad679f1321c633120265e92b7f76c1ce06b523a25dd8e5741e",
+    "upstream": "https://github.com/shounakmulay/Telephony",
+    "local_patch": "app/third_party/telephony/PANDAPAY_PATCH.md",
+    "provenance": "README and pubspec identify upstream; source is locally patched; no immutable upstream commit/archive hash established by this review"
+  }
+}

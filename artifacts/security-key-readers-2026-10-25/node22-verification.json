@@ -1,0 +1,24 @@
+{
+  "api": {
+    "image": "pandapay-security-next25-api:local",
+    "image_id": "sha256:00822714a313c7a85dd80c142d5b30c148d117798223b25c333fbd86493f096c",
+    "exit_code": 0,
+    "summary": [
+      "# tests 15",
+      "# pass 15",
+      "# fail 0",
+      "# skipped 0"
+    ]
+  },
+  "auth": {
+    "image": "pandapay-security-next25-auth:local",
+    "image_id": "sha256:4ec4930497d4213b0e1670c97f2753c9707fac5d3f3fb920c5227f640077d0ec",
+    "exit_code": 0,
+    "summary": [
+      "# tests 9",
+      "# pass 9",
+      "# fail 0",
+      "# skipped 0"
+    ]
+  }
+}

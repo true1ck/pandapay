@@ -9,13 +9,17 @@ const auth = require('../middleware/authMiddleware');
 const { sendOtpSms } = require('../services/smsService');
 const { sendOtpEmail } = require('../services/emailService');
 const { verifyGoogleToken } = require('../services/googleAuthService');
+const { resolveGoogleAccount, GoogleIdentityError } = require('../services/googleIdentity');
 const { verifyAccessToken } = require('../services/accessTokenVerification');
 const { verifyCurrentSession } = require('../services/currentSessionVerification');
 const {
   createOtp,
   verifyOtp,
   discardUndeliveredOtp,
+  createOtpV2, verifyOtpV2, discardUndeliveredOtpV2,
 } = require('../services/otpService');
+const {isVersionedOtpRequest}=require('./versionedOtpRoutes');
+const { OtpCapacityError, BUSY_CODE, respondOtpCapacityUnavailable } = require('../services/otpWorkAdmission');
 const { isTestOtpIdentifier } = require('../utils/testOtp');
 const {
   signAccessToken,
@@ -76,6 +80,20 @@ const { executeOtpRequestWithTiming, otpRequestDelay, executeOtpVerifyWithTiming
 const { detectAndLogEnumeration } = require('../utils/enumerationDetection');
 
 const router = express.Router();
+const {createLegacyAuthAdmission}=require('../middleware/legacyAuthAdmission');
+router.use(createLegacyAuthAdmission({retireLegacyOtp:config.retireLegacyOtp,retirePublicLookup:config.retirePublicLookup}));
+function createChallenge(req,identifier,type,purpose){
+  return isVersionedOtpRequest(req)?createOtpV2(identifier,type,purpose,req.body.device_id):createOtp(identifier,type,purpose);
+}
+function verifyChallenge(req,identifier,code,type,purpose){
+  return isVersionedOtpRequest(req)?verifyOtpV2(identifier,code,type,purpose,req.body.device_id,req.body.challenge_id):verifyOtp(identifier,code,type,purpose);
+}
+function discardChallenge(req,identifier,type,id,purpose){
+  return isVersionedOtpRequest(req)?discardUndeliveredOtpV2(identifier,type,id,purpose,req.body.device_id):discardUndeliveredOtp(identifier,type,id,purpose);
+}
+function requestSuccess(req,result){
+  return isVersionedOtpRequest(req)?{ok:true,version:2,challenge_id:result.requestId,code_length:6,expires_in:120}:{ok:true};
+}
 const ABUSE_STORE_UNAVAILABLE_MESSAGE = 'Authentication is temporarily unavailable. Please try again shortly.';
 
 function isRateLimitStorageError(error) {
@@ -236,12 +254,12 @@ router.post(
         }
 
         const purpose = recovery_only === true ? 'recovery' : 'signin';
-        const { code, requestId } = await createOtp(normalizedPhone, 'phone', purpose);
+        const { code, requestId } = await createChallenge(req, normalizedPhone, 'phone', purpose);
 
         // A generated code is not useful unless the SMS provider accepted it.
         // Only the explicit dev/test allowlist may bypass an external SMS
         // provider. Production OTPs still require provider acceptance.
-        const smsResult = isTestOtpIdentifier(normalizedPhone)
+        const smsResult = !isVersionedOtpRequest(req) && isTestOtpIdentifier(normalizedPhone)
           ? { success: true, testMode: true }
           : await sendOtpSms(normalizedPhone, code);
 
@@ -260,22 +278,24 @@ router.post(
 
         if (!smsResult || !smsResult.success) {
           console.warn('⚠️ SMS delivery failed; discarding undelivered OTP');
-          await discardUndeliveredOtp(normalizedPhone, 'phone', requestId, purpose);
-          return { error: 'Unable to send a sign-in code right now. Please try again later.', status: 503 };
+          await discardChallenge(req, normalizedPhone, 'phone', requestId, purpose);
+          return { error: 'Unable to send a sign-in code right now. Please try again later.', status: 503, capacityBusy: smsResult?.code === BUSY_CODE };
         }
 
-        return { ok: true, status: 200 };
+        return { ok: true, status: 200, requestId };
       });
 
       // Handle errors or return success
+      if (result.capacityBusy) return respondOtpCapacityUnavailable(res);
       if (result.error) {
         return res.status(result.status || 500).json({ error: result.error });
       }
 
-      return res.json({ ok: true });
+      return res.json(requestSuccess(req,result));
 
     } catch (err) {
       logAuthError('request-otp failed', err);
+      if (err instanceof OtpCapacityError) return respondOtpCapacityUnavailable(res);
       if (isActiveOtpError(err)) return respondActiveOtp(res);
       if (isRateLimitStorageError(err)) return respondAbuseStoreUnavailable(res);
       // === SECURITY HARDENING: TIMING ATTACK PROTECTION ===
@@ -305,6 +325,18 @@ router.post(
     }
 
     try {
+      // This legacy endpoint reveals registration state, so apply the same
+      // shared enumeration budget before querying the phone lookup index.
+      // It remains a compatibility endpoint (responses still distinguish
+      // found/not-found); the quota limits probing rather than removing it.
+      const enumerationLimit = await checkEnumerationRateLimit(clientIp);
+      if (!enumerationLimit.allowed) {
+        return res.status(429).json({
+          success: false,
+          message: 'Too many requests. Please try again later.',
+        });
+      }
+
       const { phone_number } = req.body;
 
       if (!phone_number) {
@@ -370,6 +402,7 @@ router.post(
 
     } catch (err) {
       logAuthError('check-user failed', err);
+      if (isRateLimitStorageError(err)) return respondAbuseStoreUnavailable(res);
       return res.status(500).json({
         success: false,
         message: 'Internal server error'
@@ -491,8 +524,8 @@ router.post(
         // Note: If code comes as number, leading zeros may be lost - client should send as string
         const codeString = String(code);
 
-        const result = await verifyOtp(
-          normalizedPhone,
+        const result = await verifyChallenge(
+          req, normalizedPhone,
           codeString,
           'phone',
           recovery_only === true ? 'recovery' : 'signin',
@@ -722,6 +755,7 @@ router.post(
       });
     } catch (err) {
       logAuthError('verify-otp failed', err);
+      if (err instanceof OtpCapacityError) return respondOtpCapacityUnavailable(res);
       if (isRateLimitStorageError(err)) return respondAbuseStoreUnavailable(res);
       // === SECURITY HARDENING: TIMING ATTACK PROTECTION ===
       // Even on error, ensure minimum delay to prevent timing leaks
@@ -814,7 +848,7 @@ router.post(
         }
 
         const purpose = recovery_only === true ? 'recovery' : 'signin';
-        const { code, requestId } = await createOtp(normalizedEmail, 'email', purpose);
+        const { code, requestId } = await createChallenge(req, normalizedEmail, 'email', purpose);
         const emailResult = await sendOtpEmail(normalizedEmail, code);
 
         await logAuthEvent({
@@ -828,20 +862,23 @@ router.post(
 
         if (!emailResult || !emailResult.success) {
           console.warn('⚠️ Email sending failed, but OTP was generated');
-          await discardUndeliveredOtp(normalizedEmail, 'email', requestId, purpose);
+          await discardChallenge(req, normalizedEmail, 'email', requestId, purpose);
           return {
             error: 'Unable to send a sign-in code right now. Please try again later.',
             status: 503,
+            capacityBusy: emailResult?.code === BUSY_CODE,
           };
         }
 
-        return { ok: true, status: 200 };
+        return { ok: true, status: 200, requestId };
       });
 
+      if (result.capacityBusy) return respondOtpCapacityUnavailable(res);
       if (result.error) return res.status(result.status || 500).json({ error: result.error });
-      return res.json({ ok: true });
+      return res.json(requestSuccess(req,result));
     } catch (err) {
       logAuthError('request-email-otp failed', err);
+      if (err instanceof OtpCapacityError) return respondOtpCapacityUnavailable(res);
       if (isActiveOtpError(err)) return respondActiveOtp(res);
       if (isRateLimitStorageError(err)) return respondAbuseStoreUnavailable(res);
       await otpRequestDelay();
@@ -891,8 +928,8 @@ router.post(
         // `return { success: true, ... }` line below and went on to mint
         // real access+refresh tokens. Must check `.ok`, same as the phone
         // path (verify-otp route, above) already correctly does.
-        const isValid = await verifyOtp(
-          normalizedEmail,
+        const isValid = await verifyChallenge(
+          req, normalizedEmail,
           code,
           'email',
           recovery_only === true ? 'recovery' : 'signin',
@@ -1064,6 +1101,7 @@ router.post(
       });
     } catch (err) {
       logAuthError('verify-email-otp failed', err);
+      if (err instanceof OtpCapacityError) return respondOtpCapacityUnavailable(res);
       if (isRateLimitStorageError(err)) return respondAbuseStoreUnavailable(res);
       await otpVerifyDelay();
       if (err.code === '23505' && err.constraint === 'uq_users_active_email_lower') {
@@ -1093,42 +1131,30 @@ router.post(
         return res.status(400).json({ error: 'Invalid Google token' });
       }
 
-      const { email, name, picture, googleId } = googleUser;
-      const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
-      if (!normalizedEmail) {
-        return res.status(400).json({ error: 'Invalid Google token' });
-      }
       const devId = sanitizeDeviceId(device_id);
-
-      let user;
-      const found = await db.query(
-        `SELECT id, email, name, role, COALESCE(token_version, 1) as token_version
-         FROM users WHERE lower(email) = $1 AND deleted = FALSE`,
-        [normalizedEmail]
-      );
-
-      if (found.rows.length === 0) {
-        const newUserResult = await db.query(
-          `INSERT INTO users (email, name, avatar_url, google_id, language, timezone, is_email_verified)
-           VALUES ($1, $2, $3, $4, $5, $6, TRUE)
-           RETURNING id, email, name, role, COALESCE(token_version, 1) as token_version`,
-          [normalizedEmail, name, picture, googleId, device_info?.language_code || null, device_info?.timezone || null]
-        );
-        user = newUserResult.rows[0];
-      } else {
-        user = found.rows[0];
-        // Ensure email is marked verified and google_id is linked if not present
-        await db.query(`UPDATE users SET is_email_verified = TRUE, google_id = COALESCE(google_id, $2) WHERE id = $1`, [user.id, googleId]);
+      // Linking is explicit and requires current, recent existing-account
+      // proof. An email match by itself never grants access to that UUID.
+      let linkingToken = null;
+      if (req.body.link_account === true) {
+        const header = req.headers.authorization || '';
+        if (!/^Bearer [^ ]+$/.test(header)) {
+          return res.status(401).json({ error: 'Sign in before linking Google.', code: 'GOOGLE_LINK_AUTH_REQUIRED' });
+        }
+        linkingToken = header.slice(7);
       }
-
-      await db.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [user.id]);
+      const { user, isNewAccount } = await resolveGoogleAccount({
+        pool: await db.pool,
+        googleUser,
+        deviceInfo: device_info,
+        linkingToken,
+        verifySession: verifyCurrentSession,
+      });
 
       const existingDevice = await db.query(
         `SELECT id FROM user_devices WHERE user_id = $1 AND device_identifier = $2`,
         [user.id, devId]
       );
       const isNewDevice = existingDevice.rows.length === 0;
-      const isExistingAccount = user.name && user.name.trim() !== '';
 
       await db.query(
         `INSERT INTO user_devices (
@@ -1171,7 +1197,7 @@ router.post(
         ipAddress: clientIp,
         userAgent: req.headers['user-agent'],
         meta: {
-          is_new_device: isNewDevice, is_new_account: !isExistingAccount,
+          is_new_device: isNewDevice, is_new_account: isNewAccount,
           platform: device_info?.platform || 'unknown',
           risk_score: riskScore.score, risk_reasons: riskScore.reasons,
         },
@@ -1198,10 +1224,19 @@ router.post(
         refresh_token: refreshToken,
         needs_profile: needsProfile,
         is_new_device: isNewDevice,
-        is_new_account: !isExistingAccount,
+        is_new_account: isNewAccount,
         active_devices_count: parseInt(deviceCountResult.rows[0].count, 10),
       });
     } catch (err) {
+      if (err instanceof GoogleIdentityError) {
+        return res.status(err.status).json({ error: err.message, code: err.code });
+      }
+      if (err.code === 'GOOGLE_TOKEN_INVALID') {
+        return res.status(400).json({ error: 'Invalid Google token', code: err.code });
+      }
+      if (err.code === 'GOOGLE_AUTH_UNAVAILABLE') {
+        return res.status(503).json({ error: 'Google authentication is temporarily unavailable.', code: err.code });
+      }
       logAuthError('google login failed', err);
       if (err.code === '23505' && err.constraint === 'uq_users_active_email_lower') {
         return res.status(409).json({ error: 'An account with this email already exists. Please sign in instead.' });
@@ -1450,7 +1485,7 @@ router.post(
     }
 
     try {
-      const { name, phone_number, state, district, city_village, device_id, device_info } = req.body;
+      const { name, phone_number, device_id, device_info } = req.body;
 
       // Normalize phone number
       const normalizedPhone = phone_number ? normalizePhone(phone_number) : null;
@@ -1556,17 +1591,11 @@ router.post(
             user.phone_number = decryptPhoneNumber(user.phone_number);
           }
 
-          // Create location entry if location data provided
-          let locationId = null;
-          if (state || district || city_village) {
-            const locationResult = await db.query(
-              `INSERT INTO locations (user_id, state, district, city_village, is_saved_address, location_type, source_type, source_confidence)
-               VALUES ($1, $2, $3, $4, TRUE, 'home', 'manual', 'high')
-               RETURNING id`,
-              [user.id, state || null, district || null, city_village || null]
-            );
-            locationId = locationResult.rows[0]?.id;
-          }
+          // Legacy signup accepted address fields, but the auth schema no
+          // longer has a locations table. Keep accepting the old request body
+          // for client compatibility; address capture is deprecated and is
+          // not persisted here. Retain the response field as null.
+          const locationId = null;
 
           // Update last_login_at
           await db.query(

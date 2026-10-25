@@ -1,0 +1,428 @@
+{
+  "format": "pandapay-focused-security-plan-v1",
+  "date": "25 October 2026 (IST)",
+  "status": "implementation_in_progress",
+  "scope": [
+    "data",
+    "dependencies",
+    "mobile",
+    "documentation"
+  ],
+  "scoped_findings": 26,
+  "unfinished_findings": 22,
+  "status_counts": {
+    "Implemented in source": 4,
+    "Partial": 19,
+    "Open": 3
+  },
+  "unfinished_ids": [
+    "D01",
+    "D02",
+    "D03",
+    "D04",
+    "D05",
+    "N02",
+    "N04",
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "M5",
+    "M6",
+    "M7",
+    "M8",
+    "M9",
+    "M10",
+    "W02",
+    "W03",
+    "W05",
+    "W06",
+    "W07"
+  ],
+  "already_implemented_in_source": [
+    "N01",
+    "N03",
+    "W04",
+    "W01"
+  ],
+  "phases": [
+    {
+      "phase": 1,
+      "finding_ids": [
+        "M1",
+        "M2",
+        "W01",
+        "W07"
+      ]
+    },
+    {
+      "phase": 2,
+      "finding_ids": [
+        "D01",
+        "D02",
+        "D03",
+        "D04",
+        "D05"
+      ]
+    },
+    {
+      "phase": 3,
+      "finding_ids": [
+        "N02",
+        "N04",
+        "M1",
+        "M2",
+        "M7"
+      ]
+    },
+    {
+      "phase": 4,
+      "finding_ids": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7",
+        "M8",
+        "M9",
+        "M10"
+      ]
+    },
+    {
+      "phase": 5,
+      "finding_ids": [
+        "D01",
+        "D02",
+        "D03",
+        "D04",
+        "D05",
+        "N02",
+        "N04",
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7",
+        "M8",
+        "M9",
+        "M10"
+      ]
+    },
+    {
+      "phase": 6,
+      "finding_ids": [
+        "W01",
+        "W02",
+        "W03",
+        "W05",
+        "W06",
+        "W07"
+      ]
+    }
+  ],
+  "global_backlog_changed": false,
+  "implementation_started": true,
+  "new_tests_run": true,
+  "deployment_performed": false,
+  "plan_file": "../../docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md",
+  "implementation_record": "../../docs/security-dnmw-implementation-2026-10-25.md",
+  "recovery_flow": "../../docs/security-recovery-flow-2026-10-25.md",
+  "user_recovery_decision": "Automatic encrypted updates after explicit opt-in; existing OTP; no extra password",
+  "finding_status_changes": {
+    "D03": "Open to Partial: reviewed index tool and local fixtures; actual workload/target acceptance pending",
+    "D04": "Open to Partial: exact-key unique survivor protection and local fixtures; actual target acceptance pending",
+    "W01": "Partial to Implemented in source: current architecture/entrypoints and historical design banners verified; deployment remains separate"
+  },
+  "current_implementation_record": "docs/security-sync-financial-recovery-implementation-2026-10-25.md",
+  "execution_revision": 2,
+  "execution_batch_count": 12,
+  "execution_batches": [
+    {
+      "id": "P00",
+      "title": "Candidate, support, route and writer baseline",
+      "finding_ids": [
+        "M1",
+        "M2",
+        "W07"
+      ],
+      "depends_on": [],
+      "owner": "Coordinator",
+      "phase": 1,
+      "status": "in_progress",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p00--baseline-and-acceptance-matrix",
+      "current_evidence": "docs/security-execution-implementation-2026-10-25.md"
+    },
+    {
+      "id": "P01",
+      "title": "Historical reconciliation and exact-clone D05 rehearsal",
+      "finding_ids": [
+        "D01",
+        "D02",
+        "D05",
+        "W02",
+        "W03"
+      ],
+      "depends_on": [
+        "P00"
+      ],
+      "owner": "Data",
+      "phase": 2,
+      "status": "in_progress",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p01--history-and-exact-clone-data-rehearsal",
+      "current_evidence": "docs/security-execution-implementation-2026-10-25.md"
+    },
+    {
+      "id": "P02",
+      "title": "Measured index retain/remove decisions",
+      "finding_ids": [
+        "D03",
+        "D04"
+      ],
+      "depends_on": [
+        "P00"
+      ],
+      "owner": "Data",
+      "phase": 2,
+      "status": "planned",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p02--index-decisions"
+    },
+    {
+      "id": "P03",
+      "title": "Complete secret/native dependency review and engine selection",
+      "finding_ids": [
+        "N02",
+        "M1",
+        "M2",
+        "M7"
+      ],
+      "depends_on": [
+        "P00"
+      ],
+      "owner": "Dependencies/build",
+      "phase": 3,
+      "status": "in_progress",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p03--dependency-history-and-artifact-completion",
+      "current_evidence": "docs/security-sync-recovery-implementation-2026-10-25.md"
+    },
+    {
+      "id": "P04",
+      "title": "Access, payload and relationship contracts",
+      "finding_ids": [
+        "N02",
+        "M3",
+        "M4"
+      ],
+      "depends_on": [
+        "P00"
+      ],
+      "owner": "Backend",
+      "phase": 4,
+      "status": "in_progress",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p04--access-and-payload-contracts",
+      "current_evidence": "docs/security-sync-financial-recovery-implementation-2026-10-25.md"
+    },
+    {
+      "id": "P05",
+      "title": "Retained server keyring/readers and bounded backfill",
+      "finding_ids": [
+        "M10",
+        "W02"
+      ],
+      "depends_on": [
+        "P00"
+      ],
+      "owner": "Backend/key owner",
+      "phase": 4,
+      "status": "in_progress",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p05--retained-server-keys-and-format-evolution",
+      "current_evidence": "docs/security-key-readers-implementation-2026-10-25.md"
+    },
+    {
+      "id": "P06",
+      "title": "Complete recovery, consent and privacy/retention",
+      "finding_ids": [
+        "M6",
+        "M10",
+        "W07"
+      ],
+      "depends_on": [
+        "P04",
+        "P05"
+      ],
+      "owner": "Recovery",
+      "phase": 4,
+      "status": "in_progress",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p06--complete-recovery-and-privacy",
+      "current_evidence": "docs/security-sync-financial-recovery-implementation-2026-10-25.md"
+    },
+    {
+      "id": "P07",
+      "title": "Authenticated encrypted startup and database switch",
+      "finding_ids": [
+        "M9",
+        "M10"
+      ],
+      "depends_on": [
+        "P03",
+        "P06"
+      ],
+      "owner": "Mobile storage",
+      "phase": 4,
+      "status": "planned",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p07--normal-encrypted-startup-and-switch"
+    },
+    {
+      "id": "P08",
+      "title": "Integrated encrypted receipt lifecycle",
+      "finding_ids": [
+        "M6",
+        "M9",
+        "M10"
+      ],
+      "depends_on": [
+        "P06",
+        "P07"
+      ],
+      "owner": "Mobile receipts",
+      "phase": 4,
+      "status": "planned",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p08--receipts-through-every-consumer"
+    },
+    {
+      "id": "P09",
+      "title": "Signed mobile upgrade/TLS/native acceptance",
+      "finding_ids": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7",
+        "M8",
+        "M9",
+        "M10"
+      ],
+      "depends_on": [
+        "P03",
+        "P04",
+        "P05",
+        "P06",
+        "P07",
+        "P08"
+      ],
+      "owner": "Build/device and independent reviewer",
+      "phase": 5,
+      "status": "planned",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p09--signed-device-and-native-acceptance"
+    },
+    {
+      "id": "P10",
+      "title": "Target provider/PostgreSQL/runtime/custody acceptance",
+      "finding_ids": [
+        "D01",
+        "D02",
+        "D03",
+        "D04",
+        "D05",
+        "N04",
+        "M5",
+        "M6",
+        "M8",
+        "M10",
+        "W03",
+        "W06",
+        "W07"
+      ],
+      "depends_on": [
+        "P01",
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "owner": "Coordinator/operations",
+      "phase": 5,
+      "status": "planned",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p10--external-target-and-operational-acceptance"
+    },
+    {
+      "id": "P11",
+      "title": "Active documentation and per-finding closure",
+      "finding_ids": [
+        "W02",
+        "W03",
+        "W05",
+        "W06",
+        "W07"
+      ],
+      "depends_on": [
+        "P09",
+        "P10"
+      ],
+      "owner": "Coordinator",
+      "phase": 6,
+      "status": "in_progress",
+      "specification": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#p11--documentation-and-individual-closure",
+      "current_evidence": "docs/security-sync-financial-recovery-implementation-2026-10-25.md"
+    }
+  ],
+  "execution_note": "Batches subdivide existing 14 packages; dependencies gate acceptance, not independent preparation. P11 documentation runs continuously; final review follows relevant evidence.",
+  "first_execution_slice": [
+    "P00",
+    "P01",
+    "P02",
+    "P03",
+    "P04"
+  ],
+  "planning_revision_changes_runtime": false,
+  "latest_execution_record": "docs/security-sync-financial-recovery-implementation-2026-10-25.md",
+  "execution_status_note": "Typed sync and recovery coverage progressed; V2 stays disabled, legacy numeric rejection remains until controlled activation. All 22 scoped findings remain unfinished.",
+  "next_execution_slice": {
+    "scope": "sync/recovery/history-provenance safeguards",
+    "finding_ids": [
+      "N02",
+      "M1",
+      "M3",
+      "M4",
+      "M6",
+      "M9",
+      "W07"
+    ],
+    "batch_ids": [
+      "P03",
+      "P04",
+      "P06",
+      "P11"
+    ],
+    "activation": false,
+    "plan_section": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#14-next-slice--sync-recovery-and-review-evidence",
+    "status": "source_and_local_verification",
+    "evidence": "docs/security-sync-recovery-implementation-2026-10-25.md"
+  },
+  "remaining_slice_plan": "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md#16-typed-sync-and-recovery-coverage-checkpoint",
+  "latest_slice": {
+    "scope": "default-off typed sync/financial reconciliation and compatible recovery coverage",
+    "finding_ids": [
+      "N02",
+      "M3",
+      "M4",
+      "M6",
+      "W02",
+      "W07"
+    ],
+    "batch_ids": [
+      "P04",
+      "P06",
+      "P11"
+    ],
+    "status": "source_and_local_verification",
+    "activation": false,
+    "record": "docs/security-sync-financial-recovery-implementation-2026-10-25.md"
+  }
+}

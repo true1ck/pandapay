@@ -76,9 +76,9 @@ function requestLogger(req, res, next) {
       path: requestPath(req),
       status: res.statusCode,
       durationMs: Math.round(durationMs * 10) / 10,
-      // The authenticated user id, never the token. Support needs "which
-      // account", and this is the whole of what's needed to answer it.
-      userId: req.userId || null,
+      // Correlate support cases through the response request ID. Ordinary
+      // HTTP logs do not need the persistent account identifier.
+      authenticated: Boolean(req.userId),
     });
   });
 

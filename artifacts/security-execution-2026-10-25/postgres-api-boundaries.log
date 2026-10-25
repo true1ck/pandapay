@@ -1,0 +1,88 @@
+TAP version 13
+# Subtest: real database: app_user RLS, worker separation, advisory locks, and deletion lineage
+ok 1 - real database: app_user RLS, worker separation, advisory locks, and deletion lineage
+  ---
+  duration_ms: 13.583958
+  type: 'test'
+  ...
+# Subtest: route contract: read, conditional save, lost-response retry and clear
+ok 2 - route contract: read, conditional save, lost-response retry and clear
+  ---
+  duration_ms: 6.722541
+  type: 'test'
+  ...
+# Subtest: route contract: rejects ownership, totals and references before replacement
+ok 3 - route contract: rejects ownership, totals and references before replacement
+  ---
+  duration_ms: 0.193958
+  type: 'test'
+  ...
+# Subtest: split routes reject malformed transaction IDs before querying the database
+ok 4 - split routes reject malformed transaction IDs before querying the database
+  ---
+  duration_ms: 0.906
+  type: 'test'
+  ...
+# Subtest: fingerprints ignore row IDs, ordering and display names
+ok 5 - fingerprints ignore row IDs, ordering and display names
+  ---
+  duration_ms: 0.16475
+  type: 'test'
+  ...
+# Subtest: accepts clearing, partial shares and exact decimal partitions
+ok 6 - accepts clearing, partial shares and exact decimal partitions
+  ---
+  duration_ms: 0.152875
+  type: 'test'
+  ...
+# Subtest: rejects malformed and sub-paise shares before database writes
+ok 7 - rejects malformed and sub-paise shares before database writes
+  ---
+  duration_ms: 0.090375
+  type: 'test'
+  ...
+# Subtest: tag filters validate IDs and never interpolate user input
+ok 8 - tag filters validate IDs and never interpolate user input
+  ---
+  duration_ms: 1.430417
+  type: 'test'
+  ...
+# Subtest: invalid definitions, future clocks and malformed operations are rejected
+ok 9 - invalid definitions, future clocks and malformed operations are rejected
+  ---
+  duration_ms: 1.263958
+  type: 'test'
+  ...
+# Subtest: tag changes return 400 for malformed JSON shapes instead of server errors
+ok 10 - tag changes return 400 for malformed JSON shapes instead of server errors
+  ---
+  duration_ms: 0.179125
+  type: 'test'
+  ...
+# Subtest: statement tag import requires a bounded array before database work
+ok 11 - statement tag import requires a bounded array before database work
+  ---
+  duration_ms: 0.297625
+  type: 'test'
+  ...
+# Subtest: statement tag import keeps the first display spelling after normalized deduplication
+ok 12 - statement tag import keeps the first display spelling after normalized deduplication
+  ---
+  duration_ms: 0.132833
+  type: 'test'
+  ...
+# Subtest: real database: overlap counts once, stale removals, replay, budgets, aliases and isolation
+ok 13 - real database: overlap counts once, stale removals, replay, budgets, aliases and isolation
+  ---
+  duration_ms: 27.21225
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 123.077583

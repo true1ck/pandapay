@@ -3,9 +3,15 @@ const { safeErrorCode } = require('./safeErrorCode');
 require('dotenv').config();
 const crypto = require('crypto');
 const express = require('express');
-const cors = require('cors');
+const { createCorsPolicy } = require('./cors_policy');
+const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
+const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail } = require('./sync_request_validation');
+const { createLoungeUsagePostHandler } = require('./lounge_usage_route');
 const config = require('./config');
-const { withUserClient, pool } = require('./db');
+const { withUserClient, pool, partnerWebhookPool, imapWorkerPool,accountLifecyclePool,lifecycleJournalRuntime } = require('./db');
+const { createPartnerConversionPostHandler } = require('./partner_conversion_route');
+const { createBackupStatusHandlers } = require('./backup_status_routes');
+const { checkPartnerWebhookReadiness, checkImapWorkerReadiness } = require('./service_pools');
 const {
   optionalAuth,
   requireAuth,
@@ -31,6 +37,13 @@ const {
 } = require('./sms_parser');
 const { parseSubscriptionMandate } = require('./subscription_parser');
 const importResolvers = require('./import_resolvers');
+const { createSyncTransactionApplier } = require('./sync_transaction_state');
+const applyTransactionSync = createSyncTransactionApplier({
+  loadUserCardForState,
+  reverseTransactionState,
+  applyTransactionState,
+  userCardMatchesInstrument: importResolvers.userCardMatchesInstrument,
+});
 const centralProjection = require('./central_financial_projection');
 const { registerBillsProjectionRoutes } = require('./bills_projection_route');
 const smsFactsRoute = require('./sms_facts_route');
@@ -292,13 +305,14 @@ const app = express();
 // defaults to no forwarded-header trust; staging/production set one hop for
 // their loopback-bound Nginx ingress.
 app.set('trust proxy', resolveTrustProxyHops());
-app.use(cors());
-app.use(express.json());
-// optionalAuth first so the request log can record which user a line belongs
-// to; requestLogger only writes on `finish`, so ordering costs nothing.
+// Resolve optional identity before routing. Ordinary request logs use request
+// IDs and route templates without persistent account identifiers.
 app.use(optionalAuth);
 app.use(requestLogger);
 app.use(rejectMalformedClientIp);
+app.use(...createCorsPolicy());
+app.use(jsonBodyParser);
+app.use(jsonBodyErrorHandler);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
@@ -308,6 +322,10 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 app.get('/ready', async (req, res) => {
   try {
     await pool.query('SELECT 1');
+    await checkPartnerWebhookReadiness(partnerWebhookPool);
+    await checkImapWorkerReadiness(imapWorkerPool);
+    await require('./service_pools').checkAccountLifecycleReadiness(accountLifecyclePool);
+    if(lifecycleJournalRuntime)await lifecycleJournalRuntime.readiness();
     res.json({ ok: true, database: 'ready' });
   } catch (err) {
     console.error('GET /ready error', safeErrorCode(err));
@@ -315,9 +333,22 @@ app.get('/ready', async (req, res) => {
   }
 });
 
+if(lifecycleJournalRuntime)app.use(async(req,res,next)=>{
+  try{await lifecycleJournalRuntime.readiness();next();}catch(_){res.status(503).json({error:'account_lifecycle_recovery_required'});}
+});
+const accountBackupPool=config.accountLifecycleEnabled?{
+  acquireAccountSnapshotFence:require('./account_lifecycle_snapshot_fence').acquireSnapshotFence,
+  connect:(...args)=>pool.connect(...args),
+  accountAccessFence:async(client,id)=>{await client.query(require('./account_lifecycle_routes').ASSERT_ACCESS_SQL,[id]);await lifecycleJournalRuntime.readiness();},
+}:pool;
 registerReferralRoutes(app);
-registerPortableBackupRoutes(app, { requireAuth, pool });
-registerPortableBackupRestoreRoutes(app, { requireAuth, pool });
+registerPortableBackupRoutes(app, { requireAuth, pool:accountBackupPool });
+registerPortableBackupRestoreRoutes(app, { requireAuth, pool:accountBackupPool });
+require('./account_recovery_routes').registerAccountRecoveryRoutes(app,{
+  requireAuth,withUserClient,enabled:['true','1'].includes(process.env.ACCOUNT_RECOVERY_ENABLED),
+  wrappingKeyBase64:process.env.ACCOUNT_RECOVERY_WRAPPING_KEY,wrappingKeyId:process.env.ACCOUNT_RECOVERY_WRAPPING_KEY_ID,
+  wrappingReadKeysJson:process.env.ACCOUNT_RECOVERY_WRAPPING_READ_KEYS_JSON,
+});
 registerUserMerchantCategoryRuleRoutes(app, { requireAuth, withUserClient });
 
 /**
@@ -444,9 +475,10 @@ app.post('/profile', requireVerifiedSession, async (req, res) => {
 });
 
 /**
- * GET /catalogue — public read of published cards (0011's
- * card_products_public_read policy: `to public using (true)`), no auth
- * required. Proves the anon-read path works too, not just owner rows.
+ * GET /catalogue — public read through v_card_catalogue_export, whose
+ * source definition filters published, active cards. Migration 0015 also
+ * restricts direct catalogue-table reads to published cards or admins.
+ * Verify both view filters and non-owner RLS on each deployment target.
  */
 app.get('/catalogue', async (req, res) => {
   try {
@@ -461,17 +493,12 @@ app.get('/catalogue', async (req, res) => {
 });
 
 /**
- * AD-0.3.2: readonly-vs-write is enforced in the repository layer, not just
- * the UI. requireAdmin checks pandapay.is_admin() for real (see
- * db/supabase/migrations/0011_rls_policies.sql — SECURITY DEFINER, fixed
- * this session after it recursed infinitely under a real non-superuser
- * role). NOTE: card_products' own RLS policy is `public_read using (true)`
- * — unconditional, not filtered to published rows — so Postgres RLS alone
- * does not hide draft cards from a non-admin reading the table directly.
- * This requireAdmin check is therefore the only thing actually gating
- * /admin/* in this build, not a second independent layer on top of RLS.
- * Flagged as a real gap, not fixed this session (would need either a
- * status-filtered RLS policy for non-admins or a security-definer view).
+ * AD-0.3.2: every admin route checks the authoritative member session and
+ * pandapay.is_admin(). Source migration 0015 supersedes 0011's unconditional
+ * catalogue SELECT policies: drafts and their children require admin status.
+ * API authorization, table RLS and public-export filtering are separate
+ * controls; a privileged table/view owner can bypass RLS. Target acceptance
+ * must use the actual non-owner runtime role and current migration history.
  */
 async function requireAdmin(req, res, next) {
   try {
@@ -1614,15 +1641,14 @@ app.post('/data-error-reports', requireAuth, async (req, res) => {
  * every other sync call needs. Idempotent when given a known id.
  */
 app.post('/sync/register-device', requireAuth, async (req, res) => {
-  const { platform, label, appVersion, deviceId } = req.body || {};
+  const checked = validateSyncRegistration(req.body);
+  if (checked.error) return res.status(checked.status).json({ error: checked.error });
+  const { platform, label, appVersion, deviceId } = checked.value;
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(`SELECT pandapay.register_sync_device($1, $2, $3, $4, $5) AS device_id`, [
         req.userId,
-        typeof platform === 'string' ? platform : 'web',
-        typeof label === 'string' ? label : null,
-        typeof appVersion === 'string' ? appVersion : null,
-        typeof deviceId === 'string' && deviceId ? deviceId : null,
+        platform, label, appVersion, deviceId,
       ])
     );
     res.status(201).json({ deviceId: result.rows[0].device_id });
@@ -1772,28 +1798,27 @@ app.post('/notifications/test', requireAuth, async (req, res) => {
  * can drop exactly what succeeded from its outbox and keep the rest.
  */
 app.post('/sync/push', requireAuth, async (req, res) => {
-  const { deviceId, changes } = req.body || {};
-  if (!deviceId || typeof deviceId !== 'string') {
-    return res.status(400).json({ error: 'deviceId is required' });
-  }
-  if (!Array.isArray(changes)) {
-    return res.status(400).json({ error: 'changes must be an array' });
-  }
-  if (changes.length > 200) {
-    return res.status(413).json({ error: 'too many changes in one push' });
-  }
+  const checked = validateSyncPushRequest(req.body);
+  if (checked.error) return res.status(checked.status).json({ error: checked.error });
+  const { deviceId, changes } = checked.value;
 
   try {
     const results = await withUserClient(req.userId, async (client) => {
       const out = [];
       for (const change of changes) {
-        const { entity, entityId, op, payload, fieldClocks, clientSeq } = change || {};
-        if (!entity || !entityId || !['insert', 'update', 'delete'].includes(op)) {
-          out.push({ clientSeq: clientSeq ?? null, applied: false, reason: 'malformed' });
+        const item = validateSyncPushChange(change);
+        if (item.error) {
+          out.push({ clientSeq: Number.isSafeInteger(change?.clientSeq) ? change.clientSeq : null, applied: false, reason: 'malformed' });
           continue;
         }
+        const { entity, entityId, op, payload, fieldClocks, clientSeq } = item.value;
         await client.query('SAVEPOINT sync_item');
         try {
+          // Transaction status and deletion require the ordinary domain route,
+          // whose reversal work cannot be replaced by a raw sync UPDATE/DELETE.
+          if (entity === 'transactions' && (op === 'delete' || Object.hasOwn(payload, 'status'))) {
+            throw Object.assign(new Error('Use the transaction status route'), { code: 'SYNC_TRANSACTION_DOMAIN_REQUIRED' });
+          }
           if (entity === 'user_categories' && op === 'insert') {
             const categoryResult = await client.query(
               `SELECT out_applied, out_reason
@@ -1849,25 +1874,25 @@ app.post('/sync/push', requireAuth, async (req, res) => {
             });
             continue;
           }
-          const r = await client.query(
-            `SELECT out_applied, out_conflicts, out_reason
-               FROM pandapay.sync_apply_change($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)`,
-            [
-              req.userId,
-              deviceId,
-              entity,
-              entityId,
-              op,
-              JSON.stringify(payload || {}),
-              JSON.stringify(fieldClocks || {}),
-              Number.isFinite(clientSeq) ? clientSeq : 0,
-            ]
-          );
-          const row = r.rows[0];
+          const args = [
+            req.userId, deviceId, entity, entityId, op,
+            JSON.stringify(payload), JSON.stringify(fieldClocks),
+            Number.isFinite(clientSeq) ? clientSeq : 0,
+          ];
+          const row = config.syncTypedWritesEnabled && entity === 'transactions'
+            ? await applyTransactionSync(client, {
+                userId: req.userId, deviceId, entityId, op, payload, fieldClocks, clientSeq,
+              })
+            : (await client.query(
+                config.syncTypedWritesEnabled
+                  ? `SELECT out_applied, out_conflicts, out_reason FROM pandapay.sync_apply_change_v2($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)`
+                  : `SELECT out_applied, out_conflicts, out_reason FROM pandapay.sync_apply_change($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)`,
+                args,
+              )).rows[0];
           // Offline transaction edits use this RPC rather than PATCH. Enforce
           // the same split invariant before accepting the item; a failure
           // rolls back the entire item, including its sync log/reward state.
-          if (row.out_applied && entity === 'transactions' && payload?.amount_inr != null) {
+          if (!config.syncTypedWritesEnabled && row.out_applied && entity === 'transactions' && payload?.amount_inr != null) {
             const splitCheck = await client.query(
               `SELECT t.amount_inr, COALESCE((SELECT SUM(s.amount_inr)
                  FROM transaction_splits s WHERE s.transaction_id=t.id), 0) AS split_total
@@ -1876,7 +1901,7 @@ app.post('/sync/push', requireAuth, async (req, res) => {
             );
             const checked = splitCheck.rows[0];
             if (checked && Math.round(Number(checked.split_total) * 100) > Math.round(Number(checked.amount_inr) * 100)) {
-              throw new Error('amount is less than saved split shares; edit or clear the split first');
+              throw Object.assign(new Error('amount is less than saved split shares; edit or clear the split first'), { code: 'SYNC_SPLIT_TOTAL_CONFLICT' });
             }
           }
           await client.query('RELEASE SAVEPOINT sync_item');
@@ -1889,15 +1914,14 @@ app.post('/sync/push', requireAuth, async (req, res) => {
           });
         } catch (itemErr) {
           await client.query('ROLLBACK TO SAVEPOINT sync_item');
-          // The message, not the stack: a constraint violation names the
-          // column the client got wrong, which is exactly what it needs in
-          // order to stop resending it.
+          // Keep per-item rejection semantics while excluding PostgreSQL
+          // messages, constraint names and submitted values from the response.
           out.push({
             clientSeq: clientSeq ?? null,
             entityId,
             applied: false,
             reason: 'rejected',
-            detail: itemErr.message,
+            detail: syncRejectionDetail(itemErr),
           });
         }
       }
@@ -1923,10 +1947,9 @@ app.post('/sync/push', requireAuth, async (req, res) => {
  * cursor is not advanced here.
  */
 app.get('/sync/pull', requireAuth, async (req, res) => {
-  const deviceId = req.query.deviceId;
-  if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
-  const since = Number.parseInt(req.query.since, 10) || 0;
-  const limit = Number.parseInt(req.query.limit, 10) || 500;
+  const checked = validateSyncPullQuery(req.query);
+  if (checked.error) return res.status(checked.status).json({ error: checked.error });
+  const { deviceId, since, limit } = checked.value;
 
   try {
     const result = await withUserClient(req.userId, async (client) => {
@@ -1962,10 +1985,9 @@ app.get('/sync/pull', requireAuth, async (req, res) => {
 
 /** POST /sync/ack — the client confirms it applied everything up to serverSeq. */
 app.post('/sync/ack', requireAuth, async (req, res) => {
-  const { deviceId, serverSeq } = req.body || {};
-  if (!deviceId || !Number.isFinite(serverSeq)) {
-    return res.status(400).json({ error: 'deviceId and serverSeq are required' });
-  }
+  const checked = validateSyncAck(req.body);
+  if (checked.error) return res.status(checked.status).json({ error: checked.error });
+  const { deviceId, serverSeq } = checked.value;
   try {
     await withUserClient(req.userId, (client) =>
       client.query(`SELECT pandapay.sync_ack($1, $2, $3)`, [req.userId, deviceId, serverSeq])
@@ -1979,6 +2001,8 @@ app.post('/sync/ack', requireAuth, async (req, res) => {
 
 /** POST /sync/conflicts/:id/acknowledge — F5's "I've seen this" action. */
 app.post('/sync/conflicts/:id/acknowledge', requireAuth, async (req, res) => {
+  const checked = validateSyncConflictId(req.params.id);
+  if (checked.error) return res.status(checked.status).json({ error: checked.error });
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
@@ -2098,9 +2122,9 @@ app.post('/partner-clicks', requireAuth, async (req, res) => {
  *
  * Authenticated by a shared secret, exactly like
  * `POST /inbound-emails/webhook`: there is no user JWT on this request, and
- * the caller is a third-party server. Uses the pool directly rather than
- * `withUserClient` for the same reason — there is no `app.user_id` to set,
- * and `partner_conversions` is admin-RLS, so this runs as the owner.
+ * the caller is a third-party server. A separate service database login can
+ * execute only the private conversion capability. Missing configuration
+ * returns 503; the ordinary API pool never gains callback authority.
  *
  * `ON CONFLICT DO UPDATE` on (click_token, external_ref) rather than a plain
  * insert: affiliate networks retry postbacks, and they legitimately re-send
@@ -2113,62 +2137,7 @@ app.post('/partner-clicks', requireAuth, async (req, res) => {
  * the token was never issued by us — a partner misconfiguration or a probe —
  * and answering 4xx would let a caller enumerate which tokens are real.
  */
-app.post('/partner-conversions/webhook', async (req, res) => {
-  const secret = config.partnerWebhookSecret;
-  if (!secret) {
-    console.error('POST /partner-conversions/webhook: PARTNER_WEBHOOK_SECRET is not configured');
-    return res.status(503).json({ error: 'webhook_not_configured' });
-  }
-  const provided = req.get('x-partner-signature') || '';
-  // Constant-time compare. The lengths must match first — timingSafeEqual
-  // throws on a length mismatch, which would itself be a timing signal.
-  const ok =
-    provided.length === secret.length &&
-    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(secret));
-  if (!ok) return res.status(401).json({ error: 'invalid_signature' });
-
-  const { clickToken, status, commissionInr, externalRef } = req.body || {};
-  const ALLOWED = ['pending', 'approved', 'rejected', 'reversed'];
-  if (!clickToken || typeof clickToken !== 'string') {
-    return res.status(400).json({ error: 'clickToken is required' });
-  }
-  if (status && !ALLOWED.includes(status)) {
-    return res.status(400).json({ error: `status must be one of ${ALLOWED.join(', ')}` });
-  }
-
-  try {
-    const click = await pool.query(
-      `SELECT partner_program_id FROM partner_clicks WHERE click_token = $1`,
-      [clickToken]
-    );
-    if (click.rows.length === 0) {
-      return res.status(202).json({ ok: true, matched: false });
-    }
-
-    await pool.query(
-      `INSERT INTO partner_conversions
-            (click_token, partner_program_id, status, commission_inr, external_ref, raw_payload)
-          VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-     ON CONFLICT (click_token, external_ref) DO UPDATE
-            SET status         = excluded.status,
-                commission_inr = excluded.commission_inr,
-                raw_payload    = excluded.raw_payload,
-                reported_at    = now()`,
-      [
-        clickToken,
-        click.rows[0].partner_program_id,
-        status || 'pending',
-        Number.isFinite(commissionInr) ? commissionInr : null,
-        typeof externalRef === 'string' ? externalRef : null,
-        JSON.stringify(req.body || {}),
-      ]
-    );
-    res.status(202).json({ ok: true, matched: true });
-  } catch (err) {
-    console.error('POST /partner-conversions/webhook error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.post('/partner-conversions/webhook', createPartnerConversionPostHandler({ pool: partnerWebhookPool, secret: config.partnerWebhookSecret }));
 
 /**
  * POST /acceptance-reports — plan Phase 2.1. "Did this card actually work
@@ -7407,33 +7376,7 @@ app.get('/lounge-usage', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/lounge-usage', requireAuth, async (req, res) => {
-  const { userCardId, benefitId, usedOn, airport } = req.body || {};
-  if (!userCardId || typeof userCardId !== 'string') {
-    return res.status(400).json({ error: 'userCardId is required' });
-  }
-  if (!benefitId || typeof benefitId !== 'string') {
-    return res.status(400).json({ error: 'benefitId is required' });
-  }
-  const usedOnDate = usedOn ? new Date(usedOn) : new Date();
-  if (Number.isNaN(usedOnDate.getTime())) {
-    return res.status(400).json({ error: 'usedOn is not a valid date' });
-  }
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `INSERT INTO lounge_usage (profile_id, user_card_id, benefit_id, used_on, airport, logged_manually)
-         VALUES ($1, $2, $3, $4, $5, true)
-         RETURNING id, user_card_id, benefit_id, used_on, airport, logged_manually, created_at`,
-        [req.userId, userCardId, benefitId, usedOnDate.toISOString().slice(0, 10), airport || null]
-      )
-    );
-    res.status(201).json({ loungeUsage: result.rows[0] });
-  } catch (err) {
-    console.error('POST /lounge-usage error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.post('/lounge-usage', requireAuth, createLoungeUsagePostHandler({ withUserClient }));
 
 /**
  * GET /monthly-reports?month=YYYY-MM-01 — Task E9. monthly_reports (0004)
@@ -9420,40 +9363,9 @@ app.put('/user-settings', requireAuth, async (req, res) => {
  * deletion once deletion_due_at passes needs a scheduled sweep job, which
  * is explicitly out of this plan's scope — see H2's screen doc-comment.
  */
-app.post('/account/delete-request', requireAuth, async (req, res) => {
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `UPDATE profiles SET deletion_requested_at = now(), deletion_due_at = now() + interval '30 days'
-          WHERE id = $1
-          RETURNING deletion_requested_at, deletion_due_at`,
-        [req.userId]
-      )
-    );
-    res.json({ profile: result.rows[0] || null });
-  } catch (err) {
-    console.error('POST /account/delete-request error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-/** DELETE /account/delete-request — cancels a pending deletion. */
-app.delete('/account/delete-request', requireAuth, async (req, res) => {
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `UPDATE profiles SET deletion_requested_at = null, deletion_due_at = null
-          WHERE id = $1
-          RETURNING deletion_requested_at, deletion_due_at`,
-        [req.userId]
-      )
-    );
-    res.json({ profile: result.rows[0] || null });
-  } catch (err) {
-    console.error('DELETE /account/delete-request error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+const accountLifecycleHandlers=require('./account_lifecycle_routes').createAccountLifecycleHandlers({withUserClient,enabled:config.accountLifecycleEnabled});
+app.post('/account/delete-request',requireAuth,accountLifecycleHandlers.requestDeletion);
+app.delete('/account/delete-request',requireAuth,accountLifecycleHandlers.cancelDeletion);
 
 const SUPPORT_TICKET_KINDS = ['bug', 'wrong_card_data', 'card_request', 'general'];
 
@@ -10839,27 +10751,8 @@ app.get('/sms-import-batches', requireAuth, async (req, res) => {
  * F5's conflict log ("never resolve silently without a record" — this
  * route only ever reads rows that already exist, never resolves anything).
  */
-app.get('/backup-status', requireAuth, async (req, res) => {
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      const latestBackup = await client.query(`SELECT * FROM backup_runs ORDER BY ran_at DESC LIMIT 1`);
-      const latestDrill = await client.query(`SELECT * FROM restore_drills ORDER BY ran_at DESC LIMIT 1`);
-      const conflicts = await client.query(
-        `SELECT * FROM sync_conflicts WHERE profile_id = $1 ORDER BY created_at DESC LIMIT 50`,
-        [req.userId]
-      );
-      return {
-        latestBackup: latestBackup.rows[0] || null,
-        latestRestoreDrill: latestDrill.rows[0] || null,
-        conflicts: conflicts.rows,
-      };
-    });
-    res.json(result);
-  } catch (err) {
-    console.error('GET /backup-status error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+const backupStatusHandlers = createBackupStatusHandlers({ withUserClient });
+app.get('/backup-status', requireAuth, backupStatusHandlers.getBackupStatus);
 
 /**
  * POST /backup-runs — F5's manual "Back up now".
@@ -10883,25 +10776,7 @@ app.get('/backup-status', requireAuth, async (req, res) => {
  * actually happened" is honest and useful; a green tick that means nothing is
  * neither.
  */
-app.post('/backup-runs', requireAuth, async (req, res) => {
-  try {
-    const latest = await withUserClient(req.userId, (client) =>
-      client.query(
-        `SELECT status, ran_at, size_bytes FROM backup_runs
-          WHERE status = 'success' ORDER BY ran_at DESC LIMIT 1`
-      )
-    );
-    res.status(409).json({
-      error: 'manual_backup_not_supported',
-      message:
-        'Backups run automatically on a schedule and cannot be triggered from the app.',
-      lastSuccessfulBackup: latest.rows[0] || null,
-    });
-  } catch (err) {
-    console.error('POST /backup-runs error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.post('/backup-runs', requireAuth, backupStatusHandlers.postBackupRuns);
 
 /**
  * GET /export?scope=transactions|cards|all&format=csv|json — Task F6.
@@ -11196,6 +11071,7 @@ const server = app.listen(PORT, () => console.log(`pandapay-api running at http:
 const stopImapPoller = startImapPoller(
   {
     pool,
+    workerPool: imapWorkerPool,
     withUserClient,
     encryptionKey: config.imapEncryptionKey,
     parseSmsAgainstPatterns,
@@ -11208,12 +11084,25 @@ const stopImapPoller = startImapPoller(
   { intervalMinutes: Number(process.env.IMAP_POLL_INTERVAL_MINUTES) || 0 }
 );
 
+// Durable account denial is explicitly enabled in source, schedule and DB.
+const lifecycleInterval=Number(process.env.ACCOUNT_LIFECYCLE_POLL_INTERVAL_MS||0);
+if(!Number.isInteger(lifecycleInterval)||lifecycleInterval<0||(lifecycleInterval>0&&(lifecycleInterval<60000||lifecycleInterval>3600000)))throw new Error('Invalid lifecycle poll interval');
+let lifecycleTimer=null;
+if(config.accountLifecycleEnabled&&lifecycleInterval>0){
+  const {createAccountLifecycleWorker,createAuthDeletionClient}=require('./account_lifecycle_worker');
+  const runLifecycle=createAccountLifecycleWorker({pool:accountLifecyclePool,enabled:true,journal:lifecycleJournalRuntime?.journal,
+    applyAuthDeletion:createAuthDeletionClient({baseUrl:config.authInternalBaseUrl,serviceSecret:config.authInternalServiceSecret})});
+  lifecycleTimer=setInterval(()=>runLifecycle().catch(()=>console.error('Account lifecycle cycle unavailable')),lifecycleInterval);
+  lifecycleTimer.unref();
+}
+
 let shuttingDown = false;
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`pandapay-api shutting down (${signal})`);
   stopImapPoller();
+  if(lifecycleTimer)clearInterval(lifecycleTimer);
 
   const forceExit = setTimeout(() => process.exit(1), 10000);
   forceExit.unref();
@@ -11222,6 +11111,9 @@ async function shutdown(signal) {
       server.close((err) => (err ? reject(err) : resolve()));
     });
     await pool.end();
+    if (partnerWebhookPool) await partnerWebhookPool.end();
+    if (imapWorkerPool) await imapWorkerPool.end();
+    if(accountLifecyclePool)await accountLifecyclePool.end();
     clearTimeout(forceExit);
     process.exit(0);
   } catch (err) {

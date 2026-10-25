@@ -1,5 +1,6 @@
 const { fetchRecentMessages } = require('./imap_client');
 const { safeErrorCode } = require('./safeErrorCode');
+const { readImapWorkerBatch, deferImapWorkerBatch } = require('./imap_worker_capability');
 
 /**
  * The background IMAP poller — the thing `imap_connections` was built for
@@ -35,6 +36,7 @@ const POLL_ADVISORY_LOCK_KEY = 738201947;
 
 /** How far back a first-ever poll looks. */
 const INITIAL_LOOKBACK_DAYS = 30;
+const MAX_CYCLE_DURATION_MS = 5 * 60 * 1000;
 
 /**
  * Polls one connection and imports whatever parses.
@@ -134,7 +136,7 @@ async function pollConnection(connection, deps) {
 }
 
 /**
- * One pass over every active connection.
+ * One bounded batch of active connections, using the durable worker cursor.
  *
  * Takes an advisory lock first and does nothing if another instance already
  * holds it — two instances polling the same mailbox concurrently would
@@ -145,57 +147,141 @@ async function pollConnection(connection, deps) {
  * app password must not stop everyone else's mail being read.
  */
 async function runPollCycle(deps) {
-  const { pool, withUserClient, encryptionKey } = deps;
+  const { pool, workerPool, withUserClient, encryptionKey } = deps;
   if (!encryptionKey) {
     return { skipped: 'no_encryption_key' };
   }
-
-  const lock = await pool.query(`SELECT pg_try_advisory_lock($1) AS acquired`, [POLL_ADVISORY_LOCK_KEY]);
-  if (!lock.rows[0].acquired) return { skipped: 'another_instance_is_polling' };
-
-  try {
-    // Decrypted here, in one query, rather than per-connection: the
-    // password is in memory for the shortest window that still lets the
-    // poll run, and it never leaves this function's scope.
-    const connections = await pool.query(
-      `SELECT id, profile_id, email, imap_host, imap_port, sender_filter, last_poll_at,
-              pgp_sym_decrypt(app_password_encrypted, $1) AS app_password
-         FROM imap_connections
-        WHERE is_active`,
-      [encryptionKey]
-    );
-
-    const results = [];
-    for (const connection of connections.rows) {
-      let outcome;
-      try {
-        outcome = await pollConnection(connection, deps);
-      } catch (_) {
-        outcome = { ok: false, reason: 'unexpected_error' };
-      }
-
-      const status = outcome.ok
-        ? `ok: ${outcome.imported} imported, ${outcome.skipped} already known, ${outcome.unparsed} not transactions`
-        : `error: ${outcome.reason}`;
-
-      // last_poll_at advances only on SUCCESS. Advancing it after a failure
-      // would silently skip the window that failed, so a transient outage
-      // would permanently lose whatever arrived during it.
-      await withUserClient(connection.profile_id, (client) =>
-        client.query(
-          outcome.ok
-            ? `UPDATE imap_connections SET last_poll_at = now(), last_poll_status = $2 WHERE id = $1`
-            : `UPDATE imap_connections SET last_poll_status = $2 WHERE id = $1`,
-          [connection.id, status]
-        )
-      );
-
-      results.push({ connectionId: connection.id, ...outcome });
-    }
-    return { polled: results.length, results };
-  } finally {
-    await pool.query(`SELECT pg_advisory_unlock($1)`, [POLL_ADVISORY_LOCK_KEY]);
+  if (!workerPool) return { skipped: 'no_worker_database' };
+  if (workerPool === pool) return { skipped: 'worker_database_pool_not_separate' };
+  const maxCycleDurationMs = deps.maxCycleDurationMs ?? MAX_CYCLE_DURATION_MS;
+  if (!Number.isInteger(maxCycleDurationMs) || maxCycleDurationMs < 1 || maxCycleDurationMs > MAX_CYCLE_DURATION_MS) {
+    throw new Error('imap_poll_cycle_budget_invalid');
   }
+  const now = deps.now || Date.now;
+  const deadline = now() + maxCycleDurationMs;
+
+  let client;
+  let lockResolved = false;
+  let lockAcquired = false;
+  let result;
+  let operationError;
+  let unlockError;
+  try {
+    client = await workerPool.connect();
+    const lock = await client.query(
+      `SELECT pg_try_advisory_lock($1) AS acquired`,
+      [POLL_ADVISORY_LOCK_KEY],
+    );
+    const acquired = lock.rows[0]?.acquired;
+    if (typeof acquired !== 'boolean') {
+      throw new Error('imap_poll_lock_result_invalid');
+    }
+    lockResolved = true;
+    lockAcquired = acquired;
+    if (!lockAcquired) {
+      result = { skipped: 'another_instance_is_polling' };
+    } else {
+      // A private capability enumerates at most 100 active connections. Its
+      // durable keyset cursor survives process/lock-owner changes. Imports and
+      // status updates still use ordinary per-user RLS connections.
+      const connections = await readImapWorkerBatch(client, encryptionKey);
+
+      const results = [];
+      let deferredCount = 0;
+      try {
+        for (const [index, connection] of connections.entries()) {
+          if (now() >= deadline) {
+            deferredCount = connections.length - index;
+            break;
+          }
+          let outcome;
+          try {
+            outcome = connection.credential_error || typeof connection.app_password !== 'string'
+              ? { ok: false, reason: 'credential_unavailable', imported: 0, skipped: 0, unparsed: 0 }
+              : await pollConnection(connection, deps);
+          } catch (_) {
+            outcome = { ok: false, reason: 'unexpected_error' };
+          } finally {
+            // Release this batch's reference as soon as its provider work ends.
+            connection.app_password = null;
+          }
+
+          const status = outcome.ok
+            ? `ok: ${outcome.imported} imported, ${outcome.skipped} already known, ${outcome.unparsed} not transactions`
+            : `error: ${outcome.reason}`;
+
+          // last_poll_at advances only on SUCCESS. Advancing it after a failure
+          // would silently skip the window that failed, so a transient outage
+          // would permanently lose whatever arrived during it.
+          try {
+            await withUserClient(connection.profile_id, (client) =>
+              client.query(
+                outcome.ok
+                  ? `UPDATE imap_connections SET last_poll_at = now(), last_poll_status = $2 WHERE id = $1`
+                  : `UPDATE imap_connections SET last_poll_status = $2 WHERE id = $1`,
+                [connection.id, status]
+              )
+            );
+          } catch (_) {
+            // The per-user transaction rolls back failed status writes. Keep
+            // its old successful poll window and continue this batch so one
+            // bad row cannot repeatedly starve every later mailbox.
+            outcome = { ...outcome, ok: false, reason: 'status_write_failed' };
+          }
+
+          results.push({ connectionId: connection.id, ...outcome });
+        }
+      } finally {
+        // Include unprocessed rows when a cycle is deferred or status I/O
+        // fails. Their original last_poll_at survives for a later rotation.
+        for (const connection of connections) connection.app_password = null;
+      }
+      if (deferredCount) {
+        // Resume after the last attempted mailbox next tick. This matters
+        // even for a short batch: otherwise one slow first mailbox could
+        // consume each cycle and starve every later row after cursor wrap.
+        await deferImapWorkerBatch(client, results.at(-1)?.connectionId ?? null);
+      }
+      result = { polled: results.length, results, ...(deferredCount ? { deferredCount } : {}) };
+    }
+  } catch (err) {
+    operationError = err;
+  } finally {
+    if (client) {
+      let discardClient = false;
+      if (!lockResolved) {
+        // A failed lock query has an uncertain server-side outcome. Destroy
+        // this session so a lock acquired without a received response cannot
+        // remain attached to a connection returned to the pool.
+        discardClient = true;
+      }
+      if (lockAcquired) {
+        try {
+          const unlock = await client.query(
+            `SELECT pg_advisory_unlock($1) AS released`,
+            [POLL_ADVISORY_LOCK_KEY],
+          );
+          if (unlock.rows[0]?.released !== true) {
+            throw new Error('imap_poll_lock_release_failed');
+          }
+        } catch (err) {
+          discardClient = true;
+          unlockError = err;
+        }
+      }
+      // pg.PoolClient.release(error) destroys the underlying session. This is
+      // required whenever lock ownership could not be confirmed as released.
+      client.release(
+        discardClient
+          ? (unlockError || operationError || new Error('imap_poll_lock_state_uncertain'))
+          : undefined,
+      );
+    }
+  }
+
+  if (operationError) throw operationError;
+  if (unlockError) throw unlockError;
+  return result;
 }
 
 /**
@@ -217,7 +303,11 @@ function startImapPoller(deps, { intervalMinutes, logger = console } = {}) {
     running = true;
     try {
       const summary = await runPollCycle(deps);
+      if (summary.skipped === 'no_worker_database' || summary.skipped === 'worker_database_pool_not_separate') {
+        logger.warn('[imap-poller] skipped: configure a separate IMAP worker database capability');
+      }
       if (summary.polled) logger.log(`[imap-poller] polled ${summary.polled} connection(s)`);
+      if (summary.deferredCount) logger.warn(`[imap-poller] deferred ${summary.deferredCount} connection(s) after cycle deadline`);
     } catch (err) {
       logger.error('[imap-poller] cycle failed', safeErrorCode(err));
     } finally {
@@ -238,4 +328,5 @@ module.exports = {
   fetchRecentMessages,
   POLL_ADVISORY_LOCK_KEY,
   INITIAL_LOOKBACK_DAYS,
+  MAX_CYCLE_DURATION_MS,
 };

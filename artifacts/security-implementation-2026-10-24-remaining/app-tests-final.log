@@ -1,0 +1,15 @@
+03:02 +1549: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/data/sms_family_corpus_test.dart: delivery identity live broadcast then identical inbox row collapses to one source and one provisional spend
+03:02 +1550: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/data/sms_family_corpus_test.dart: delivery identity identical sender/body delivered days apart is documented as one source today
+03:02 +1551: loading /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/services/recurrence_engine_test.dart
+03:02 +1551: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/services/recurrence_engine_test.dart: RecurrenceEngine detects fixed-amount monthly SaaS subscription (e.g. Netflix)
+03:02 +1552: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/services/recurrence_engine_test.dart: RecurrenceEngine detects variable-amount monthly metered utility (e.g. Electricity)
+03:02 +1553: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/services/recurrence_engine_test.dart: RecurrenceEngine detects Indian prepaid telecom 28-day cycle (e.g. Jio)
+03:02 +1554: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/services/recurrence_engine_test.dart: RecurrenceEngine detects Indian prepaid telecom 56-day and 84-day cycles
+03:02 +1555: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/services/recurrence_engine_test.dart: RecurrenceEngine rejects irregular random visits without consistent cadence
+03:02 +1556: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/services/recurrence_engine_test.dart: SpecializedDomainClassifiers Broker message classifications
+03:02 +1557: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/services/recurrence_engine_test.dart: SpecializedDomainClassifiers Loan & EMI lifecycle classifications
+03:02 +1558: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/services/recurrence_engine_test.dart: SpecializedDomainClassifiers Insurance lifecycle classifications
+03:02 +1559: loading /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/notification_devices_api_test.dart
+03:03 +1559: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/notification_devices_api_test.dart: sendTestNotification accepts the provider-accepted response
+03:03 +1560: /private/tmp/pandapay-rest-20261024-85mhb0hn/candidate/app/test/notification_devices_api_test.dart: sendTestNotification surfaces an unconfigured production service
+03:03 +1561: All tests passed!

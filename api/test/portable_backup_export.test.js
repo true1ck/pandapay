@@ -298,14 +298,37 @@ test('record and byte caps abort without writing a complete footer', async () =>
     },
   };
   const byteResponse = new ResponseStub();
+  // The header grows when master adds portable sections. Measure its actual
+  // serialized size so this regression tests a partially streamed record,
+  // rather than accidentally exhausting the limit on the header itself.
+  const sampleResponse = new ResponseStub();
+  await exportSnapshot({ client: emptyClient(), res: sampleResponse, profileId });
+  const firstRecordLine = `${canonicalJson({ type: 'record', section: 'profile', record: { id: profileId, note: 'x'.repeat(600) } })}\n`;
+  const byteLimit = Buffer.byteLength(sampleResponse.chunks[0]) + Buffer.byteLength(firstRecordLine);
   await assert.rejects(exportSnapshot({
     client: byteClient,
     res: byteResponse,
     profileId,
     batchSize: 2,
-    maxOutputBytes: 1_500,
+    maxOutputBytes: byteLimit,
   }), (error) => error.code === 'export_limit_exceeded');
   assert.ok(byteResponse.chunks.length >= 2, 'first record should be streamed before the cap is reached');
+  assert.ok(Buffer.byteLength(byteResponse.chunks.join('')) <= byteLimit);
   assert.equal(byteResponse.chunks.some((chunk) => chunk.includes('"complete":true')), false);
   assert.equal(byteResponse.ended, undefined);
+});
+
+test('account lifecycle export fence precedes repeatable-read snapshot and is released after rollback',async()=>{
+ const client=emptyClient(),events=[];const original=client.query.bind(client);
+ client.query=async(...args)=>{events.push(args[0]);return original(...args);};
+ const pool={connect:async()=>client,acquireAccountSnapshotFence:async()=>{events.push('acquire');return async()=>{events.push('unlock');};},accountAccessFence:async()=>events.push('account-check')};
+ const handler=createPortableBackupExportHandler({pool}),res=new ResponseStub();await handler({userId:'11111111-1111-4111-8111-111111111111'},res);
+ assert.ok(events.indexOf('acquire')<events.indexOf('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'));
+ assert.ok(events.indexOf('ROLLBACK')<events.indexOf('unlock'));assert.ok(client.released);
+});
+test('uncertain account export lock destroys pooled session and emits no archive',async()=>{
+ const client=emptyClient();let destroyed;
+ client.release=error=>{destroyed=error;};
+ const handler=createPortableBackupExportHandler({pool:{connect:async()=>client,acquireAccountSnapshotFence:async()=>{throw Error('uncertain');}}}),res=new ResponseStub();
+ await handler({userId:'11111111-1111-4111-8111-111111111111'},res);assert.ok(destroyed);assert.equal(res.statusCode,503);assert.equal(res.chunks.length,0);
 });

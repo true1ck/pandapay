@@ -1,0 +1,868 @@
+TAP version 13
+# Subtest: Google route preserves successful token/device response without requiring a legacy google_id column
+ok 1 - Google route preserves successful token/device response without requiring a legacy google_id column
+  ---
+  duration_ms: 35.093125
+  type: 'test'
+  ...
+# Subtest: Google route returns explicit account-link error without issuing tokens
+ok 2 - Google route returns explicit account-link error without issuing tokens
+  ---
+  duration_ms: 5.66675
+  type: 'test'
+  ...
+# Subtest: Google explicit linking requires a bearer session and passes it to the checked account resolver
+ok 3 - Google explicit linking requires a bearer session and passes it to the checked account resolver
+  ---
+  duration_ms: 6.414167
+  type: 'test'
+  ...
+# Subtest: Google route maps GOOGLE_TOKEN_INVALID to 400 without provider details
+ok 4 - Google route maps GOOGLE_TOKEN_INVALID to 400 without provider details
+  ---
+  duration_ms: 2.178125
+  type: 'test'
+  ...
+# Subtest: Google route maps GOOGLE_AUTH_UNAVAILABLE to 503 without provider details
+ok 5 - Google route maps GOOGLE_AUTH_UNAVAILABLE to 503 without provider details
+  ---
+  duration_ms: 1.720584
+  type: 'test'
+  ...
+# ⚠️ Email sending failed, but OTP was generated
+# Subtest: failed email returns 503, discards its code, and permits retry
+ok 6 - failed email returns 503, discards its code, and permits retry
+  ---
+  duration_ms: 114.032375
+  type: 'test'
+  ...
+# Subtest: late failure cannot discard a newer code
+ok 7 - late failure cannot discard a newer code
+  ---
+  duration_ms: 103.665542
+  type: 'test'
+  ...
+# ⚠️ Email sending failed, but OTP was generated
+# ⚠️ Email sending failed, but OTP was generated
+# ⚠️ Email sending failed, but OTP was generated
+# Subtest: delivery failures do not bypass the existing request quota
+ok 8 - delivery failures do not bypass the existing request quota
+  ---
+  duration_ms: 154.412625
+  type: 'test'
+  ...
+# [auth] request-otp failed Error
+# [auth] request-email-otp failed Error
+# Subtest: abuse-store active-claim failures happen before OTP writes and never call providers
+ok 9 - abuse-store active-claim failures happen before OTP writes and never call providers
+  ---
+  duration_ms: 103.045833
+  type: 'test'
+  ...
+# [auth] request-email-otp failed Error
+# Subtest: a losing active OTP claim returns 429 without changing OTP rows or sending
+ok 10 - a losing active OTP claim returns 429 without changing OTP rows or sending
+  ---
+  duration_ms: 50.858583
+  type: 'test'
+  ...
+# [auth] request-email-otp failed Error
+# Subtest: concurrent requests for one identifier create and deliver only one OTP
+ok 11 - concurrent requests for one identifier create and deliver only one OTP
+  ---
+  duration_ms: 52.400625
+  type: 'test'
+  ...
+# [auth] request-email-otp failed Error
+# [auth] request-otp failed Error
+# Subtest: enumeration storage outage inside request handler returns controlled 503
+ok 12 - enumeration storage outage inside request handler returns controlled 503
+  ---
+  duration_ms: 2.513458
+  type: 'test'
+  ...
+# [auth] verify-email-otp failed Error
+# Subtest: failed verification counter storage outage returns controlled 503
+ok 13 - failed verification counter storage outage returns controlled 503
+  ---
+  duration_ms: 1.635
+  type: 'test'
+  ...
+# Subtest: recovery and normal sign-in have independent OTP resend windows
+ok 14 - recovery and normal sign-in have independent OTP resend windows
+  ---
+  duration_ms: 102.380917
+  type: 'test'
+  ...
+# Subtest: email signup contact preflight ignores soft-deleted identities and compares normalized email
+ok 15 - email signup contact preflight ignores soft-deleted identities and compares normalized email
+  ---
+  duration_ms: 57.001
+  type: 'test'
+  ...
+# Subtest: legacy validate-token preserves the active-user payload after authoritative session verification
+ok 16 - legacy validate-token preserves the active-user payload after authoritative session verification
+  ---
+  duration_ms: 1.951584
+  type: 'test'
+  ...
+# Subtest: legacy validate-token rejects guest and inactive, deleted, revoked, wrong-device sessions
+ok 17 - legacy validate-token rejects guest and inactive, deleted, revoked, wrong-device sessions
+  ---
+  duration_ms: 7.278042
+  type: 'test'
+  ...
+# [auth] validate-token session verification unavailable 08006
+# Subtest: legacy validate-token distinguishes invalid credentials from unavailable session storage
+ok 18 - legacy validate-token distinguishes invalid credentials from unavailable session storage
+  ---
+  duration_ms: 2.66275
+  type: 'test'
+  ...
+# Subtest: email and phone conflict preflight normalizes a stored email before comparison
+ok 19 - email and phone conflict preflight normalizes a stored email before comparison
+  ---
+  duration_ms: 51.841166
+  type: 'test'
+  ...
+# Subtest: check-user keeps its response contract and applies shared enumeration admission
+ok 20 - check-user keeps its response contract and applies shared enumeration admission
+  ---
+  duration_ms: 2.564667
+  type: 'test'
+  ...
+# [auth] check-user failed Error
+# Subtest: check-user fails closed with controlled 503 when shared enumeration storage is unavailable
+ok 21 - check-user fails closed with controlled 503 when shared enumeration storage is unavailable
+  ---
+  duration_ms: 1.373917
+  type: 'test'
+  ...
+# Subtest: same identifier keeps separate durable purpose challenges and same-purpose resend replaces only its own
+ok 22 - same identifier keeps separate durable purpose challenges and same-purpose resend replaces only its own
+  ---
+  duration_ms: 148.4665
+  type: 'test'
+  ...
+# Subtest: delivery cleanup is scoped to the request purpose
+ok 23 - delivery cleanup is scoped to the request purpose
+  ---
+  duration_ms: 102.041333
+  type: 'test'
+  ...
+# Subtest: email OTP cannot attach an unverified phone to an existing phone account
+ok 24 - email OTP cannot attach an unverified phone to an existing phone account
+  ---
+  duration_ms: 1.825792
+  type: 'test'
+  ...
+# Subtest: signup cannot create an account without an authenticated OTP session
+ok 25 - signup cannot create an account without an authenticated OTP session
+  ---
+  duration_ms: 1.544042
+  type: 'test'
+  ...
+# Subtest: signup cannot replace the verified phone factor with a body-supplied number
+ok 26 - signup cannot replace the verified phone factor with a body-supplied number
+  ---
+  duration_ms: 1.531834
+  type: 'test'
+  ...
+# Subtest: legacy signup address fields do not query removed locations and retain null response field
+ok 27 - legacy signup address fields do not query removed locations and retain null response field
+  ---
+  duration_ms: 1.313417
+  type: 'test'
+  ...
+# [auth] signup failed 23505
+# Subtest: signup constraint errors keep status and shape without returning database details
+ok 28 - signup constraint errors keep status and shape without returning database details
+  ---
+  duration_ms: 2.128875
+  type: 'test'
+  ...
+# ⚠️ SMS delivery failed; discarding undelivered OTP
+# Subtest: failed SMS returns an error, discards the code, and allows retry
+ok 29 - failed SMS returns an error, discards the code, and allows retry
+  ---
+  duration_ms: 100.225541
+  type: 'test'
+  ...
+# Subtest: email recovery cannot create an account even after a valid OTP
+ok 30 - email recovery cannot create an account even after a valid OTP
+  ---
+  duration_ms: 1.656625
+  type: 'test'
+  ...
+# Email SMTP credentials missing. Email authentication delivery is unavailable.
+# Email delivery service initialized
+# OTP email delivery succeeded
+# Email delivery service initialized
+# [Email Service] SMTP did not accept the OTP recipient
+# Email delivery service initialized
+# [Email Service] Failed to send OTP: Error
+# Email delivery service initialized
+# [Email Service] Failed to send OTP: Error
+# Email delivery service initialized
+# OTP email delivery succeeded
+# Email delivery service initialized
+# OTP email delivery succeeded
+# Email delivery service initialized
+# OTP email delivery succeeded
+# Subtest: phone recovery cannot create an account even after a valid OTP
+ok 31 - phone recovery cannot create an account even after a valid OTP
+  ---
+  duration_ms: 1.79825
+  type: 'test'
+  ...
+# Subtest: production without SMTP cannot report a mock email as delivered
+ok 32 - production without SMTP cannot report a mock email as delivered
+  ---
+  duration_ms: 15.2335
+  type: 'test'
+  ...
+# Subtest: SMTP accepted result is reported accurately
+ok 33 - SMTP accepted result is reported accurately
+  ---
+  duration_ms: 0.176625
+  type: 'test'
+  ...
+# Subtest: SMTP rejected result is reported accurately
+ok 34 - SMTP rejected result is reported accurately
+  ---
+  duration_ms: 0.073416
+  type: 'test'
+  ...
+# Subtest: SMTP error result is reported accurately
+ok 35 - SMTP error result is reported accurately
+  ---
+  duration_ms: 0.095458
+  type: 'test'
+  ...
+# Subtest: SMTP error details are not returned from email delivery
+ok 36 - SMTP error details are not returned from email delivery
+  ---
+  duration_ms: 0.111458
+  type: 'test'
+  ...
+# Subtest: hosted SMTP port 465 keeps certificate validation and the appropriate TLS mode
+ok 37 - hosted SMTP port 465 keeps certificate validation and the appropriate TLS mode
+  ---
+  duration_ms: 0.1205
+  type: 'test'
+  ...
+# Subtest: hosted SMTP port 587 keeps certificate validation and the appropriate TLS mode
+ok 38 - hosted SMTP port 587 keeps certificate validation and the appropriate TLS mode
+  ---
+  duration_ms: 0.07
+  type: 'test'
+  ...
+# Subtest: email delivery logs neither the full address nor the OTP value
+ok 39 - email delivery logs neither the full address nor the OTP value
+  ---
+  duration_ms: 0.09825
+  type: 'test'
+  ...
+# Subtest: v2 OTP request requires stable device and returns only six-digit challenge metadata
+ok 40 - v2 OTP request requires stable device and returns only six-digit challenge metadata
+  ---
+  duration_ms: 51.7785
+  type: 'test'
+  ...
+# Subtest: v2 refuses contact selectors and forged protocol fields before queries or provider work
+ok 41 - v2 refuses contact selectors and forged protocol fields before queries or provider work
+  ---
+  duration_ms: 5.286042
+  type: 'test'
+  ...
+# ⚠️ Email sending failed, but OTP was generated
+# Subtest: v2 delivery failure discards its exact challenge and permits retry with unchanged legacy response
+ok 42 - v2 delivery failure discards its exact challenge and permits retry with unchanged legacy response
+  ---
+  duration_ms: 148.300834
+  type: 'test'
+  ...
+# Subtest: unversioned endpoints cannot select six digits with header/body protocol claims
+ok 43 - unversioned endpoints cannot select six digits with header/body protocol claims
+  ---
+  duration_ms: 1.483708
+  type: 'test'
+  ...
+# [auth] request-email-otp failed Error
+# [auth] verify-email-otp failed Error
+# Subtest: email issuance and verification saturation return safe retryable 503 with no OTP/account writes
+ok 44 - email issuance and verification saturation return safe retryable 503 with no OTP/account writes
+  ---
+  duration_ms: 1.5495
+  type: 'test'
+  ...
+# ⚠️ Email sending failed, but OTP was generated
+# ⚠️ Email sending failed, but OTP was generated
+# Subtest: email provider saturation discards the issued challenge and its active marker
+ok 45 - email provider saturation discards the issued challenge and its active marker
+  ---
+  duration_ms: 99.405791
+  type: 'test'
+  ...
+# [auth] request-otp failed Error
+# [auth] verify-otp failed Error
+# Subtest: phone issuance and verification saturation return safe retryable 503 with no OTP/account writes
+ok 46 - phone issuance and verification saturation return safe retryable 503 with no OTP/account writes
+  ---
+  duration_ms: 1.925167
+  type: 'test'
+  ...
+# ⚠️ SMS delivery failed; discarding undelivered OTP
+# ⚠️ SMS delivery failed; discarding undelivered OTP
+# Subtest: phone provider saturation discards the issued challenge and its active marker
+ok 47 - phone provider saturation discards the issued challenge and its active marker
+  ---
+  duration_ms: 100.185125
+  type: 'test'
+  ...
+# [auth] request-email-otp failed Error
+# [auth] verify-email-otp failed Error
+# Subtest: v2/email issuance and verification saturation return safe retryable 503 with no OTP/account writes
+ok 48 - v2/email issuance and verification saturation return safe retryable 503 with no OTP/account writes
+  ---
+  duration_ms: 2.302833
+  type: 'test'
+  ...
+# ⚠️ Email sending failed, but OTP was generated
+# ⚠️ Email sending failed, but OTP was generated
+# Subtest: v2/email provider saturation discards the issued challenge and its active marker
+ok 49 - v2/email provider saturation discards the issued challenge and its active marker
+  ---
+  duration_ms: 100.935792
+  type: 'test'
+  ...
+# [auth] request-otp failed Error
+# [auth] verify-otp failed Error
+# Subtest: v2/phone issuance and verification saturation return safe retryable 503 with no OTP/account writes
+ok 50 - v2/phone issuance and verification saturation return safe retryable 503 with no OTP/account writes
+  ---
+  duration_ms: 2.230541
+  type: 'test'
+  ...
+# ⚠️ SMS delivery failed; discarding undelivered OTP
+# ⚠️ SMS delivery failed; discarding undelivered OTP
+# Subtest: v2/phone provider saturation discards the issued challenge and its active marker
+ok 51 - v2/phone provider saturation discards the issued challenge and its active marker
+  ---
+  duration_ms: 99.913958
+  type: 'test'
+  ...
+# Subtest: one correct OTP can be consumed by at most one concurrent verification
+ok 52 - one correct OTP can be consumed by at most one concurrent verification
+  ---
+  duration_ms: 6.844625
+  type: 'test'
+  ...
+# Subtest: successful OTP verification clears only its requested purpose window
+ok 53 - successful OTP verification clears only its requested purpose window
+  ---
+  duration_ms: 3.484417
+  type: 'test'
+  ...
+# Subtest: purpose-specific verification cannot consume another purpose challenge
+ok 54 - purpose-specific verification cannot consume another purpose challenge
+  ---
+  duration_ms: 113.717542
+  type: 'test'
+  ...
+# Subtest: legacy NULL purpose is accepted for sign-in only
+ok 55 - legacy NULL purpose is accepted for sign-in only
+  ---
+  duration_ms: 105.942459
+  type: 'test'
+  ...
+# Subtest: OTP type and purpose are rejected before database access when invalid
+ok 56 - OTP type and purpose are rejected before database access when invalid
+  ---
+  duration_ms: 1.74625
+  type: 'test'
+  ...
+# Subtest: abuse-store marker cleanup failure does not undo successful OTP consumption
+ok 57 - abuse-store marker cleanup failure does not undo successful OTP consumption
+  ---
+  duration_ms: 2.083083
+  type: 'test'
+  ...
+# Subtest: failed active marker claim propagates before any OTP row mutation
+ok 58 - failed active marker claim propagates before any OTP row mutation
+  ---
+  duration_ms: 51.433791
+  type: 'test'
+  ...
+# Subtest: database failure after claim clears only the pre-generated request claim
+ok 59 - database failure after claim clears only the pre-generated request claim
+  ---
+  duration_ms: 50.984375
+  type: 'test'
+  ...
+# Subtest: OTP creation and verification failures never write the raw code to logs
+ok 60 - OTP creation and verification failures never write the raw code to logs
+  ---
+  duration_ms: 2.394875
+  type: 'test'
+  ...
+# Subtest: defaults are bounded and only strict integer spellings from 1 through 16 are accepted
+ok 61 - defaults are bounded and only strict integer spellings from 1 through 16 are accepted
+  ---
+  duration_ms: 0.785167
+  type: 'test'
+  ...
+# Subtest: full stage rejects before running the callback and keeps no waiting work
+ok 62 - full stage rejects before running the callback and keeps no waiting work
+  ---
+  duration_ms: 1.094666
+  type: 'test'
+  ...
+# Subtest: email, SMS and verification capacity are independent and observations cannot mutate limits
+ok 63 - email, SMS and verification capacity are independent and observations cannot mutate limits
+  ---
+  duration_ms: 0.194959
+  type: 'test'
+  ...
+# Subtest: sync throw and async rejection both release slots exactly once, preserving the original failure
+ok 64 - sync throw and async rejection both release slots exactly once, preserving the original failure
+  ---
+  duration_ms: 0.121542
+  type: 'test'
+  ...
+# Subtest: abandoned caller does not free a slot before the underlying operation settles
+ok 65 - abandoned caller does not free a slot before the underlying operation settles
+  ---
+  duration_ms: 0.107542
+  type: 'test'
+  ...
+# Subtest: issuance saturation rejects legacy/V2 verification and issuance before DB, claims, or native hashing
+ok 66 - issuance saturation rejects legacy/V2 verification and issuance before DB, claims, or native hashing
+  ---
+  duration_ms: 1.449792
+  type: 'test'
+  ...
+# Subtest: concurrent unknown identifiers share one pending dummy hash then all compare
+ok 67 - concurrent unknown identifiers share one pending dummy hash then all compare
+  ---
+  duration_ms: 0.745958
+  type: 'test'
+  ...
+# Subtest: failed dummy initialization is retryable and neither leaks nor permanently occupies capacity
+ok 68 - failed dummy initialization is retryable and neither leaks nor permanently occupies capacity
+  ---
+  duration_ms: 0.255417
+  type: 'test'
+  ...
+# Subtest: real installed bcrypt retains cost 10, shares dummy initialization and rejects overload before native work
+ok 69 - real installed bcrypt retains cost 10, shares dummy initialization and rejects overload before native work
+  ---
+  duration_ms: 115.062333
+  type: 'test'
+  ...
+# OTP SMS delivery succeeded
+# [SMS Service] provider delivery failed: ETIMEDOUT
+# OTP SMS delivery succeeded
+# OTP SMS delivery succeeded
+# Email delivery service initialized
+# [Email Service] Failed to send OTP: ETIMEDOUT
+# OTP email delivery succeeded
+# Subtest: Twilio SMS client uses bounded timeout and disables automatic retry
+ok 70 - Twilio SMS client uses bounded timeout and disables automatic retry
+  ---
+  duration_ms: 1.304416
+  type: 'test'
+  ...
+# Subtest: Twilio failures return a fixed redacted error and never return provider text
+ok 71 - Twilio failures return a fixed redacted error and never return provider text
+  ---
+  duration_ms: 0.265167
+  type: 'test'
+  ...
+# Subtest: installed Twilio transport bounds requests, refuses redirects and installs no retry interceptor
+ok 72 - installed Twilio transport bounds requests, refuses redirects and installs no retry interceptor
+  ---
+  duration_ms: 86.124291
+  type: 'test'
+  ...
+# Subtest: SMS saturation never calls the SDK for rejected sends and permits retry after settlement
+ok 73 - SMS saturation never calls the SDK for rejected sends and permits retry after settlement
+  ---
+  duration_ms: 0.543416
+  type: 'test'
+  ...
+# Subtest: SMTP saturation never opens a send for rejected work; failure releases capacity
+ok 74 - SMTP saturation never opens a send for rejected work; failure releases capacity
+  ---
+  duration_ms: 2.180666
+  type: 'test'
+  ...
+# Subtest: linked contacts are masked in recognisable form
+ok 75 - linked contacts are masked in recognisable form
+  ---
+  duration_ms: 0.7545
+  type: 'test'
+  ...
+# Subtest: recovery contact availability follows active-only reuse policy for email and phone
+ok 76 - recovery contact availability follows active-only reuse policy for email and phone
+  ---
+  duration_ms: 46.84325
+  type: 'test'
+  ...
+# Subtest: a normal session or expired recovery proof cannot replace a contact
+ok 77 - a normal session or expired recovery proof cannot replace a contact
+  ---
+  duration_ms: 6.661458
+  type: 'test'
+  ...
+# Subtest: the old linked email is kept until the new email code is verified
+ok 78 - the old linked email is kept until the new email code is verified
+  ---
+  duration_ms: 6.53225
+  type: 'test'
+  ...
+# Subtest: replacement challenges cannot be used on another account
+ok 79 - replacement challenges cannot be used on another account
+  ---
+  duration_ms: 3.639417
+  type: 'test'
+  ...
+# Subtest: phone contact replacement requires the existing email proof and stores a searchable hash
+ok 80 - phone contact replacement requires the existing email proof and stores a searchable hash
+  ---
+  duration_ms: 2.952708
+  type: 'test'
+  ...
+# Subtest: conflicting contact and failed delivery leave the linked contact unchanged
+ok 81 - conflicting contact and failed delivery leave the linked contact unchanged
+  ---
+  duration_ms: 2.951375
+  type: 'test'
+  ...
+# Recovery contact request failed: Error
+# Recovery contact verification failed: Error
+# Subtest: abuse-store failures during recovery request and verification return 503
+ok 82 - abuse-store failures during recovery request and verification return 503
+  ---
+  duration_ms: 3.540542
+  type: 'test'
+  ...
+# Subtest: email proof permits only phone replacement and honours disabled SMS
+ok 83 - email proof permits only phone replacement and honours disabled SMS
+  ---
+  duration_ms: 2.081958
+  type: 'test'
+  ...
+# Recovery contact request failed: Error
+# Subtest: concurrent replacement requests consume one stable account budget across random challenges
+ok 84 - concurrent replacement requests consume one stable account budget across random challenges
+  ---
+  duration_ms: 2.917666
+  type: 'test'
+  ...
+# Recovery contact verification failed: Error
+# Subtest: every valid replacement challenge verification attempt consumes the account attempt cap
+ok 85 - every valid replacement challenge verification attempt consumes the account attempt cap
+  ---
+  duration_ms: 4.890666
+  type: 'test'
+  ...
+# Recovery contact request failed: Error
+# Recovery contact verification failed: Error
+# Subtest: replacement budget storage outages fail closed before delivery or OTP verification
+ok 86 - replacement budget storage outages fail closed before delivery or OTP verification
+  ---
+  duration_ms: 2.9515
+  type: 'test'
+  ...
+# Subtest: v2 replacement keeps the old contact until its account/device/purpose-bound six-digit code succeeds
+ok 87 - v2 replacement keeps the old contact until its account/device/purpose-bound six-digit code succeeds
+  ---
+  duration_ms: 3.07625
+  type: 'test'
+  ...
+# Subtest: v2 replacement rejects selectors, queries and unproved devices before sending or charging an account budget
+ok 88 - v2 replacement rejects selectors, queries and unproved devices before sending or charging an account budget
+  ---
+  duration_ms: 2.893708
+  type: 'test'
+  ...
+# Subtest: v2 replacement rejects four-digit/numeric codes and cannot cross legacy protocol audiences
+ok 89 - v2 replacement rejects four-digit/numeric codes and cannot cross legacy protocol audiences
+  ---
+  duration_ms: 3.380625
+  type: 'test'
+  ...
+# Subtest: v2 replacement JWT remains bound to its original device even under another valid recent account proof
+ok 90 - v2 replacement JWT remains bound to its original device even under another valid recent account proof
+  ---
+  duration_ms: 2.677459
+  type: 'test'
+  ...
+# Recovery contact request failed: Error
+# Subtest: v2 delivery failure discards only the matching versioned challenge and storage/budget failures preserve contacts
+ok 91 - v2 delivery failure discards only the matching versioned challenge and storage/budget failures preserve contacts
+  ---
+  duration_ms: 2.178042
+  type: 'test'
+  ...
+# Subtest: explicit legacy retirement covers contact replacement while v2 and existing recent-factor guards remain
+ok 92 - explicit legacy retirement covers contact replacement while v2 and existing recent-factor guards remain
+  ---
+  duration_ms: 3.039792
+  type: 'test'
+  ...
+# Recovery contact request failed: Error
+# Subtest: legacy and v2 replacement requests share one stable account request cap
+ok 93 - legacy and v2 replacement requests share one stable account request cap
+  ---
+  duration_ms: 2.295
+  type: 'test'
+  ...
+# Subtest: v2 thrown delivery errors discard the versioned challenge before retry
+ok 94 - v2 thrown delivery errors discard the versioned challenge before retry
+  ---
+  duration_ms: 1.05625
+  type: 'test'
+  ...
+# Recovery contact verification failed: Error
+# Recovery contact request failed: Error
+# Subtest: replacement busy issuance/verification preserves the old contact and proof
+ok 95 - replacement busy issuance/verification preserves the old contact and proof
+  ---
+  duration_ms: 1.764958
+  type: 'test'
+  ...
+# Subtest: replacement provider capacity rejection discards only its challenge before responding
+ok 96 - replacement provider capacity rejection discards only its challenge before responding
+  ---
+  duration_ms: 1.045667
+  type: 'test'
+  ...
+# Recovery contact verification failed: Error
+# Recovery contact request failed: Error
+# Subtest: v2/replacement busy issuance/verification preserves the old contact and proof
+ok 97 - v2/replacement busy issuance/verification preserves the old contact and proof
+  ---
+  duration_ms: 1.937333
+  type: 'test'
+  ...
+# Subtest: v2/replacement provider capacity rejection discards only its challenge before responding
+ok 98 - v2/replacement provider capacity rejection discards only its challenge before responding
+  ---
+  duration_ms: 0.962542
+  type: 'test'
+  ...
+# Subtest: default template preserves missing actual host/custody/device gates and no deployment
+ok 99 - default template preserves missing actual host/custody/device gates and no deployment
+  ---
+  duration_ms: 4.153875
+  type: 'test'
+  ...
+# Subtest: consistent synthetic metadata fixture exercises fully supplied gate logic without reading external systems
+ok 100 - consistent synthetic metadata fixture exercises fully supplied gate logic without reading external systems
+  ---
+  duration_ms: 0.660834
+  type: 'test'
+  ...
+# Subtest: prior partial batch record and stale/foreign source evidence never become full-candidate proof
+ok 101 - prior partial batch record and stale/foreign source evidence never become full-candidate proof
+  ---
+  duration_ms: 2.137792
+  type: 'test'
+  ...
+# Subtest: synthetic restore/upgrade tests cannot satisfy actual-data/provider release acceptance
+ok 102 - synthetic restore/upgrade tests cannot satisfy actual-data/provider release acceptance
+  ---
+  duration_ms: 0.675792
+  type: 'test'
+  ...
+# Subtest: freshness, proof hash, failures and per-check candidate binding are enforced
+ok 103 - freshness, proof hash, failures and per-check candidate binding are enforced
+  ---
+  duration_ms: 0.934334
+  type: 'test'
+  ...
+# Subtest: privilege policy drift, incomplete reports and wrong report scope cannot pass
+ok 104 - privilege policy drift, incomplete reports and wrong report scope cannot pass
+  ---
+  duration_ms: 1.207208
+  type: 'test'
+  ...
+# Subtest: one local PC and absent independent key custody stay missing; connection budgets must fit verified host limits
+ok 105 - one local PC and absent independent key custody stay missing; connection budgets must fit verified host limits
+  ---
+  duration_ms: 0.202459
+  type: 'test'
+  ...
+# Subtest: key inventory exports only names/presence and never hashes or reveals actual key values/IDs
+ok 106 - key inventory exports only names/presence and never hashes or reveals actual key values/IDs
+  ---
+  duration_ms: 0.710375
+  type: 'test'
+  ...
+# Subtest: feature manifest mismatches cannot silently enable browser/worker/recovery behavior
+ok 107 - feature manifest mismatches cannot silently enable browser/worker/recovery behavior
+  ---
+  duration_ms: 0.315708
+  type: 'test'
+  ...
+# Subtest: enabled optional features require their own acceptance proof, including IMAP interval configuration
+ok 108 - enabled optional features require their own acceptance proof, including IMAP interval configuration
+  ---
+  duration_ms: 0.290791
+  type: 'test'
+  ...
+# Subtest: provider, role, feature or retained-key version metadata changes invalidate imported release evidence
+ok 109 - provider, role, feature or retained-key version metadata changes invalidate imported release evidence
+  ---
+  duration_ms: 0.896166
+  type: 'test'
+  ...
+# Subtest: unknown/credential-containing manifest properties are rejected before output
+ok 110 - unknown/credential-containing manifest properties are rejected before output
+  ---
+  duration_ms: 0.286334
+  type: 'test'
+  ...
+# Subtest: source scope excludes .env, private key material, generated artifacts and unrelated files
+ok 111 - source scope excludes .env, private key material, generated artifacts and unrelated files
+  ---
+  duration_ms: 0.342417
+  type: 'test'
+  ...
+# Subtest: candidate hashing includes dirty/untracked/deleted release code and refuses concurrent edits
+ok 112 - candidate hashing includes dirty/untracked/deleted release code and refuses concurrent edits
+  ---
+  duration_ms: 141.671917
+  type: 'test'
+  ...
+# Subtest: input files are bounded regular non-symlinks; evidence cannot escape through relative paths or directory symlinks
+ok 113 - input files are bounded regular non-symlinks; evidence cannot escape through relative paths or directory symlinks
+  ---
+  duration_ms: 0.911084
+  type: 'test'
+  ...
+# Subtest: report/proof imports verify bytes without exposing their raw contents
+ok 114 - report/proof imports verify bytes without exposing their raw contents
+  ---
+  duration_ms: 1.284542
+  type: 'test'
+  ...
+# Subtest: template CLI is bounded read-only and does not import secret values from environment
+ok 115 - template CLI is bounded read-only and does not import secret values from environment
+  ---
+  duration_ms: 27.462834
+  type: 'test'
+  ...
+# Subtest: stable source fingerprints do not depend on object insertion order
+ok 116 - stable source fingerprints do not depend on object insertion order
+  ---
+  duration_ms: 0.057542
+  type: 'test'
+  ...
+# Subtest: enabled account lifecycle requires independent journal custody and separate retained authentication key
+ok 117 - enabled account lifecycle requires independent journal custody and separate retained authentication key
+  ---
+  duration_ms: 0.61575
+  type: 'test'
+  ...
+# Subtest: retiring legacy OTP or public lookup requires exact supported-client acceptance proof
+ok 118 - retiring legacy OTP or public lookup requires exact supported-client acceptance proof
+  ---
+  duration_ms: 0.41
+  type: 'test'
+  ...
+# Subtest: new retirement and maintenance flags reject spellings not accepted by their runtime parsers
+ok 119 - new retirement and maintenance flags reject spellings not accepted by their runtime parsers
+  ---
+  duration_ms: 0.831709
+  type: 'test'
+  ...
+# Subtest: operational webhook delivery needs explicit manifest and exact receiver acceptance
+ok 120 - operational webhook delivery needs explicit manifest and exact receiver acceptance
+  ---
+  duration_ms: 0.286416
+  type: 'test'
+  ...
+# Subtest: unset retained-reader environment preserves prior input and configuration-digest compatibility
+ok 121 - unset retained-reader environment preserves prior input and configuration-digest compatibility
+  ---
+  duration_ms: 0.2065
+  type: 'test'
+  ...
+# Subtest: configured retained readers need a registered label for every ID and expose no secret JSON
+ok 122 - configured retained readers need a registered label for every ID and expose no secret JSON
+  ---
+  duration_ms: 0.479375
+  type: 'test'
+  ...
+# Subtest: malformed, duplicate, oversized, and active-key-duplicate retained lists fail through a safe missing gate
+ok 123 - malformed, duplicate, oversized, and active-key-duplicate retained lists fail through a safe missing gate
+  ---
+  duration_ms: 0.959083
+  type: 'test'
+  ...
+# Subtest: retained-reader version labels are configuration evidence and invalidate stale exact-candidate proof
+ok 124 - retained-reader version labels are configuration evidence and invalidate stale exact-candidate proof
+  ---
+  duration_ms: 0.555208
+  type: 'test'
+  ...
+# Subtest: typed sync defaults off and older manifests without it remain compatible while off
+ok 125 - typed sync defaults off and older manifests without it remain compatible while off
+  ---
+  duration_ms: 0.270125
+  type: 'test'
+  ...
+# Subtest: typed sync activation requires exact acceptance proof and strict environment parity
+ok 126 - typed sync activation requires exact acceptance proof and strict environment parity
+  ---
+  duration_ms: 0.50025
+  type: 'test'
+  ...
+# Subtest: legacy scalar connection totals alone never approve the aggregate release budget
+ok 127 - legacy scalar connection totals alone never approve the aggregate release budget
+  ---
+  duration_ms: 0.134584
+  type: 'test'
+  ...
+# Subtest: rollout/reserve overflow, stale limits and mismatched primary totals remain missing gates despite passed proof labels
+ok 128 - rollout/reserve overflow, stale limits and mismatched primary totals remain missing gates despite passed proof labels
+  ---
+  duration_ms: 1.454875
+  type: 'test'
+  ...
+# Subtest: replica, mapping or reserve changes invalidate exact-source configuration acceptance
+ok 129 - replica, mapping or reserve changes invalidate exact-source configuration acceptance
+  ---
+  duration_ms: 0.402417
+  type: 'test'
+  ...
+# Subtest: enabled lifecycle, console and IMAP cannot omit their dedicated API/auth pools
+ok 130 - enabled lifecycle, console and IMAP cannot omit their dedicated API/auth pools
+  ---
+  duration_ms: 0.509042
+  type: 'test'
+  ...
+# Subtest: OTP process limits must be explicit, bounded and identical to the runtime environment
+ok 131 - OTP process limits must be explicit, bounded and identical to the runtime environment
+  ---
+  duration_ms: 1.14825
+  type: 'test'
+  ...
+# Subtest: OTP concurrency changes invalidate configuration evidence and require exact-source acceptance
+ok 132 - OTP concurrency changes invalidate configuration evidence and require exact-source acceptance
+  ---
+  duration_ms: 0.348875
+  type: 'test'
+  ...
+1..132
+# tests 132
+# suites 0
+# pass 132
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1952.843584

@@ -1,0 +1,143 @@
+{
+  "format": "pandapay-remaining-security-batch-verification-v1",
+  "verified_at_utc": "2026-10-23T18:34:20.613553+00:00",
+  "branch": "dev",
+  "base_commit": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+  "candidate_state": "uncommitted working changes; not deployed",
+  "scope": [
+    "R1 lounge POST relationship and legacy auth/lookup containment",
+    "R1 IMAP session lock lifecycle",
+    "R2 CORS/parser/migration collision boundaries",
+    "R3 logging schema/privacy/optional narrow grants slice"
+  ],
+  "source_file_sha256": {
+    ".env.prod.example": "a62c0854c5dffd4e7f4a5de9a2e1058b106ec7593236a97df7aff665729557e1",
+    ".env.staging.example": "f3a7d670ff73196b85677315f1982f31b79d5b677af6c13475b265c6f2473bb0",
+    ".github/workflows/build-and-test.yml": "4bd3d60038843ee90dccf697c2fd450dfc6aaa1ebb266b1461ca68c01381b2b1",
+    "api/src/cors_policy.js": "7db34b23a427460fac457cf12047afff7616ffb4ed99511134c67a1ce728b72d",
+    "api/src/imap_poller.js": "62ed325b0ef15fe97f045fa66d8e2488f421a1c34e88ac70b0273db48d736dc9",
+    "api/src/index.js": "83f205d184262ab9081405ecaef25dbade151427c04d4d4d96d7ae617f813bb3",
+    "api/src/lounge_usage_route.js": "64473167dd4b11bae327e2262e2cc490cf92ddf9d3513959af7cf13521c7460c",
+    "api/src/observability.js": "eb8a83e76a9f82f321f07f9e2569304330ff1ab26d5c9cbac24f8a867dfb840a",
+    "api/src/request_limits.js": "b98dff46e845735e9c4e7bd970948834ee03bd308aeb022eb4d506250bb128c8",
+    "api/test/imap_poller.test.js": "8bbcb6ce24fcb8813f4a0c8148b449ba3f585ad6a69c4dc0bfdb5953a80ded7f",
+    "api/test/lounge_usage_postgres.js": "f0841b0d22e8d117e925c3cd278347422f7728d4f19ca375c423b40a1877e2b4",
+    "api/test/lounge_usage_route.test.js": "1a7289a1c9fc854fe55955f7e909ce24a4f1110eadcca9368bec8aa908b5a574",
+    "api/test/observability.test.js": "be05f1be6aff4f4b7d6e072c52c141d50a68c3b9b512840e83c932d532c4312e",
+    "api/test/portable_backup_export.test.js": "c30578a7f51bd16de32abdcaf50612911797c530d836ac5f3da7f7a2b4d592b4",
+    "api/test/request_boundaries.test.js": "0348349bdaabaa0c563f8a5d26f47fe071f4d0003610d184d956b704155264f8",
+    "auth/db/migrations/0005_db_access_log.sql": "6f42cc59d995197847ebc13d62a39bb908ff0e9f741ad03284a1999990befe38",
+    "auth/scripts/migrate.js": "2354db3bba90f65f712ead5cf0d508f20b110f8a8b798c937e0494bd1e0a0e19",
+    "auth/scripts/runtimePermissions.js": "343d5563b08af8d866c8bdc811f33ebf9ee745513614e5cf0eb3b255ef0574ff",
+    "auth/src/index.js": "e26d8ec6131159e7aecf025b10af0b88bb4971c83cc12d6d545aa2429eaf7432",
+    "auth/src/middleware/dbAccessLogger.js": "72ea82a506db58a83820067e5b0d708dafc564c7619f716ada35dd3b29c04c7e",
+    "auth/src/middleware/requestLimits.js": "07b8829c9306e434238b6a7b2295f7d615194babb535812957f3d575183204b2",
+    "auth/src/observability.js": "f7acbe554275927a8974d88eaceaaf71b8a0b56b82bdbe89355d356de225b16d",
+    "auth/src/routes/authRoutes.js": "646efdab8dc7301d43831f150d111ef0300c000b1e5f2cf692d4138da03ed09c",
+    "auth/src/services/authReadiness.js": "3a182e482cb59850841c098850da3655d6f1c0b27acea0abfbbb0786026668b3",
+    "auth/test/auth_readiness.test.js": "57cc74993edb74fb6de4aa2112e2c54d752eed89e9b3d5c63c122ad6cee20380",
+    "auth/test/auth_runtime_permissions_postgres.js": "7e23805d46be78b2b78ec736156828003ac9cb94d23bf1dd8558582c77e5b85e",
+    "auth/test/db_access_logger.test.js": "ea3f059cc5ceadf557ade689ab43d69b1f6a9a7f2aa8b2f4011dd67999e4df7c",
+    "auth/test/observability.test.js": "cf17d788bcd78df81d8db944b1f7819b3787a7c82440d06e0e53e0dd9af2e328",
+    "auth/test/otp_delivery.test.js": "efabe218b0d7cbd07c52b952771463ffcc94eba414445817e4b7012459cf1fc2",
+    "auth/test/request_limits.test.js": "4b853026614cd776d614a9ec8d37f144c8b9114a183466a1748c97bc9bbd24b9",
+    "auth/test/runtime_permissions.test.js": "dfe91685f90dd9b4babbb1438617651d2e49e165f92959807f110e857d4012af",
+    "db/migration-prefix-exceptions.json": "119b28fe86abf8482bcf24c6ed15017c2c552275b45dde2fcef363e0a983089a",
+    "db/scripts/migration_prefix_policy.js": "111eceb83157dac21986b7102566e2a25d10195ed95880a498cd639041e883d0",
+    "db/scripts/product_migrate.js": "e79de63e139693dd3a89f7cb0793981a573f8d1925cc5951db9fa33e43668b9f",
+    "db/tests/migration_prefix_policy.test.js": "0aaa75b3da9f20c585cdf63c8ec8b0ee83e984c908aa14b08426c0cc17a0e5e9",
+    "db/tests/security_remaining_postgres.py": "e9a8dce27c0dd50307a2fcf956a591766c0f78af9b2d3afab4e6423dcd60febc",
+    "deploy/DEPLOY.md": "5d4a4f3cde21b1b56c937f7d977fa03c7190c54ad5cee585c0ce55ea3edb09cd",
+    "docker-compose.prod.yml": "aafbb3648185de8aae0e738fda11b0d4414c3de3ec73fbe97c318bf04826589c",
+    "docker-compose.staging.yml": "c1454e2d3628a4cc209829ade234f8522e7063f7df179f538063c608d3c94f74"
+  },
+  "checks": {
+    "api": {
+      "status": "passed",
+      "node": "22.23.4",
+      "passed": 868,
+      "skipped": 2,
+      "failed": 0,
+      "environment": "cached runtime container; external network disabled; read-only sanitized source; synthetic loopback servers"
+    },
+    "auth": {
+      "status": "passed",
+      "node": "22.23.4",
+      "passed": 163,
+      "skipped": 0,
+      "failed": 0,
+      "environment": "cached runtime container; external network disabled; synthetic HTTP/SMTP/DB doubles"
+    },
+    "database_unit": {
+      "status": "passed",
+      "node": "22.23.4",
+      "passed": 53,
+      "failed": 0
+    },
+    "backup_setup_unit": {
+      "status": "passed",
+      "passed": 45,
+      "failed": 0
+    },
+    "deployment_unit": {
+      "status": "passed",
+      "passed": 21,
+      "failed": 0
+    },
+    "postgres_role_fixtures": {
+      "status": "passed",
+      "postgres": "18.4 Homebrew",
+      "fixtures": [
+        "actual base migrations and non-owner lounge RLS/relationship/archive locking",
+        "optional audit schema adoption/replay and INSERT-only role; privilege loss readiness"
+      ]
+    },
+    "encrypted_recovery": {
+      "status": "passed",
+      "postgres": "18.4 Homebrew",
+      "data": "synthetic only",
+      "coverage": [
+        "fresh current merged migrations",
+        "idempotent replay",
+        "mixed legacy phone hash backfill",
+        "wrong-key rejection",
+        "runtime ledger denial",
+        "snapshot consistency under writes",
+        "paired age-encrypted v5 export",
+        "separate temporary cluster restore",
+        "table/schema/ACL/global-parameter comparison",
+        "grantor/grant-option preservation",
+        "fresh-target attestation/preflight refusal",
+        "key/identity verification",
+        "local PC mode and source-host rejection"
+      ]
+    },
+    "report_dom": {
+      "status": "passed",
+      "remediation_items": 68,
+      "current_security_status_rows": 18,
+      "local_links": 437,
+      "coverage": "status parity with Markdown; generated HTML reproducibility; tabs, filters, anchors, keyboard, search, zoom and offline resources"
+    }
+  },
+  "baseline": {
+    "base": "1025c02",
+    "node": "24.15.0",
+    "auth_passed": 154,
+    "api_passed": 847,
+    "api_skipped": 2,
+    "api_failed": 1,
+    "failure": "Portable export byte-cap fixture fixed a header budget after master added sections; production caps unchanged",
+    "initial_environment_limit": "sandbox denied loopback test listeners; rerun with local server access"
+  },
+  "preserved_preexisting_notification_files": 12,
+  "limitations": [
+    "No live queries/data mutation, provider send, deployment, key rotation or destructive cleanup",
+    "No current real-data PostgreSQL 17 or managed-provider certification; earlier real-data v5 proof predates merged migrations",
+    "App/console full suites and signed oldest-client/device behavior not rerun; no app/console implementation changed",
+    "Worker role/callback/status capabilities, browser cookies/CSRF, uniform public lookup, erasure/retention and password-free phone-only recovery remain planned",
+    "Optional DB access logging stays disabled by default; retention/access/load approval remains",
+    "Two independent off-host copies and separate recovery-key custody remain release gates",
+    "Cached Node 22 dependency runtimes reused; clean final release image/dependency/provider acceptance remains required"
+  ]
+}

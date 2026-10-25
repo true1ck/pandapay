@@ -1,0 +1,940 @@
+TAP version 13
+# Subtest: conflict proposal preserves every account and prefers the oldest verified account
+ok 1 - conflict proposal preserves every account and prefers the oldest verified account
+  ---
+  duration_ms: 2.006542
+  type: 'test'
+  ...
+# Subtest: review markdown contains masked email hints and no phone ciphertext/hash
+ok 2 - review markdown contains masked email hints and no phone ciphertext/hash
+  ---
+  duration_ms: 1.177291
+  type: 'test'
+  ...
+# Subtest: proposal rejects undefined deletion states and incomplete groups
+ok 3 - proposal rejects undefined deletion states and incomplete groups
+  ---
+  duration_ms: 0.447167
+  type: 'test'
+  ...
+# Subtest: identifiers are strictly quoted; SQL/customer-looking values never interpolate as code
+ok 4 - identifiers are strictly quoted; SQL/customer-looking values never interpolate as code
+  ---
+  duration_ms: 0.551375
+  type: 'test'
+  ...
+# Subtest: cap/benefit candidates preserve every other business discriminator and normalize only approved labels
+ok 5 - cap/benefit candidates preserve every other business discriminator and normalize only approved labels
+  ---
+  duration_ms: 0.184417
+  type: 'test'
+  ...
+# Subtest: parser equivalence preserves regex, field mapping, version and active state without regex normalization
+ok 6 - parser equivalence preserves regex, field mapping, version and active state without regex normalization
+  ---
+  duration_ms: 0.071125
+  type: 'test'
+  ...
+# Subtest: versioned label identity reviews keep all unique keys and distinguish broader locale candidates
+ok 7 - versioned label identity reviews keep all unique keys and distinguish broader locale candidates
+  ---
+  duration_ms: 0.565458
+  type: 'test'
+  ...
+# Subtest: financial values and whole-row snapshots stay inside database aggregate digests
+ok 8 - financial values and whole-row snapshots stay inside database aggregate digests
+  ---
+  duration_ms: 0.102667
+  type: 'test'
+  ...
+# Subtest: composite FK review handles MATCH SIMPLE nulls and MATCH FULL partial-null failures
+ok 9 - composite FK review handles MATCH SIMPLE nulls and MATCH FULL partial-null failures
+  ---
+  duration_ms: 0.126291
+  type: 'test'
+  ...
+# Subtest: index equivalence respects uniqueness, opclasses, predicate, expression, null and covering semantics
+ok 10 - index equivalence respects uniqueness, opclasses, predicate, expression, null and covering semantics
+  ---
+  duration_ms: 0.266584
+  type: 'test'
+  ...
+# Subtest: review requires explicit restored-copy acknowledgement and never falls back to live/ambient DB URLs
+ok 11 - review requires explicit restored-copy acknowledgement and never falls back to live/ambient DB URLs
+  ---
+  duration_ms: 0.985292
+  type: 'test'
+  ...
+# Subtest: read-only repeatable snapshot applies statement/resource/timezone bounds and reports explicit missing rules
+ok 12 - read-only repeatable snapshot applies statement/resource/timezone bounds and reports explicit missing rules
+  ---
+  duration_ms: 2.365375
+  type: 'test'
+  ...
+# Subtest: one query timeout is isolated by savepoint and cannot claim a complete review
+ok 13 - one query timeout is isolated by savepoint and cannot claim a complete review
+  ---
+  duration_ms: 0.881417
+  type: 'test'
+  ...
+# Subtest: table/count/deadline budgets stop expensive checks without silently passing
+ok 14 - table/count/deadline budgets stop expensive checks without silently passing
+  ---
+  duration_ms: 0.455417
+  type: 'test'
+  ...
+# Subtest: catalog truncation aborts and rolls back instead of returning a partial inventory
+ok 15 - catalog truncation aborts and rolls back instead of returning a partial inventory
+  ---
+  duration_ms: 0.184958
+  type: 'test'
+  ...
+# Subtest: dry-run is count-only and never validates transport configuration
+ok 16 - dry-run is count-only and never validates transport configuration
+  ---
+  duration_ms: 0.838166
+  type: 'test'
+  ...
+# Subtest: payload is fixed and omits timestamps, acknowledgment, and arbitrary fields
+ok 17 - payload is fixed and omits timestamps, acknowledgment, and arbitrary fields
+  ---
+  duration_ms: 0.075458
+  type: 'test'
+  ...
+# Subtest: webhook URL requires exact preconfigured HTTPS hostname
+ok 18 - webhook URL requires exact preconfigured HTTPS hostname
+  ---
+  duration_ms: 0.186583
+  type: 'test'
+  ...
+# Subtest: DNS validation rejects mixed public and private answers
+ok 19 - DNS validation rejects mixed public and private answers
+  ---
+  duration_ms: 3.153208
+  type: 'test'
+  ...
+# Subtest: delivery stores successful identities and skips acknowledged rows without acknowledging them
+ok 20 - delivery stores successful identities and skips acknowledged rows without acknowledging them
+  ---
+  duration_ms: 19.727167
+  type: 'test'
+  ...
+# Subtest: uncertain/failed send remains pending and is retried with same idempotency key
+ok 21 - uncertain/failed send remains pending and is retried with same idempotency key
+  ---
+  duration_ms: 31.800084
+  type: 'test'
+  ...
+# Subtest: state parser rejects oversized, tampered, invalid, and symlinked state
+ok 22 - state parser rejects oversized, tampered, invalid, and symlinked state
+  ---
+  duration_ms: 0.819334
+  type: 'test'
+  ...
+# Subtest: atomic private state writer round-trips bounded identities
+ok 23 - atomic private state writer round-trips bounded identities
+  ---
+  duration_ms: 15.89
+  type: 'test'
+  ...
+# Subtest: CLI default path is read-only dry-run and send requires exact enable flag
+ok 24 - CLI default path is read-only dry-run and send requires exact enable flag
+  ---
+  duration_ms: 0.431459
+  type: 'test'
+  ...
+# Subtest: auth-retention notice is accepted and source identities prevent cross-host collisions
+ok 25 - auth-retention notice is accepted and source identities prevent cross-host collisions
+  ---
+  duration_ms: 0.157792
+  type: 'test'
+  ...
+# Subtest: special IPv6 spellings and mapped/private destinations are refused
+ok 26 - special IPv6 spellings and mapped/private destinations are refused
+  ---
+  duration_ms: 0.135208
+  type: 'test'
+  ...
+# Subtest: unsafe state directory refuses delivery before any webhook side effect
+ok 27 - unsafe state directory refuses delivery before any webhook side effect
+  ---
+  duration_ms: 5.166834
+  type: 'test'
+  ...
+# Subtest: a state file is bound to its original source identity
+ok 28 - a state file is bound to its original source identity
+  ---
+  duration_ms: 24.41275
+  type: 'test'
+  ...
+# Subtest: TLS URL options cannot replace strict certificate or hostname verification
+ok 29 - TLS URL options cannot replace strict certificate or hostname verification
+  ---
+  duration_ms: 1.034917
+  type: 'test'
+  ...
+# Subtest: HTTPS transport supports all-address lookup and bounds response/timeout without live network
+ok 30 - HTTPS transport supports all-address lookup and bounds response/timeout without live network
+  ---
+  duration_ms: 5.769042
+  type: 'test'
+  ...
+# Subtest: reader identity rejects writer capabilities and privileged or direct table access
+ok 31 - reader identity rejects writer capabilities and privileged or direct table access
+  ---
+  duration_ms: 0.826167
+  type: 'test'
+  ...
+# Subtest: flags reject non-boolean spellings even in diagnostic mode
+ok 32 - flags reject non-boolean spellings even in diagnostic mode
+  ---
+  duration_ms: 0.062625
+  type: 'test'
+  ...
+# Subtest: product migration diagnostics omit database messages, details and nested causes
+ok 33 - product migration diagnostics omit database messages, details and nested causes
+  ---
+  duration_ms: 0.480833
+  type: 'test'
+  ...
+# Subtest: product migration diagnostics retain reviewed filenames and fixed failure category
+ok 34 - product migration diagnostics retain reviewed filenames and fixed failure category
+  ---
+  duration_ms: 0.440625
+  type: 'test'
+  ...
+# Subtest: current full inventories retain exact reviewed historical collisions
+ok 35 - current full inventories retain exact reviewed historical collisions
+  ---
+  duration_ms: 3.97425
+  type: 'test'
+  ...
+# Subtest: unique new prefixes are accepted but additional historical and new collisions are refused
+ok 36 - unique new prefixes are accepted but additional historical and new collisions are refused
+  ---
+  duration_ms: 0.761666
+  type: 'test'
+  ...
+# Subtest: removing or renaming reviewed history cannot broaden an exception
+ok 37 - removing or renaming reviewed history cannot broaden an exception
+  ---
+  duration_ms: 0.473
+  type: 'test'
+  ...
+# Subtest: unreadable/malformed manifests and duplicate filenames fail closed
+ok 38 - unreadable/malformed manifests and duplicate filenames fail closed
+  ---
+  duration_ms: 13.306708
+  type: 'test'
+  ...
+# Subtest: product apply and preflight reject collisions before contacting a database
+ok 39 - product apply and preflight reject collisions before contacting a database
+  ---
+  duration_ms: 6.731833
+  type: 'test'
+  ...
+# Subtest: product CLI diagnostic is one machine-readable safe JSON line
+ok 40 - product CLI diagnostic is one machine-readable safe JSON line
+  ---
+  duration_ms: 0.92775
+  type: 'test'
+  ...
+# Subtest: the complete existing product migration chain can be ledgered transactionally
+ok 41 - the complete existing product migration chain can be ledgered transactionally
+  ---
+  duration_ms: 11.622708
+  type: 'test'
+  ...
+# Subtest: outer transactions are normalized without changing quoted SQL and PL/pgSQL
+ok 42 - outer transactions are normalized without changing quoted SQL and PL/pgSQL
+  ---
+  duration_ms: 0.301292
+  type: 'test'
+  ...
+# Subtest: DDL and checksum ledger commit atomically and release the session lock
+ok 43 - DDL and checksum ledger commit atomically and release the session lock
+  ---
+  duration_ms: 4.168667
+  type: 'test'
+  ...
+# Subtest: failed DDL rolls back and never writes a success ledger entry
+ok 44 - failed DDL rolls back and never writes a success ledger entry
+  ---
+  duration_ms: 10.172583
+  type: 'test'
+  ...
+# Subtest: changed history and unreviewed checksum adoption fail before new DDL
+ok 45 - changed history and unreviewed checksum adoption fail before new DDL
+  ---
+  duration_ms: 18.956417
+  type: 'test'
+  ...
+# Subtest: explicit reviewed adoption records checksum without replaying historical DDL
+ok 46 - explicit reviewed adoption records checksum without replaying historical DDL
+  ---
+  duration_ms: 10.007
+  type: 'test'
+  ...
+# Subtest: unknown historical migrations and changed reviewed schema block adoption
+ok 47 - unknown historical migrations and changed reviewed schema block adoption
+  ---
+  duration_ms: 38.135375
+  type: 'test'
+  ...
+# Subtest: legacy v1 baseline is rejected and requires a fresh independently reviewed v2 capture
+ok 48 - legacy v1 baseline is rejected and requires a fresh independently reviewed v2 capture
+  ---
+  duration_ms: 12.318042
+  type: 'test'
+  ...
+# Subtest: a concurrent migration cannot start any DDL
+ok 49 - a concurrent migration cannot start any DDL
+  ---
+  duration_ms: 5.656791
+  type: 'test'
+  ...
+# Subtest: read-only baseline ledger and schema dump share one held snapshot
+ok 50 - read-only baseline ledger and schema dump share one held snapshot
+  ---
+  duration_ms: 7.612042
+  type: 'test'
+  ...
+# Subtest: baseline failure releases the held read-only snapshot
+ok 51 - baseline failure releases the held read-only snapshot
+  ---
+  duration_ms: 0.952708
+  type: 'test'
+  ...
+# Subtest: empty database preflight is read-only and reports pending work without bootstrapping
+ok 52 - empty database preflight is read-only and reports pending work without bootstrapping
+  ---
+  duration_ms: 1.159625
+  type: 'test'
+  ...
+# Subtest: legacy preflight requires matching reviewed schema/history but never adopts checksums
+ok 53 - legacy preflight requires matching reviewed schema/history but never adopts checksums
+  ---
+  duration_ms: 1.517667
+  type: 'test'
+  ...
+# Subtest: preflight rejects unknown history before generating any schema fingerprint
+ok 54 - preflight rejects unknown history before generating any schema fingerprint
+  ---
+  duration_ms: 0.778209
+  type: 'test'
+  ...
+# Subtest: product target requires the generated loopback database and both attestations
+ok 55 - product target requires the generated loopback database and both attestations
+  ---
+  duration_ms: 8.598958
+  type: 'test'
+  ...
+# Subtest: foreign tables fail closed without querying their external data source
+ok 56 - foreign tables fail closed without querying their external data source
+  ---
+  duration_ms: 0.815708
+  type: 'test'
+  ...
+# Subtest: migration child environment carries only the restored target and disposable role credentials
+ok 57 - migration child environment carries only the restored target and disposable role credentials
+  ---
+  duration_ms: 14.853334
+  type: 'test'
+  ...
+# Subtest: row fingerprint cursor orders canonical JSON text under C collation
+ok 58 - row fingerprint cursor orders canonical JSON text under C collation
+  ---
+  duration_ms: 0.5305
+  type: 'test'
+  ...
+# Subtest: recovery adapter inputs and pgpass path are bounded before inheritance
+ok 59 - recovery adapter inputs and pgpass path are bounded before inheritance
+  ---
+  duration_ms: 4.668917
+  type: 'test'
+  ...
+# Subtest: failure diagnostics expose only fixed categories
+ok 60 - failure diagnostics expose only fixed categories
+  ---
+  duration_ms: 0.609917
+  type: 'test'
+  ...
+# Subtest: bounded migration diagnostics retain only an anchored allowlisted category
+ok 61 - bounded migration diagnostics retain only an anchored allowlisted category
+  ---
+  duration_ms: 2.114458
+  type: 'test'
+  ...
+# Subtest: bounded command failures classify only fixed missing-module categories and retain their stage
+ok 62 - bounded command failures classify only fixed missing-module categories and retain their stage
+  ---
+  duration_ms: 0.589375
+  type: 'test'
+  ...
+# Subtest: data equality uses original table columns and preserves every original ledger identity
+ok 63 - data equality uses original table columns and preserves every original ledger identity
+  ---
+  duration_ms: 0.176625
+  type: 'test'
+  ...
+# Subtest: role preservation keeps existing worker roles and rejects optional SMS role creation
+ok 64 - role preservation keeps existing worker roles and rejects optional SMS role creation
+  ---
+  duration_ms: 0.127625
+  type: 'test'
+  ...
+# Subtest: all product ledger entries must match known local migration checksums
+ok 65 - all product ledger entries must match known local migration checksums
+  ---
+  duration_ms: 12.126292
+  type: 'test'
+  ...
+# Subtest: rehearsal orders check, apply, replay and verifies the synthetic restored copy
+ok 66 - rehearsal orders check, apply, replay and verifies the synthetic restored copy
+  ---
+  duration_ms: 6.593166
+  type: 'test'
+  ...
+# Subtest: offline dependency inventory is deterministic and separates lock state from declarations
+ok 67 - offline dependency inventory is deterministic and separates lock state from declarations
+  ---
+  duration_ms: 23.031
+  type: 'test'
+  ...
+# Subtest: missing locks remain unresolved and declarations never claim resolved dependencies
+ok 68 - missing locks remain unresolved and declarations never claim resolved dependencies
+  ---
+  duration_ms: 2.454417
+  type: 'test'
+  ...
+# Subtest: fixture inventory fails closed for malformed, oversized, unsafe, and symlinked inputs
+ok 69 - fixture inventory fails closed for malformed, oversized, unsafe, and symlinked inputs
+  ---
+  duration_ms: 49.414542
+  type: 'test'
+  ...
+# Subtest: inventory reports hashes and metadata without exposing lock URLs or duplicate content
+ok 70 - inventory reports hashes and metadata without exposing lock URLs or duplicate content
+  ---
+  duration_ms: 17.997625
+  type: 'test'
+  ...
+# Subtest: source and bounded history report locations/counts only and exclude env/key paths
+ok 71 - source and bounded history report locations/counts only and exclude env/key paths
+  ---
+  duration_ms: 247.003541
+  type: 'test'
+  ...
+# Subtest: symlinked eligible source fails closed without serializing file contents
+ok 72 - symlinked eligible source fails closed without serializing file contents
+  ---
+  duration_ms: 21.941417
+  type: 'test'
+  ...
+# Subtest: ZIP scan redacts matches, validates bounds, and rejects unsafe/truncated archives
+ok 73 - ZIP scan redacts matches, validates bounds, and rejects unsafe/truncated archives
+  ---
+  duration_ms: 232.229208
+  type: 'test'
+  ...
+# Subtest: audit output contains no matches or source context, only rule/file/line/count fields
+ok 74 - audit output contains no matches or source context, only rule/file/line/count fields
+  ---
+  duration_ms: 116.365125
+  type: 'test'
+  ...
+# Subtest: default template preserves missing actual host/custody/device gates and no deployment
+ok 75 - default template preserves missing actual host/custody/device gates and no deployment
+  ---
+  duration_ms: 2.452625
+  type: 'test'
+  ...
+# Subtest: consistent synthetic metadata fixture exercises fully supplied gate logic without reading external systems
+ok 76 - consistent synthetic metadata fixture exercises fully supplied gate logic without reading external systems
+  ---
+  duration_ms: 1.698875
+  type: 'test'
+  ...
+# Subtest: prior partial batch record and stale/foreign source evidence never become full-candidate proof
+ok 77 - prior partial batch record and stale/foreign source evidence never become full-candidate proof
+  ---
+  duration_ms: 0.524
+  type: 'test'
+  ...
+# Subtest: synthetic restore/upgrade tests cannot satisfy actual-data/provider release acceptance
+ok 78 - synthetic restore/upgrade tests cannot satisfy actual-data/provider release acceptance
+  ---
+  duration_ms: 0.162792
+  type: 'test'
+  ...
+# Subtest: freshness, proof hash, failures and per-check candidate binding are enforced
+ok 79 - freshness, proof hash, failures and per-check candidate binding are enforced
+  ---
+  duration_ms: 1.535708
+  type: 'test'
+  ...
+# Subtest: privilege policy drift, incomplete reports and wrong report scope cannot pass
+ok 80 - privilege policy drift, incomplete reports and wrong report scope cannot pass
+  ---
+  duration_ms: 0.384833
+  type: 'test'
+  ...
+# Subtest: one local PC and absent independent key custody stay missing; connection budgets must fit verified host limits
+ok 81 - one local PC and absent independent key custody stay missing; connection budgets must fit verified host limits
+  ---
+  duration_ms: 0.106209
+  type: 'test'
+  ...
+# Subtest: key inventory exports only names/presence and never hashes or reveals actual key values/IDs
+ok 82 - key inventory exports only names/presence and never hashes or reveals actual key values/IDs
+  ---
+  duration_ms: 0.191792
+  type: 'test'
+  ...
+# Subtest: feature manifest mismatches cannot silently enable browser/worker/recovery behavior
+ok 83 - feature manifest mismatches cannot silently enable browser/worker/recovery behavior
+  ---
+  duration_ms: 0.148666
+  type: 'test'
+  ...
+# Subtest: enabled optional features require their own acceptance proof, including IMAP interval configuration
+ok 84 - enabled optional features require their own acceptance proof, including IMAP interval configuration
+  ---
+  duration_ms: 0.165208
+  type: 'test'
+  ...
+# Subtest: provider, role, feature or retained-key version metadata changes invalidate imported release evidence
+ok 85 - provider, role, feature or retained-key version metadata changes invalidate imported release evidence
+  ---
+  duration_ms: 1.166625
+  type: 'test'
+  ...
+# Subtest: unknown/credential-containing manifest properties are rejected before output
+ok 86 - unknown/credential-containing manifest properties are rejected before output
+  ---
+  duration_ms: 0.2245
+  type: 'test'
+  ...
+# Subtest: source scope excludes .env, private key material, generated artifacts and unrelated files
+ok 87 - source scope excludes .env, private key material, generated artifacts and unrelated files
+  ---
+  duration_ms: 0.550958
+  type: 'test'
+  ...
+# Subtest: candidate hashing includes dirty/untracked/deleted release code and refuses concurrent edits
+ok 88 - candidate hashing includes dirty/untracked/deleted release code and refuses concurrent edits
+  ---
+  duration_ms: 242.012792
+  type: 'test'
+  ...
+# Subtest: input files are bounded regular non-symlinks; evidence cannot escape through relative paths or directory symlinks
+ok 89 - input files are bounded regular non-symlinks; evidence cannot escape through relative paths or directory symlinks
+  ---
+  duration_ms: 0.952125
+  type: 'test'
+  ...
+# Subtest: report/proof imports verify bytes without exposing their raw contents
+ok 90 - report/proof imports verify bytes without exposing their raw contents
+  ---
+  duration_ms: 1.178166
+  type: 'test'
+  ...
+# Subtest: template CLI is bounded read-only and does not import secret values from environment
+ok 91 - template CLI is bounded read-only and does not import secret values from environment
+  ---
+  duration_ms: 28.24825
+  type: 'test'
+  ...
+# Subtest: stable source fingerprints do not depend on object insertion order
+ok 92 - stable source fingerprints do not depend on object insertion order
+  ---
+  duration_ms: 0.079959
+  type: 'test'
+  ...
+# Subtest: enabled account lifecycle requires independent journal custody and separate retained authentication key
+ok 93 - enabled account lifecycle requires independent journal custody and separate retained authentication key
+  ---
+  duration_ms: 0.1965
+  type: 'test'
+  ...
+# Subtest: retiring legacy OTP or public lookup requires exact supported-client acceptance proof
+ok 94 - retiring legacy OTP or public lookup requires exact supported-client acceptance proof
+  ---
+  duration_ms: 0.175
+  type: 'test'
+  ...
+# Subtest: new retirement and maintenance flags reject spellings not accepted by their runtime parsers
+ok 95 - new retirement and maintenance flags reject spellings not accepted by their runtime parsers
+  ---
+  duration_ms: 0.255625
+  type: 'test'
+  ...
+# Subtest: operational webhook delivery needs explicit manifest and exact receiver acceptance
+ok 96 - operational webhook delivery needs explicit manifest and exact receiver acceptance
+  ---
+  duration_ms: 0.169084
+  type: 'test'
+  ...
+# Subtest: validates reviewed proposal shape, keeper, state digest, and verified secondary email
+ok 97 - validates reviewed proposal shape, keeper, state digest, and verified secondary email
+  ---
+  duration_ms: 1.222292
+  type: 'test'
+  ...
+# Subtest: rejects stale inventory and any extra current active account in a shared phone group
+ok 98 - rejects stale inventory and any extra current active account in a shared phone group
+  ---
+  duration_ms: 0.216083
+  type: 'test'
+  ...
+# Subtest: approval binds the exact encrypted plan digest and deterministic resolution ID
+ok 99 - approval binds the exact encrypted plan digest and deterministic resolution ID
+  ---
+  duration_ms: 0.142833
+  type: 'test'
+  ...
+# Subtest: replay accepts only complete, checksummed encrypted history and exact resolved state
+ok 100 - replay accepts only complete, checksummed encrypted history and exact resolved state
+  ---
+  duration_ms: 0.397834
+  type: 'test'
+  ...
+# Subtest: apply transaction archives before clearing only secondary phone fields and commits atomically
+ok 101 - apply transaction archives before clearing only secondary phone fields and commits atomically
+  ---
+  duration_ms: 0.570958
+  type: 'test'
+  ...
+# Subtest: archive failure rolls back the whole group and exposes no data through safe error
+ok 102 - archive failure rolls back the whole group and exposes no data through safe error
+  ---
+  duration_ms: 0.147791
+  type: 'test'
+  ...
+# Subtest: review deterministically describes current locks and preserves unknown license evidence
+ok 103 - review deterministically describes current locks and preserves unknown license evidence
+  ---
+  duration_ms: 104.140167
+  type: 'test'
+  ...
+# Subtest: Dart and Podfile lock readers preserve exact package/version/source boundaries
+ok 104 - Dart and Podfile lock readers preserve exact package/version/source boundaries
+  ---
+  duration_ms: 0.078833
+  type: 'test'
+  ...
+# Subtest: malformed locks and unsafe files fail closed
+ok 105 - malformed locks and unsafe files fail closed
+  ---
+  duration_ms: 1.380042
+  type: 'test'
+  ...
+# Subtest: Dart package metadata cannot escape cache or silently accept malformed input
+ok 106 - Dart package metadata cannot escape cache or silently accept malformed input
+  ---
+  duration_ms: 0.12425
+  type: 'test'
+  ...
+# Subtest: CLI marks unresolved review incomplete with a failing exit code
+ok 107 - CLI marks unresolved review incomplete with a failing exit code
+  ---
+  duration_ms: 49.871875
+  type: 'test'
+  ...
+# Subtest: quotes identifiers and only accepts explicit exact reviewed decisions
+ok 108 - quotes identifiers and only accepts explicit exact reviewed decisions
+  ---
+  duration_ms: 1.773916
+  type: 'test'
+  ...
+# Subtest: CLI requires restored-copy acknowledgement and quiesced reviewed execution
+ok 109 - CLI requires restored-copy acknowledgement and quiesced reviewed execution
+  ---
+  duration_ms: 0.265584
+  type: 'test'
+  ...
+# Subtest: an explicit retain decision produces a no-op plan, never an inferred drop
+ok 110 - an explicit retain decision produces a no-op plan, never an inferred drop
+  ---
+  duration_ms: 0.655792
+  type: 'test'
+  ...
+# Subtest: refuses all protected or uncertain index classes and semantic mismatches
+ok 111 - refuses all protected or uncertain index classes and semantic mismatches
+  ---
+  duration_ms: 0.190542
+  type: 'test'
+  ...
+# Subtest: rejects incomplete dependency inventory, stale measurements, altered definitions and unknown dependencies
+ok 112 - rejects incomplete dependency inventory, stale measurements, altered definitions and unknown dependencies
+  ---
+  duration_ms: 1.440083
+  type: 'test'
+  ...
+# Subtest: requires measurements, exact target binding and rollback rehearsal receipt before apply
+ok 113 - requires measurements, exact target binding and rollback rehearsal receipt before apply
+  ---
+  duration_ms: 0.767584
+  type: 'test'
+  ...
+# Subtest: rehearsal rolls back and returns original recreation definition
+ok 114 - rehearsal rolls back and returns original recreation definition
+  ---
+  duration_ms: 0.445791
+  type: 'test'
+  ...
+# Subtest: dropping or retaining a non-live index is refused
+ok 115 - dropping or retaining a non-live index is refused
+  ---
+  duration_ms: 0.051125
+  type: 'test'
+  ...
+# Subtest: exact unique constraint can protect a redundant nonunique index without losing uniqueness
+ok 116 - exact unique constraint can protect a redundant nonunique index without losing uniqueness
+  ---
+  duration_ms: 0.075625
+  type: 'test'
+  ...
+# Subtest: explicit review generates only an exact quoted REVOKE with RESTRICT
+ok 117 - explicit review generates only an exact quoted REVOKE with RESTRICT
+  ---
+  duration_ms: 11.397209
+  type: 'test'
+  ...
+# Subtest: catalog, policy, target, source, reviewer and evidence drift all refuse planning
+ok 118 - catalog, policy, target, source, reviewer and evidence drift all refuse planning
+  ---
+  duration_ms: 3.470333
+  type: 'test'
+  ...
+# Subtest: PUBLIC, owners, inherited membership, unknown grants, extensions and alternate grantor are refused
+ok 119 - PUBLIC, owners, inherited membership, unknown grants, extensions and alternate grantor are refused
+  ---
+  duration_ms: 2.071
+  type: 'test'
+  ...
+# Subtest: required capability EXECUTE cannot be revoked by its direct grantee
+ok 120 - required capability EXECUTE cannot be revoked by its direct grantee
+  ---
+  duration_ms: 0.308208
+  type: 'test'
+  ...
+# Subtest: grant-option removal retains ordinary data access
+ok 121 - grant-option removal retains ordinary data access
+  ---
+  duration_ms: 0.638792
+  type: 'test'
+  ...
+# Subtest: exact loss verification preserves all other schema/table/column/capability access
+ok 122 - exact loss verification preserves all other schema/table/column/capability access
+  ---
+  duration_ms: 0.474958
+  type: 'test'
+  ...
+# Subtest: default rehearsal rolls back after proving exact catalog and effective-access result
+ok 123 - default rehearsal rolls back after proving exact catalog and effective-access result
+  ---
+  duration_ms: 1.154458
+  type: 'test'
+  ...
+# Subtest: apply requires receipt for identical plan/catalog/source/target and its rehearsed result
+ok 124 - apply requires receipt for identical plan/catalog/source/target and its rehearsed result
+  ---
+  duration_ms: 3.07975
+  type: 'test'
+  ...
+# Subtest: tampering, catalog drift, query failures and source changes all fail with rollback
+ok 125 - tampering, catalog drift, query failures and source changes all fail with rollback
+  ---
+  duration_ms: 2.041042
+  type: 'test'
+  ...
+# Subtest: repair requires explicit maintenance acknowledgement and a source recheck dependency
+ok 126 - repair requires explicit maintenance acknowledgement and a source recheck dependency
+  ---
+  duration_ms: 0.325333
+  type: 'test'
+  ...
+# Subtest: repair CLI never consumes ambient URLs or remotely disabled TLS
+ok 127 - repair CLI never consumes ambient URLs or remotely disabled TLS
+  ---
+  duration_ms: 0.647042
+  type: 'test'
+  ...
+# Subtest: reviewed healthy role inventory passes without altering source policy
+ok 128 - reviewed healthy role inventory passes without altering source policy
+  ---
+  duration_ms: 0.895583
+  type: 'test'
+  ...
+# Subtest: PUBLIC relation and column access and effective migration-ledger access are blocking
+ok 129 - PUBLIC relation and column access and effective migration-ledger access are blocking
+  ---
+  duration_ms: 5.680625
+  type: 'test'
+  ...
+# Subtest: owner/superuser/RLS/view and DDL-like grants are inventoried as failures
+ok 130 - owner/superuser/RLS/view and DDL-like grants are inventoried as failures
+  ---
+  duration_ms: 0.224917
+  type: 'test'
+  ...
+# Subtest: nested membership and SET/ADMIN permission to definer owners fail
+ok 131 - nested membership and SET/ADMIN permission to definer owners fail
+  ---
+  duration_ms: 0.094542
+  type: 'test'
+  ...
+# Subtest: definer bodies remain fingerprints; unsafe ownership/search paths/PUBLIC execution fail
+ok 132 - definer bodies remain fingerprints; unsafe ownership/search paths/PUBLIC execution fail
+  ---
+  duration_ms: 0.158958
+  type: 'test'
+  ...
+# Subtest: explicit and implicit future PUBLIC defaults and runtime table defaults require review
+ok 133 - explicit and implicit future PUBLIC defaults and runtime table defaults require review
+  ---
+  duration_ms: 0.903958
+  type: 'test'
+  ...
+# Subtest: dedicated service roles cannot gain unexpected direct table/column or routine access
+ok 134 - dedicated service roles cannot gain unexpected direct table/column or routine access
+  ---
+  duration_ms: 0.111458
+  type: 'test'
+  ...
+# Subtest: exceptions are exact, expiring and invalidated by object/body drift
+ok 135 - exceptions are exact, expiring and invalidated by object/body drift
+  ---
+  duration_ms: 0.217875
+  type: 'test'
+  ...
+# Subtest: audit uses a bounded repeatable-read read-only transaction and catalog-only queries
+ok 136 - audit uses a bounded repeatable-read read-only transaction and catalog-only queries
+  ---
+  duration_ms: 1.207375
+  type: 'test'
+  ...
+# Subtest: truncated catalog inventory fails closed and rolls back
+ok 137 - truncated catalog inventory fails closed and rolls back
+  ---
+  duration_ms: 0.282458
+  type: 'test'
+  ...
+# Subtest: database errors roll back and do not produce a partial report
+ok 138 - database errors roll back and do not produce a partial report
+  ---
+  duration_ms: 0.45025
+  type: 'test'
+  ...
+# Subtest: invalid/missing roles, policy exceptions and arguments fail safely
+ok 139 - invalid/missing roles, policy exceptions and arguments fail safely
+  ---
+  duration_ms: 0.235167
+  type: 'test'
+  ...
+# Subtest: repository policies are explicit, require separate auth runtime configuration and grant no exceptions
+ok 140 - repository policies are explicit, require separate auth runtime configuration and grant no exceptions
+  ---
+  duration_ms: 0.858667
+  type: 'test'
+  ...
+# Subtest: runtime grant options and maintenance permissions cannot hide in ordinary grants
+ok 141 - runtime grant options and maintenance permissions cannot hide in ordinary grants
+  ---
+  duration_ms: 0.11325
+  type: 'test'
+  ...
+# Subtest: audit TLS cannot be disabled for remote production and never uses ambient DB credentials
+ok 142 - audit TLS cannot be disabled for remote production and never uses ambient DB credentials
+  ---
+  duration_ms: 0.572542
+  type: 'test'
+  ...
+# Subtest: catalog ordering is independent of database collation without sorting tuple positions
+ok 143 - catalog ordering is independent of database collation without sorting tuple positions
+  ---
+  duration_ms: 0.876834
+  type: 'test'
+  ...
+# Subtest: normalizes a CHECK only in its matching table DDL statement
+ok 144 - normalizes a CHECK only in its matching table DDL statement
+  ---
+  duration_ms: 0.942083
+  type: 'test'
+  ...
+# Subtest: normalizes named inline table and domain CHECK clauses by object identity
+ok 145 - normalizes named inline table and domain CHECK clauses by object identity
+  ---
+  duration_ms: 0.2465
+  type: 'test'
+  ...
+# Subtest: SQL result uses the always-quoted identifier expected by quote-all-identifiers pg_dump
+ok 146 - SQL result uses the always-quoted identifier expected by quote-all-identifiers pg_dump
+  ---
+  duration_ms: 0.437
+  type: 'test'
+  ...
+# Subtest: does not normalize real CHECK operator or value changes
+ok 147 - does not normalize real CHECK operator or value changes
+  ---
+  duration_ms: 0.191916
+  type: 'test'
+  ...
+# Subtest: equivalent grouped CHECK dumps fingerprint identically after narrow normalization
+ok 148 - equivalent grouped CHECK dumps fingerprint identically after narrow normalization
+  ---
+  duration_ms: 0.659042
+  type: 'test'
+  ...
+# Subtest: effective ACL grant and owner drift each change the baseline fingerprint
+ok 149 - effective ACL grant and owner drift each change the baseline fingerprint
+  ---
+  duration_ms: 0.228334
+  type: 'test'
+  ...
+# Subtest: extension member identity includes non-relation and non-routine classes
+ok 150 - extension member identity includes non-relation and non-routine classes
+  ---
+  duration_ms: 0.114084
+  type: 'test'
+  ...
+# Subtest: new ACL catalog collections canonicalize ACL ordering and preserve privilege drift
+ok 151 - new ACL catalog collections canonicalize ACL ordering and preserve privilege drift
+  ---
+  duration_ms: 0.450375
+  type: 'test'
+  ...
+# Subtest: ACL catalog query captures all portable ACL identities and does not read large-object contents
+ok 152 - ACL catalog query captures all portable ACL identities and does not read large-object contents
+  ---
+  duration_ms: 0.297708
+  type: 'test'
+  ...
+# Subtest: blank opt-in service credentials perform no SQL
+ok 153 - blank opt-in service credentials perform no SQL
+  ---
+  duration_ms: 0.481542
+  type: 'test'
+  ...
+# Subtest: bootstrap creates one narrow login with server-quoted password and EXECUTE capability membership
+ok 154 - bootstrap creates one narrow login with server-quoted password and EXECUTE capability membership
+  ---
+  duration_ms: 0.272625
+  type: 'test'
+  ...
+# Subtest: repeat bootstrap preserves credentials and refuses unsafe existing identities
+ok 155 - repeat bootstrap preserves credentials and refuses unsafe existing identities
+  ---
+  duration_ms: 0.278541
+  type: 'test'
+  ...
+1..155
+# tests 155
+# suites 0
+# pass 155
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 664.6325

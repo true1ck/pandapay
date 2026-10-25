@@ -1,0 +1,40 @@
+{
+  "verified_at_utc": "2026-10-24T11:14:04.607862+00:00",
+  "scope": "offline DOM and generated report checks; no real-browser, deployment or current live schema certification",
+  "source": "docs/security-and-backend-audit-2026-10-20.md",
+  "source_sha256": "fcdb81c110acd825ab7df103bd3facd9820e3842f1a09520336acb98f82958a6",
+  "html": "docs/security-and-backend-audit-2026-10-20.html",
+  "html_sha256": "3a5134df44950e89caacfa9c34227e78e2a83c36e2906837374fd6272ed6f6aa",
+  "reproducible_generation": true,
+  "followup_markdown_local_links": 38,
+  "dom": {
+    "result": "passed",
+    "postgres_tables": 96,
+    "columns": 934,
+    "foreign_keys": 139,
+    "sqlite_tables": 19,
+    "source_only_tables": 2,
+    "remediation_items": 68,
+    "optimization_inventory_rows": 96,
+    "table_retirement_candidates": 4,
+    "local_links": 452,
+    "checks": [
+      "tab switching",
+      "keyboard tabs",
+      "database filter",
+      "domain filter",
+      "column search",
+      "empty state",
+      "reset",
+      "table inspection",
+      "relationship navigation",
+      "zoom",
+      "unique IDs",
+      "local links",
+      "offline scripts",
+      "remediation coverage and proposal status",
+      "optimization inventory completeness",
+      "scalability section and cross-tab shortcut"
+    ]
+  }
+}

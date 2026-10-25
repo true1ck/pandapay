@@ -1,0 +1,276 @@
+{
+  "format": "pandapay-production-launch-readonly-review-v1",
+  "review_date": "2026-10-25",
+  "user_confirmed_target": {
+    "registrations_per_day": 100000,
+    "window_hours": 24
+  },
+  "project": {
+    "id": "chgkmvmoqehbgkccrqbs",
+    "region": "ap-south-1",
+    "status": "ACTIVE_HEALTHY",
+    "provider_database_build": "17.6.1.155"
+  },
+  "catalog": {
+    "observed_at": "2026-10-25T09:41:21.195857+00:00",
+    "database_name": "postgres",
+    "database_bytes": 42069139,
+    "server_version": "17.6",
+    "connections_now": 37,
+    "max_connections": 60,
+    "logical_databases": [
+      {
+        "name": "postgres",
+        "bytes": 42069139
+      },
+      {
+        "name": "pandapay_auth",
+        "bytes": 11463827
+      },
+      {
+        "name": "pandapay_restore_drill_20260830030001",
+        "bytes": 18779283
+      },
+      {
+        "name": "pandapay_restore_drill_20260906030001",
+        "bytes": 22760595
+      },
+      {
+        "name": "pandapay_restore_drill_20260913030001",
+        "bytes": 22875283
+      },
+      {
+        "name": "pandapay_restore_drill_20260920030001",
+        "bytes": 23055507
+      },
+      {
+        "name": "pandapay_restore_drill_20260927030001",
+        "bytes": 23039123
+      },
+      {
+        "name": "pandapay_restore_drill_20261004030001",
+        "bytes": 23227539
+      },
+      {
+        "name": "pandapay_restore_drill_20261011030001",
+        "bytes": 25136275
+      },
+      {
+        "name": "pandapay_restore_drill_20261018030001",
+        "bytes": 28372115
+      },
+      {
+        "name": "pandapay_restore_drill_20261025030001",
+        "bytes": 34065555
+      }
+    ],
+    "selected_routines": [
+      {
+        "name": "bump_card_data_version",
+        "schema": "pandapay",
+        "settings": null,
+        "public_execute": true,
+        "security_definer": false
+      },
+      {
+        "name": "is_syncable_entity",
+        "schema": "pandapay",
+        "settings": null,
+        "public_execute": true,
+        "security_definer": false
+      },
+      {
+        "name": "register_sync_device",
+        "schema": "pandapay",
+        "settings": [
+          "search_path=public, pandapay"
+        ],
+        "public_execute": true,
+        "security_definer": true
+      },
+      {
+        "name": "snap_grid",
+        "schema": "pandapay",
+        "settings": null,
+        "public_execute": true,
+        "security_definer": false
+      },
+      {
+        "name": "sync_ack",
+        "schema": "pandapay",
+        "settings": [
+          "search_path=public, pandapay"
+        ],
+        "public_execute": true,
+        "security_definer": true
+      },
+      {
+        "name": "sync_apply_change",
+        "schema": "pandapay",
+        "settings": [
+          "search_path=public, pandapay"
+        ],
+        "public_execute": true,
+        "security_definer": true
+      },
+      {
+        "name": "sync_pull",
+        "schema": "pandapay",
+        "settings": [
+          "search_path=public, pandapay"
+        ],
+        "public_execute": true,
+        "security_definer": true
+      }
+    ],
+    "active_connections_now": 1,
+    "superuser_reserved_connections": 3
+  },
+  "client_snapshot": {
+    "observed_at": "2026-10-25T09:43:29.495494+00:00",
+    "backend_types": [
+      {
+        "count": 1,
+        "backend_type": "archiver"
+      },
+      {
+        "count": 1,
+        "backend_type": "autovacuum launcher"
+      },
+      {
+        "count": 1,
+        "backend_type": "background writer"
+      },
+      {
+        "count": 1,
+        "backend_type": "checkpointer"
+      },
+      {
+        "count": 28,
+        "backend_type": "client backend"
+      },
+      {
+        "count": 1,
+        "backend_type": "logical replication launcher"
+      },
+      {
+        "count": 1,
+        "backend_type": "pg_cron launcher"
+      },
+      {
+        "count": 1,
+        "backend_type": "pg_net 0.20.4 worker"
+      },
+      {
+        "count": 1,
+        "backend_type": "walwriter"
+      }
+    ],
+    "client_connections": 28,
+    "idle_client_connections": 25,
+    "active_client_connections": 1,
+    "idle_in_transaction_clients": 2
+  },
+  "idle_followup": {
+    "observed_empty_result": true,
+    "persistent_idle_transaction_leak_established": false
+  },
+  "advisors": {
+    "security": [
+      {
+        "name": "rls_enabled_no_policy",
+        "level": "INFO",
+        "count": 1,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+        "examples": [
+          "public.contribution_salts"
+        ]
+      },
+      {
+        "name": "function_search_path_mutable",
+        "level": "WARN",
+        "count": 17,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable",
+        "examples": [
+          "pandapay.is_syncable_entity",
+          "pandapay.bump_card_data_version"
+        ]
+      },
+      {
+        "name": "extension_in_public",
+        "level": "WARN",
+        "count": 2,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public",
+        "examples": [
+          "public.citext",
+          "public.pg_trgm"
+        ]
+      }
+    ],
+    "performance": [
+      {
+        "name": "unindexed_foreign_keys",
+        "level": "INFO",
+        "count": 123,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys",
+        "examples": [
+          "promotions.access_settings",
+          "promotions.engagement_days"
+        ]
+      },
+      {
+        "name": "auth_rls_initplan",
+        "level": "WARN",
+        "count": 1,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+        "examples": [
+          "public.sms_learning_examples"
+        ]
+      },
+      {
+        "name": "unused_index",
+        "level": "INFO",
+        "count": 53,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index",
+        "examples": [
+          "public.recurring_series",
+          "public.user_categories"
+        ]
+      },
+      {
+        "name": "multiple_permissive_policies",
+        "level": "WARN",
+        "count": 378,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+        "examples": [
+          "public.app_versions",
+          "public.billing_cycle_rules"
+        ]
+      },
+      {
+        "name": "duplicate_index",
+        "level": "WARN",
+        "count": 1,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0009_duplicate_index",
+        "examples": [
+          "public.change_log"
+        ]
+      }
+    ]
+  },
+  "storage_summary": {
+    "restore_drill_database_count": 9,
+    "restore_drill_database_bytes": 221311275,
+    "all_logical_database_bytes": 274844241,
+    "basis": "logical pg_database_size, not billable disk, WAL or filesystem headroom"
+  },
+  "limits": {
+    "live_customer_rows_read": false,
+    "live_data_or_schema_changes": false,
+    "provider_messages_sent": false,
+    "load_test_run": false,
+    "actual_compute_plan_or_disk_quota_verified": false,
+    "deployed_api_or_auth_build_verified": false
+  },
+  "metadata_queries": "Only database size/settings/catalogue/pg_stat_activity aggregates and provider advisors; no row payload, session query text, credentials or private keys."
+}

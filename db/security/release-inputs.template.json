@@ -1,0 +1,61 @@
+{
+  "format": "pandapay-security-release-inputs-v1",
+  "postgres": {
+    "sourceMajor": 17,
+    "targetMajor": null,
+    "dumpClientMajor": null
+  },
+  "resourceTier": "free",
+  "quotas": {
+    "verified": false,
+    "databaseMaxBytes": null,
+    "maxConnections": null,
+    "configuredConnectionBudget": null,
+    "backupMaxBytes": 1073741824,
+    "backupKeepSets": 7,
+    "backupKeepDays": 7
+  },
+  "custody": {
+    "offHostCopiesVerified": 0,
+    "distinctFailureDomainsVerified": 0,
+    "separateRecoveryKeyCustodyVerified": false
+  },
+  "keyIds": {
+    "ENCRYPTION_KEY": null,
+    "PHONE_LOOKUP_HMAC_KEY": null,
+    "JWT_ACCESS_SECRET": null,
+    "JWT_REFRESH_SECRET": null,
+    "AUTH_INTERNAL_SERVICE_SECRET": null,
+    "REFERRAL_IDENTITY_HMAC_KEY": null,
+    "IMAP_ENCRYPTION_KEY": null,
+    "CONSOLE_SESSION_ENCRYPTION_KEY": null,
+    "ACCOUNT_RECOVERY_WRAPPING_KEY": null,
+    "ACCOUNT_LIFECYCLE_JOURNAL_AUTH_KEY": null
+  },
+  "features": {
+    "consoleBrowser": false,
+    "accountLifecycle": false,
+    "accountRecovery": false,
+    "dbAccessLogging": false,
+    "imapPolling": false,
+    "legacyOtpRetirement": false,
+    "anonymousLookupRetirement": false,
+    "maintenance": false,
+    "authRetentionMaintenance": false,
+    "syncTypedWrites": false
+  },
+  "runtimeRoles": {
+    "product": [
+      "app_user"
+    ],
+    "auth": []
+  },
+  "reports": {
+    "productPrivileges": null,
+    "authPrivileges": null,
+    "productData": null,
+    "authData": null
+  },
+  "evidence": null,
+  "notes": "Operator inputs only. Never put credentials, passwords or private keys in this file. PostgreSQL 17 is the prior recorded baseline; verify actual source/target versions. Unknown quotas/custody remain missing gates."
+}

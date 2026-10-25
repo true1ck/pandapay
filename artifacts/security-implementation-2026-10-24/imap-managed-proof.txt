@@ -1,0 +1,19 @@
+IMAP capability verification — 24 October 2026
+
+Focused Node unit suite: 41 passed, 0 failed, 0 skipped.
+Command: node --test api/test/imap_poller.test.js api/test/imap_worker_capability.test.js
+
+Owned temporary native PostgreSQL cluster, role imap_fixture_migrator:
+PASS: IMAP worker additive migration/replay; non-owner active-row RLS; no app/PUBLIC/direct worker access; durable bounded100 cursor, rotation and deadline resume; corrupt/wrong-key isolation; SQL argument validation; per-user status boundary; session lock exclusion; pgcrypto schema=extensions; search-path isolation
+Role: NOSUPERUSER NOBYPASSRLS CREATEROLE CREATEDB. The owned cluster was stopped and its temporary directory removed after verification.
+
+Owned temporary native PostgreSQL cluster, fixture superuser:
+PASS: IMAP worker additive migration/replay; non-owner active-row RLS; no app/PUBLIC/direct worker access; durable bounded100 cursor, rotation and deadline resume; corrupt/wrong-key isolation; SQL argument validation; per-user status boundary; session lock exclusion; pgcrypto schema=extensions->public; search-path isolation
+
+Owned Supabase PostgreSQL17 container, managed postgres migration role:
+PASS: IMAP worker additive migration/replay; non-owner active-row RLS; no app/PUBLIC/direct worker access; durable bounded100 cursor, rotation and deadline resume; corrupt/wrong-key isolation; SQL argument validation; per-user status boundary; session lock exclusion; pgcrypto schema=extensions; search-path isolation
+Container: pandapay-partner-fixture-20261024-1855. Fresh database: imap_worker_test. Database retained for root cleanup with its owned container.
+
+All records and passwords were synthetic. No live config, services, keys, provider connections, or database URLs were read or changed.
+
+Post-review P2: repeated first-row status-write failures now produce fixed status_write_failed outcomes and continue later rows. Two-cycle short-batch regression and deadline-resume regression pass. SQL unchanged after PG17/18 acceptance.

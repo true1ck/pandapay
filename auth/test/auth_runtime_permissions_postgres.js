@@ -41,9 +41,11 @@ function fixtureConfig(raw) {
 }
 
 const config = fixtureConfig(process.env.AUTH_RUNTIME_PERMISSION_TEST_URL);
-const ownTables = ['auth_abuse_buckets', 'users', 'contact_resolution_history', 'auth_schema_migrations'];
+const ownTables = ['db_access_log', 'auth_abuse_buckets', 'users', 'contact_resolution_history', 'auth_schema_migrations'];
 const migration = fs.readFileSync(path.join(__dirname, '../db/migrations/0004_auth_abuse_buckets.sql'), 'utf8');
 const migrationFile = { file: '0004_auth_abuse_buckets.sql', version: '0004_auth_abuse_buckets' };
+const logMigration = fs.readFileSync(path.join(__dirname, '../db/migrations/0005_db_access_log.sql'), 'utf8');
+const logMigrationFile = { file: '0005_db_access_log.sql', version: '0005_db_access_log' };
 
 async function assertNoRoleDml(client, role, table) {
   const result = await client.query(
@@ -56,14 +58,14 @@ async function assertNoRoleDml(client, role, table) {
   assert.deepEqual(Object.values(result.rows[0]), [false, false, false, false]);
 }
 
-async function readinessResult(query) {
+async function readinessResult(query, extraEnv = {}) {
   let statusCode = 200;
   let body;
   const response = {
     json(value) { body = value; return this; },
     status(value) { statusCode = value; return this; },
   };
-  await createReadinessHandler({ query, env: { NODE_ENV: 'production' }, logger: { error() {} } })(null, response);
+  await createReadinessHandler({ query, env: { NODE_ENV: 'production', ...extraEnv }, logger: { error() {} } })(null, response);
   return { statusCode, body };
 }
 
@@ -102,13 +104,19 @@ async function main() {
     await adminPool.query('CREATE TABLE public.auth_schema_migrations (version text PRIMARY KEY)');
     await adminPool.query('REVOKE ALL ON TABLE public.users, public.contact_resolution_history, public.auth_schema_migrations FROM PUBLIC');
     await adminPool.query(migration);
+    await adminPool.query(logMigration);
+    await adminPool.query("INSERT INTO public.db_access_log(query_type,query_text) VALUES ('SELECT','synthetic legacy audit')");
+    // The optional runtime logger used to create this table. Reapplying its
+    // additive adoption migration must preserve compatible existing rows.
+    await adminPool.query(logMigration);
+    assert.equal((await adminPool.query('SELECT count(*)::int AS count FROM public.db_access_log')).rows[0].count, 1);
 
     await assertNoRoleDml(adminPool, role, 'auth_abuse_buckets');
     for (const table of ['users', 'contact_resolution_history', 'auth_schema_migrations']) {
       await assertNoRoleDml(adminPool, role, table);
     }
 
-    await configureAuthRuntimeRole(adminPool, { files: [migrationFile], runtimeRole: role });
+    await configureAuthRuntimeRole(adminPool, { files: [migrationFile, logMigrationFile], runtimeRole: role, dbAccessLoggingEnabled: true });
     await assertNoRoleDml(adminPool, role, 'users');
     await assertNoRoleDml(adminPool, role, 'contact_resolution_history');
     await assertNoRoleDml(adminPool, role, 'auth_schema_migrations');
@@ -116,6 +124,10 @@ async function main() {
     runtimePool = new Pool(config);
     runtimeClient = await runtimePool.connect();
     await runtimeClient.query(`SET ROLE ${quotedRole}`);
+    await runtimeClient.query("INSERT INTO public.db_access_log(query_type,query_text,params_sanitized) VALUES ('SELECT','[query omitted]','{\"count\":1}'::jsonb)");
+    for (const sql of ['SELECT * FROM public.db_access_log', 'DELETE FROM public.db_access_log', "UPDATE public.db_access_log SET query_text='changed'", 'ALTER TABLE public.db_access_log ADD COLUMN bad text']) {
+      await assert.rejects(runtimeClient.query(sql), error => error.code === '42501');
+    }
     const runtimePoolProvider = async () => ({
       connect: async () => ({
         query: (...args) => runtimeClient.query(...args),
@@ -136,12 +148,17 @@ async function main() {
 
     const ready = await readinessResult(runtimeClient.query.bind(runtimeClient));
     assert.deepEqual(ready, { statusCode: 200, body: { ok: true, database: 'ready' } });
+    const logReady = await readinessResult(runtimeClient.query.bind(runtimeClient), { DB_ACCESS_LOGGING_ENABLED: 'true' });
+    assert.equal(logReady.statusCode, 200);
+    await adminPool.query(`REVOKE INSERT ON TABLE public.db_access_log FROM ${quotedRole}`);
+    assert.equal((await readinessResult(runtimeClient.query.bind(runtimeClient), { DB_ACCESS_LOGGING_ENABLED: 'true' })).statusCode, 503);
+    assert.equal((await readinessResult(runtimeClient.query.bind(runtimeClient))).statusCode, 200);
 
     await adminPool.query(`REVOKE DELETE ON TABLE public.auth_abuse_buckets FROM ${quotedRole}`);
     const denied = await readinessResult(runtimeClient.query.bind(runtimeClient));
     assert.equal(denied.statusCode, 503);
     assert.deepEqual(denied.body, { ok: false, database: 'unavailable' });
-    console.log('PASS: runtime role has only abuse-bucket DML, real store operations succeed, and readiness fails after privilege loss');
+    console.log('PASS: runtime role has scoped abuse DML and optional INSERT-only audit access; migration replay preserves audit history; readiness detects privilege loss');
   } finally {
     if (runtimeClient) {
       await runtimeClient.query('RESET ROLE').catch(() => {});

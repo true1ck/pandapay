@@ -1,0 +1,9 @@
+Initialized empty auth database baseline (7 tables, 78 columns)
+Applied auth migration 0001_phone_lookup_hashes
+Auth migrations and phone hash backfill complete
+Verified existing auth schema against init.sql baseline
+Applied auth migration 0002_otp_purpose_binding
+Phone hash verification otp_requests: checked=1 matched=1
+Phone hash verification otp_requests: checked=1 matched=1
+Auth migrations and phone hash backfill complete
+PASS: real PostgreSQL OTP purpose migration, NULL legacy signin-only, purpose isolation, resend and delivery cleanup scope, atomic concurrent consume

@@ -26,6 +26,40 @@ async function main() {
       if (new Set(users.map(row => row.id)).size !== rows.length) throw new Error('Product/auth identity reconciliation failed');
       cursor = rows.at(-1).id; count += rows.length;
     }
+    if (process.env.RESTORE_DATA_REVIEW_FILE) {
+      const fs = require('node:fs');
+      const {spawnSync} = require('node:child_process');
+      const {reviewDataCleanup} = require('./review_data_cleanup');
+      const output = process.env.RESTORE_DATA_REVIEW_FILE;
+      const recipients = process.env.RESTORE_DIAGNOSTIC_RECIPIENTS_FILE;
+      if (!path.isAbsolute(output) || !output.endsWith('.json.age') || !path.isAbsolute(recipients || '')) throw Error('Protected encrypted review output required');
+      const reports = {};
+      // Dedicated connections retain each read-only repeatable-read transaction.
+      for (const [scope,pool] of [['product',product],['auth',auth]]) {
+        const connection = await pool.connect();
+        try { reports[scope] = await reviewDataCleanup(connection,{scope,maxChecks:500,maxDurationMs:180000}); }
+        finally { connection.release(); }
+      }
+      const encrypted = spawnSync('age',['-R',recipients],{
+        input:JSON.stringify({format:'pandapay-protected-restored-data-review-v1',reports}),
+        timeout:30000,maxBuffer:16*1024*1024,
+        env:{PATH:process.env.PATH,HOME:process.env.HOME},
+      });
+      if (encrypted.status !== 0 || !encrypted.stdout?.length) throw Error('Encrypted review failed');
+      const pending = output + '.pending';
+      const fd = fs.openSync(pending,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_EXCL|fs.constants.O_NOFOLLOW,0o600);
+      try {fs.writeFileSync(fd,encrypted.stdout);fs.fsyncSync(fd);} finally {fs.closeSync(fd);}
+      fs.renameSync(pending,output);
+      console.log(`Read-only restored data review saved encrypted; product_complete=${reports.product.complete} auth_complete=${reports.auth.complete}`);
+      if (!reports.product.complete || !reports.auth.complete) throw Error('Restored data review is incomplete');
+    }
+    if (process.env.RESTORE_PRIVILEGE_REVIEW_FILE) {
+      const result = await require('./review_restored_privileges').reviewRestoredPrivileges({ product, auth });
+      console.log(`RESTORED_PRIVILEGE_REVIEW=complete product_blocking=${result.product_blocking} auth_blocking=${result.auth_blocking} history_unknown=${result.history_unknown} history_mismatched=${result.history_mismatched}`);
+      // Complete review is not strict acceptance. Preserve findings encrypted;
+      // caller/release gates must inspect strict_pass rather than infer it
+      // from the successful underlying archive/key/identity restore.
+    }
     console.log(`Recovery keys, phone indexes and product/auth identities verified; profiles=${count}`);
   } finally { await Promise.allSettled([product.end(), auth.end()]); }
 }

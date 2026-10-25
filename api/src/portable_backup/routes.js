@@ -106,14 +106,16 @@ function createPortableBackupExportHandler({
     activeExports += 1;
 
     let client;
-    let committed = false;
+    let committed = false, releaseAccountFence, uncertainFence=false, discard;
     try {
       res.setHeader?.('Content-Type', `${MEDIA_TYPE}; charset=utf-8`);
       res.setHeader?.('Cache-Control', 'no-store');
       client = await pool.connect();
+      if(pool.acquireAccountSnapshotFence){uncertainFence=true;releaseAccountFence=await pool.acquireAccountSnapshotFence(client,profileId);uncertainFence=false;}
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       await client.query("SELECT set_config('statement_timeout', $1, true)", [`${statementTimeoutMs}ms`]);
       await client.query("SELECT set_config('app.user_id', $1, true)", [profileId]);
+      if(pool.accountAccessFence)await pool.accountAccessFence(client,profileId);
       await exportSnapshot({ client, res, profileId, batchSize, maxDurationMs,
         backpressureTimeoutMs, maxOutputBytes, maxRecords, now });
       // The snapshot is read-only. Rollback closes the transaction without
@@ -130,8 +132,9 @@ function createPortableBackupExportHandler({
     } finally {
       try {
         if (client) {
-          if (!committed) await client.query('ROLLBACK').catch(() => {});
-          client.release();
+          if (!committed)try{await client.query('ROLLBACK');}catch(error){discard=error;}
+          if(releaseAccountFence)try{await releaseAccountFence();}catch(error){discard=error;}
+          client.release(discard||(uncertainFence?new Error('Uncertain account snapshot fence'):undefined));
         }
       } finally {
         activeExports -= 1;

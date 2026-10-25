@@ -1,0 +1,16 @@
+00:00 +212: test/card_rules_json_test.dart: parses every card in the live fixture without throwing
+00:00 +213: test/card_rules_json_test.dart: parses every card in the live fixture without throwing
+00:00 +214: test/card_rules_json_test.dart: parses every card in the live fixture without throwing
+00:00 +215: test/card_rules_json_test.dart: parses every card in the live fixture without throwing
+00:00 +216: test/card_rules_json_test.dart: parses every card in the live fixture without throwing
+00:00 +217: test/card_rules_json_test.dart: parses every card in the live fixture without throwing
+00:00 +218: test/card_rules_json_test.dart: parses every card in the live fixture without throwing
+00:00 +219: test/card_rules_json_test.dart: parses every card in the live fixture without throwing
+00:00 +220: test/card_rules_json_test.dart: axis-ace: RuPay/UPI-linkable, two reward rules, one cap rule
+00:00 +221: test/card_rules_json_test.dart: icici-amazon-pay: points/100 unit, forex rule, milestone rule all parse
+00:00 +222: test/card_rules_json_test.dart: a numeric top-level column sent as a JSON string (annual_fee_inr) does not throw
+00:00 +223: test/card_rules_json_test.dart: Task C-0: catalogue-display fields (fee/freshness/issuer/art) parse from the live fixture
+00:00 +224: test/card_rules_json_test.dart: Task C-0: fee_waiver_rules and benefits parse from a hand-built response shape
+00:00 +225: test/card_rules_json_test.dart: parsed cards are directly usable by RecommendationEngine.rank()
+00:00 +226: test/card_rules_json_roundtrip_test.dart: CardProduct toJson -> jsonEncode -> jsonDecode -> fromJson round-trips every field
+00:00 +227: All tests passed!

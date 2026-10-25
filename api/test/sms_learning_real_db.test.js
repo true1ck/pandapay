@@ -23,15 +23,21 @@ test('real database: app_user RLS, worker separation, advisory locks, and deleti
     // Always run inside a transaction that is rolled back at the end
     await client.query('BEGIN');
     try {
-      await client.query('SET LOCAL ROLE app_user');
-      const role = await client.query('SELECT current_user AS role');
-      assert.equal(role.rows[0].role, 'app_user');
       const user1 = crypto.randomUUID();
       const user2 = crypto.randomUUID();
       const hmacKey = 'test_learning_secret_key_32_characters_long';
       const user1Hash = crypto.createHmac('sha256', hmacKey).update(user1).digest('hex');
       const user2Hash = crypto.createHmac('sha256', hmacKey).update(user2).digest('hex');
       const senderFingerprint = crypto.createHmac('sha256', hmacKey).update('hdfcbk').digest('hex');
+
+      // Profile creation belongs to the trusted auth bootstrap. Seed only the
+      // synthetic fixture as its operator, then exercise learning as app_user.
+      await client.query('INSERT INTO profiles(id, contributions_opt_in) VALUES ($1, true)', [user1]);
+      await client.query('SET LOCAL ROLE app_user');
+      const role = await client.query(`SELECT current_user AS role,
+        has_table_privilege(current_user, 'public.profiles', 'INSERT') AS can_create_profile`);
+      assert.equal(role.rows[0].role, 'app_user');
+      assert.equal(role.rows[0].can_create_profile, false);
 
       // 1. Advisory Lock under app_user
       const lockRes = await client.query('SELECT pg_try_advisory_lock($1) AS locked', [749281]);
@@ -42,7 +48,6 @@ test('real database: app_user RLS, worker separation, advisory locks, and deleti
       // 2. Set RLS context for user1
       await client.query("SELECT set_config('app.user_id', $1, true)", [user1]);
       await client.query("SELECT set_config('app.sms_learning_hmac_key', $1, true)", [hmacKey]);
-      await client.query('INSERT INTO profiles(id, contributions_opt_in) VALUES ($1, true)', [user1]);
 
       // 3. User 1 inserts a valid learning example
       const insertRes = await client.query(

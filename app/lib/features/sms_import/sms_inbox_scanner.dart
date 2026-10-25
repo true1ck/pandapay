@@ -1,3 +1,4 @@
+import '../../data/portable_backup/account_recovery_operation_gate.dart';
 import '../../data/local/app_database.dart';
 import 'sms_listener_service.dart';
 
@@ -75,7 +76,10 @@ class SmsInboxScanner {
     this.onProgress,
   });
 
-  Future<int> scan(String namespace) async {
+  Future<int> scan(String namespace) =>
+      AccountRecoveryOperationGate.process.run(() => _scan(namespace));
+
+  Future<int> _scan(String namespace) async {
     checkAccount();
     onProgress?.call(const SmsInboxScanProgress());
     final throughId = await head();

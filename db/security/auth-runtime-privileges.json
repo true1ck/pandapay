@@ -1,0 +1,98 @@
+{
+  "format": "pandapay-runtime-privilege-policy-v1",
+  "scope": "auth",
+  "managedSchemas": [
+    "public",
+    "auth_private",
+    "console_private"
+  ],
+  "roles": [
+    {
+      "name": "auth_runtime",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "console_session_runtime",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "pandapay_console_session",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "auth_lifecycle_runtime",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "pandapay_auth_lifecycle",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "auth_lifecycle_owner",
+      "kind": "owner",
+      "required": false
+    }
+  ],
+  "ledgers": [
+    "public.auth_schema_migrations",
+    "public.schema_migrations"
+  ],
+  "memberships": [
+    {
+      "member": "console_session_runtime",
+      "role": "pandapay_console_session"
+    },
+    {
+      "member": "auth_lifecycle_runtime",
+      "role": "pandapay_auth_lifecycle"
+    }
+  ],
+  "restrictedRoles": [
+    {
+      "role": "console_session_runtime",
+      "relations": [
+        "console_private.sessions"
+      ],
+      "routines": []
+    },
+    {
+      "role": "pandapay_console_session",
+      "relations": [
+        "console_private.sessions"
+      ],
+      "routines": []
+    },
+    {
+      "role": "auth_lifecycle_runtime",
+      "relations": [],
+      "routines": [
+        "auth_private.apply_account_deletion(uuid,uuid,bigint)",
+        "auth_private.list_deletion_tombstones(uuid,integer)"
+      ]
+    },
+    {
+      "role": "pandapay_auth_lifecycle",
+      "relations": [],
+      "routines": [
+        "auth_private.apply_account_deletion(uuid,uuid,bigint)",
+        "auth_private.list_deletion_tombstones(uuid,integer)"
+      ]
+    }
+  ],
+  "requiredRoutineAccess": [
+    {
+      "role": "auth_lifecycle_runtime",
+      "identity": "auth_private.apply_account_deletion(uuid,uuid,bigint)"
+    },
+    {
+      "role": "auth_lifecycle_runtime",
+      "identity": "auth_private.list_deletion_tombstones(uuid,integer)"
+    }
+  ],
+  "acceptedFindings": []
+}

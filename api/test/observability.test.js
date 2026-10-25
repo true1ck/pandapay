@@ -88,6 +88,23 @@ test('bounded safe request IDs are preserved across logs and response headers', 
   }
 });
 
+test('ordinary request logs omit persistent account identifiers', () => {
+  const output = process.stdout.write;
+  const lines = [];
+  process.stdout.write = line => { lines.push(JSON.parse(line)); return true; };
+  try {
+    const req = { get: () => 'support-case', method: 'GET', route: { path: '/profile' }, userId: 'private-account-uuid' };
+    const res = new EventEmitter();
+    res.statusCode = 200;
+    res.setHeader = () => {};
+    requestLogger(req, res, () => {});
+    res.emit('finish');
+    assert.equal(lines[0].authenticated, true);
+    assert.equal('userId' in lines[0], false);
+    assert.equal(JSON.stringify(lines).includes(req.userId), false);
+  } finally { process.stdout.write = output; }
+});
+
 test('contact, header injection, arrays and overlong request IDs are replaced', () => {
   for (const value of ['private@example.com', 'secret\r\nvalue', ['safe', 'secret'], 'x'.repeat(129), '']) {
     const result = runLoggerWithRequestId(value);

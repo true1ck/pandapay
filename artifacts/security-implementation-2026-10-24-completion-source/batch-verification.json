@@ -1,0 +1,222 @@
+{
+  "format": "pandapay-security-completion-source-verification-v1",
+  "verified_at_utc": "2026-10-24T13:05:18.532688+00:00",
+  "scope": "source plus partial sandbox validation; not exact-full-candidate acceptance or deployment approval",
+  "branch": "dev",
+  "base_commit": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+  "uncommitted": true,
+  "candidate_sha256": "ceb1a288f459f8a1225ed314acc26a54daead1758ad81569224a14ea10a591cc",
+  "source_files": 1265,
+  "source_manifest": "candidate-source-sha256.json",
+  "checks": {
+    "sandbox_unit_subset": {
+      "status": "passed",
+      "passed": 131,
+      "failed": 0,
+      "scope": "database/tool suite, portable coverage, maintenance runner and auth retention doubles; no local server/provider"
+    },
+    "backup_setup": {
+      "status": "passed",
+      "passed": 45,
+      "failed": 0
+    },
+    "deployment": {
+      "status": "passed",
+      "passed": 21,
+      "failed": 0
+    },
+    "retirement_parser_only": {
+      "status": "passed",
+      "passed": 1,
+      "full_endpoint_regression": false
+    },
+    "app_static_analysis": {
+      "status": "passed",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 72,
+      "command": "dart --suppress-analytics analyze app"
+    },
+    "console_static_analysis": {
+      "status": "passed",
+      "issues": 0,
+      "command": "dart --suppress-analytics analyze console"
+    },
+    "core_dart_gate": {
+      "status": "passed",
+      "cases": 5,
+      "scope": "standalone core Dart; no Flutter harness/native SQLite",
+      "script": "gate-core-check.dart"
+    },
+    "core_dart_otp_client": {
+      "status": "passed",
+      "cases": 6,
+      "scope": "real AuthApi with in-memory HTTP mock; no provider/server/Flutter UI",
+      "script": "otp-core-check.dart"
+    },
+    "javascript_syntax": {
+      "status": "passed",
+      "files": 330,
+      "roots": [
+        "api/src",
+        "api/test",
+        "api/scripts",
+        "auth/src",
+        "auth/test",
+        "auth/scripts",
+        "db/scripts",
+        "db/tests"
+      ]
+    },
+    "notification_wip": {
+      "files_unchanged": 12,
+      "sha256_match": true
+    },
+    "initial_privilege_fixture": {
+      "status": "passed-in-earlier-agent-step",
+      "proof": "initial-privilege-fixture.log",
+      "exact_final_source_bound": false,
+      "scope": "disposable independent-LOGIN/RLS/CRUD/safe-RPC/data-digest scenario; final integrated repeat still pending"
+    },
+    "release_gate": {
+      "exit": 2,
+      "release_ready": false,
+      "missing_gates": [
+        "exact_candidate_evidence",
+        "api",
+        "auth",
+        "database",
+        "backup",
+        "deployment",
+        "app",
+        "console",
+        "actual_data_restore",
+        "target_provider_upgrade",
+        "oldest_supported_client",
+        "signed_device_recovery",
+        "provider_delivery",
+        "operator_alerts",
+        "rollout_recovery",
+        "backup_custody",
+        "productPrivileges",
+        "authPrivileges",
+        "productData",
+        "authData",
+        "postgres_provider_portability",
+        "free_host_resource_limits",
+        "off_host_backup_custody",
+        "retained_key_inventory",
+        "hash_bound_backup_restore"
+      ]
+    },
+    "audit_report": {
+      "status": "passed",
+      "reproducible_generation": true,
+      "proof": "report-verification.json",
+      "real_browser_acceptance": false
+    }
+  },
+  "proofs": {
+    "sandbox-unit-final": {
+      "proof_file": "sandbox-unit-final.log",
+      "sha256": "1790e4d9ab194ce0f66452ad4149c9662c1dfca6a80628857b6dea49e7397190",
+      "original_log_sha256": "9ad2c24abf4bcdeceaf33f97b45e455a63a0a19be6d445194ec18c523689ec60",
+      "original_log_bytes": 12641,
+      "scope": "final summary excerpt"
+    },
+    "backup-setup-final": {
+      "proof_file": "backup-setup-final.log",
+      "sha256": "0559d4d18b04b3034999d69d14365d78a3549aaf5b5d6d8b7e9511af20b61c80",
+      "original_log_sha256": "a5986190f10fe67d48d191c83409010f2ce4831f58bedf4f82493e419884ecc3",
+      "original_log_bytes": 8839,
+      "scope": "final summary excerpt"
+    },
+    "deployment-all": {
+      "proof_file": "deployment-all.log",
+      "sha256": "62f6f6bf33f6249f2d52bfb25b42c5ea1d625aac9496e0dc9c72a7f5b2f9044f",
+      "original_log_sha256": "fb63f5907896633fe203f7c3cda5fad33d5e953f4067173e61796d278d41b261",
+      "original_log_bytes": 3943,
+      "scope": "final summary excerpt"
+    },
+    "retirement-parser-only": {
+      "proof_file": "retirement-parser-only.log",
+      "sha256": "cf0e3dd567beb3f188b69563e7b440278489f7069de3d745c79ceadc0da3874d",
+      "original_log_sha256": "cf0e3dd567beb3f188b69563e7b440278489f7069de3d745c79ceadc0da3874d",
+      "original_log_bytes": 203,
+      "scope": "final summary excerpt"
+    },
+    "app-static-final": {
+      "proof_file": "app-static-final.log",
+      "sha256": "11dd51ca64a81311c4eee437c446c30bfb5ab7314e52fa923fccd9f10089ab66",
+      "original_log_sha256": "11dd51ca64a81311c4eee437c446c30bfb5ab7314e52fa923fccd9f10089ab66",
+      "original_log_bytes": 14531,
+      "scope": "complete diagnostic log"
+    },
+    "console-static-final": {
+      "proof_file": "console-static-final.log",
+      "sha256": "1923b205f97ccb0401e568b2eb2469d67bcddf1f2e09b4f2ff5119ef8d1dfc9b",
+      "original_log_sha256": "1923b205f97ccb0401e568b2eb2469d67bcddf1f2e09b4f2ff5119ef8d1dfc9b",
+      "original_log_bytes": 38,
+      "scope": "complete diagnostic log"
+    },
+    "syntax-final": {
+      "proof_file": "syntax-final.log",
+      "sha256": "e103767b0a4d4a2d1e0a571f29d959085861ab71ea2bd2bebe603769fb092a84",
+      "original_log_sha256": "e103767b0a4d4a2d1e0a571f29d959085861ab71ea2bd2bebe603769fb092a84",
+      "original_log_bytes": 54,
+      "scope": "complete diagnostic log"
+    },
+    "gate-core": {
+      "proof_file": "gate-core.log",
+      "sha256": "b9f00f25dd9fdf2a973925e5b61b3e4c4ec6e5a79450eea424d3da18dfded417",
+      "original_log_sha256": "b9f00f25dd9fdf2a973925e5b61b3e4c4ec6e5a79450eea424d3da18dfded417",
+      "original_log_bytes": 318,
+      "scope": "complete diagnostic log"
+    },
+    "otp-core": {
+      "proof_file": "otp-core.log",
+      "sha256": "b36fc65476ff99dd30bc27045704297da3773167103cbda39fa62b85ab207dc8",
+      "original_log_sha256": "b36fc65476ff99dd30bc27045704297da3773167103cbda39fa62b85ab207dc8",
+      "original_log_bytes": 424,
+      "scope": "complete diagnostic log"
+    },
+    "gate-core-check.dart": {
+      "proof_file": "gate-core-check.dart",
+      "sha256": "36ee9bbe500ed67fa65826d666abad1d905a5fe0e1eb65d0a589cbd13a31444f",
+      "scope": "reproducible standalone Dart check source"
+    },
+    "otp-core-check.dart": {
+      "proof_file": "otp-core-check.dart",
+      "sha256": "569c0ba1180a1654ba0a7ebc6c4a3a16f039bd923d241eea886b9fb3c26cedd4",
+      "scope": "reproducible standalone Dart check source"
+    }
+  },
+  "blocked_verification": "blocked-verification.json",
+  "earlier_full_suite_evidence": "../security-implementation-2026-10-24-followup/batch-verification.json",
+  "earlier_full_suite_applies_to_this_candidate": false,
+  "new_source": [
+    "opt-in mobile/console six-digit challenge clients and browser gateway relay",
+    "uniform explicit legacy OTP/lookup retirement controls and acceptance gates",
+    "manual account-bound password-free recovery UI, fresh-account pre-login restore and page-memory recent proof",
+    "separate native SQLite writer lease, tracked async/HTTP/receipt drain, bounded durable SMS deferral",
+    "disabled bounded maintenance roles/functions/jobs/heartbeats/internal notices and optional one-shot Compose profile",
+    "explicit exact-grant permission repair plan, rollback rehearsal and hash-bound apply receipt"
+  ],
+  "not_performed": [
+    "live DDL/data/contact changes",
+    "live key/credential generation or rotation",
+    "live providers/messages/schedulers/backup-custody changes",
+    "application/storage encryption or feature activation",
+    "service restart/deployment",
+    "Git commit/push"
+  ],
+  "remaining_source_and_acceptance": [
+    "remaining contact replacement protocol transition",
+    "unmodelled/actual-data broader privilege and business-data/index reconciliation",
+    "complete native writer and process-death/orphan-repair coverage",
+    "secure native key custody and resumable live SQLite/receipt conversion",
+    "external operational/customer alert delivery and actual monitored schedules",
+    "full actual-data/provider/oldest-client/signed-device/free-host and independent custody acceptance"
+  ],
+  "safety_state": "all new feature/retirement flags remain off; existing login/masked-contact recovery retained; no extra user password or silent phone-only upload; original data/keys/history preserved"
+}

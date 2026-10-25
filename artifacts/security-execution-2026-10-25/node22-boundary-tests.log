@@ -1,0 +1,160 @@
+TAP version 13
+# Subtest: validates all file sources, accounting timezone offsets and legacy clients
+ok 1 - validates all file sources, accounting timezone offsets and legacy clients
+  ---
+  duration_ms: 3.80025
+  type: 'test'
+  ...
+# Subtest: accepts each supported transaction type and rejects unknown types
+ok 2 - accepts each supported transaction type and rejects unknown types
+  ---
+  duration_ms: 0.335333
+  type: 'test'
+  ...
+# Subtest: rejects invalid calendar dates, ranges, decimal precision, nonfinite values and malformed rows
+ok 3 - rejects invalid calendar dates, ranges, decimal precision, nonfinite values and malformed rows
+  ---
+  duration_ms: 0.366375
+  type: 'test'
+  ...
+# Subtest: unexpected import failures return a correlation id without leaking server details
+ok 4 - unexpected import failures return a correlation id without leaking server details
+  ---
+  duration_ms: 2.871083
+  type: 'test'
+  ...
+# Subtest: handler blocks bad requests before any database work and checks card ownership
+ok 5 - handler blocks bad requests before any database work and checks card ownership
+  ---
+  duration_ms: 0.182667
+  type: 'test'
+  ...
+# Subtest: handler routes bank/debit/credit separately, masks source account metadata and reports replay
+ok 6 - handler routes bank/debit/credit separately, masks source account metadata and reports replay
+  ---
+  duration_ms: 1.214959
+  type: 'test'
+  ...
+# Subtest: stable row keys survive different batch selections and duplicate candidates are not counted as added
+ok 7 - stable row keys survive different batch selections and duplicate candidates are not counted as added
+  ---
+  duration_ms: 0.530791
+  type: 'test'
+  ...
+# Subtest: automatic duplicate is skipped without modifying the canonical transaction
+ok 8 - automatic duplicate is skipped without modifying the canonical transaction
+  ---
+  duration_ms: 0.829833
+  type: 'test'
+  ...
+# Subtest: statement import forwards the transaction kind to the shared insert path
+ok 9 - statement import forwards the transaction kind to the shared insert path
+  ---
+  duration_ms: 0.505
+  type: 'test'
+  ...
+# Subtest: statement narration classification excludes settlements and preserves explicit kinds
+ok 10 - statement narration classification excludes settlements and preserves explicit kinds
+  ---
+  duration_ms: 0.439542
+  type: 'test'
+  ...
+# Subtest: statement adjustments and loan advances stay outside spending and earned income
+ok 11 - statement adjustments and loan advances stay outside spending and earned income
+  ---
+  duration_ms: 0.190916
+  type: 'test'
+  ...
+# Subtest: reviewed category, subcategory, and note are saved as the selected assignment
+ok 12 - reviewed category, subcategory, and note are saved as the selected assignment
+  ---
+  duration_ms: 0.239375
+  type: 'test'
+  ...
+# Subtest: reviewed private category must belong to the importing account and match its parent
+ok 13 - reviewed private category must belong to the importing account and match its parent
+  ---
+  duration_ms: 0.114875
+  type: 'test'
+  ...
+# Subtest: route contract: read, conditional save, lost-response retry and clear
+ok 14 - route contract: read, conditional save, lost-response retry and clear
+  ---
+  duration_ms: 6.236375
+  type: 'test'
+  ...
+# Subtest: route contract: rejects ownership, totals and references before replacement
+ok 15 - route contract: rejects ownership, totals and references before replacement
+  ---
+  duration_ms: 0.309417
+  type: 'test'
+  ...
+# Subtest: split routes reject malformed transaction IDs before querying the database
+ok 16 - split routes reject malformed transaction IDs before querying the database
+  ---
+  duration_ms: 0.150584
+  type: 'test'
+  ...
+# Subtest: fingerprints ignore row IDs, ordering and display names
+ok 17 - fingerprints ignore row IDs, ordering and display names
+  ---
+  duration_ms: 0.1665
+  type: 'test'
+  ...
+# Subtest: accepts clearing, partial shares and exact decimal partitions
+ok 18 - accepts clearing, partial shares and exact decimal partitions
+  ---
+  duration_ms: 0.209042
+  type: 'test'
+  ...
+# Subtest: rejects malformed and sub-paise shares before database writes
+ok 19 - rejects malformed and sub-paise shares before database writes
+  ---
+  duration_ms: 0.110917
+  type: 'test'
+  ...
+# Subtest: tag filters validate IDs and never interpolate user input
+ok 20 - tag filters validate IDs and never interpolate user input
+  ---
+  duration_ms: 1.093708
+  type: 'test'
+  ...
+# Subtest: invalid definitions, future clocks and malformed operations are rejected
+ok 21 - invalid definitions, future clocks and malformed operations are rejected
+  ---
+  duration_ms: 3.68025
+  type: 'test'
+  ...
+# Subtest: tag changes return 400 for malformed JSON shapes instead of server errors
+ok 22 - tag changes return 400 for malformed JSON shapes instead of server errors
+  ---
+  duration_ms: 0.207
+  type: 'test'
+  ...
+# Subtest: statement tag import requires a bounded array before database work
+ok 23 - statement tag import requires a bounded array before database work
+  ---
+  duration_ms: 0.398
+  type: 'test'
+  ...
+# Subtest: statement tag import keeps the first display spelling after normalized deduplication
+ok 24 - statement tag import keeps the first display spelling after normalized deduplication
+  ---
+  duration_ms: 0.173417
+  type: 'test'
+  ...
+# Subtest: real database: overlap counts once, stale removals, replay, budgets, aliases and isolation
+ok 25 - real database: overlap counts once, stale removals, replay, budgets, aliases and isolation # SKIP
+  ---
+  duration_ms: 0.038625
+  type: 'test'
+  ...
+1..25
+# tests 25
+# suites 0
+# pass 24
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 78.117792

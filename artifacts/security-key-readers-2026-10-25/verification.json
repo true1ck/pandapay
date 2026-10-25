@@ -1,0 +1,266 @@
+{
+  "format": "pandapay-retained-readers-source-verification-v1",
+  "verified_at_utc": "2026-10-25T08:42:07.542Z",
+  "scope": "P05 reader-first source/local/protected original-key restore; no backfill/rotation/activation",
+  "source_manifest": "candidate-source-sha256.json",
+  "candidate_sha256": "ab2305014149ede074d55adef545ddcae99f2820089ab5236fde9453772e31c6",
+  "changed_source_files": [
+    ".env.prod.example",
+    ".env.staging.example",
+    "api/src/account_recovery_routes.js",
+    "api/src/automatic_account_recovery.js",
+    "api/src/index.js",
+    "api/test/account_recovery.test.js",
+    "api/test/automatic_account_recovery.test.js",
+    "auth/src/utils/fieldEncryption.js",
+    "auth/test/field_encryption.test.js",
+    "db/scripts/release_security_check.js",
+    "db/tests/release_security_check.test.js",
+    "deploy/DEPLOY.md",
+    "docker-compose.prod.yml",
+    "docker-compose.staging.yml"
+  ],
+  "added_source_files": [
+    "db/tests/recovery_retained_key_postgres.js",
+    "db/tests/retained_key_configuration.test.js"
+  ],
+  "agents": {
+    "model": "gpt-6-luna",
+    "count": 3,
+    "independent_reviews": [
+      "recovery runtime/index wiring",
+      "release parser/inventory/digest"
+    ],
+    "coordinator_review": true,
+    "refinements": [
+      "Exact legacy UTF-8 behavior retained",
+      "Known-ID same-key AAD substitution and padding cases added",
+      "22-case configuration parity contract",
+      "Actual role/persistence/dump-restore fixture"
+    ]
+  },
+  "tests": {
+    "api": {
+      "exit_code": 0,
+      "summary": [
+        "# tests 990",
+        "# pass 988",
+        "# fail 0",
+        "# skipped 2"
+      ]
+    },
+    "auth": {
+      "exit_code": 0,
+      "summary": [
+        "# tests 317",
+        "# pass 317",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    "database-tools": {
+      "exit_code": 0,
+      "summary": [
+        "# tests 190",
+        "# pass 190",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    }
+  },
+  "node22": {
+    "api": {
+      "image": "pandapay-security-next25-api:local",
+      "image_id": "sha256:00822714a313c7a85dd80c142d5b30c148d117798223b25c333fbd86493f096c",
+      "exit_code": 0,
+      "summary": [
+        "# tests 15",
+        "# pass 15",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    "auth": {
+      "image": "pandapay-security-next25-auth:local",
+      "image_id": "sha256:4ec4930497d4213b0e1670c97f2753c9707fac5d3f3fb920c5227f640077d0ec",
+      "exit_code": 0,
+      "summary": [
+        "# tests 9",
+        "# pass 9",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    }
+  },
+  "compose": {
+    "docker-compose.prod.yml": {
+      "parsed": true,
+      "auth_and_migration_reader_passthrough": [
+        "auth",
+        "db-migrate"
+      ],
+      "recovery_reader_passthrough": [
+        "api"
+      ],
+      "reader_defaults_blank": true,
+      "recovery_activation_default_false": true
+    },
+    "docker-compose.staging.yml": {
+      "parsed": true,
+      "auth_and_migration_reader_passthrough": [
+        "auth",
+        "db-migrate"
+      ],
+      "recovery_reader_passthrough": [
+        "api"
+      ],
+      "reader_defaults_blank": true,
+      "recovery_activation_default_false": true
+    }
+  },
+  "postgres_retained_recovery": {
+    "fixture": "db/tests/recovery_retained_key_postgres.js",
+    "command": "PATH=/opt/homebrew/bin:$PATH node db/tests/recovery_retained_key_postgres.js",
+    "result": "passed",
+    "log": "recovery-retained-key-postgres.log",
+    "data_scope": "synthetic",
+    "dump_restore_scope": "same-major PostgreSQL 18"
+  },
+  "protected_original_key_restore": {
+    "summary": "protected-restored-data-summary.json",
+    "proof": {
+      "set_id": "4f383a48d3111523e663f8791e4819f0",
+      "status": "database_restore_verified",
+      "application_check": "passed",
+      "upgrade_check": "not_run",
+      "product_upgrade": "not_run",
+      "contact_upgrade": "not_run",
+      "verified_at_utc": "2026-10-25T08:34:49Z",
+      "proof_format": "pandapay-paired-postgresql-restore-proof-v1",
+      "manifest_ciphertext_sha256": "8de997d4d45cfa77725fc5657eaa00659cc702eb40a593110c56d4ceed2ee84a",
+      "product_ciphertext_sha256": "9cf41011bc31671e43858fb3464935d446891778d84907f541e9bdff86df8a21",
+      "auth_ciphertext_sha256": "d96d14b838f0aabb4d48a8487396b4789aff82b23ce931bc4bd63233246a9146"
+    },
+    "scopes": {
+      "product": {
+        "complete": true,
+        "label_identity_version": "pandapay-catalogue-label-identity-v1",
+        "checks": 357,
+        "foreign_keys": 217,
+        "orphan_rows": 0,
+        "catalogue_checks": [
+          {
+            "name": "cap_rule_business_equivalence",
+            "status": "completed",
+            "duplicate_groups": "0",
+            "extra_rows": "0"
+          },
+          {
+            "name": "benefit_business_equivalence",
+            "status": "completed",
+            "duplicate_groups": "0",
+            "extra_rows": "0"
+          },
+          {
+            "name": "cap_rule_normalized_identity_v1",
+            "status": "completed",
+            "duplicate_groups": "0",
+            "extra_rows": "0"
+          },
+          {
+            "name": "benefit_normalized_identity_v1",
+            "status": "completed",
+            "duplicate_groups": "0",
+            "extra_rows": "0"
+          }
+        ]
+      },
+      "auth": {
+        "complete": true,
+        "label_identity_version": "pandapay-catalogue-label-identity-v1",
+        "checks": 10,
+        "foreign_keys": 5,
+        "orphan_rows": 0,
+        "catalogue_checks": []
+      }
+    },
+    "live_connection_opened": false,
+    "upgrade_or_schema_apply_performed": false
+  },
+  "preservation": {
+    "unchanged_app_lock_and_schema_files": 802,
+    "legacy_phone_writer_unchanged": true,
+    "active_recovery_write_key_selection_unchanged": true,
+    "phone_lookup_hmac_and_imap_formats_unchanged": true,
+    "original_private_keys_untouched": true,
+    "feature_defaults_disabled": true,
+    "flutter_rerun": false
+  },
+  "status": {
+    "unfinished_findings": 22,
+    "partial": 19,
+    "open": 3,
+    "new_finding_closures": [],
+    "deployment": false,
+    "rotation_or_backfill": false,
+    "mobile_storage_activation": false
+  },
+  "limitations": [
+    "No v2 phone writer or write-format switch",
+    "No IMAP/lookup versioning or bounded backfill/rotation",
+    "Protected restore used original keys, not real retained lists",
+    "SQL dump/restore is same-major local, not intended-provider acceptance",
+    "Release metadata binds operator IDs/labels, not secret bytes or custody",
+    "Mobile/client/device/provider/independent-custody/rollout gates remain"
+  ],
+  "html": {
+    "result": "passed",
+    "postgres_tables": 96,
+    "columns": 934,
+    "foreign_keys": 139,
+    "sqlite_tables": 19,
+    "source_only_tables": 2,
+    "remediation_items": 68,
+    "optimization_inventory_rows": 96,
+    "table_retirement_candidates": 4,
+    "local_links": 477,
+    "remaining_implementation_packages": 14,
+    "remaining_release_gates": 6,
+    "full_findings": 76,
+    "unfinished_findings": 50,
+    "focused_page_verified": true,
+    "checks": [
+      "remaining-work counts and complete finding mapping",
+      "focused remaining-work HTML",
+      "tab switching",
+      "keyboard tabs",
+      "database filter",
+      "domain filter",
+      "column search",
+      "empty state",
+      "reset",
+      "table inspection",
+      "relationship navigation",
+      "zoom",
+      "unique IDs",
+      "local links",
+      "offline scripts",
+      "remediation coverage and proposal status",
+      "optimization inventory completeness",
+      "scalability section and cross-tab shortcut"
+    ]
+  },
+  "html_reproducible": true,
+  "markdown_links_checked": 50,
+  "runtime_hashes_match": true,
+  "finding_statuses_unchanged": true,
+  "documentation_sha256": {
+    "docs/security-key-readers-implementation-2026-10-25.md": "5cf2c08cd08a3ea138394de3d03dd62087c729138f1abe4e7af7e1b1e65907ee",
+    "docs/security-and-backend-audit-2026-10-20.md": "16ed45fbe6d60e24576bd1a14d5a1b3f07fbb845a67fc20d2f040a55b052ca60",
+    "docs/security-and-backend-audit-2026-10-20.html": "89986837aeb40ebe8219ae00f3d6ec3f7608bbb21ed81ea5511f6c1b23127d3f",
+    "docs/security-secrets-inventory-2026-10-23.md": "36e85b344af07378a99a7ac29c82b0addfc9a021a89597515bfb4a88b995aa1d",
+    "docs/security-focused-gap-review-2026-10-25.md": "172f1099d149c9cbc9227218c74fd63d5085f37be700fa47d66496d573c487dc",
+    "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md": "908b8198cc14f98c9dfe3f6b107c4af400756664c8c9fca3625743f3bc23e374",
+    "artifacts/security-review-2026-10-20/data-dependency-mobile-documentation-plan-2026-10-25.json": "e66dc956748733d89d03bd97973e24afe256f87bc3458d03dfefe7fc368be2d5"
+  }
+}

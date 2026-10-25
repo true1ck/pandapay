@@ -1,0 +1,10 @@
+{
+  "package": "app.pandapay.securityfixture.pandapay",
+  "source_files": {
+    "lib/data/local/app_database.dart": "47f4c45dfbd03e170a06c548f39bb2c794fec79008e9b3789d8f1782ed0ac707",
+    "lib/data/portable_backup/account_recovery_local_snapshot.dart": "3e2ef617cbf386752ff8c2409411be02c72a9f129f8be73ac42906853f02418a",
+    "lib/data/portable_backup/account_recovery_crypto.dart": "1549613d0b40a25ed08c9c19754465a4411daa06c22d5e0a2bbcf277d1d123ae",
+    "integration_test/security_recovery_native_test.dart": "043aa4f28d6b876e7eeca69f22aaa71b942db07bad565dc024527c384b82d9fe"
+  },
+  "scope": "isolated Android debug harness; copied exact SQLite/receipt components only; no app main/providers/real accounts"
+}

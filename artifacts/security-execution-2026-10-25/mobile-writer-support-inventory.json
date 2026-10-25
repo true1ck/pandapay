@@ -1,0 +1,91 @@
+{
+  "inventory_date": "2026-10-25",
+  "scope": "Checked-in source and build metadata only; source is authoritative. No secret files, external directories, builds, or network were inspected.",
+  "database_open_paths": [
+    {
+      "kind": "foreground/provider",
+      "detail": "appDatabaseProvider awaits AppDatabase.open(); production resolves documents/pandapay.sqlite and calls openFile(). AppDatabase._ opens raw sqlite3, sets WAL/busy_timeout, creates schema and runs schema migrations. This is the actual normal app database path.",
+      "evidence": ["app/lib/app/providers.dart:3762-3774", "app/lib/data/local/app_database.dart:231-265", "app/lib/data/local/app_database.dart:384-420"]
+    },
+    {
+      "kind": "background SMS receiver",
+      "detail": "SMS listener independently calls AppDatabase.open(), captures into SmsImportStore, then closes the connection. On main DB open/write failure during recovery it persists raw sender/body/timestamp into separate pandapay-recovery-deferred-sms.sqlite and later drains into normal intake.",
+      "evidence": ["app/lib/features/sms_import/sms_listener_service.dart:56-97", "app/lib/data/local/recovery_deferred_sms.dart:11-41", "app/lib/data/local/recovery_deferred_sms.dart:89-134"]
+    },
+    {
+      "kind": "background/bulk SMS worker isolate",
+      "detail": "SmsCaptureWorker spawns an isolate with database path; worker opens an independent AppDatabase.openFile() connection and captures batched messages through FinancialStore/SmsImportStore.",
+      "evidence": ["app/lib/features/sms_import/sms_capture_worker.dart:10-20", "app/lib/features/sms_import/sms_capture_worker.dart:57-85", "app/lib/features/sms_import/sms_capture_worker.dart:132-173"]
+    },
+    {
+      "kind": "recovery exclusive writer",
+      "detail": "withRecoveryDatabase sets ordinary same-path connections query_only, opens separate SQLite handle and BEGIN IMMEDIATE; callers are required to drain sync, SMS, receipt operations first. This is still raw sqlite3, with no encrypted open in the path.",
+      "evidence": ["app/lib/data/local/app_database.dart:413-420", "app/lib/data/local/app_database.dart:423-469", "app/lib/data/portable_backup/account_recovery_coordinator.dart:64-84"]
+    }
+  ],
+  "writer_reader_inventory": [
+    {
+      "area": "SMS ingress, intake, observations and reconciliation",
+      "writers_readers": "OS listener writes financial SMS through SmsImportStore; bulk capture isolate writes batches; foreground inbox scanner persists provider checkpoints only after capture; recovery deferred spool preserves intake when DB is fenced; providers reconcile pending and legacy rows by active namespace.",
+      "evidence": ["app/lib/features/sms_import/sms_listener_service.dart:46-97", "app/lib/features/sms_import/sms_capture_worker.dart:132-180", "app/lib/features/sms_import/sms_inbox_scanner.dart:18-58", "app/lib/features/sms_import/sms_inbox_scanner.dart:61-119", "app/lib/data/local/recovery_deferred_sms.dart:43-113", "app/lib/app/providers.dart:572-617"]
+    },
+    {
+      "area": "sync and pending queues",
+      "writers_readers": "SyncQueue persists namespaced edits/outbox state; SyncEngine pushes, pulls, materializes and acknowledges under AccountRecoveryOperationGate. Sync API is session-only; queue is sourced from shared AppDatabase.",
+      "evidence": ["app/lib/data/local/sync_queue.dart:20-37", "app/lib/data/local/sync_queue.dart:40-95", "app/lib/app/providers.dart:513-532", "app/lib/features/sync/sync_engine.dart:66-120", "app/lib/features/sync/sync_engine.dart:170-210"]
+    },
+    {
+      "area": "guest/account namespace",
+      "writers_readers": "Current cache namespace is signed-out when no token, user:<JWT subject> when present, else session:<SHA-256 token>. Shared install DB partitions most financial/cache rows by namespace. No current runtime guest namespace was found in this selection; secure receipt custody code defines user:/guest: labels but is not connected to the attachment repository.",
+      "evidence": ["app/lib/app/providers.dart:203-221", "app/lib/app/providers.dart:524-532", "app/lib/data/secure_storage/local_receipt_key_custody.dart:10-60"]
+    },
+    {
+      "area": "attachment add/view/delete",
+      "writers_readers": "TransactionAttachmentsRepository copies picked bytes/files in plaintext under documents/transaction_attachments/<transactionId>, then records path and metadata in transaction_attachments. Detail view reads with Image.file, opens external app or shares original path; delete removes DB row then file. Quick add also invokes repository add methods.",
+      "evidence": ["app/lib/data/local/transaction_attachments_repository.dart:38-56", "app/lib/data/local/transaction_attachments_repository.dart:59-141", "app/lib/data/local/transaction_attachments_repository.dart:143-151", "app/lib/features/activity/transaction_detail_screen.dart:779-835", "app/lib/features/activity/transaction_detail_screen.dart:838-861", "app/lib/features/activity/transaction_detail_screen.dart:863-887", "app/lib/features/quickadd/quick_add_screen.dart:510-520"]
+    },
+    {
+      "area": "receipt/OCR",
+      "writers_readers": "OCR helpers read source paths into memory and create temporary preprocessed image files; no attachment-key custody or encrypted receipt store call site was found in app/lib. Receipt OCR presence does not establish OCR-on-attachment integration.",
+      "evidence": ["app/lib/data/receipt_ocr.dart:53-62", "app/lib/data/spending_screenshot_ocr.dart:39-44", "app/lib/data/pdf_statement_ocr.dart:46-52"]
+    },
+    {
+      "area": "portable backup and restore",
+      "writers_readers": "Local snapshot reads a transactionally consistent namespace-filtered DB snapshot and all transaction attachment paths; collector copies attachment bytes to staging. Archive encrypts portable artifact with user passphrase. Restore stages/decrypts, then LocalPortableRestoreWriter replaces local state and writes restored attachment bytes/paths. Local attachments therefore have a separate portable encrypted backup flow; this does not encrypt live attachment files.",
+      "evidence": ["app/lib/data/portable_backup/local_snapshot_source.dart:26-58", "app/lib/data/portable_backup/local_snapshot_source.dart:113-220", "app/lib/data/portable_backup/portable_attachments.dart:53-114", "app/lib/data/portable_backup/portable_archive.dart:99-122", "app/lib/data/portable_backup/portable_restore.dart:72-119", "app/lib/data/portable_backup/local_restore_writer.dart:82-118", "app/lib/data/portable_backup/local_restore_writer.dart:271-294"]
+    },
+    {
+      "area": "account recovery snapshot/restore",
+      "writers_readers": "Coordinator is disabled by default at construction unless caller enables it; create requires explicit pending-data approval and captures via exclusive recovery lease. Restore requires explicit approval and writes fresh namespace. Recovery can include receipts by consent.",
+      "evidence": ["app/lib/data/portable_backup/account_recovery_coordinator.dart:22-47", "app/lib/data/portable_backup/account_recovery_coordinator.dart:99-139", "app/lib/data/portable_backup/account_recovery_coordinator.dart:152-178"]
+    }
+  ],
+  "encrypted_components_vs_runtime_wiring": {
+    "checked_in_components": [
+      {"component": "LocalDatabaseKeyCustody", "purpose": "Versioned per-install key material in secure key value storage; comments explicitly describe a shared DB containing guest/multiple accounts.", "evidence": ["app/lib/data/secure_storage/local_database_key_custody.dart:69-105"]},
+      {"component": "EncryptedDatabaseCopy", "purpose": "Verified encrypted DB copy and encrypted open helper exist.", "evidence": ["app/lib/data/secure_storage/encrypted_database_copy.dart:379-420", "app/lib/data/secure_storage/encrypted_database_copy.dart:635-660"]},
+      {"component": "EncryptedMigrationJournal / EncryptedMigrationState", "purpose": "Durable migration journal/state support exists; no class named EncryptedDatabaseMigration was found.", "evidence": ["app/lib/data/secure_storage/encrypted_database_migration.dart:7-27", "app/lib/data/secure_storage/encrypted_database_migration.dart:93-110"]},
+      {"component": "LocalReceiptKeyCustody and EncryptedReceiptFileStore", "purpose": "Per namespace key custody and AES-GCM receipt file codec/store exist as reusable components.", "evidence": ["app/lib/data/secure_storage/local_receipt_key_custody.dart:10-63", "app/lib/data/secure_storage/encrypted_receipt_file.dart:12-37", "app/lib/data/secure_storage/encrypted_receipt_file.dart:166-180"]}
+    ],
+    "runtime_wiring_finding": "A name-based rg search of checked-in app/lib surfaced AppDatabase production open using sqlite3.open directly and attachment repository/UI using plaintext File copy/read/share/delete. The search surfaced no direct app/lib call sites for EncryptedDatabaseCopy, LocalDatabaseKeyCustody, EncryptedReceiptFileStore, or LocalReceiptKeyCustody outside their secure_storage definitions. Treat those components as not observed on the inventoried runtime paths, rather than as proof against indirect/dynamic integrations; they are not evidence of active data-at-rest protection in the paths cited here.",
+    "evidence": ["app/lib/data/local/app_database.dart:404-420", "app/lib/data/local/transaction_attachments_repository.dart:59-151", "app/lib/features/activity/transaction_detail_screen.dart:838-861"]
+  },
+  "checked_in_mobile_build_metadata": {
+    "android": {"min_sdk": 24, "min_os_label": "Android 7.0", "compile_sdk": 37, "target_sdk": "flutter.targetSdkVersion (resolved value not established from these checked-in lines)"},
+    "ios": {"minimum_deployment_target": "iOS 15.5"},
+    "app_version": "1.0.5+40 (pubspec version/build metadata; appVersionProvider reports PackageInfo version only, normally version component)",
+    "evidence": ["app/android/app/build.gradle.kts:23", "app/android/app/build.gradle.kts:44-50", "app/ios/Podfile:2", "app/ios/Runner.xcodeproj/project.pbxproj:627", "app/pubspec.yaml:19", "app/lib/app/providers.dart:3754-3760"]
+  },
+  "release_and_support_unknowns": [
+    "These minimum OS/build values are checked-in configuration only; they do not prove the oldest released client, any built/installed/deployed app version, or actual store/device support.",
+    "No release artifact, store listing, deployment record, build provenance, device test, or oldest-supported-client input was inspected or established.",
+    "The app-status minSupportedVersion is fetched at runtime from a remote status API; its currently configured value is not present in this local source inventory.",
+    "The requested supported-client compatibility / migration rollout set and user population of legacy plaintext stores remain unknown."
+  ],
+  "gaps": [
+    "Normal foreground and SMS background database connections do not use encrypted database open/migration code in their call paths.",
+    "Normal live receipt attachments are copied and consumed as plaintext files; the encrypted receipt/key components have no observed runtime call sites.",
+    "Database is shared across signed-out/account namespaces, while current namespace uses signed-out/user/session labels; secure receipt custody's guest namespace is not wired to this runtime model.",
+    "Recovery deferred SMS is a second SQLite file containing message sender/body and is separately opened as raw sqlite3; migration/coverage for this spool is an explicit unknown."
+  ]
+}

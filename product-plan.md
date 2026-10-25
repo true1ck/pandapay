@@ -1,5 +1,7 @@
 # PandaPay — Product & Build Plan (India)
 
+> **Historical/product design reference — reviewed 25 October 2026.** Feature and architecture statements here may describe intended or earlier designs. The [current source architecture](docs/security-current-architecture-2026-10-25.md), [security progress](docs/security-implementation-progress-2026-10-22.md) and [deployment guide](deploy/DEPLOY.md) are the implementation/operations entrypoints. Do not infer a deployed feature, database topology or encryption state from this plan.
+
 *Tells you which of your cards to use for every transaction, at the moment you're about to pay.*
 
 **Revision 5** — reframed from "MVP" to **v1.0 Production Release**. This is not a prototype or a feature demo. It is a real product serving real people's real money, targeting **500+ users from launch**, self-hosted end to end. Everything in Part I must be complete, hardened, and trustworthy — not illustrative.

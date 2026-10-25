@@ -1,0 +1,317 @@
+{
+  "format": "pandapay-remaining-security-batch-verification-v1",
+  "verified_at_utc": "2026-10-24T06:22:37.833159+00:00",
+  "scope": "remaining-source-batch; synthetic regression and migration/recovery verification; not production release acceptance",
+  "branch": "dev",
+  "base_commit": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+  "uncommitted": true,
+  "candidate_sha256": "395027df8391c9da7df9dc5a3cc121bb45de6eb7bfc4637c937a1f36cf3ad5b4",
+  "candidate_source_file_count": 1230,
+  "candidate_hash_scope_file": "candidate-source-sha256.json",
+  "environments": {
+    "api_auth_node": "22.23.4 cached Linux images; synthetic providers, external networking disabled for unit suites",
+    "database_tool_node": "24.15.0 native with Git",
+    "native_postgresql": "18.4 Homebrew; owned temporary clusters",
+    "managed_role_postgresql": "Supabase Postgres image 17.6.1.136; owned disposable local Docker instance; postgres NOSUPERUSER CREATEROLE operator, independent restricted runtime logins",
+    "flutter": "3.44.8 stable / Dart 3.12.2",
+    "dependencies": "existing lockfiles and offline Flutter package cache; no new package dependency"
+  },
+  "checks": {
+    "api": {
+      "passed": 940,
+      "failed": 0,
+      "skipped": 2,
+      "log": "api-full"
+    },
+    "auth": {
+      "passed": 288,
+      "failed": 0,
+      "skipped": 0,
+      "log": "auth-final"
+    },
+    "database_tools": {
+      "passed": 100,
+      "failed": 0,
+      "log": "db-native-final"
+    },
+    "backup_setup": {
+      "passed": 45,
+      "failed": 0,
+      "log": "backup-final"
+    },
+    "deployment": {
+      "passed": 21,
+      "failed": 0,
+      "log": "deployment-final"
+    },
+    "app": {
+      "passed": 1561,
+      "failed": 0,
+      "log": "app-tests-final"
+    },
+    "app_analysis": {
+      "errors": 0,
+      "warnings": 0,
+      "informational_notices": 74,
+      "log": "app-analysis-final"
+    },
+    "console": {
+      "passed": 29,
+      "failed": 0,
+      "log": "console-tests-final"
+    },
+    "console_analysis": {
+      "errors": 0,
+      "warnings": 0,
+      "informational_notices": 0,
+      "log": "console-analysis-final"
+    },
+    "console_csp_build": {
+      "status": "passed",
+      "flags": [
+        "--release",
+        "--csp",
+        "--no-web-resources-cdn"
+      ],
+      "actual_browser_interaction": false,
+      "log": "console-build-final"
+    },
+    "domain": {
+      "passed": 227,
+      "failed": 0,
+      "log": "domain-tests-final"
+    },
+    "postgres_role_fixtures": {
+      "status": "passed",
+      "scripts": 12,
+      "fresh_databases": 13,
+      "log": "postgres-final"
+    },
+    "encrypted_paired_recovery": {
+      "status": "passed",
+      "data_scope": "synthetic",
+      "format": "v5 age-encrypted paired PostgreSQL",
+      "log": "recovery-final"
+    },
+    "managed_postgres17": {
+      "status": "passed",
+      "fixtures": [
+        "console-browser-managed17",
+        "retention-managed17",
+        "lifecycle-final-managed17",
+        "runtime-privileges-managed17",
+        "data-cleanup-managed17"
+      ]
+    },
+    "javascript_syntax": {
+      "files": 310,
+      "failed": 0
+    },
+    "notification_work_preserved": {
+      "files": 12,
+      "unchanged_sha256": true
+    },
+    "release_checker": {
+      "status": "correctly-refused-incomplete-inputs",
+      "exit_code": 2,
+      "release_ready": false,
+      "missing_gates": [
+        "exact_candidate_evidence",
+        "api",
+        "auth",
+        "database",
+        "backup",
+        "deployment",
+        "app",
+        "console",
+        "actual_data_restore",
+        "target_provider_upgrade",
+        "oldest_supported_client",
+        "signed_device_recovery",
+        "provider_delivery",
+        "operator_alerts",
+        "rollout_recovery",
+        "backup_custody",
+        "productPrivileges",
+        "authPrivileges",
+        "productData",
+        "authData",
+        "postgres_provider_portability",
+        "free_host_resource_limits",
+        "off_host_backup_custody",
+        "retained_key_inventory",
+        "hash_bound_backup_restore"
+      ],
+      "report": "release-check.json"
+    },
+    "audit_report": {
+      "status": "passed",
+      "local_links": 449,
+      "remediation_items": 68,
+      "html_reproducible": true,
+      "proof": "report-verification.json"
+    }
+  },
+  "proofs": {
+    "api-full": {
+      "proof_file": "api-full.log",
+      "proof_sha256": "f1121ff0bc9b9cdc67b8353348d81db8bcd054a73509b4f6a79190bad41357bd",
+      "original_full_log_sha256": "672616c7d30978216f2fd3432170559606f4a7f76f843abb552a4969494456b9",
+      "original_full_log_bytes": 198516,
+      "content": "final summary excerpt"
+    },
+    "auth-final": {
+      "proof_file": "auth-final.log",
+      "proof_sha256": "c1fec9f47596bca60c4b228a7e9f2cf22d435d4597b513a689ed0c187d638733",
+      "original_full_log_sha256": "0f043119bf806f6d931acb1e7133e5e598554db105557216b6ff5cae770d4659",
+      "original_full_log_bytes": 67260,
+      "content": "final summary excerpt"
+    },
+    "db-native-final": {
+      "proof_file": "db-native-final.log",
+      "proof_sha256": "54bc67a63653866e7db9a63a5fd2fd4ef82c097634cf6b486d24504b87c6c856",
+      "original_full_log_sha256": "3cd8dc82e6317ad79c863aa35174197526f449fa8826568a180ecffe625dc2f0",
+      "original_full_log_bytes": 9802,
+      "content": "final summary excerpt"
+    },
+    "backup-final": {
+      "proof_file": "backup-final.log",
+      "proof_sha256": "89a29ee3e435f937157e657e3f7e08ed4014b5d3f7718e777f07281be22035a7",
+      "original_full_log_sha256": "f23df652942a186ab6154e9b0f684657cbf3d3e78cebfec9a1f4fbe74c621284",
+      "original_full_log_bytes": 8839,
+      "content": "final summary excerpt"
+    },
+    "deployment-final": {
+      "proof_file": "deployment-final.log",
+      "proof_sha256": "8c35d68a71fb9862398e79feefd68eec56f08b2e55935528ac24ad73cfc850a3",
+      "original_full_log_sha256": "fa57711ff760ca59fd2ab532cac5e905075ebeb1eec1491738b71c183331986d",
+      "original_full_log_bytes": 3943,
+      "content": "final summary excerpt"
+    },
+    "app-tests-final": {
+      "proof_file": "app-tests-final.log",
+      "proof_sha256": "7a1e0bf49adafdb9a6516bf5214d35660b9a7bab9252907f598829b69681fe80",
+      "original_full_log_sha256": "31179cb4f251986b047ba56348dcb4f7725ced1ba20efb40e10d0a21ceb5594e",
+      "original_full_log_bytes": 341953,
+      "content": "final summary excerpt"
+    },
+    "console-tests-final": {
+      "proof_file": "console-tests-final.log",
+      "proof_sha256": "ddbf755d7cce7ca6963eeaabf768ea848545b6be347b1b126d9345419ed5c21d",
+      "original_full_log_sha256": "012bce8fa107bf922eb372c5666a8d45ebc7fde75447e3ee2d82c751923fb442",
+      "original_full_log_bytes": 5406,
+      "content": "final summary excerpt"
+    },
+    "domain-tests-final": {
+      "proof_file": "domain-tests-final.log",
+      "proof_sha256": "e8b192dd33dd690b6eef5ea0c3d55fa5219df6e361e259cc323f1d1a753c2826",
+      "original_full_log_sha256": "ecc84c270d378cd2b90745bfdec3d710965d184f6c771a2eb7d2a1b0cc94616b",
+      "original_full_log_bytes": 25560,
+      "content": "final summary excerpt"
+    },
+    "app-analysis-final": {
+      "proof_file": "app-analysis-final.log",
+      "proof_sha256": "375607c327bc49a84f84eadf4bac8a50028d7ae38a95d04c54b7de7de69b6f84",
+      "original_full_log_sha256": "375607c327bc49a84f84eadf4bac8a50028d7ae38a95d04c54b7de7de69b6f84",
+      "original_full_log_bytes": 15264,
+      "content": "complete count-only fixture output"
+    },
+    "console-analysis-final": {
+      "proof_file": "console-analysis-final.log",
+      "proof_sha256": "72567d96360e492e61208ad8824816c6a1d0bb067515df958c151219e07feb81",
+      "original_full_log_sha256": "72567d96360e492e61208ad8824816c6a1d0bb067515df958c151219e07feb81",
+      "original_full_log_bytes": 96,
+      "content": "complete count-only fixture output"
+    },
+    "console-build-final": {
+      "proof_file": "console-build-final.log",
+      "proof_sha256": "55566c70211d6d6fd4a1729446bcb8c60759b0ac524480ec422a57ad8c587329",
+      "original_full_log_sha256": "55566c70211d6d6fd4a1729446bcb8c60759b0ac524480ec422a57ad8c587329",
+      "original_full_log_bytes": 395,
+      "content": "complete count-only fixture output"
+    },
+    "postgres-final": {
+      "proof_file": "postgres-final.log",
+      "proof_sha256": "a3ab4beb2f4dcdd916373a2e31f25f7747dc24ba34078be8fc3fc6f6e15e1033",
+      "original_full_log_sha256": "a3ab4beb2f4dcdd916373a2e31f25f7747dc24ba34078be8fc3fc6f6e15e1033",
+      "original_full_log_bytes": 2789,
+      "content": "complete count-only fixture output"
+    },
+    "recovery-final": {
+      "proof_file": "recovery-final.log",
+      "proof_sha256": "a5c965ffa1fa9bfcf0b92b17138cbd0a3988c402c9f7f7dd105bca8ce3b67485",
+      "original_full_log_sha256": "a5c965ffa1fa9bfcf0b92b17138cbd0a3988c402c9f7f7dd105bca8ce3b67485",
+      "original_full_log_bytes": 471,
+      "content": "complete count-only fixture output"
+    },
+    "console-browser-managed17": {
+      "proof_file": "console-browser-managed17.log",
+      "proof_sha256": "19f268e98549a4ff11fa513c9388afac4507b7824b45887655e317cd713dcede",
+      "original_full_log_sha256": "19f268e98549a4ff11fa513c9388afac4507b7824b45887655e317cd713dcede",
+      "original_full_log_bytes": 247,
+      "content": "complete count-only fixture output"
+    },
+    "retention-managed17": {
+      "proof_file": "retention-managed17.log",
+      "proof_sha256": "8bdfac2802353a5d5af8ee69041b4dae9022c0e3a834b3079e4c19811cf214aa",
+      "original_full_log_sha256": "8bdfac2802353a5d5af8ee69041b4dae9022c0e3a834b3079e4c19811cf214aa",
+      "original_full_log_bytes": 233,
+      "content": "complete count-only fixture output"
+    },
+    "lifecycle-final-managed17": {
+      "proof_file": "lifecycle-final-managed17.log",
+      "proof_sha256": "334341d0ed9c967d7bc02893b808ff6deaec3243286ce3ebadd24d9abdb21330",
+      "original_full_log_sha256": "334341d0ed9c967d7bc02893b808ff6deaec3243286ce3ebadd24d9abdb21330",
+      "original_full_log_bytes": 318,
+      "content": "complete count-only fixture output"
+    },
+    "runtime-privileges-managed17": {
+      "proof_file": "runtime-privileges-managed17.log",
+      "proof_sha256": "7aa1b7bcf70d32264a2f4daacc2ce75c50bcbfb89ca86affa0a28e1ab85430f8",
+      "original_full_log_sha256": "7aa1b7bcf70d32264a2f4daacc2ce75c50bcbfb89ca86affa0a28e1ab85430f8",
+      "original_full_log_bytes": 311,
+      "content": "complete count-only fixture output"
+    },
+    "data-cleanup-managed17": {
+      "proof_file": "data-cleanup-managed17.log",
+      "proof_sha256": "c2caa09db240ecffb0ce44aa32665d24dda20ae61e9a758f1a724c5df6dd430b",
+      "original_full_log_sha256": "c2caa09db240ecffb0ce44aa32665d24dda20ae61e9a758f1a724c5df6dd430b",
+      "original_full_log_bytes": 267,
+      "content": "complete count-only fixture output"
+    }
+  },
+  "issues_repaired_during_verification": [
+    "New recovery snapshot analyzer warning/casts and brace notices fixed; existing 74 infos remain.",
+    "Database/tool tests in minimal cached Node22 image lacked Git; complete unchanged suite passed with native Node24/Git. This is not a claimed 100/100 container run.",
+    "PG17 CREATEROLE does not imply SET membership; fixture-only cleanup/default-privilege grants corrected and rerun. Runtime checks were not weakened."
+  ],
+  "not_performed": [
+    "live DDL or data/contact mutation",
+    "deployed environment/key generation or rotation",
+    "provider message or actual sender/domain test",
+    "actual browser cookie/CSP interaction",
+    "signed Android/iOS upgrade or device recovery",
+    "current actual-data restore/target-provider cutover/failback",
+    "physical backup/key-custody verification",
+    "deployment/restart",
+    "commit/push"
+  ],
+  "remaining_gates": [
+    "Wider legacy privilege matrix repair and actual-data duplicate/index/financial review; tools report drift without blind mutation.",
+    "Real same-origin browser/proxy/operator acceptance; new static console and gateway must ship together.",
+    "Supported-client transition away from legacy anonymous lookup and four-digit OTP; broader abuse classes.",
+    "Independently retained deletion journal and monitored lifecycle/retention/remaining job/outbox operations; no physical financial erase policy assumed.",
+    "Recovery consent UI/provider wiring, real app operation barrier, complete local schema coverage, signed-device/native key-custody and resumable live database/receipt encryption.",
+    "Exact-candidate current actual-data recovery, intended provider PostgreSQL role/extension/quota/cutover/post-write failback and oldest supported clients.",
+    "Two independent off-host encrypted copies and separate private identity custody; current Mac remains one location."
+  ],
+  "default_state": {
+    "console_gateway": "off; new web console requires paired gateway rollout",
+    "account_lifecycle": "off in application/polling/DB controls",
+    "account_recovery": "off; mobile modules unwired; no silent uploads",
+    "live_local_storage_encryption": "disabled",
+    "extra_user_password": "not introduced"
+  },
+  "cleanup": "owned native fixture clusters stopped/removed by runners; exact owned managed PostgreSQL 17 container removed",
+  "documentation": "docs/security-remaining-source-implementation-2026-10-24.md and updated Markdown/generated HTML audit"
+}

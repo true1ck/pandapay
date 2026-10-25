@@ -68,6 +68,8 @@ def main():
     parser.add_argument("recovery_folder", type=Path)
     parser.add_argument("--image", required=True, help="Reviewed Supabase PG image with source extensions")
     parser.add_argument("--contact-upgrade", action="store_true", help="Rehearse the owner-approved test contact resolution on the disposable copy")
+    parser.add_argument("--data-review", action="store_true", help="Save encrypted, bounded read-only product/auth data review from the restored copy")
+    parser.add_argument("--privilege-review", action="store_true", help="Save encrypted read-only restored privilege/history review; requires explicit runtime role names in the environment")
     parser.add_argument("--product-baseline", type=Path, help="Also rehearse the product upgrade using this independently reviewed source baseline")
     parser.add_argument("--dump-image", default=os.environ.get("BACKUP_PG_DUMP_IMAGE"), help="Reviewed matching pg_dump client image for the product baseline")
     args = parser.parse_args()
@@ -231,6 +233,10 @@ os.execvp(command[0],command)
                            CONTACT_PROPOSAL_FILE=str(root / "contact-review/contact-conflict-proposal.json.age"),
                            CONTACT_IDENTITY_FILE=str(root / "keys/recovery-identity.txt"),
                            CONTACT_RECIPIENTS_FILE=str(root / "public-recipients.txt"))
+            if args.data_review:
+                env["RESTORE_DATA_REVIEW_FILE"] = str(root / "status/data-review.json.age")
+            if args.privilege_review:
+                env["RESTORE_PRIVILEGE_REVIEW_FILE"] = str(root / "status/privilege-review.json.age")
             if args.product_baseline:
                 env["PRODUCT_REVIEWED_BASELINE_FILE"] = str(args.product_baseline.resolve())
                 env["PP_RECOVERY_DUMP_IMAGE"] = args.dump_image

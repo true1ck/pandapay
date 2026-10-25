@@ -46,6 +46,17 @@ services:
       ADMIN_DATABASE_URL: "${ADMIN_DATABASE_URL:?}"
       AUTH_MIGRATION_DATABASE_URL: "${AUTH_MIGRATION_DATABASE_URL:-${AUTH_DATABASE_URL:?}}"
       AUTH_RUNTIME_ROLE: "${AUTH_RUNTIME_ROLE:-}"
+      ENABLE_ADMIN_DASHBOARD: "${ENABLE_ADMIN_DASHBOARD:-false}"
+      PARTNER_WEBHOOK_DB_PASSWORD: "${PARTNER_WEBHOOK_DB_PASSWORD:-}"
+      IMAP_WORKER_DB_PASSWORD: "${IMAP_WORKER_DB_PASSWORD:-}"
+      BACKUP_STATUS_WRITER_DB_PASSWORD: "${BACKUP_STATUS_WRITER_DB_PASSWORD:-}"
+      CONSOLE_SESSION_DB_PASSWORD: "${CONSOLE_SESSION_DB_PASSWORD:-}"
+      AUTH_LIFECYCLE_DB_PASSWORD: "${AUTH_LIFECYCLE_DB_PASSWORD:-}"
+      ACCOUNT_LIFECYCLE_DB_PASSWORD: "${ACCOUNT_LIFECYCLE_DB_PASSWORD:-}"
+      MAINTENANCE_DB_PASSWORD: "${MAINTENANCE_DB_PASSWORD:-}"
+      AUTH_MAINTENANCE_DB_PASSWORD: "${AUTH_MAINTENANCE_DB_PASSWORD:-}"
+      MAINTENANCE_READER_DB_PASSWORD: "${MAINTENANCE_READER_DB_PASSWORD:-}"
+      DB_ACCESS_LOGGING_ENABLED: "${DB_ACCESS_LOGGING_ENABLED:-false}"
       APP_USER_PASSWORD: "${APP_USER_PASSWORD:?}"
       REWARD_WORKER_DB_PASSWORD: "${REWARD_WORKER_DB_PASSWORD:?}"
       # Opt-in: blank keeps the autonomous SMS learner disabled (no dedicated
@@ -54,6 +65,7 @@ services:
       PHONE_LOOKUP_HMAC_KEY: "${PHONE_LOOKUP_HMAC_KEY:?}"
       ENCRYPTION_ENABLED: "${ENCRYPTION_ENABLED:-true}"
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:?}"
+      ENCRYPTION_READ_KEYS_JSON: "${ENCRYPTION_READ_KEYS_JSON:-}"
       DB_SSL: "${DB_SSL:-true}"
       DB_SSL_CA: "${DB_SSL_CA:-}"
       MIGRATION_LEGACY_BASELINE_FILE: "${MIGRATION_LEGACY_BASELINE_FILE:-}"
@@ -90,6 +102,7 @@ services:
       JWT_ISSUER: "${JWT_ISSUER:-pandapay-auth}"
       JWT_AUDIENCE: "${JWT_AUDIENCE:-mobile-app}"
       AUTH_INTERNAL_BASE_URL: http://auth:3210
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:?}"
       AUTH_INTERNAL_SERVICE_SECRET: "${AUTH_INTERNAL_SERVICE_SECRET:?}"
       REFERRAL_IDENTITY_HMAC_KEY: "${REFERRAL_IDENTITY_HMAC_KEY:?}"
       REFERRAL_IDENTITY_HMAC_KEY_VERSION: "${REFERRAL_IDENTITY_HMAC_KEY_VERSION:-v1}"
@@ -106,6 +119,25 @@ services:
       SMS_LEARNING_HMAC_KEY: "${SMS_LEARNING_HMAC_KEY:-}"
       INBOUND_EMAIL_WEBHOOK_SECRET: "${INBOUND_EMAIL_WEBHOOK_SECRET:?}"
       PARTNER_WEBHOOK_SECRET: "${PARTNER_WEBHOOK_SECRET:?}"
+      PARTNER_WEBHOOK_DATABASE_URL: "${PARTNER_WEBHOOK_DATABASE_URL:-}"
+      IMAP_POLL_DATABASE_URL: "${IMAP_POLL_DATABASE_URL:-}"
+      IMAP_POLL_INTERVAL_MINUTES: "${IMAP_POLL_INTERVAL_MINUTES:-0}"
+      ACCOUNT_LIFECYCLE_ENABLED: "${ACCOUNT_LIFECYCLE_ENABLED:-false}"
+      ACCOUNT_LIFECYCLE_DATABASE_URL: "${ACCOUNT_LIFECYCLE_DATABASE_URL:-}"
+      ACCOUNT_LIFECYCLE_POLL_INTERVAL_MS: "${ACCOUNT_LIFECYCLE_POLL_INTERVAL_MS:-0}"
+      # Add the reviewed private journal mounts in a release-specific override.
+      ACCOUNT_LIFECYCLE_JOURNAL_A: "${ACCOUNT_LIFECYCLE_JOURNAL_A:-}"
+      ACCOUNT_LIFECYCLE_CHECKPOINT_ROOT: "${ACCOUNT_LIFECYCLE_CHECKPOINT_ROOT:-}"
+      ACCOUNT_LIFECYCLE_JOURNAL_B: "${ACCOUNT_LIFECYCLE_JOURNAL_B:-}"
+      ACCOUNT_LIFECYCLE_JOURNAL_ID: "${ACCOUNT_LIFECYCLE_JOURNAL_ID:-}"
+      ACCOUNT_LIFECYCLE_JOURNAL_AUTH_KEY: "${ACCOUNT_LIFECYCLE_JOURNAL_AUTH_KEY:-}"
+      ACCOUNT_LIFECYCLE_JOURNAL_RECIPIENTS_FILE: "${ACCOUNT_LIFECYCLE_JOURNAL_RECIPIENTS_FILE:-}"
+      ACCOUNT_LIFECYCLE_JOURNAL_AGE_BINARY: "${ACCOUNT_LIFECYCLE_JOURNAL_AGE_BINARY:-age}"
+      ACCOUNT_RECOVERY_ENABLED: "${ACCOUNT_RECOVERY_ENABLED:-false}"
+      SYNC_TYPED_WRITES_ENABLED: "${SYNC_TYPED_WRITES_ENABLED:-false}"
+      ACCOUNT_RECOVERY_WRAPPING_KEY: "${ACCOUNT_RECOVERY_WRAPPING_KEY:-}"
+      ACCOUNT_RECOVERY_WRAPPING_KEY_ID: "${ACCOUNT_RECOVERY_WRAPPING_KEY_ID:-}"
+      ACCOUNT_RECOVERY_WRAPPING_READ_KEYS_JSON: "${ACCOUNT_RECOVERY_WRAPPING_READ_KEYS_JSON:-}"
       IMAP_ENCRYPTION_KEY: "${IMAP_ENCRYPTION_KEY:?}"
       GOOGLE_PLACES_API_KEY: "${GOOGLE_PLACES_API_KEY:-}"
       # Remote push delivery is optional at the API layer. Keep these empty
@@ -233,10 +265,23 @@ services:
     environment:
       NODE_ENV: production
       TRUST_PROXY_HOPS: "1"
+      ENABLE_ADMIN_DASHBOARD: "${ENABLE_ADMIN_DASHBOARD:-false}"
+      DB_ACCESS_LOGGING_ENABLED: "${DB_ACCESS_LOGGING_ENABLED:-false}"
+      CONSOLE_BROWSER_ENABLED: "${CONSOLE_BROWSER_ENABLED:-false}"
+      CONSOLE_BROWSER_ORIGIN: "${CONSOLE_BROWSER_ORIGIN:-}"
+      CONSOLE_SESSION_DATABASE_URL: "${CONSOLE_SESSION_DATABASE_URL:-}"
+      CONSOLE_SESSION_ENCRYPTION_KEY: "${CONSOLE_SESSION_ENCRYPTION_KEY:-}"
+      CONSOLE_AUTH_UPSTREAM: http://127.0.0.1:3210
+      CONSOLE_API_UPSTREAM: http://api:4000
+      ACCOUNT_LIFECYCLE_ENABLED: "${ACCOUNT_LIFECYCLE_ENABLED:-false}"
+      AUTH_LIFECYCLE_DATABASE_URL: "${AUTH_LIFECYCLE_DATABASE_URL:-}"
       DATABASE_URL: "${AUTH_DATABASE_URL:?}"
       DB_SSL: "${DB_SSL:-true}"
       DB_SSL_CA: "${DB_SSL_CA:-}"
       DB_POOL_MAX: "${DB_POOL_MAX:-10}"
+      OTP_WORK_MAX_CONCURRENT: "${OTP_WORK_MAX_CONCURRENT:-2}"
+      OTP_EMAIL_MAX_CONCURRENT: "${OTP_EMAIL_MAX_CONCURRENT:-2}"
+      OTP_SMS_MAX_CONCURRENT: "${OTP_SMS_MAX_CONCURRENT:-2}"
       DB_IDLE_TIMEOUT_MS: "${DB_IDLE_TIMEOUT_MS:-10000}"
       DB_CONNECTION_TIMEOUT_MS: "${DB_CONNECTION_TIMEOUT_MS:-5000}"
       PORT: "3210"
@@ -257,12 +302,10 @@ services:
       # OTP verification succeed without sending a real code.
       ALLOW_TEST_OTP: "false"
       ENCRYPTION_ENABLED: "${ENCRYPTION_ENABLED:-true}"
-      # The actual AES-256 key fieldEncryption.js needs — ENCRYPTION_ENABLED
-      # alone does nothing without it. A code review of this file caught that
-      # the first version of this compose file set ENCRYPTION_ENABLED=true
-      # but never defined this, which makes encryption silently no-op (a
-      # warning to stderr, nothing else) rather than fail loudly.
+      # Preserve the original legacy AES key. Hosted auth refuses startup
+      # if it is missing/invalid; optional read keys never replace it.
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:?}"
+      ENCRYPTION_READ_KEYS_JSON: "${ENCRYPTION_READ_KEYS_JSON:-}"
       # Generic SMTP — auth/src/services/emailService.js uses nodemailer
       # against any host, Gmail included. Without these, emailService.js
       # falls back to logging the OTP to the container's own stdout instead
@@ -279,6 +322,8 @@ services:
       # SMS provider is added.
       ENABLE_PHONE_OTP: "${ENABLE_PHONE_OTP:-false}"
       ENABLE_EMAIL_OTP: "${ENABLE_EMAIL_OTP:-true}"
+      AUTH_RETIRE_LEGACY_OTP: "${AUTH_RETIRE_LEGACY_OTP:-false}"
+      AUTH_RETIRE_PUBLIC_LOOKUP: "${AUTH_RETIRE_PUBLIC_LOOKUP:-false}"
     ports:
       - "127.0.0.1:3210:3210"
 
@@ -326,6 +371,55 @@ services:
         target: /offhost/b
         bind:
           create_host_path: false
+
+  # Explicit one-shot commands; profile does not install a host scheduler.
+  operational-maintenance:
+    profiles: [maintenance]
+    build:
+      context: ./api
+    command: [node, src/maintenance/cli.js, --run]
+    restart: "no"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    pids_limit: 64
+    logging: *default-logging
+    healthcheck:
+      disable: true
+    environment:
+      NODE_ENV: production
+      MAINTENANCE_ENABLED: "${MAINTENANCE_ENABLED:-false}"
+      MAINTENANCE_DATABASE_URL: "${MAINTENANCE_DATABASE_URL:-}"
+      DB_SSL: "${DB_SSL:-true}"
+      DB_SSL_CA: "${DB_SSL_CA:-}"
+
+  auth-retention-maintenance:
+    profiles: [maintenance]
+    build:
+      context: ./auth
+    command: [node, src/services/maintenanceCli.js, --run, --apply]
+    restart: "no"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    pids_limit: 64
+    logging: *default-logging
+    healthcheck:
+      disable: true
+    environment:
+      NODE_ENV: production
+      AUTH_RETENTION_MAINTENANCE_ENABLED: "${AUTH_RETENTION_MAINTENANCE_ENABLED:-false}"
+      AUTH_MAINTENANCE_DATABASE_URL: "${AUTH_MAINTENANCE_DATABASE_URL:-}"
+      AUTH_RETENTION_DATABASE_URL: "${AUTH_RETENTION_DATABASE_URL:-}"
+      AUTH_DB_ACCESS_LOG_RETENTION_DAYS: "${AUTH_DB_ACCESS_LOG_RETENTION_DAYS:-}"
+      AUTH_ABUSE_STATE_RETENTION_DAYS: "${AUTH_ABUSE_STATE_RETENTION_DAYS:-}"
+      AUTH_RETENTION_BATCH_SIZE: "${AUTH_RETENTION_BATCH_SIZE:-100}"
+      AUTH_RETENTION_MAX_BATCHES: "${AUTH_RETENTION_MAX_BATCHES:-10}"
+      AUTH_RETENTION_MAX_DURATION_MS: "${AUTH_RETENTION_MAX_DURATION_MS:-5000}"
+      DB_SSL: "${DB_SSL:-true}"
+      DB_SSL_CA: "${DB_SSL_CA:-}"
 
 volumes:
   backups:

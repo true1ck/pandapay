@@ -1,0 +1,31 @@
+# Build with: flutter build web --release --csp --no-web-resources-cdn
+# Serve the reviewed bundle and /browser from one HTTPS origin. Configure
+# CONSOLE_BROWSER_ORIGIN and CORS_ALLOWED_ORIGINS to exactly this origin.
+server {
+    listen 443 ssl;
+    server_name console.yourapp.com;
+    ssl_certificate /etc/letsencrypt/live/console.yourapp.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/console.yourapp.com/privkey.pem;
+    root /var/www/pandapay-console;
+    index index.html;
+    client_max_body_size 100k;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy no-referrer always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    # Expiry directives preserve inherited security headers. Never cache a
+    # session response or silently serve index.html for missing scripts.
+    location ^~ /browser/ {
+        proxy_pass http://127.0.0.1:3210;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Request-ID $req_id;
+        proxy_read_timeout 35s;
+        proxy_buffering off;
+    }
+    location = /index.html { expires -1; try_files $uri =404; }
+    location ~* \.(js|wasm|json|bin|ttf|otf|png|ico)$ { expires -1; try_files $uri =404; }
+    location / { expires -1; try_files $uri $uri/ /index.html; }
+}

@@ -1,3 +1,4 @@
+import 'portable_backup/account_recovery_operation_gate.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -396,7 +397,8 @@ class TransactionTagsRepository extends ChangeNotifier {
   }
 
   Future<void> sync() =>
-      _syncFuture ??= _runSync().whenComplete(() => _syncFuture = null);
+      _syncFuture ??= AccountRecoveryOperationGate.process.run(_runSync)
+          .whenComplete(() => _syncFuture = null);
   Future<void> _runSync() async {
     do {
       _syncAgain = false;

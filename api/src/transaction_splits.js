@@ -1,4 +1,5 @@
 const { safeErrorCode } = require('./safeErrorCode');
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Validate before writing NUMERIC(…, 2): rounding each stored row after
 // comparing an unrounded sum can otherwise create an over-allocation.
@@ -54,6 +55,9 @@ module.exports = { validateSplits, splitTotalPaise, splitFingerprint, splitWrite
 
 function registerSplitRoutes(app, { requireAuth, withUserClient }) {
 app.get('/transactions/:id/splits', requireAuth, async (req, res) => {
+  if (typeof req.params.id !== 'string' || !UUID.test(req.params.id)) {
+    return res.status(400).json({ error: 'invalid transaction id' });
+  }
   try {
     const result = await withUserClient(req.userId, async (client) => {
       const owns = await client.query(`SELECT id FROM transactions WHERE id = $1 AND profile_id = $2`, [
@@ -99,6 +103,9 @@ app.get('/transactions/:id/splits', requireAuth, async (req, res) => {
  * Recomputing state from splits would double-count the spend.
  */
 app.put('/transactions/:id/splits', requireAuth, async (req, res) => {
+  if (typeof req.params.id !== 'string' || !UUID.test(req.params.id)) {
+    return res.status(400).json({ error: 'invalid transaction id' });
+  }
   const splits = (req.body || {}).splits;
   const validationError = validateSplits(splits);
   if (validationError) return res.status(400).json({ error: validationError });

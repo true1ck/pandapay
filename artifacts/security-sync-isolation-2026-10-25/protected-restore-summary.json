@@ -1,0 +1,19 @@
+{
+  "format": "pandapay-protected-restore-upgrade-attempt-v1",
+  "generated_at": "2026-10-25T15:23:01.472Z",
+  "candidate_sha256": "04b0eeb4da4b7ce643d2b6b13a169a2e27316314abc57640750a91aa63306bfe",
+  "candidate_unchanged": true,
+  "exit_code": 1,
+  "timed_out": false,
+  "safe_messages": [
+    "Disposable memory-backed recovery container started.",
+    "Independent recovery PostgreSQL is ready; applying reviewed roles and restore checks."
+  ],
+  "existing_local_backup_only": true,
+  "live_connection_opened": false,
+  "live_mutations": false,
+  "retained_keys_used_privately": true,
+  "private_encrypted_diagnostic": "status/sync-isolation-upgrade.log.age",
+  "protected_backup_source_version": "historical existing local encrypted set; not a new live snapshot",
+  "production_accepted": false
+}

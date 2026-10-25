@@ -1,0 +1,15 @@
+{
+  "format": "pandapay-dependency-review-policy-v1",
+  "offline_only": true,
+  "max_files": 20000,
+  "max_file_bytes": 16777216,
+  "max_total_bytes": 268435456,
+  "max_vendor_files": 5000,
+  "max_vendor_file_bytes": 4194304,
+  "max_release_archive_bytes": 536870912,
+  "exclude_directories": [".git", "node_modules", "build", "dist", ".dart_tool", ".gradle", ".temp"],
+  "exclude_basenames": [".env", ".env.local", "key.properties", "local.properties"],
+  "exclude_extensions": [".pem", ".key", ".p12", ".jks", ".keystore", ".db", ".sqlite"],
+  "report_fields": ["path", "kind", "state", "sha256", "package_count", "license_count", "provenance_count"],
+  "secret_audit": {"output": "rule-file-line-count-only", "raw_matches": false, "incomplete_fails": true, "source_snapshot_excludes": ["private env files", "key files", "generated builds", "dependency caches"]}
+}

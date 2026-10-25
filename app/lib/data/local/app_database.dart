@@ -229,6 +229,8 @@ CREATE TABLE IF NOT EXISTS profile_name_cache (
 ''';
 
 class AppDatabase {
+  static final Set<AppDatabase> _connections = {};
+  static final Set<String> _recoveryPaths = {};
   final Database db;
   final String? filePath;
 
@@ -260,6 +262,7 @@ class AppDatabase {
         );
       }
     }
+    _connections.add(this);
   }
 
   void _ensureLocalUserCardsSchema() {
@@ -409,8 +412,91 @@ class AppDatabase {
 
   /// Worker isolates open their own connection; a native database handle
   /// must never be shared across isolates.
-  static AppDatabase openFile(String path) =>
-      AppDatabase._(sqlite3.open(path), filePath: path);
+  static AppDatabase openFile(String path) {
+    final absolute = p.normalize(File(path).absolute.path);
+    if (_recoveryPaths.contains(absolute)) {
+      throw StateError('Account recovery has exclusive local storage access');
+    }
+    return AppDatabase._(sqlite3.open(absolute), filePath: absolute);
+  }
+
+  /// A real SQLite write fence, including independent/background connections.
+  /// Recovery owns a separate connection and BEGIN IMMEDIATE; every ordinary
+  /// connection in this isolate is also query_only, so an async callback can
+  /// never accidentally join the recovery transaction. No live WAL is copied.
+  ///
+  /// Call only after draining sync, SMS capture and receipt operations through
+  /// the operation gate. SQLite alone cannot pause server requests or files.
+  Future<T> withRecoveryDatabase<T>(
+    Future<T> Function(AppDatabaseRecoveryLease lease) operation,
+  ) async {
+    final location = filePath;
+    if (location == null) {
+      throw StateError('Account recovery requires a file-backed database');
+    }
+    if (!_recoveryPaths.add(location)) {
+      throw StateError('Account recovery is already using this database');
+    }
+    final ordinary = <AppDatabase, int>{};
+    Database? recovery;
+    AppDatabaseRecoveryLease? lease;
+    var started = false;
+    try {
+      // These synchronous calls have no interleaving with normal callbacks.
+      for (final connection in _connections) {
+        if (connection.filePath != location) continue;
+        ordinary[connection] =
+            connection.db.select('PRAGMA query_only').single.values.first
+                as int;
+        connection.db.execute('PRAGMA query_only=ON');
+      }
+      recovery = sqlite3.open(location);
+      recovery.execute('PRAGMA busy_timeout=0');
+      recovery.execute('PRAGMA foreign_keys=ON');
+      // Refuse if a prior writer has not drained; do not kill or roll it back.
+      recovery.execute('BEGIN IMMEDIATE');
+      started = true;
+      lease = AppDatabaseRecoveryLease._(recovery);
+      final result = await operation(lease);
+      lease._requireActive();
+      recovery.execute('COMMIT');
+      started = false;
+      return result;
+    } catch (_) {
+      var rollbackConfirmed = false;
+      if (started) {
+        try {
+          recovery?.execute('ROLLBACK');
+          rollbackConfirmed = true;
+        } catch (_) {
+          // Preserve installed files when commit/rollback outcome is unknown.
+          // A later reconciliation can remove an orphan after checking the DB;
+          // deleting now could remove a receipt referenced by a committed row.
+        }
+      }
+      if (lease != null && rollbackConfirmed) await lease._rollbackFiles();
+      rethrow;
+    } finally {
+      lease?._active = false;
+      try {
+        recovery?.dispose();
+      } finally {
+        Object? restoreFailure;
+        for (final entry in ordinary.entries) {
+          if (!_connections.contains(entry.key)) continue;
+          try {
+            entry.key.db.execute('PRAGMA query_only=${entry.value}');
+          } catch (error) {
+            restoreFailure ??= error;
+          }
+        }
+        _recoveryPaths.remove(location);
+        if (restoreFailure != null) {
+          throw StateError('Local storage must be reopened after recovery');
+        }
+      }
+    }
+  }
 
   void saveProfileDisplayName(String namespace, String? displayName) {
     if (displayName == null || displayName.trim().isEmpty) return;
@@ -432,7 +518,44 @@ class AppDatabase {
     }
   }
 
-  void close() => db.dispose();
+  void close() {
+    _connections.remove(this);
+    db.dispose();
+  }
+}
+
+/// Only AppDatabase can issue this lease, after the native write lock exists.
+/// It is invalidated on commit/rollback and cannot be retained for later work.
+class AppDatabaseRecoveryLease {
+  final Database _database;
+  bool _active = true;
+  final List<Future<void> Function()> _fileRollbacks = [];
+  AppDatabaseRecoveryLease._(this._database);
+  void _requireActive() {
+    if (!_active) throw StateError('The recovery database lease has expired');
+  }
+
+  Database get database {
+    _requireActive();
+    return _database;
+  }
+
+  void removeNewFileOnRollback(File file) {
+    _requireActive();
+    _fileRollbacks.add(() async {
+      try {
+        if (await file.exists()) await file.delete();
+      } on FileSystemException {
+        // Only newly installed recovery files are eligible for this cleanup.
+      }
+    });
+  }
+
+  Future<void> _rollbackFiles() async {
+    for (final rollback in _fileRollbacks.reversed) {
+      await rollback();
+    }
+  }
 }
 
 /// Test-only convenience — avoids every test needing its own

@@ -1,0 +1,11 @@
+{
+  "package": "app.pandapay.keycipherfixture.pandapay",
+  "sha256": "b94fd9b0d660e467f9824d89f48912731631c276189fb1afa7b507f1a0966f5e",
+  "bytes": 111833566,
+  "tests_passed": 5,
+  "artifact_scope": "last receipt fixture debug APK; earlier fixtures built separately",
+  "no_user_app_replacement": true,
+  "native_lock_sha256": "1053d32e5fc6dfdc9fb7abe142decde1460c4a35e842bc178a55f0e5e3cef2c8",
+  "free_GiB_after": 25.71,
+  "used_percent_after": 94.42
+}

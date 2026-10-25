@@ -1,0 +1,1 @@
+PASS: exact-grant repair rehearsal rolled back; reviewed apply removed only TRUNCATE, grant option, ledger, schema CREATE, default table grant and unneeded inherited RPC; independent non-owner LOGIN retains tenant RLS CRUD and separate service safe RPC; data digests preserved; strict audit passes; tampered receipt and replay refused

@@ -1,7 +1,10 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../data/admin_api.dart';
 
 /// Sign-in uses the existing phone or email OTP routes. Whether the resulting
 /// session is an operator is decided by api/'s requireAdmin server-side, not
@@ -16,6 +19,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _codeController = TextEditingController();
+  final _deviceId =
+      'console-${List.generate(24, (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0')).join()}';
+  ConsoleOtpChallenge? _challenge;
   bool _useEmail = true;
   bool _otpRequested = false;
   bool _loading = false;
@@ -28,9 +34,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       if (_useEmail) {
-        await ref.read(authApiProvider).requestEmailOtp(_emailController.text.trim());
+        _challenge = await ref
+            .read(authApiProvider)
+            .requestEmailOtp(_emailController.text.trim(), deviceId: _deviceId);
       } else {
-        await ref.read(authApiProvider).requestOtp(_phoneController.text.trim());
+        _challenge = await ref
+            .read(authApiProvider)
+            .requestOtp(_phoneController.text.trim(), deviceId: _deviceId);
       }
       setState(() => _otpRequested = true);
     } catch (e) {
@@ -51,15 +61,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ? await authApi.verifyEmailOtp(
               _emailController.text.trim(),
               _codeController.text.trim(),
-              'console-web',
+              _deviceId,
+              challenge: _challenge,
             )
           : await authApi.verifyOtp(
               _phoneController.text.trim(),
               _codeController.text.trim(),
-              'console-web',
+              _deviceId,
+              challenge: _challenge,
             );
       final store = await ref.read(tokenStoreProvider.future);
-      await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+      await store.save(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      );
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
     } catch (e) {
       setState(() => _error = e.toString());
@@ -79,10 +94,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('PandaPay Console', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const Text(
+                  'PandaPay Console',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
-                const Text('Internal only. No public signup path exists.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const Text(
+                  'Internal only. No public signup path exists.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
                 const SizedBox(height: 24),
                 if (!_otpRequested)
                   SegmentedButton<bool>(
@@ -114,16 +134,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   TextField(
                     controller: _codeController,
-                    decoration: const InputDecoration(labelText: 'OTP code'),
+                    keyboardType: TextInputType.number,
+                    maxLength: ref.read(authApiProvider).otpCodeLength,
+                    decoration: InputDecoration(
+                      labelText:
+                          '${ref.read(authApiProvider).otpCodeLength}-digit code',
+                    ),
                   ),
                   TextButton(
                     onPressed: _loading
                         ? null
                         : () => setState(() {
-                              _otpRequested = false;
-                              _codeController.clear();
-                              _error = null;
-                            }),
+                            _otpRequested = false;
+                            _codeController.clear();
+                            _error = null;
+                          }),
                     child: const Text('Use a different account'),
                   ),
                 ],
@@ -133,8 +158,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ],
                 const SizedBox(height: 16),
                 FilledButton(
-                  onPressed: _loading ? null : (_otpRequested ? _verifyOtp : _requestOtp),
-                  child: Text(_loading ? 'Working...' : (_otpRequested ? 'Verify' : 'Send OTP')),
+                  onPressed: _loading
+                      ? null
+                      : (_otpRequested ? _verifyOtp : _requestOtp),
+                  child: Text(
+                    _loading
+                        ? 'Working...'
+                        : (_otpRequested ? 'Verify' : 'Send OTP'),
+                  ),
                 ),
               ],
             ),

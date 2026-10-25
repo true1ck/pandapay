@@ -1,0 +1,1 @@
+PASS: PostgreSQL 18 retained wrapping-key upload/read, missing-key and cross-account rejection, active-key writes, immutable rows, and pg_dump/restore reopen

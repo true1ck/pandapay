@@ -1,0 +1,25 @@
+✔ dry-run is count-only and never validates transport configuration (0.817ms)
+✔ payload is fixed and omits timestamps, acknowledgment, and arbitrary fields (0.075292ms)
+✔ webhook URL requires exact preconfigured HTTPS hostname (0.294666ms)
+✔ DNS validation rejects mixed public and private answers (3.736209ms)
+✔ delivery stores successful identities and skips acknowledged rows without acknowledging them (21.391458ms)
+✔ uncertain/failed send remains pending and is retried with same idempotency key (30.649333ms)
+✔ state parser rejects oversized, tampered, invalid, and symlinked state (1.191125ms)
+✔ atomic private state writer round-trips bounded identities (13.420959ms)
+✔ CLI default path is read-only dry-run and send requires exact enable flag (0.381084ms)
+✔ auth-retention notice is accepted and source identities prevent cross-host collisions (0.150958ms)
+✔ special IPv6 spellings and mapped/private destinations are refused (0.139208ms)
+✔ unsafe state directory refuses delivery before any webhook side effect (0.372041ms)
+✔ a state file is bound to its original source identity (19.013208ms)
+✔ TLS URL options cannot replace strict certificate or hostname verification (2.682167ms)
+✔ HTTPS transport supports all-address lookup and bounds response/timeout without live network (6.055166ms)
+✔ reader identity rejects writer capabilities and privileged or direct table access (1.837583ms)
+✔ flags reject non-boolean spellings even in diagnostic mode (0.079833ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 142.876708

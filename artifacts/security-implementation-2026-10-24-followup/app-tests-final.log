@@ -1,0 +1,16 @@
+02:52 +1551: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/sms_family_corpus_test.dart: corpus cases ambiguous suffix at two institutions: independent observations never merge
+02:52 +1552: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/sms_family_corpus_test.dart: delivery identity live broadcast then identical inbox row collapses to one source and one provisional spend
+02:52 +1553: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/sms_family_corpus_test.dart: delivery identity identical sender/body delivered days apart is documented as one source today
+02:52 +1554: loading /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/services/recurrence_engine_test.dart
+02:53 +1554: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/services/recurrence_engine_test.dart: RecurrenceEngine detects fixed-amount monthly SaaS subscription (e.g. Netflix)
+02:53 +1555: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/services/recurrence_engine_test.dart: RecurrenceEngine detects variable-amount monthly metered utility (e.g. Electricity)
+02:53 +1556: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/services/recurrence_engine_test.dart: RecurrenceEngine detects Indian prepaid telecom 28-day cycle (e.g. Jio)
+02:53 +1557: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/services/recurrence_engine_test.dart: RecurrenceEngine detects Indian prepaid telecom 56-day and 84-day cycles
+02:53 +1558: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/services/recurrence_engine_test.dart: RecurrenceEngine rejects irregular random visits without consistent cadence
+02:53 +1559: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/services/recurrence_engine_test.dart: SpecializedDomainClassifiers Broker message classifications
+02:53 +1560: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/services/recurrence_engine_test.dart: SpecializedDomainClassifiers Loan & EMI lifecycle classifications
+02:53 +1561: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/services/recurrence_engine_test.dart: SpecializedDomainClassifiers Insurance lifecycle classifications
+02:53 +1562: loading /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/notification_devices_api_test.dart
+02:53 +1562: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/notification_devices_api_test.dart: sendTestNotification accepts the provider-accepted response
+02:53 +1563: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/notification_devices_api_test.dart: sendTestNotification surfaces an unconfigured production service
+02:53 +1564: All tests passed!

@@ -181,6 +181,7 @@ python3 "$SCRIPT_DIR/backup_manifest.py" verify \
   --product-url-env RESTORE_PRODUCT_TARGET_URL --auth-url-env RESTORE_AUTH_TARGET_URL \
   --product-dump "$SET_DIR/product.dump.age" --auth-dump "$SET_DIR/auth.dump.age"
 export RESTORE_PRODUCT_EXACT_COMPARISON=passed
+export RESTORE_AUTH_EXACT_COMPARISON=passed
 
 mkdir -p "$RESTORE_STATUS_DIR"
 application_check=not_run
@@ -209,8 +210,15 @@ if [ -n "${RESTORE_UPGRADE_CHECK:-}" ]; then
   done < "$WORK/upgrade-check-output"
 fi
 status_tmp="$RESTORE_STATUS_DIR/.restore-verified-$SET_ID.tmp"
-printf 'set_id=%s\nstatus=database_restore_verified\napplication_check=%s\nupgrade_check=%s\nproduct_upgrade=%s\ncontact_upgrade=%s\nverified_at_utc=%s\n' \
-  "$SET_ID" "$application_check" "$upgrade_check" "$product_upgrade" "$contact_upgrade" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$status_tmp"
+# Bind publication proof to the exact ciphertext verified by this drill.
+# Historical set-id-only markers remain valid retention hints but cannot
+# publish application-visible recovery success.
+manifest_ciphertext_sha256="$(sha256sum "$SET_DIR/manifest.json.age" | awk '{print $1}')"
+product_ciphertext_sha256="$(sha256sum "$SET_DIR/product.dump.age" | awk '{print $1}')"
+auth_ciphertext_sha256="$(sha256sum "$SET_DIR/auth.dump.age" | awk '{print $1}')"
+printf 'set_id=%s\nstatus=database_restore_verified\napplication_check=%s\nupgrade_check=%s\nproduct_upgrade=%s\ncontact_upgrade=%s\nverified_at_utc=%s\nproof_format=pandapay-paired-postgresql-restore-proof-v1\nmanifest_ciphertext_sha256=%s\nproduct_ciphertext_sha256=%s\nauth_ciphertext_sha256=%s\n' \
+  "$SET_ID" "$application_check" "$upgrade_check" "$product_upgrade" "$contact_upgrade" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  "$manifest_ciphertext_sha256" "$product_ciphertext_sha256" "$auth_ciphertext_sha256" > "$status_tmp"
 chmod 600 "$status_tmp"
 mv "$status_tmp" "$RESTORE_STATUS_DIR/RESTORE_VERIFIED-$SET_ID"
 cp "$RESTORE_STATUS_DIR/RESTORE_VERIFIED-$SET_ID" "$SET_DIR/RESTORE_VERIFIED"

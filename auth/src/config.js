@@ -34,6 +34,7 @@
 //   Example: 'https://app.example.com,https://api.example.com'
 //   WARNING: Never use '*' when credentials or tokens are involved
 require('dotenv').config();
+const {retirementFlag}=require('./middleware/legacyAuthAdmission');
 
 // DATABASE_URL is only required if not using AWS SSM Parameter Store
 const REQUIRED_ENV = [
@@ -109,6 +110,8 @@ module.exports = {
   emailFrom: process.env.EMAIL_FROM,
   // Shared only between auth and trusted backend services; never include in mobile builds.
   authInternalServiceSecret: process.env.AUTH_INTERNAL_SERVICE_SECRET || null,
+  retireLegacyOtp: retirementFlag(process.env.AUTH_RETIRE_LEGACY_OTP,'AUTH_RETIRE_LEGACY_OTP'),
+  retirePublicLookup: retirementFlag(process.env.AUTH_RETIRE_PUBLIC_LOOKUP,'AUTH_RETIRE_PUBLIC_LOOKUP'),
   enablePhoneOtp: process.env.ENABLE_PHONE_OTP !== 'false',
   enableEmailOtp: process.env.ENABLE_EMAIL_OTP !== 'false',
 };

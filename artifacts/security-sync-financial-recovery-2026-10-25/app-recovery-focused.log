@@ -1,0 +1,39 @@
+00:00 +0: loading /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_completeness_test.dart
+00:00 +0: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_completeness_test.dart: rejects an archive that disclaims unsynced recovery before writes
+00:00 +1: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_completeness_test.dart: accepts a legacy v1 archive when the destination has a newer table
+00:00 +2: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_completeness_test.dart: capture declares tables, columns, queues, and receipt bytes
+00:00 +3: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_completeness_test.dart: coverage rejects omitted or altered entries before filesystem writes
+00:00 +4: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_completeness_test.dart: receipt opt-out omits receipt metadata and bytes from coverage
+00:00 +5: loading /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_test.dart
+00:00 +5: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_test.dart: password-free cipher authenticates account, snapshot and ciphertext
+00:00 +6: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_test.dart: fresh device recovers encrypted local payload through existing OTP account
+00:00 +7: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_test.dart: unapproved or disabled recovery never uploads
+00:00 +8: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_test.dart: private workspace deletes copies and links while preserving gallery originals
+00:00 +9: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_test.dart: startup reaper removes only owned inactive stale directories
+00:00 +10: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_test.dart: recovery retry reads retained original ciphertext and HTTPS prevents remote key exposure
+00:00 +11: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_test.dart: account SQLite recovery preserves unsynced UUIDs and receipt bytes without replacing existing history
+00:00 +12: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_test.dart: account and consent scopes are checked before upload
+00:00 +13: loading /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_gate_test.dart
+00:01 +13: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_gate_test.dart: gate drains admitted jobs and permits their nested work before exclusive
+00:01 +14: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_gate_test.dart: nested work keeps admission until it ends after its parent
+00:01 +15: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_gate_test.dart: gate timeout never cancels or loses an admitted operation
+00:01 +16: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_gate_test.dart: native lease blocks normal and independent writers and expires after rollback
+00:01 +17: loading /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart
+00:01 +17: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: deletes a journaled orphan in the recovery-owned directory
+00:01 +18: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: preserves files referenced by any table and namespace
+00:01 +19: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: checks path references outside the attachment table too
+00:01 +20: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: retains a basename embedded in pending JSON or BLOB values
+00:01 +21: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: preflights every candidate before deleting an earlier orphan
+00:01 +22: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: refuses an oversized journal without deleting its candidate
+00:01 +23: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: refuses over-budget schemas before deleting any candidates
+00:01 +24: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: rejects an unsafe journal temp symlink before deleting candidates
+00:01 +25: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: refuses a symlinked owned directory without touching its target
+00:01 +26: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: preserves all candidates when the intent journal is malformed
+00:01 +27: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: opaque binary references conservatively preserve all candidates
+00:01 +28: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: ignores unjournaled names and symlinks
+00:01 +29: loading /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart
+00:02 +29: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: scheduler waits for online activity, coalesces events and spaces attempts
+00:02 +30: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: scheduler backs off failures without a retry storm and recovers
+00:02 +31: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: automatic copy verifies ciphertext without requesting an escrow key
+00:02 +32: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: settings default to no consent and bind explicit receipt choice
+00:02 +33: All tests passed!

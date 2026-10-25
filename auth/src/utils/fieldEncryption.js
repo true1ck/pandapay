@@ -2,8 +2,10 @@
 
 // Preserve existing iv:tag:ciphertext and key bytes across provider moves.
 const crypto = require('node:crypto');
+const { TextDecoder } = require('node:util');
 const enabled = ['true', '1'].includes(process.env.ENCRYPTION_ENABLED);
 const hosted = ['production', 'staging'].includes(process.env.NODE_ENV);
+const V2_AAD_PREFIX = Buffer.from('pandapay-field-encryption-v2\0', 'utf8');
 function failure(message) {
   const error = new Error(message);
   error.code = 'FIELD_ENCRYPTION_ERROR';
@@ -19,6 +21,11 @@ function decodeBase64(value) {
   }
   return bytes;
 }
+function decodeCanonicalBase64(value) {
+  const bytes = decodeBase64(value);
+  if (bytes.toString('base64') !== value) throw failure('Invalid encrypted field encoding');
+  return bytes;
+}
 function initializeKey() {
   if (!enabled) {
     if (hosted) throw failure('Field encryption must be enabled in production and staging');
@@ -32,7 +39,38 @@ function initializeKey() {
     throw failure('ENCRYPTION_KEY must be a base64-encoded 32-byte key');
   }
 }
+function initializeReadKeys() {
+  const source = process.env.ENCRYPTION_READ_KEYS_JSON;
+  if (source === undefined || source === null || source === '') return new Map();
+  if (typeof source !== 'string' || Buffer.byteLength(source, 'utf8') > 8192) {
+    throw failure('ENCRYPTION_READ_KEYS_JSON must be a JSON array of valid read keys');
+  }
+  try {
+    const entries = JSON.parse(source);
+    if (!Array.isArray(entries) || entries.length > 8) throw new Error('invalid read key list');
+    const keys = new Map();
+    for (const entry of entries) {
+      if (!Array.isArray(entry) || entry.length !== 2) throw new Error('invalid read key pair');
+      const [id, encodedKey] = entry;
+      if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(id) || keys.has(id)) {
+        throw new Error('invalid or duplicate read key id');
+      }
+      if (typeof encodedKey !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)$/.test(encodedKey)) {
+        throw new Error('invalid read key encoding');
+      }
+      const decoded = Buffer.from(encodedKey, 'base64');
+      if (decoded.length !== 32 || decoded.toString('base64') !== encodedKey) {
+        throw new Error('invalid read key length or encoding');
+      }
+      keys.set(id, decoded);
+    }
+    return keys;
+  } catch (_) {
+    throw failure('ENCRYPTION_READ_KEYS_JSON must contain up to 8 unique IDs and canonical base64 32-byte keys');
+  }
+}
 const key = initializeKey();
+const readKeys = initializeReadKeys();
 function encryptField(value) {
   if (!value || typeof value !== 'string') return value;
   if (!key) return value;
@@ -51,15 +89,34 @@ function decryptField(value) {
     if (/^\d{10}$/.test(normalized) || /^\+[1-9]\d{1,14}$/.test(normalized)) return value;
     throw failure('Unrecognized legacy phone encoding');
   }
-  if (!key) throw failure('A valid encryption key is required to read encrypted fields');
+  if (!value.startsWith('v2:') && !key) {
+    throw failure('A valid encryption key is required to read encrypted fields');
+  }
   try {
+    if (value.startsWith('v2:') && Buffer.byteLength(value, 'utf8') > 4096) throw new Error('oversized envelope');
     const parts = value.split(':');
+    if (parts[0] === 'v2') {
+      if (parts.length !== 5 || !/^[A-Za-z0-9_-]{1,64}$/.test(parts[1])) throw new Error('invalid v2 envelope');
+      const readKey = readKeys.get(parts[1]);
+      if (!readKey) throw new Error('unknown v2 key');
+      const [, keyId, ivText, tagText, ciphertextText] = parts;
+      const iv = decodeCanonicalBase64(ivText);
+      const tag = decodeCanonicalBase64(tagText);
+      const ciphertext = decodeCanonicalBase64(ciphertextText);
+      if (iv.length !== 12 || tag.length !== 16 || ciphertext.length === 0) throw new Error('invalid v2 lengths');
+      const decipher = crypto.createDecipheriv('aes-256-gcm', readKey, iv);
+      decipher.setAAD(Buffer.concat([V2_AAD_PREFIX, Buffer.from(keyId, 'utf8')]));
+      decipher.setAuthTag(tag);
+      const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+      return new TextDecoder('utf-8', { fatal: true }).decode(plaintext);
+    }
     if (parts.length !== 3) throw new Error('unsupported format');
     const [iv, tag, ciphertext] = parts.map(decodeBase64);
     if (iv.length !== 12 || tag.length !== 16) throw new Error('invalid length');
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
     decipher.setAuthTag(tag);
-    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return plaintext.toString('utf8');
   } catch (_) {
     // Neither log the secret-bearing exception nor return damaged ciphertext
     // as plaintext. The caller must preserve the row and report a repair need.

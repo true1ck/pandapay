@@ -21,8 +21,14 @@ const { requestLogger, errorHandler } = require('./observability');
 const { resolveTrustProxyHops, rejectMalformedClientIp } = require('./utils/proxyTrust');
 const { mountTestHarness } = require('./utils/testHarnessAccess');
 const { createReadinessHandler } = require('./services/authReadiness');
+const { jsonBodyParser, jsonBodyErrorHandler } = require('./middleware/requestLimits');
+const {createConsoleBrowserRuntime}=require('./services/consoleBrowserRuntime');
+const {createAccountLifecycleRuntime}=require('./services/accountLifecycleRuntime');
 
 const app = express();
+const consoleBrowser=createConsoleBrowserRuntime();
+const authLifecycle=createAccountLifecycleRuntime();
+const {createAccountDeletionHandler}=require('./services/accountLifecycle');
 
 // Trust only the explicitly configured number of proxy hops. Local
 // development defaults to no forwarded-header trust; staging/production set
@@ -102,7 +108,8 @@ if (allowAllOrigins) {
     return next(err);
   });
 }
-app.use(express.json());
+app.use(jsonBodyParser);
+app.use(jsonBodyErrorHandler);
 
 // === SECURITY HARDENING: SECURITY HEADERS ===
 // Apply security headers to all routes (not just admin)
@@ -120,15 +127,39 @@ app.get('/health', (req, res) => {
 // Readiness verifies ordinary DB queries and, in hosted PostgreSQL mode, the
 // runtime identity's actual auth abuse-bucket access without writing buckets.
 app.get('/ready', createReadinessHandler({
-  query: (...args) => db.query(...args),
+  query: async (...args) => {
+    if (consoleBrowser) await consoleBrowser.readiness();
+    if (authLifecycle) await authLifecycle.readiness();
+    return db.query(...args);
+  },
   env: process.env,
   logger: console,
 }));
 
+const {createProofLookupHandler}=require('./routes/proofLookupRoutes');
+app.post('/auth/v2/account-status',createProofLookupHandler({
+  query:(...args)=>db.query(...args),
+  verifySession:async token=>{
+    const {verifyAccessToken}=require('./services/accessTokenVerification');
+    let claims;
+    try { claims=verifyAccessToken(token); } catch(error) {
+      if(['JsonWebTokenError','TokenExpiredError','NotBeforeError'].includes(error.name))throw new Error('invalid_token');
+      throw error;
+    }
+    const proof=await require('./services/currentSessionVerification').verifyCurrentSession(token);
+    return {...proof,device_id:claims.device_id};
+  },
+}));
+app.use('/auth/v2',require('./routes/versionedOtpRoutes').createVersionedOtpRouter({legacyRouter:authRoutes}));
 app.use('/auth', authRoutes);
+if(consoleBrowser)app.use('/browser',consoleBrowser.router);
 app.use('/users', userRoutes);
 app.use('/users/me/recovery-contact', require('./routes/recoveryContactRoutes'));
 app.use('/internal', internalRoutes);
+app.post('/internal/account/deletion/apply', (req,res,next)=>{
+  if(!internalRoutes.serviceAuthenticated(req))return res.status(typeof config.authInternalServiceSecret==='string'&&Buffer.byteLength(config.authInternalServiceSecret)>=32?401:503).json({error:'Unauthorized service'});
+  next();
+},createAccountDeletionHandler({executor:authLifecycle?.executor,enabled:Boolean(authLifecycle)}));
 
 // === ADMIN SECURITY VISUALIZER ===
 // Admin dashboard and API endpoints (only enabled if flag is set)
@@ -197,6 +228,8 @@ async function shutdown(signal) {
       server.close((err) => (err ? reject(err) : resolve()));
     });
     await db.closeDb();
+    if(consoleBrowser)await consoleBrowser.close();
+    if(authLifecycle)await authLifecycle.close();
     await closeRedis();
     clearTimeout(forceExit);
     process.exit(0);

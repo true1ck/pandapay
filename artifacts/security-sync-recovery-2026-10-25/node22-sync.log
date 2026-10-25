@@ -1,0 +1,106 @@
+TAP version 13
+# Subtest: registration preserves omitted values and normalizes optional client fields
+ok 1 - registration preserves omitted values and normalizes optional client fields
+  ---
+  duration_ms: 1.556042
+  type: 'test'
+  ...
+# Subtest: registration rejects non-object shapes and malformed non-empty UUIDs
+ok 2 - registration rejects non-object shapes and malformed non-empty UUIDs
+  ---
+  duration_ms: 0.191916
+  type: 'test'
+  ...
+# Subtest: push request validates envelope while retaining array ordering and partial-item handling
+ok 3 - push request validates envelope while retaining array ordering and partial-item handling
+  ---
+  duration_ms: 0.145
+  type: 'test'
+  ...
+# Subtest: push item accepts Dart JSON shapes and leaves unknown entity policy to SQL
+ok 4 - push item accepts Dart JSON shapes and leaves unknown entity policy to SQL
+  ---
+  duration_ms: 0.120458
+  type: 'test'
+  ...
+# Subtest: push item rejects malformed shapes, UUIDs, payload maps, and unsafe or fractional integer fields
+ok 5 - push item rejects malformed shapes, UUIDs, payload maps, and unsafe or fractional integer fields
+  ---
+  duration_ms: 0.492708
+  type: 'test'
+  ...
+# Subtest: pull uses current defaults and clamps the SQL limit range
+ok 6 - pull uses current defaults and clamps the SQL limit range
+  ---
+  duration_ms: 0.192167
+  type: 'test'
+  ...
+# Subtest: pull rejects malformed UUIDs, fractional, exponential, non-scalar, and unsafe query integers
+ok 7 - pull rejects malformed UUIDs, fractional, exponential, non-scalar, and unsafe query integers
+  ---
+  duration_ms: 0.126791
+  type: 'test'
+  ...
+# Subtest: ack accepts only non-negative safe integer server sequences
+ok 8 - ack accepts only non-negative safe integer server sequences
+  ---
+  duration_ms: 0.091625
+  type: 'test'
+  ...
+# Subtest: conflict acknowledgement path validates UUID shape without deciding row existence
+ok 9 - conflict acknowledgement path validates UUID shape without deciding row existence
+  ---
+  duration_ms: 0.339667
+  type: 'test'
+  ...
+# Subtest: sync rejection details map SQLSTATEs to fixed safe strings
+ok 10 - sync rejection details map SQLSTATEs to fixed safe strings
+  ---
+  duration_ms: 0.389916
+  type: 'test'
+  ...
+# Subtest: sync rejection details expose the split invariant only through its explicit safe code
+ok 11 - sync rejection details expose the split invariant only through its explicit safe code
+  ---
+  duration_ms: 0.122542
+  type: 'test'
+  ...
+# Subtest: sync rejection details use a fixed fallback and never echo arbitrary error text
+ok 12 - sync rejection details use a fixed fallback and never echo arbitrary error text
+  ---
+  duration_ms: 0.065541
+  type: 'test'
+  ...
+# Subtest: wired sync routes reject malformed IDs/sequences before any database call
+ok 13 - wired sync routes reject malformed IDs/sequences before any database call
+  ---
+  duration_ms: 2.289625
+  type: 'test'
+  ...
+# Subtest: registration defaults and stale-device ID still reach the original RPC
+ok 14 - registration defaults and stale-device ID still reach the original RPC
+  ---
+  duration_ms: 1.035792
+  type: 'test'
+  ...
+# Subtest: push preserves ordered per-item outcomes and never returns SQL error contents
+ok 15 - push preserves ordered per-item outcomes and never returns SQL error contents
+  ---
+  duration_ms: 1.532209
+  type: 'test'
+  ...
+# Subtest: pull and acknowledgement retain existing successful response contracts
+ok 16 - pull and acknowledgement retain existing successful response contracts
+  ---
+  duration_ms: 0.642166
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 67.683375

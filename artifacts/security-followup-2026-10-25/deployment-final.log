@@ -1,0 +1,16 @@
+test_server_head_not_ancestor_fails_before_build_or_downtime (test_deploy_security_order.DeploySecurityOrderTest.test_server_head_not_ancestor_fails_before_build_or_downtime) ... ok
+test_stale_target_that_is_not_current_master_fails_before_build_or_downtime (test_deploy_security_order.DeploySecurityOrderTest.test_stale_target_that_is_not_current_master_fails_before_build_or_downtime) ... ok
+test_unanchored_legacy_checkout_fails_before_build_or_downtime (test_deploy_security_order.DeploySecurityOrderTest.test_unanchored_legacy_checkout_fails_before_build_or_downtime) ... ok
+test_unreviewed_running_service_blocks_downtime_instead_of_missing_a_writer (test_deploy_security_order.DeploySecurityOrderTest.test_unreviewed_running_service_blocks_downtime_instead_of_missing_a_writer) ... ok
+test_builds_then_restarts_each_service_with_readiness_gates (test_restart_services.SequentialRolloutTest.test_builds_then_restarts_each_service_with_readiness_gates) ... ok
+test_failed_auth_readiness_stops_before_api_restart (test_restart_services.SequentialRolloutTest.test_failed_auth_readiness_stops_before_api_restart) ... ok
+test_failed_build_leaves_running_services_untouched (test_restart_services.SequentialRolloutTest.test_failed_build_leaves_running_services_untouched) ... ok
+test_failed_worker_readiness_stops_before_backup_restart (test_restart_services.SequentialRolloutTest.test_failed_worker_readiness_stops_before_backup_restart) ... ok
+test_partial_sms_learning_configuration_fails_before_docker_calls (test_restart_services.SequentialRolloutTest.test_partial_sms_learning_configuration_fails_before_docker_calls) ... ok
+test_prebuilt_mode_skips_all_image_builds (test_restart_services.SequentialRolloutTest.test_prebuilt_mode_skips_all_image_builds) ... ok
+test_sms_learning_is_built_and_started_only_with_complete_opt_in_config (test_restart_services.SequentialRolloutTest.test_sms_learning_is_built_and_started_only_with_complete_opt_in_config) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 21.456s
+
+OK

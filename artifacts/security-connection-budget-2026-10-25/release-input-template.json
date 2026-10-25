@@ -1,0 +1,173 @@
+{
+  "format": "pandapay-security-release-inputs-v1",
+  "postgres": {
+    "sourceMajor": 17,
+    "targetMajor": null,
+    "dumpClientMajor": null
+  },
+  "resourceTier": "free",
+  "quotas": {
+    "verified": false,
+    "databaseMaxBytes": null,
+    "maxConnections": null,
+    "configuredConnectionBudget": null,
+    "backupMaxBytes": 1073741824,
+    "backupKeepSets": 7,
+    "backupKeepDays": 7
+  },
+  "connectionBudget": {
+    "format": "pandapay-connection-budget-v1",
+    "inventoryReviewed": false,
+    "reviewedAt": null,
+    "primaryCluster": "primary",
+    "clusters": [
+      {
+        "id": "primary",
+        "limitsVerified": false,
+        "verifiedAt": null,
+        "maxConnections": null,
+        "reservedConnections": null,
+        "providerConnections": null,
+        "operationalConnections": null,
+        "safetyConnections": null
+      }
+    ],
+    "processes": [
+      {
+        "id": "api",
+        "kind": "api",
+        "replicas": 1,
+        "overlapReplicas": 0,
+        "dbPoolMax": 10,
+        "pools": {
+          "main": "primary",
+          "partnerWebhook": null,
+          "imapWorker": null,
+          "accountLifecycle": null
+        }
+      },
+      {
+        "id": "auth",
+        "kind": "auth",
+        "replicas": 1,
+        "overlapReplicas": 0,
+        "dbPoolMax": 10,
+        "pools": {
+          "main": "primary",
+          "consoleSession": null,
+          "authLifecycle": null
+        }
+      },
+      {
+        "id": "rewards-worker",
+        "kind": "rewards-worker",
+        "replicas": 1,
+        "overlapReplicas": 0,
+        "dbPoolMax": 10,
+        "pools": {
+          "main": "primary",
+          "partnerWebhook": null,
+          "imapWorker": null,
+          "accountLifecycle": null
+        }
+      },
+      {
+        "id": "sms-learning-worker",
+        "kind": "sms-learning-worker",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {
+          "main": "primary"
+        }
+      },
+      {
+        "id": "gemini-worker",
+        "kind": "gemini-worker",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {}
+      },
+      {
+        "id": "product-maintenance",
+        "kind": "product-maintenance",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {
+          "main": "primary"
+        }
+      },
+      {
+        "id": "auth-retention-maintenance",
+        "kind": "auth-retention-maintenance",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {
+          "ledger": "primary",
+          "retention": "primary"
+        }
+      },
+      {
+        "id": "backup-status-publisher",
+        "kind": "backup-status-publisher",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {
+          "main": "primary"
+        }
+      },
+      {
+        "id": "maintenance-alert-delivery",
+        "kind": "maintenance-alert-delivery",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {
+          "main": "primary"
+        }
+      }
+    ]
+  },
+  "custody": {
+    "offHostCopiesVerified": 0,
+    "distinctFailureDomainsVerified": 0,
+    "separateRecoveryKeyCustodyVerified": false
+  },
+  "keyIds": {
+    "ENCRYPTION_KEY": null,
+    "PHONE_LOOKUP_HMAC_KEY": null,
+    "JWT_ACCESS_SECRET": null,
+    "JWT_REFRESH_SECRET": null,
+    "AUTH_INTERNAL_SERVICE_SECRET": null,
+    "REFERRAL_IDENTITY_HMAC_KEY": null,
+    "IMAP_ENCRYPTION_KEY": null,
+    "CONSOLE_SESSION_ENCRYPTION_KEY": null,
+    "ACCOUNT_RECOVERY_WRAPPING_KEY": null,
+    "ACCOUNT_LIFECYCLE_JOURNAL_AUTH_KEY": null
+  },
+  "features": {
+    "syncTypedWrites": false,
+    "consoleBrowser": false,
+    "accountLifecycle": false,
+    "accountRecovery": false,
+    "dbAccessLogging": false,
+    "imapPolling": false,
+    "legacyOtpRetirement": false,
+    "anonymousLookupRetirement": false,
+    "maintenance": false,
+    "authRetentionMaintenance": false,
+    "maintenanceAlertDelivery": false
+  },
+  "runtimeRoles": {
+    "product": [
+      "app_user"
+    ],
+    "auth": []
+  },
+  "reports": {
+    "productPrivileges": null,
+    "authPrivileges": null,
+    "productData": null,
+    "authData": null
+  },
+  "evidence": null,
+  "notes": "Operator inputs only. Never put credentials, passwords or private keys in this file. PostgreSQL 17 is the prior recorded baseline; verify actual source/target versions. Unknown quotas/custody remain missing gates."
+}

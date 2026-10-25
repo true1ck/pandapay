@@ -1,6 +1,8 @@
 const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/services/smsService.js
 const twilio = require('twilio');
+const { getOtpWorkAdmission, OtpCapacityError, BUSY_CODE } = require('./otpWorkAdmission');
+const otpAdmission = getOtpWorkAdmission();
 // === SECURITY HARDENING: OTP LOGGING ===
 const { logOtpEvent } = require('../utils/otpLogger');
 
@@ -14,7 +16,13 @@ const {
 let client = null;
 
 if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
-  client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+  // Twilio's SDK defaults to a 30s request timeout. Keep provider calls bounded
+  // and disable automatic 429 retries so OTP delivery cannot duplicate sends.
+  client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, {
+    timeout: 10000,
+    autoRetry: false,
+    maxRetries: 0,
+  });
 } else {
   console.warn('⚠️ Twilio credentials are not set. SMS sending will be disabled.');
 }
@@ -54,30 +62,17 @@ async function sendOtpSms(toPhone, code) {
   }
 
   try {
-    const msg = await client.messages.create(msgConfig);
+    const msg = await otpAdmission.run('sms', () => client.messages.create(msgConfig));
     console.info('OTP SMS delivery succeeded');
     logOtpEvent(toPhone, true);
     return { success: true, sid: msg.sid };
   } catch (err) {
-    const errorMessage = err.message || 'Unknown error';
-    console.error('❌ Failed to send SMS via Twilio:', safeErrorCode(err, 'delivery_error'));
-    
-    // Check for specific Twilio error types
-    const isShortCodeError = errorMessage.includes('Short Code');
-    const isUnverifiedNumberError = errorMessage.includes('unverified');
-    const isTrialAccountError = errorMessage.includes('Trial account');
-    
-    if (isShortCodeError) {
-      console.warn('⚠️ Cannot send to short codes (5-6 digit numbers).');
-    } else if (isUnverifiedNumberError || isTrialAccountError) {
-      console.warn('⚠️ Trial account limitation: Verify the number at https://console.twilio.com/us1/develop/phone-numbers/manage/verified');
-      console.warn('⚠️ Or upgrade to a paid account to send to any number.');
-    }
-    
-    // === SECURITY HARDENING: OTP LOGGING ===
-    // Use safe logging for fallback
+    if (err instanceof OtpCapacityError) return { success: false, error: 'SMS delivery is temporarily busy', code: BUSY_CODE };
+    // Provider messages may contain recipient, URL, or credential details.
+    // Keep only a bounded machine code in logs and return a fixed error.
+    console.error('[SMS Service] provider delivery failed:', safeErrorCode(err, 'delivery_error'));
     logOtpEvent(toPhone, false);
-    return { success: false, error: errorMessage };
+    return { success: false, error: 'SMS delivery failed' };
   }
 }
 

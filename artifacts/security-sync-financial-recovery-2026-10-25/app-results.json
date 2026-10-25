@@ -1,0 +1,37 @@
+{
+  "app-analysis": {
+    "exit_code": 0,
+    "seconds": 3.48,
+    "command": [
+      "analyze",
+      "--no-pub",
+      "--no-fatal-infos"
+    ],
+    "tail": [
+      "   info \u2022 Statements in an if should be enclosed in a block. Try wrapping the statement in a block \u2022 test/data/transaction_tags_repository_test.dart:100:15 \u2022 curly_braces_in_flow_control_structures",
+      "   info \u2022 Can't use a relative path to import a library in 'lib'. Try fixing the relative path or changing the import to a 'package:' import \u2022 test/features/voice/voice_action_parser_test.dart:3:8 \u2022 avoid_relative_lib_imports",
+      "   info \u2022 Can't use a relative path to import a library in 'lib'. Try fixing the relative path or changing the import to a 'package:' import \u2022 test/features/voice/voice_action_parser_test.dart:4:8 \u2022 avoid_relative_lib_imports",
+      "   info \u2022 Can't use a relative path to import a library in 'lib'. Try fixing the relative path or changing the import to a 'package:' import \u2022 test/features/voice/voice_action_parser_test.dart:6:8 \u2022 avoid_relative_lib_imports",
+      "   info \u2022 Use interpolation to compose strings and values. Try using string interpolation to build the composite string \u2022 test/fixtures/portable_backup_fixture.dart:81:7 \u2022 prefer_interpolation_to_compose_strings",
+      ""
+    ]
+  },
+  "app-full": {
+    "exit_code": 0,
+    "seconds": 197.06,
+    "command": [
+      "test",
+      "--no-pub",
+      "--concurrency=1",
+      "--reporter=expanded"
+    ],
+    "tail": [
+      "03:09 +1630: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/services/recurrence_engine_test.dart: SpecializedDomainClassifiers Loan & EMI lifecycle classifications",
+      "03:09 +1631: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/services/recurrence_engine_test.dart: SpecializedDomainClassifiers Insurance lifecycle classifications",
+      "03:09 +1632: loading /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/notification_devices_api_test.dart",
+      "03:10 +1632: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/notification_devices_api_test.dart: sendTestNotification accepts the provider-accepted response",
+      "03:10 +1633: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/notification_devices_api_test.dart: sendTestNotification surfaces an unconfigured production service",
+      "03:10 +1634: All tests passed!"
+    ]
+  }
+}

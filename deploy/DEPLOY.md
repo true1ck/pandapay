@@ -64,6 +64,23 @@ backup, writer fence or coordinated migrations.
 
 ## 0. What you need before starting
 
+### Remaining-security batches — 24 October 2026
+
+See the [remaining implementation plan](../docs/security-remaining-implementation-plan-2026-10-23.md) for the ordered source and release gates. These changes are not deployed by editing the repository.
+
+- Product API now consumes `CORS_ALLOWED_ORIGINS`, using the same list already required for auth. Include each actual browser console origin before rollout. Production/staging refuse an empty/invalid list; native requests without `Origin` retain their existing authorization flow. CORS does not authorize a request or introduce browser cookies.
+- API/auth explicitly retain the prior **100 KiB** JSON limit. Oversized/malformed input now receives safe 413/400 JSON errors. Supported chunked/streaming protocols retain their separate bounds; do not increase the global limit to mask an import-client bug.
+- Auth migration `0005_db_access_log.sql` adopts the optional logger's existing compatible table and preserves its rows. Runtime logging no longer creates tables/indexes or stores SQL/parameter values. Ordinary request logs use request IDs without persistent account IDs. Existing audit data still needs an access/retention review.
+- `DB_ACCESS_LOGGING_ENABLED` remains **false** by default. If enabled after the access/retention review, pass the same flag to migrations and auth. With `AUTH_RUNTIME_ROLE`, migration setup grants only INSERT on the access-log table; readiness checks storage/INSERT. Optional logging failure cannot replace the primary query result. This is not full auth-role provisioning or a retention job.
+- IMAP polling now requires the separate `IMAP_POLL_DATABASE_URL` restricted login; it never falls back to the API login. Its two-connection pool holds one session through acquire/work/unlock and reserves capacity for readiness. Use direct/session-affine PostgreSQL transport, not transaction pooling. The interval defaults to zero, batches are capped at 100 and a five-minute budget resumes deferred work through a private durable cursor. Keep the existing encryption key unchanged. See the capability runbook below before enabling it.
+- Migration inventories reject new numeric-prefix collisions, including alternate zero padding. The exact historical product/seed exception list is tracked in `db/migration-prefix-exceptions.json`. Retain that file in migration packages. Do not rename applied SQL or widen an exception to bypass a failed check.
+
+### Service capabilities and Google identity — source candidate
+
+Follow the [24 October capability runbook](../docs/security-service-capabilities-2026-10-24.md) and its separate-credential table before promoting R4/R5. New private migrations must run transactionally through the canonical runner. Optional bootstrap passwords create bounded logins without rotating existing credentials. An active partner integration needs its dedicated URL before the new callback is released; missing configuration returns 503. Backup status needs an explicit recovery-machine publication from a fresh hash-bound restore proof; legacy stub success is never accepted. The optional dashboard stays disabled unless an operator provisions an expiring account capability.
+
+Auth migration `0006` makes `oauth_accounts` canonical and refuses ambiguous legacy mappings. Keep email/phone OTP available for unlinked email collisions. Configure the scoped auth runtime grants and verify real Google clients before rollout. No extra user password or mobile linking UI is introduced. These source checks do not replace the exact final-candidate actual-data PostgreSQL 17 upgrade and provider/device acceptance.
+
 - A Postgres instance reachable from the VM — either managed (has automated
   backups/PITR built in, which is the stronger guarantee) or self-hosted on
   the same VM. Either way you need a **superuser-equivalent connection
@@ -404,3 +421,47 @@ bash deploy/deploy.sh <reviewed-commit-sha>
   deliberately not a vendor SDK baked into the code (see
   `api/src/observability.js`'s header for why, particularly the DPDP
   PII-review angle for a payments app).
+
+## Optional security features added 24 October
+
+Read the [remaining-source runbook](../docs/security-remaining-source-implementation-2026-10-24.md) before enabling browser sessions, lifecycle processing, recovery escrow or auth retention. Examples keep new credentials blank and feature flags off. Migration logins are privileged operators; ordinary services never receive owner access.
+
+Promote the **new web console and `/browser/` gateway together**, under one HTTPS origin using `deploy/nginx/console.conf.example`. The new web bundle uses relative cookie-session routes and clears legacy browser token storage; publishing it alone against an older auth service breaks console login. Build with `--csp --no-web-resources-cdn`; configure the exact origin, private fixed upstreams, dedicated three-connection session login and separately retained `CONSOLE_SESSION_ENCRYPTION_KEY`. Validate actual cookies, CSRF, CSP, refresh, logout and operator OTP before serving traffic. Native console bearer mode is retained.
+
+Lifecycle activation needs both dedicated service logins, all transaction fences, external tombstone-journal recovery and monitoring. Its product DB control and worker timer are off by default. Migration disables the legacy physical-delete function; no financial history is erased. Password-free recovery source is also off and is not connected to the active mobile UI. It needs a separately retained wrapping key, reviewed consent/operation barriers and signed-device tests; live local-storage encryption remains disabled.
+
+Run the read-only runtime privilege and restored-copy data reports, then `node db/scripts/release_security_check.js --inputs /protected/release-inputs.json --strict`. A missing provider, actual-data, device, quota or custody proof must block promotion. The checker creates no credentials and performs no deployment; keep secret values out of the input/report. Use the existing fenced rollout script only after reviewing the concrete candidate and fresh paired backup/recovery proof.
+
+The strict release review also requires a fresh `connectionBudget` inventory and hash-bound `connection_budget_acceptance` proof. Generate a credential-free template with `node db/scripts/connection_budget.js --template`, then run the reviewed input through `node db/scripts/connection_budget.js --inputs /protected/connection-budget.json --strict`. Count every main/dedicated pool and maximum replica, rollout overlap, concurrent maintenance invocation and external/provider/backup/operational allowance by physical cluster. Product/auth databases in the same project share one backend limit. Old scalar totals alone no longer pass; a fitting connection budget does not establish throughput or overall release readiness. [Schema, evidence and operator flow](../docs/security-connection-budget-implementation-2026-10-25.md).
+
+The next OTP source slice adds immediate per-process work/email/SMS admission. Match the explicit release-input `otpCapacity` object to auth's three `OTP_*_MAX_CONCURRENT` settings (defaults 2 each; valid integers 1–16), and include fresh hash-checked `otp_capacity_acceptance` evidence for the exact candidate/configuration. Existing recipient/IP/global quotas remain required. Capacity 503 responses preserve existing codes or discard exactly an undelivered new challenge; do not retry sends automatically or increase process/worker counts to evade provider budgets. Prove valid user completion under the admitted load and actual quota before promotion. [Runtime contract, tests and limitations](../docs/security-otp-admission-implementation-2026-10-25.md).
+
+Legacy sync isolation now requires migration `20261025151350_legacy_sync_context_isolation.sql` and current-source `sync_isolation_acceptance` evidence from an actual-data restored copy. It preserves API signatures while adding profile/device guards, empty search paths and explicit app execution without PUBLIC. Verify named/inherited grants and every direct consumer; SQL context assumes a trusted backend login, not client-set identity. The recovered original `20261023180000_user_merchant_rule_actions.sql` matches retained Git and saved routine bodies, but the old baseline predates it. Do not skip the ledger/baseline gate or edit applied SQL: reconcile provenance/schema and obtain a new independently reviewed baseline before the complete actual-data upgrade. [Current slice and open gates](../docs/security-sync-isolation-implementation-2026-10-25.md).
+
+
+The [24 October follow-up](../docs/security-followup-implementation-2026-10-24.md) adds auth migration `0011_versioned_otp_challenges.sql` and product journal-checkpoint migration. Apply migrations before the corresponding service source through the fenced procedure. Legacy OTP remains supported; do not activate v2 clients or retire public lookup until compatibility/provider acceptance. The patched API lockfile includes body-parser 2.4.0.
+
+Lifecycle startup now requires two private encrypted journal mounts, a distinct latest-checkpoint mount, public age recipients, a stable journal ID and separate retained authentication key. Provision mounts for the container's non-root UID in an explicit release override; blank defaults cannot enable this feature. The API runtime includes age. Initialize/reconcile while all writers remain fenced; checkpoint mismatch blocks admission. Physical independence, crash repair, measured I/O/connection/disk budgets and external monitoring must pass before enabling. No private age identity belongs in the API container.
+
+## Additional recovery/maintenance source — verification pending
+
+Follow [the current runbook](../docs/security-recovery-maintenance-source-2026-10-24.md). New product migration `20261024111632_bounded_operational_maintenance.sql` is additive and all jobs stay disabled. Whole paired PostgreSQL recovery includes its private schema. Existing cron is preserved until a separately reviewed fenced replacement; do not leave both historical and replacement jobs active.
+
+The optional `maintenance` Compose profile supplies one-shot product and auth coordinator commands, not an installed schedule. Blank optional bootstrap credentials preserve existing logins on replay. Auth job progress uses a separate product capability URL; diagnostic/expired-abuse DML uses the separately reviewed auth maintenance identity and explicit policy. Runtime roles never receive control-table grants. Actual host limits, policy, notification delivery and heartbeat monitoring need acceptance before activation.
+
+Mobile/console v2 OTP build opt-in and legacy endpoint retirement are separate steps. Keep retirement flags false until supported-client/provider/recovery acceptance. Keep `PANDAPAY_ACCOUNT_RECOVERY_ENABLED` and server/database recovery controls off until native writer, process-death, fresh-account restore, low-disk and signed-device checks pass. Fresh full-suite/image/PostgreSQL verification for this additional source is pending because automatic approval review could not run the requested local-server/Flutter tests at the account usage limit. No source/static check supplies deployment approval.
+
+## Reader-first key compatibility — source update
+
+The [retained-reader implementation](../docs/security-key-readers-implementation-2026-10-25.md) adds optional `ENCRYPTION_READ_KEYS_JSON` and `ACCOUNT_RECOVERY_WRAPPING_READ_KEYS_JSON` pair-array configuration. Examples leave them blank; recovery stays disabled. Keep the original legacy phone/lookup/IMAP keys and current write formats unchanged. Before later provisioning retained IDs, deploy compatible readers everywhere, register nonsecret escrow/version labels in release inputs, refresh the private encrypted configuration escrow and rehearse current/old data on the intended provider. No key values belong in tracked files or release metadata. This batch supplies no new-format write switch, rotation/backfill or activation authorization.
+
+
+### Typed sync writes (source prepared, disabled)
+
+`SYNC_TYPED_WRITES_ENABLED=false` is the default in the API and staging/production Compose examples. The typed path requires the additive `sync_apply_change_v2` migration, the updated API transaction applier and an exact-candidate `sync_typed_writes_acceptance` proof registered with the release checker. An older release-input manifest may omit `features.syncTypedWrites` only while this feature is off; enabling it requires an explicit true value and matching runtime setting. Runtime accepts only the exact string `true`.
+
+Apply schema before selecting the new writer. Keep the switch off while rehearsing the complete current PostgreSQL clone, current/old clients, typed fields, private categories, transaction-state/reward/split reconciliation, replay, concurrent edits and target roles/provider behavior. New installations and provider moves retain original IDs, history and encryption keys. This batch changes no cipher writer, key or mobile-storage default.
+
+The API rejects transaction status changes and deletes over generic sync; use the existing domain status/ignore paths that maintain financial state. The V2 RPC is restricted to the backend role, authenticated profile context and an owned product device. Its low-level write must be invoked through the API's financial reconciliation, inside the existing per-item savepoint. It is not an independently complete financial editing endpoint.
+
+Do not enable typed writes or combine that activation with database rehosting until its acceptance gates pass. If a later rollout must stop, disable further typed admission and preserve accepted rows, queues, change/conflict history and financial state for forward repair. The legacy writer still rejects numeric updates; selecting it again does not undo or repair already committed new writes. No deployment, activation or production rollback is performed by this source batch.

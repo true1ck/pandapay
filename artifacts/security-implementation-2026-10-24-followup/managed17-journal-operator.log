@@ -1,0 +1,2 @@
+PASS: real age journal operator bootstrap/replay with separate control/limited function logins, all pre-existing DB tombstones journaled before checkpoint install, repeat recovery and financial history preserved
+PASS: durable two-database deletion ledger, exact UUID preservation, 30-day grace/cancel race, one-worker leases, bounded retries, auth/session revocation, immutable soft tombstones, replay fencing, no financial/profile deletion, non-owner role denials, legacy cron safety and bounded account-recovery escrow/rotation

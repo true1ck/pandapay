@@ -1,0 +1,84 @@
+Analyzing app...                                                
+
+   info • Use an initializing formal to assign a parameter to a field. Try using an initialing formal ('this._isAutopay') to initialize the field • lib/data/local_sms_parser.dart:94:8 • prefer_initializing_formals
+   info • Parameter 'debugMessage' could be a super parameter. Trying converting 'debugMessage' to a super parameter • lib/data/merchant_category_rules_repository.dart:274:3 • use_super_parameters
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/merchant_category_rules_repository.dart:307:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/merchant_category_rules_repository.dart:336:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/merchant_category_rules_repository.dart:337:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/merchant_category_rules_repository.dart:357:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/merchant_category_rules_repository.dart:358:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/merchant_category_rules_repository.dart:359:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/merchant_category_rules_repository.dart:380:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/merchant_category_rules_repository.dart:381:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/merchant_category_rules_repository.dart:382:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/merchant_category_rules_repository.dart:383:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/merchant_category_rules_repository.dart:398:9 • use_null_aware_elements
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/merchant_category_rules_repository.dart:446:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/merchant_category_rules_repository.dart:453:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/portable_backup/account_recovery_repository.dart:131:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/portable_backup/account_recovery_repository.dart:178:9 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/portable_backup/account_recovery_repository.dart:192:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/portable_backup/account_recovery_repository.dart:204:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/portable_backup/account_recovery_repository.dart:281:11 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/portable_backup/account_recovery_repository.dart:346:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/portable_backup/account_recovery_repository.dart:358:7 • curly_braces_in_flow_control_structures
+   info • Use an initializing formal to assign a parameter to a field. Try using an initialing formal ('this._prefix') to initialize the field • lib/data/secure_storage/flutter_secure_key_value_store.dart:31:8 • prefer_initializing_formals
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/spending_selection.dart:24:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/transaction_tags_repository.dart:140:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/transaction_tags_repository.dart:142:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/transaction_tags_repository.dart:226:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/transaction_tags_repository.dart:268:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/transaction_tags_repository.dart:368:9 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/transaction_tags_repository.dart:442:13 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/transaction_tags_repository.dart:466:9 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/transaction_tags_repository.dart:509:13 • curly_braces_in_flow_control_structures
+   info • Parameter 'debugMessage' could be a super parameter. Trying converting 'debugMessage' to a super parameter • lib/data/user_cards_repository.dart:1266:3 • use_super_parameters
+   info • Angle brackets will be interpreted as HTML. Try using backticks around the content with angle brackets, or try replacing `<` with `&lt;` and `>` with `&gt;` • lib/data/user_cards_repository.dart:1334:61 • unintended_html_in_doc_comment
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/data/user_cards_repository.dart:2001:9 • curly_braces_in_flow_control_structures
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/user_cards_repository.dart:2355:7 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/user_cards_repository.dart:2356:7 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/user_cards_repository.dart:2410:7 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/data/user_cards_repository.dart:2411:7 • use_null_aware_elements
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/activity/activity_screen.dart:143:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/activity/activity_screen.dart:168:9 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/activity/activity_screen.dart:382:41 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/activity/activity_screen.dart:384:45 • curly_braces_in_flow_control_structures
+   info • Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private • lib/features/activity/activity_screen.dart:495:9 • library_private_types_in_public_api
+   info • Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private • lib/features/activity/activity_screen.dart:496:9 • library_private_types_in_public_api
+   info • Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private • lib/features/activity/activity_screen.dart:507:10 • library_private_types_in_public_api
+   info • Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private • lib/features/activity/activity_screen.dart:508:10 • library_private_types_in_public_api
+   info • Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private • lib/features/activity/activity_screen.dart:545:5 • library_private_types_in_public_api
+   info • Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private • lib/features/activity/activity_screen.dart:546:5 • library_private_types_in_public_api
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/activity/activity_screen.dart:907:13 • curly_braces_in_flow_control_structures
+   info • Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check • lib/features/activity/activity_screen.dart:1101:15 • use_build_context_synchronously
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/activity/edit_transaction_screen.dart:121:11 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/activity/edit_transaction_screen.dart:547:29 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/activity/edit_transaction_screen.dart:627:29 • curly_braces_in_flow_control_structures
+   info • Use the null-aware operator '?.' rather than an explicit 'null' comparison. Try using '?.' • lib/features/activity/transaction_detail_screen.dart:141:22 • prefer_null_aware_operators
+   info • Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check • lib/features/activity/transaction_detail_screen.dart:688:9 • use_build_context_synchronously
+   info • 'withData' is deprecated and shouldn't be used. Use PlatformFile.readAsBytes(); this parameter will be removed in a future release. Try replacing the use of the deprecated member with the replacement • lib/features/activity/transaction_detail_screen.dart:787:11 • deprecated_member_use
+   info • 'bytes' is deprecated and shouldn't be used. Use readAsBytes() instead to avoid out-of-memory issues with large files. Try replacing the use of the deprecated member with the replacement • lib/features/activity/transaction_detail_screen.dart:798:25 • deprecated_member_use
+   info • 'bytes' is deprecated and shouldn't be used. Use readAsBytes() instead to avoid out-of-memory issues with large files. Try replacing the use of the deprecated member with the replacement • lib/features/activity/transaction_detail_screen.dart:801:25 • deprecated_member_use
+   info • Unnecessary use of multiple underscores. Try using '_' • lib/features/activity/transaction_detail_screen.dart:1154:32 • unnecessary_underscores
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/activity/transaction_detail_screen.dart:1384:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/calculator/big_purchase_calculator_screen.dart:126:21 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/calculator/big_purchase_calculator_screen.dart:214:7 • curly_braces_in_flow_control_structures
+   info • Unnecessary use of multiple underscores. Try using '_' • lib/features/home/home_screen.dart:3062:29 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores. Try using '_' • lib/features/home/home_screen.dart:3062:33 • unnecessary_underscores
+   info • Use interpolation to compose strings and values. Try using string interpolation to build the composite string • lib/features/insights/central_bills_section.dart:62:19 • prefer_interpolation_to_compose_strings
+   info • Use interpolation to compose strings and values. Try using string interpolation to build the composite string • lib/features/insights/central_bills_section.dart:81:19 • prefer_interpolation_to_compose_strings
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/features/insights/spend_trends_screen.dart:2393:11 • use_null_aware_elements
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/features/settings/transaction_tags_screen.dart:49:7 • curly_braces_in_flow_control_structures
+   info • Don't invoke 'print' in production code. Try using a logging framework • test/data/local/financial_store_test.dart:79:5 • avoid_print
+   info • Use interpolation to compose strings and values. Try using string interpolation to build the composite string • test/data/local_sms_parser_test.dart:1041:17 • prefer_interpolation_to_compose_strings
+   info • Use a function declaration rather than a variable assignment to bind a function to a name. Try rewriting the closure assignment as a function declaration • test/data/sms_fact_contract_test.dart:139:11 • prefer_function_declarations_over_variables
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • test/data/transaction_import_pipeline_test.dart:454:13 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • test/data/transaction_tags_repository_test.dart:92:15 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • test/data/transaction_tags_repository_test.dart:95:15 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • test/data/transaction_tags_repository_test.dart:100:15 • curly_braces_in_flow_control_structures
+   info • Can't use a relative path to import a library in 'lib'. Try fixing the relative path or changing the import to a 'package:' import • test/features/voice/voice_action_parser_test.dart:3:8 • avoid_relative_lib_imports
+   info • Can't use a relative path to import a library in 'lib'. Try fixing the relative path or changing the import to a 'package:' import • test/features/voice/voice_action_parser_test.dart:4:8 • avoid_relative_lib_imports
+   info • Can't use a relative path to import a library in 'lib'. Try fixing the relative path or changing the import to a 'package:' import • test/features/voice/voice_action_parser_test.dart:6:8 • avoid_relative_lib_imports
+   info • Use interpolation to compose strings and values. Try using string interpolation to build the composite string • test/fixtures/portable_backup_fixture.dart:81:7 • prefer_interpolation_to_compose_strings
+
+80 issues found. (ran in 3.0s)

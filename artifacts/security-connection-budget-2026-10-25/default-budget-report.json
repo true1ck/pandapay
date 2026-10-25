@@ -1,0 +1,166 @@
+{
+  "format": "pandapay-connection-budget-report-v1",
+  "generated_at": "2026-10-25T10:32:22.619Z",
+  "read_only": true,
+  "model": "Conservative maximum: every configured client slot counts as one backend connection. No transaction-pooler discount or throughput guarantee.",
+  "trust": "Operator-reviewed aliases, replica ceilings and limits; actual running configuration and provider reserves are not discovered by this offline check.",
+  "primary_cluster": "primary",
+  "processes": [
+    {
+      "id": "api",
+      "kind": "api",
+      "replicas": 1,
+      "overlap_replicas": 0,
+      "contributions": [
+        {
+          "pool": "main",
+          "cluster": "primary",
+          "max_per_process": 10,
+          "steady_connections": 10,
+          "rollout_connections": 10
+        }
+      ]
+    },
+    {
+      "id": "auth",
+      "kind": "auth",
+      "replicas": 1,
+      "overlap_replicas": 0,
+      "contributions": [
+        {
+          "pool": "main",
+          "cluster": "primary",
+          "max_per_process": 10,
+          "steady_connections": 10,
+          "rollout_connections": 10
+        }
+      ]
+    },
+    {
+      "id": "rewards-worker",
+      "kind": "rewards-worker",
+      "replicas": 1,
+      "overlap_replicas": 0,
+      "contributions": [
+        {
+          "pool": "main",
+          "cluster": "primary",
+          "max_per_process": 10,
+          "steady_connections": 10,
+          "rollout_connections": 10
+        }
+      ]
+    },
+    {
+      "id": "sms-learning-worker",
+      "kind": "sms-learning-worker",
+      "replicas": 0,
+      "overlap_replicas": 0,
+      "contributions": [
+        {
+          "pool": "main",
+          "cluster": "primary",
+          "max_per_process": 2,
+          "steady_connections": 0,
+          "rollout_connections": 0
+        }
+      ]
+    },
+    {
+      "id": "gemini-worker",
+      "kind": "gemini-worker",
+      "replicas": 0,
+      "overlap_replicas": 0,
+      "contributions": []
+    },
+    {
+      "id": "product-maintenance",
+      "kind": "product-maintenance",
+      "replicas": 0,
+      "overlap_replicas": 0,
+      "contributions": [
+        {
+          "pool": "main",
+          "cluster": "primary",
+          "max_per_process": 1,
+          "steady_connections": 0,
+          "rollout_connections": 0
+        }
+      ]
+    },
+    {
+      "id": "auth-retention-maintenance",
+      "kind": "auth-retention-maintenance",
+      "replicas": 0,
+      "overlap_replicas": 0,
+      "contributions": [
+        {
+          "pool": "ledger",
+          "cluster": "primary",
+          "max_per_process": 1,
+          "steady_connections": 0,
+          "rollout_connections": 0
+        },
+        {
+          "pool": "retention",
+          "cluster": "primary",
+          "max_per_process": 1,
+          "steady_connections": 0,
+          "rollout_connections": 0
+        }
+      ]
+    },
+    {
+      "id": "backup-status-publisher",
+      "kind": "backup-status-publisher",
+      "replicas": 0,
+      "overlap_replicas": 0,
+      "contributions": [
+        {
+          "pool": "main",
+          "cluster": "primary",
+          "max_per_process": 1,
+          "steady_connections": 0,
+          "rollout_connections": 0
+        }
+      ]
+    },
+    {
+      "id": "maintenance-alert-delivery",
+      "kind": "maintenance-alert-delivery",
+      "replicas": 0,
+      "overlap_replicas": 0,
+      "contributions": [
+        {
+          "pool": "main",
+          "cluster": "primary",
+          "max_per_process": 1,
+          "steady_connections": 0,
+          "rollout_connections": 0
+        }
+      ]
+    }
+  ],
+  "clusters": [
+    {
+      "id": "primary",
+      "max_connections": null,
+      "steady_connections": 30,
+      "rollout_connections": 30,
+      "reserved_connections": null,
+      "provider_connections": null,
+      "operational_connections": null,
+      "safety_connections": null,
+      "limits_verified": false,
+      "total_reserved_connections": null,
+      "rollout_required_connections": null,
+      "remaining_connections": null,
+      "fits": false
+    }
+  ],
+  "issues": [
+    "inventory_review_missing_or_stale",
+    "primary_limits_missing_or_stale"
+  ],
+  "budget_ready": false
+}

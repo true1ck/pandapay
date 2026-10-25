@@ -1,5 +1,7 @@
 # PandaPay — Complete UI Specification (v1.0 Production)
 
+> **Historical/product design reference — reviewed 25 October 2026.** Feature and architecture statements here may describe intended or earlier designs. The [current source architecture](docs/security-current-architecture-2026-10-25.md), [security progress](docs/security-implementation-progress-2026-10-22.md) and [deployment guide](deploy/DEPLOY.md) are the implementation/operations entrypoints. Do not infer a deployed feature, database topology or encryption state from this plan.
+
 Companion to `product-plan.md`. Together these two documents are intended to be **sufficient to implement the entire application** — the plan defines *what and why*, this defines *where and how*.
 
 **Total: 66 screens + 6 system surfaces.**

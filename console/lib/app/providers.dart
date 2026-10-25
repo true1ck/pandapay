@@ -10,46 +10,55 @@ import '../data/token_store.dart';
 /// (plan Phase 0.3) — kept as two plain consts here rather than a shared
 /// package because the console is a separate Flutter target that does not
 /// depend on `app/`, and duplicating two `String.fromEnvironment` calls is
-/// cheaper than a package just to hold them. Defaults are the local dev
-/// ports, so `flutter run -d chrome` is unchanged.
+/// cheaper than a package just to hold them. These origins apply to native
+/// console callers. Web uses the same-origin /browser gateway, which must
+/// be served alongside the static bundle during development and deployment.
 ///
 /// ```bash
 /// flutter build web --release \
 ///   --dart-define=PANDAPAY_API_BASE_URL=https://api.pandapay.example \
 ///   --dart-define=PANDAPAY_AUTH_BASE_URL=https://auth.pandapay.example
 /// ```
-const authBaseUrl = String.fromEnvironment('PANDAPAY_AUTH_BASE_URL', defaultValue: 'http://localhost:3210');
-const apiBaseUrl = String.fromEnvironment('PANDAPAY_API_BASE_URL', defaultValue: 'http://localhost:4000');
+const authBaseUrl = String.fromEnvironment(
+  'PANDAPAY_AUTH_BASE_URL',
+  defaultValue: 'http://localhost:3210',
+);
+const apiBaseUrl = String.fromEnvironment(
+  'PANDAPAY_API_BASE_URL',
+  defaultValue: 'http://localhost:4000',
+);
 
 final authApiProvider = Provider<AuthApi>(
-  (ref) => AuthApi(authBaseUrl: authBaseUrl),
+  (ref) => AuthApi(
+    authBaseUrl: authBaseUrl,
+    versionedOtpEnabled: const bool.fromEnvironment(
+      'PANDAPAY_OTP_V2_ENABLED',
+      defaultValue: false,
+    ),
+  ),
 );
 
 final tokenStoreProvider = FutureProvider<TokenStore>(
   (ref) => TokenStore.load(),
 );
 
-/// The signed-in access token, or null when signed out. Chunk 10: seeded on
-/// startup from sessionInitProvider (which resolves a stored refresh token
-/// through the real auth/ /auth/refresh endpoint), and login_screen.dart
-/// persists both tokens on a fresh OTP sign-in — a reload no longer forces
-/// the OTP flow again.
+/// Native access token or in-memory browser-session marker; null when signed
+/// out. Browser bearer credentials remain on the server. Native credentials
+/// retain their existing compatibility storage and require careful custody.
 final accessTokenProvider = StateProvider<String?>((ref) => null);
 
-/// Runs once on startup: if a refresh token is stored, exchange it for a
-/// fresh access token and seed accessTokenProvider. A definitive 401 clears
-/// the invalid/revoked session; transient failures preserve stored tokens and
-/// are surfaced by the auth gate for retry.
+/// Restores the browser cookie session or exchanges the native refresh token.
+/// A definitive 401 clears local sign-in state; transient failures are
+/// surfaced by the auth gate for retry.
 /// _AuthGate waits on this before deciding whether to show the login screen,
 /// so a valid stored session never flashes the login screen first.
 final sessionInitProvider = FutureProvider<void>((ref) async {
   final store = await ref.watch(tokenStoreProvider.future);
-  final refreshToken = store.refreshToken;
-  if (refreshToken == null) return;
-
   final authApi = ref.read(authApiProvider);
+  final refreshToken = store.refreshToken;
+  if (!authApi.browserSessions && refreshToken == null) return;
   try {
-    final tokens = await authApi.refresh(refreshToken);
+    final tokens = await authApi.refresh(refreshToken ?? '');
     await store.save(
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
@@ -68,7 +77,14 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
 final adminApiProvider = Provider<AdminApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return AdminApi(apiBaseUrl: apiBaseUrl, accessToken: token);
+  final auth = ref.read(authApiProvider);
+  return AdminApi(
+    apiBaseUrl: auth.browserSessions
+        ? '${auth.browserBaseUrl}/api'
+        : apiBaseUrl,
+    accessToken: token,
+    csrfToken: auth.browserSessions ? () => auth.browserCsrf : null,
+  );
 });
 
 /// AD-0.3.2: whether the signed-in account is an active admin_users row —
@@ -180,6 +196,8 @@ final abuseSignalsProvider = FutureProvider<List<Map<String, dynamic>>>((
 final categoriesProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,
 ) async {
+  final auth = ref.read(authApiProvider);
+  if (auth.browserSessions) return auth.categories();
   final response = await http.get(Uri.parse('$apiBaseUrl/categories'));
   if (response.statusCode != 200) return const [];
   final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -229,13 +247,16 @@ final smsAiSummaryProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   return api.fetchSmsAiSummary();
 });
 
-final smsLearningCandidatesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchSmsLearningCandidates();
-});
+final smsLearningCandidatesProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+      final api = ref.watch(adminApiProvider);
+      if (api == null) return const [];
+      return api.fetchSmsLearningCandidates();
+    });
 
-final smsLearningOperationsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+final smsLearningOperationsProvider = FutureProvider<Map<String, dynamic>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const {};
   return api.fetchSmsLearningOperations();
@@ -243,29 +264,41 @@ final smsLearningOperationsProvider = FutureProvider<Map<String, dynamic>>((ref)
 
 final smsAiJobStatusFilterProvider = StateProvider<String?>((ref) => null);
 
-final smsAiJobsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final smsAiJobsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
-  return api.fetchSmsAiJobs(status: ref.watch(smsAiJobStatusFilterProvider), limit: 100);
+  return api.fetchSmsAiJobs(
+    status: ref.watch(smsAiJobStatusFilterProvider),
+    limit: 100,
+  );
 });
 
-final smsAiQuotaProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final smsAiQuotaProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchSmsAiQuota();
 });
 
-final smsAiJobTimelineProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, jobId) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchSmsAiJobTimeline(jobId);
-});
+final smsAiJobTimelineProvider =
+    FutureProvider.family<List<Map<String, dynamic>>, String>((
+      ref,
+      jobId,
+    ) async {
+      final api = ref.watch(adminApiProvider);
+      if (api == null) return const [];
+      return api.fetchSmsAiJobTimeline(jobId);
+    });
 
-final anonymizationAuditRunsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchAnonymizationAuditRuns();
-});
+final anonymizationAuditRunsProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+      final api = ref.watch(adminApiProvider);
+      if (api == null) return const [];
+      return api.fetchAnonymizationAuditRuns();
+    });
 
 final parserPatternsProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,

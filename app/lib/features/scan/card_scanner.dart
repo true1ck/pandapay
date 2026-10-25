@@ -1,3 +1,5 @@
+import '../../data/portable_backup/app_private_temporary_storage.dart';
+import '../../data/portable_backup/private_temporary_workspace.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -44,8 +46,9 @@ class MlKitCardTextRecognizer implements CardTextRecognizer {
 
   @override
   Future<ExtractedCardText> recognizeText(String imagePath) async {
-    final ocrPaths = await _prepareOcrVariants(imagePath);
+    final workspace = await AppPrivateTemporaryStorage.create();
     try {
+      final ocrPaths = await _prepareOcrVariants(imagePath, workspace);
       final texts = <String>[];
       for (final ocrPath in ocrPaths) {
         final inputImage = InputImage.fromFilePath(ocrPath);
@@ -54,14 +57,7 @@ class MlKitCardTextRecognizer implements CardTextRecognizer {
       }
       return ExtractedCardText(texts.join('\n'));
     } finally {
-      for (final ocrPath in ocrPaths.where((path) => path != imagePath)) {
-        try {
-          await File(ocrPath).delete();
-        } catch (_) {
-          // The OCR result is already available; a best-effort temp-file
-          // cleanup must never turn a successful scan into an error.
-        }
-      }
+      await workspace.cleanup();
     }
   }
 
@@ -69,7 +65,10 @@ class MlKitCardTextRecognizer implements CardTextRecognizer {
   /// gallery image while confidently reading a large network/tier label such
   /// as "RuPay Platinum". Upscale genuinely small inputs and run overlapping
   /// horizontal crops so small top/bottom wordmarks get a larger OCR target.
-  Future<List<String>> _prepareOcrVariants(String imagePath) async {
+  Future<List<String>> _prepareOcrVariants(
+    String imagePath,
+    PrivateTemporaryWorkspace workspace,
+  ) async {
     final bytes = await File(imagePath).readAsBytes();
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return [imagePath];
@@ -135,9 +134,7 @@ class MlKitCardTextRecognizer implements CardTextRecognizer {
         paths.add(imagePath);
         continue;
       }
-      final tempPath =
-          '${Directory.systemTemp.path}${Platform.pathSeparator}'
-          'pandapay_ocr_${DateTime.now().microsecondsSinceEpoch}_$i.jpg';
+      final tempPath = workspace.file('card-variant-$i.jpg').path;
       await File(tempPath).writeAsBytes(
         img.encodeJpg(prepared, quality: 95, chroma: img.JpegChroma.yuv444),
       );

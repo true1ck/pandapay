@@ -21,14 +21,14 @@ FROM node:22-alpine AS runtime
 # Node runs as PID 1, ignores SIGTERM by default, and every deploy waits out
 # the orchestrator's kill timeout before the old container dies — turning a
 # rolling restart into a visible outage.
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init age
 
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY package.json ./
-COPY src ./src
+COPY --from=deps --chown=node:node /app/node_modules ./node_modules
+COPY --chown=node:node package.json ./
+COPY --chown=node:node src ./src
 
 # Never root. A container that is compromised through a dependency should not
 # also be running as uid 0 — `node` is a non-root user the base image already

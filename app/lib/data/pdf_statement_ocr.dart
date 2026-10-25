@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'portable_backup/app_private_temporary_storage.dart';
 import 'dart:typed_data';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -17,7 +17,7 @@ class PdfStatementOcr {
     String? password,
     List<int>? pageNumbers,
   }) async {
-    final tempDir = await Directory.systemTemp.createTemp('pandapay-pdf-ocr-');
+    final workspace = await AppPrivateTemporaryStorage.create();
     PdfDocument? document;
     try {
       document = await PdfDocument.openData(bytes, password: password);
@@ -42,7 +42,7 @@ class PdfStatementOcr {
             backgroundColor: '#FFFFFF',
           );
           if (image == null) continue;
-          final file = File('${tempDir.path}/page-$pageNumber.jpg');
+          final file = workspace.file('page-$pageNumber.jpg');
           await file.writeAsBytes(image.bytes, flush: true);
           final result = await _recognizer.processImage(
             InputImage.fromFilePath(file.path),
@@ -59,11 +59,10 @@ class PdfStatementOcr {
       }
       return pages.join('\n');
     } finally {
-      await document?.close();
       try {
-        await tempDir.delete(recursive: true);
-      } catch (_) {
-        // Temporary OCR directory is best-effort cleanup only.
+        await document?.close();
+      } finally {
+        await workspace.cleanup();
       }
     }
   }

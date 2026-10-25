@@ -59,10 +59,9 @@ function requestLogger(req, res, next) {
       path: requestPath(req),
       status: res.statusCode,
       durationMs: Math.round(durationMs * 10) / 10,
-      // req.userId is set by authMiddleware on the routes that require it;
-      // undefined elsewhere, which is the honest signal for "unauthenticated
-      // request" rather than a fabricated value.
-      userId: req.userId || null,
+      // Support correlation uses requestId; ordinary logs need no durable
+      // account ID. authMiddleware sets req.user on protected routes.
+      authenticated: Boolean(req.user?.id || req.userId),
     });
   });
 

@@ -1,0 +1,275 @@
+{
+  "format": "pandapay-sync-recovery-provenance-verification-v1",
+  "verified_at_utc": "2026-10-25T09:09:47.809Z",
+  "scope": "P03/P04/P06/P11 bounded source and local safeguards; known numeric sync SQL issue remains",
+  "source_manifest": "candidate-source-sha256.json",
+  "candidate_sha256": "f79b61361c228ebc85c21f2baa486ced12322353bacc70be01f0c28d8babae54",
+  "changed_source_files": [
+    "api/src/index.js",
+    "app/lib/data/portable_backup/account_recovery_local_snapshot.dart",
+    "db/scripts/release_secret_audit.js",
+    "db/tests/release_secret_audit.test.js"
+  ],
+  "added_source_files": [
+    "api/src/sync_request_validation.js",
+    "api/test/sync_request_validation.test.js",
+    "api/test/sync_transport_postgres.js",
+    "api/test/sync_transport_routes.test.js",
+    "app/test/data/portable_backup/account_recovery_completeness_test.dart"
+  ],
+  "preserved_baseline_source_files": 1309,
+  "agents": {
+    "model": "gpt-6-luna",
+    "count": 3,
+    "independent_reviews": [
+      "sync runtime and caller compatibility",
+      "recovery header and legacy archive compatibility",
+      "audit finding provenance semantics/bounds"
+    ],
+    "coordinator_integration_and_review": true
+  },
+  "tests": {
+    "api": {
+      "exit_code": 0,
+      "summary": [
+        "# tests 1006",
+        "# pass 1004",
+        "# fail 0",
+        "# skipped 2"
+      ]
+    },
+    "database-tools": {
+      "exit_code": 0,
+      "summary": [
+        "# tests 193",
+        "# pass 193",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    }
+  },
+  "flutter": {
+    "app-analysis": {
+      "exit_code": 0,
+      "seconds": 3.77,
+      "tail": [
+        "   info • Can't use a relative path to import a library in 'lib'. Try fixing the relative path or changing the import to a 'package:' import • test/features/voice/voice_action_parser_test.dart:6:8 • avoid_relative_lib_imports",
+        "   info • Use interpolation to compose strings and values. Try using string interpolation to build the composite string • test/fixtures/portable_backup_fixture.dart:81:7 • prefer_interpolation_to_compose_strings",
+        "",
+        "80 issues found. (ran in 3.0s)"
+      ]
+    },
+    "app-full": {
+      "exit_code": 0,
+      "seconds": 193.52,
+      "tail": [
+        "03:06 +1629: loading /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/notification_devices_api_test.dart",
+        "03:06 +1629: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/notification_devices_api_test.dart: sendTestNotification accepts the provider-accepted response",
+        "03:06 +1630: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/notification_devices_api_test.dart: sendTestNotification surfaces an unconfigured production service",
+        "03:06 +1631: All tests passed!"
+      ]
+    },
+    "summary": {
+      "passed": 1631,
+      "analysis_errors": 0,
+      "analysis_warnings": 0,
+      "analysis_infos": 80
+    }
+  },
+  "focused_recovery": {
+    "exit_code": 0,
+    "command": [
+      "test",
+      "--no-pub",
+      "--concurrency=1",
+      "--reporter=expanded",
+      "test/data/portable_backup/account_recovery_completeness_test.dart",
+      "test/data/portable_backup/account_recovery_test.dart",
+      "test/data/portable_backup/account_recovery_gate_test.dart",
+      "test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart",
+      "test/data/portable_backup/automatic_recovery_test.dart"
+    ],
+    "tail": [
+      "00:02 +28: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: automatic copy verifies ciphertext without requesting an escrow key",
+      "00:02 +29: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: settings default to no consent and bind explicit receipt choice",
+      "00:02 +30: All tests passed!"
+    ]
+  },
+  "node22": {
+    "image": "pandapay-security-next25-api:local",
+    "image_id": "sha256:00822714a313c7a85dd80c142d5b30c148d117798223b25c333fbd86493f096c",
+    "exit_code": 0,
+    "summary": [
+      "# tests 16",
+      "# pass 16",
+      "# fail 0",
+      "# skipped 0"
+    ],
+    "network": "none",
+    "source_mount": "sanitized read-only api/src and api/test",
+    "runtime": "Node22 cached image"
+  },
+  "postgres": {
+    "fresh_product_migration": "passed",
+    "checksummed_migration_repeat": "passed",
+    "sync_postgres_output": "PASS sync transport PostgreSQL route and RLS fixture; known_numeric_update_rejection=42804; numeric_write_remediation=pending"
+  },
+  "api_syntax_check": {
+    "command": "npm run check",
+    "exit_code": 0,
+    "sanitized_candidate": true
+  },
+  "preservation": {
+    "all_other_baseline_release_source_hashes_unchanged": true,
+    "auth_keys_readers_and_writers_unchanged": true,
+    "dependency_locks_schema_migrations_and_deploy_config_unchanged": true,
+    "original_notification_edits_preserved": true,
+    "no_live_connection_opened": true,
+    "no_private_key_or_backup_read_this_batch": true,
+    "feature_defaults_unchanged_and_disabled": true,
+    "no_new_user_password": true
+  },
+  "known_unresolved_issue": {
+    "record": "known-sync-numeric-issue.json",
+    "sqlstate": "42804",
+    "numeric_writes_remediated": false,
+    "required": "Typed-field and financial-state/split/reward/retry review with compatible additive migration"
+  },
+  "status": {
+    "scoped_unfinished_findings": 22,
+    "partial": 19,
+    "open": 3,
+    "new_finding_closures": [],
+    "global_implemented_in_source": 26,
+    "global_partial": 43,
+    "global_open": 7,
+    "implementation_packages": 14,
+    "release_gates": 6,
+    "deployment": false,
+    "live_mutation": false,
+    "mobile_encryption_activation": false
+  },
+  "limitations": [
+    "Recovery scope metadata validation is not a complete producer-schema/receipt coverage manifest",
+    "Normal encrypted startup, full writer/receipt consumers and fresh-phone integration remain",
+    "Existing numeric sync SQL rejection remains explicitly unresolved",
+    "Observed commit provenance identifies a containing commit, not earliest introduction or a confirmed exposure",
+    "Excluded/native/release artifact secret/dependency classification remains",
+    "Signed devices, intended-provider migration/failback, independent custody and monitored rollout remain"
+  ],
+  "commands": {
+    "api_tests": "node --test test/*.test.js (sanitized API)",
+    "tools_tests": "node --test db/tests/*.test.js (sanitized root)",
+    "flutter_analyze": "flutter analyze --no-pub --no-fatal-infos",
+    "flutter_full": "flutter test --no-pub --concurrency=1 --reporter=expanded",
+    "postgres": "fresh owned PostgreSQL18 loopback cluster; product_migrate.js; repeat product_migrate.js; explicit sync_transport_postgres.js; rollback and teardown",
+    "history": "node db/scripts/release_secret_audit.js --root <repo> --history-full-retained --history-provenance"
+  },
+  "history": {
+    "exit_code": 0,
+    "incomplete": false,
+    "history": {
+      "mode": "full-retained",
+      "scan_scope": "retained-git-refs/release-source/recognized-text",
+      "incomplete": false,
+      "shallow_repository": false,
+      "commits_listed": 651,
+      "commits_selected": 651,
+      "commits_attempted": 651,
+      "commits_examined": 651,
+      "blobs_attempted": 4235,
+      "blobs_read": 4235,
+      "blobs_examined": 4235,
+      "blobs_failed": 0,
+      "blobs_limit_rejected": 0,
+      "bytes_examined": 128093276,
+      "tree_entries_examined": 638860,
+      "tree_bytes_examined": 62015766,
+      "limits": {
+        "maxCommits": 20000,
+        "maxFiles": 5000,
+        "maxBytes": 134217728,
+        "maxTreeBytes": 16777216,
+        "maxTreeTotalBytes": 536870912,
+        "maxTreeEntries": 20000000,
+        "maxMs": 120000
+      },
+      "retained_history_complete": true
+    },
+    "findings": 52,
+    "historical_findings": 32,
+    "provenance_records": 32,
+    "provenance_incomplete": false,
+    "source_sha256": "f79b61361c228ebc85c21f2baa486ced12322353bacc70be01f0c28d8babae54",
+    "raw_values_emitted": false,
+    "recorded_at_utc": "2026-10-25T09:10:03.842047+00:00"
+  },
+  "history_attempt_note": "Attempt1 retained text traversal completed but overall report was incomplete because release-source files changed during review. Final frozen-source pass is complete for the stated retained-ref/release-source/recognized-text scope.",
+  "html": {
+    "result": "passed",
+    "postgres_tables": 96,
+    "columns": 934,
+    "foreign_keys": 139,
+    "sqlite_tables": 19,
+    "source_only_tables": 2,
+    "remediation_items": 68,
+    "optimization_inventory_rows": 96,
+    "table_retirement_candidates": 4,
+    "local_links": 480,
+    "remaining_implementation_packages": 14,
+    "remaining_release_gates": 6,
+    "full_findings": 76,
+    "unfinished_findings": 50,
+    "focused_page_verified": true,
+    "checks": [
+      "remaining-work counts and complete finding mapping",
+      "focused remaining-work HTML",
+      "tab switching",
+      "keyboard tabs",
+      "database filter",
+      "domain filter",
+      "column search",
+      "empty state",
+      "reset",
+      "table inspection",
+      "relationship navigation",
+      "zoom",
+      "unique IDs",
+      "local links",
+      "offline scripts",
+      "remediation coverage and proposal status",
+      "optimization inventory completeness",
+      "scalability section and cross-tab shortcut"
+    ]
+  },
+  "review_refinements": [
+    "Preserved legacy archive restore when destination adds a table",
+    "Renamed first commit claim to observed containing commit",
+    "Used canonical PostgreSQL host() for loopback fixture preflight and explicit typed synthetic seed parameters",
+    "Confirmed and documented existing numeric sync SQLSTATE42804 instead of weakening a successful-write claim"
+  ],
+  "documentation": {
+    "render_deterministic": true,
+    "html_sha256": {
+      "docs/security-and-backend-audit-2026-10-20.html": "c0d75afca237e65e6a910f639e55d91656ae16fb2c94e73d3ec661de394a0d3d",
+      "docs/security-remaining-work-2026-10-25.html": "56aeaf2477bebbec381c6cf196725bcef4c9e4f2bfaeb0539bcb8e7b5aca48ba"
+    },
+    "focused_markdown_local_links_checked": 53,
+    "git_diff_check": "passed"
+  },
+  "final_source_recheck": "passed",
+  "documentation_sha256": {
+    "docs/security-and-backend-audit-2026-10-20.md": "0ca48b33b50cdfd7ba5851b20d3a0c8453653cba1f09e72bc2443224a8a836fd",
+    "docs/security-and-backend-audit-2026-10-20.html": "c0d75afca237e65e6a910f639e55d91656ae16fb2c94e73d3ec661de394a0d3d",
+    "docs/security-remaining-work-2026-10-25.md": "49c0f9b4facb2edb4d8a1d97e83c8e3d24b68b7fca7f58a721242bf21c98b736",
+    "docs/security-remaining-work-2026-10-25.html": "56aeaf2477bebbec381c6cf196725bcef4c9e4f2bfaeb0539bcb8e7b5aca48ba",
+    "docs/security-sync-recovery-implementation-2026-10-25.md": "35fdd703cab1e3227625b4952f3066f5cd6439b7fe5eb54bc3190ef4cd132f59",
+    "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md": "ceefac5f3b44d4a35f53a229b24ab7c0a229c701f310c8f915f44cedbeaa7aa3",
+    "docs/security-focused-gap-review-2026-10-25.md": "c3f215aaffe2d6f9efa786192737dfaf3e9cf07caac31c3654bc0a9f743ba545",
+    "docs/security-implementation-progress-2026-10-22.md": "873b377816759cdb4242187fbedf373b206b0baa9f63fc07659462955bfa10c0",
+    "docs/security-completion-checklist-2026-10-23.md": "359b492b955d355ee3470877de86ca01480b51bb31d7101df521dd6cf2458513",
+    "artifacts/security-review-2026-10-20/data-dependency-mobile-documentation-plan-2026-10-25.json": "b5aa1becb2a25c3d4f1147e12d9a5295c421b27fef0073bbe7638b4e242120eb",
+    "artifacts/security-storage-2026-10-25/focused-gap-review.json": "07f6f72b22d0774d05c2bd3fa6db928faf78a53aa6c38c22a29ded76c728fa45"
+  },
+  "finalized_at_utc": "2026-10-25T09:11:30.563Z"
+}

@@ -77,6 +77,7 @@ async function authMiddleware(req, res, next) {
 
   req.user = {
     id: payload.sub,
+    device_id: payload.device_id,
     phone_number: payload.phone_number,
     role: payload.user_role || payload.role, // Fallback to role for older tokens
     user_type: payload.user_type,

@@ -1,3 +1,4 @@
+const {isVersionedOtpRequest}=require('../routes/versionedOtpRoutes');
 // src/middleware/validation.js
 // === SECURITY HARDENING: INPUT VALIDATION ===
 // Request validation middleware using simple validation
@@ -41,7 +42,8 @@ function validateEmail(email) {
 /**
  * Validate OTP code format
  */
-function validateOtpCode(code) {
+function validateOtpCode(code, versioned=false) {
+  if(versioned)return typeof code==='string'&&/^\d{6}$/.test(code)?{valid:true,normalizedCode:code}:{valid:false,error:'code must be exactly 6 digits'};
   if (!code) {
     return { valid: false, error: 'code is required' };
   }
@@ -186,7 +188,7 @@ function validateVerifyOtpBody(req, res, next) {
     return res.status(400).json({ error: phoneCheck.error });
   }
 
-  const codeCheck = validateOtpCode(code);
+  const codeCheck = validateOtpCode(code,isVersionedOtpRequest(req));
   if (!codeCheck.valid) {
     return res.status(400).json({ error: codeCheck.error });
   }
@@ -266,7 +268,7 @@ function validateVerifyEmailOtpBody(req, res, next) {
     if (!phoneCheck.valid) return res.status(400).json({ error: phoneCheck.error });
   }
 
-  const codeCheck = validateOtpCode(code);
+  const codeCheck = validateOtpCode(code,isVersionedOtpRequest(req));
   if (!codeCheck.valid) return res.status(400).json({ error: codeCheck.error });
   req.body.code = codeCheck.normalizedCode || String(code);
 

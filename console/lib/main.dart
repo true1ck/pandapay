@@ -97,9 +97,7 @@ class _SessionResumeRetry extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Your saved session could not be checked right now.',
-              ),
+              const Text('Your saved session could not be checked right now.'),
               const SizedBox(height: 8),
               const Text('Your sign-in is still saved. Try again in a moment.'),
               const SizedBox(height: 16),
@@ -186,6 +184,20 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
                     icon: const Icon(Icons.logout),
                     tooltip: 'Sign out',
                     onPressed: () async {
+                      try {
+                        await ref.read(authApiProvider).logout();
+                      } catch (_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Sign-out could not be completed. Try again.',
+                              ),
+                            ),
+                          );
+                        }
+                        return;
+                      }
                       final store = await ref.read(tokenStoreProvider.future);
                       await store.clear();
                       ref.read(accessTokenProvider.notifier).state = null;

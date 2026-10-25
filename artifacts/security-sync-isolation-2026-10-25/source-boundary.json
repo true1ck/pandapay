@@ -1,0 +1,25 @@
+{
+  "candidate_sha256": "f8b289111ab85f098eaaf4287fb996837a0412f3dd72bddf46c6b5c659365d10",
+  "files": 1333,
+  "changed_release_files": [
+    "api/test/sync_isolation_postgres.js",
+    "api/test/sync_typed_changes_postgres.js",
+    "db/scripts/audit_runtime_privileges.js",
+    "db/scripts/rehearse_local_backup.py",
+    "db/scripts/release_security_check.js",
+    "db/scripts/restore_drill.sh",
+    "db/scripts/review_restored_privileges.js",
+    "db/scripts/verify_recovery.js",
+    "db/security/product-runtime-privileges.json",
+    "db/supabase/migrations/20261023180000_user_merchant_rule_actions.sql",
+    "db/supabase/migrations/20261025151350_legacy_sync_context_isolation.sql",
+    "db/tests/release_security_check.test.js",
+    "db/tests/restored_privilege_review.test.js",
+    "db/tests/runtime_privileges.test.js",
+    "deploy/DEPLOY.md"
+  ],
+  "api_auth_mobile_runtime_unchanged": true,
+  "original_keys_unchanged": true,
+  "schema_source_changed": true,
+  "live_mutations": false
+}

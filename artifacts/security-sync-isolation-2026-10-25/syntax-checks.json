@@ -1,0 +1,12 @@
+{
+  "result": "passed",
+  "node": "v24.15.0",
+  "files": [
+    "api/test/sync_isolation_postgres.js",
+    "api/test/sync_typed_changes_postgres.js",
+    "db/scripts/review_restored_privileges.js",
+    "db/scripts/audit_runtime_privileges.js",
+    "db/scripts/release_security_check.js",
+    "db/scripts/verify_recovery.js"
+  ]
+}

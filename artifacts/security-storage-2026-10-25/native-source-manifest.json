@@ -1,0 +1,22 @@
+{
+  "scope": "isolated Android API37 fixture; five tests; journal is copied but not imported/exercised by native cases",
+  "package": "app.pandapay.keycipherfixture.pandapay",
+  "source_sha256": {
+    "lib/data/secure_storage/encrypted_database_copy.dart": "0f1b314184d55ad66f00bef0fb9ad0e70337cb74162bc0b70e6ce894e5037779",
+    "lib/data/secure_storage/encrypted_receipt_file.dart": "85dbd9d41068c86410fbf8ca6631087b3054b0437244fa60d46e8fdc2b5a07c0",
+    "lib/data/secure_storage/flutter_secure_key_value_store.dart": "60701c1dffee2a5b41d6d3c9ec82a5dfd4d11ec0afa9c1eb4787efe0793d6c9a",
+    "lib/data/secure_storage/encrypted_database_migration.dart": "c69c94beb90d1ec33220f3d58cf4ad2e4acab59997cedf145cd1c9d6f80066dd",
+    "lib/data/secure_storage/local_key_provisioning_lease.dart": "13ed761a1836c7e3b51954ae2c81c7408c7b90c6c13e37146cf54a2b71f911bc",
+    "lib/data/secure_storage/local_database_key_custody.dart": "d7e93cffc686142219f19eb3f82517ebed57f135ac32b7875617398ce11e4422",
+    "lib/data/local/app_database.dart": "47f4c45dfbd03e170a06c548f39bb2c794fec79008e9b3789d8f1782ed0ac707",
+    "lib/data/portable_backup/account_recovery_operation_gate.dart": "bd19045875c57f2d3db295839e8b67d72f3118a91d72cc63c27a6dea71e691db",
+    "lib/data/portable_backup/private_temporary_workspace.dart": "8c3e41b9a2c26135e4cfda8fd68529b7d593b51d980dda9cf15dffb8d24401e7",
+    "integration_test/security_storage_key_test.dart": "2bae883b13090f0646600386cbaf83bea61b0d45fc22baf5d25fe088a69859a8",
+    "integration_test/security_encrypted_engine_test.dart": "4684ae912e6d16e5c9415d226f0c47931a3f59d1d8c276db1153a776e326a3e5",
+    "integration_test/security_database_copy_test.dart": "749c0c01e6e127a198ca3ad701db07767a7cb17a0ab09d4afb478c85d356633d",
+    "integration_test/security_encrypted_receipt_test.dart": "18d5d1a9ee536b8d895888348126627afaf464b7f6cdc8e0738d3e78a7d4fb72"
+  },
+  "not_exercised_copied_sources": [
+    "lib/data/secure_storage/encrypted_database_migration.dart"
+  ]
+}

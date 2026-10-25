@@ -1,0 +1,16 @@
+BEGIN
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+SET
+              set_config              
+--------------------------------------
+ 3aef8ab5-6ff2-4b3a-9741-c25e0d9dd5b0
+(1 row)
+
+ out_applied | out_conflicts | out_reason 
+-------------+---------------+------------
+ t           |             0 | 
+(1 row)
+
+COMMIT

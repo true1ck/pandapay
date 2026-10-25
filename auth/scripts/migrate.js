@@ -7,7 +7,9 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { safeErrorCode } = require('../src/utils/safeErrorCode');
-const { configureAuthRuntimeRole } = require('./runtimePermissions');
+const { configureAuthRuntimeRole, isDbAccessLoggingEnabled } = require('./runtimePermissions');
+const { configureConsoleSessionLogin } = require('./consoleSessionPermissions');
+const {configureAuthLifecycleLogin}=require('./authLifecyclePermissions');
 const { canonicalizePhone, phoneLookupHash } = require('../src/utils/encryptedPhoneSearch');
 const { decryptPhoneNumber } = require('../src/utils/fieldEncryption');
 
@@ -61,10 +63,18 @@ function migrationDiagnostic(error) {
 }
 
 function migrationFiles(migrationsDir) {
-  return fs.readdirSync(migrationsDir)
+  const names = fs.readdirSync(migrationsDir)
     .filter(file => /^\d+_[a-z0-9_-]+\.sql$/i.test(file))
-    .sort()
-    .map(file => {
+    .sort();
+  // Auth has no historical duplicate prefixes. Check the packaged inventory
+  // before connecting or starting any schema work.
+  const prefixes = new Set();
+  for (const name of names) {
+    const prefix = BigInt(name.split('_', 1)[0]).toString();
+    if (prefixes.has(prefix)) throw new Error('Unreviewed auth migration version-prefix collision');
+    prefixes.add(prefix);
+  }
+  return names.map(file => {
       const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
       return { file, version: file.slice(0, -'.sql'.length), sql, checksum: sha256(sql) };
     });
@@ -557,7 +567,11 @@ async function runMigrations(pool, {
       await beforePostBackfill(client);
     }
     await applyMigrationBatch(client, postBackfill);
-    await configureAuthRuntimeRole(client, { files, runtimeRole: env.AUTH_RUNTIME_ROLE });
+    await configureAuthRuntimeRole(client, { files, runtimeRole: env.AUTH_RUNTIME_ROLE,
+      dbAccessLoggingEnabled: isDbAccessLoggingEnabled(env),
+      securityDashboardEnabled: ['true', '1'].includes(env.ENABLE_ADMIN_DASHBOARD) });
+    await configureConsoleSessionLogin(client, env);
+    await configureAuthLifecycleLogin(client, env);
     console.log('Auth migrations and phone hash backfill complete');
   } finally {
     let discardConnection = false;

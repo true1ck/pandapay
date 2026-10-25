@@ -1,0 +1,379 @@
+{
+  "format": "pandapay-remaining-work-register-v1",
+  "review_date": "25 October 2026 (IST)",
+  "scope": "Grouped remaining work for the full security plan, including current D/N/M/W source/local verification; no production certification",
+  "counting_rule": "14 uniquely numbered implementation package identities and 6 acceptance/rollout gate identities; finding mappings overlap and must not be summed as separate implementations. Source implemented does not mean deployed.",
+  "original_audit_findings": 68,
+  "additional_system_design_findings": 8,
+  "total_findings": 76,
+  "status_counts": {
+    "Implemented in source": 26,
+    "Partial": 43,
+    "Open": 7
+  },
+  "not_fully_closed": 50,
+  "finding_statuses": {
+    "S01": "Implemented in source",
+    "S02": "Implemented in source",
+    "S03": "Implemented in source",
+    "S04": "Implemented in source",
+    "S05": "Implemented in source",
+    "S06": "Implemented in source",
+    "S07": "Implemented in source",
+    "S08": "Partial",
+    "S09": "Partial",
+    "S10": "Implemented in source",
+    "S11": "Implemented in source",
+    "S12": "Implemented in source",
+    "S13": "Partial",
+    "S14": "Implemented in source",
+    "S15": "Partial",
+    "S16": "Partial",
+    "S17": "Partial",
+    "S18": "Partial",
+    "B01": "Implemented in source",
+    "B02": "Implemented in source",
+    "B03": "Implemented in source",
+    "B04": "Implemented in source",
+    "B05": "Implemented in source",
+    "B06": "Implemented in source",
+    "B07": "Implemented in source",
+    "B08": "Implemented in source",
+    "A01": "Partial",
+    "A02": "Partial",
+    "A03": "Partial",
+    "A04": "Partial",
+    "A05": "Implemented in source",
+    "A06": "Implemented in source",
+    "A07": "Implemented in source",
+    "A08": "Partial",
+    "A09": "Partial",
+    "D01": "Open",
+    "D02": "Open",
+    "D03": "Partial",
+    "D04": "Partial",
+    "D05": "Partial",
+    "C01": "Partial",
+    "C02": "Open",
+    "C03": "Partial",
+    "C04": "Partial",
+    "C05": "Open",
+    "C06": "Partial",
+    "C07": "Partial",
+    "N01": "Implemented in source",
+    "N02": "Partial",
+    "N03": "Implemented in source",
+    "N04": "Partial",
+    "M1": "Partial",
+    "M2": "Partial",
+    "M3": "Partial",
+    "M4": "Partial",
+    "M5": "Partial",
+    "M6": "Partial",
+    "M7": "Open",
+    "M8": "Partial",
+    "M9": "Partial",
+    "M10": "Partial",
+    "W01": "Implemented in source",
+    "W02": "Partial",
+    "W03": "Partial",
+    "W04": "Implemented in source",
+    "W05": "Partial",
+    "W06": "Partial",
+    "W07": "Partial",
+    "SD01": "Partial",
+    "SD02": "Open",
+    "SD03": "Partial",
+    "SD04": "Open",
+    "SD05": "Partial",
+    "SD06": "Partial",
+    "SD07": "Partial",
+    "SD08": "Partial"
+  },
+  "implementation_packages": [
+    {
+      "id": "I01",
+      "title": "Versioned server encryption",
+      "remaining_work": "Finish the encryption/keyring bridge for approved phone/email/profile/raw-payload copies and IMAP secrets: parallel storage, transactional writes, bounded backfill, verified reads and retained original keys.",
+      "completion_criterion": "Complete the P2 format transition and a different-host restore without plaintext downgrade, changed IDs or lost old-key readability.",
+      "finding_ids": [
+        "M6",
+        "M10",
+        "W02"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I02",
+      "title": "Encrypted device database and receipts",
+      "remaining_work": "Finish native key custody, resumable SQLite/receipt conversion, the complete writer inventory and remaining crash/power-loss repair. Existing account recovery and receipt reconciliation are foundations; live encryption remains off.",
+      "completion_criterion": "Fresh/upgrade/offline/account-switch/key-loss/interruption/low-disk behavior preserves pending data and receipts, without a new password.",
+      "finding_ids": [
+        "M9",
+        "M10",
+        "M6"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I03",
+      "title": "Remaining database privilege repair",
+      "remaining_work": "Extend reviewed repairs for remaining PUBLIC/default/inherited grants, ownership/RLS and unsafe definer paths; audit the actual restored role matrix. The narrow exact-grant tool already exists.",
+      "completion_criterion": "Strict actual-role reports pass while ordinary application and worker requests retain required access.",
+      "finding_ids": [
+        "S17",
+        "A03"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I04",
+      "title": "Business-aware data reconciliation",
+      "remaining_work": "Reconcile historical cap/benefit IDs and state, then rehearse the new additive normalized uniqueness on the current clone; review every collision before activation.",
+      "completion_criterion": "Before/after IDs, counts, amounts, cap usage, benefit usage and foreign keys reconcile; non-equivalent rows are retained.",
+      "finding_ids": [
+        "D01",
+        "D02",
+        "D05"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I05",
+      "title": "Index reconciliation",
+      "remaining_work": "Compare the overlapping indexes and query plans, then apply only reviewed remove/retain decisions. Keep backing uniqueness constraints.",
+      "completion_criterion": "Constraint coverage and representative query performance are preserved on the reviewed target.",
+      "finding_ids": [
+        "D03",
+        "D04"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I06",
+      "title": "Cross-store retention and lifecycle privacy",
+      "remaining_work": "Finish the approved OTP/refresh/audit/raw-import/cursor/attachment retention categories and missing bounded jobs. Existing deletion ledgers and selected retention jobs stay intact.",
+      "completion_criterion": "Replay detection, long-offline recovery, financial history and restore tombstones survive bounded cleanup.",
+      "finding_ids": [
+        "A01",
+        "A08",
+        "C03",
+        "M6",
+        "S08",
+        "S16"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I07",
+      "title": "Durable customer notification delivery",
+      "remaining_work": "Add a transactional pending-delivery outbox for important inbox/business notifications, with bounded claims, retries and terminal failure handling. Existing reward/referral outboxes and the new operator adapter do not close this gap.",
+      "completion_criterion": "A crash after commit or an uncertain provider response cannot silently lose a required delivery or duplicate its financial effect.",
+      "finding_ids": [
+        "SD01"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I08",
+      "title": "Clock-independent offline conflicts",
+      "remaining_work": "Replace authoritative phone-wall-clock ordering with reviewed server revisions or logical ordering while preserving losing values and conflict visibility.",
+      "completion_criterion": "Wrong device dates, concurrent edits, edit/delete races and long-offline re-entry reconcile without lost mutations.",
+      "finding_ids": [
+        "SD02"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I09",
+      "title": "Remaining shared abuse controls",
+      "remaining_work": "Complete durable multi-instance admission for general/user/admin route classes; hosted OTP/enumeration/replacement quotas already use PostgreSQL.",
+      "completion_criterion": "Two instances, restart, exhaustion and store outage cannot accidentally permit unlimited sensitive requests.",
+      "finding_ids": [
+        "SD03",
+        "M3"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I10",
+      "title": "Operation-specific administrator permissions",
+      "remaining_work": "Define and enforce narrower reviewer/publisher/support/export powers, recent-factor requirements and separation for high-impact actions.",
+      "completion_criterion": "Unprivileged or narrower operators cannot self-approve, escalate or invoke unrelated high-impact actions.",
+      "finding_ids": [
+        "SD08",
+        "M3"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I11",
+      "title": "Reliability metrics and independent monitoring",
+      "remaining_work": "Add privacy-preserving trends, service objectives, backlog/cleanup/backup-age thresholds and missing-run detection. The optional notice webhook adapter already exists.",
+      "completion_criterion": "Injected outages, stale backups and stopped jobs produce useful signals accepted by an accountable operator.",
+      "finding_ids": [
+        "SD04",
+        "A08",
+        "W07"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I12",
+      "title": "Large-import continuation and provider backpressure",
+      "remaining_work": "Finish durable large-work continuation, per-account/provider concurrency and quota handling, with fair admission across pools. Existing selected IMAP/SMTP/export bounds remain.",
+      "completion_criterion": "Slow or throttled integrations and burst backlogs do not starve sign-in or small financial writes.",
+      "finding_ids": [
+        "SD07"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I13",
+      "title": "Historical financial reproducibility",
+      "remaining_work": "Complete ruleset/parser/calculation versioning and auditable reconciliation for historical estimates and recalculations; shared Dart/Node parity fixtures already exist.",
+      "completion_criterion": "Edits, refunds, period changes and replay explain the original result and any revised result without silently rewriting history.",
+      "finding_ids": [
+        "SD06",
+        "A07"
+      ],
+      "status": "Remaining"
+    },
+    {
+      "id": "I14",
+      "title": "Compatibility, configuration and reviewed cleanup",
+      "remaining_work": "Complete API/feature/version configuration consolidation, route-preserving domain extraction, reviewed legacy consumer/package/repository retirement and matching documentation. Six-digit clients and retirement switches already exist.",
+      "completion_criterion": "Supported clients retain contracts; legacy storage/code is retired only after consumer and recovery evidence, or retained with an explicit reviewed decision.",
+      "finding_ids": [
+        "C01",
+        "C02",
+        "C04",
+        "C05",
+        "C06",
+        "C07",
+        "W01",
+        "W02",
+        "W05",
+        "SD05"
+      ],
+      "status": "Remaining"
+    }
+  ],
+  "release_gates": [
+    {
+      "id": "G01",
+      "title": "Signed mobile and native acceptance",
+      "remaining_work": "Validate the actual Android/iOS release packages, signing/upgrade compatibility, hardware-backed key behavior, TLS, permissions, shrinking/Room paths and full device-loss/crash matrix. Three isolated Android component checks have passed.",
+      "finding_ids": [
+        "A09",
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7",
+        "M8",
+        "M9",
+        "M10"
+      ],
+      "status": "Pending acceptance"
+    },
+    {
+      "id": "G02",
+      "title": "Providers, browser and supported clients",
+      "remaining_work": "Verify real email/SMS/Google and optional integrations, browser cookies/CSRF/CSP/proxy/operator flows, current/oldest supported clients, and the monitored legacy-route retirement window.",
+      "finding_ids": [
+        "S09",
+        "S13",
+        "S15",
+        "S18",
+        "C01",
+        "C04",
+        "N04",
+        "W03",
+        "W06",
+        "W07",
+        "SD03",
+        "SD05",
+        "SD08"
+      ],
+      "status": "Pending acceptance"
+    },
+    {
+      "id": "G03",
+      "title": "Actual-data PostgreSQL migration and failback",
+      "remaining_work": "Run this exact candidate on a complete current restored copy and intended PostgreSQL provider. Apply reviewed contact/role/data changes, preserve all original keys and IDs, then prove cutover and post-write failback/replay.",
+      "finding_ids": [
+        "S17",
+        "S18",
+        "A03",
+        "A04",
+        "D01",
+        "D02",
+        "D03",
+        "D04",
+        "D05",
+        "W02",
+        "SD05",
+        "SD06"
+      ],
+      "status": "Pending acceptance"
+    },
+    {
+      "id": "G04",
+      "title": "Independent backup and journal custody",
+      "remaining_work": "Provision and verify two off-host encrypted recovery copies in separate failure domains, an independently retained latest lifecycle checkpoint and separate recovery-key custody. One Mac and its shortcut count as one location.",
+      "finding_ids": [
+        "A01",
+        "A02",
+        "M6",
+        "M10"
+      ],
+      "status": "Pending acceptance"
+    },
+    {
+      "id": "G05",
+      "title": "Release security, contract and load evidence",
+      "remaining_work": "Finish full history/native artifact secret review, Dart/native dependency checks, broader payload/relationship tests, historical financial parity, actual deployed-tree verification and representative failure/load runs.",
+      "finding_ids": [
+        "A07",
+        "N02",
+        "N04",
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M7",
+        "SD05",
+        "SD06",
+        "SD07"
+      ],
+      "status": "Pending acceptance"
+    },
+    {
+      "id": "G06",
+      "title": "Monitored operations and controlled rollout",
+      "remaining_work": "Approve retention policies and measured free-host quotas, replace old cron in a fenced activation, configure scheduler/independent monitor/receiver and accepted alert routing, then freeze evidence and perform the separately approved rollout/failback procedure.",
+      "finding_ids": [
+        "S08",
+        "S16",
+        "A01",
+        "A02",
+        "A08",
+        "C03",
+        "M6",
+        "M8",
+        "W01",
+        "W03",
+        "W07",
+        "SD04",
+        "SD07"
+      ],
+      "status": "Pending acceptance"
+    }
+  ],
+  "release_ready": false,
+  "current_source_evidence": "../security-storage-2026-10-25/verification.json"
+}

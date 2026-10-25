@@ -127,8 +127,8 @@
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="ocr,barcode" />
 
-        <!-- Android's status-bar glyph is a small, monochrome mark rather than
-             the full-color launcher artwork. -->
+        <!-- Generated from assets/logo/pandapay_mark.png, the app's own logo.
+             Android needs its monochrome mask for background push messages. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_notification" />

@@ -1,0 +1,10 @@
+{
+  "fresh_product_migration": "passed",
+  "checksummed_migration_repeat": "passed",
+  "api_postgres_summary": [
+    "# tests 13",
+    "# pass 13",
+    "# fail 0",
+    "# skipped 0"
+  ]
+}

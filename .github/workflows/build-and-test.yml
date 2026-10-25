@@ -48,6 +48,11 @@ jobs:
           python3 -m unittest discover -s deploy/tests -p 'test_*.py' -v
       - name: Synthetic encrypted database move rehearsal
         run: python3 db/tests/security_recovery_integration.py
+      - name: Remaining security PostgreSQL role regressions
+        run: |
+          npm ci --omit=dev --prefix api
+          LIFECYCLE_JOURNAL_AGE_TEST_BIN="$(command -v age)" python3 db/tests/security_remaining_postgres.py
+          LIFECYCLE_JOURNAL_AGE_TEST_BIN="$(command -v age)" node api/test/account_lifecycle_journal_age.js
 
   api:
     name: API and auth (Node)
@@ -158,6 +163,12 @@ jobs:
         run: |
           flutter pub get
           flutter analyze
+
+      - name: Console session regressions and CSP bundle
+        working-directory: console
+        run: |
+          flutter test --no-pub
+          flutter build web --release --no-pub --csp --no-web-resources-cdn
 
   images:
     name: Container images

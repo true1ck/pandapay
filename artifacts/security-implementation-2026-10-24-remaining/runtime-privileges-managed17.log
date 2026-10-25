@@ -1,0 +1,1 @@
+PASS: catalog-only audit under independent non-owner LOGIN; PUBLIC/column/default grants, RLS, owner/SET/admin paths, views, ledger and unsafe definers detected; CLI advisory succeeds and opt-in strict gate exits 2 on drift; bounded truncation fails closed; no row/body values emitted and grants/data unchanged

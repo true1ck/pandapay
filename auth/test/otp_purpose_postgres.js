@@ -36,7 +36,7 @@ function serviceWithSyntheticRateLimiter(client) {
     if (parent?.filename === filename && request === '../db') return { query: (...args) => client.query(...args) };
     if (parent?.filename === filename && request === '../config') return { isProduction: false };
     if (parent?.filename === filename && request === 'node:crypto') {
-      return { ...originalLoad.call(this, request, parent, isMain), randomInt: () => codes[codeIndex++] || 1000 + codeIndex };
+      return { ...originalLoad.call(this, request, parent, isMain), randomInt: (minimum) => minimum===100000?620000+(codeIndex++):codes[codeIndex++] || 1000 + codeIndex };
     }
     if (parent?.filename === filename && request === '../middleware/rateLimitMiddleware') {
       return { markActiveOtp: async () => {}, clearActiveOtp: async () => {} };
@@ -85,6 +85,7 @@ async function main() {
     const legacy = await client.query('SELECT purpose FROM otp_requests WHERE email = $1', [legacyIdentifier]);
     assert.equal(legacy.rows[0]?.purpose, null, 'migration preserves unknown historical purpose');
 
+    await client.query(fs.readFileSync(path.join(sourceMigrationDir,'0011_versioned_otp_challenges.sql'),'utf8'));
     const otp = serviceWithSyntheticRateLimiter(client);
     assert.equal((await otp.verifyOtp(legacyIdentifier, legacyCode, 'email', 'recovery')).ok, false,
       'historical NULL challenge must not authorize recovery');
@@ -128,6 +129,49 @@ async function main() {
       otp.verifyOtp(concurrentIdentifier, concurrent.code, 'email', 'replacement'),
     ]);
     assert.equal(results.filter(result => result.ok).length, 1, 'exactly one concurrent consume succeeds');
+    const v2Email='version2-purpose@example.invalid',device='stable-device-v2';
+    const six=await otp.createOtpV2(v2Email,'email','signin',device);
+    assert.match(six.code,/^\d{6}$/);
+    assert.equal((await otp.verifyOtp(v2Email,six.code,'email','signin')).ok,false,'legacy cannot consume version2');
+    for(const [code,type,purpose,dev,id] of [[six.code,'email','recovery',device,six.requestId],[six.code,'email','signin','foreign-device',six.requestId],[six.code,'email','signin',device,require('crypto').randomUUID()],['1234','email','signin',device,six.requestId]]){
+      assert.equal((await otp.verifyOtpV2(v2Email,code,type,purpose,dev,id)).ok,false,'challenge/device/purpose/version bound');
+    }
+    const winners=await Promise.all([1,2].map(()=>otp.verifyOtpV2(v2Email,six.code,'email','signin',device,six.requestId)));
+    assert.equal(winners.filter(r=>r.ok).length,1,'v2 has one atomic consume');
+    const old=await otp.createOtp('v1-isolation@example.invalid','email','signin');
+    assert.equal((await otp.verifyOtpV2('v1-isolation@example.invalid',old.code.padStart(6,'0'),'email','signin',device,old.requestId)).ok,false);
+    assert.equal((await otp.verifyOtp('v1-isolation@example.invalid',old.code,'email','signin')).ok,true);
+    const undelivered=await otp.createOtpV2('v2-undelivered@example.invalid','email','recovery',device);
+    await otp.discardUndeliveredOtpV2('v2-undelivered@example.invalid','email',undelivered.requestId,'recovery',device);
+    assert.equal((await otp.verifyOtpV2('v2-undelivered@example.invalid',undelivered.code,'email','recovery',device,undelivered.requestId)).ok,false);
+    const capped=await otp.createOtpV2('v2-attempts@example.invalid','email','signin',device);
+    for(let i=0;i<5;i++)assert.equal((await otp.verifyOtpV2('v2-attempts@example.invalid','000000','email','signin',device,capped.requestId)).ok,false);
+    assert.equal((await otp.verifyOtpV2('v2-attempts@example.invalid',capped.code,'email','signin',device,capped.requestId)).ok,false,'v2 attempts capped at5');
+    const replacementEmail='v2-replacement@example.invalid';
+    const replacement=await otp.createOtpV2(replacementEmail,'email','replacement',device);
+    assert.match(replacement.code,/^\d{6}$/);
+    for(const purpose of ['signin','recovery'])assert.equal((await otp.verifyOtpV2(replacementEmail,replacement.code,'email',purpose,device,replacement.requestId)).ok,false);
+    assert.equal((await otp.verifyOtp(replacementEmail,replacement.code,'email','replacement')).ok,false,'replacement cannot downgrade');
+    assert.equal((await otp.verifyOtpV2(replacementEmail,replacement.code,'email','replacement','wrong-device',replacement.requestId)).ok,false);
+    const replacementWinners=await Promise.all([1,2].map(()=>otp.verifyOtpV2(replacementEmail,replacement.code,'email','replacement',device,replacement.requestId)));
+    assert.equal(replacementWinners.filter(r=>r.ok).length,1,'v2 replacement consumes exactly once');
+    // Capacity rejection must happen before a challenge/attempt mutation, and
+    // the exact already-issued code must remain usable when capacity returns.
+    const { getOtpWorkAdmission, OtpCapacityError } = require('../src/services/otpWorkAdmission');
+    const admission = getOtpWorkAdmission(), capacityEmail = 'capacity-fixture@example.invalid';
+    const capacityCode = await otp.createOtpV2(capacityEmail, 'email', 'signin', device);
+    const beforeCapacity = (await client.query('SELECT id,attempt_count,consumed_at,deleted FROM otp_requests ORDER BY id')).rows;
+    let releaseCapacity;
+    const held = new Promise(resolve => { releaseCapacity = resolve; });
+    const occupied = Array.from({ length: admission.snapshot().work.maximum }, () => admission.run('work', () => held));
+    try {
+      await assert.rejects(otp.verifyOtpV2(capacityEmail, capacityCode.code, 'email', 'signin', device, capacityCode.requestId), OtpCapacityError);
+      await assert.rejects(otp.createOtp('rejected-capacity@example.invalid', 'email', 'recovery'), OtpCapacityError);
+      assert.deepEqual((await client.query('SELECT id,attempt_count,consumed_at,deleted FROM otp_requests ORDER BY id')).rows, beforeCapacity);
+    } finally { releaseCapacity(); await Promise.all(occupied); }
+    assert.equal((await otp.verifyOtpV2(capacityEmail, capacityCode.code, 'email', 'signin', device, capacityCode.requestId)).ok, true);
+    console.log('PASS: OTP saturation preserves every existing challenge/attempt and allows the same code after capacity returns');
+    console.log('PASS: v2 replacement six-digit/device/purpose/protocol binding and atomic one-winner consume');
     console.log('PASS: real PostgreSQL OTP purpose migration, NULL legacy signin-only, purpose isolation, resend and delivery cleanup scope, atomic concurrent consume');
   } finally {
     await client.end().catch(() => {});

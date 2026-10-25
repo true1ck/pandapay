@@ -1,0 +1,279 @@
+{
+  "scope": "synthetic-test-only-not-deployment-settings",
+  "input": {
+    "format": "pandapay-connection-budget-v1",
+    "inventoryReviewed": true,
+    "reviewedAt": "2026-10-25T10:32:22.619Z",
+    "primaryCluster": "primary",
+    "clusters": [
+      {
+        "id": "primary",
+        "limitsVerified": true,
+        "verifiedAt": "2026-10-25T10:32:22.619Z",
+        "maxConnections": 60,
+        "reservedConnections": 3,
+        "providerConnections": 6,
+        "operationalConnections": 2,
+        "safetyConnections": 2
+      }
+    ],
+    "processes": [
+      {
+        "id": "api",
+        "kind": "api",
+        "replicas": 2,
+        "overlapReplicas": 0,
+        "dbPoolMax": 10,
+        "pools": {
+          "main": "primary",
+          "partnerWebhook": null,
+          "imapWorker": null,
+          "accountLifecycle": null
+        }
+      },
+      {
+        "id": "auth",
+        "kind": "auth",
+        "replicas": 2,
+        "overlapReplicas": 0,
+        "dbPoolMax": 10,
+        "pools": {
+          "main": "primary",
+          "consoleSession": null,
+          "authLifecycle": null
+        }
+      },
+      {
+        "id": "rewards-worker",
+        "kind": "rewards-worker",
+        "replicas": 1,
+        "overlapReplicas": 0,
+        "dbPoolMax": 10,
+        "pools": {
+          "main": "primary",
+          "partnerWebhook": null,
+          "imapWorker": null,
+          "accountLifecycle": null
+        }
+      },
+      {
+        "id": "sms-learning-worker",
+        "kind": "sms-learning-worker",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {
+          "main": "primary"
+        }
+      },
+      {
+        "id": "gemini-worker",
+        "kind": "gemini-worker",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {}
+      },
+      {
+        "id": "product-maintenance",
+        "kind": "product-maintenance",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {
+          "main": "primary"
+        }
+      },
+      {
+        "id": "auth-retention-maintenance",
+        "kind": "auth-retention-maintenance",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {
+          "ledger": "primary",
+          "retention": "primary"
+        }
+      },
+      {
+        "id": "backup-status-publisher",
+        "kind": "backup-status-publisher",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {
+          "main": "primary"
+        }
+      },
+      {
+        "id": "maintenance-alert-delivery",
+        "kind": "maintenance-alert-delivery",
+        "replicas": 0,
+        "overlapReplicas": 0,
+        "pools": {
+          "main": "primary"
+        }
+      }
+    ]
+  },
+  "report": {
+    "format": "pandapay-connection-budget-report-v1",
+    "generated_at": "2026-10-25T10:32:22.619Z",
+    "read_only": true,
+    "model": "Conservative maximum: every configured client slot counts as one backend connection. No transaction-pooler discount or throughput guarantee.",
+    "trust": "Operator-reviewed aliases, replica ceilings and limits; actual running configuration and provider reserves are not discovered by this offline check.",
+    "primary_cluster": "primary",
+    "processes": [
+      {
+        "id": "api",
+        "kind": "api",
+        "replicas": 2,
+        "overlap_replicas": 0,
+        "contributions": [
+          {
+            "pool": "main",
+            "cluster": "primary",
+            "max_per_process": 10,
+            "steady_connections": 20,
+            "rollout_connections": 20
+          }
+        ]
+      },
+      {
+        "id": "auth",
+        "kind": "auth",
+        "replicas": 2,
+        "overlap_replicas": 0,
+        "contributions": [
+          {
+            "pool": "main",
+            "cluster": "primary",
+            "max_per_process": 10,
+            "steady_connections": 20,
+            "rollout_connections": 20
+          }
+        ]
+      },
+      {
+        "id": "rewards-worker",
+        "kind": "rewards-worker",
+        "replicas": 1,
+        "overlap_replicas": 0,
+        "contributions": [
+          {
+            "pool": "main",
+            "cluster": "primary",
+            "max_per_process": 10,
+            "steady_connections": 10,
+            "rollout_connections": 10
+          }
+        ]
+      },
+      {
+        "id": "sms-learning-worker",
+        "kind": "sms-learning-worker",
+        "replicas": 0,
+        "overlap_replicas": 0,
+        "contributions": [
+          {
+            "pool": "main",
+            "cluster": "primary",
+            "max_per_process": 2,
+            "steady_connections": 0,
+            "rollout_connections": 0
+          }
+        ]
+      },
+      {
+        "id": "gemini-worker",
+        "kind": "gemini-worker",
+        "replicas": 0,
+        "overlap_replicas": 0,
+        "contributions": []
+      },
+      {
+        "id": "product-maintenance",
+        "kind": "product-maintenance",
+        "replicas": 0,
+        "overlap_replicas": 0,
+        "contributions": [
+          {
+            "pool": "main",
+            "cluster": "primary",
+            "max_per_process": 1,
+            "steady_connections": 0,
+            "rollout_connections": 0
+          }
+        ]
+      },
+      {
+        "id": "auth-retention-maintenance",
+        "kind": "auth-retention-maintenance",
+        "replicas": 0,
+        "overlap_replicas": 0,
+        "contributions": [
+          {
+            "pool": "ledger",
+            "cluster": "primary",
+            "max_per_process": 1,
+            "steady_connections": 0,
+            "rollout_connections": 0
+          },
+          {
+            "pool": "retention",
+            "cluster": "primary",
+            "max_per_process": 1,
+            "steady_connections": 0,
+            "rollout_connections": 0
+          }
+        ]
+      },
+      {
+        "id": "backup-status-publisher",
+        "kind": "backup-status-publisher",
+        "replicas": 0,
+        "overlap_replicas": 0,
+        "contributions": [
+          {
+            "pool": "main",
+            "cluster": "primary",
+            "max_per_process": 1,
+            "steady_connections": 0,
+            "rollout_connections": 0
+          }
+        ]
+      },
+      {
+        "id": "maintenance-alert-delivery",
+        "kind": "maintenance-alert-delivery",
+        "replicas": 0,
+        "overlap_replicas": 0,
+        "contributions": [
+          {
+            "pool": "main",
+            "cluster": "primary",
+            "max_per_process": 1,
+            "steady_connections": 0,
+            "rollout_connections": 0
+          }
+        ]
+      }
+    ],
+    "clusters": [
+      {
+        "id": "primary",
+        "max_connections": 60,
+        "steady_connections": 50,
+        "rollout_connections": 50,
+        "reserved_connections": 3,
+        "provider_connections": 6,
+        "operational_connections": 2,
+        "safety_connections": 2,
+        "limits_verified": true,
+        "total_reserved_connections": 13,
+        "rollout_required_connections": 63,
+        "remaining_connections": -3,
+        "fits": false
+      }
+    ],
+    "issues": [
+      "primary_connection_budget_exceeded"
+    ],
+    "budget_ready": false
+  }
+}

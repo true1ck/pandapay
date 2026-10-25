@@ -1,0 +1,1 @@
+PASS: bounded maintenance disabled defaults, narrow independent LOGINs/RLS, mailbox body-only policy, merchant/rate batches, durable leases/checkpoints, generation acknowledgements and separate auth coordinator; financial/identity rows preserved

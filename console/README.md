@@ -1,17 +1,7 @@
-# pandapay_console
+# PandaPay internal console
 
-A new Flutter project.
+Flutter console for catalogue/data operations. Web builds can use the opt-in same-origin browser cookie/CSRF gateway; native clients use configured auth/product origins. Administrative privileges and allowed operations remain server-enforced.
 
-## Getting Started
+See the [current source architecture](../docs/security-current-architecture-2026-10-25.md), [deployment guide](../deploy/DEPLOY.md), [environment/provider wiring](lib/app/providers.dart), and [security progress](../docs/security-implementation-progress-2026-10-22.md). `adminimplementation_plan.md` is a historical/product design reference, not proof of a running deployment.
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Use `flutter analyze --no-fatal-infos` and `flutter test` for local checks. Browser bundles and their cookie gateway must be released together after the required acceptance checks. Do not store server keys in the Flutter bundle.

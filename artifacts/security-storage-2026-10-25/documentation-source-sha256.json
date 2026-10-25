@@ -1,0 +1,20 @@
+{
+  "README.md": "f7d1dd9224ce6b673ee9ed4553ea6561bc521a9169635dbd0c376e6a3a76e4ec",
+  "app/README.md": "039b2ecef74c0735c08a275e24f509c3e1c0235a7f7f021d42fed899a51bb090",
+  "console/README.md": "b8b836d94f9008e404ab91cb40f5ca7f4854aeecf0b12e6c977bc507861b49a6",
+  "api/README.md": "9d5a0cda6b25f98c94098267adaa06043fe21b779ddc79dd900d4ed6021337d7",
+  "auth/README.md": "1936301c5019e8a51400403372c7d9a1a0770d0a24c2208fda1961a57f8bba90",
+  "database.sql": "50efc9698a254fdb4bb5d7c17c903627b4d8a202962105dd6b7f5d0cf3ec0543",
+  "product-plan.md": "024d5ce6d7d2dda6c6c12598846d2a16f8d2213f45462210ef6829a6fd55c30c",
+  "ui-spec.md": "796c223912428541baeb2e7a36698c273be75f7d650bdc59a010d8408d34608c",
+  "Userappimplementation_plan.md": "58d1b21a30094760a0b5f845b63b35364d10f71398f6b8042c0fc8e93a0d608b",
+  "adminimplementation_plan.md": "64e55a1df8c23fdfa19e03f016b1a4dd1844a919191fadc07348f3c6b7f5432a",
+  "admin-console-plan.md": "9a3779ac2584b9b2ee357313f36243de0b8dec0daa296fb105892a00536d7969",
+  "docs/security-current-architecture-2026-10-25.md": "7a145fc44b13476877e153b5829daae536bb2235f54d78602cf095ba99591054",
+  "docs/security-storage-implementation-2026-10-25.md": "b947579cc2fae517dc6dec6c2797d53720193112a72580c60ee99519505be6db",
+  "docs/security-dependency-applicability-2026-10-25.md": "8759c670533b6bacab3a81dcb7b94666d4605d230da809df1b859c4d925e5e0f",
+  "docs/security-claim-register-2026-10-25.md": "257275f5fafbb2dc3633d95b8c4e37448716d715565d39198b09dae71ae1d585",
+  "docs/security-and-backend-audit-2026-10-20.md": "b1c378ebffa86660a1c8bd42ac9910f4279952b0c9f6b62c24ed615dd457088c",
+  "docs/security-remaining-work-2026-10-25.md": "4d2f579d332c45127c912ac4a587c92af06d0ea60d7d418fded1d1c7c139b867",
+  "docs/security-secrets-inventory-2026-10-23.md": "3d969eb77dab2b69cf089fc8dadc73cb0537ad5a7a3687d82e8c4b2ee52ef12d"
+}

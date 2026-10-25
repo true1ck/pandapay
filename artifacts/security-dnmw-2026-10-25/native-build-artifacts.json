@@ -1,0 +1,36 @@
+{
+  "artifacts": [
+    {
+      "path": "/private/tmp/pandapay-v3-app-candidate/build/app/outputs/flutter-apk/app-prod-debug.apk",
+      "bytes": 265204848,
+      "sha256": "d7402bd07510d907f97ffc277b3473c30ec29a585560d8c7e44369ad4aacc022"
+    },
+    {
+      "path": "/private/tmp/pandapay-v3-app-candidate/build/app/outputs/flutter-apk/app-staging-debug.apk",
+      "bytes": 265204468,
+      "sha256": "d82be24fc5a381eee80bdfdfef322743f49970a4d93d126918ce68c0fa7921fe"
+    },
+    {
+      "path": "/private/tmp/pandapay-v3-app-candidate/build/app/outputs/flutter-apk/app-dev-debug.apk",
+      "bytes": 265204824,
+      "sha256": "b3ca0a986f4f73c5416b92c5ef3b448cb0973f0ec168a74aaaf0bc7512a4bfce"
+    },
+    {
+      "path": "/private/tmp/pandapay-sqlite3mc-mobile/build/app/outputs/flutter-apk/app-debug.apk",
+      "bytes": 96576156,
+      "sha256": "e20aebd22859e9e9a828e86eb4515ebd11624f115aed28cbd7291186ecb019fd"
+    },
+    {
+      "path": "/private/tmp/pandapay-dnmw-20261025/native-key-cipher/build/app/outputs/flutter-apk/app-debug.apk",
+      "bytes": 111082914,
+      "sha256": "49eacc610401610e41511a1914be5f000f290a219ea77acf656a2fa67fd782a7"
+    }
+  ],
+  "removed_generated_builds": [
+    "/private/tmp/pandapay-v3-app-candidate/build",
+    "/private/tmp/pandapay-sqlite3mc-mobile/build",
+    "/private/tmp/pandapay-dnmw-20261025/native-key-cipher/build"
+  ],
+  "free_GiB_after": 29.52,
+  "used_percent_after": 93.59
+}

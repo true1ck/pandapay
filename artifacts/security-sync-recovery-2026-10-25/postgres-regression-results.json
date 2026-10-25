@@ -1,0 +1,5 @@
+{
+  "fresh_product_migration": "passed",
+  "checksummed_migration_repeat": "passed",
+  "sync_postgres_output": "PASS sync transport PostgreSQL route and RLS fixture; known_numeric_update_rejection=42804; numeric_write_remediation=pending"
+}

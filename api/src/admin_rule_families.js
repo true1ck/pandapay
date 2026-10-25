@@ -25,6 +25,18 @@
  */
 
 const { safeErrorCode } = require('./safeErrorCode');
+// Exact duplicates may hit the retained raw-label index first. Both old and
+// versioned identity indexes produce the same safe conflict response.
+const CATALOGUE_IDENTITY_CONFLICTS = new Set([
+  'uq_cap_rules_semantic_identity', 'uq_card_benefits_semantic_identity',
+  'uq_cap_rules_label_identity_v1', 'uq_card_benefits_label_identity_v1',
+]);
+function catalogueConflict(error, res) {
+  if (error?.code !== '23505' || !CATALOGUE_IDENTITY_CONFLICTS.has(error.constraint)) return false;
+  res.status(409).json({ error: 'rule_definition_conflict' });
+  return true;
+}
+
 
 function validateField(spec, value) {
   if (value === undefined || value === null) {
@@ -159,6 +171,7 @@ function registerRuleFamilyRoutes(app, { withUserClient, requireAdmin }, spec) {
       });
       res.status(201).json({ [auditEntity]: result });
     } catch (err) {
+      if (catalogueConflict(err, res)) return;
       console.error(`POST /admin/${urlSegment} error`, safeErrorCode(err));
       res.status(500).json({ error: 'internal_error' });
     }
@@ -199,6 +212,7 @@ function registerRuleFamilyRoutes(app, { withUserClient, requireAdmin }, spec) {
       if (!result) return res.status(404).json({ error: `${auditEntity} not found` });
       res.json({ [auditEntity]: result });
     } catch (err) {
+      if (catalogueConflict(err, res)) return;
       console.error(`PUT /admin/${urlSegment}/:id error`, safeErrorCode(err));
       res.status(500).json({ error: 'internal_error' });
     }

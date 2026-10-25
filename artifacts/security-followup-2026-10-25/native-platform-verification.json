@@ -1,0 +1,14 @@
+{
+  "package": "app.pandapay.securityfixture.pandapay",
+  "apk_sha256": "6517cb98a2f2dd06612f64d083c0f437f6f0966931719fe8fc470507aec91307",
+  "emulator": true,
+  "android_api": 37,
+  "declared_tests": 3,
+  "passed": 3,
+  "failed": 0,
+  "normal_app_installed_or_overwritten": false,
+  "test_package_absent_after_flutter_cleanup": true,
+  "physical_phone_used": false,
+  "live_account_or_provider_initialized": false,
+  "scope": "isolated debug component harness, not production-signed application or hardware-key/process-death acceptance"
+}

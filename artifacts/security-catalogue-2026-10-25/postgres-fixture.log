@@ -1,0 +1,1 @@
+PASS: catalogue identity PostgreSQL fixture; collision/schema refusal, complete rollback, SQL/JS parity, NULL identity, all discriminators, Unicode, concurrent writers, update rollback, actual 0015 non-owner RLS, checksummed rerun and full dump/restore preservation

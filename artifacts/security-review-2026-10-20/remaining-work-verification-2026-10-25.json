@@ -1,0 +1,64 @@
+{
+  "verified_at_utc": "2026-10-24T18:59:38.597482+00:00",
+  "scope": "documentation-only reconciliation; application tests and live checks were not rerun",
+  "implementation_packages": 14,
+  "release_gates": 6,
+  "tracked_findings": 76,
+  "finding_status_counts": {
+    "Implemented in source": 25,
+    "Partial": 41,
+    "Open": 10
+  },
+  "unfinished_findings": 51,
+  "all_unfinished_findings_mapped": true,
+  "both_html_outputs_reproducible": true,
+  "file_sha256": {
+    "docs/security-and-backend-audit-2026-10-20.md": "66c8ee61d967675e33d39eca003bbff294398037556060e4ed1218d3514cc7f5",
+    "docs/security-and-backend-audit-2026-10-20.html": "4ccb05515732b6109bc4828298089f61ae42283eb739f91de1beb7d90bebc7b5",
+    "docs/security-remaining-work-2026-10-25.md": "ba9a0a75bd5b056b3146c041db03d0eb3fb041685b0040087c46a021cac817a1",
+    "docs/security-remaining-work-2026-10-25.html": "66784e8da4b875c1a615c52e96e4587b1a3ef4b5ee94b55bedd4138cbb8bb03e",
+    "artifacts/security-review-2026-10-20/remaining-work-2026-10-25.json": "d081a7f05ea2a07f778468a651965b2f449ca449a8ff61a284b54903ca77faf5"
+  },
+  "dom": {
+    "result": "passed",
+    "postgres_tables": 96,
+    "columns": 934,
+    "foreign_keys": 139,
+    "sqlite_tables": 19,
+    "source_only_tables": 2,
+    "remediation_items": 68,
+    "optimization_inventory_rows": 96,
+    "table_retirement_candidates": 4,
+    "local_links": 460,
+    "remaining_implementation_packages": 14,
+    "remaining_release_gates": 6,
+    "full_findings": 76,
+    "unfinished_findings": 51,
+    "focused_page_verified": true,
+    "checks": [
+      "remaining-work counts and complete finding mapping",
+      "focused remaining-work HTML",
+      "tab switching",
+      "keyboard tabs",
+      "database filter",
+      "domain filter",
+      "column search",
+      "empty state",
+      "reset",
+      "table inspection",
+      "relationship navigation",
+      "zoom",
+      "unique IDs",
+      "local links",
+      "offline scripts",
+      "remediation coverage and proposal status",
+      "optimization inventory completeness",
+      "scalability section and cross-tab shortcut"
+    ]
+  },
+  "prior_application_source_manifest_unchanged": {
+    "candidate_sha256": "ccedf1d4229b85f1ea9b87bb35f845a683ff2474cddad0573d2a70797fc97fd5",
+    "files_checked": 1272
+  },
+  "deployment_performed": false
+}

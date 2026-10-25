@@ -1,3 +1,4 @@
+import '../portable_backup/account_recovery_operation_gate.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -227,6 +228,14 @@ class SplitRepository extends ChangeNotifier {
 
   /// Resume/reconnect drains only pending documents; clean records cost no GET.
   Future<void> sync({bool reconnect = false}) async {
+    try {
+      await AccountRecoveryOperationGate.process.run(() => _sync(reconnect: reconnect));
+    } on AccountRecoveryBusy {
+      // Pending documents remain durable until the next resume/reconnect.
+    }
+  }
+
+  Future<void> _sync({bool reconnect = false}) async {
     if (_running || !_online) return;
     _timer?.cancel();
     _running = true;

@@ -1,0 +1,100 @@
+{
+  "format": "pandapay-restored-data-review-summary-v1",
+  "date": "25 October 2026 (IST)",
+  "backup_set_id": "4f383a48d3111523e663f8791e4819f0",
+  "encrypted_review_sha256": "308c4cd66060ec09d13724a0b52310ace67b67cee984e60eb6e72fd727bde126",
+  "source_data_modified": false,
+  "candidate_upgrade_rehearsed": false,
+  "scope": {
+    "product": {
+      "complete": true,
+      "checks": 355,
+      "foreign_key_checks": 217,
+      "orphan_rows": 0,
+      "candidate_counts": {
+        "cap_rule_business_equivalence": 0,
+        "benefit_business_equivalence": 0,
+        "card_product_name_candidates": 0,
+        "issuer_name_candidates": 1,
+        "category_name_candidates": 0,
+        "parser_definition_equivalence": 0,
+        "parser_failure_shape_candidates": 0
+      },
+      "financial_history": [
+        {
+          "name": "transactions",
+          "object": "public.transactions",
+          "status": "completed",
+          "rows": "2453",
+          "invalid_amount_rows": "0",
+          "amount_sum_digest": "2976df10b2df06b72d5126548c4e07117d50570818ca59896aebe310a32e93a8",
+          "row_multiset_digest": "03b00b94d84974c772570db515b17ff0876453f4a728d73ea448655d4c941c13"
+        },
+        {
+          "name": "transaction_splits",
+          "object": "public.transaction_splits",
+          "status": "completed",
+          "rows": "4",
+          "invalid_amount_rows": "0",
+          "amount_sum_digest": "2d1711a9f77f26b947302326d6efcfb2b3541a6c7c7328979119a46a56307d5a",
+          "row_multiset_digest": "51cb61fe0f22140c6daa64359de68eaea442f21bf7b358e9735d983b268b32fc"
+        },
+        {
+          "name": "points_ledger",
+          "object": "public.points_ledger",
+          "status": "completed",
+          "rows": "14",
+          "invalid_amount_rows": "0",
+          "amount_sum_digest": "404a27a5b9bcaead2a3e41addc79bac0c997cf98ab3fe6e05bfa0cd7e2b5f6a5",
+          "row_multiset_digest": "d5661e7bb03eb52b319b45222b085e6f51aa67897548caaabb16361dc9bacbf3"
+        },
+        {
+          "name": "cap_consumption",
+          "object": "public.cap_states",
+          "status": "completed",
+          "rows": "2",
+          "invalid_amount_rows": "0",
+          "amount_sum_digest": "bf6dbb18f53f264d4db7451d51a6bce3af6052eca56079111d532a49065de5eb",
+          "row_multiset_digest": "46a6fce6afffe0d270770bddc76ec20a315c1d44feac0a93bb9842d7c1da1d5e"
+        },
+        {
+          "name": "milestone_spend",
+          "object": "public.milestone_states",
+          "status": "completed",
+          "rows": "2",
+          "invalid_amount_rows": "0",
+          "amount_sum_digest": "a9d9e0a9c2bd02cb890fb1ffa9f18fa46839892b6a9fc3a58d4c7b455b376288",
+          "row_multiset_digest": "27e201419899d04af28136fc1b3f767a961defc729de31cd4ff36e8a59404c1e"
+        },
+        {
+          "name": "fee_waiver_spend",
+          "object": "public.fee_waiver_states",
+          "status": "completed",
+          "rows": "5",
+          "invalid_amount_rows": "0",
+          "amount_sum_digest": "e80a06b26591e100a3e3e500a4db27f48333ef71873d52bd2c5f8c8c809f5b01",
+          "row_multiset_digest": "579ae8f69ddb582ae4100cdb0b3fa93576f35e46bb8ed598394b75640674ccc7"
+        },
+        {
+          "name": "lounge_history",
+          "object": "public.lounge_usage",
+          "status": "completed",
+          "rows": "0",
+          "invalid_amount_rows": "0",
+          "amount_sum_digest": null,
+          "row_multiset_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "equivalent_index_groups": 1
+    },
+    "auth": {
+      "complete": true,
+      "checks": 10,
+      "foreign_key_checks": 5,
+      "orphan_rows": 0,
+      "candidate_counts": {},
+      "financial_history": [],
+      "equivalent_index_groups": 0
+    }
+  }
+}

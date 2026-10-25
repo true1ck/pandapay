@@ -18,6 +18,27 @@ notification service is used only for queued FCM delivery.
 6. The notification service queues FCM delivery through Redis and removes stale
    device tokens when Firebase reports them as invalid.
 
+## Notification logo
+
+Android notification artwork comes from `app/assets/logo/pandapay_mark.png`,
+the same panda-and-wallet logo used by the app. From `app/`, regenerate it with:
+
+```sh
+dart run tool/gen_notification_icon.dart
+dart run tool/render_notification_sample.dart
+```
+
+The generator produces `ic_notification` in all five screen densities as a
+white alpha mask for Android's monochrome status-bar icon. Local alerts,
+foreground push banners, location monitoring, and the Firebase background-push
+default all reference this resource. Local alerts and foreground push banners
+also show the original color logo through `ic_notification_logo`, a bundled
+drawable that works offline. Background push messages use the manifest default
+when the provider does not specify an icon override.
+
+These are native Android resources, so checking the change on a phone requires
+a rebuilt, installed app; hot reload does not update them.
+
 ## Authenticated physical-device self-test
 
 Notification Settings includes **Send test notification**. It calls

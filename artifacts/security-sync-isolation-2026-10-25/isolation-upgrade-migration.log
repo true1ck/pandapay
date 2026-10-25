@@ -1,0 +1,2 @@
+Applied product migration 20261025151350_legacy_sync_context_isolation.sql
+Scheduler migration 0013 requires separately installed and monitored jobs

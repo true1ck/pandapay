@@ -31,6 +31,8 @@ import '../data/devices_api.dart';
 import '../data/emergency_contacts_repository.dart';
 import '../data/import_repository.dart';
 import '../data/local/app_database.dart';
+import '../data/local/recovery_deferred_sms.dart';
+import '../data/portable_backup/account_recovery_operation_gate.dart';
 import '../data/local/response_cache.dart';
 import '../data/local/financial_store.dart';
 import '../data/local/sms_rule_bundle.dart';
@@ -121,7 +123,7 @@ bool reviewReplayShouldStop(Object error) {
 }
 
 final authApiProvider = Provider<AuthApi>(
-  (ref) => AuthApi(authBaseUrl: _authBaseUrl),
+  (ref) => AuthApi(authBaseUrl: _authBaseUrl, versionedOtpEnabled: Env.versionedOtpEnabled),
 );
 
 /// One shared retrying client for all authenticated repositories. Keeping the
@@ -5601,7 +5603,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     return scanned > 0;
   }
 
-  Future<void> flushAndRetry() async {
+  Future<void> flushAndRetryAdmitted() async {
     if (disposed) return;
     if (workInProgress) {
       // Startup, auth restoration, and resume may all request the same pass.
@@ -5714,6 +5716,14 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       // must not turn an unavailable database/API into an unhandled error.
     } finally {
       workInProgress = false;
+    }
+  }
+
+  Future<void> flushAndRetry() async {
+    try {
+      await AccountRecoveryOperationGate.process.run(flushAndRetryAdmitted);
+    } on AccountRecoveryBusy {
+      // Durable queues and the next resume/reconnect retain this work.
     }
   }
 
@@ -5844,7 +5854,10 @@ class SmsAutoImportController {
     return syncPendingMessages(scanned: scanned);
   }
 
-  Future<int> captureExistingInbox() async {
+  Future<int> captureExistingInbox() =>
+      AccountRecoveryOperationGate.process.run(_captureExistingInboxAdmitted);
+
+  Future<int> _captureExistingInboxAdmitted() async {
     if (_disposed) return 0;
     final namespace = _ref.read(cacheNamespaceProvider);
     final active = _activeInboxCapture;
@@ -5972,7 +5985,10 @@ class SmsAutoImportController {
     ).capturedBodies(namespace, limit: limit);
   }
 
-  Future<SmsInboxSyncSummary> syncPendingMessages({int scanned = 0}) async {
+  Future<SmsInboxSyncSummary> syncPendingMessages({int scanned = 0}) =>
+      AccountRecoveryOperationGate.process.run(() => _syncPendingMessagesAdmitted(scanned: scanned));
+
+  Future<SmsInboxSyncSummary> _syncPendingMessagesAdmitted({int scanned = 0}) async {
     if (_disposed) {
       return SmsInboxSyncSummary(
         scanned: scanned,
@@ -6056,6 +6072,7 @@ class SmsAutoImportController {
       );
     }
     final cache = await _ref.read(responseCacheProvider.future);
+    RecoveryDeferredSms.drainFor(cache.financialStore.database);
     final intake = SmsIntakeRepository(cache.financialStore.database);
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
@@ -6245,6 +6262,25 @@ class SmsAutoImportController {
   Future<void> _handle(String sender, String body, DateTime receivedAt) async {
     if (_disposed || LocalSmsParser.sensitive(body)) return;
     final namespace = _ref.read(cacheNamespaceProvider);
+    try {
+      await AccountRecoveryOperationGate.process.run(() =>
+          _handleAdmitted(namespace, sender, body, receivedAt));
+    } on AccountRecoveryBusy {
+      final location = _ref.read(appDatabaseProvider).valueOrNull?.filePath;
+      if (location != null) {
+        final spool = RecoveryDeferredSms.open(location);
+        try {
+          spool.enqueue(namespace, QueuedSms(sender: sender, body: body, receivedAt: receivedAt));
+        } finally {
+          spool.close();
+        }
+      }
+    } catch (_) {
+      // Android inbox reconciliation retries when storage is available.
+    }
+  }
+
+  Future<void> _handleAdmitted(String namespace, String sender, String body, DateTime receivedAt) async {
     try {
       final cache = await _ref.read(responseCacheProvider.future);
       if (_ref.read(cacheNamespaceProvider) != namespace) return;

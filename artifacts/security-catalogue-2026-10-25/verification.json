@@ -1,0 +1,131 @@
+{
+  "format": "pandapay-catalogue-source-verification-v1",
+  "verified_at_utc": "2026-10-25T07:55:58.254133+00:00",
+  "scope": "Source implementation and synthetic local tests only; no live migration/deployment/activation",
+  "status_changes": {
+    "D05": "Open -> Partial",
+    "W03": "Partial remains"
+  },
+  "test_results": {
+    "api": {
+      "exit_code": 0,
+      "summary": [
+        "# tests 983",
+        "# pass 981",
+        "# fail 0",
+        "# skipped 2"
+      ]
+    },
+    "database-tools": {
+      "exit_code": 0,
+      "summary": [
+        "# tests 155",
+        "# pass 155",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    }
+  },
+  "node22_docker": {
+    "image": "pandapay-security-next25-api:local",
+    "passed": 25,
+    "failed": 0,
+    "network": "none",
+    "source_read_only": true,
+    "tests": [
+      "api/test/catalogue_label_identity.test.js",
+      "api/test/admin_rule_families.test.js"
+    ],
+    "overlaps_full_api_suite": true
+  },
+  "postgres": {
+    "version": "18.4",
+    "fixture": "db/tests/catalogue_label_identity_postgres.js",
+    "result": "passed",
+    "command": "PATH=/opt/homebrew/bin:$PATH node db/tests/catalogue_label_identity_postgres.js",
+    "log": "postgres-fixture.log",
+    "synthetic_only": true,
+    "same_major_local_dump_restore": true,
+    "intended_provider_acceptance": false,
+    "current_actual_data_v1_review": false,
+    "read_only_v1_collision_checks": "Passed against actual base column/types in the synthetic fixture, matching both migration collision guards"
+  },
+  "flutter_rerun": false,
+  "live_changes": false,
+  "source_sha256": {
+    "api/src/catalogue_label_identity.js": "d3ff5eb3340fe71ed13a8fa3f636fb54fdfee998131c5cd06b880e5aa6ed5c5b",
+    "api/src/admin_rule_families.js": "bfbff2988deb7d4f060161909dbf04851330ede598e66e02a5c3437a3206fdbd",
+    "api/src/index.js": "804a02c9e2b1cd8cf83bd70b94dfacf41496a7357d2c5fc4558c135c7df5c537",
+    "api/test/catalogue_label_identity.test.js": "c72cfc23c766cb2ab6d80d38ca392df5675fe038da70100ae903425c5fe151e3",
+    "db/scripts/review_data_cleanup.js": "824c8400dddcb1e9efab13678f0def16cc26c2d53b9d9dcb1ccb6e494d5ed9fb",
+    "db/tests/data_cleanup_review.test.js": "495c91e73f8c5de5baa047e82f13e676e9b4dea32ff6b82ee0106b84f09a32e6",
+    "db/tests/catalogue_label_identity_postgres.js": "8dce2c176f5cc397ac2dda4920efb7023ab221c493db1a376bfe03c1dcb0a07f",
+    "db/supabase/migrations/20261025074636_catalogue_label_identity_v1.sql": "a607cf3ee909a11340b1ed3bd9c926668899f975c72ea346cf63da95aabcbdda"
+  },
+  "historical_dedupe_unchanged": true,
+  "limitations": [
+    "Historical D01/D02 mappings and financial-state reconciliation remain",
+    "Protected current-clone v1 collision/pending-history review remains",
+    "Intended-provider, import/client, effective-target role and rollout acceptance remain",
+    "Mobile startup/receipt/recovery integration, signed-device and independent custody acceptance remain"
+  ],
+  "postgres_review_regressions": {
+    "reviewed_index_reconciliation_postgres.js": "passed",
+    "data_cleanup_review_postgres.js": "passed",
+    "auth-index-inspection": "passed"
+  },
+  "preservation": {
+    "historical_dedupe_unchanged_against_HEAD": true,
+    "existing_notification_related_source_hashes_unchanged": 14,
+    "baseline": "/private/tmp/pandapay-dnmw-20261025/baseline-source.json"
+  },
+  "html": {
+    "result": "passed",
+    "postgres_tables": 96,
+    "columns": 934,
+    "foreign_keys": 139,
+    "sqlite_tables": 19,
+    "source_only_tables": 2,
+    "remediation_items": 68,
+    "optimization_inventory_rows": 96,
+    "table_retirement_candidates": 4,
+    "local_links": 471,
+    "remaining_implementation_packages": 14,
+    "remaining_release_gates": 6,
+    "full_findings": 76,
+    "unfinished_findings": 50,
+    "focused_page_verified": true,
+    "checks": [
+      "remaining-work counts and complete finding mapping",
+      "focused remaining-work HTML",
+      "tab switching",
+      "keyboard tabs",
+      "database filter",
+      "domain filter",
+      "column search",
+      "empty state",
+      "reset",
+      "table inspection",
+      "relationship navigation",
+      "zoom",
+      "unique IDs",
+      "local links",
+      "offline scripts",
+      "remediation coverage and proposal status",
+      "optimization inventory completeness",
+      "scalability section and cross-tab shortcut"
+    ]
+  },
+  "html_reproducible": true,
+  "new_markdown_local_links_checked": 32,
+  "documentation_sha256": {
+    "docs/security-and-backend-audit-2026-10-20.md": "39113c6a5652105ba4393c3f705160bfdb98e4b56f3f235ffd884049af2eb7d2",
+    "docs/security-and-backend-audit-2026-10-20.html": "d39e223bdf0749a57949c2b0dc45731e9a22284ec1a5350389fcd00efefbdce7",
+    "docs/security-remaining-work-2026-10-25.md": "3fa9b734a7a53e6775ca8332671f5fd56c492eab847fd0313564f1be8cbd4100",
+    "docs/security-remaining-work-2026-10-25.html": "a7e1755f6eed02e0a587b5dc87e3b7e46144b40345f6b3d709e3a8f16b4c2336",
+    "docs/security-focused-gap-review-2026-10-25.md": "cc38e9e3fbf72891bf65c5e98cd3a59c354182404a8a6045cbe42a5acb9aa4e3",
+    "docs/security-catalogue-implementation-2026-10-25.md": "c6edb42f11ec5f5c8be77e5ba0c6e3facd968f1ed9b999562a2ff7e5ad69f93f",
+    "artifacts/security-review-2026-10-20/remaining-work-2026-10-25.json": "25bfb9843f70e03c506394aaad5453844086f3e5e7ecf46729f6c4c51fe1fe7f",
+    "artifacts/security-review-2026-10-20/data-dependency-mobile-documentation-plan-2026-10-25.json": "a44e1873b53520ee07c99cde92b47423d945af0fd5bde68d6941d4e9189f2527"
+  }
+}

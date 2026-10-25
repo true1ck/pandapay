@@ -1,0 +1,16 @@
+✔ equivalent grouped CHECK dumps fingerprint identically after narrow normalization (2.3605ms)
+✔ effective ACL grant and owner drift each change the baseline fingerprint (0.243875ms)
+✔ extension member identity includes non-relation and non-routine classes (0.13375ms)
+✔ new ACL catalog collections canonicalize ACL ordering and preserve privilege drift (0.797959ms)
+✔ ACL catalog query captures all portable ACL identities and does not read large-object contents (0.327375ms)
+✔ blank opt-in service credentials perform no SQL (0.572084ms)
+✔ bootstrap creates one narrow login with server-quoted password and EXECUTE capability membership (0.309375ms)
+✔ repeat bootstrap preserves credentials and refuses unsafe existing identities (0.780084ms)
+ℹ tests 131
+ℹ suites 0
+ℹ pass 131
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 328.838792

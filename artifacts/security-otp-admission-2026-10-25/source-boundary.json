@@ -1,0 +1,27 @@
+{
+  "candidate": "ca1cdb722928ce3e2782ce4ec5afd419f660616c116a3712a9da0c43a16dc827",
+  "files": 1328,
+  "changed_release_files": [
+    ".env.prod.example",
+    ".env.staging.example",
+    "auth/src/routes/authRoutes.js",
+    "auth/src/routes/recoveryContactRoutes.js",
+    "auth/src/services/emailService.js",
+    "auth/src/services/otpService.js",
+    "auth/src/services/otpWorkAdmission.js",
+    "auth/src/services/smsService.js",
+    "auth/test/otp_delivery.test.js",
+    "auth/test/otp_purpose_postgres.js",
+    "auth/test/otp_work_admission.test.js",
+    "auth/test/provider_transport_boundaries.test.js",
+    "auth/test/recovery_contact.test.js",
+    "db/scripts/release_security_check.js",
+    "db/tests/release_security_check.test.js",
+    "deploy/DEPLOY.md",
+    "docker-compose.prod.yml",
+    "docker-compose.staging.yml"
+  ],
+  "schema_unchanged": true,
+  "application_and_api_runtime_unchanged": true,
+  "auth_runtime_changed": true
+}

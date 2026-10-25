@@ -1,0 +1,1 @@
+PASS: real age-encrypted two-copy denial journal, HMAC chain/checkpoint, fsynced opaque files, full decrypt/UUID recovery and wrong-authentication-key refusal

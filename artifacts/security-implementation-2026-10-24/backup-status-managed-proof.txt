@@ -1,0 +1,5 @@
+Agent verification record — 24 October 2026
+
+PASS: api/test/backup_status_postgres.js against fresh backup_status_test in owned disposable Supabase PostgreSQL 17.6 container, managed postgres CREATEROLE/non-superuser migration role. Independent runtime/publisher/anonymous logins, owner-role denial, sanitized verified-only status, caller isolation, stale/unavailable states, replay and 32-row retention bound verified.
+
+Recorded from backup_status_capability agent tool transcript; no separate original output log was saved. No production credentials/data/provider operations used. Owned shared fixture container removed after all tests.

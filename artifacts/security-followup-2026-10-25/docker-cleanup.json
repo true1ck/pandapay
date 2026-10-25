@@ -1,0 +1,11 @@
+{
+  "removed": [
+    "pandapay-next25-pg17"
+  ],
+  "remaining_owned_containers": [],
+  "synthetic_storage": "tmpfs released",
+  "images_retained": [
+    "pandapay-security-next25-api:local",
+    "pandapay-security-next25-auth:local"
+  ]
+}

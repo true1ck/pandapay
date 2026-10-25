@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'api_exception.dart';
+import 'portable_backup/account_recovery_operation_gate.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -17,6 +18,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
   final Future<String?> Function() refreshAccessToken;
   final String? Function()? currentAccessToken;
   final void Function(http.BaseRequest)? onSuccessfulMutation;
+  final AccountRecoveryOperationGate recoveryGate;
 
   /// Optional token-aware refresh hook.  A keep-alive refresh can finish
   /// between the original 401 and this callback; in that case the caller
@@ -25,17 +27,59 @@ class AuthenticatedHttpClient extends http.BaseClient {
   final Future<String?> Function(String rejectedAccessToken)?
   refreshAccessTokenForToken;
   Future<String?>? _refreshInProgress;
+  final Set<AccountRecoveryOperationAdmission> _admissions = {};
 
   AuthenticatedHttpClient({
     required this.refreshAccessToken,
     this.currentAccessToken,
     this.onSuccessfulMutation,
     this.refreshAccessTokenForToken,
+    AccountRecoveryOperationGate? recoveryGate,
     http.Client? inner,
-  }) : _inner = inner ?? http.Client();
+  }) : _inner = inner ?? http.Client(),
+       recoveryGate = recoveryGate ?? AccountRecoveryOperationGate.process;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final admission = recoveryGate.admit();
+    _admissions.add(admission);
+    try {
+      final response = await _send(request);
+      // Header arrival does not mean an outbox operation finished. Retain
+      // admission through response consumption, cancellation or stream error.
+      return http.StreamedResponse(
+        _trackedBody(response.stream, admission),
+        response.statusCode,
+        contentLength: response.contentLength,
+        request: response.request,
+        headers: response.headers,
+        isRedirect: response.isRedirect,
+        persistentConnection: response.persistentConnection,
+        reasonPhrase: response.reasonPhrase,
+      );
+    } catch (_) {
+      _finishAdmission(admission);
+      rethrow;
+    }
+  }
+
+  Stream<List<int>> _trackedBody(
+    Stream<List<int>> source,
+    AccountRecoveryOperationAdmission admission,
+  ) async* {
+    try {
+      yield* source;
+    } finally {
+      _finishAdmission(admission);
+    }
+  }
+
+  void _finishAdmission(AccountRecoveryOperationAdmission admission) {
+    _admissions.remove(admission);
+    admission.finish();
+  }
+
+  Future<http.StreamedResponse> _send(http.BaseRequest request) async {
     final liveToken = currentAccessToken?.call();
     final originalHeader =
         request.headers['authorization'] ?? request.headers['Authorization'];
@@ -162,5 +206,10 @@ class AuthenticatedHttpClient extends http.BaseClient {
   }
 
   @override
-  void close() => _inner.close();
+  void close() {
+    _inner.close();
+    for (final admission in _admissions.toList()) {
+      _finishAdmission(admission);
+    }
+  }
 }

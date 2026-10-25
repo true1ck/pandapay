@@ -1,0 +1,14 @@
+{
+  "image": "pandapay-security-next25-api:local",
+  "image_id": "sha256:00822714a313c7a85dd80c142d5b30c148d117798223b25c333fbd86493f096c",
+  "exit_code": 0,
+  "network": "none",
+  "read_only_sanitized_source": true,
+  "summary": [
+    "# tests 36",
+    "# pass 36",
+    "# fail 0",
+    "# skipped 0"
+  ],
+  "identity_confirmed_by": "local Docker image inventory"
+}

@@ -1,0 +1,15 @@
+{
+  "fresh_product_migration": "passed",
+  "checksummed_migration_repeat": "passed",
+  "typed_sql": "PASS typed sync RPC PostgreSQL fixture; legacy_function_unchanged=true; fixture_rolled_back=true",
+  "legacy_transport": "PASS sync transport PostgreSQL route and RLS fixture; known_numeric_update_rejection=42804; numeric_write_remediation=pending",
+  "financial_state": "PASS sync financial PostgreSQL fixture rolled back snapshot=3583e6b7d9d985f41a090703424210aab6a290a5e11b534d95ab6a01ce3eb455",
+  "dump_restore": {
+    "same_major": 18,
+    "full_schema_dump_restore": "passed",
+    "synthetic_profile_device_transaction_and_log_fingerprint_equal": true,
+    "v2_definition_equal": true,
+    "typed_write_after_restore": "passed",
+    "fingerprint_sha256": "78f5e979ce8d700530f3afc61e0c96f98d92646bcc4b8e9738608c48c9298b2b"
+  }
+}

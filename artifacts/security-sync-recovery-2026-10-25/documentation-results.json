@@ -1,0 +1,9 @@
+{
+  "render_deterministic": true,
+  "html_sha256": {
+    "docs/security-and-backend-audit-2026-10-20.html": "c0d75afca237e65e6a910f639e55d91656ae16fb2c94e73d3ec661de394a0d3d",
+    "docs/security-remaining-work-2026-10-25.html": "56aeaf2477bebbec381c6cf196725bcef4c9e4f2bfaeb0539bcb8e7b5aca48ba"
+  },
+  "focused_markdown_local_links_checked": 53,
+  "git_diff_check": "passed"
+}

@@ -1,5 +1,7 @@
 # PandaPay User App — Detailed Implementation Plan (Flutter, Android-first)
 
+> **Historical/product design reference — reviewed 25 October 2026.** Feature and architecture statements here may describe intended or earlier designs. The [current source architecture](docs/security-current-architecture-2026-10-25.md), [security progress](docs/security-implementation-progress-2026-10-22.md) and [deployment guide](deploy/DEPLOY.md) are the implementation/operations entrypoints. Do not infer a deployed feature, database topology or encryption state from this plan.
+
 **Companion to:** [`product-plan.md`](./product-plan.md) · [`ui-spec.md`](./ui-spec.md) · [`database.sql`](./database.sql) · [`adminimplementation_plan.md`](./adminimplementation_plan.md)
 
 **Scope:** the 66-screen + 6-system-surface consumer application defined in `ui-spec.md`, built to the v1.0 production standard in `product-plan.md` §2.

@@ -1,0 +1,569 @@
+{
+  "format": "pandapay-runtime-privilege-policy-v1",
+  "scope": "product",
+  "managedSchemas": [
+    "public",
+    "pandapay",
+    "promotions",
+    "partner_webhook",
+    "backup_status",
+    "imap_worker",
+    "account_lifecycle",
+    "account_recovery",
+    "maintenance"
+  ],
+  "roles": [
+    {
+      "name": "app_user",
+      "kind": "runtime",
+      "required": true
+    },
+    {
+      "name": "rewards_worker_login",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "rewards_worker",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "sms_learning_worker",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "scraper_role",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "partner_webhook_runtime",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "pandapay_partner_webhook",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "partner_webhook_owner",
+      "kind": "owner",
+      "required": false
+    },
+    {
+      "name": "backup_status_runtime",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "backup_status_reader",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "backup_status_writer",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "backup_status_owner",
+      "kind": "owner",
+      "required": false
+    },
+    {
+      "name": "imap_worker_runtime",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "pandapay_imap_worker",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "imap_worker_owner",
+      "kind": "owner",
+      "required": false
+    },
+    {
+      "name": "promotions_owner",
+      "kind": "owner",
+      "required": false
+    },
+    {
+      "name": "anon",
+      "kind": "exposure",
+      "required": false
+    },
+    {
+      "name": "authenticated",
+      "kind": "exposure",
+      "required": false
+    },
+    {
+      "name": "account_lifecycle_runtime",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "pandapay_account_lifecycle",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "account_lifecycle_owner",
+      "kind": "owner",
+      "required": false
+    },
+    {
+      "name": "account_recovery_owner",
+      "kind": "owner",
+      "required": false
+    },
+    {
+      "name": "maintenance_owner",
+      "kind": "owner",
+      "required": false
+    },
+    {
+      "name": "pandapay_maintenance",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "pandapay_maintenance_reader",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "pandapay_auth_retention_coordinator",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "maintenance_runtime",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "auth_maintenance_runtime",
+      "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "maintenance_reader_runtime",
+      "kind": "runtime",
+      "required": false
+    }
+  ],
+  "ledgers": [
+    "public.schema_migrations"
+  ],
+  "memberships": [
+    {
+      "member": "rewards_worker_login",
+      "role": "rewards_worker"
+    },
+    {
+      "member": "app_user",
+      "role": "backup_status_reader"
+    },
+    {
+      "member": "partner_webhook_runtime",
+      "role": "pandapay_partner_webhook"
+    },
+    {
+      "member": "backup_status_runtime",
+      "role": "backup_status_writer"
+    },
+    {
+      "member": "imap_worker_runtime",
+      "role": "pandapay_imap_worker"
+    },
+    {
+      "member": "account_lifecycle_runtime",
+      "role": "pandapay_account_lifecycle"
+    },
+    {
+      "member": "maintenance_runtime",
+      "role": "pandapay_maintenance"
+    },
+    {
+      "member": "auth_maintenance_runtime",
+      "role": "pandapay_auth_retention_coordinator"
+    },
+    {
+      "member": "maintenance_reader_runtime",
+      "role": "pandapay_maintenance_reader"
+    }
+  ],
+  "restrictedRoles": [
+    {
+      "role": "partner_webhook_runtime",
+      "relations": [],
+      "routines": [
+        "partner_webhook.ingest_conversion(text,text,numeric,text)"
+      ]
+    },
+    {
+      "role": "pandapay_partner_webhook",
+      "relations": [],
+      "routines": [
+        "partner_webhook.ingest_conversion(text,text,numeric,text)"
+      ]
+    },
+    {
+      "role": "backup_status_runtime",
+      "relations": [],
+      "routines": [
+        "backup_status.publish_verified_status(text,text,timestamp with time zone,bigint,text,timestamp with time zone,text,text)"
+      ]
+    },
+    {
+      "role": "backup_status_writer",
+      "relations": [],
+      "routines": [
+        "backup_status.publish_verified_status(text,text,timestamp with time zone,bigint,text,timestamp with time zone,text,text)"
+      ]
+    },
+    {
+      "role": "backup_status_reader",
+      "relations": [],
+      "routines": [
+        "backup_status.read_status(uuid)"
+      ]
+    },
+    {
+      "role": "imap_worker_runtime",
+      "relations": [],
+      "routines": [
+        "imap_worker.next_connections(text,integer)",
+        "imap_worker.defer_connections(uuid)"
+      ]
+    },
+    {
+      "role": "pandapay_imap_worker",
+      "relations": [],
+      "routines": [
+        "imap_worker.next_connections(text,integer)",
+        "imap_worker.defer_connections(uuid)"
+      ]
+    },
+    {
+      "role": "account_lifecycle_runtime",
+      "relations": [],
+      "routines": [
+        "account_lifecycle.claim_due(integer)",
+        "account_lifecycle.finish(uuid,uuid,boolean)",
+        "account_lifecycle.list_tombstones(uuid,integer)",
+        "account_lifecycle.replay_tombstone(uuid,uuid,bigint)",
+        "account_lifecycle.journal_checkpoint(boolean)",
+        "account_lifecycle.advance_journal(text,bigint,text,text)"
+      ]
+    },
+    {
+      "role": "pandapay_account_lifecycle",
+      "relations": [],
+      "routines": [
+        "account_lifecycle.claim_due(integer)",
+        "account_lifecycle.finish(uuid,uuid,boolean)",
+        "account_lifecycle.list_tombstones(uuid,integer)",
+        "account_lifecycle.replay_tombstone(uuid,uuid,bigint)",
+        "account_lifecycle.journal_checkpoint(boolean)",
+        "account_lifecycle.advance_journal(text,bigint,text,text)"
+      ]
+    },
+    {
+      "role": "maintenance_runtime",
+      "relations": [],
+      "routines": [
+        "maintenance.claim_job(text)",
+        "maintenance.run_batch(text,uuid)",
+        "maintenance.yield_job(text,uuid)",
+        "maintenance.fail_job(text,uuid)",
+        "maintenance.review_health()",
+        "maintenance.read_health()",
+        "maintenance.read_notifications()"
+      ]
+    },
+    {
+      "role": "pandapay_maintenance",
+      "relations": [],
+      "routines": [
+        "maintenance.claim_job(text)",
+        "maintenance.run_batch(text,uuid)",
+        "maintenance.yield_job(text,uuid)",
+        "maintenance.fail_job(text,uuid)",
+        "maintenance.review_health()",
+        "maintenance.read_health()",
+        "maintenance.read_notifications()"
+      ]
+    },
+    {
+      "role": "auth_maintenance_runtime",
+      "relations": [],
+      "routines": [
+        "maintenance.claim_auth_retention()",
+        "maintenance.finish_external(uuid,integer,boolean)",
+        "maintenance.fail_auth_retention(uuid)",
+        "maintenance.defer_auth_retention(uuid)"
+      ]
+    },
+    {
+      "role": "pandapay_auth_retention_coordinator",
+      "relations": [],
+      "routines": [
+        "maintenance.claim_auth_retention()",
+        "maintenance.finish_external(uuid,integer,boolean)",
+        "maintenance.fail_auth_retention(uuid)",
+        "maintenance.defer_auth_retention(uuid)"
+      ]
+    },
+    {
+      "role": "maintenance_reader_runtime",
+      "relations": [],
+      "routines": [
+        "maintenance.read_health()",
+        "maintenance.read_notifications()",
+        "maintenance.acknowledge_notification(text,text,bigint)"
+      ]
+    },
+    {
+      "role": "pandapay_maintenance_reader",
+      "relations": [],
+      "routines": [
+        "maintenance.read_health()",
+        "maintenance.read_notifications()",
+        "maintenance.acknowledge_notification(text,text,bigint)"
+      ]
+    }
+  ],
+  "requiredRoutineAccess": [
+    {
+      "role": "app_user",
+      "identity": "pandapay.sync_insert_user_category(uuid,uuid,uuid,text,text,jsonb,bigint)"
+    },
+    {
+      "role": "app_user",
+      "identity": "pandapay.sync_insert_user_category(uuid,uuid,uuid,text,text,uuid,uuid,text[],jsonb,bigint)"
+    },
+    {
+      "role": "app_user",
+      "identity": "pandapay.sync_apply_user_merchant_category_rule(uuid,uuid,uuid,public.sync_op,jsonb,bigint)"
+    },
+    {
+      "role": "app_user",
+      "identity": "pandapay.register_sync_device(uuid,text,text,text,uuid)"
+    },
+    {
+      "role": "app_user",
+      "identity": "pandapay.sync_apply_change(uuid,uuid,text,uuid,public.sync_op,jsonb,jsonb,bigint)"
+    },
+    {
+      "role": "app_user",
+      "identity": "pandapay.sync_pull(uuid,uuid,bigint,integer)"
+    },
+    {
+      "role": "app_user",
+      "identity": "pandapay.sync_ack(uuid,uuid,bigint)"
+    },
+    {
+      "role": "partner_webhook_runtime",
+      "identity": "partner_webhook.ingest_conversion(text,text,numeric,text)"
+    },
+    {
+      "role": "backup_status_runtime",
+      "identity": "backup_status.publish_verified_status(text,text,timestamp with time zone,bigint,text,timestamp with time zone,text,text)"
+    },
+    {
+      "role": "app_user",
+      "identity": "backup_status.read_status(uuid)"
+    },
+    {
+      "role": "imap_worker_runtime",
+      "identity": "imap_worker.next_connections(text,integer)"
+    },
+    {
+      "role": "imap_worker_runtime",
+      "identity": "imap_worker.defer_connections(uuid)"
+    },
+    {
+      "role": "app_user",
+      "identity": "account_lifecycle.assert_access(uuid)"
+    },
+    {
+      "role": "app_user",
+      "identity": "account_lifecycle.request_deletion(uuid)"
+    },
+    {
+      "role": "app_user",
+      "identity": "account_lifecycle.cancel_deletion(uuid)"
+    },
+    {
+      "role": "account_lifecycle_runtime",
+      "identity": "account_lifecycle.claim_due(integer)"
+    },
+    {
+      "role": "account_lifecycle_runtime",
+      "identity": "account_lifecycle.finish(uuid,uuid,boolean)"
+    },
+    {
+      "role": "account_lifecycle_runtime",
+      "identity": "account_lifecycle.list_tombstones(uuid,integer)"
+    },
+    {
+      "role": "account_lifecycle_runtime",
+      "identity": "account_lifecycle.replay_tombstone(uuid,uuid,bigint)"
+    },
+    {
+      "role": "app_user",
+      "identity": "account_recovery.put_snapshot(uuid,uuid,bytea,text,bytea,text,boolean,boolean,text)"
+    },
+    {
+      "role": "app_user",
+      "identity": "account_recovery.read_snapshot(uuid,uuid)"
+    },
+    {
+      "role": "app_user",
+      "identity": "account_recovery.list_snapshots(uuid)"
+    },
+    {
+      "role": "app_user",
+      "identity": "account_recovery.remove_snapshots(uuid)"
+    },
+    {
+      "role": "account_lifecycle_runtime",
+      "identity": "account_lifecycle.journal_checkpoint(boolean)"
+    },
+    {
+      "role": "account_lifecycle_runtime",
+      "identity": "account_lifecycle.advance_journal(text,bigint,text,text)"
+    },
+    {
+      "role": "maintenance_runtime",
+      "identity": "maintenance.claim_job(text)"
+    },
+    {
+      "role": "maintenance_runtime",
+      "identity": "maintenance.run_batch(text,uuid)"
+    },
+    {
+      "role": "maintenance_runtime",
+      "identity": "maintenance.yield_job(text,uuid)"
+    },
+    {
+      "role": "maintenance_runtime",
+      "identity": "maintenance.fail_job(text,uuid)"
+    },
+    {
+      "role": "maintenance_runtime",
+      "identity": "maintenance.review_health()"
+    },
+    {
+      "role": "maintenance_runtime",
+      "identity": "maintenance.read_health()"
+    },
+    {
+      "role": "maintenance_runtime",
+      "identity": "maintenance.read_notifications()"
+    },
+    {
+      "role": "auth_maintenance_runtime",
+      "identity": "maintenance.claim_auth_retention()"
+    },
+    {
+      "role": "auth_maintenance_runtime",
+      "identity": "maintenance.finish_external(uuid,integer,boolean)"
+    },
+    {
+      "role": "auth_maintenance_runtime",
+      "identity": "maintenance.fail_auth_retention(uuid)"
+    },
+    {
+      "role": "auth_maintenance_runtime",
+      "identity": "maintenance.defer_auth_retention(uuid)"
+    },
+    {
+      "role": "maintenance_reader_runtime",
+      "identity": "maintenance.read_health()"
+    },
+    {
+      "role": "maintenance_reader_runtime",
+      "identity": "maintenance.read_notifications()"
+    },
+    {
+      "role": "maintenance_reader_runtime",
+      "identity": "maintenance.acknowledge_notification(text,text,bigint)"
+    }
+  ],
+  "acceptedFindings": [],
+  "forbiddenRoutineAccess": [
+    {
+      "role": "anon",
+      "identity": "pandapay.register_sync_device(uuid,text,text,text,uuid)"
+    },
+    {
+      "role": "anon",
+      "identity": "pandapay.sync_apply_change(uuid,uuid,text,uuid,public.sync_op,jsonb,jsonb,bigint)"
+    },
+    {
+      "role": "anon",
+      "identity": "pandapay.sync_pull(uuid,uuid,bigint,integer)"
+    },
+    {
+      "role": "anon",
+      "identity": "pandapay.sync_ack(uuid,uuid,bigint)"
+    },
+    {
+      "role": "anon",
+      "identity": "pandapay.sync_insert_user_category(uuid,uuid,uuid,text,text,jsonb,bigint)"
+    },
+    {
+      "role": "anon",
+      "identity": "pandapay.sync_insert_user_category(uuid,uuid,uuid,text,text,uuid,uuid,text[],jsonb,bigint)"
+    },
+    {
+      "role": "anon",
+      "identity": "pandapay.sync_apply_user_merchant_category_rule(uuid,uuid,uuid,public.sync_op,jsonb,bigint)"
+    },
+    {
+      "role": "anon",
+      "identity": "pandapay.sync_apply_change_v2(uuid,uuid,text,uuid,public.sync_op,jsonb,jsonb,bigint)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "pandapay.register_sync_device(uuid,text,text,text,uuid)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "pandapay.sync_apply_change(uuid,uuid,text,uuid,public.sync_op,jsonb,jsonb,bigint)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "pandapay.sync_pull(uuid,uuid,bigint,integer)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "pandapay.sync_ack(uuid,uuid,bigint)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "pandapay.sync_insert_user_category(uuid,uuid,uuid,text,text,jsonb,bigint)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "pandapay.sync_insert_user_category(uuid,uuid,uuid,text,text,uuid,uuid,text[],jsonb,bigint)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "pandapay.sync_apply_user_merchant_category_rule(uuid,uuid,uuid,public.sync_op,jsonb,bigint)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "pandapay.sync_apply_change_v2(uuid,uuid,text,uuid,public.sync_op,jsonb,jsonb,bigint)"
+    }
+  ]
+}

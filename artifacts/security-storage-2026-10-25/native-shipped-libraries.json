@@ -1,0 +1,36 @@
+{
+  "scope": "isolated native receipt fixture debug APK only; not production app or dependency clearance",
+  "apk_sha256": "b94fd9b0d660e467f9824d89f48912731631c276189fb1afa7b507f1a0966f5e",
+  "libraries": [
+    {
+      "path": "lib/arm64-v8a/libVkLayer_khronos_validation.so",
+      "bytes": 15240080,
+      "sha256": "ae445f7e74d402e3a367adb230b1edd9841899fcb3310166e5cc96a09ad37a3f"
+    },
+    {
+      "path": "lib/arm64-v8a/libdartjni.so",
+      "bytes": 97952,
+      "sha256": "60f88365e52a8d8dc87cbb4ac55c24af5f1cf94999d73322275ecbec7c0b7190"
+    },
+    {
+      "path": "lib/arm64-v8a/libflutter.so",
+      "bytes": 37584608,
+      "sha256": "d57c82a550ac4ba595a1e3d8de0bc3b92f0e74e1f138205f196472f686033774"
+    },
+    {
+      "path": "lib/arm64-v8a/libsqlite3mc.so",
+      "bytes": 2001152,
+      "sha256": "99a2ee91bdd6e7644fe0a8659e2c3599ea5bef2528aaecbe3ffe809ad4869b2a"
+    },
+    {
+      "path": "lib/armeabi-v7a/libdartjni.so",
+      "bytes": 57600,
+      "sha256": "22ecc5d35fd1b0cd25fd5b49dd34dfd0a409aac082ac077db1c08d3c9c0e8090"
+    },
+    {
+      "path": "lib/x86_64/libdartjni.so",
+      "bytes": 99968,
+      "sha256": "c4c3a281cbc944925a73636e03018638a79b0eaeddbe360f48297115244148b9"
+    }
+  ]
+}

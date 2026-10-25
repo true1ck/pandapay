@@ -1,0 +1,49 @@
+The files belonging to this database system will be owned by user "chandresh_kerkar".
+This user must also own the server process.
+
+The database cluster will be initialized with locale "C".
+The default text search configuration will be set to "english".
+
+Data page checksums are enabled.
+
+creating directory /private/tmp/pandapay-otp-pg-hk1owf1b/cluster ... ok
+creating subdirectories ... ok
+selecting dynamic shared memory implementation ... posix
+selecting default "max_connections" ... 100
+selecting default "shared_buffers" ... 128MB
+selecting default time zone ... Asia/Kolkata
+creating configuration files ... ok
+running bootstrap script ... ok
+performing post-bootstrap initialization ... ok
+syncing data to disk ... ok
+
+Success. You can now start the database server using:
+
+    '/opt/homebrew/opt/postgresql@18/bin/pg_ctl' -D /private/tmp/pandapay-otp-pg-hk1owf1b/cluster -l logfile start
+
+
+waiting for server to start.... done
+server started
+
+18.4 (Homebrew)
+
+CREATE DATABASE
+
+CREATE DATABASE
+
+Initialized empty auth database baseline (7 tables, 78 columns)
+Applied auth migration 0001_phone_lookup_hashes
+Auth migrations and phone hash backfill complete
+Verified existing auth schema against init.sql baseline
+Applied auth migration 0002_otp_purpose_binding
+Phone hash verification otp_requests: checked=1 matched=1
+Phone hash verification otp_requests: checked=1 matched=1
+Auth migrations and phone hash backfill complete
+PASS: OTP saturation preserves every existing challenge/attempt and allows the same code after capacity returns
+PASS: v2 replacement six-digit/device/purpose/protocol binding and atomic one-winner consume
+PASS: real PostgreSQL OTP purpose migration, NULL legacy signin-only, purpose isolation, resend and delivery cleanup scope, atomic concurrent consume
+
+PASS: PostgreSQL concurrency, atomic marker claim, HMAC-only key storage, TTL, compare-delete, refresh/cleanup race and capacity refusal
+
+waiting for server to shut down.... done
+server stopped

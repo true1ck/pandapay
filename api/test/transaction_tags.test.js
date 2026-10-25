@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { Client } = require('pg');
-const { validateChange, readTagFilter, tagQueryClient, applyChange, mergeTransactionTags, attachTags, importTagNames } = require('../src/transaction_tags');
+const { validateChange, readTagFilter, tagQueryClient, applyChange, mergeTransactionTags, attachTags, importTagNames, normalizeName } = require('../src/transaction_tags');
 const reports = require('../src/spend_reports');
 const id = () => crypto.randomUUID();
 
@@ -26,6 +26,54 @@ test('invalid definitions, future clocks and malformed operations are rejected',
   assert.throws(()=>validateChange({...base,tag:{...base.tag,color:'red'}}));
   assert.throws(()=>validateChange({...base,updatedAt:'2100-01-01'}));
   assert.throws(()=>validateChange({...base,operation:'delete_everything'}));
+  for (const malformed of [null, [], 'change', { ...base, updatedAt: 123 },
+    { ...base, tag: null }, { ...base, tag: [] },
+    { ...base, tag: { ...base.tag, color: 123 } },
+    { ...base, tag: { ...base.tag, archivedAt: 123 } }]) {
+    assert.throws(() => validateChange(malformed), { status: 400 });
+  }
+});
+
+test('tag changes return 400 for malformed JSON shapes instead of server errors', async () => {
+  const handlers = {};
+  const app = { get() {}, post(path, auth, handler) { handlers.post = handler; } };
+  const { registerTagRoutes } = require('../src/transaction_tags');
+  registerTagRoutes(app, { requireAuth() {}, withUserClient: async () => { throw new Error('should not query'); } });
+  const res = { code: 200, status(code) { this.code = code; return this; }, json(value) { this.body = value; return this; } };
+  await handlers.post({ body: null, userId: id() }, res);
+  assert.equal(res.code, 400);
+  assert.equal(res.body.error, 'Invalid tag change');
+});
+
+test('statement tag import requires a bounded array before database work', async () => {
+  let queries = 0;
+  const client = { query: async () => { queries++; return { rows: [] }; } };
+  await assert.rejects(() => importTagNames(client, id(), id(), 'Office'), { status: 400 });
+  await assert.rejects(() => importTagNames(client, id(), id(), Array(51).fill('Office')), { status: 400 });
+  await assert.rejects(() => importTagNames(client, id(), id(), ['Office', ' '.repeat(2)]), { status: 400 });
+  assert.equal(queries, 0);
+});
+
+test('statement tag import keeps the first display spelling after normalized deduplication', async () => {
+  const tags = new Map();
+  const inserted = [];
+  const client = { async query(sql, args = []) {
+    if (sql.includes('SELECT pg_advisory_xact_lock')) return { rows: [] };
+    if (sql.startsWith('SELECT id FROM transaction_tags')) {
+      const tag = tags.get(args[1]);
+      return { rows: tag ? [{ id: tag.id }] : [] };
+    }
+    if (sql.includes('INSERT INTO transaction_tags')) {
+      inserted.push({ id: args[0], name: args[2], normalizedName: args[3] });
+      tags.set(args[3], { id: args[0], name: args[2] });
+      return { rows: [] };
+    }
+    if (sql.includes('INSERT INTO transaction_tag_links')) return { rows: [] };
+    throw new Error(`Unexpected query: ${sql}`);
+  } };
+  await importTagNames(client, id(), id(), ['  Café\tTrip ', 'café  trip']);
+  assert.equal(normalizeName('  Café\tTrip '), 'café trip');
+  assert.deepEqual(inserted, [{ id: inserted[0].id, name: 'Café\tTrip', normalizedName: 'café trip' }]);
 });
 
 test('real database: overlap counts once, stale removals, replay, budgets, aliases and isolation',

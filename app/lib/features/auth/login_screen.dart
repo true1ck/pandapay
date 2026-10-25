@@ -7,11 +7,13 @@ import '../../app/design/app_theme.dart';
 import '../onboarding/entry_brand.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/auth_api.dart';
 import '../../data/phone_number_hint.dart';
 import '../../data/product_access_api.dart';
 import '../settings/feedback_support_screen.dart';
 import '../settings/legal_screen.dart';
 import 'account_recovery_screen.dart';
+import '../recovery/account_data_recovery.dart';
 
 /// A4: DPDP §8.2 — purpose-specific, unbundled consent, never a single
 /// bundled "I agree to everything" checkbox. Bumped by hand whenever the
@@ -57,6 +59,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _codeController = TextEditingController();
   final _phoneFocusNode = FocusNode();
 
+  OtpChallenge? _challenge;
+  int get _codeLength => ref.read(authApiProvider).otpCodeLength;
   bool _otpRequested = false;
   bool _loading = false;
   String? _error;
@@ -147,14 +151,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       final identifier = _identifierController.text.trim();
-      await ref
-          .read(authApiProvider)
-          .requestEmailOtp(
-            identifier,
-            isSignUp: _isSignUp,
-            phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
-          );
-      setState(() => _otpRequested = true);
+      final auth = ref.read(authApiProvider);
+      final deviceId = auth.versionedOtpEnabled
+          ? await ref.read(localDeviceIdProvider.future)
+          : null;
+      _challenge = await auth.requestEmailOtp(
+        identifier,
+        deviceId: deviceId,
+        isSignUp: _isSignUp,
+        phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
+      );
+      if (mounted) setState(() => _otpRequested = true);
     } catch (e) {
       // The auth service deliberately rejects a second request while the
       // first code is still valid. That is not a dead end: the code already
@@ -162,6 +169,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // the verification step instead of leaving them on a form whose only
       // action is guaranteed to fail again.
       final activeOtp =
+          (!ref.read(authApiProvider).versionedOtpEnabled ||
+              _challenge != null) &&
           e is ApiException &&
           e.statusCode == 429 &&
           e.userMessage.toLowerCase().contains('otp') &&
@@ -182,8 +191,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _verifyOtp() async {
-    if (_codeController.text.trim().length != 4) {
-      setState(() => _error = 'Enter the 4-digit code from your email.');
+    if (!RegExp(
+      '^[0-9]{$_codeLength}\$',
+    ).hasMatch(_codeController.text.trim())) {
+      setState(
+        () => _error = 'Enter the $_codeLength-digit code from your email.',
+      );
       return;
     }
     setState(() {
@@ -202,6 +215,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         code,
         deviceId,
         deviceInfo: deviceInfo,
+        challenge: _challenge,
         // Only sign-up links the phone. Returning-user login is authorized by
         // the email OTP and keeps the existing account linkage unchanged.
         phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
@@ -225,6 +239,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             );
       }
 
+      if (!mounted) return;
+      await offerAccountDataRecovery(context, ref, tokens.accessToken);
+      if (!mounted) return;
       final store = await ref.read(tokenStoreProvider.future);
       await store.save(
         accessToken: tokens.accessToken,
@@ -336,7 +353,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const SizedBox(height: 10),
                         Text(
                           _otpRequested
-                              ? 'Enter the 4-digit verification code sent to'
+                              ? 'Enter the $_codeLength-digit verification code sent to'
                               : _isSignUp
                               ? 'Create your PandaPay account.'
                               : 'Sign in to your PandaPay account.',
@@ -386,6 +403,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           )
                         else
                           _OtpStep(
+                            codeLength: _codeLength,
                             controller: _codeController,
                             loading: _loading,
                             onSubmit: _verifyOtp,
@@ -707,6 +725,7 @@ class _ConsentCheckbox extends StatelessWidget {
 }
 
 class _OtpStep extends StatefulWidget {
+  final int codeLength;
   final TextEditingController controller;
   final bool loading;
   final VoidCallback onSubmit;
@@ -714,6 +733,7 @@ class _OtpStep extends StatefulWidget {
   final VoidCallback onResend;
 
   const _OtpStep({
+    required this.codeLength,
     required this.controller,
     required this.loading,
     required this.onSubmit,
@@ -771,7 +791,7 @@ class _OtpStepState extends State<_OtpStep> {
                   autofillHints: const [AutofillHints.oneTimeCode],
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(4),
+                    LengthLimitingTextInputFormatter(widget.codeLength),
                   ],
                   onSubmitted: (_) => widget.loading ? null : widget.onSubmit(),
                   showCursor: false,
@@ -780,8 +800,8 @@ class _OtpStepState extends State<_OtpStep> {
                     color: Colors.transparent,
                     fontSize: 1,
                   ),
-                  decoration: const InputDecoration(
-                    labelText: '4-digit verification code',
+                  decoration: InputDecoration(
+                    labelText: '${widget.codeLength}-digit verification code',
                     floatingLabelBehavior: FloatingLabelBehavior.never,
                     labelStyle: TextStyle(
                       color: Colors.transparent,
@@ -799,7 +819,7 @@ class _OtpStepState extends State<_OtpStep> {
                       valueListenable: widget.controller,
                       builder: (context, value, _) => Row(
                         children: [
-                          for (var i = 0; i < 4; i++) ...[
+                          for (var i = 0; i < widget.codeLength; i++) ...[
                             if (i > 0) const SizedBox(width: 12),
                             Expanded(
                               child: AnimatedContainer(
@@ -811,7 +831,11 @@ class _OtpStepState extends State<_OtpStep> {
                                   border: Border.all(
                                     color:
                                         _focus.hasFocus &&
-                                            i == value.text.length.clamp(0, 3)
+                                            i ==
+                                                value.text.length.clamp(
+                                                  0,
+                                                  widget.codeLength - 1,
+                                                )
                                         ? BambooInk.jade
                                         : const Color(0xFFDDE1E3),
                                     width:

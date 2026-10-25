@@ -1,0 +1,38 @@
+{
+  "verified_at_utc": "2026-10-24T13:05:37.803095+00:00",
+  "scope": "offline DOM/report and local-link verification only; no browser/native/provider/deployment certification",
+  "markdown_sha256": "6e3837874eaa173ff4d504f08251912ed6264ab19150c2271f3c59dee3dfc065",
+  "html_sha256": "818e0545fec3eeaa67814ab77eb11158dd1250d70b9fa0bdecb2204acda628fd",
+  "reproducible_generation": true,
+  "related_markdown_local_links": 45,
+  "dom": {
+    "result": "passed",
+    "postgres_tables": 96,
+    "columns": 934,
+    "foreign_keys": 139,
+    "sqlite_tables": 19,
+    "source_only_tables": 2,
+    "remediation_items": 68,
+    "optimization_inventory_rows": 96,
+    "table_retirement_candidates": 4,
+    "local_links": 450,
+    "checks": [
+      "tab switching",
+      "keyboard tabs",
+      "database filter",
+      "domain filter",
+      "column search",
+      "empty state",
+      "reset",
+      "table inspection",
+      "relationship navigation",
+      "zoom",
+      "unique IDs",
+      "local links",
+      "offline scripts",
+      "remediation coverage and proposal status",
+      "optimization inventory completeness",
+      "scalability section and cross-tab shortcut"
+    ]
+  }
+}

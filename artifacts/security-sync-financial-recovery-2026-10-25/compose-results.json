@@ -1,0 +1,12 @@
+{
+  "prod": {
+    "parsed": true,
+    "api_typed_sync_default": "${SYNC_TYPED_WRITES_ENABLED:-false}",
+    "private_environment_resolution": false
+  },
+  "staging": {
+    "parsed": true,
+    "api_typed_sync_default": "${SYNC_TYPED_WRITES_ENABLED:-false}",
+    "private_environment_resolution": false
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "exit_code": 0,
+  "seconds": 5.05,
+  "command": [
+    "test",
+    "--no-pub",
+    "--concurrency=1",
+    "--reporter=expanded",
+    "test/data/portable_backup/account_recovery_completeness_test.dart",
+    "test/data/portable_backup/account_recovery_test.dart",
+    "test/data/portable_backup/account_recovery_gate_test.dart",
+    "test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart",
+    "test/data/portable_backup/automatic_recovery_test.dart"
+  ],
+  "tail": [
+    "00:01 +27: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: opaque binary references conservatively preserve all candidates",
+    "00:01 +28: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart: ignores unjournaled names and symlinks",
+    "00:01 +29: loading /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart",
+    "00:02 +29: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: scheduler waits for online activity, coalesces events and spaces attempts",
+    "00:02 +30: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: scheduler backs off failures without a retry storm and recovers",
+    "00:02 +31: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: automatic copy verifies ciphertext without requesting an escrow key",
+    "00:02 +32: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: settings default to no consent and bind explicit receipt choice",
+    "00:02 +33: All tests passed!"
+  ]
+}

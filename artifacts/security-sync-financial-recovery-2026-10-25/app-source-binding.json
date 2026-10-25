@@ -1,0 +1,10 @@
+{
+  "app/lib/data/portable_backup/account_recovery_local_snapshot.dart": {
+    "workspace": "14421f6f4077351f45c67ef152c2dfe9a7ebcba66b2104b79a67f57ca59fd742",
+    "tested": "14421f6f4077351f45c67ef152c2dfe9a7ebcba66b2104b79a67f57ca59fd742"
+  },
+  "app/test/data/portable_backup/account_recovery_completeness_test.dart": {
+    "workspace": "049e761865f158c72eb621679329c098be2783352090105b8ef44a2cc25420b5",
+    "tested": "049e761865f158c72eb621679329c098be2783352090105b8ef44a2cc25420b5"
+  }
+}

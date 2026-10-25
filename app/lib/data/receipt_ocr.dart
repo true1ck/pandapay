@@ -1,3 +1,4 @@
+import 'portable_backup/app_private_temporary_storage.dart';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -55,13 +56,9 @@ class ReceiptOcr {
     );
     if (bytes == null) return original;
 
-    final directory = await Directory.systemTemp.createTemp(
-      'pandapay-receipt-ocr-',
-    );
+    final workspace = await AppPrivateTemporaryStorage.create();
     try {
-      final prepared = File(
-        '${directory.path}${Platform.pathSeparator}receipt.jpg',
-      );
+      final prepared = workspace.file('receipt.jpg');
       await prepared.writeAsBytes(bytes);
       final retry = await _recognizeLines(prepared.path);
       // Keep the better result. A failed retry must never erase a useful
@@ -71,7 +68,7 @@ class ReceiptOcr {
       return retryScan.parsedLine != null ? retry : original;
     } finally {
       try {
-        await directory.delete(recursive: true);
+        await workspace.cleanup();
       } catch (_) {
         // Best-effort cleanup only; OCR has already completed.
       }

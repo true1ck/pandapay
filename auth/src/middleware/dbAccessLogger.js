@@ -1,18 +1,18 @@
 const { safeErrorCode } = require('../utils/safeErrorCode');
 // src/middleware/dbAccessLogger.js
 // === SECURITY HARDENING: DATABASE ACCESS LOGGING ===
-// Logs all database access for security auditing and compliance
+// Optional best-effort database access metadata; not a durable audit ledger.
 
 /**
  * Database Access Logging
  * 
- * Logs all database queries for security auditing:
+ * Records selected query metadata when explicitly enabled:
  * - Query type (SELECT, INSERT, UPDATE, DELETE)
  * - Table names accessed
  * - Timestamp
  * - User context (if available from request)
  * - IP address
- * - Query parameters (sanitized - no sensitive data)
+ * - Parameter count only; query text and parameter values are omitted
  * 
  * Configuration:
  * - DB_ACCESS_LOGGING_ENABLED: Set to 'true' to enable logging (default: false)
@@ -44,7 +44,6 @@ const SENSITIVE_TABLES = [
  */
 function extractTableNames(query) {
   const tables = [];
-  const upperQuery = query.toUpperCase();
   
   // Match FROM, JOIN, UPDATE, INSERT INTO patterns
   const patterns = [
@@ -87,34 +86,16 @@ function getQueryType(query) {
 /**
  * Sanitize query parameters (remove sensitive data)
  * @param {Array} params - Query parameters
- * @returns {Array} - Sanitized parameters (sensitive values replaced with '[REDACTED]')
+ * @returns {Object} - Bounded parameter count, without any values
  */
 function sanitizeParams(params) {
   if (!params || !Array.isArray(params)) {
-    return [];
+    return { count: 0, truncated: false };
   }
 
-  return params.map(param => {
-    if (typeof param === 'string') {
-      if (/^\d{4,8}$/.test(param)) {
-        return '[REDACTED_OTP]';
-      }
-      // Check if it looks like a phone number
-      if (/^\+?\d{10,15}$/.test(param)) {
-        return '[REDACTED_PHONE]';
-      }
-      // Check if it looks like a token or hash
-      if (param.length > 50) {
-        return '[REDACTED_TOKEN]';
-      }
-      // Check if it looks like an encrypted value (format: iv:authTag:data)
-      if (param.includes(':') && param.split(':').length === 3) {
-        return '[REDACTED_ENCRYPTED]';
-      }
-    }
-    // For other types, return as-is (numbers, booleans, etc.)
-    return param;
-  });
+  // A shape denylist leaks short tokens, emails, nested JSON and numbers.
+  // Retain only a bounded count, never the values or their types.
+  return { count: Math.min(params.length, 1000), truncated: params.length > 1000 };
 }
 
 /**
@@ -146,11 +127,7 @@ async function logDbAccess(logData, executor) {
   }
 
   try {
-    // Ensure db_access_log table exists
-    await ensureDbAccessLogTable(executor);
-
     const {
-      query,
       queryType,
       tables,
       params,
@@ -161,14 +138,14 @@ async function logDbAccess(logData, executor) {
     } = logData;
 
     await executor.query(
-      `INSERT INTO db_access_log (
+      `INSERT INTO public.db_access_log (
         query_type, tables_accessed, query_text, params_sanitized,
         user_id, ip_address, user_agent, duration_ms, created_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
       [
         queryType,
         JSON.stringify(tables),
-        query.substring(0, 1000), // Truncate long queries
+        '[query omitted]',
         JSON.stringify(sanitizeParams(params)),
         userId,
         ipAddress,
@@ -183,36 +160,6 @@ async function logDbAccess(logData, executor) {
 }
 
 /**
- * Ensure db_access_log table exists
- */
-async function ensureDbAccessLogTable(executor) {
-  try {
-    await executor.query(`
-      CREATE TABLE IF NOT EXISTS db_access_log (
-        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        query_type VARCHAR(20) NOT NULL,
-        tables_accessed JSONB,
-        query_text TEXT NOT NULL,
-        params_sanitized JSONB,
-        user_id UUID,
-        ip_address VARCHAR(45),
-        user_agent TEXT,
-        duration_ms INTEGER,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_db_access_log_created_at ON db_access_log(created_at);
-      CREATE INDEX IF NOT EXISTS idx_db_access_log_user_id ON db_access_log(user_id);
-      CREATE INDEX IF NOT EXISTS idx_db_access_log_tables ON db_access_log USING GIN(tables_accessed);
-      CREATE INDEX IF NOT EXISTS idx_db_access_log_query_type ON db_access_log(query_type);
-    `);
-  } catch (err) {
-    // Table might already exist or database might not be ready
-    // This is fine, the insert will handle it
-  }
-}
-
-/**
  * Wrap database query with logging
  * @param {string} query - SQL query
  * @param {Array} params - Query parameters
@@ -223,12 +170,15 @@ async function loggedQuery(query, params = [], context = {}, executor) {
   if (!executor || typeof executor.query !== 'function') {
     throw new TypeError('loggedQuery requires a database executor');
   }
+  const queryText = typeof query === 'string' ? query : query?.text;
+  if (typeof queryText !== 'string') return executor.query(query, params);
+  const queryParams = Array.isArray(query?.values) ? query.values : params;
   const startTime = Date.now();
-  const queryType = getQueryType(query);
-  const tables = extractTableNames(query);
+  const queryType = getQueryType(queryText);
+  const tables = extractTableNames(queryText);
 
   // Check if we should log this query
-  if (!shouldLogQuery(query)) {
+  if (!shouldLogQuery(queryText)) {
     // Execute query without logging
     return executor.query(query, params);
   }
@@ -241,10 +191,10 @@ async function loggedQuery(query, params = [], context = {}, executor) {
 
     // Log access (fire and forget)
     logDbAccess({
-      query,
+      query: queryText,
       queryType,
       tables,
-      params,
+      params: queryParams,
       userId: context.userId || null,
       ipAddress: context.ipAddress || null,
       userAgent: context.userAgent || null,
@@ -258,15 +208,14 @@ async function loggedQuery(query, params = [], context = {}, executor) {
     // Log failed query too
     const duration = Date.now() - startTime;
     logDbAccess({
-      query,
+      query: queryText,
       queryType,
       tables,
-      params,
+      params: queryParams,
       userId: context.userId || null,
       ipAddress: context.ipAddress || null,
       userAgent: context.userAgent || null,
       duration,
-      error: err.message,
     }, executor).catch(() => {
       // Ignore logging errors
     });

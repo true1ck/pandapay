@@ -2,6 +2,13 @@ const { Pool } = require('pg');
 const config = require('./config');
 const { resolveDatabaseTls } = require('./db_tls');
 const { safeErrorCode } = require('./safeErrorCode');
+const { createPartnerWebhookPool, createImapWorkerPool,createAccountLifecyclePool } = require('./service_pools');
+const partnerWebhookPool = createPartnerWebhookPool(config.partnerWebhookDatabaseUrl);
+const imapWorkerPool = createImapWorkerPool(config.imapPollDatabaseUrl);
+const accountLifecyclePool=createAccountLifecyclePool(config.accountLifecycleEnabled?config.accountLifecycleDatabaseUrl:null);
+if(config.accountLifecycleEnabled&&!accountLifecyclePool)throw new Error('Dedicated account lifecycle database required');
+const {ASSERT_ACCESS_SQL}=require('./account_lifecycle_routes');
+const lifecycleJournalRuntime=require('./account_lifecycle_journal_runtime').createJournalRuntime({pool:accountLifecyclePool});
 
 // Resolve and validate TLS before the pool can be created. This also removes
 // pg connection-string TLS parameters only after translating supported CA
@@ -37,6 +44,7 @@ pool.on('error', (err) => {
  */
 async function withUserClient(userId, fn) {
   const client = await pool.connect();
+  let discardConnection;
   try {
     await client.query('BEGIN');
     // Keep every request bounded at the database too. Without a statement
@@ -49,6 +57,7 @@ async function withUserClient(userId, fn) {
     );
     if (userId) {
       await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
+      if(config.accountLifecycleEnabled){await client.query(ASSERT_ACCESS_SQL,[userId]);await lifecycleJournalRuntime.readiness();}
     }
     if (process.env.SMS_LEARNING_HMAC_KEY?.length >= 32) {
       await client.query("SELECT set_config('app.sms_learning_hmac_key', $1, true)", [process.env.SMS_LEARNING_HMAC_KEY]);
@@ -57,11 +66,11 @@ async function withUserClient(userId, fn) {
     await client.query('COMMIT');
     return result;
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
+    try { await client.query('ROLLBACK'); } catch(error) { discardConnection=error; }
     throw err;
   } finally {
-    client.release();
+    client.release(discardConnection);
   }
 }
 
-module.exports = { pool, withUserClient };
+module.exports = { lifecycleJournalRuntime, pool, withUserClient, partnerWebhookPool, imapWorkerPool,accountLifecyclePool };

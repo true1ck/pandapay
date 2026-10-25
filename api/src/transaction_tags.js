@@ -4,15 +4,17 @@ const normalizeName = (value) => value.trim().replace(/\s+/g, ' ').toLowerCase()
 function bad(message, status = 400) { return Object.assign(new Error(message), { status }); }
 function validId(value) { if (typeof value !== 'string' || !UUID.test(value)) throw bad('Invalid tag or transaction ID'); return value; }
 function validateChange(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw bad('Invalid tag change');
   validId(body?.mutationId);
   if (!['upsert_tag', 'assign', 'unassign', 'merge_tags'].includes(body.operation)) throw bad('Invalid tag operation');
-  const at = new Date(body.updatedAt);
+  const at = typeof body.updatedAt === 'string' ? new Date(body.updatedAt) : new Date(NaN);
   if (!body.updatedAt || !Number.isFinite(at.getTime()) || at.getTime() > Date.now() + 300000) throw bad('Invalid change timestamp');
   if (body.operation === 'upsert_tag') {
+    if (!body.tag || typeof body.tag !== 'object' || Array.isArray(body.tag)) throw bad('Invalid tag definition');
     validId(body.tag?.id);
     if (typeof body.tag.name !== 'string' || !body.tag.name.trim() || body.tag.name.trim().length > 60) throw bad('Tag names must be 1–60 characters');
-    if (body.tag.color != null && !/^#[\da-f]{6}$/i.test(body.tag.color)) throw bad('Invalid tag color');
-    if (body.tag.archivedAt != null && !Number.isFinite(Date.parse(body.tag.archivedAt))) throw bad('Invalid archive timestamp');
+    if (body.tag.color != null && (typeof body.tag.color !== 'string' || !/^#[\da-f]{6}$/i.test(body.tag.color))) throw bad('Invalid tag color');
+    if (body.tag.archivedAt != null && (typeof body.tag.archivedAt !== 'string' || !Number.isFinite(Date.parse(body.tag.archivedAt)))) throw bad('Invalid archive timestamp');
   } else {
     validId(body.tagId);
     if (body.operation === 'merge_tags') {
@@ -104,16 +106,23 @@ async function mergeTransactionTags(client, profileId, oldId, keptId) {
 }
 
 async function importTagNames(client, profileId, transactionId, names) {
-  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`tags:${profileId}`]);
-  for (const name of [...new Set(names || [])]) {
+  if (!Array.isArray(names)) throw bad('Imported tags must be an array');
+  if (names.length > 50) throw bad('At most 50 tags can be imported for one transaction');
+  const uniqueNames = new Map();
+  for (const name of names) {
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 60) throw bad('Invalid imported tag');
-    const found = await client.query('SELECT id FROM transaction_tags WHERE profile_id=$1 AND normalized_name=$2 AND archived_at IS NULL', [profileId, normalizeName(name)]);
+    const normalized = normalizeName(name);
+    if (!uniqueNames.has(normalized)) uniqueNames.set(normalized, name.trim());
+  }
+  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`tags:${profileId}`]);
+  for (const [normalizedName, name] of uniqueNames) {
+    const found = await client.query('SELECT id FROM transaction_tags WHERE profile_id=$1 AND normalized_name=$2 AND archived_at IS NULL', [profileId, normalizedName]);
     const id = found.rows[0]?.id || crypto.randomUUID();
     if (!found.rows.length) {
       await client.query(`INSERT INTO transaction_tags(id,profile_id,name,normalized_name) VALUES($1,$2,$3,$4)
-        ON CONFLICT(profile_id,normalized_name) WHERE archived_at IS NULL DO NOTHING`, [id, profileId, name.trim(), normalizeName(name)]);
+        ON CONFLICT(profile_id,normalized_name) WHERE archived_at IS NULL DO NOTHING`, [id, profileId, name, normalizedName]);
     }
-    const tag = await client.query('SELECT id FROM transaction_tags WHERE profile_id=$1 AND normalized_name=$2 AND archived_at IS NULL', [profileId, normalizeName(name)]);
+    const tag = await client.query('SELECT id FROM transaction_tags WHERE profile_id=$1 AND normalized_name=$2 AND archived_at IS NULL', [profileId, normalizedName]);
     await client.query(`INSERT INTO transaction_tag_links(profile_id,transaction_id,tag_id) VALUES($1,$2,$3)
       ON CONFLICT DO NOTHING`, [profileId, transactionId, tag.rows[0].id]);
   }

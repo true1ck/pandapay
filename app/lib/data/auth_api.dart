@@ -16,6 +16,25 @@ class AuthTokens {
   const AuthTokens({required this.accessToken, this.refreshToken});
 }
 
+/// The challenge stays in memory for one request on one installation. A lost
+/// challenge is retried after expiry; the client never downgrades a v2 code.
+class OtpChallenge {
+  final String id;
+  final String deviceId;
+  final String identifier;
+  final bool email;
+  final bool recoveryOnly;
+  final DateTime expiresAt;
+  const OtpChallenge._({
+    required this.id,
+    required this.deviceId,
+    required this.identifier,
+    required this.email,
+    required this.recoveryOnly,
+    required this.expiresAt,
+  });
+}
+
 class AuthApi {
   // Auth is used during cold start. A network that is offline or a hosted
   // service that is slow must never hold the app's first frame indefinitely.
@@ -23,25 +42,114 @@ class AuthApi {
 
   final String authBaseUrl;
   final http.Client _client;
-  AuthApi({required this.authBaseUrl, http.Client? client})
-    : _client = client ?? http.Client();
+  final bool versionedOtpEnabled;
+  final DateTime Function() _now;
+  int get otpCodeLength => versionedOtpEnabled ? 6 : 4;
+  AuthApi({
+    required this.authBaseUrl,
+    http.Client? client,
+    this.versionedOtpEnabled = false,
+    DateTime Function()? now,
+  }) : _client = client ?? http.Client(),
+       _now = now ?? DateTime.now;
+
+  String _otpPath(String name) =>
+      '$authBaseUrl/auth/${versionedOtpEnabled ? 'v2/' : ''}$name';
+  String _contact(String value, bool email) =>
+      email ? value.trim().toLowerCase() : value.trim();
+  String _requestDevice(String? id) {
+    if (id == null || !RegExp(r'^[A-Za-z0-9:_-]{4,128}$').hasMatch(id)) {
+      throw StateError('Please try requesting a new sign-in code.');
+    }
+    return id;
+  }
+
+  OtpChallenge? _challenge(
+    http.Response response,
+    String identifier,
+    bool email,
+    bool recoveryOnly,
+    String? deviceId,
+  ) {
+    if (!versionedOtpEnabled) return null;
+    try {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final id = body['challenge_id'];
+      final seconds = body['expires_in'];
+      if (body['ok'] != true ||
+          body['version'] != 2 ||
+          body['code_length'] != 6 ||
+          id is! String ||
+          !RegExp(
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+            caseSensitive: false,
+          ).hasMatch(id) ||
+          seconds is! int ||
+          seconds < 1 ||
+          seconds > 120) {
+        throw const FormatException();
+      }
+      return OtpChallenge._(
+        id: id,
+        deviceId: _requestDevice(deviceId),
+        identifier: _contact(identifier, email),
+        email: email,
+        recoveryOnly: recoveryOnly,
+        expiresAt: _now().add(Duration(seconds: seconds)),
+      );
+    } catch (_) {
+      throw ApiException(
+        'OTP challenge unavailable',
+        userMessage: 'Unable to start sign-in. Please try again shortly.',
+      );
+    }
+  }
+
+  Map<String, Object?> _challengeFields(
+    OtpChallenge? challenge,
+    String identifier,
+    String code,
+    String deviceId,
+    bool email,
+    bool recoveryOnly,
+  ) {
+    if (!versionedOtpEnabled) {
+      if (challenge != null) {
+        throw StateError('Please request a new sign-in code.');
+      }
+      return const {};
+    }
+    if (challenge == null ||
+        challenge.email != email ||
+        challenge.identifier != _contact(identifier, email) ||
+        challenge.deviceId != deviceId ||
+        challenge.recoveryOnly != recoveryOnly ||
+        !_now().isBefore(challenge.expiresAt) ||
+        !RegExp(r'^\d{6}$').hasMatch(code)) {
+      throw StateError('Please request a new sign-in code for this device.');
+    }
+    return {'challenge_id': challenge.id};
+  }
 
   RecoveryApi recoveryApiFor(String accessToken) => RecoveryApi(
     authBaseUrl: authBaseUrl,
     accessToken: accessToken,
     client: _client,
+    versionedOtpEnabled: versionedOtpEnabled,
   );
 
-  Future<void> requestOtp(
+  Future<OtpChallenge?> requestOtp(
     String phoneNumber, {
     bool recoveryOnly = false,
+    String? deviceId,
   }) async {
     final response = await _client
         .post(
-          Uri.parse('$authBaseUrl/auth/request-otp'),
+          Uri.parse(_otpPath('request-otp')),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'phone_number': phoneNumber,
+            if (versionedOtpEnabled) 'device_id': _requestDevice(deviceId),
             if (recoveryOnly) 'recovery_only': true,
           }),
         )
@@ -51,6 +159,7 @@ class AuthApi {
         'OTP request failed: ${response.statusCode} ${response.body}',
       );
     }
+    return _challenge(response, phoneNumber, false, recoveryOnly, deviceId);
   }
 
   Future<AuthTokens> verifyOtp(
@@ -59,16 +168,25 @@ class AuthApi {
     String deviceId, {
     bool recoveryOnly = false,
     Map<String, Object?>? deviceInfo,
+    OtpChallenge? challenge,
   }) async {
     final response = await _client
         .post(
-          Uri.parse('$authBaseUrl/auth/verify-otp'),
+          Uri.parse(_otpPath('verify-otp')),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'phone_number': phoneNumber,
             'code': code,
             'device_id': deviceId,
-            if (deviceInfo != null) 'device_info': deviceInfo,
+            ..._challengeFields(
+              challenge,
+              phoneNumber,
+              code,
+              deviceId,
+              false,
+              recoveryOnly,
+            ),
+            'device_info': ?deviceInfo,
             if (recoveryOnly) 'recovery_only': true,
           }),
         )
@@ -108,26 +226,28 @@ class AuthApi {
     );
   }
 
-  /// Email-based sign-in/sign-up against auth/'s /auth/request-email-otp and
-  /// /auth/verify-email-otp — the same OTP machinery as phone (2-minute TTL,
-  /// bcrypt-hashed, rate-limited), just a different identifier. When present,
-  /// phone_number is sent on both flows: auth/ links it for a new account and
-  /// safely matches/repairs an older email-only account on sign-in.
-  Future<void> requestEmailOtp(
+  /// Existing email OTP. Legacy requests retain their supported request
+  /// fields. V2 requests send only email/device; a phone claim cannot select
+  /// an identity or prove phone ownership. There is no automatic downgrade.
+  Future<OtpChallenge?> requestEmailOtp(
     String email, {
     bool isSignUp = false,
     String? phoneNumber,
     bool recoveryOnly = false,
+    String? deviceId,
   }) async {
     final response = await _client
         .post(
-          Uri.parse('$authBaseUrl/auth/request-email-otp'),
+          Uri.parse(_otpPath('request-email-otp')),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'email': email,
-            if (isSignUp) 'is_signup': true,
+            if (versionedOtpEnabled) 'device_id': _requestDevice(deviceId),
+            if (!versionedOtpEnabled && isSignUp) 'is_signup': true,
             if (recoveryOnly) 'recovery_only': true,
-            if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
+            if (!versionedOtpEnabled &&
+                phoneNumber != null &&
+                phoneNumber.trim().isNotEmpty)
               'phone_number': phoneNumber.trim(),
           }),
         )
@@ -137,13 +257,12 @@ class AuthApi {
         'OTP request failed: ${response.statusCode} ${response.body}',
       );
     }
+    return _challenge(response, email, true, recoveryOnly, deviceId);
   }
 
-  /// [phoneNumber] is optional and sent when the form collected it. auth/'s
-  /// verify-email-otp links the two onto one users row and rejects the case
-  /// where they already belong to different accounts. The key is omitted
-  /// entirely when absent — sending an explicit null would fail that route's
-  /// validatePhone() check rather than being treated as "not provided".
+  /// V2 requires the original challenge, device and email. [phoneNumber]
+  /// remains a legacy compatibility field; the server separately verifies
+  /// factor ownership before linking contacts to the email-proved identity.
   Future<AuthTokens> verifyEmailOtp(
     String email,
     String code,
@@ -151,18 +270,29 @@ class AuthApi {
     String? phoneNumber,
     bool recoveryOnly = false,
     Map<String, Object?>? deviceInfo,
+    OtpChallenge? challenge,
   }) async {
     final trimmedPhone = phoneNumber?.trim();
     final response = await _client
         .post(
-          Uri.parse('$authBaseUrl/auth/verify-email-otp'),
+          Uri.parse(_otpPath('verify-email-otp')),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'email': email,
             'code': code,
             'device_id': deviceId,
-            if (deviceInfo != null) 'device_info': deviceInfo,
-            if (trimmedPhone != null && trimmedPhone.isNotEmpty)
+            ..._challengeFields(
+              challenge,
+              email,
+              code,
+              deviceId,
+              true,
+              recoveryOnly,
+            ),
+            'device_info': ?deviceInfo,
+            if (!versionedOtpEnabled &&
+                trimmedPhone != null &&
+                trimmedPhone.isNotEmpty)
               'phone_number': trimmedPhone,
             if (recoveryOnly) 'recovery_only': true,
           }),

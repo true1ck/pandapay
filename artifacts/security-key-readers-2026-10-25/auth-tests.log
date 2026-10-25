@@ -1,0 +1,2011 @@
+TAP version 13
+# Subtest: deletion job validation accepts stable UUID and safe bigint strings only
+ok 1 - deletion job validation accepts stable UUID and safe bigint strings only
+  ---
+  duration_ms: 5.034666
+  type: 'test'
+  ...
+# Subtest: auth deletion uses one atomic RPC and acknowledges repeats identically
+ok 2 - auth deletion uses one atomic RPC and acknowledges repeats identically
+  ---
+  duration_ms: 0.45475
+  type: 'test'
+  ...
+# Subtest: auth deletion refuses invalid input before database use
+ok 3 - auth deletion refuses invalid input before database use
+  ---
+  duration_ms: 0.21375
+  type: 'test'
+  ...
+# Subtest: internal lifecycle handler is disabled by default and returns sanitized failures
+ok 4 - internal lifecycle handler is disabled by default and returns sanitized failures
+  ---
+  duration_ms: 0.192084
+  type: 'test'
+  ...
+# Subtest: auth lifecycle runtime is opt-in and requires a dedicated database
+ok 5 - auth lifecycle runtime is opt-in and requires a dedicated database
+  ---
+  duration_ms: 0.487667
+  type: 'test'
+  ...
+# Subtest: auth lifecycle runtime bounds connections, sanitizes errors and closes its own pool
+ok 6 - auth lifecycle runtime bounds connections, sanitizes errors and closes its own pool
+  ---
+  duration_ms: 9.002041
+  type: 'test'
+  ...
+# Subtest: auth lifecycle readiness rejects missing permissions and broadened identities
+ok 7 - auth lifecycle readiness rejects missing permissions and broadened identities
+  ---
+  duration_ms: 89.158625
+  type: 'test'
+  ...
+# Subtest: auth lifecycle bootstrap blank config does nothing; malformed secrets are refused
+ok 8 - auth lifecycle bootstrap blank config does nothing; malformed secrets are refused
+  ---
+  duration_ms: 15.388458
+  type: 'test'
+  ...
+# Subtest: auth lifecycle bootstrap creates only the dedicated login and never rotates an existing password
+ok 9 - auth lifecycle bootstrap creates only the dedicated login and never rotates an existing password
+  ---
+  duration_ms: 2.3185
+  type: 'test'
+  ...
+# Subtest: auth lifecycle bootstrap refuses broad capability and unexpected memberships
+ok 10 - auth lifecycle bootstrap refuses broad capability and unexpected memberships
+  ---
+  duration_ms: 0.216875
+  type: 'test'
+  ...
+# Subtest: dashboard capability requires authentication before querying
+ok 11 - dashboard capability requires authentication before querying
+  ---
+  duration_ms: 0.3805
+  type: 'test'
+  ...
+# Subtest: token role labels never replace fresh capability lookup
+ok 12 - token role labels never replace fresh capability lookup
+  ---
+  duration_ms: 0.3995
+  type: 'test'
+  ...
+# Subtest: explicit active capability authorizes independently of enum labels
+ok 13 - explicit active capability authorizes independently of enum labels
+  ---
+  duration_ms: 0.181542
+  type: 'test'
+  ...
+# Subtest: capability database failure denies safely
+ok 14 - capability database failure denies safely
+  ---
+  duration_ms: 0.200083
+  type: 'test'
+  ...
+# Subtest: deployment audit gate rejects active conflicts and undefined lifecycle without requiring a backfill yet
+ok 15 - deployment audit gate rejects active conflicts and undefined lifecycle without requiring a backfill yet
+  ---
+  duration_ms: 0.892125
+  type: 'test'
+  ...
+# Subtest: audit is read-only, bounded, and returns only aggregate counts
+ok 16 - audit is read-only, bounded, and returns only aggregate counts
+  ---
+  duration_ms: 3.377459
+  type: 'test'
+  ...
+# Subtest: null lifecycle values are surfaced and hold the lifecycle gate
+ok 17 - null lifecycle values are surfaced and hold the lifecycle gate
+  ---
+  duration_ms: 14.0785
+  type: 'test'
+  ...
+# Subtest: audit rejects a transaction that is not read-only and releases it
+ok 18 - audit rejects a transaction that is not read-only and releases it
+  ---
+  duration_ms: 2.383917
+  type: 'test'
+  ...
+# Subtest: audit rejects a transaction without repeatable-read isolation
+ok 19 - audit rejects a transaction without repeatable-read isolation
+  ---
+  duration_ms: 0.434625
+  type: 'test'
+  ...
+# Subtest: query errors are rethrown without serializing returned contact data
+ok 20 - query errors are rethrown without serializing returned contact data
+  ---
+  duration_ms: 0.398667
+  type: 'test'
+  ...
+# Subtest: timeout values are validated and bounded
+ok 21 - timeout values are validated and bounded
+  ---
+  duration_ms: 0.248791
+  type: 'test'
+  ...
+# Subtest: security audit logger performs DML only and retains the existing event shape
+ok 22 - security audit logger performs DML only and retains the existing event shape
+  ---
+  duration_ms: 42.164125
+  type: 'test'
+  ...
+# Subtest: missing audit schema/permission remains isolated with fixed sanitized error reporting
+ok 23 - missing audit schema/permission remains isolated with fixed sanitized error reporting
+  ---
+  duration_ms: 0.457916
+  type: 'test'
+  ...
+# Subtest: schema adoption is additive and never drops audit rows or rewrites risk values
+ok 24 - schema adoption is additive and never drops audit rows or rewrites risk values
+  ---
+  duration_ms: 0.323292
+  type: 'test'
+  ...
+# ◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+# Subtest: auth middleware rejects unknown key ids without trying configured keys
+ok 25 - auth middleware rejects unknown key ids without trying configured keys
+  ---
+  duration_ms: 2.236875
+  type: 'test'
+  ...
+# Subtest: auth middleware exposes only the signed device claim after checking its active device row
+ok 26 - auth middleware exposes only the signed device claim after checking its active device row
+  ---
+  duration_ms: 366.009292
+  type: 'test'
+  ...
+# Subtest: auth middleware rejects disabled/deleted accounts and revoked device sessions
+ok 27 - auth middleware rejects disabled/deleted accounts and revoked device sessions
+  ---
+  duration_ms: 2.751958
+  type: 'test'
+  ...
+# Subtest: auth middleware admits an active account and active bound device
+ok 28 - auth middleware admits an active account and active bound device
+  ---
+  duration_ms: 0.345042
+  type: 'test'
+  ...
+# Initialized empty auth database baseline (7 tables, 78 columns)
+# Applied auth migration 0001_phone_lookup_hashes
+# Phone hash verification users: checked=1 matched=0
+# Phone hash verification users: checked=2 matched=0
+# Phone hash verification otp_requests: checked=1 matched=0
+# Phone hash verification users: checked=1 matched=1
+# Phone hash verification users: checked=2 matched=2
+# Phone hash verification otp_requests: checked=1 matched=1
+# Auth migrations and phone hash backfill complete
+# Verified existing auth schema against init.sql baseline
+# Phone hash verification users: checked=2 matched=2
+# Phone hash verification otp_requests: checked=1 matched=1
+# Phone hash verification users: checked=2 matched=2
+# Phone hash verification otp_requests: checked=1 matched=1
+# Auth migrations and phone hash backfill complete
+# Initialized empty auth database baseline (7 tables, 78 columns)
+# Applied auth migration 0001_phone_lookup_hashes
+# Applied auth migration 0002_otp_purpose_binding
+# Applied auth migration 0003_contact_resolution_history
+# Phone hash verification users: checked=1 matched=0
+# Phone hash verification users: checked=1 matched=1
+# Applied auth migration 9001_active_contact_uniqueness
+# Auth migrations and phone hash backfill complete
+# Initialized empty auth database baseline (7 tables, 78 columns)
+# Applied auth migration 0001_phone_lookup_hashes
+# Applied auth migration 0002_otp_purpose_binding
+# Applied auth migration 0003_contact_resolution_history
+# Phone hash verification users: checked=1 matched=0
+# Phone hash verification users: checked=1 matched=1
+# Applied auth migration 9001_active_contact_uniqueness
+# Auth migrations and phone hash backfill complete
+# Initialized empty auth database baseline (7 tables, 78 columns)
+# Applied auth migration 0001_phone_lookup_hashes
+# Applied auth migration 0002_otp_purpose_binding
+# Applied auth migration 0003_contact_resolution_history
+# Phone hash verification users: checked=1 matched=0
+# Phone hash verification users: checked=1 matched=1
+# Verified existing auth schema against init.sql baseline
+# Verified existing auth schema against init.sql baseline
+# Verified existing auth schema against init.sql baseline
+# Verified existing auth schema against init.sql baseline
+# Verified existing auth schema against init.sql baseline
+# Adopted reviewed checksum for existing auth migration 0001_phone_lookup_hashes
+# Auth migrations and phone hash backfill complete
+# Subtest: only explicit local plaintext mode can migrate without an encryption key
+ok 29 - only explicit local plaintext mode can migrate without an encryption key
+  ---
+  duration_ms: 41.213458
+  type: 'test'
+  ...
+# Subtest: migration diagnostics redact arbitrary database messages and details
+ok 30 - migration diagnostics redact arbitrary database messages and details
+  ---
+  duration_ms: 0.912583
+  type: 'test'
+  ...
+# Subtest: migration diagnostics expose only exact allowlisted contact preflight counters
+ok 31 - migration diagnostics expose only exact allowlisted contact preflight counters
+  ---
+  duration_ms: 2.951791
+  type: 'test'
+  ...
+# Subtest: importing migration CLI does not import DB startup module or connect
+ok 32 - importing migration CLI does not import DB startup module or connect
+  ---
+  duration_ms: 0.825834
+  type: 'test'
+  ...
+# Subtest: empty auth database bootstraps validated baseline, checksums migration, and resumes bounded hash backfill
+ok 33 - empty auth database bootstraps validated baseline, checksums migration, and resumes bounded hash backfill
+  ---
+  duration_ms: 109.381292
+  type: 'test'
+  ...
+# Subtest: post-backfill migrations run only after full phone hash verification
+ok 34 - post-backfill migrations run only after full phone hash verification
+  ---
+  duration_ms: 7.081458
+  type: 'test'
+  ...
+# Subtest: approved conflict resolution callback runs under the migration client after hash verification and before 9001
+ok 35 - approved conflict resolution callback runs under the migration client after hash verification and before 9001
+  ---
+  duration_ms: 3.459
+  type: 'test'
+  ...
+# Subtest: post-backfill contact preflight rejects conflicts without recording 9001 or creating indexes
+ok 36 - post-backfill contact preflight rejects conflicts without recording 9001 or creating indexes
+  ---
+  duration_ms: 7.214667
+  type: 'test'
+  ...
+# Subtest: post-backfill checksum drift is detected before regular migration or backfill writes
+ok 37 - post-backfill checksum drift is detected before regular migration or backfill writes
+  ---
+  duration_ms: 3.914708
+  type: 'test'
+  ...
+# Subtest: checksum-less post-backfill migration cannot use legacy checksum adoption
+ok 38 - checksum-less post-backfill migration cannot use legacy checksum adoption
+  ---
+  duration_ms: 3.472041
+  type: 'test'
+  ...
+# Subtest: existing partial schema is rejected before creating a migration ledger
+ok 39 - existing partial schema is rejected before creating a migration ledger
+  ---
+  duration_ms: 2.22325
+  type: 'test'
+  ...
+# Subtest: missing or invalid crypto configuration fails before acquiring a connection
+ok 40 - missing or invalid crypto configuration fails before acquiring a connection
+  ---
+  duration_ms: 0.232125
+  type: 'test'
+  ...
+# Subtest: migration advisory lock is held on the dedicated client and contention fails before schema work
+ok 41 - migration advisory lock is held on the dedicated client and contention fails before schema work
+  ---
+  duration_ms: 2.0665
+  type: 'test'
+  ...
+# Subtest: applied migration checksum mismatch fails closed
+ok 42 - applied migration checksum mismatch fails closed
+  ---
+  duration_ms: 21.55325
+  type: 'test'
+  ...
+# Subtest: legacy checksum adoption requires explicit opt-in and verifies migration effects
+ok 43 - legacy checksum adoption requires explicit opt-in and verifies migration effects
+  ---
+  duration_ms: 10.921041
+  type: 'test'
+  ...
+# Subtest: backfill checks original ciphertext before setting digest and restarts after a raced update
+ok 44 - backfill checks original ciphertext before setting digest and restarts after a raced update
+  ---
+  duration_ms: 0.259292
+  type: 'test'
+  ...
+# Subtest: backfill bounds batch size and progress output contains counters only
+ok 45 - backfill bounds batch size and progress output contains counters only
+  ---
+  duration_ms: 0.169333
+  type: 'test'
+  ...
+# Subtest: restart verification detects a changed HMAC key or mismatched stored digest
+ok 46 - restart verification detects a changed HMAC key or mismatched stored digest
+  ---
+  duration_ms: 0.478458
+  type: 'test'
+  ...
+# Subtest: enabled optional access audit checks migrated storage and INSERT without reading records
+ok 47 - enabled optional access audit checks migrated storage and INSERT without reading records
+  ---
+  duration_ms: 0.615458
+  type: 'test'
+  ...
+# Subtest: hosted readiness checks database and runtime abuse storage without writes
+ok 48 - hosted readiness checks database and runtime abuse storage without writes
+  ---
+  duration_ms: 0.454625
+  type: 'test'
+  ...
+# Subtest: local memory mode checks ordinary database connectivity only
+ok 49 - local memory mode checks ordinary database connectivity only
+  ---
+  duration_ms: 0.071959
+  type: 'test'
+  ...
+# Subtest: hosted readiness returns safe 503 when bucket privileges or table query fail
+ok 50 - hosted readiness returns safe 503 when bucket privileges or table query fail
+  ---
+  duration_ms: 0.213292
+  type: 'test'
+  ...
+# Subtest: console origin/upstream configuration rejects credentials, remote plaintext and noncanonical origins
+ok 51 - console origin/upstream configuration rejects credentials, remote plaintext and noncanonical origins
+  ---
+  duration_ms: 0.592292
+  type: 'test'
+  ...
+# Subtest: duplicate cookies cannot select an ambiguous browser identity
+ok 52 - duplicate cookies cannot select an ambiguous browser identity
+  ---
+  duration_ms: 0.08325
+  type: 'test'
+  ...
+# Subtest: browser requests require custom header, exact origin and non-cross-site fetch metadata
+ok 53 - browser requests require custom header, exact origin and non-cross-site fetch metadata
+  ---
+  duration_ms: 213.051625
+  type: 'test'
+  ...
+# Subtest: OTP request and verification use bounded fields and forward trusted IP instead of raw XFF
+ok 54 - OTP request and verification use bounded fields and forward trusted IP instead of raw XFF
+  ---
+  duration_ms: 32.59275
+  type: 'test'
+  ...
+# Subtest: secure login returns only CSRF state and sets a host-only HttpOnly Strict cookie
+ok 55 - secure login returns only CSRF state and sets a host-only HttpOnly Strict cookie
+  ---
+  duration_ms: 5.654875
+  type: 'test'
+  ...
+# Subtest: explicit local development uses a distinct cookie without Secure
+ok 56 - explicit local development uses a distinct cookie without Secure
+  ---
+  duration_ms: 16.573667
+  type: 'test'
+  ...
+# Subtest: phone OTP and email OTP preserve their existing upstream method/path/field contracts
+ok 57 - phone OTP and email OTP preserve their existing upstream method/path/field contracts
+  ---
+  duration_ms: 30.995084
+  type: 'test'
+  ...
+# Subtest: non-admin proof is refused, newly issued refresh is revoked and no browser session is created
+ok 58 - non-admin proof is refused, newly issued refresh is revoked and no browser session is created
+  ---
+  duration_ms: 92.335208
+  type: 'test'
+  ...
+# Subtest: failed OTP/provider responses are sanitized without upstream headers or raw details
+ok 59 - failed OTP/provider responses are sanitized without upstream headers or raw details
+  ---
+  duration_ms: 5.363
+  type: 'test'
+  ...
+# Subtest: proxy and logout require the matching per-session CSRF proof
+ok 60 - proxy and logout require the matching per-session CSRF proof
+  ---
+  duration_ms: 11.700083
+  type: 'test'
+  ...
+# Subtest: proxy permits fixed admin paths and categories GET while retaining encoded query values
+ok 61 - proxy permits fixed admin paths and categories GET while retaining encoded query values
+  ---
+  duration_ms: 9.593833
+  type: 'test'
+  ...
+# Subtest: proxy forwards mutations as JSON without exposing or accepting browser bearer credentials
+ok 62 - proxy forwards mutations as JSON without exposing or accepting browser bearer credentials
+  ---
+  duration_ms: 102.628041
+  type: 'test'
+  ...
+# Subtest: session restoration rotates server credentials and rechecks current product-admin access
+ok 63 - session restoration rotates server credentials and rechecks current product-admin access
+  ---
+  duration_ms: 162.061667
+  type: 'test'
+  ...
+# Subtest: the same unconfirmed refresh retries with a stable idempotency request ID
+ok 64 - the same unconfirmed refresh retries with a stable idempotency request ID
+  ---
+  duration_ms: 15.95875
+  type: 'test'
+  ...
+# Subtest: confirmed refresh survives a later admission outage and the next request uses the new token
+ok 65 - confirmed refresh survives a later admission outage and the next request uses the new token
+  ---
+  duration_ms: 11.437292
+  type: 'test'
+  ...
+# Subtest: proxy retries an expired access token once using server-only refresh credentials
+ok 66 - proxy retries an expired access token once using server-only refresh credentials
+  ---
+  duration_ms: 8.970291
+  type: 'test'
+  ...
+# Subtest: invalid refresh destroys the session and clears the cookie
+ok 67 - invalid refresh destroys the session and clears the cookie
+  ---
+  duration_ms: 13.562333
+  type: 'test'
+  ...
+# Subtest: refresh step-up returns to existing OTP sign-in instead of trapping the browser behind 503
+ok 68 - refresh step-up returns to existing OTP sign-in instead of trapping the browser behind 503
+  ---
+  duration_ms: 8.064959
+  type: 'test'
+  ...
+# Subtest: current product-admin revocation invalidates an already admitted browser session
+ok 69 - current product-admin revocation invalidates an already admitted browser session
+  ---
+  duration_ms: 10.67425
+  type: 'test'
+  ...
+# Subtest: valid logout revokes upstream refresh, removes the browser session and is replay safe
+ok 70 - valid logout revokes upstream refresh, removes the browser session and is replay safe
+  ---
+  duration_ms: 7.542958
+  type: 'test'
+  ...
+# Subtest: malformed, oversized and redirecting upstream responses produce a fixed safe 503
+ok 71 - malformed, oversized and redirecting upstream responses produce a fixed safe 503
+  ---
+  duration_ms: 298.333083
+  type: 'test'
+  ...
+# Subtest: upstream fetch rejects redirects and has an actual ten-second abort boundary
+ok 72 - upstream fetch rejects redirects and has an actual ten-second abort boundary
+  ---
+  duration_ms: 10006.696375
+  type: 'test'
+  ...
+# Subtest: v2 console forwards stable device and challenge with recovery purpose, returns no credentials
+ok 73 - v2 console forwards stable device and challenge with recovery purpose, returns no credentials
+  ---
+  duration_ms: 10.440792
+  type: 'test'
+  ...
+# Subtest: v2 console refuses selectors, missing binding and malformed challenge without calling upstream
+ok 74 - v2 console refuses selectors, missing binding and malformed challenge without calling upstream
+  ---
+  duration_ms: 5.132
+  type: 'test'
+  ...
+# Subtest: console store requires a canonical separate 256-bit encryption key
+ok 75 - console store requires a canonical separate 256-bit encryption key
+  ---
+  duration_ms: 0.712916
+  type: 'test'
+  ...
+# Subtest: console store saves only an opaque ID hash and authenticated ciphertext, using database expiry
+ok 76 - console store saves only an opaque ID hash and authenticated ciphertext, using database expiry
+  ---
+  duration_ms: 0.605459
+  type: 'test'
+  ...
+# Subtest: console store rejects malformed identifiers without checking out a connection
+ok 77 - console store rejects malformed identifiers without checking out a connection
+  ---
+  duration_ms: 0.204791
+  type: 'test'
+  ...
+# Subtest: missing, expired or idle-filtered console session returns no state and releases its client
+ok 78 - missing, expired or idle-filtered console session returns no state and releases its client
+  ---
+  duration_ms: 0.136625
+  type: 'test'
+  ...
+# Subtest: confirmed token rotation persists before a later upstream callback error is rethrown
+ok 79 - confirmed token rotation persists before a later upstream callback error is rethrown
+  ---
+  duration_ms: 0.348584
+  type: 'test'
+  ...
+# Subtest: console session destroy removes ciphertext and cannot be replayed
+ok 80 - console session destroy removes ciphertext and cannot be replayed
+  ---
+  duration_ms: 0.385708
+  type: 'test'
+  ...
+# Subtest: denied CSRF work neither re-encrypts credentials nor extends idle activity
+ok 81 - denied CSRF work neither re-encrypts credentials nor extends idle activity
+  ---
+  duration_ms: 0.14825
+  type: 'test'
+  ...
+# Subtest: at most two upstream session operations occupy the dedicated pool and capacity recovers
+ok 82 - at most two upstream session operations occupy the dedicated pool and capacity recovers
+  ---
+  duration_ms: 0.891208
+  type: 'test'
+  ...
+# Subtest: failed connection checkout returns the session capacity permit
+ok 83 - failed connection checkout returns the session capacity permit
+  ---
+  duration_ms: 0.180625
+  type: 'test'
+  ...
+# Subtest: console runtime remains opt-in and reserves a third connection for readiness
+ok 84 - console runtime remains opt-in and reserves a third connection for readiness
+  ---
+  duration_ms: 282.44975
+  type: 'test'
+  ...
+# Subtest: GCM rejects copied ciphertext, corrupted bytes and a different key before invoking application work
+ok 85 - GCM rejects copied ciphertext, corrupted bytes and a different key before invoking application work
+  ---
+  duration_ms: 0.326292
+  type: 'test'
+  ...
+# Subtest: database failures roll back and an uncertain rollback destroys the pooled session
+ok 86 - database failures roll back and an uncertain rollback destroys the pooled session
+  ---
+  duration_ms: 0.159417
+  type: 'test'
+  ...
+# Subtest: cleanup targets only expired or idle private sessions in batches of 100
+ok 87 - cleanup targets only expired or idle private sessions in batches of 100
+  ---
+  duration_ms: 0.077458
+  type: 'test'
+  ...
+# Subtest: current-session proof returns only verified contacts and rejects revoked subjects
+ok 88 - current-session proof returns only verified contacts and rejects revoked subjects
+  ---
+  duration_ms: 5.884542
+  type: 'test'
+  ...
+# Subtest: guest session is explicit and does not query a user row
+ok 89 - guest session is explicit and does not query a user row
+  ---
+  duration_ms: 0.458792
+  type: 'test'
+  ...
+# Subtest: internal session response requires the backend secret and bearer access token
+ok 90 - internal session response requires the backend secret and bearer access token
+  ---
+  duration_ms: 220.170084
+  type: 'test'
+  ...
+# Subtest: internal session route fails closed when its service secret is not configured
+ok 91 - internal session route fails closed when its service secret is not configured
+  ---
+  duration_ms: 65.282625
+  type: 'test'
+  ...
+# Subtest: default TLS uses verified system trust and neutralizes pg sslmode overrides
+ok 92 - default TLS uses verified system trust and neutralizes pg sslmode overrides
+  ---
+  duration_ms: 3.251542
+  type: 'test'
+  ...
+# Subtest: explicit DB_SSL=false is available only to local development and test
+ok 93 - explicit DB_SSL=false is available only to local development and test
+  ---
+  duration_ms: 0.947833
+  type: 'test'
+  ...
+# Subtest: production verified TLS rejects sslmode=disable and unsupported SSL URL options
+ok 94 - production verified TLS rejects sslmode=disable and unsupported SSL URL options
+  ---
+  duration_ms: 0.485584
+  type: 'test'
+  ...
+# Subtest: inline and file CA roots are additive to system trust and passed through pg parsing
+ok 95 - inline and file CA roots are additive to system trust and passed through pg parsing
+  ---
+  duration_ms: 4.315666
+  type: 'test'
+  ...
+# Subtest: invalid or conflicting CA configuration fails before a pool can be created
+ok 96 - invalid or conflicting CA configuration fails before a pool can be created
+  ---
+  duration_ms: 0.438458
+  type: 'test'
+  ...
+# Subtest: DB access logger uses only injected DML and omits every parameter value and SQL text
+ok 97 - DB access logger uses only injected DML and omits every parameter value and SQL text
+  ---
+  duration_ms: 10.579417
+  type: 'test'
+  ...
+# Subtest: missing audit table or permissions do not change primary query success or failure
+ok 98 - missing audit table or permissions do not change primary query success or failure
+  ---
+  duration_ms: 2.707417
+  type: 'test'
+  ...
+# Subtest: prepared query configuration retains its arguments and logs only the value count
+ok 99 - prepared query configuration retains its arguments and logs only the value count
+  ---
+  duration_ms: 3.256
+  type: 'test'
+  ...
+# Email delivery service initialized
+# Email delivery service initialized
+# Subtest: hosted SMTP requires STARTTLS before auth or OTP content is sent
+ok 100 - hosted SMTP requires STARTTLS before auth or OTP content is sent
+  ---
+  duration_ms: 158.509125
+  type: 'test'
+  ...
+# OTP email delivery succeeded
+# Email delivery service initialized
+# Subtest: real Nodemailer SMTP transport preserves recipient acceptance behavior
+ok 101 - real Nodemailer SMTP transport preserves recipient acceptance behavior
+  ---
+  duration_ms: 15.380292
+  type: 'test'
+  ...
+# Subtest: real Nodemailer SMTP transport preserves recipient rejection behavior
+ok 102 - real Nodemailer SMTP transport preserves recipient rejection behavior
+  ---
+  duration_ms: 4.747834
+  type: 'test'
+  ...
+# Subtest: phone lookup hashes canonicalize common India input formats
+ok 103 - phone lookup hashes canonicalize common India input formats
+  ---
+  duration_ms: 0.687875
+  type: 'test'
+  ...
+# Subtest: phone lookup refuses invalid input and weak/missing digest keys
+ok 104 - phone lookup refuses invalid input and weak/missing digest keys
+  ---
+  duration_ms: 0.206417
+  type: 'test'
+  ...
+# Subtest: existing authenticated ciphertext survives a provider move using the same key
+ok 105 - existing authenticated ciphertext survives a provider move using the same key
+  ---
+  duration_ms: 1.941583
+  type: 'test'
+  ...
+# Subtest: hosted startup rejects missing, disabled, malformed and short keys
+ok 106 - hosted startup rejects missing, disabled, malformed and short keys
+  ---
+  duration_ms: 9.908
+  type: 'test'
+  ...
+# Subtest: wrong keys, tampering and unknown formats cannot become plaintext
+ok 107 - wrong keys, tampering and unknown formats cannot become plaintext
+  ---
+  duration_ms: 4.81975
+  type: 'test'
+  ...
+# Subtest: legacy local mode and plaintext reads preserve existing records
+ok 108 - legacy local mode and plaintext reads preserve existing records
+  ---
+  duration_ms: 1.180417
+  type: 'test'
+  ...
+# Subtest: v2 reader opens independently manufactured AAD-bound envelopes without changing the writer
+ok 109 - v2 reader opens independently manufactured AAD-bound envelopes without changing the writer
+  ---
+  duration_ms: 2.38325
+  type: 'test'
+  ...
+# Subtest: read key config accepts empty forms, enforces limits and keeps IDs prototype safe
+ok 110 - read key config accepts empty forms, enforces limits and keeps IDs prototype safe
+  ---
+  duration_ms: 4.354666
+  type: 'test'
+  ...
+# Subtest: v2 rejects missing, unknown, wrong and tampered keys or envelope fields safely
+ok 111 - v2 rejects missing, unknown, wrong and tampered keys or envelope fields safely
+  ---
+  duration_ms: 48.41275
+  type: 'test'
+  ...
+# Subtest: v2 can be read in explicit local-off mode while hosted mode still requires the original key
+ok 112 - v2 can be read in explicit local-off mode while hosted mode still requires the original key
+  ---
+  duration_ms: 5.42725
+  type: 'test'
+  ...
+# Subtest: legacy envelopes never fall back to optional read keys when the original key is wrong
+ok 113 - legacy envelopes never fall back to optional read keys when the original key is wrong
+  ---
+  duration_ms: 0.916208
+  type: 'test'
+  ...
+# Subtest: Google verifier uses signature-verifying client with configured audience
+ok 114 - Google verifier uses signature-verifying client with configured audience
+  ---
+  duration_ms: 1.729667
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects wrong issuer
+ok 115 - Google verifier rejects wrong issuer
+  ---
+  duration_ms: 0.439833
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects wrong audience
+ok 116 - Google verifier rejects wrong audience
+  ---
+  duration_ms: 0.055875
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects missing subject
+ok 117 - Google verifier rejects missing subject
+  ---
+  duration_ms: 0.0415
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects oversized subject
+ok 118 - Google verifier rejects oversized subject
+  ---
+  duration_ms: 0.158917
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects non-string subject
+ok 119 - Google verifier rejects non-string subject
+  ---
+  duration_ms: 0.064083
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects malformed subject
+ok 120 - Google verifier rejects malformed subject
+  ---
+  duration_ms: 0.071292
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects unverified email
+ok 121 - Google verifier rejects unverified email
+  ---
+  duration_ms: 0.042
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects string email verification
+ok 122 - Google verifier rejects string email verification
+  ---
+  duration_ms: 0.047542
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects missing email
+ok 123 - Google verifier rejects missing email
+  ---
+  duration_ms: 0.079958
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects malformed email
+ok 124 - Google verifier rejects malformed email
+  ---
+  duration_ms: 0.077583
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects expired token
+ok 125 - Google verifier rejects expired token
+  ---
+  duration_ms: 0.047542
+  type: 'test'
+  ...
+# Subtest: Google verifier rejects missing expiry
+ok 126 - Google verifier rejects missing expiry
+  ---
+  duration_ms: 0.031958
+  type: 'test'
+  ...
+# Subtest: Google third-party email requires separate contact proof; Workspace is authoritative
+ok 127 - Google third-party email requires separate contact proof; Workspace is authoritative
+  ---
+  duration_ms: 0.064
+  type: 'test'
+  ...
+# Subtest: Google token can identify an Android presenter while keeping the verified server audience
+ok 128 - Google token can identify an Android presenter while keeping the verified server audience
+  ---
+  duration_ms: 0.042042
+  type: 'test'
+  ...
+# Subtest: historical magic token has no bypass and provider failures are redacted
+ok 129 - historical magic token has no bypass and provider failures are redacted
+  ---
+  duration_ms: 0.175041
+  type: 'test'
+  ...
+# Subtest: Google provider subject wins over changed email without contact mutation
+ok 130 - Google provider subject wins over changed email without contact mutation
+  ---
+  duration_ms: 0.932875
+  type: 'test'
+  ...
+# Subtest: matching email alone cannot acquire an existing UUID
+ok 131 - matching email alone cannot acquire an existing UUID
+  ---
+  duration_ms: 0.403458
+  type: 'test'
+  ...
+# Subtest: Google cannot revive deleted linked account
+ok 132 - Google cannot revive deleted linked account
+  ---
+  duration_ms: 0.1125
+  type: 'test'
+  ...
+# Subtest: Google cannot revive inactive linked account
+ok 133 - Google cannot revive inactive linked account
+  ---
+  duration_ms: 0.069834
+  type: 'test'
+  ...
+# Subtest: new non-authoritative Google email uses existing OTP flow
+ok 134 - new non-authoritative Google email uses existing OTP flow
+  ---
+  duration_ms: 0.104709
+  type: 'test'
+  ...
+# Subtest: new Google identity inserts user and provider atomically
+ok 135 - new Google identity inserts user and provider atomically
+  ---
+  duration_ms: 0.107583
+  type: 'test'
+  ...
+# Subtest: informational device metadata fits profile columns without changing the device payload
+ok 136 - informational device metadata fits profile columns without changing the device payload
+  ---
+  duration_ms: 1.4635
+  type: 'test'
+  ...
+# Subtest: concurrent email uniqueness conflict rolls back and requests existing account proof
+ok 137 - concurrent email uniqueness conflict rolls back and requests existing account proof
+  ---
+  duration_ms: 0.6495
+  type: 'test'
+  ...
+# Subtest: explicit linking checks recent current account proof twice on checked-out connection
+ok 138 - explicit linking checks recent current account proof twice on checked-out connection
+  ---
+  duration_ms: 0.402542
+  type: 'test'
+  ...
+# Subtest: explicit linking rejects guest proof without creating identities
+ok 139 - explicit linking rejects guest proof without creating identities
+  ---
+  duration_ms: 1.236542
+  type: 'test'
+  ...
+# Subtest: explicit linking rejects revoked proof without creating identities
+ok 140 - explicit linking rejects revoked proof without creating identities
+  ---
+  duration_ms: 0.11425
+  type: 'test'
+  ...
+# Subtest: explicit linking rejects stale proof without creating identities
+ok 141 - explicit linking rejects stale proof without creating identities
+  ---
+  duration_ms: 0.081
+  type: 'test'
+  ...
+# Subtest: explicit linking rejects future proof without creating identities
+ok 142 - explicit linking rejects future proof without creating identities
+  ---
+  duration_ms: 0.05975
+  type: 'test'
+  ...
+# Subtest: explicit linking rejects missing proof without creating identities
+ok 143 - explicit linking rejects missing proof without creating identities
+  ---
+  duration_ms: 0.054625
+  type: 'test'
+  ...
+# Subtest: transaction failure rolls back and releases client
+ok 144 - transaction failure rolls back and releases client
+  ---
+  duration_ms: 0.099541
+  type: 'test'
+  ...
+# Subtest: explicit linking cannot move a provider subject already owned by another UUID
+ok 145 - explicit linking cannot move a provider subject already owned by another UUID
+  ---
+  duration_ms: 0.115791
+  type: 'test'
+  ...
+# Subtest: session revocation discovered after acquiring the user lock blocks linking
+ok 146 - session revocation discovered after acquiring the user lock blocks linking
+  ---
+  duration_ms: 0.124042
+  type: 'test'
+  ...
+# Subtest: failure to roll back discards the broken pooled connection
+ok 147 - failure to roll back discards the broken pooled connection
+  ---
+  duration_ms: 0.514292
+  type: 'test'
+  ...
+# Subtest: subject lock keys are opaque stable signed int64
+ok 148 - subject lock keys are opaque stable signed int64
+  ---
+  duration_ms: 0.148875
+  type: 'test'
+  ...
+# Subtest: rotation configuration takes precedence over the legacy access secret
+ok 149 - rotation configuration takes precedence over the legacy access secret
+  ---
+  duration_ms: 108.892375
+  type: 'test'
+  ...
+# Subtest: malformed rotation configuration fails closed
+ok 150 - malformed rotation configuration fails closed
+  ---
+  duration_ms: 113.427291
+  type: 'test'
+  ...
+# Subtest: an unknown active key id fails closed
+ok 151 - an unknown active key id fails closed
+  ---
+  duration_ms: 37.320417
+  type: 'test'
+  ...
+# Subtest: retirement config is explicit, strict and defaults to compatible routes
+ok 152 - retirement config is explicit, strict and defaults to compatible routes
+  ---
+  duration_ms: 0.417959
+  type: 'test'
+  ...
+# Subtest: retirement refuses legacy protocol and lookup uniformly but keeps trusted v2 and unrelated routes
+ok 153 - retirement refuses legacy protocol and lookup uniformly but keeps trusted v2 and unrelated routes
+  ---
+  duration_ms: 209.758375
+  type: 'test'
+  ...
+# Subtest: auth scheduled retention is opt-in and has no implicit policy
+ok 154 - auth scheduled retention is opt-in and has no implicit policy
+  ---
+  duration_ms: 2.100791
+  type: 'test'
+  ...
+# Subtest: auth maintenance records bounded counts through separate product capability
+ok 155 - auth maintenance records bounded counts through separate product capability
+  ---
+  duration_ms: 1.163792
+  type: 'test'
+  ...
+# Subtest: busy auth session defers without claiming completed deletion
+ok 156 - busy auth session defers without claiming completed deletion
+  ---
+  duration_ms: 0.349375
+  type: 'test'
+  ...
+# Subtest: auth coordinator rejects direct access, broad role and failed effect before receipt
+ok 157 - auth coordinator rejects direct access, broad role and failed effect before receipt
+  ---
+  duration_ms: 0.22975
+  type: 'test'
+  ...
+# {"level":"info","ts":"2026-10-25T08:32:10.099Z","msg":"request","requestId":"f44a4fa5-f4b1-4ee4-a904-d2c077421566","method":"GET","path":"/health","status":200,"durationMs":0,"authenticated":false}
+# {"level":"info","ts":"2026-10-25T08:32:10.099Z","msg":"request","requestId":"064fe697-3613-49ac-bf39-0ad7a78dc496","method":"GET","path":"/health","status":200,"durationMs":0,"authenticated":false}
+# {"level":"info","ts":"2026-10-25T08:32:10.099Z","msg":"request","requestId":"a38448da-1beb-4389-88f7-fce386117713","method":"GET","path":"/health","status":200,"durationMs":0,"authenticated":false}
+# {"level":"info","ts":"2026-10-25T08:32:10.100Z","msg":"request","requestId":"a8de3cd7-f378-467d-81aa-7e5c3d0f61fc","method":"GET","path":"/health","status":200,"durationMs":0,"authenticated":false}
+# {"level":"info","ts":"2026-10-25T08:32:10.100Z","msg":"request","requestId":"8c91c805-13f4-413a-b0c8-010290608e81","method":"GET","path":"/health","status":200,"durationMs":0,"authenticated":false}
+# Subtest: encoded, nested and unknown query values cannot enter logs
+ok 158 - encoded, nested and unknown query values cannot enter logs
+  ---
+  duration_ms: 0.386
+  type: 'test'
+  ...
+# Subtest: request logs use route templates and error logs exclude exception contents
+ok 159 - request logs use route templates and error logs exclude exception contents
+  ---
+  duration_ms: 7.543583
+  type: 'test'
+  ...
+# Subtest: bounded safe request IDs are preserved across logs and response headers
+ok 160 - bounded safe request IDs are preserved across logs and response headers
+  ---
+  duration_ms: 0.252041
+  type: 'test'
+  ...
+# Subtest: contact, header injection, arrays and overlong request IDs are replaced
+ok 161 - contact, header injection, arrays and overlong request IDs are replaced
+  ---
+  duration_ms: 0.447
+  type: 'test'
+  ...
+# Subtest: auth ordinary request logs omit account identifiers
+ok 162 - auth ordinary request logs omit account identifiers
+  ---
+  duration_ms: 0.101666
+  type: 'test'
+  ...
+# Subtest: Google route preserves successful token/device response without requiring a legacy google_id column
+ok 163 - Google route preserves successful token/device response without requiring a legacy google_id column
+  ---
+  duration_ms: 79.886916
+  type: 'test'
+  ...
+# Subtest: Google route returns explicit account-link error without issuing tokens
+ok 164 - Google route returns explicit account-link error without issuing tokens
+  ---
+  duration_ms: 128.03375
+  type: 'test'
+  ...
+# Subtest: Google explicit linking requires a bearer session and passes it to the checked account resolver
+ok 165 - Google explicit linking requires a bearer session and passes it to the checked account resolver
+  ---
+  duration_ms: 6.254166
+  type: 'test'
+  ...
+# Subtest: Google route maps GOOGLE_TOKEN_INVALID to 400 without provider details
+ok 166 - Google route maps GOOGLE_TOKEN_INVALID to 400 without provider details
+  ---
+  duration_ms: 25.057875
+  type: 'test'
+  ...
+# Subtest: Google route maps GOOGLE_AUTH_UNAVAILABLE to 503 without provider details
+ok 167 - Google route maps GOOGLE_AUTH_UNAVAILABLE to 503 without provider details
+  ---
+  duration_ms: 2.206542
+  type: 'test'
+  ...
+# ⚠️ Email sending failed, but OTP was generated
+# Subtest: failed email returns 503, discards its code, and permits retry
+ok 168 - failed email returns 503, discards its code, and permits retry
+  ---
+  duration_ms: 408.698333
+  type: 'test'
+  ...
+# Subtest: late failure cannot discard a newer code
+ok 169 - late failure cannot discard a newer code
+  ---
+  duration_ms: 190.5285
+  type: 'test'
+  ...
+# ⚠️ Email sending failed, but OTP was generated
+# ⚠️ Email sending failed, but OTP was generated
+# ⚠️ Email sending failed, but OTP was generated
+# Subtest: delivery failures do not bypass the existing request quota
+ok 170 - delivery failures do not bypass the existing request quota
+  ---
+  duration_ms: 160.533167
+  type: 'test'
+  ...
+# [auth] request-otp failed Error
+# [auth] request-email-otp failed Error
+# Subtest: abuse-store active-claim failures happen before OTP writes and never call providers
+ok 171 - abuse-store active-claim failures happen before OTP writes and never call providers
+  ---
+  duration_ms: 108.374333
+  type: 'test'
+  ...
+# [auth] request-email-otp failed Error
+# Subtest: a losing active OTP claim returns 429 without changing OTP rows or sending
+ok 172 - a losing active OTP claim returns 429 without changing OTP rows or sending
+  ---
+  duration_ms: 53.264083
+  type: 'test'
+  ...
+# [auth] request-email-otp failed Error
+# Subtest: concurrent requests for one identifier create and deliver only one OTP
+ok 173 - concurrent requests for one identifier create and deliver only one OTP
+  ---
+  duration_ms: 55.058791
+  type: 'test'
+  ...
+# [auth] request-email-otp failed Error
+# [auth] request-otp failed Error
+# Subtest: enumeration storage outage inside request handler returns controlled 503
+ok 174 - enumeration storage outage inside request handler returns controlled 503
+  ---
+  duration_ms: 2.3605
+  type: 'test'
+  ...
+# [auth] verify-email-otp failed Error
+# Subtest: failed verification counter storage outage returns controlled 503
+ok 175 - failed verification counter storage outage returns controlled 503
+  ---
+  duration_ms: 1.600208
+  type: 'test'
+  ...
+# Subtest: recovery and normal sign-in have independent OTP resend windows
+ok 176 - recovery and normal sign-in have independent OTP resend windows
+  ---
+  duration_ms: 103.865
+  type: 'test'
+  ...
+# Subtest: email signup contact preflight ignores soft-deleted identities and compares normalized email
+ok 177 - email signup contact preflight ignores soft-deleted identities and compares normalized email
+  ---
+  duration_ms: 52.238708
+  type: 'test'
+  ...
+# Subtest: legacy validate-token preserves the active-user payload after authoritative session verification
+ok 178 - legacy validate-token preserves the active-user payload after authoritative session verification
+  ---
+  duration_ms: 1.850542
+  type: 'test'
+  ...
+# Subtest: legacy validate-token rejects guest and inactive, deleted, revoked, wrong-device sessions
+ok 179 - legacy validate-token rejects guest and inactive, deleted, revoked, wrong-device sessions
+  ---
+  duration_ms: 9.193792
+  type: 'test'
+  ...
+# [auth] validate-token session verification unavailable 08006
+# Subtest: legacy validate-token distinguishes invalid credentials from unavailable session storage
+ok 180 - legacy validate-token distinguishes invalid credentials from unavailable session storage
+  ---
+  duration_ms: 3.134792
+  type: 'test'
+  ...
+# Subtest: email and phone conflict preflight normalizes a stored email before comparison
+ok 181 - email and phone conflict preflight normalizes a stored email before comparison
+  ---
+  duration_ms: 53.49375
+  type: 'test'
+  ...
+# Subtest: check-user keeps its response contract and applies shared enumeration admission
+ok 182 - check-user keeps its response contract and applies shared enumeration admission
+  ---
+  duration_ms: 3.311
+  type: 'test'
+  ...
+# [auth] check-user failed Error
+# Subtest: check-user fails closed with controlled 503 when shared enumeration storage is unavailable
+ok 183 - check-user fails closed with controlled 503 when shared enumeration storage is unavailable
+  ---
+  duration_ms: 2.5685
+  type: 'test'
+  ...
+# Subtest: same identifier keeps separate durable purpose challenges and same-purpose resend replaces only its own
+ok 184 - same identifier keeps separate durable purpose challenges and same-purpose resend replaces only its own
+  ---
+  duration_ms: 152.631333
+  type: 'test'
+  ...
+# Subtest: delivery cleanup is scoped to the request purpose
+ok 185 - delivery cleanup is scoped to the request purpose
+  ---
+  duration_ms: 103.133667
+  type: 'test'
+  ...
+# Subtest: email OTP cannot attach an unverified phone to an existing phone account
+ok 186 - email OTP cannot attach an unverified phone to an existing phone account
+  ---
+  duration_ms: 2.003208
+  type: 'test'
+  ...
+# Subtest: signup cannot create an account without an authenticated OTP session
+ok 187 - signup cannot create an account without an authenticated OTP session
+  ---
+  duration_ms: 1.697917
+  type: 'test'
+  ...
+# Subtest: signup cannot replace the verified phone factor with a body-supplied number
+ok 188 - signup cannot replace the verified phone factor with a body-supplied number
+  ---
+  duration_ms: 1.475959
+  type: 'test'
+  ...
+# Subtest: legacy signup address fields do not query removed locations and retain null response field
+ok 189 - legacy signup address fields do not query removed locations and retain null response field
+  ---
+  duration_ms: 1.529417
+  type: 'test'
+  ...
+# [auth] signup failed 23505
+# Subtest: signup constraint errors keep status and shape without returning database details
+ok 190 - signup constraint errors keep status and shape without returning database details
+  ---
+  duration_ms: 1.935458
+  type: 'test'
+  ...
+# ⚠️ SMS delivery failed; discarding undelivered OTP
+# Subtest: failed SMS returns an error, discards the code, and allows retry
+ok 191 - failed SMS returns an error, discards the code, and allows retry
+  ---
+  duration_ms: 104.802625
+  type: 'test'
+  ...
+# Subtest: email recovery cannot create an account even after a valid OTP
+ok 192 - email recovery cannot create an account even after a valid OTP
+  ---
+  duration_ms: 1.868958
+  type: 'test'
+  ...
+# Email SMTP credentials missing. Email authentication delivery is unavailable.
+# Email delivery service initialized
+# OTP email delivery succeeded
+# Email delivery service initialized
+# [Email Service] SMTP did not accept the OTP recipient
+# Email delivery service initialized
+# [Email Service] Failed to send OTP: Error
+# Email delivery service initialized
+# [Email Service] Failed to send OTP: Error
+# Email delivery service initialized
+# OTP email delivery succeeded
+# Email delivery service initialized
+# OTP email delivery succeeded
+# Email delivery service initialized
+# OTP email delivery succeeded
+# Subtest: phone recovery cannot create an account even after a valid OTP
+ok 193 - phone recovery cannot create an account even after a valid OTP
+  ---
+  duration_ms: 2.675416
+  type: 'test'
+  ...
+# Subtest: production without SMTP cannot report a mock email as delivered
+ok 194 - production without SMTP cannot report a mock email as delivered
+  ---
+  duration_ms: 8.244583
+  type: 'test'
+  ...
+# Subtest: SMTP accepted result is reported accurately
+ok 195 - SMTP accepted result is reported accurately
+  ---
+  duration_ms: 0.160417
+  type: 'test'
+  ...
+# Subtest: SMTP rejected result is reported accurately
+ok 196 - SMTP rejected result is reported accurately
+  ---
+  duration_ms: 0.070625
+  type: 'test'
+  ...
+# Subtest: SMTP error result is reported accurately
+ok 197 - SMTP error result is reported accurately
+  ---
+  duration_ms: 0.089833
+  type: 'test'
+  ...
+# Subtest: SMTP error details are not returned from email delivery
+ok 198 - SMTP error details are not returned from email delivery
+  ---
+  duration_ms: 0.114917
+  type: 'test'
+  ...
+# Subtest: hosted SMTP port 465 keeps certificate validation and the appropriate TLS mode
+ok 199 - hosted SMTP port 465 keeps certificate validation and the appropriate TLS mode
+  ---
+  duration_ms: 0.120375
+  type: 'test'
+  ...
+# Subtest: hosted SMTP port 587 keeps certificate validation and the appropriate TLS mode
+ok 200 - hosted SMTP port 587 keeps certificate validation and the appropriate TLS mode
+  ---
+  duration_ms: 0.061
+  type: 'test'
+  ...
+# Subtest: email delivery logs neither the full address nor the OTP value
+ok 201 - email delivery logs neither the full address nor the OTP value
+  ---
+  duration_ms: 0.158083
+  type: 'test'
+  ...
+# Subtest: v2 OTP request requires stable device and returns only six-digit challenge metadata
+ok 202 - v2 OTP request requires stable device and returns only six-digit challenge metadata
+  ---
+  duration_ms: 55.677708
+  type: 'test'
+  ...
+# Subtest: v2 refuses contact selectors and forged protocol fields before queries or provider work
+ok 203 - v2 refuses contact selectors and forged protocol fields before queries or provider work
+  ---
+  duration_ms: 5.606042
+  type: 'test'
+  ...
+# ⚠️ Email sending failed, but OTP was generated
+# Subtest: v2 delivery failure discards its exact challenge and permits retry with unchanged legacy response
+ok 204 - v2 delivery failure discards its exact challenge and permits retry with unchanged legacy response
+  ---
+  duration_ms: 165.359
+  type: 'test'
+  ...
+# Subtest: unversioned endpoints cannot select six digits with header/body protocol claims
+ok 205 - unversioned endpoints cannot select six digits with header/body protocol claims
+  ---
+  duration_ms: 1.9735
+  type: 'test'
+  ...
+# Subtest: one correct OTP can be consumed by at most one concurrent verification
+ok 206 - one correct OTP can be consumed by at most one concurrent verification
+  ---
+  duration_ms: 24.068458
+  type: 'test'
+  ...
+# Subtest: successful OTP verification clears only its requested purpose window
+ok 207 - successful OTP verification clears only its requested purpose window
+  ---
+  duration_ms: 14.665583
+  type: 'test'
+  ...
+# Subtest: purpose-specific verification cannot consume another purpose challenge
+ok 208 - purpose-specific verification cannot consume another purpose challenge
+  ---
+  duration_ms: 560.049583
+  type: 'test'
+  ...
+# Subtest: legacy NULL purpose is accepted for sign-in only
+ok 209 - legacy NULL purpose is accepted for sign-in only
+  ---
+  duration_ms: 280.048125
+  type: 'test'
+  ...
+# Subtest: OTP type and purpose are rejected before database access when invalid
+ok 210 - OTP type and purpose are rejected before database access when invalid
+  ---
+  duration_ms: 8.572875
+  type: 'test'
+  ...
+# Subtest: abuse-store marker cleanup failure does not undo successful OTP consumption
+ok 211 - abuse-store marker cleanup failure does not undo successful OTP consumption
+  ---
+  duration_ms: 4.15125
+  type: 'test'
+  ...
+# Subtest: failed active marker claim propagates before any OTP row mutation
+ok 212 - failed active marker claim propagates before any OTP row mutation
+  ---
+  duration_ms: 56.741584
+  type: 'test'
+  ...
+# Subtest: database failure after claim clears only the pre-generated request claim
+ok 213 - database failure after claim clears only the pre-generated request claim
+  ---
+  duration_ms: 53.72675
+  type: 'test'
+  ...
+# Subtest: OTP creation and verification failures never write the raw code to logs
+ok 214 - OTP creation and verification failures never write the raw code to logs
+  ---
+  duration_ms: 2.394
+  type: 'test'
+  ...
+# Subtest: proof lookup requires explicit verifier/database dependencies
+ok 215 - proof lookup requires explicit verifier/database dependencies
+  ---
+  duration_ms: 0.556417
+  type: 'test'
+  ...
+# Subtest: missing, malformed, duplicate-looking and oversized bearer inputs never query identity
+ok 216 - missing, malformed, duplicate-looking and oversized bearer inputs never query identity
+  ---
+  duration_ms: 1.079916
+  type: 'test'
+  ...
+# Subtest: current recent device proof returns only its own masked verified contacts and profile status
+ok 217 - current recent device proof returns only its own masked verified contacts and profile status
+  ---
+  duration_ms: 0.39625
+  type: 'test'
+  ...
+# Subtest: all caller-supplied contact, identity and device selectors are uniformly rejected
+ok 218 - all caller-supplied contact, identity and device selectors are uniformly rejected
+  ---
+  duration_ms: 0.269916
+  type: 'test'
+  ...
+# Subtest: guests, invalid/revoked/inactive sessions and unbound devices receive no profile data
+ok 219 - guests, invalid/revoked/inactive sessions and unbound devices receive no profile data
+  ---
+  duration_ms: 0.168792
+  type: 'test'
+  ...
+# Subtest: the recent-factor window accepts exactly 300 seconds and refuses stale/future/missing proof
+ok 220 - the recent-factor window accepts exactly 300 seconds and refuses stale/future/missing proof
+  ---
+  duration_ms: 0.209541
+  type: 'test'
+  ...
+# Subtest: email and phone proof require their current verified factor rather than a token role label
+ok 221 - email and phone proof require their current verified factor rather than a token role label
+  ---
+  duration_ms: 0.12775
+  type: 'test'
+  ...
+# Subtest: own-account query denies missing/misbound/inactive-device records without contact lookups
+ok 222 - own-account query denies missing/misbound/inactive-device records without contact lookups
+  ---
+  duration_ms: 0.14325
+  type: 'test'
+  ...
+# Subtest: Google factor needs a current own-account provider link and never implies an unverified contact
+ok 223 - Google factor needs a current own-account provider link and never implies an unverified contact
+  ---
+  duration_ms: 2.902333
+  type: 'test'
+  ...
+# Subtest: an incomplete existing profile remains distinct from a missing account
+ok 224 - an incomplete existing profile remains distinct from a missing account
+  ---
+  duration_ms: 0.196333
+  type: 'test'
+  ...
+# Subtest: revocation, device rebinding or changed proof between checks cannot disclose the earlier snapshot
+ok 225 - revocation, device rebinding or changed proof between checks cannot disclose the earlier snapshot
+  ---
+  duration_ms: 0.149292
+  type: 'test'
+  ...
+# Subtest: contact replacements use the newer verified snapshot and omit unverified contact data
+ok 226 - contact replacements use the newer verified snapshot and omit unverified contact data
+  ---
+  duration_ms: 0.113417
+  type: 'test'
+  ...
+# Subtest: invalid tokens and storage failures are sanitized and never echo identifiers or credentials
+ok 227 - invalid tokens and storage failures are sanitized and never echo identifiers or credentials
+  ---
+  duration_ms: 0.188125
+  type: 'test'
+  ...
+# OTP SMS delivery succeeded
+# [SMS Service] provider delivery failed: ETIMEDOUT
+# Subtest: Twilio SMS client uses bounded timeout and disables automatic retry
+ok 228 - Twilio SMS client uses bounded timeout and disables automatic retry
+  ---
+  duration_ms: 4.684041
+  type: 'test'
+  ...
+# Subtest: Twilio failures return a fixed redacted error and never return provider text
+ok 229 - Twilio failures return a fixed redacted error and never return provider text
+  ---
+  duration_ms: 0.578875
+  type: 'test'
+  ...
+# Subtest: installed Twilio transport bounds requests, refuses redirects and installs no retry interceptor
+ok 230 - installed Twilio transport bounds requests, refuses redirects and installs no retry interceptor
+  ---
+  duration_ms: 421.44675
+  type: 'test'
+  ...
+# Subtest: proxy hops accept only explicit small non-negative integer configuration
+ok 231 - proxy hops accept only explicit small non-negative integer configuration
+  ---
+  duration_ms: 0.679292
+  type: 'test'
+  ...
+# Subtest: legacy TRUST_PROXY values map to bounded hop counts and explicit hops take precedence
+ok 232 - legacy TRUST_PROXY values map to bounded hop counts and explicit hops take precedence
+  ---
+  duration_ms: 0.1205
+  type: 'test'
+  ...
+# Subtest: local mode ignores a caller-supplied forwarded address
+ok 233 - local mode ignores a caller-supplied forwarded address
+  ---
+  duration_ms: 1.425125
+  type: 'test'
+  ...
+# Subtest: one-hop mode uses Express nearest-hop resolution, not a manual XFF parser
+ok 234 - one-hop mode uses Express nearest-hop resolution, not a manual XFF parser
+  ---
+  duration_ms: 0.2425
+  type: 'test'
+  ...
+# Subtest: malformed address selected through configured trust is rejected
+ok 235 - malformed address selected through configured trust is rejected
+  ---
+  duration_ms: 1.985375
+  type: 'test'
+  ...
+# Subtest: legacy true is bounded to one hop and ignores a spoofed farther XFF entry
+ok 236 - legacy true is bounded to one hop and ignores a spoofed farther XFF entry
+  ---
+  duration_ms: 0.117333
+  type: 'test'
+  ...
+# Subtest: legacy false leaves the socket peer as the limiter IP
+ok 237 - legacy false leaves the socket peer as the limiter IP
+  ---
+  duration_ms: 0.090625
+  type: 'test'
+  ...
+# [rate-limit] phone request quota check failed Error
+# [rate-limit] phone active challenge check failed Error
+# Subtest: storage failure blocks before OTP request continuation with a fixed 503 response
+ok 238 - storage failure blocks before OTP request continuation with a fixed 503 response
+  ---
+  duration_ms: 1.488708
+  type: 'test'
+  ...
+# Subtest: successful retry continues and existing OTP limit response remains 429
+ok 239 - successful retry continues and existing OTP limit response remains 429
+  ---
+  duration_ms: 0.232792
+  type: 'test'
+  ...
+# Subtest: phone/email normalization and recovery-purpose bucket names stay compatible
+ok 240 - phone/email normalization and recovery-purpose bucket names stay compatible
+  ---
+  duration_ms: 0.193334
+  type: 'test'
+  ...
+# Subtest: active OTP marker uses atomic claim and exposes a typed conflict
+ok 241 - active OTP marker uses atomic claim and exposes a typed conflict
+  ---
+  duration_ms: 0.293667
+  type: 'test'
+  ...
+# Subtest: replacement request budget increments account-scoped short and daily quotas
+ok 242 - replacement request budget increments account-scoped short and daily quotas
+  ---
+  duration_ms: 0.215542
+  type: 'test'
+  ...
+# Subtest: replacement verify budget saturates and reports a typed quota refusal
+ok 243 - replacement verify budget saturates and reports a typed quota refusal
+  ---
+  duration_ms: 0.17925
+  type: 'test'
+  ...
+# Subtest: replacement budget rejects unbounded or malformed account/channel inputs
+ok 244 - replacement budget rejects unbounded or malformed account/channel inputs
+  ---
+  duration_ms: 4.532125
+  type: 'test'
+  ...
+# Subtest: bucket HMAC is stable, domain separated, and never emits the source key
+ok 245 - bucket HMAC is stable, domain separated, and never emits the source key
+  ---
+  duration_ms: 2.735667
+  type: 'test'
+  ...
+# Subtest: memory store keeps concurrent increments, fixed expiry, and saturates
+ok 246 - memory store keeps concurrent increments, fixed expiry, and saturates
+  ---
+  duration_ms: 0.644208
+  type: 'test'
+  ...
+# Subtest: memory marker compare-delete cannot clear a newer marker and expires
+ok 247 - memory marker compare-delete cannot clear a newer marker and expires
+  ---
+  duration_ms: 23.758208
+  type: 'test'
+  ...
+# Subtest: memory marker claims are atomic under concurrent OTP creation
+ok 248 - memory marker claims are atomic under concurrent OTP creation
+  ---
+  duration_ms: 0.260542
+  type: 'test'
+  ...
+# Subtest: hosted environments always choose PostgreSQL and reject memory configuration
+ok 249 - hosted environments always choose PostgreSQL and reject memory configuration
+  ---
+  duration_ms: 0.321583
+  type: 'test'
+  ...
+# Subtest: memory storage remains available to explicit local test fixtures
+ok 250 - memory storage remains available to explicit local test fixtures
+  ---
+  duration_ms: 0.083708
+  type: 'test'
+  ...
+# Subtest: linked contacts are masked in recognisable form
+ok 251 - linked contacts are masked in recognisable form
+  ---
+  duration_ms: 0.531917
+  type: 'test'
+  ...
+# Subtest: recovery contact availability follows active-only reuse policy for email and phone
+ok 252 - recovery contact availability follows active-only reuse policy for email and phone
+  ---
+  duration_ms: 288.962833
+  type: 'test'
+  ...
+# Subtest: a normal session or expired recovery proof cannot replace a contact
+ok 253 - a normal session or expired recovery proof cannot replace a contact
+  ---
+  duration_ms: 98.789
+  type: 'test'
+  ...
+# Subtest: the old linked email is kept until the new email code is verified
+ok 254 - the old linked email is kept until the new email code is verified
+  ---
+  duration_ms: 52.844041
+  type: 'test'
+  ...
+# Subtest: replacement challenges cannot be used on another account
+ok 255 - replacement challenges cannot be used on another account
+  ---
+  duration_ms: 8.099542
+  type: 'test'
+  ...
+# Subtest: phone contact replacement requires the existing email proof and stores a searchable hash
+ok 256 - phone contact replacement requires the existing email proof and stores a searchable hash
+  ---
+  duration_ms: 11.387542
+  type: 'test'
+  ...
+# Subtest: conflicting contact and failed delivery leave the linked contact unchanged
+ok 257 - conflicting contact and failed delivery leave the linked contact unchanged
+  ---
+  duration_ms: 27.709917
+  type: 'test'
+  ...
+# Recovery contact request failed: Error
+# Recovery contact verification failed: Error
+# Subtest: abuse-store failures during recovery request and verification return 503
+ok 258 - abuse-store failures during recovery request and verification return 503
+  ---
+  duration_ms: 15.157208
+  type: 'test'
+  ...
+# Subtest: email proof permits only phone replacement and honours disabled SMS
+ok 259 - email proof permits only phone replacement and honours disabled SMS
+  ---
+  duration_ms: 4.228541
+  type: 'test'
+  ...
+# Subtest: concurrent replacement requests consume one stable account budget across random challenges
+ok 260 - concurrent replacement requests consume one stable account budget across random challenges
+  ---
+  duration_ms: 3.040917
+  type: 'test'
+  ...
+# Recovery contact request failed: Error
+# Recovery contact verification failed: Error
+# Subtest: every valid replacement challenge verification attempt consumes the account attempt cap
+ok 261 - every valid replacement challenge verification attempt consumes the account attempt cap
+  ---
+  duration_ms: 61.091041
+  type: 'test'
+  ...
+# Recovery contact request failed: Error
+# Recovery contact verification failed: Error
+# Subtest: replacement budget storage outages fail closed before delivery or OTP verification
+ok 262 - replacement budget storage outages fail closed before delivery or OTP verification
+  ---
+  duration_ms: 5.88175
+  type: 'test'
+  ...
+# Subtest: v2 replacement keeps the old contact until its account/device/purpose-bound six-digit code succeeds
+ok 263 - v2 replacement keeps the old contact until its account/device/purpose-bound six-digit code succeeds
+  ---
+  duration_ms: 5.040666
+  type: 'test'
+  ...
+# Subtest: v2 replacement rejects selectors, queries and unproved devices before sending or charging an account budget
+ok 264 - v2 replacement rejects selectors, queries and unproved devices before sending or charging an account budget
+  ---
+  duration_ms: 4.314667
+  type: 'test'
+  ...
+# Subtest: v2 replacement rejects four-digit/numeric codes and cannot cross legacy protocol audiences
+ok 265 - v2 replacement rejects four-digit/numeric codes and cannot cross legacy protocol audiences
+  ---
+  duration_ms: 4.14475
+  type: 'test'
+  ...
+# Subtest: v2 replacement JWT remains bound to its original device even under another valid recent account proof
+ok 266 - v2 replacement JWT remains bound to its original device even under another valid recent account proof
+  ---
+  duration_ms: 2.23975
+  type: 'test'
+  ...
+# Recovery contact request failed: Error
+# Subtest: v2 delivery failure discards only the matching versioned challenge and storage/budget failures preserve contacts
+ok 267 - v2 delivery failure discards only the matching versioned challenge and storage/budget failures preserve contacts
+  ---
+  duration_ms: 2.09575
+  type: 'test'
+  ...
+# Subtest: explicit legacy retirement covers contact replacement while v2 and existing recent-factor guards remain
+ok 268 - explicit legacy retirement covers contact replacement while v2 and existing recent-factor guards remain
+  ---
+  duration_ms: 4.0945
+  type: 'test'
+  ...
+# Recovery contact request failed: Error
+# Subtest: legacy and v2 replacement requests share one stable account request cap
+ok 269 - legacy and v2 replacement requests share one stable account request cap
+  ---
+  duration_ms: 4.718375
+  type: 'test'
+  ...
+# Subtest: v2 thrown delivery errors discard the versioned challenge before retry
+ok 270 - v2 thrown delivery errors discard the versioned challenge before retry
+  ---
+  duration_ms: 1.440208
+  type: 'test'
+  ...
+# Subtest: second recovery check accepts only the linked contact suffix
+ok 271 - second recovery check accepts only the linked contact suffix
+  ---
+  duration_ms: 306.820959
+  type: 'test'
+  ...
+# Subtest: normal or expired tokens cannot use the linked-contact check
+ok 272 - normal or expired tokens cannot use the linked-contact check
+  ---
+  duration_ms: 72.959791
+  type: 'test'
+  ...
+# Subtest: email OTP verification accepts a boolean recovery_only flag
+ok 273 - email OTP verification accepts a boolean recovery_only flag
+  ---
+  duration_ms: 0.462625
+  type: 'test'
+  ...
+# Subtest: email OTP verification rejects a non-boolean recovery_only flag
+ok 274 - email OTP verification rejects a non-boolean recovery_only flag
+  ---
+  duration_ms: 0.31325
+  type: 'test'
+  ...
+# Subtest: phone OTP verification rejects a non-boolean recovery_only flag
+ok 275 - phone OTP verification rejects a non-boolean recovery_only flag
+  ---
+  duration_ms: 0.078375
+  type: 'test'
+  ...
+# ◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+# Subtest: lost rotation response and process retry recover exactly the committed successor
+ok 276 - lost rotation response and process retry recover exactly the committed successor
+  ---
+  duration_ms: 439.087167
+  type: 'test'
+  ...
+# Subtest: failed successor insert rolls back without consuming the old credential
+ok 277 - failed successor insert rolls back without consuming the old credential
+  ---
+  duration_ms: 205.627375
+  type: 'test'
+  ...
+# Subtest: different request IDs cannot recover a consumed credential
+ok 278 - different request IDs cannot recover a consumed credential
+  ---
+  duration_ms: 257.239667
+  type: 'test'
+  ...
+# Subtest: logout revokes recovery as well as the current refresh token
+ok 279 - logout revokes recovery as well as the current refresh token
+  ---
+  duration_ms: 204.550167
+  type: 'test'
+  ...
+# Subtest: legacy callers still rotate, without allowing reuse recovery
+ok 280 - legacy callers still rotate, without allowing reuse recovery
+  ---
+  duration_ms: 260.774375
+  type: 'test'
+  ...
+# Subtest: refresh request identity must be a UUID v4 when provided
+ok 281 - refresh request identity must be a UUID v4 when provided
+  ---
+  duration_ms: 0.786959
+  type: 'test'
+  ...
+# Subtest: auth retains its 100 KiB JSON contract and returns safe 400/413 responses
+ok 282 - auth retains its 100 KiB JSON contract and returns safe 400/413 responses
+  ---
+  duration_ms: 141.348833
+  type: 'test'
+  ...
+# Subtest: retention preserves all rows and avoids any connection without configured policies
+ok 283 - retention preserves all rows and avoids any connection without configured policies
+  ---
+  duration_ms: 3.633125
+  type: 'test'
+  ...
+# Subtest: retention policy validates days and free-host resource caps strictly
+ok 284 - retention policy validates days and free-host resource caps strictly
+  ---
+  duration_ms: 15.147041
+  type: 'test'
+  ...
+# Subtest: unknown, duplicate and prototype scopes cannot become SQL identifiers
+ok 285 - unknown, duplicate and prototype scopes cannot become SQL identifiers
+  ---
+  duration_ms: 0.246708
+  type: 'test'
+  ...
+# Subtest: default dry run uses bounded read-only counts and emits no row data
+ok 286 - default dry run uses bounded read-only counts and emits no row data
+  ---
+  duration_ms: 11.379792
+  type: 'test'
+  ...
+# Subtest: apply requires explicit policy, locks the dedicated session and deletes bounded batches only
+ok 287 - apply requires explicit policy, locks the dedicated session and deletes bounded batches only
+  ---
+  duration_ms: 1.630458
+  type: 'test'
+  ...
+# Subtest: job batch limit stops safely and leaves a truthful count-only continuation indicator
+ok 288 - job batch limit stops safely and leaves a truthful count-only continuation indicator
+  ---
+  duration_ms: 0.235375
+  type: 'test'
+  ...
+# Subtest: elapsed job budget prevents a new transaction
+ok 289 - elapsed job budget prevents a new transaction
+  ---
+  duration_ms: 0.186708
+  type: 'test'
+  ...
+# Subtest: busy worker makes no transactions or deletes and does not unlock another session
+ok 290 - busy worker makes no transactions or deletes and does not unlock another session
+  ---
+  duration_ms: 0.338584
+  type: 'test'
+  ...
+# Subtest: failed batch rolls back and releases its session lock
+ok 291 - failed batch rolls back and releases its session lock
+  ---
+  duration_ms: 0.537541
+  type: 'test'
+  ...
+# Subtest: unexpected row counts and uncertain unlock fail closed
+ok 292 - unexpected row counts and uncertain unlock fail closed
+  ---
+  duration_ms: 61.628125
+  type: 'test'
+  ...
+# Subtest: CLI is dry-run by default, omits secrets from output and always closes its client
+ok 293 - CLI is dry-run by default, omits secrets from output and always closes its client
+  ---
+  duration_ms: 3.265041
+  type: 'test'
+  ...
+# Subtest: CLI rejects unknown arguments and needs no secret or database for help/no policy
+ok 294 - CLI rejects unknown arguments and needs no secret or database for help/no policy
+  ---
+  duration_ms: 0.106583
+  type: 'test'
+  ...
+# Subtest: PostgreSQL role identifiers are safely quoted and bounded
+ok 295 - PostgreSQL role identifiers are safely quoted and bounded
+  ---
+  duration_ms: 1.296166
+  type: 'test'
+  ...
+# Subtest: runtime role grants are not applied when the actual abuse migration is absent
+ok 296 - runtime role grants are not applied when the actual abuse migration is absent
+  ---
+  duration_ms: 0.519
+  type: 'test'
+  ...
+# Subtest: explicit runtime role must already exist and schema usage is not broadened
+ok 297 - explicit runtime role must already exist and schema usage is not broadened
+  ---
+  duration_ms: 0.133833
+  type: 'test'
+  ...
+# Subtest: explicit role receives only quoted table DML privileges and all are verified
+ok 298 - explicit role receives only quoted table DML privileges and all are verified
+  ---
+  duration_ms: 0.135625
+  type: 'test'
+  ...
+# Subtest: a partial runtime grant fails migration completion
+ok 299 - a partial runtime grant fails migration completion
+  ---
+  duration_ms: 5.421708
+  type: 'test'
+  ...
+# Subtest: optional access log gets INSERT only after its migration and when enabled
+ok 300 - optional access log gets INSERT only after its migration and when enabled
+  ---
+  duration_ms: 0.690833
+  type: 'test'
+  ...
+# Subtest: optional security dashboard receives read-only capability lookup without role promotion
+ok 301 - optional security dashboard receives read-only capability lookup without role promotion
+  ---
+  duration_ms: 0.387625
+  type: 'test'
+  ...
+# Subtest: canonical provider links grant only lookup and insertion to explicit auth runtime
+ok 302 - canonical provider links grant only lookup and insertion to explicit auth runtime
+  ---
+  duration_ms: 0.155292
+  type: 'test'
+  ...
+# Subtest: safeErrorCode preserves bounded operational codes and hides arbitrary provider text
+ok 303 - safeErrorCode preserves bounded operational codes and hides arbitrary provider text
+  ---
+  duration_ms: 0.374583
+  type: 'test'
+  ...
+# Subtest: dashboard grants retain the active verified existing-account lock and explicit expiry
+ok 304 - dashboard grants retain the active verified existing-account lock and explicit expiry
+  ---
+  duration_ms: 4.76725
+  type: 'test'
+  ...
+# Subtest: dashboard revocation locks only the existing UUID without account-state restrictions
+ok 305 - dashboard revocation locks only the existing UUID without account-state restrictions
+  ---
+  duration_ms: 0.238209
+  type: 'test'
+  ...
+# Subtest: repeated revocation or absent grant still commits without creating access
+ok 306 - repeated revocation or absent grant still commits without creating access
+  ---
+  duration_ms: 0.085333
+  type: 'test'
+  ...
+# Subtest: unknown grant/revoke subjects fail before changing capability state
+ok 307 - unknown grant/revoke subjects fail before changing capability state
+  ---
+  duration_ms: 0.251667
+  type: 'test'
+  ...
+# Subtest: invalid operator commands and expired grants never query the database
+ok 308 - invalid operator commands and expired grants never query the database
+  ---
+  duration_ms: 0.57675
+  type: 'test'
+  ...
+# Subtest: a capability write failure rolls back
+ok 309 - a capability write failure rolls back
+  ---
+  duration_ms: 0.115
+  type: 'test'
+  ...
+# Subtest: test harness is disabled in production and staging
+ok 310 - test harness is disabled in production and staging
+  ---
+  duration_ms: 0.902042
+  type: 'test'
+  ...
+# Subtest: test harness remains available in local and test environments
+ok 311 - test harness remains available in local and test environments
+  ---
+  duration_ms: 0.096875
+  type: 'test'
+  ...
+# Subtest: hosted environments do not mount public static assets or test aliases
+ok 312 - hosted environments do not mount public static assets or test aliases
+  ---
+  duration_ms: 1.26125
+  type: 'test'
+  ...
+# Subtest: local environments retain the existing static mount and test aliases
+ok 313 - local environments retain the existing static mount and test aliases
+  ---
+  duration_ms: 0.146833
+  type: 'test'
+  ...
+# Subtest: test OTP requires explicit opt-in and is always disabled in production
+ok 314 - test OTP requires explicit opt-in and is always disabled in production
+  ---
+  duration_ms: 0.328833
+  type: 'test'
+  ...
+# Subtest: test OTP bypass is limited to the explicit identifier allowlist
+ok 315 - test OTP bypass is limited to the explicit identifier allowlist
+  ---
+  duration_ms: 0.076
+  type: 'test'
+  ...
+# ◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+# Subtest: new access tokens satisfy the protected-route claim contract
+ok 316 - new access tokens satisfy the protected-route claim contract
+  ---
+  duration_ms: 1.91775
+  type: 'test'
+  ...
+# Subtest: protected auth routes reject tokens without the shared claims
+ok 317 - protected auth routes reject tokens without the shared claims
+  ---
+  duration_ms: 0.118875
+  type: 'test'
+  ...
+1..317
+# tests 317
+# suites 0
+# pass 317
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 11531.6185

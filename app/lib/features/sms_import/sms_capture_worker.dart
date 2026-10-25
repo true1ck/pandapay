@@ -1,3 +1,4 @@
+import '../../data/portable_backup/account_recovery_operation_gate.dart';
 import 'dart:async';
 import 'dart:isolate';
 import '../../data/local/app_database.dart';
@@ -79,7 +80,10 @@ class SmsCaptureWorker {
     return ready.future;
   }
 
-  Future<List<String>> capture(
+  Future<List<String>> capture(String namespace, List<QueuedSms> messages) =>
+      AccountRecoveryOperationGate.process.run(() => _capture(namespace, messages));
+
+  Future<List<String>> _capture(
     String namespace,
     List<QueuedSms> messages,
   ) async {

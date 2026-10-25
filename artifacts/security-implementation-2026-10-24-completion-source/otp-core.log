@@ -1,0 +1,6 @@
+PASS: real client uses v2 email/device challenge without phone/signup selectors
+PASS: real client rejects wrong device/contact/code/purpose before a request
+PASS: real client refuses an expired challenge locally
+PASS: v2 missing upstream never downgrades to a legacy request
+PASS: default legacy request shape and four-digit client remain compatible
+PASS: real client rejects malformed protocol, identifier and TTL metadata

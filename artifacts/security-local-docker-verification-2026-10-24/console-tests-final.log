@@ -1,0 +1,16 @@
+00:01 +16: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: AD-1.1.2: admin adds a fee waiver rule via the tabbed rule-family editor
+00:01 +17: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: AD-2.1: admin sees card requests grouped by issuer+product with counts
+00:01 +18: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: AD-2.2: admin sees error reports with shown vs claimed and can approve
+00:01 +19: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: Chunk 10: a stored refresh token resumes the session without asking for OTP again
+00:01 +20: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: AD-4.2: admin sees a policy alert with evidence and heuristic proposals, can approve
+00:01 +21: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: Chunk 10: an invalid stored refresh token falls back to the login screen
+00:01 +22: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: transient refresh failure preserves tokens and retry resumes the session
+00:01 +23: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: network and access-denied refresh failures preserve the saved token
+00:01 +24: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: AD-6: admin sees crowdsourced merchants and can override a name
+00:01 +25: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: AD-6.3: admin resolves a merchant conflict by picking a competing value
+00:02 +26: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: AD-7: admin sees acceptance data and effective-rate divergence with a linked alert
+00:02 +27: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: AD-8: admin sees the data quality dashboard snapshot
+00:02 +28: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: AD-9: admin sees the latest anonymization audit result and can run a new one
+00:02 +29: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: Chunk 35: admin sees parser patterns and can add a new one
+00:02 +30: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/console/test/widget_test.dart: AD-3.2: admin marks a source ToS-reviewed then enables it
+00:02 +31: All tests passed!

@@ -1,0 +1,10 @@
+{
+  "scope": "isolated debug fixture, no account data or production app installation",
+  "package": "app.pandapay.keycipherfixture.pandapay",
+  "source_sha256": {
+    "lib/data/secure_storage/local_database_key_custody.dart": "75b84902e0f3dd4e9d942ae371e140f5a3c55fb1150efffb65dbdcb52ff436ca",
+    "lib/data/secure_storage/flutter_secure_key_value_store.dart": "5fd6f9b94b545545add234b2bf3064fa462aa558edbead4c8181098da0d9c431",
+    "integration_test/security_storage_key_test.dart": "2bae883b13090f0646600386cbaf83bea61b0d45fc22baf5d25fe088a69859a8",
+    "integration_test/security_encrypted_engine_test.dart": "4684ae912e6d16e5c9415d226f0c47931a3f59d1d8c276db1153a776e326a3e5"
+  }
+}

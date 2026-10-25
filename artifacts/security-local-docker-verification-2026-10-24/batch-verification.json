@@ -1,0 +1,382 @@
+{
+  "format": "pandapay-local-docker-verification-v1",
+  "verified_at_utc": "2026-10-24T18:31:13.437482+00:00",
+  "verified_at_ist": "2026-10-25T00:01:13.437482+05:30",
+  "scope": "current source; local synthetic Docker/Flutter/PostgreSQL verification only; not production release approval",
+  "branch": "dev",
+  "base_commit": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+  "uncommitted": true,
+  "candidate_sha256": "20281c3ad35b3eed504bc11faee6dbb569e66141972fa3cab303986b695c3ecf",
+  "source_files": 1266,
+  "source_manifest": "candidate-source-sha256.json",
+  "environments": {
+    "docker_server": "29.4.0",
+    "node": [
+      "22.23.4 current service images",
+      "24.15.0 native synthetic database/tool harness"
+    ],
+    "postgresql": [
+      "18.4 Homebrew owned temporary clusters",
+      "Docker supabase/postgres:17.6.1.136, PostgreSQL17.6"
+    ],
+    "flutter": "3.44.8 / Dart3.12.2, offline dependencies",
+    "managed_fixture_operator": "NOSUPERUSER CREATEDB CREATEROLE BYPASSRLS for setup only; runtime identities NOBYPASSRLS",
+    "service_smoke": "Development mode, real local PostgreSQL, separate non-superuser runtime logins; no provider credentials"
+  },
+  "checks": {
+    "api": {
+      "passed": 964,
+      "skipped": 2,
+      "failed": 0
+    },
+    "supplemental_api_database": {
+      "passed": 4,
+      "skipped": 0,
+      "failed": 0,
+      "previously_skipped_cases_executed": 2,
+      "overlap_with_api_unit_cases": 2
+    },
+    "auth": {
+      "passed": 300,
+      "failed": 0
+    },
+    "database_tool_subset": {
+      "passed": 131,
+      "failed": 0,
+      "overlaps_with_api_auth": true
+    },
+    "backup_setup": {
+      "passed": 45,
+      "failed": 0
+    },
+    "deployment": {
+      "passed": 22,
+      "failed": 0
+    },
+    "app": {
+      "passed": 1576,
+      "failed": 0
+    },
+    "console": {
+      "passed": 31,
+      "failed": 0
+    },
+    "domain": {
+      "passed": 227,
+      "failed": 0
+    },
+    "analysis": {
+      "app_errors": 0,
+      "app_warnings": 0,
+      "app_infos": 72,
+      "console_issues": 0
+    },
+    "console_csp_web_build": {
+      "status": "passed",
+      "actual_browser_acceptance": false
+    },
+    "postgres18": {
+      "status": "passed",
+      "scripts": 14,
+      "fresh_databases": 15,
+      "scenarios": 15
+    },
+    "postgres17_docker": {
+      "status": "passed",
+      "scripts": 4,
+      "fresh_databases": 5,
+      "cases": [
+        "lifecycle",
+        "privilege-repair",
+        "maintenance",
+        "otp"
+      ]
+    },
+    "paired_encrypted_recovery": {
+      "status": "passed",
+      "schema_format": "v5",
+      "data": "synthetic",
+      "independent_cluster_restore": true
+    },
+    "age_journal_in_api_image": {
+      "status": "passed"
+    },
+    "service_startup": {
+      "api/health": {
+        "status": 200,
+        "body": {
+          "ok": true
+        }
+      },
+      "api/ready": {
+        "status": 200,
+        "body": {
+          "ok": true,
+          "database": "ready"
+        }
+      },
+      "auth/health": {
+        "status": 200,
+        "body": {
+          "ok": true
+        }
+      },
+      "auth/ready": {
+        "status": 200,
+        "body": {
+          "ok": true,
+          "database": "ready"
+        }
+      },
+      "api/unauthenticated": {
+        "status": 401
+      }
+    },
+    "images": {
+      "api": {
+        "image": "sha256:6642d4109dba9b09bec8d74ee59c233f09422c4362f560a28d1eef9e8aaa0037",
+        "source_files": 88,
+        "uid": 1000,
+        "node": "v22.23.4",
+        "body_parser": "2.4.0",
+        "config": {
+          "user": "node",
+          "port": null,
+          "dockerfile_sha256": "79a201b199a749625d59be0ccc7e93adbdec8272507fc151ef2475d210e5d6c6"
+        }
+      },
+      "auth": {
+        "image": "sha256:2dda106ad373549b3a2860c8f1ee141602114769c05c4214c6385339096587f4",
+        "source_files": 58,
+        "uid": 1000,
+        "node": "v22.23.4",
+        "body_parser": "2.4.0",
+        "config": {
+          "user": "node",
+          "port": "3210",
+          "dockerfile_sha256": "d7e0e38265b01ce1b3ae1f4f34ae224bc6bbc2071d7647562b49832bf8f4d686"
+        }
+      }
+    },
+    "production_dependency_audits": {
+      "api_known_vulnerabilities": 0,
+      "auth_known_vulnerabilities": 0
+    },
+    "notification_wip": {
+      "files_unchanged": 12,
+      "sha256_match": true
+    },
+    "docker_cleanup": {
+      "removed": [
+        "pandapay-completion24-pg17",
+        "pandapay-completion24-smoke-api",
+        "pandapay-completion24-smoke-auth"
+      ],
+      "remaining_owned_containers": [],
+      "fixture_database_storage": "tmpfs released",
+      "application_images_retained": [
+        "pandapay-security-completion-api:local",
+        "pandapay-security-completion-auth:local"
+      ]
+    },
+    "release_gate": {
+      "exit": 2,
+      "release_ready": false,
+      "missing_gates": [
+        "exact_candidate_evidence",
+        "api",
+        "auth",
+        "database",
+        "backup",
+        "deployment",
+        "app",
+        "console",
+        "actual_data_restore",
+        "target_provider_upgrade",
+        "oldest_supported_client",
+        "signed_device_recovery",
+        "provider_delivery",
+        "operator_alerts",
+        "rollout_recovery",
+        "backup_custody",
+        "productPrivileges",
+        "authPrivileges",
+        "productData",
+        "authData",
+        "postgres_provider_portability",
+        "free_host_resource_limits",
+        "off_host_backup_custody",
+        "retained_key_inventory",
+        "hash_bound_backup_restore"
+      ]
+    }
+  },
+  "proofs": {
+    "api-image-tests-current": {
+      "proof_file": "api-image-tests-current.log",
+      "sha256": "901c032c6d578ea252b785f8ff478a3ab0665ba0ea0deb45eb9980a61b71dea2",
+      "original_log_sha256": "9359424fee5fbb728b5f3dff40123ec438eb321daa43ea0e32862609c501e5c9",
+      "original_log_bytes": 203860,
+      "scope": "final summary excerpt"
+    },
+    "auth-image-tests-current": {
+      "proof_file": "auth-image-tests-current.log",
+      "sha256": "76211a61799f62d73dc7dd43e0ab80345958910a8c53651b47796f916a6fee40",
+      "original_log_sha256": "5680186a10f5740da54ef23236a9ecf341236a9010e4d66294928e72d16b5f39",
+      "original_log_bytes": 70142,
+      "scope": "final summary excerpt"
+    },
+    "sandbox-unit-final": {
+      "proof_file": "sandbox-unit-final.log",
+      "sha256": "2172c51a1817603e452138eab40dedbbf0bda95b7de6cbea0610fc6b8eed96c3",
+      "original_log_sha256": "8c410fa054dfe4dfb97fc1664bfd2c9ebbbf07558f45cfaa32742a5560ef1489",
+      "original_log_bytes": 12654,
+      "scope": "final summary excerpt"
+    },
+    "optional-database-current": {
+      "proof_file": "optional-database-current.log",
+      "sha256": "8c6c4e5efad49ac7015fc8f23dbd89df00823298036a4f4da57a9229a3a25d97",
+      "original_log_sha256": "8c6c4e5efad49ac7015fc8f23dbd89df00823298036a4f4da57a9229a3a25d97",
+      "original_log_bytes": 488,
+      "scope": "final summary excerpt"
+    },
+    "backup-setup-final": {
+      "proof_file": "backup-setup-final.log",
+      "sha256": "1a4144a9bd5192e373063216a1615c61102b3b7a35f793dc1f00b7cdb42804ad",
+      "original_log_sha256": "02c44d13a8b1c862be286a4ca6c3cca75aca33df48aaf2bcd1bee680d8cf6e58",
+      "original_log_bytes": 8839,
+      "scope": "final summary excerpt"
+    },
+    "deployment-port-final": {
+      "proof_file": "deployment-port-final.log",
+      "sha256": "641d575250b7be238646043afe2c26ede7a441932e86cddf8acca9f9d38f7986",
+      "original_log_sha256": "9bce2be1cc0699ab406ac5ab98d47f02e2bbc912fdba0031bffa313d7f9edbbb",
+      "original_log_bytes": 4106,
+      "scope": "final summary excerpt"
+    },
+    "app-tests-final": {
+      "proof_file": "app-tests-final.log",
+      "sha256": "cd414e1d37a8071e2b750b2f9d72bad896dc85bad0598a3644a26845eb41a999",
+      "original_log_sha256": "fdfa93867c2299278ce2866e8e4e031b3a049cdff635a312046d53229a1cb2d5",
+      "original_log_bytes": 356109,
+      "scope": "final summary excerpt"
+    },
+    "console-tests-final": {
+      "proof_file": "console-tests-final.log",
+      "sha256": "036bba5f26230ee6a628d82d9184efc1e06ce1e1d463fdb9ecba641f9fc7df2d",
+      "original_log_sha256": "33dd22eacc94c5de1b2813b9617ab5b16d28e2cc6f039fc7491dd881913fd8f6",
+      "original_log_bytes": 6007,
+      "scope": "final summary excerpt"
+    },
+    "domain-tests-final": {
+      "proof_file": "domain-tests-final.log",
+      "sha256": "c847237ab1e824318968da09a04c7bf985311b2723495e9d34895cd109c70310",
+      "original_log_sha256": "17b3ba4c6f274b070cb02fc1b42419ba012b41ce82f9707239d36212e12af350",
+      "original_log_bytes": 25709,
+      "scope": "final summary excerpt"
+    },
+    "app-analysis-final": {
+      "proof_file": "app-analysis-final.log",
+      "sha256": "6debe312276ed6ca6453cc325e9c248d340e7436ffdc4721dba4cba37a58f944",
+      "original_log_sha256": "6debe312276ed6ca6453cc325e9c248d340e7436ffdc4721dba4cba37a58f944",
+      "original_log_bytes": 14953,
+      "scope": "complete diagnostic log"
+    },
+    "console-analysis-final": {
+      "proof_file": "console-analysis-final.log",
+      "sha256": "8abcab4d4628844fea4e26a35455dfc1b43d1fcefa14326d9eaa95ff89e4fc4d",
+      "original_log_sha256": "8abcab4d4628844fea4e26a35455dfc1b43d1fcefa14326d9eaa95ff89e4fc4d",
+      "original_log_bytes": 96,
+      "scope": "complete diagnostic log"
+    },
+    "console-build-final": {
+      "proof_file": "console-build-final.log",
+      "sha256": "e059df99c853953a89447679b68e04cbc66a9390c06f9eb7a4a562cfffdc452d",
+      "original_log_sha256": "e059df99c853953a89447679b68e04cbc66a9390c06f9eb7a4a562cfffdc452d",
+      "original_log_bytes": 810,
+      "scope": "complete diagnostic log"
+    },
+    "postgres18-remaining-current": {
+      "proof_file": "postgres18-remaining-current.log",
+      "sha256": "a180979fc6cbd07e32fa512d0df269d2440945f82c966dc9f015d3c8b6f27c88",
+      "original_log_sha256": "a180979fc6cbd07e32fa512d0df269d2440945f82c966dc9f015d3c8b6f27c88",
+      "original_log_bytes": 3582,
+      "scope": "complete diagnostic log"
+    },
+    "postgres18-paired-recovery-current": {
+      "proof_file": "postgres18-paired-recovery-current.log",
+      "sha256": "a5c965ffa1fa9bfcf0b92b17138cbd0a3988c402c9f7f7dd105bca8ce3b67485",
+      "original_log_sha256": "a5c965ffa1fa9bfcf0b92b17138cbd0a3988c402c9f7f7dd105bca8ce3b67485",
+      "original_log_bytes": 471,
+      "scope": "complete diagnostic log"
+    },
+    "journal-age-current-image": {
+      "proof_file": "journal-age-current-image.log",
+      "sha256": "ef8d604e0e1d1fe18ebd337288ba1d0613b48a5c939c44fd712652ee1f1cc7e6",
+      "original_log_sha256": "ef8d604e0e1d1fe18ebd337288ba1d0613b48a5c939c44fd712652ee1f1cc7e6",
+      "original_log_bytes": 159,
+      "scope": "complete diagnostic log"
+    },
+    "managed17-current-lifecycle": {
+      "proof_file": "managed17-current-lifecycle.log",
+      "sha256": "2bbecf8a231d373f66c4dbd624a2b66bf439c3f31211c6078550b366ffaaa7e8",
+      "original_log_sha256": "2bbecf8a231d373f66c4dbd624a2b66bf439c3f31211c6078550b366ffaaa7e8",
+      "original_log_bytes": 530,
+      "scope": "complete diagnostic log"
+    },
+    "managed17-current-privilege-repair": {
+      "proof_file": "managed17-current-privilege-repair.log",
+      "sha256": "fbc591343629f7afd339bb7e6b510e46ec24951ed8c48d8b4d4a3b903b444be2",
+      "original_log_sha256": "fbc591343629f7afd339bb7e6b510e46ec24951ed8c48d8b4d4a3b903b444be2",
+      "original_log_bytes": 335,
+      "scope": "complete diagnostic log"
+    },
+    "managed17-current-maintenance": {
+      "proof_file": "managed17-current-maintenance.log",
+      "sha256": "fa95c494cab7202cb67c3a160423cef6f018e5fd1932eaf3b303994bf0463a39",
+      "original_log_sha256": "fa95c494cab7202cb67c3a160423cef6f018e5fd1932eaf3b303994bf0463a39",
+      "original_log_bytes": 246,
+      "scope": "complete diagnostic log"
+    },
+    "managed17-current-otp": {
+      "proof_file": "managed17-current-otp.log",
+      "sha256": "9701cd548c0a19710ac21cc32ca505eab3ead05559edbc26b526deefe9331eff",
+      "original_log_sha256": "9701cd548c0a19710ac21cc32ca505eab3ead05559edbc26b526deefe9331eff",
+      "original_log_bytes": 580,
+      "scope": "complete diagnostic log"
+    },
+    "docker-service-smoke-current": {
+      "proof_file": "docker-service-smoke-current.log",
+      "sha256": "fbc1d60136b3676bf672c2ea68ae9f8f0eea0bea5d977d5478973a2921724200",
+      "original_log_sha256": "fbc1d60136b3676bf672c2ea68ae9f8f0eea0bea5d977d5478973a2921724200",
+      "original_log_bytes": 423,
+      "scope": "complete diagnostic log"
+    }
+  },
+  "fixes": [
+    "auth Docker default PORT=3210 matches EXPOSE and HEALTHCHECK; direct Node dev default unchanged",
+    "macOS recovery fixture accepts shasum, matching backup helper contract",
+    "privilege-repair fixture temporarily grants then revokes schema CREATE during function ownership transfer",
+    "SMS fixture seeds profiles as setup operator then asserts app_user cannot create profiles"
+  ],
+  "previous_partial_evidence": "../security-implementation-2026-10-24-completion-source/batch-verification.json",
+  "previous_approval_review_block": "resolved for local Docker, Flutter and synthetic PostgreSQL checks in this run; no bypass",
+  "not_performed": [
+    "live database/key/credential/contact changes",
+    "provider sends or actual browser/operator acceptance",
+    "signed-device/process-death/key-loss/native custody acceptance",
+    "actual-data intended-provider upgrade/cutover/failback/load acceptance",
+    "independent physical backup/journal/private-key custody provisioning",
+    "feature activation or live SQLite/receipt encryption",
+    "deployment/service restart or Git commit/push"
+  ],
+  "remaining_source_and_acceptance": [
+    "contact replacement protocol transition",
+    "whole actual-data privilege/data/index reconciliation",
+    "complete native writer/process-death/orphan repair coverage",
+    "native key custody and resumable live SQLite/receipt conversion",
+    "external operational/customer alert delivery and actual monitored schedules",
+    "actual-data/provider/oldest-client/signed-device/free-host and independent custody acceptance"
+  ],
+  "safety_state": "new feature flags remain off; existing login and masked-email recovery retained; no extra user password or silent phone-only upload; original data/keys/history preserved"
+}

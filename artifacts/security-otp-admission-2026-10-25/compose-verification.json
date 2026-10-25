@@ -1,0 +1,11 @@
+{
+  "result": "passed",
+  "files": 2,
+  "new_settings_only_on_auth": true,
+  "default_limits": [
+    2,
+    2,
+    2
+  ],
+  "live_environment_loaded": false
+}

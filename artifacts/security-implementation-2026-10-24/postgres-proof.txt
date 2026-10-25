@@ -1,0 +1,8 @@
+18.4 (Homebrew)
+PASS: migrated PostgreSQL schema and non-owner RLS role enforce lounge visit ownership, active-card state, benefit/card matching, and archive locking
+PASS: runtime role has scoped abuse DML and optional INSERT-only audit access; migration replay preserves audit history; readiness detects privilege loss
+PASS: additive partner migration/replay, non-owner service role, app/PUBLIC denials, SQL validation, search-path isolation, status upserts, concurrent no-ref retries and preserved historical rows
+PASS: backup status least-privilege roles, verified-only projection, caller RLS, stale/unavailable states, bounded replay and diagnostic redaction
+PASS: Google fresh schema and replay; optional legacy upgrade/replay and ambiguous ownership rejection; subject-stable UUIDs; no email-only linking; recent explicit proof; deletion/contact reuse; concurrent provider/email claims; PUBLIC denied
+PASS: explicit dashboard grant/revoke/expiry and account status under a read-only non-owner runtime; disabled/deleted/unverified revocation survives restoration; no self-promotion
+PASS: IMAP worker additive migration/replay; non-owner active-row RLS; no app/PUBLIC/direct worker access; durable bounded100 cursor, rotation and deadline resume; corrupt/wrong-key isolation; SQL argument validation; per-user status boundary; session lock exclusion; pgcrypto schema=extensions->public; search-path isolation

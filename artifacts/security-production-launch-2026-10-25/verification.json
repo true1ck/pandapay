@@ -1,0 +1,99 @@
+{
+  "format": "pandapay-production-launch-review-verification-v1",
+  "review_date": "2026-10-25",
+  "target": {
+    "registrations": 100000,
+    "hours": 24,
+    "confirmed_by_user": true
+  },
+  "decision": "not_ready_for_unrestricted_launch",
+  "review_scope": [
+    "current report/source and recorded local evidence",
+    "read-only project metadata, database catalogues and session aggregates",
+    "read-only security/performance advisors",
+    "current primary provider/platform/security documentation"
+  ],
+  "launch_priority_controls": 10,
+  "canonical_finding_counts_changed": false,
+  "global_counts": {
+    "total": 76,
+    "source_implemented": 26,
+    "partial": 43,
+    "open": 7,
+    "unfinished": 50
+  },
+  "focused_unfinished": 22,
+  "runtime_source_unchanged": true,
+  "source_sha256": "d5e5a511fd5d201f4b1683b7a7f71cafa672ef4301c3a610c8695edd8a641b94",
+  "live_mutations": false,
+  "live_customer_row_payloads_read": false,
+  "credentials_or_private_keys_read": false,
+  "load_test_run": false,
+  "provider_messages_sent": false,
+  "application_tests_rerun": false,
+  "html": {
+    "result": "passed",
+    "postgres_tables": 96,
+    "columns": 934,
+    "foreign_keys": 139,
+    "sqlite_tables": 19,
+    "source_only_tables": 2,
+    "remediation_items": 68,
+    "optimization_inventory_rows": 96,
+    "table_retirement_candidates": 4,
+    "local_links": 491,
+    "remaining_implementation_packages": 14,
+    "remaining_release_gates": 6,
+    "full_findings": 76,
+    "unfinished_findings": 50,
+    "focused_page_verified": true,
+    "checks": [
+      "remaining-work counts and complete finding mapping",
+      "focused remaining-work HTML",
+      "tab switching",
+      "keyboard tabs",
+      "database filter",
+      "domain filter",
+      "column search",
+      "empty state",
+      "reset",
+      "table inspection",
+      "relationship navigation",
+      "zoom",
+      "unique IDs",
+      "local links",
+      "offline scripts",
+      "remediation coverage and proposal status",
+      "optimization inventory completeness",
+      "scalability section and cross-tab shortcut"
+    ]
+  },
+  "additional_checks": [
+    "priority order and known finding/package/gate mappings",
+    "confirmed day-one window and arithmetic",
+    "first report section and header link",
+    "stale headline test numbers removed",
+    "deterministic HTML generation",
+    "git diff whitespace check"
+  ],
+  "file_sha256": {
+    "docs/security-and-backend-audit-2026-10-20.md": "7d1c2d386952f725fa7bffd4c25ff927b4e32dae9a1b713b5ccb86395d644cc1",
+    "docs/security-and-backend-audit-2026-10-20.html": "c8e2b1f3faaa915779d04b63288eb4ad41c939f309da27283261fe0104258eca",
+    "docs/security-remaining-work-2026-10-25.md": "90b2c777cbeb5cd06578c63b1a023a29f1ce2c93d07f17d28fd30d28bd94803b",
+    "docs/security-remaining-work-2026-10-25.html": "f7bdb5abc93a421b9761981a83c4a0c66257f56f03e7a29202c22109887f8503",
+    "docs/security-data-dependency-mobile-documentation-plan-2026-10-25.md": "e73d56c3645871aaf1afb767fa7f75a22392b53d45daedd93c4581d7307969a2",
+    "docs/security-implementation-progress-2026-10-22.md": "5d8770c00c4794fd7ad4196948d676dff89e0a4fbf5b69165b9ea97aa9e0b23f",
+    "docs/security-completion-checklist-2026-10-23.md": "1d9bac525872efe74f924c3209dcc7596fc2510ce51d15e2651c456194305ada",
+    "artifacts/security-review-2026-10-20/render_html_report.py": "10f5b81b7902a96cfa96ab90357e055df57cea4c79d0bf9b168a1c8c67550c2a",
+    "artifacts/security-review-2026-10-20/verify_report.cjs": "8f86397462345809b9effd1b5fcc6b674707f99c830731f87dd783cb99916658",
+    "artifacts/security-production-launch-2026-10-25/launch-priorities.json": "d6be48c2256ed2f392467940a55b7e5322b793bffb26f38202f4e579fad0b58b",
+    "artifacts/security-production-launch-2026-10-25/live-metadata-summary.json": "54b0e4ae447d6bc99592beccb94d1d6db4303269e3b7d974c8bf100e82d89bee"
+  },
+  "limitations": [
+    "App hosts, deployed API/auth images, actual subscriptions/quotas and sender settings not inspected",
+    "Live observations are metadata snapshots, not vulnerability exploitation or load certification",
+    "Advisors require classification; index removal/extension moves/database cleanup are not authorized by these warnings",
+    "Legal/platform applicability and proposed performance/recovery targets need accountable owner acceptance"
+  ],
+  "verified_at_utc": "2026-10-25T10:00:05.986Z"
+}

@@ -1,0 +1,4 @@
+PASS: managed-style Supabase PostgreSQL17 CREATEROLE bootstrap creates a dedicated non-superuser/non-BYPASSRLS LOGIN
+PASS: actual service current_user and session_user pass root checkPartnerWebhookReadiness and private ingestion RPC
+PASS: sole membership is pandapay_partner_webhook; owner SET denied; no app or owner membership added
+PASS: bootstrap replay keeps the original credential usable and status retry updates the same conversion

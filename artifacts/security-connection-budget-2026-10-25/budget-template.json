@@ -1,0 +1,111 @@
+{
+  "format": "pandapay-connection-budget-v1",
+  "inventoryReviewed": false,
+  "reviewedAt": null,
+  "primaryCluster": "primary",
+  "clusters": [
+    {
+      "id": "primary",
+      "limitsVerified": false,
+      "verifiedAt": null,
+      "maxConnections": null,
+      "reservedConnections": null,
+      "providerConnections": null,
+      "operationalConnections": null,
+      "safetyConnections": null
+    }
+  ],
+  "processes": [
+    {
+      "id": "api",
+      "kind": "api",
+      "replicas": 1,
+      "overlapReplicas": 0,
+      "dbPoolMax": 10,
+      "pools": {
+        "main": "primary",
+        "partnerWebhook": null,
+        "imapWorker": null,
+        "accountLifecycle": null
+      }
+    },
+    {
+      "id": "auth",
+      "kind": "auth",
+      "replicas": 1,
+      "overlapReplicas": 0,
+      "dbPoolMax": 10,
+      "pools": {
+        "main": "primary",
+        "consoleSession": null,
+        "authLifecycle": null
+      }
+    },
+    {
+      "id": "rewards-worker",
+      "kind": "rewards-worker",
+      "replicas": 1,
+      "overlapReplicas": 0,
+      "dbPoolMax": 10,
+      "pools": {
+        "main": "primary",
+        "partnerWebhook": null,
+        "imapWorker": null,
+        "accountLifecycle": null
+      }
+    },
+    {
+      "id": "sms-learning-worker",
+      "kind": "sms-learning-worker",
+      "replicas": 0,
+      "overlapReplicas": 0,
+      "pools": {
+        "main": "primary"
+      }
+    },
+    {
+      "id": "gemini-worker",
+      "kind": "gemini-worker",
+      "replicas": 0,
+      "overlapReplicas": 0,
+      "pools": {}
+    },
+    {
+      "id": "product-maintenance",
+      "kind": "product-maintenance",
+      "replicas": 0,
+      "overlapReplicas": 0,
+      "pools": {
+        "main": "primary"
+      }
+    },
+    {
+      "id": "auth-retention-maintenance",
+      "kind": "auth-retention-maintenance",
+      "replicas": 0,
+      "overlapReplicas": 0,
+      "pools": {
+        "ledger": "primary",
+        "retention": "primary"
+      }
+    },
+    {
+      "id": "backup-status-publisher",
+      "kind": "backup-status-publisher",
+      "replicas": 0,
+      "overlapReplicas": 0,
+      "pools": {
+        "main": "primary"
+      }
+    },
+    {
+      "id": "maintenance-alert-delivery",
+      "kind": "maintenance-alert-delivery",
+      "replicas": 0,
+      "overlapReplicas": 0,
+      "pools": {
+        "main": "primary"
+      }
+    }
+  ]
+}

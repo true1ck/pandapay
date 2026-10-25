@@ -1,3 +1,7 @@
+-- HISTORICAL DESIGN REFERENCE: not the supported migration/bootstrap source.
+-- Current source architecture: docs/security-current-architecture-2026-10-25.md
+-- Use db/supabase/migrations and auth/db/migrations via their reviewed runners.
+-- Old topology/UI statements below are preserved historical design context.
 -- =============================================================================
 --  PandaPay — Single Shared Database Schema  (PostgreSQL 15+ / Supabase)
 -- =============================================================================

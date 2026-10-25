@@ -1,0 +1,20 @@
+{
+  "api": {
+    "exit_code": 0,
+    "summary": [
+      "# tests 987",
+      "# pass 985",
+      "# fail 0",
+      "# skipped 2"
+    ]
+  },
+  "database-tools": {
+    "exit_code": 0,
+    "summary": [
+      "# tests 164",
+      "# pass 164",
+      "# fail 0",
+      "# skipped 0"
+    ]
+  }
+}

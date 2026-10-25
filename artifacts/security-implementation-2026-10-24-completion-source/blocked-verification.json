@@ -1,0 +1,15 @@
+{
+  "cause": "Automatic approval review returned an account usage-limit failure; it did not determine the actions unsafe, and neither action was executed.",
+  "actions": [
+    "Synthetic local-server auth/console gateway regressions in a sanitized temporary checkout",
+    "Flutter app regressions with offline dependencies and the installed SDK cache"
+  ],
+  "approval_bypassed": false,
+  "pending_additional_checks": [
+    "Complete current-source API/auth/app/console suites",
+    "New maintenance PostgreSQL fixture and final permission-repair rerun",
+    "Full merged migration/paired encrypted recovery on current source",
+    "Exact current service image builds/source verification",
+    "Real browser/providers/signed devices and actual-data intended-provider/custody acceptance"
+  ]
+}

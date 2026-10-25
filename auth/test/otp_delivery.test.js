@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
 const express = require('express');
+const { GoogleIdentityError } = require('../src/services/googleIdentity');
+const { OtpCapacityError, BUSY_CODE } = require('../src/services/otpWorkAdmission');
 const {
   RateLimitStorageError,
   RateLimitExceededError,
@@ -35,6 +37,9 @@ async function harness(t, {
   currentSessionError = null,
   abuseStore = null, failEnumerationStorage = false, verifyOtpResult = { ok: true },
   markActiveError = null, synchronizeActiveChecks = false,
+  enumerationAdmission = null, failEnumerationAdmission = false,
+  googleVerificationError = null, googleResolve = null,
+  otpCapacityError = false, providerBusy = false,
 } = {}) {
   const rows = [];
   abuseStore ||= createMemoryRateLimitStore();
@@ -68,6 +73,14 @@ async function harness(t, {
   }
   if (failEnumerationStorage) {
     limiter.isIpBlockedForEnumeration = async () => {
+      throw new RateLimitStorageError('storage_unavailable');
+    };
+  }
+  if (enumerationAdmission) {
+    limiter.checkEnumerationRateLimit = async () => enumerationAdmission;
+  }
+  if (failEnumerationAdmission) {
+    limiter.checkEnumerationRateLimit = async () => {
       throw new RateLimitStorageError('storage_unavailable');
     };
   }
@@ -118,8 +131,19 @@ async function harness(t, {
       if (sql.startsWith('UPDATE users') || sql.startsWith('INSERT INTO users')) {
         if (sql.startsWith('UPDATE users') && signupUpdateError) throw signupUpdateError;
         userWrites.push({ sql, args });
+        if (sql.startsWith('UPDATE users') && sql.includes('SET name =')) {
+          return { rows: [{
+            ...identityUser,
+            name: args[0],
+            country_code: args[1],
+            created_at: identityUser?.created_at || '2026-01-01T00:00:00.000Z',
+          }] };
+        }
         return { rows: [] };
       }
+      if (sql.includes('SELECT COUNT(*) as count FROM user_devices')) return { rows: [{ count: '1' }] };
+      if (sql.includes('SELECT id FROM user_devices')) return { rows: [] };
+      if (sql.includes('INSERT INTO user_devices')) return { rows: [] };
       throw new Error('Unexpected database operation in email delivery test');
     },
   };
@@ -130,6 +154,7 @@ async function harness(t, {
     '../middleware/rateLimitMiddleware': limiter,
     '../utils/fieldEncryption': { encryptPhoneNumber: value => value },
   });
+  if (otpCapacityError) for (const name of ['createOtp', 'createOtpV2', 'verifyOtp', 'verifyOtpV2']) otp[name] = async () => { throw new OtpCapacityError(); };
   let delivered = true;
   let mailCount = 0;
   let smsCount = 0;
@@ -145,12 +170,22 @@ async function harness(t, {
       return next();
     },
     '../services/smsService': {
-      sendOtpSms: async () => { smsCount++; return { success: delivered }; },
+      sendOtpSms: async () => { smsCount++; return providerBusy ? { success: false, code: BUSY_CODE } : { success: delivered }; },
     },
     '../services/emailService': {
-      sendOtpEmail: async () => { mailCount++; return { success: delivered }; },
+      sendOtpEmail: async () => { mailCount++; return providerBusy ? { success: false, code: BUSY_CODE } : { success: delivered }; },
     },
-    '../services/googleAuthService': {},
+    '../services/googleAuthService': { verifyGoogleToken: async () => {
+      if (googleVerificationError) throw googleVerificationError;
+      return { googleId: '123456789', email: 'synthetic@gmail.com', emailVerified: true, emailAuthoritative: true };
+    } },
+    '../services/googleIdentity': {
+      GoogleIdentityError,
+      resolveGoogleAccount: async options => {
+        assert.ok(googleResolve, 'Google test must explicitly provide an identity resolver');
+        return googleResolve(options);
+      },
+    },
     '../services/accessTokenVerification': { verifyAccessToken: token => {
       if (token === 'invalid-token') throw new Error('invalid_token');
       return tokenClaims;
@@ -160,15 +195,26 @@ async function harness(t, {
       if (currentSessionError) throw currentSessionError;
       return currentSession;
     } },
-    '../services/otpService': { ...otp, verifyOtp: async () => verifyOtpResult },
-    '../services/tokenService': {},
+    '../services/otpService': { ...otp, verifyOtp: async () => { if (otpCapacityError) throw new OtpCapacityError(); return verifyOtpResult; } },
+    '../services/tokenService': {
+      signAccessToken: () => 'synthetic-access-token',
+      issueRefreshToken: async () => 'synthetic-refresh-token',
+    },
     '../middleware/rateLimitMiddleware': limiter,
-    '../services/riskScoring': { isIpBlocked: () => false },
+    '../services/riskScoring': {
+      isIpBlocked: () => false,
+      getPreviousAuthInfo: async () => ({}),
+      calculateRiskScore: async () => ({ score: 0, reasons: [], isSuspicious: false }),
+    },
     '../services/auditLogger': {
       logAuthEvent: noop, logBlockedIpLogin: noop, logSuspiciousOtpAttempt: noop,
+      checkAnomalies: noop,
       RISK_LEVELS: { INFO: 'info' },
     },
-    '../utils/fieldEncryption': { encryptPhoneNumber: value => value },
+    '../utils/fieldEncryption': {
+      encryptPhoneNumber: value => value,
+      decryptPhoneNumber: value => value,
+    },
     '../utils/encryptedPhoneSearch': { preparePhoneSearchParams: value => [value], phoneLookupHash: value => value },
     '../utils/timingProtection': {
       executeOtpRequestWithTiming: operation => operation(), otpRequestDelay: noop,
@@ -178,6 +224,7 @@ async function harness(t, {
   });
   const app = express();
   app.use(express.json());
+  app.use('/auth/v2',require('../src/routes/versionedOtpRoutes').createVersionedOtpRouter({legacyRouter:router}));
   app.use('/auth', router);
   const server = await new Promise(resolve => {
     const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
@@ -195,11 +242,63 @@ async function harness(t, {
           'Content-Type': 'application/json', ...(authorization ? { Authorization: authorization } : {}),
         }, body: JSON.stringify(body),
       });
-      return { status: response.status, body: await response.json() };
+      const result = { status: response.status, body: await response.json() };
+      Object.defineProperties(result, { retryAfter: { value: response.headers.get('retry-after') }, cacheControl: { value: response.headers.get('cache-control') } });
+      return result;
     },
     request(email, recovery_only = false) { return this.post('request-email-otp', { email, ...(recovery_only ? { recovery_only } : {}) }); },
     requestPhone(phone_number, recovery_only = false) { return this.post('request-otp', { phone_number, ...(recovery_only ? { recovery_only } : {}) }); },
   };
+}
+
+test('Google route preserves successful token/device response without requiring a legacy google_id column', async t => {
+  const h = await harness(t, { googleResolve: async options => {
+    assert.equal(options.googleUser.googleId, '123456789');
+    assert.equal(options.linkingToken, null);
+    return { user: { id: 'google-user', email: 'synthetic@gmail.com', name: 'Synthetic', role: 'user', token_version: 1 }, isNewAccount: true };
+  } });
+  const response = await h.post('google', { id_token: 'synthetic-google-id-token', device_id: 'google-test-device' });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.user.id, 'google-user');
+  assert.equal(response.body.access_token, 'synthetic-access-token');
+  assert.equal(response.body.refresh_token, 'synthetic-refresh-token');
+  assert.equal(response.body.is_new_account, true);
+  assert.equal(response.body.active_devices_count, 1);
+  assert.equal(h.userQueries.length, 0);
+  assert.equal(h.userWrites.length, 0);
+});
+
+test('Google route returns explicit account-link error without issuing tokens', async t => {
+  const h = await harness(t, { googleResolve: async () => {
+    throw new GoogleIdentityError('GOOGLE_ACCOUNT_LINK_REQUIRED', 409, 'Sign in with your existing OTP account.');
+  } });
+  const response = await h.post('google', { id_token: 'synthetic-google-id-token', device_id: 'google-test-device' });
+  assert.equal(response.status, 409);
+  assert.equal(response.body.code, 'GOOGLE_ACCOUNT_LINK_REQUIRED');
+  assert.equal(response.body.access_token, undefined);
+});
+
+test('Google explicit linking requires a bearer session and passes it to the checked account resolver', async t => {
+  const h = await harness(t, { googleResolve: async options => {
+    assert.equal(options.linkingToken, 'signed-existing-session');
+    assert.equal(typeof options.verifySession, 'function');
+    return { user: { id: 'existing-user', name: 'Existing', role: 'user' }, isNewAccount: false };
+  } });
+  const body = { id_token: 'synthetic-google-id-token', device_id: 'google-test-device', link_account: true };
+  assert.equal((await h.post('google', body)).status, 401);
+  const response = await h.post('google', body, 'Bearer signed-existing-session');
+  assert.equal(response.status, 200);
+  assert.equal(response.body.is_new_account, false);
+});
+
+for (const [code, status] of [['GOOGLE_TOKEN_INVALID', 400], ['GOOGLE_AUTH_UNAVAILABLE', 503]]) {
+  test(`Google route maps ${code} to ${status} without provider details`, async t => {
+    const h = await harness(t, { googleVerificationError: Object.assign(new Error('sensitive provider response'), { code }) });
+    const response = await h.post('google', { id_token: 'synthetic-google-id-token', device_id: 'google-test-device' });
+    assert.equal(response.status, status);
+    assert.equal(response.body.code, code);
+    assert.equal(JSON.stringify(response.body).includes('sensitive'), false);
+  });
 }
 
 test('failed email returns 503, discards its code, and permits retry', async t => {
@@ -387,6 +486,31 @@ test('email and phone conflict preflight normalizes a stored email before compar
   assert.equal(response.status, 200);
 });
 
+test('check-user keeps its response contract and applies shared enumeration admission', async t => {
+  const phone = '+919876543210';
+  const h = await harness(t, {
+    phoneUser: { id: 'known-user', name: 'Known', phone_lookup_hash: phone },
+  });
+  const known = await h.post('check-user', { phone_number: '9876543210' });
+  assert.equal(known.status, 200);
+  assert.equal(known.body.user_exists, true);
+  assert.deepEqual(h.userQueries.at(-1).args, [phone]);
+
+  const limited = await harness(t, { enumerationAdmission: { allowed: false } });
+  const throttled = await limited.post('check-user', { phone_number: phone });
+  assert.equal(throttled.status, 429);
+  assert.equal(throttled.body.success, false);
+  assert.equal(limited.userQueries.length, 0);
+});
+
+test('check-user fails closed with controlled 503 when shared enumeration storage is unavailable', async t => {
+  const h = await harness(t, { failEnumerationAdmission: true });
+  const response = await h.post('check-user', { phone_number: '+919876543210' });
+  assert.equal(response.status, 503);
+  assert.equal(response.body.error, 'Authentication is temporarily unavailable. Please try again shortly.');
+  assert.equal(h.userQueries.length, 0);
+});
+
 test('same identifier keeps separate durable purpose challenges and same-purpose resend replaces only its own', async t => {
   const h = await harness(t);
   const signin1 = await h.otp.createOtp('purpose@example.com', 'email', 'signin');
@@ -452,6 +576,22 @@ test('signup cannot replace the verified phone factor with a body-supplied numbe
   assert.equal(response.status, 409);
   assert.equal(response.body.code, 'existing_factor_required');
   assert.deepEqual(h.userWrites, []);
+});
+
+test('legacy signup address fields do not query removed locations and retain null response field', async t => {
+  const h = await harness(t, { identityUser: {
+    id: 'authenticated-user', phone_number: '+919876543210',
+    phone_lookup_hash: '+919876543210', is_phone_verified: true,
+    is_email_verified: false, country_code: '+91', name: null, role: 'user', token_version: 1,
+  } });
+  const response = await h.post('signup', {
+    name: 'Profile Name', phone_number: '+919876543210',
+    state: 'Maharashtra', district: 'Pune', city_village: 'Pune',
+  }, 'Bearer existing-session');
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.location_id, null);
+  assert.equal(h.userWrites.some(({ sql }) => /INSERT INTO locations/i.test(sql)), false);
 });
 
 test('signup constraint errors keep status and shape without returning database details', async t => {
@@ -565,6 +705,10 @@ for (const port of [465, 587]) {
     assert.equal((await service.sendOtpEmail('recovery@example.com', '5678')).success, true);
     assert.equal(messageOptions.disableFileAccess, true);
     assert.equal(messageOptions.disableUrlAccess, true);
+    assert.match(messageOptions.subject, /PandaPay/);
+    assert.match(messageOptions.text, /PandaPay verification code/);
+    assert.match(messageOptions.html, /PandaPay Verification Code/);
+    assert.doesNotMatch(JSON.stringify(messageOptions), /PandaPal/);
     assert.ok(service);
   });
 }
@@ -589,3 +733,62 @@ test('email delivery logs neither the full address nor the OTP value', async () 
   assert.equal(output.some(line => line.includes('recovery@example.com')), false);
   assert.equal(output.some(line => line.includes('4826')), false);
 });
+
+
+test('v2 OTP request requires stable device and returns only six-digit challenge metadata',async t=>{
+  const h=await harness(t);
+  const bad=await h.post('v2/request-email-otp',{email:'version2@example.com'});assert.equal(bad.status,400);
+  const response=await h.post('v2/request-email-otp',{email:'version2@example.com',device_id:'device-v2'});
+  assert.equal(response.status,200);assert.deepEqual(Object.keys(response.body).sort(),['challenge_id','code_length','expires_in','ok','version']);
+  assert.equal(response.body.code_length,6);assert.equal(response.body.expires_in,120);assert.match(response.body.challenge_id,/^[a-f0-9-]{36}$/);
+  assert.equal(h.userQueries.length,0,'request cannot expose pre-proof account state');
+  assert.equal(h.mailCount,1);
+  const duplicate=await h.request('version2@example.com');assert.equal(duplicate.status,429,'legacy shares the same active identifier claim');
+});
+test('v2 refuses contact selectors and forged protocol fields before queries or provider work',async t=>{
+  const h=await harness(t);
+  for(const extra of [{phone_number:'+919876543210'},{is_signup:true},{protocol_version:1},{version:2}]){
+    assert.equal((await h.post('v2/request-email-otp',{email:'v2-selectors@example.com',device_id:'v2-device',...extra})).status,400);
+  }
+  for(const code of ['1234',123456,'1234567',' 123456'])assert.equal((await h.post('v2/verify-email-otp',{email:'v2-selectors@example.com',device_id:'v2-device',challenge_id:'00000000-0000-4000-8000-000000000001',code})).status,400);
+  assert.equal(h.mailCount,0);assert.equal(h.userQueries.length,0);assert.equal(h.rows.length,0);
+});
+test('v2 delivery failure discards its exact challenge and permits retry with unchanged legacy response',async t=>{
+  const h=await harness(t);h.failDelivery();
+  assert.equal((await h.post('v2/request-email-otp',{email:'v2-failure@example.com',device_id:'v2-device'})).status,503);
+  assert.equal(h.rows[0].deleted,true);h.restoreDelivery();
+  assert.equal((await h.request('v2-failure@example.com')).status,200);
+  const v1=await h.request('v1-unchanged@example.com');assert.deepEqual(v1.body,{ok:true});
+});
+test('unversioned endpoints cannot select six digits with header/body protocol claims',async t=>{
+  const h=await harness(t);
+  const response=await h.post('verify-email-otp',{email:'legacy@example.com',code:'123456',protocol_version:2,device_id:'v2-device',challenge_id:'00000000-0000-4000-8000-000000000001'});
+  assert.equal(response.status,400);assert.match(response.body.error,/4 digits/);
+});
+
+for (const versioned of [false, true]) for (const channel of ['email', 'phone']) {
+  const prefix = versioned ? 'v2/' : '', suffix = channel === 'email' ? 'email-otp' : 'otp';
+  const identity = channel === 'email' ? { email: 'capacity@example.com' } : { phone_number: '+919876543210' };
+  const protocol = versioned ? { device_id: 'capacity-device', challenge_id: '11111111-1111-4111-8111-111111111111' } : {};
+  test(`${prefix}${channel} issuance and verification saturation return safe retryable 503 with no OTP/account writes`, async t => {
+    const h = await harness(t, { otpCapacityError: true });
+    const requestBody = { ...identity, ...(versioned ? { device_id: protocol.device_id } : {}) };
+    const verifyBody = { ...identity, ...protocol, code: versioned ? '123456' : '5678', device_id: 'capacity-device' };
+    for (const [action, body] of [[`request-${suffix}`, requestBody], [`verify-${suffix}`, verifyBody]]) {
+      const response = await h.post(prefix + action, body);
+      assert.equal(response.status, 503); assert.equal(response.retryAfter, '2');
+      assert.equal(response.cacheControl, 'no-store'); assert.equal(response.body.code, BUSY_CODE);
+      assert.equal(JSON.stringify(response.body).includes('capacity@example.com'), false);
+    }
+    assert.equal(h.rows.length, 0); assert.equal(h.userWrites.length, 0); assert.equal(h.mailCount + h.smsCount, 0);
+  });
+  test(`${prefix}${channel} provider saturation discards the issued challenge and its active marker`, async t => {
+    const h = await harness(t, { providerBusy: true });
+    const response = await h.post(prefix + `request-${suffix}`, { ...identity, ...(versioned ? { device_id: protocol.device_id } : {}) });
+    assert.equal(response.status, 503); assert.equal(response.retryAfter, '2'); assert.equal(response.body.code, BUSY_CODE);
+    assert.equal(h.rows.length, 1); assert.equal(h.rows[0].deleted, true);
+    // A second attempt reaches issuance again rather than a stale OTP_ACTIVE response.
+    const retry = await h.post(prefix + `request-${suffix}`, { ...identity, ...(versioned ? { device_id: protocol.device_id } : {}) });
+    assert.equal(retry.status, 503); assert.equal(retry.body.code, BUSY_CODE); assert.equal(h.rows.length, 2);
+  });
+}

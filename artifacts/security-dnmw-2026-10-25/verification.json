@@ -1,0 +1,119 @@
+{
+  "format": "pandapay-dnmw-local-verification-v1",
+  "date": "25 October 2026 (IST)",
+  "status": "source_slices_locally_verified_release_acceptance_pending",
+  "deployment_performed": false,
+  "live_database_data_or_schema_changed": false,
+  "mobile_feature_enabled": false,
+  "mobile_active_dependency_lock_changed": false,
+  "checks": {
+    "app": {
+      "passed": 1606,
+      "failed": 0,
+      "analysis_errors": 0,
+      "analysis_warnings": 0,
+      "analysis_information": 80,
+      "runtime": "Flutter 3.44.8 / Dart 3.12.2, sanitized candidate"
+    },
+    "api": {
+      "passed": 968,
+      "failed": 0,
+      "skipped": 2,
+      "runtime": "Node 24.15.0, sanitized candidate; separate DB fixtures below"
+    },
+    "api_changed_recovery_routes": {
+      "passed": 12,
+      "failed": 0,
+      "runtime": "cached Node 22 image, network none, read-only source"
+    },
+    "auth": {
+      "passed": 312,
+      "failed": 0,
+      "runtime": "cached Node 22 image, network none, test configuration"
+    },
+    "database_tools": {
+      "reviewed_index_units": 9,
+      "dependency_inventory_units": 4,
+      "secret_audit_units": 4,
+      "data_review_units": 11,
+      "postgresql_automatic_consent": "passed PostgreSQL 18.4",
+      "postgresql_index_and_data_review": "passed PostgreSQL 18.4",
+      "auth_index_inspection": "passed PostgreSQL 18.4",
+      "total_current_focused_units": 28,
+      "additional_guards": [
+        "non-live retained/dropped index refusal",
+        "table ownership, ACL, RLS and constraint preservation",
+        "auth data fingerprint inspection",
+        "exact automatic-consent generation, cooldown and receipt choice"
+      ]
+    },
+    "android_components": {
+      "passed": 2,
+      "failed": 0,
+      "device": "API 37 emulator",
+      "package": "app.pandapay.keycipherfixture.pandapay",
+      "scope": [
+        "native key-custody persistence",
+        "SQLite3MC ChaCha20 encrypted file/WAL, rollback, correct-key reopen, wrong/missing-key and damaged-page refusal"
+      ],
+      "engine": "sqlite3 3.5.2 via maintained sqlite3mc native-assets hook",
+      "full_signed_app_acceptance": false
+    },
+    "actual_data": {
+      "fresh_paired_encrypted_backup": true,
+      "restore_with_original_keys": true,
+      "product_readonly_checks": 355,
+      "auth_readonly_checks": 10,
+      "product_foreign_key_checks": 217,
+      "auth_foreign_key_checks": 5,
+      "orphans": 0,
+      "candidate_upgrade_or_provider_move_rehearsed": false
+    },
+    "android_current_app_debug_build": {
+      "status": "passed",
+      "artifact_path": "/private/tmp/pandapay-dnmw-20261025/current-app-dev-debug.apk",
+      "sha256": "38e2cc24c70f39dbb7188891e7f5dd3abca794cb88ea3d9d6a6b53ced421b484",
+      "bytes": 263674814,
+      "flavor": "dev",
+      "mode": "debug",
+      "installed_on_phone": false,
+      "production_dependency_lock_unchanged": true,
+      "free_GiB_after_cleanup": 30.23,
+      "used_percent_after_cleanup": 93.44
+    }
+  },
+  "limitations": [
+    "new local database conversion and receipt encryption are not integrated/enabled",
+    "cross-isolate key provisioning, native crash/power-loss and signed-device matrix remain",
+    "private issuer-name candidate and equivalent index pair have not been merged/removed",
+    "full history and native binary secret coverage, full Dart/Gradle/Pod/Swift/license review remain",
+    "one physical Mac backup custody remains; two independent copies/private-key custody remain",
+    "all 23 scoped findings and broader 14 implementation packages / 6 gates remain unfinished; no status closure inferred"
+  ],
+  "test_environment_incidents": [
+    {
+      "issue": "three API journal tests refused disk reserve after generated native builds pushed volume over 95%",
+      "resolution": "recorded artifact hashes, removed only task-created generated build directories, reran full API: 968 passed/2 skipped",
+      "free_GiB_after": 29.52,
+      "used_percent_after": 93.59
+    }
+  ],
+  "documentation": {
+    "html_pages_regenerated": 2,
+    "offline_dom_qa": "passed",
+    "local_links_checked": 463,
+    "historical_database_explorer_unchanged": true,
+    "new_document_links_checked": "passed"
+  },
+  "candidate_source_sha256": "80a993c228c8cd370a44fa7d0e5d9af864e9d41ae07350aa44c2398ddc7aea8d",
+  "preservation": {
+    "unrelated_notification_source_files_compared": 11,
+    "baseline_hashes_match": true,
+    "notification_document_not_edited_by_this_batch": true
+  },
+  "finding_status_changes": {
+    "D03": "Open to Partial",
+    "D04": "Open to Partial"
+  },
+  "finding_closures": 0
+}

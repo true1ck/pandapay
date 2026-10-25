@@ -1,3 +1,4 @@
+import '../portable_backup/account_recovery_operation_gate.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:convert';
@@ -182,6 +183,14 @@ class TransactionOutboxRepository {
   /// failure records [TransactionOutboxEntry.lastError] and leaves it
   /// queued for the next flush — never silently drops a queued transaction.
   Future<int> flush(UserCardsRepository repo) async {
+    try {
+      return await AccountRecoveryOperationGate.process.run(() => _flush(repo));
+    } on AccountRecoveryBusy {
+      return 0;
+    }
+  }
+
+  Future<int> _flush(UserCardsRepository repo) async {
     var sent = 0;
     for (final entry in await pending()) {
       try {

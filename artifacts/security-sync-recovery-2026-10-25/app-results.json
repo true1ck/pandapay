@@ -1,0 +1,22 @@
+{
+  "app-analysis": {
+    "exit_code": 0,
+    "seconds": 3.77,
+    "tail": [
+      "   info \u2022 Can't use a relative path to import a library in 'lib'. Try fixing the relative path or changing the import to a 'package:' import \u2022 test/features/voice/voice_action_parser_test.dart:6:8 \u2022 avoid_relative_lib_imports",
+      "   info \u2022 Use interpolation to compose strings and values. Try using string interpolation to build the composite string \u2022 test/fixtures/portable_backup_fixture.dart:81:7 \u2022 prefer_interpolation_to_compose_strings",
+      "",
+      "80 issues found. (ran in 3.0s)"
+    ]
+  },
+  "app-full": {
+    "exit_code": 0,
+    "seconds": 193.52,
+    "tail": [
+      "03:06 +1629: loading /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/notification_devices_api_test.dart",
+      "03:06 +1629: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/notification_devices_api_test.dart: sendTestNotification accepts the provider-accepted response",
+      "03:06 +1630: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/notification_devices_api_test.dart: sendTestNotification surfaces an unconfigured production service",
+      "03:06 +1631: All tests passed!"
+    ]
+  }
+}

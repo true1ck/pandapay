@@ -1,3 +1,4 @@
+import 'portable_backup/app_private_temporary_storage.dart';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -37,11 +38,9 @@ class SpendingScreenshotOcr {
     // Retry small, rotated or low-contrast photos without altering the source.
     final bytes = await compute(_prepareImage, await File(path).readAsBytes());
     if (bytes == null) return text;
-    final directory = await Directory.systemTemp.createTemp(
-      'pandapay-image-ocr-',
-    );
+    final workspace = await AppPrivateTemporaryStorage.create();
     try {
-      final file = File('${directory.path}/prepared.jpg');
+      final file = workspace.file('prepared.jpg');
       await file.writeAsBytes(bytes);
       final retry = readingOrderLines(
         await _recognizer.processImage(InputImage.fromFilePath(file.path)),
@@ -51,7 +50,7 @@ class SpendingScreenshotOcr {
           : text;
     } finally {
       try {
-        await directory.delete(recursive: true);
+        await workspace.cleanup();
       } catch (_) {
         /* Best-effort cleanup. */
       }

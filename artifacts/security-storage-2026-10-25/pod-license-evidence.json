@@ -1,0 +1,921 @@
+{
+  "format": "pandapay-local-native-license-evidence-v1",
+  "podfile_lock_sha256": "c51e6dfaf93dd8550e2b40ac243bf501a0912c2de7f9a1366f52d34a10adcfb8",
+  "podfile_lock_entries": 77,
+  "unique_base_specs": 53,
+  "public_cached_specs": [
+    {
+      "name": "FirebaseCore",
+      "version": "12.19.0",
+      "lock_spec_checksum": "c990214798d7c568ad436a15ba7da25c7a278c9a",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/FirebaseCore/12.19.0-c9902.podspec.json",
+      "cached_spec_sha256": "f599d14a5daeec1aa9a479e43c199a41bf68bb938d67ec5cbe08d00c4f5d9442",
+      "license_metadata": {
+        "type": "Apache-2.0",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/FirebaseCore/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "RecaptchaInterop",
+      "version": "101.0.0",
+      "lock_spec_checksum": "11e0b637842dfb48308d242afc3f448062325aba",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/RecaptchaInterop/101.0.0-11e0b.podspec.json",
+      "cached_spec_sha256": "85a30bf8eea0b8ebcf70558cc470b0bef50f891f8f4113acc55d224f079c1797",
+      "license_metadata": {
+        "type": "Apache-2.0",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/RecaptchaInterop/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "PromisesObjC",
+      "version": "2.4.1",
+      "lock_spec_checksum": "752c3227f599e3467650e47ea36f433eeb10c273",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/PromisesObjC/2.4.1-752c3.podspec.json",
+      "cached_spec_sha256": "4dea22040db52e0b720b16795ac72dbea72bdaa31828f00bf9960cb1d0c9978d",
+      "license_metadata": {
+        "type": "Apache-2.0",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/PromisesObjC/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "AppCheckCore",
+      "version": "11.3.2",
+      "lock_spec_checksum": "be8fce5469f68d7f6a29aa94b25f097409ff7fdc",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/AppCheckCore/11.3.2-be8fc.podspec.json",
+      "cached_spec_sha256": "d8dd5914188ff511369274585e98d861483319eb7ce887c909461fffa7b12940",
+      "license_metadata": {
+        "type": "Apache-2.0",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/AppCheckCore/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "GoogleDataTransport",
+      "version": "10.1.1",
+      "lock_spec_checksum": "a24e58982ab3ba2f64d79613e027fe7f57e88539",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/GoogleDataTransport/10.1.1-a24e5.podspec.json",
+      "cached_spec_sha256": "eb9e44320a5dfa0c14fbfc7738cb746db61b7b14de71f6c546100eba848fc9e8",
+      "license_metadata": {
+        "type": "Apache-2.0",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/GoogleDataTransport/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "AppAuth",
+      "version": "1.7.6",
+      "lock_spec_checksum": "d4f13a8fe0baf391b2108511793e4b479691fb73",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/AppAuth/1.7.6-d4f13.podspec.json",
+      "cached_spec_sha256": "50d9cbb14016a6e73b7c3254581ed42fbef69c3239044084cad6f0eebe15c315",
+      "license_metadata": {
+        "type": "Apache License, Version 2.0",
+        "file": null,
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/AppAuth/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "CwlCatchException",
+      "version": "2.2.1",
+      "lock_spec_checksum": "7acc161b299a6de7f0a46a6ed741eae2c8b4d75a",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/CwlCatchException/2.2.1-7acc1.podspec.json",
+      "cached_spec_sha256": "0c6fc3cf992f7554aaa118cb2b6ddb835962a43ee8c2584e67a4353ab6488a28",
+      "license_metadata": {
+        "type": "ISC",
+        "file": "LICENSE.txt",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/CwlCatchException/LICENSE.txt",
+        "sha256": "740b29806531fef266b70da0cf18edf5feb981a5f50f97cc5974f8a360a4ad30"
+      }
+    },
+    {
+      "name": "FirebaseInstallations",
+      "version": "12.19.0",
+      "lock_spec_checksum": "f70a49eed611f5602f373e40974b3b01556ac217",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/FirebaseInstallations/12.19.0-f70a4.podspec.json",
+      "cached_spec_sha256": "e6379ff4a516876367f31059daef0ec87d1b3c2d66e4ecc517693259901b2911",
+      "license_metadata": {
+        "type": "Apache-2.0",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/FirebaseInstallations/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "GTMSessionFetcher",
+      "version": "3.5.0",
+      "lock_spec_checksum": "5aea5ba6bd522a239e236100971f10cb71b96ab6",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/GTMSessionFetcher/3.5.0-5aea5.podspec.json",
+      "cached_spec_sha256": "1ef73b2c400025a51fc9fc81e5f07f83f29a978323ebcb9bc7b295e0fbc1872e",
+      "license_metadata": {
+        "type": "Apache",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/GTMSessionFetcher/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "MLKitVision",
+      "version": "10.0.0",
+      "lock_spec_checksum": "39a5a812db83c4a0794445088e567f3631c11961",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/MLKitVision/10.0.0-39a5a.podspec.json",
+      "cached_spec_sha256": "ce45cd937d5372c6586e2e55536e8378df9a51d0c880cd210d6df9107dd4ae02",
+      "license_metadata": {
+        "type": "Copyright",
+        "file": null,
+        "text_present": true
+      },
+      "installed_license": null
+    },
+    {
+      "name": "MLKitCommon",
+      "version": "14.0.0",
+      "lock_spec_checksum": "47d47b50a031d00db62f1b0efe5a1d8b09a3b2e6",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/MLKitCommon/14.0.0-47d47.podspec.json",
+      "cached_spec_sha256": "6c6d76f9bfb389abea312e3dd0860bb675902c88b022b8afff920e7f07af7a4c",
+      "license_metadata": {
+        "type": "Copyright",
+        "file": null,
+        "text_present": true
+      },
+      "installed_license": null
+    },
+    {
+      "name": "FirebaseCoreInternal",
+      "version": "12.19.0",
+      "lock_spec_checksum": "656b1c2fd5a1c5976183dc54b73deda78fb26ee3",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/FirebaseCoreInternal/12.19.0-656b1.podspec.json",
+      "cached_spec_sha256": "549217d0cf0453cb953b92b463d1fc1173516e469e333b3ed4ba7cb7ac18a0a7",
+      "license_metadata": {
+        "type": "Apache-2.0",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/FirebaseCoreInternal/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "Firebase",
+      "version": "12.19.0",
+      "lock_spec_checksum": "7ca191e43724142f79fae653547b3382c45413cc",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/Firebase/12.19.0-7ca19.podspec.json",
+      "cached_spec_sha256": "744da79450a64d5fd8c63aa82f8c623e9c0be056527366cc428d459fa93800ff",
+      "license_metadata": {
+        "type": "Apache-2.0",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/Firebase/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "GoogleMLKit",
+      "version": "9.0.0",
+      "lock_spec_checksum": "b1eee21a41c57704fe72483b15c85cb2c0cd7444",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/GoogleMLKit/9.0.0-b1eee.podspec.json",
+      "cached_spec_sha256": "a7bc945a97a8d101477c8d24e956c6f56cc8af90342cc6696f60e908af7890cb",
+      "license_metadata": {
+        "type": "Copyright",
+        "file": null,
+        "text_present": true
+      },
+      "installed_license": null
+    },
+    {
+      "name": "sqlite3",
+      "version": "3.52.0",
+      "lock_spec_checksum": "a51c07cf16e023d6c48abd5e5791a61a47354921",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/sqlite3/3.52.0-a51c0.podspec.json",
+      "cached_spec_sha256": "09ff15d0b72b603d40a5efd383bcf602df1700a27178169f25369e4097a469ad",
+      "license_metadata": {
+        "type": "Public Domain",
+        "file": null,
+        "text_present": true
+      },
+      "installed_license": null
+    },
+    {
+      "name": "MLKitTextRecognitionCommon",
+      "version": "6.0.0",
+      "lock_spec_checksum": "234ceb1cfdfb5fceb4fd664943046609a2961cc2",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/MLKitTextRecognitionCommon/6.0.0-234ce.podspec.json",
+      "cached_spec_sha256": "f8ec5e3716662f398808cc02f13c6b49b64c3153e9e88e91b43c0d33f8a13086",
+      "license_metadata": {
+        "type": "Copyright",
+        "file": null,
+        "text_present": true
+      },
+      "installed_license": null
+    },
+    {
+      "name": "FirebaseMessaging",
+      "version": "12.19.0",
+      "lock_spec_checksum": "c15f48126adbe8b4d3238a5e1fa24bab3ad3e472",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/FirebaseMessaging/12.19.0-c15f4.podspec.json",
+      "cached_spec_sha256": "aa0627629c69807d78debb1f1e73e102c49d1269897bbfc598d3e379b7570302",
+      "license_metadata": {
+        "type": "Apache-2.0",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/FirebaseMessaging/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "GoogleUtilities",
+      "version": "8.1.2",
+      "lock_spec_checksum": "766ace00c6b10d8148408f329d10c4f051931850",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/GoogleUtilities/8.1.2-766ac.podspec.json",
+      "cached_spec_sha256": "ce232db5e92bf71c3af54db1ed513152672fd3de53ec9fa240528361c118e846",
+      "license_metadata": {
+        "type": "Apache-2.0",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/GoogleUtilities/LICENSE",
+        "sha256": "ad6d036b9a78f0e1700d68039c06058033fea063172ce2dc68e382a24b4d1928"
+      }
+    },
+    {
+      "name": "GoogleSignIn",
+      "version": "8.0.0",
+      "lock_spec_checksum": "ce8c89bb9b37fb624b92e7514cc67335d1e277e4",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/GoogleSignIn/8.0.0-ce8c8.podspec.json",
+      "cached_spec_sha256": "d6a8ad339c5bfead29d1818cf9655a4f9f4b6dccbc502d42630655ecfba3fc2e",
+      "license_metadata": {
+        "type": "Apache",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/GoogleSignIn/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "GoogleToolboxForMac",
+      "version": "4.2.1",
+      "lock_spec_checksum": "d1a2cbf009c453f4d6ded37c105e2f67a32206d8",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/GoogleToolboxForMac/4.2.1-d1a2c.podspec.json",
+      "cached_spec_sha256": "67cd0d217f94967517ac533cffdc283d25d5767a81fa23aae073fdb9c1bc4621",
+      "license_metadata": {
+        "type": "Apache",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/GoogleToolboxForMac/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "PromisesSwift",
+      "version": "2.4.1",
+      "lock_spec_checksum": "217dea0fd5d2ad65222a109c48698add13cc1c5b",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/PromisesSwift/2.4.1-217de.podspec.json",
+      "cached_spec_sha256": "3713c3c00a6ac9a1bc7b6db5ea80d8052218bb48cc3de4e9c4a668713bcfcc3d",
+      "license_metadata": {
+        "type": "Apache-2.0",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/PromisesSwift/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "nanopb",
+      "version": "3.30910.0",
+      "lock_spec_checksum": "fad817b59e0457d11a5dfbde799381cd727c1275",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/nanopb/3.30910.0-fad81.podspec.json",
+      "cached_spec_sha256": "b086016b578cdc723e878eba59d26776170e4e0a788641bef0a4395e019de4e4",
+      "license_metadata": {
+        "type": "zlib",
+        "file": "LICENSE.txt",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/nanopb/LICENSE.txt",
+        "sha256": "e2f2fc8fe3faa7dcb09dbe995db48c6ec5c1f72705db915101e4a83fed44f66d"
+      }
+    },
+    {
+      "name": "MLImage",
+      "version": "1.0.0-beta8",
+      "lock_spec_checksum": "0de5c6c2bf9e93b80ef752e2797f0836f03b58c0",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/MLImage/1.0.0-beta8-0de5c.podspec.json",
+      "cached_spec_sha256": "51da9aadf6b8ce725242149b361361dee92cd16e286f3ea32faeb1056c53bdd8",
+      "license_metadata": {
+        "type": "Copyright",
+        "file": null,
+        "text_present": true
+      },
+      "installed_license": null
+    },
+    {
+      "name": "CwlCatchExceptionSupport",
+      "version": "2.2.1",
+      "lock_spec_checksum": "54ccab8d8c78907b57f99717fb19d4cc3bce02dc",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/CwlCatchExceptionSupport/2.2.1-54cca.podspec.json",
+      "cached_spec_sha256": "caf9f3752c2143e9e0da36527b3552c8a5b4c4175f8555a1553b1d3283d6872e",
+      "license_metadata": {
+        "type": "ISC",
+        "file": "LICENSE.txt",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/CwlCatchExceptionSupport/LICENSE.txt",
+        "sha256": "740b29806531fef266b70da0cf18edf5feb981a5f50f97cc5974f8a360a4ad30"
+      }
+    },
+    {
+      "name": "GTMAppAuth",
+      "version": "4.1.1",
+      "lock_spec_checksum": "f69bd07d68cd3b766125f7e072c45d7340dea0de",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/GTMAppAuth/4.1.1-f69bd.podspec.json",
+      "cached_spec_sha256": "484834dc8802f0644610408d5dc6d6782df0fb71956779a6c855b1f07a362cf8",
+      "license_metadata": {
+        "type": "Apache",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "installed_license": {
+        "path": "app/ios/Pods/GTMAppAuth/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "name": "MLKitTextRecognition",
+      "version": "7.0.0",
+      "lock_spec_checksum": "c0ad24510481dfc8893ad15dfcb8a5f05ed9e826",
+      "checksum_prefix_matches_cached_spec": true,
+      "cached_spec_path": "Pods/Specs/Release/MLKitTextRecognition/7.0.0-c0ad2.podspec.json",
+      "cached_spec_sha256": "491480cf3218e8373902f02de942dd5350d8fe97f1fb2421dd50dbfb540d205b",
+      "license_metadata": {
+        "type": "Copyright",
+        "file": null,
+        "text_present": true
+      },
+      "installed_license": null
+    }
+  ],
+  "local_podspecs": [
+    {
+      "name": "Flutter",
+      "pod_version": "1.0.0",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/Flutter.podspec.json",
+      "podspec_sha256": "3e5637c5269364f6f8e51d05b1cfeaaeb47f5f688e0af111212043261a2ceadd",
+      "license_metadata": {
+        "type": "BSD",
+        "file": null,
+        "text_present": false
+      },
+      "source_license": {
+        "path": "flutter-sdk/LICENSE",
+        "sha256": "a598db94b6290ffbe10b5ecf911057b6a943351c727fdda9e5f2891d68700a20",
+        "package_local_license_file": false
+      }
+    },
+    {
+      "name": "camera_avfoundation",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/camera_avfoundation.podspec.json",
+      "podspec_sha256": "6f4edbfe3b731fce607cce8c8b65bc023dda6cc15a01e458093a5537b4afd16a",
+      "license_metadata": {
+        "type": "BSD",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/camera_avfoundation/LICENSE",
+        "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d"
+      }
+    },
+    {
+      "name": "connectivity_plus",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/connectivity_plus.podspec.json",
+      "podspec_sha256": "7bc58686e20b8467c1c43f2f3b506ade070ffa00b7a02d082a9141ce7dcca431",
+      "license_metadata": {
+        "type": "BSD",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/connectivity_plus/LICENSE",
+        "sha256": "3b38d48befd0af70b892e13d10c9e34679416c24a9277f962629951c64d71f4c"
+      }
+    },
+    {
+      "name": "file_picker",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/file_picker.podspec.json",
+      "podspec_sha256": "b8c55c128e36c6ba230d898e68e803a55307250f8a4221fa5cfc87c13c4e497e",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/file_picker/LICENSE",
+        "sha256": "6278994817bd65fa32404e53c3a62a09d824d3f9a71f7fadcaca3e4f02641d66"
+      }
+    },
+    {
+      "name": "firebase_core",
+      "pod_version": "4.15.0",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/firebase_core.podspec.json",
+      "podspec_sha256": "8c12ff340fb22a8a349a655908b7c3ad6ae5357ff6c21cc047efe531deb548ca",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/firebase_core/LICENSE",
+        "sha256": "9f23ad2aa0fe3e877397294b6846868c2a7458fe394fbcd5b90ca4505a6b6ab8"
+      }
+    },
+    {
+      "name": "firebase_messaging",
+      "pod_version": "16.7.0",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/firebase_messaging.podspec.json",
+      "podspec_sha256": "7f1ae06a73dda69b66e9d204bd057182c164ac2405427099f3835bfdb5893ce6",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/firebase_messaging/LICENSE",
+        "sha256": "9f23ad2aa0fe3e877397294b6846868c2a7458fe394fbcd5b90ca4505a6b6ab8"
+      }
+    },
+    {
+      "name": "flutter_local_notifications",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/flutter_local_notifications.podspec.json",
+      "podspec_sha256": "28845ca6117bcc07e5e5c8a5a4bd1674be2a6aea1294b69d9bfd0ee898395242",
+      "license_metadata": {
+        "type": "BSD",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/flutter_local_notifications/LICENSE",
+        "sha256": "d6885e4633e08ec3a52cd90299b97831444d487f16721e5d092289bcfedfc511"
+      }
+    },
+    {
+      "name": "flutter_secure_storage_darwin",
+      "pod_version": "10.0.0",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/flutter_secure_storage_darwin.podspec.json",
+      "podspec_sha256": "a9507631588a60d57055e90539e401514bbb7eb819d6d6b3058b761b5d09dbb2",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/flutter_secure_storage_darwin/LICENSE",
+        "sha256": "3754c516086c62307896512b68024837bee5d2bea42a55cfd03f7448b92b06c8"
+      }
+    },
+    {
+      "name": "geolocator_apple",
+      "pod_version": "1.2.0",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/geolocator_apple.podspec.json",
+      "podspec_sha256": "a1c9aa15ed865e32d9dba79cb7424b54ed7721633e124c57e7ff60292823eda8",
+      "license_metadata": {
+        "type": "MIT",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/geolocator_apple/LICENSE",
+        "sha256": "9a4d631b14df96d4886d95164878aa3c3d06ea0843a5da771fe2536f8dc5c844"
+      }
+    },
+    {
+      "name": "google_mlkit_commons",
+      "pod_version": "0.13.0",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/google_mlkit_commons.podspec.json",
+      "podspec_sha256": "e3831097ca2a1daad08a67173f80e6247cf73cec8344e1fd6ad43664ff47d496",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/google_mlkit_commons/LICENSE",
+        "sha256": "6ee9368b072c9e88d5355e806e07c30a95baa8cafffc19556fa03d04daf12bd1"
+      }
+    },
+    {
+      "name": "google_mlkit_text_recognition",
+      "pod_version": "0.17.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/google_mlkit_text_recognition.podspec.json",
+      "podspec_sha256": "26b1c05c35a41acaabfbba1c1d9db86ce08ceb4e9c76bc0c2e3ace1c74c80f45",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/google_mlkit_text_recognition/LICENSE",
+        "sha256": "6ee9368b072c9e88d5355e806e07c30a95baa8cafffc19556fa03d04daf12bd1"
+      }
+    },
+    {
+      "name": "google_sign_in_ios",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/google_sign_in_ios.podspec.json",
+      "podspec_sha256": "86b9c789a87026ff37467d2bf85131c0e0e1c82d8b54a5d350c88b0865009f96",
+      "license_metadata": {
+        "type": "BSD",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/google_sign_in_ios/LICENSE",
+        "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9"
+      }
+    },
+    {
+      "name": "home_widget",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/home_widget.podspec.json",
+      "podspec_sha256": "5919a2202a306cc5842646b496f68aea4ed3f0a1692f1ee4b3e00ced4da3dfe9",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/home_widget/LICENSE",
+        "sha256": "8d6b4ec8cc00da3eceef4c23f2ef0f2dd1908763827e0ff0f8e92d917d32788d"
+      }
+    },
+    {
+      "name": "image_picker_ios",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/image_picker_ios.podspec.json",
+      "podspec_sha256": "06ac6c44dd013c77b10c1e9402d1b4ceb64ba43ae69b8082d12a44a29468de1b",
+      "license_metadata": {
+        "type": "BSD",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/image_picker_ios/LICENSE",
+        "sha256": "8e22fae63e4e8ac897f0cb3018ed94ed730b3e5da5d42c6856a26ba524f0fd88"
+      }
+    },
+    {
+      "name": "integration_test",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/integration_test.podspec.json",
+      "podspec_sha256": "1c071e5e26a102cebf318594b019ed1decbcf7995372962ec09c7ef9746ea9bd",
+      "license_metadata": {
+        "type": "BSD",
+        "file": null,
+        "text_present": true
+      },
+      "source_license": null
+    },
+    {
+      "name": "local_auth_darwin",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/local_auth_darwin.podspec.json",
+      "podspec_sha256": "1f68ed51284575739c276c3dc1518e83312c3d50575051b9ebf4857009f1ec5e",
+      "license_metadata": {
+        "type": "BSD",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/local_auth_darwin/LICENSE",
+        "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d"
+      }
+    },
+    {
+      "name": "mobile_scanner",
+      "pod_version": "7.0.0",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/mobile_scanner.podspec.json",
+      "podspec_sha256": "e220c872e710152ff3dbcd6c738f9abd7a0cff2cb7a17d58d81ea1a44d5570d0",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/mobile_scanner/LICENSE",
+        "sha256": "339ba81aabe6518f26ab5c9d2f76ca1732349360ba18d61bb93acb694dee7afe"
+      }
+    },
+    {
+      "name": "package_info_plus",
+      "pod_version": "0.4.5",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/package_info_plus.podspec.json",
+      "podspec_sha256": "9fc9a30bb2fd482ffb58531fc56cb49083f32ce8313128db24aa1d194759a315",
+      "license_metadata": {
+        "type": "BSD",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/package_info_plus/LICENSE",
+        "sha256": "3b38d48befd0af70b892e13d10c9e34679416c24a9277f962629951c64d71f4c"
+      }
+    },
+    {
+      "name": "pdfx",
+      "pod_version": "1.0.0",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/pdfx.podspec.json",
+      "podspec_sha256": "a9a062e68eec4c6ca4595a7dbd9e52bcc9580dae5facce2e8ffe8069b0665bde",
+      "license_metadata": {
+        "type": "MIT",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/pdfx/LICENSE",
+        "sha256": "44e34f70d50670fa260cd7db787cc06ba532c06a72011dd3fcd3b1e700ccdfd0"
+      }
+    },
+    {
+      "name": "permission_handler_apple",
+      "pod_version": "9.4.8",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/permission_handler_apple.podspec.json",
+      "podspec_sha256": "58efa927b913a703093afed104f3fd7ea78dc09f9af3bd23805ab7ba5b4ae667",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/permission_handler_apple/LICENSE",
+        "sha256": "65a603f544989f5cff639d5c55f56e781796e5e1b2f8546a7cb4cb26763133f3"
+      }
+    },
+    {
+      "name": "rive_native",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/rive_native.podspec.json",
+      "podspec_sha256": "9bd8dada15341609fe6555a952954fdba5476ca233ef6b1b4aadb6c4f5950f04",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/rive_native/LICENSE",
+        "sha256": "5bd1e6e65109558c03fcd29edfb63a9f9a192bbe7227f1786ad8b447032c1cf9"
+      }
+    },
+    {
+      "name": "share_plus",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/share_plus.podspec.json",
+      "podspec_sha256": "21a6bb21ae733dee387da1b41e4706640083bc5ddbae20fb2d5b544e32a28a0b",
+      "license_metadata": {
+        "type": "BSD",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/share_plus/LICENSE",
+        "sha256": "eb9741a672906ebd01fd9b3bef38f6c82eff250e91149cf404539ee7981079fd"
+      }
+    },
+    {
+      "name": "shared_preferences_foundation",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/shared_preferences_foundation.podspec.json",
+      "podspec_sha256": "d50c57ff2a56af84fbc04cff71337ca3e7b6b2d27f8bddeba77631d602d1991d",
+      "license_metadata": {
+        "type": "BSD",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/shared_preferences_foundation/LICENSE",
+        "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d"
+      }
+    },
+    {
+      "name": "speech_to_text",
+      "pod_version": "7.2.0",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/speech_to_text.podspec.json",
+      "podspec_sha256": "4bc6611b906a1c3fde718c82ac9bb2718396164a203013a12f2aba7d7ea3b355",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/speech_to_text/LICENSE",
+        "sha256": "93c167d88e0073150ec077ce1a04052032e4a811a589b724a6a9bb157ac75152"
+      }
+    },
+    {
+      "name": "sqlite3_flutter_libs",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/sqlite3_flutter_libs.podspec.json",
+      "podspec_sha256": "f4136f6dd7d9ef8a6e8ee8035e312a9849acd9cbdb055025b250e8834389f4f5",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/sqlite3_flutter_libs/LICENSE",
+        "sha256": "67e5d73a3a0c6e41f33d688a672b1161bf7f16e04da9ae48a7a14f1ba7436a4d"
+      }
+    },
+    {
+      "name": "telephony",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/telephony.podspec.json",
+      "podspec_sha256": "0244a593e0cbd06e799ff6d602059f440b44a45ab364c10d07f3e180e20cd486",
+      "license_metadata": {
+        "type": null,
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/telephony/LICENSE",
+        "sha256": "a7621da7b781a8ad679f1321c633120265e92b7f76c1ce06b523a25dd8e5741e"
+      }
+    },
+    {
+      "name": "url_launcher_ios",
+      "pod_version": "0.0.1",
+      "local_podspec_path": "app/ios/Pods/Local Podspecs/url_launcher_ios.podspec.json",
+      "podspec_sha256": "b6bc98dd023e7969304346038157a598d07e9cd991e12918b7bccdf8f1b3008f",
+      "license_metadata": {
+        "type": "BSD",
+        "file": "LICENSE",
+        "text_present": false
+      },
+      "source_license": {
+        "path": "app/ios/.symlinks/plugins/url_launcher_ios/LICENSE",
+        "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d"
+      }
+    }
+  ],
+  "installed_external_license_files": [
+    {
+      "path": "app/ios/Pods/AppAuth/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/AppCheckCore/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/CwlCatchException/LICENSE.txt",
+      "sha256": "740b29806531fef266b70da0cf18edf5feb981a5f50f97cc5974f8a360a4ad30"
+    },
+    {
+      "path": "app/ios/Pods/CwlCatchExceptionSupport/LICENSE.txt",
+      "sha256": "740b29806531fef266b70da0cf18edf5feb981a5f50f97cc5974f8a360a4ad30"
+    },
+    {
+      "path": "app/ios/Pods/Firebase/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/FirebaseCore/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/FirebaseCoreInternal/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/FirebaseInstallations/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/FirebaseMessaging/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/GTMAppAuth/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/GTMSessionFetcher/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/GoogleDataTransport/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/GoogleSignIn/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/GoogleToolboxForMac/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/GoogleUtilities/LICENSE",
+      "sha256": "ad6d036b9a78f0e1700d68039c06058033fea063172ce2dc68e382a24b4d1928"
+    },
+    {
+      "path": "app/ios/Pods/PromisesObjC/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/PromisesSwift/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/RecaptchaInterop/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "app/ios/Pods/nanopb/LICENSE.txt",
+      "sha256": "e2f2fc8fe3faa7dcb09dbe995db48c6ec5c1f72705db915101e4a83fed44f66d"
+    }
+  ],
+  "flutter_sdk_license": {
+    "path": "flutter-sdk/LICENSE",
+    "sha256": "a598db94b6290ffbe10b5ecf911057b6a943351c727fdda9e5f2891d68700a20"
+  },
+  "first_party_local_license_files": {
+    "packages/pandapay_domain": false,
+    "packages/pandapay_lints": false
+  },
+  "swiftpm_csqlite_local_cache_checkout_found": false
+}

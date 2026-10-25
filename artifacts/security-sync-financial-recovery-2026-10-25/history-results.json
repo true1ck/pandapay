@@ -1,0 +1,39 @@
+{
+  "exit_code": 0,
+  "incomplete": false,
+  "history": {
+    "mode": "full-retained",
+    "scan_scope": "retained-git-refs/release-source/recognized-text",
+    "incomplete": false,
+    "shallow_repository": false,
+    "commits_listed": 655,
+    "commits_selected": 655,
+    "commits_attempted": 655,
+    "commits_examined": 655,
+    "blobs_attempted": 4246,
+    "blobs_read": 4246,
+    "blobs_examined": 4246,
+    "blobs_failed": 0,
+    "blobs_limit_rejected": 0,
+    "bytes_examined": 128660035,
+    "tree_entries_examined": 645154,
+    "tree_bytes_examined": 62633895,
+    "limits": {
+      "maxCommits": 20000,
+      "maxFiles": 5000,
+      "maxBytes": 134217728,
+      "maxTreeBytes": 16777216,
+      "maxTreeTotalBytes": 536870912,
+      "maxTreeEntries": 20000000,
+      "maxMs": 120000
+    },
+    "retained_history_complete": true
+  },
+  "findings": 52,
+  "historical_findings": 32,
+  "provenance_records": 32,
+  "provenance_incomplete": false,
+  "source_sha256": "d5e5a511fd5d201f4b1683b7a7f71cafa672ef4301c3a610c8695edd8a641b94",
+  "raw_values_emitted": false,
+  "recorded_at_utc": "2026-10-25T09:31:55.732259+00:00"
+}

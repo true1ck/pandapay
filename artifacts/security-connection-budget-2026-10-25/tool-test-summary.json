@@ -1,0 +1,9 @@
+{
+  "exit_code": 0,
+  "pass": 209,
+  "fail": 0,
+  "skip": 0,
+  "node": "v24.15.0",
+  "focused_cases_included": 42,
+  "scope": "db/tests/*.test.js"
+}

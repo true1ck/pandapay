@@ -1,0 +1,15 @@
+{
+  "format": "pandapay-known-sync-contract-gap-v1",
+  "data_scope": "synthetic-only fresh PostgreSQL18 full product schema",
+  "source": "db/supabase/migrations/0034_sync_engine.sql",
+  "sqlstate": "42804",
+  "observed": "Both positive and negative amount_inr updates reject; note-only update succeeds. Rejected item state rolls back.",
+  "production_changed": false,
+  "remediation": "pending typed-field and financial-state/split/reward/retry contract review; additive migration and complete before/after tests",
+  "tracking": [
+    "M4",
+    "P04",
+    "SD06"
+  ],
+  "no_live_conclusion": true
+}

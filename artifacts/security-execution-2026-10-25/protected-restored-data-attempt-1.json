@@ -1,0 +1,11 @@
+{
+  "format": "pandapay-protected-clone-readonly-review-v1",
+  "reviewed_at": "2026-10-25T08:09:27.674Z",
+  "exit_code": 1,
+  "live_connection_opened": false,
+  "upgrade_or_schema_apply_performed": false,
+  "safe_messages": [
+    "Disposable memory-backed recovery container started.",
+    "Independent recovery PostgreSQL is ready; applying reviewed roles and restore checks."
+  ]
+}

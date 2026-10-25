@@ -1,0 +1,5 @@
+PASS: core gate releases ordinary admission
+PASS: core gate drains unawaited nested child and rejects new work
+PASS: core gate timeout preserves admitted work and reopens admission
+PASS: completed parent zone cannot bypass a later recovery fence
+PASS: previously admitted work completes nested operations during drain

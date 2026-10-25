@@ -1,0 +1,33 @@
+{
+  "result": "passed",
+  "postgres_tables": 96,
+  "columns": 934,
+  "foreign_keys": 139,
+  "sqlite_tables": 19,
+  "source_only_tables": 2,
+  "remediation_items": 68,
+  "optimization_inventory_rows": 96,
+  "table_retirement_candidates": 4,
+  "local_links": 449,
+  "checks": [
+    "tab switching",
+    "keyboard tabs",
+    "database filter",
+    "domain filter",
+    "column search",
+    "empty state",
+    "reset",
+    "table inspection",
+    "relationship navigation",
+    "zoom",
+    "unique IDs",
+    "local links",
+    "offline scripts",
+    "remediation coverage and proposal status",
+    "optimization inventory completeness",
+    "scalability section and cross-tab shortcut"
+  ],
+  "html_reproducible": true,
+  "html_sha256": "51ede90c38e0a073f3c574e024e2f2bf6adb747a451b7c21d04e7a36c8ccbc0e",
+  "markdown_sha256": "381f7887bf3547ef58943f236fabcf0d72b5d29f8e9b2522e9509999166e6582"
+}

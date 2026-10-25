@@ -1,0 +1,134 @@
+{
+  "format": "pandapay-storage-source-verification-v1",
+  "date": "25 October 2026 (IST)",
+  "status": "reviewed_source_and_local_verification_release_acceptance_pending",
+  "deployment_performed": false,
+  "normal_app_storage_changed": false,
+  "production_dependency_lock_changed": false,
+  "live_database_or_receipt_changes": false,
+  "source_finding_changes": {
+    "W01": "Implemented in source"
+  },
+  "full_report_counts": {
+    "total": 76,
+    "implemented_in_source": 26,
+    "partial": 42,
+    "open": 8,
+    "unfinished": 50
+  },
+  "focused_unfinished_findings": 22,
+  "full_app": {
+    "tests_passed": 1625,
+    "tests_failed": 0,
+    "analysis_errors": 0,
+    "analysis_warnings": 0,
+    "analysis_infos": 80,
+    "runtime": "Flutter 3.44.8 / Dart 3.12.2, sanitized candidate",
+    "command_status": {
+      "app-analyze": {
+        "exit_code": 0,
+        "seconds": 4
+      },
+      "app-tests": {
+        "exit_code": 0,
+        "seconds": 188
+      }
+    },
+    "scope_manifest": "full-app-test-source.json",
+    "later_local_only_changes": "four custody source/test files are covered by final focused storage suite; no normal startup uses these new components"
+  },
+  "final_storage_focus": {
+    "tests_passed": 30,
+    "tests_failed": 0,
+    "analysis_errors": 0,
+    "analysis_warnings": 0,
+    "analysis_infos": 1,
+    "scope": [
+      "cross-isolate key lease and recovery",
+      "independent account/guest receipt keys",
+      "authenticated migration journal and pending replacement",
+      "receipt codec/private file preservation",
+      "database fingerprint/copy contracts"
+    ]
+  },
+  "native_android": {
+    "tests_passed": 5,
+    "tests_failed": 0,
+    "device": "API 37 emulator",
+    "package": "app.pandapay.keycipherfixture.pandapay",
+    "normal_app_replaced": false,
+    "scope": [
+      "OS secure-store key persistence with default provisioning lease",
+      "encrypted file/WAL, wrong/missing key, damaged page, rollback/reopen",
+      "complete current app schema, namespace and mutation-ID encrypted copy with writer fence",
+      "raw text/blob/rowid/generated/without-rowid/sequence preservation plus low-disk/cancellation source preservation",
+      "receipt encryption/scoped viewing, wrong account and existing output preservation"
+    ],
+    "journal_native_crash_matrix": "not performed",
+    "source_manifest": "native-source-manifest.json",
+    "artifact": "native-build.json",
+    "shipped_libraries": "native-shipped-libraries.json",
+    "later_source_differences_covered_by_host_focus": [
+      "lib/data/secure_storage/encrypted_database_migration.dart",
+      "lib/data/secure_storage/local_database_key_custody.dart"
+    ]
+  },
+  "dependency_review": {
+    "unit_tests_passed": 5,
+    "status": "incomplete",
+    "report": "dependency-license-review.json",
+    "native_evidence": "dependency-evidence.json",
+    "unknown_license_entries": 92,
+    "runtime_lock_entries": 786,
+    "locks": 8,
+    "android_external_coordinates": 197,
+    "android_project_modules": 28,
+    "cached_native_artifacts": 168,
+    "pod_base_specs_with_metadata": 53,
+    "exact_pinned_csqlite_license": "unavailable; current HEAD not substituted",
+    "first_party_licenses": "owner policy unresolved; no license invented"
+  },
+  "remaining_acceptance": [
+    "authenticated application-wide manifest/startup admission and atomic switch/reopen",
+    "all receipt add/view/OCR/export/restore readers and writers integrated before new encrypted writes",
+    "native locked/reboot/key-loss/termination/power-loss and signed Android/iOS device matrix",
+    "actual target/provider migration and existing data/index business decisions",
+    "production/staging native graphs, full license/advisory/support, full history/binary secret review",
+    "independent backup/key/checkpoint custody and monitored rollout"
+  ],
+  "known_limits": [
+    "Dart path checks assume exclusive app-private directory ownership and do not close hostile same-sandbox replacement races",
+    "copy deadlines/cancellation checked between operations; a synchronous SQL query is not preempted",
+    "copy staging preserves source; it does not switch startup or resume partial table copy",
+    "30 focused tests and 1625 full-app tests overlap; counts must not be added",
+    "native fixture disk admission is synthetic only; not measured production disk policy"
+  ],
+  "database_tool_unit_tests": {
+    "passed": 154,
+    "failed": 0,
+    "command": "NODE_ENV=test node --test db/tests/*.test.js",
+    "scope": "local tooling unit tests; no live database mutation"
+  },
+  "documentation": {
+    "finding_implemented_in_source": "W01",
+    "new_current_entrypoints": 5,
+    "historical_design_banners": 6,
+    "html_pages_regenerated": 2,
+    "offline_dom_qa": "passed",
+    "no_production_closure_claimed": true,
+    "local_links_checked": 468
+  },
+  "latest_guard_test_scope": [
+    "strict metadata field whitelist",
+    "bounded key-slot decoding",
+    "independent receipt-key custody"
+  ],
+  "candidate_source_sha256": "1be244e5d79a86ba972f669a08210f59d4321e39feb2eaf52b4b97ca986a2a1d",
+  "secret_audit": {
+    "status": "incomplete",
+    "source_matches": true,
+    "history_commits_examined": 40,
+    "artifact_scope": "historical prod AAB text entries; non-text binaries not proven clear"
+  },
+  "note": "This completes the current reviewed source/local-verification batch. It does not complete the overall plan or enable normal storage conversion."
+}

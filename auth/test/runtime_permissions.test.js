@@ -104,3 +104,53 @@ test('a partial runtime grant fails migration completion', async () => {
     /lacks required schema or auth abuse-bucket privileges/,
   );
 });
+
+test('optional access log gets INSERT only after its migration and when enabled', async () => {
+  const logMigration = { file: '0005_db_access_log.sql', version: '0005_db_access_log' };
+  const client = fakeClient();
+  const originalQuery = client.query.bind(client);
+  client.query = async (sql, params) => {
+    if (sql.includes('has_table_privilege') && sql.includes('public.db_access_log')) {
+      client.queries.push({ sql, params });
+      return { rows: [{ schema_usage: true, can_select: false, can_insert: true, can_update: false, can_delete: false }] };
+    }
+    return originalQuery(sql, params);
+  };
+  await configureAuthRuntimeRole(client, { files: [abuseMigration, logMigration], runtimeRole: 'runtime', dbAccessLoggingEnabled: true });
+  assert.deepEqual(client.queries.filter(call => call.sql.startsWith('GRANT')).map(call => call.sql), [
+    'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.auth_abuse_buckets TO "runtime"',
+    'GRANT INSERT ON TABLE public.db_access_log TO "runtime"',
+  ]);
+  for (const options of [
+    { files: [abuseMigration], dbAccessLoggingEnabled: true },
+    { files: [abuseMigration, logMigration], dbAccessLoggingEnabled: false },
+  ]) {
+    const disabled = fakeClient();
+    await configureAuthRuntimeRole(disabled, { runtimeRole: 'runtime', ...options });
+    assert.equal(disabled.queries.some(call => call.sql.includes('db_access_log')), false);
+  }
+});
+
+test('optional security dashboard receives read-only capability lookup without role promotion', async () => {
+  const client=fakeClient();const query=client.query.bind(client);
+  client.query=async(sql,params)=>{
+    if(sql.includes('has_table_privilege')&&sql.includes('auth_private.security_admins')){
+      client.queries.push({sql,params});return {rows:[{can_select:true,can_insert:false,can_update:false,can_delete:false}]};
+    }
+    return query(sql,params);
+  };
+  await configureAuthRuntimeRole(client,{files:[{file:'0007_security_dashboard_capability.sql'}],runtimeRole:'auth_runtime',securityDashboardEnabled:true});
+  assert.deepEqual(client.queries.filter(x=>x.sql.startsWith('GRANT')).map(x=>x.sql),[
+    'GRANT USAGE ON SCHEMA auth_private TO "auth_runtime"',
+    'GRANT SELECT ON TABLE auth_private.security_admins TO "auth_runtime"',
+  ]);
+  assert.equal(client.queries.some(x=>x.sql.includes('INSERT INTO auth_private')),false);
+});
+
+test('canonical provider links grant only lookup and insertion to explicit auth runtime', async () => {
+  const client=fakeClient();
+  await configureAuthRuntimeRole(client,{files:[{file:'0006_google_oauth_identity.sql'}],runtimeRole:'auth_runtime'});
+  assert.deepEqual(client.queries.filter(x=>x.sql.startsWith('GRANT')).map(x=>x.sql),[
+    'GRANT SELECT, INSERT ON TABLE public.oauth_accounts TO "auth_runtime"',
+  ]);
+});

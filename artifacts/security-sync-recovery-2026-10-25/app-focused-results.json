@@ -1,0 +1,19 @@
+{
+  "exit_code": 0,
+  "command": [
+    "test",
+    "--no-pub",
+    "--concurrency=1",
+    "--reporter=expanded",
+    "test/data/portable_backup/account_recovery_completeness_test.dart",
+    "test/data/portable_backup/account_recovery_test.dart",
+    "test/data/portable_backup/account_recovery_gate_test.dart",
+    "test/data/portable_backup/account_recovery_receipt_reconciliation_test.dart",
+    "test/data/portable_backup/automatic_recovery_test.dart"
+  ],
+  "tail": [
+    "00:02 +28: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: automatic copy verifies ciphertext without requesting an escrow key",
+    "00:02 +29: /private/tmp/pandapay-completion-20261024-rs1crzbq/candidate/app/test/data/portable_backup/automatic_recovery_test.dart: settings default to no consent and bind explicit receipt choice",
+    "00:02 +30: All tests passed!"
+  ]
+}

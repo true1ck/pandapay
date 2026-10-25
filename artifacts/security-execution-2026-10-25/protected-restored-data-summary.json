@@ -1,0 +1,69 @@
+{
+  "attempt": 3,
+  "format": "pandapay-protected-clone-readonly-review-v1",
+  "reviewed_at": "2026-10-25T08:11:07.650Z",
+  "exit_code": 0,
+  "live_connection_opened": false,
+  "upgrade_or_schema_apply_performed": false,
+  "safe_messages": [
+    "Disposable memory-backed recovery container started.",
+    "Independent recovery PostgreSQL is ready; applying reviewed roles and restore checks.",
+    "Actual local backup restored and verified; disposable RAM-backed recovery cluster removed."
+  ],
+  "scopes": {
+    "product": {
+      "complete": true,
+      "label_identity_version": "pandapay-catalogue-label-identity-v1",
+      "checks": 357,
+      "foreign_keys": 217,
+      "orphan_rows": 0,
+      "catalogue_checks": [
+        {
+          "name": "cap_rule_business_equivalence",
+          "status": "completed",
+          "duplicate_groups": "0",
+          "extra_rows": "0"
+        },
+        {
+          "name": "benefit_business_equivalence",
+          "status": "completed",
+          "duplicate_groups": "0",
+          "extra_rows": "0"
+        },
+        {
+          "name": "cap_rule_normalized_identity_v1",
+          "status": "completed",
+          "duplicate_groups": "0",
+          "extra_rows": "0"
+        },
+        {
+          "name": "benefit_normalized_identity_v1",
+          "status": "completed",
+          "duplicate_groups": "0",
+          "extra_rows": "0"
+        }
+      ]
+    },
+    "auth": {
+      "complete": true,
+      "label_identity_version": "pandapay-catalogue-label-identity-v1",
+      "checks": 10,
+      "foreign_keys": 5,
+      "orphan_rows": 0,
+      "catalogue_checks": []
+    }
+  },
+  "restore_proof": {
+    "set_id": "4f383a48d3111523e663f8791e4819f0",
+    "status": "database_restore_verified",
+    "application_check": "passed",
+    "upgrade_check": "not_run",
+    "product_upgrade": "not_run",
+    "contact_upgrade": "not_run",
+    "verified_at_utc": "2026-10-25T08:11:07Z",
+    "proof_format": "pandapay-paired-postgresql-restore-proof-v1",
+    "manifest_ciphertext_sha256": "8de997d4d45cfa77725fc5657eaa00659cc702eb40a593110c56d4ceed2ee84a",
+    "product_ciphertext_sha256": "9cf41011bc31671e43858fb3464935d446891778d84907f541e9bdff86df8a21",
+    "auth_ciphertext_sha256": "d96d14b838f0aabb4d48a8487396b4789aff82b23ce931bc4bd63233246a9146"
+  }
+}

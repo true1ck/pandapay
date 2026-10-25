@@ -4,148 +4,562 @@
   "updated": "2026-10-23",
   "comment": "Schema-aware inventory of PostgreSQL CREATE TABLE objects in db/supabase/migrations. Public-schema keys remain unqualified for contract compatibility; non-public schemas are qualified. This registry covers server migration tables only, not SQLite tables or individual fields, and is not a full database disaster-recovery manifest. Portable export and restore services have separate device, integration and recovery acceptance gates; excluded user-linked rows remain explicit coverage gaps.",
   "tables": {
-    "profiles": {"disposition": "exported_v1", "section": "profile"},
-    "user_settings": {"disposition": "exported_v1", "section": "settings"},
-    "user_categories": {"disposition": "exported_v1", "section": "user_categories"},
-    "user_cards": {"disposition": "exported_v1", "section": "user_cards"},
-    "card_overrides": {"disposition": "exported_v1", "section": "card_overrides"},
-    "transactions": {"disposition": "exported_v1", "section": "transactions"},
-    "transaction_splits": {"disposition": "exported_v1", "section": "transaction_splits"},
-    "transaction_observations": {"disposition": "exported_v1", "section": "transaction_observations"},
-    "transaction_tags": {"disposition": "exported_v1", "section": "transaction_tags"},
-    "transaction_tag_links": {"disposition": "exported_v1", "section": "transaction_tag_links"},
-    "points_ledger": {"disposition": "exported_v1", "section": "points_ledger"},
-    "cap_states": {"disposition": "exported_v1", "section": "cap_states"},
-    "milestone_states": {"disposition": "exported_v1", "section": "milestone_states"},
-    "fee_waiver_states": {"disposition": "exported_v1", "section": "fee_waiver_states"},
-    "lounge_usage": {"disposition": "exported_v1", "section": "lounge_usage"},
-    "needs_review_items": {"disposition": "exported_v1", "section": "needs_review_items"},
-    "duplicate_candidates": {"disposition": "exported_v1", "section": "duplicate_candidates"},
-    "monthly_reports": {"disposition": "exported_v1", "section": "monthly_reports"},
-    "statement_imports": {"disposition": "exported_v1", "section": "statement_imports"},
-    "sms_import_batches": {"disposition": "exported_v1", "section": "sms_import_batches"},
-    "budgets": {"disposition": "exported_v1", "section": "budgets"},
-    "budget_periods": {"disposition": "exported_v1", "section": "budget_periods"},
-    "recurring_series": {"disposition": "exported_v1", "section": "recurring_series"},
-    "sms_sources": {"disposition": "exported_v1", "section": "sms_sources"},
-    "sms_source_facts": {"disposition": "exported_v1", "section": "sms_source_facts"},
-    "fact_overrides": {"disposition": "exported_v1", "section": "fact_overrides"},
-    "billing_cycle_rules": {"disposition": "global_catalog"},
-    "cap_rules": {"disposition": "global_catalog"},
-    "card_benefits": {"disposition": "global_catalog"},
-    "card_catalogue_changes": {"disposition": "global_catalog"},
-    "card_product_network_variants": {"disposition": "global_catalog"},
-    "card_products": {"disposition": "global_catalog"},
-    "contribution_quotas": {"disposition": "global_catalog"},
-    "effective_rate_samples": {"disposition": "global_catalog"},
-    "effective_rate_summary": {"disposition": "global_catalog"},
-    "fee_waiver_rules": {"disposition": "global_catalog"},
-    "forex_rules": {"disposition": "global_catalog"},
-    "fuel_surcharge_rules": {"disposition": "global_catalog"},
-    "issuers": {"disposition": "global_catalog"},
-    "issuer_emergency_contacts": {"disposition": "global_catalog"},
-    "mcc_categories": {"disposition": "global_catalog"},
-    "merchant_category_rules": {"disposition": "global_catalog"},
-    "merchant_conflicts": {"disposition": "global_catalog"},
-    "merchant_contributions": {"disposition": "global_catalog"},
-    "merchant_locations": {"disposition": "global_catalog"},
-    "merchants": {"disposition": "global_catalog"},
-    "milestone_rules": {"disposition": "global_catalog"},
-    "reward_rules": {"disposition": "global_catalog"},
-    "redemption_options": {"disposition": "global_catalog"},
-    "referral_program": {"disposition": "global_catalog"},
-    "sources": {"disposition": "global_catalog"},
-    "source_pages": {"disposition": "global_catalog"},
-    "partner_programs": {"disposition": "global_catalog"},
-    "spend_categories": {"disposition": "global_catalog"},
-    "parser_patterns": {"disposition": "global_catalog"},
-    "abuse_signals": {"disposition": "platform_ops"},
-    "acceptance_reports": {"disposition": "platform_ops"},
-    "acceptance_summary": {"disposition": "platform_ops"},
-    "admin_audit_log": {"disposition": "platform_ops"},
-    "admin_users": {"disposition": "platform_ops"},
-    "anonymization_audit_runs": {"disposition": "platform_ops"},
-    "app_status": {"disposition": "platform_ops"},
-    "app_versions": {"disposition": "platform_ops"},
-    "backup_runs": {"disposition": "platform_ops"},
-    "change_log": {"disposition": "platform_ops"},
-    "changelog_entries": {"disposition": "platform_ops"},
-    "data_error_reports": {"disposition": "platform_ops"},
-    "feature_flags": {"disposition": "platform_ops"},
-    "kill_switches": {"disposition": "platform_ops"},
-    "page_snapshots": {"disposition": "platform_ops"},
-    "parser_failures": {"disposition": "platform_ops", "reason": "parse telemetry"},
-    "policy_alert_evidence": {"disposition": "platform_ops"},
-    "policy_change_alerts": {"disposition": "platform_ops"},
-    "remote_config": {"disposition": "platform_ops"},
-    "restore_drills": {"disposition": "platform_ops"},
-    "scrape_runs": {"disposition": "platform_ops"},
-    "support_tickets": {"disposition": "platform_ops"},
-    "ai_events": {"disposition": "platform_ops"},
-    "ai_jobs": {"disposition": "platform_ops"},
-    "ai_quota_days": {"disposition": "platform_ops"},
-    "analytics_events": {"disposition": "platform_ops"},
-    "contribution_salts": {"disposition": "platform_ops"},
-    "card_requests": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: user-applied card requests; candidate for a later wave"},
-    "extraction_proposals": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: interactive review artifacts; candidate for later wave"},
-    "forwarding_addresses": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: email ingest routing data; user re-enters after restore"},
-    "imap_connections": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: credentials-adjacent ingest config; user reconnects after restore"},
-    "inbound_emails": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: raw ingest payloads; statements themselves are exported"},
-    "notifications": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: push inbox is ephemeral; history not restored"},
-    "notification_muted_merchants": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: notification prefs table; candidate for later wave"},
-    "notification_preferences": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: notification prefs table; candidate for later wave"},
-    "partner_clicks": {"disposition": "platform_ops", "reason": "affiliate attribution telemetry, server-side"},
-    "partner_conversions": {"disposition": "platform_ops", "reason": "affiliate conversion telemetry, server-side"},
-    "referral_codes": {"disposition": "excluded_with_intent", "reason": "Server-issued referral codes are not exported; related account-linked invitation and attribution records are also outside the portable export, so this remains a recovery gap."},
-    "referrals": {"disposition": "excluded_with_intent", "reason": "Account-linked referral relationships are not exported; the promotions schema contains separate referral and credit records that are also outside the portable export, so this remains a recovery gap."},
-    "sync_conflicts": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: sync session artifacts; candidate for later wave"},
-    "sync_cursors": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: sync session artifacts; candidate for later wave"},
-    "transaction_tag_mutations": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: tag audit artifacts; tagged state is exported via transaction_tags/links"},
-    "transaction_tag_transaction_aliases": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: tag alias mapping; candidate for later wave"},
-    "user_consents": {"disposition": "excluded_with_intent", "reason": "wave-1 scope gap: consent ledger; candidate for later wave"},
-    "user_devices": {"disposition": "excluded_with_intent", "reason": "device registry is security-sensitive FCM state; re-registered by app"},
-    "ai_provider_reservations": {"disposition": "platform_ops", "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."},
-    "ai_provider_capacity_checks": {"disposition": "platform_ops", "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."},
-    "sms_learning_feedback": {"disposition": "platform_ops", "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."},
-    "sms_learning_candidate_decisions": {"disposition": "platform_ops", "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."},
-    "sms_rule_bundles": {"disposition": "platform_ops", "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."},
-    "sms_learning_examples": {"disposition": "platform_ops", "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."},
-    "sms_rule_candidates": {"disposition": "platform_ops", "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."},
-    "sms_rule_candidate_exposures": {"disposition": "platform_ops", "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."},
-    "sms_rule_candidate_assignments": {"disposition": "platform_ops", "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."},
-    "sms_learning_worker_runs": {"disposition": "platform_ops", "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."},
-    "promotions.access_settings": {"disposition": "global_catalog", "reason": "Shared campaign policy/configuration; not included in the account-scoped portable export."},
-    "promotions.campaign_versions": {"disposition": "global_catalog", "reason": "Shared campaign policy/configuration; not included in the account-scoped portable export."},
-    "promotions.campaign_state": {"disposition": "global_catalog", "reason": "Shared campaign policy/configuration; not included in the account-scoped portable export."},
-    "promotions.memberships": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.invitation_codes": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.referral_attributions": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.terms_acceptances": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.inviter_campaign_caps": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.reward_reservations": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.engagement_days": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.reward_entitlements": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.reward_spins": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.credit_accounts": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.credit_ledger": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.credit_redemptions": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.eligibility_claims": {"disposition": "excluded_with_intent", "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."},
-    "promotions.reward_outbox": {"disposition": "platform_ops", "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."},
-    "promotions.invitation_validation_limits": {"disposition": "platform_ops", "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."},
-    "promotions.reward_outbox_attempts": {"disposition": "platform_ops", "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."},
-    "promotions.reward_worker_heartbeats": {"disposition": "platform_ops", "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."},
-    "promotions.referral_operator_holds": {"disposition": "platform_ops", "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."},
-    "promotions.referral_operator_audit": {"disposition": "platform_ops", "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."},
-    "user_merchant_category_rules": {"disposition": "exported_v1", "section": "user_merchant_category_rules"},
-    "user_merchant_category_rule_audit": {"disposition": "excluded_with_intent", "reason": "append-only audit is operational history; the user-owned rule state is exported in user_merchant_category_rules"},
-    "user_merchant_category_rule_idempotency": {"disposition": "excluded_with_intent", "reason": "ephemeral request replay keys are not portable user intent"},
-    "financial_projections": {"disposition": "excluded_with_intent", "reason": "rebuildable domain projections derived from typed SMS facts and transaction history; source facts remain portable"},
-    "portable_restore_sessions": {"disposition": "excluded_with_intent", "reason": "restore protocol staging metadata; never included in a portable archive"},
-    "portable_restore_sections": {"disposition": "excluded_with_intent", "reason": "restore protocol upload declarations; ephemeral until commit or expiry"},
-    "portable_restore_records": {"disposition": "excluded_with_intent", "reason": "untrusted restore rows; applied atomically and then discarded with the session"},
-    "portable_backup_ledger": {"disposition": "excluded_with_intent", "reason": "idempotent committed-restore receipt; never included in a portable archive"},
-    "transaction_category_bulk_previews": {"disposition": "excluded_with_intent", "reason": "short-lived category review snapshots; expired after the apply window and rebuilt on demand"},
-    "transaction_category_bulk_operations": {"disposition": "excluded_with_intent", "reason": "category bulk operation receipts are server audit/idempotency state, not portable user data"},
-    "transaction_category_bulk_operation_items": {"disposition": "excluded_with_intent", "reason": "category bulk audit details are derived operation history and are not restored into a new account"}
+    "maintenance.jobs": {
+      "disposition": "platform_ops",
+      "reason": "Bounded job controls, leases and cursor/heartbeat state migrate with paired PostgreSQL backups; per-account portable restore cannot replace operational jobs."
+    },
+    "maintenance.notifications": {
+      "disposition": "platform_ops",
+      "reason": "Count-only internal maintenance failure notices and acknowledgement generations are operational records preserved by complete PostgreSQL recovery."
+    },
+    "account_recovery.control": {
+      "disposition": "platform_ops",
+      "reason": "Explicit operator account-recovery gate; paired PostgreSQL recovery preserves it."
+    },
+    "account_recovery.snapshots": {
+      "disposition": "excluded_with_intent",
+      "reason": "Account recovery ciphertext and escrow keys use separate recent-proof/consent routes; ordinary portable archives never export recovery credentials. Complete paired PostgreSQL dumps preserve the ciphertext and wrapping-key metadata."
+    },
+    "account_lifecycle.control": {
+      "disposition": "platform_ops",
+      "reason": "Explicit operator worker enablement gate; complete paired PostgreSQL backups preserve it."
+    },
+    "account_lifecycle.requests": {
+      "disposition": "platform_ops",
+      "reason": "Deletion workflow history must not be imported by account portable restore; paired recovery and external tombstone reconciliation preserve account denial."
+    },
+    "account_lifecycle.tombstones": {
+      "disposition": "platform_ops",
+      "reason": "Authoritative deletion tombstones must survive full recovery and cannot be replaced by a per-account archive."
+    },
+    "backup_status.attestations": {
+      "disposition": "platform_ops",
+      "reason": "Sanitized paired-backup verification history is operational state, not per-account portable data; paired PostgreSQL recovery includes this schema."
+    },
+    "imap_worker.poll_state": {
+      "disposition": "platform_ops",
+      "reason": "A bounded worker polling cursor is operational scheduling state; account-scoped portable archives do not restore it. Paired PostgreSQL recovery includes it."
+    },
+    "profiles": {
+      "disposition": "exported_v1",
+      "section": "profile"
+    },
+    "user_settings": {
+      "disposition": "exported_v1",
+      "section": "settings"
+    },
+    "user_categories": {
+      "disposition": "exported_v1",
+      "section": "user_categories"
+    },
+    "user_cards": {
+      "disposition": "exported_v1",
+      "section": "user_cards"
+    },
+    "card_overrides": {
+      "disposition": "exported_v1",
+      "section": "card_overrides"
+    },
+    "transactions": {
+      "disposition": "exported_v1",
+      "section": "transactions"
+    },
+    "transaction_splits": {
+      "disposition": "exported_v1",
+      "section": "transaction_splits"
+    },
+    "transaction_observations": {
+      "disposition": "exported_v1",
+      "section": "transaction_observations"
+    },
+    "transaction_tags": {
+      "disposition": "exported_v1",
+      "section": "transaction_tags"
+    },
+    "transaction_tag_links": {
+      "disposition": "exported_v1",
+      "section": "transaction_tag_links"
+    },
+    "points_ledger": {
+      "disposition": "exported_v1",
+      "section": "points_ledger"
+    },
+    "cap_states": {
+      "disposition": "exported_v1",
+      "section": "cap_states"
+    },
+    "milestone_states": {
+      "disposition": "exported_v1",
+      "section": "milestone_states"
+    },
+    "fee_waiver_states": {
+      "disposition": "exported_v1",
+      "section": "fee_waiver_states"
+    },
+    "lounge_usage": {
+      "disposition": "exported_v1",
+      "section": "lounge_usage"
+    },
+    "needs_review_items": {
+      "disposition": "exported_v1",
+      "section": "needs_review_items"
+    },
+    "duplicate_candidates": {
+      "disposition": "exported_v1",
+      "section": "duplicate_candidates"
+    },
+    "monthly_reports": {
+      "disposition": "exported_v1",
+      "section": "monthly_reports"
+    },
+    "statement_imports": {
+      "disposition": "exported_v1",
+      "section": "statement_imports"
+    },
+    "sms_import_batches": {
+      "disposition": "exported_v1",
+      "section": "sms_import_batches"
+    },
+    "budgets": {
+      "disposition": "exported_v1",
+      "section": "budgets"
+    },
+    "budget_periods": {
+      "disposition": "exported_v1",
+      "section": "budget_periods"
+    },
+    "recurring_series": {
+      "disposition": "exported_v1",
+      "section": "recurring_series"
+    },
+    "sms_sources": {
+      "disposition": "exported_v1",
+      "section": "sms_sources"
+    },
+    "sms_source_facts": {
+      "disposition": "exported_v1",
+      "section": "sms_source_facts"
+    },
+    "fact_overrides": {
+      "disposition": "exported_v1",
+      "section": "fact_overrides"
+    },
+    "billing_cycle_rules": {
+      "disposition": "global_catalog"
+    },
+    "cap_rules": {
+      "disposition": "global_catalog"
+    },
+    "card_benefits": {
+      "disposition": "global_catalog"
+    },
+    "card_catalogue_changes": {
+      "disposition": "global_catalog"
+    },
+    "card_product_network_variants": {
+      "disposition": "global_catalog"
+    },
+    "card_products": {
+      "disposition": "global_catalog"
+    },
+    "contribution_quotas": {
+      "disposition": "global_catalog"
+    },
+    "effective_rate_samples": {
+      "disposition": "global_catalog"
+    },
+    "effective_rate_summary": {
+      "disposition": "global_catalog"
+    },
+    "fee_waiver_rules": {
+      "disposition": "global_catalog"
+    },
+    "forex_rules": {
+      "disposition": "global_catalog"
+    },
+    "fuel_surcharge_rules": {
+      "disposition": "global_catalog"
+    },
+    "issuers": {
+      "disposition": "global_catalog"
+    },
+    "issuer_emergency_contacts": {
+      "disposition": "global_catalog"
+    },
+    "mcc_categories": {
+      "disposition": "global_catalog"
+    },
+    "merchant_category_rules": {
+      "disposition": "global_catalog"
+    },
+    "merchant_conflicts": {
+      "disposition": "global_catalog"
+    },
+    "merchant_contributions": {
+      "disposition": "global_catalog"
+    },
+    "merchant_locations": {
+      "disposition": "global_catalog"
+    },
+    "merchants": {
+      "disposition": "global_catalog"
+    },
+    "milestone_rules": {
+      "disposition": "global_catalog"
+    },
+    "reward_rules": {
+      "disposition": "global_catalog"
+    },
+    "redemption_options": {
+      "disposition": "global_catalog"
+    },
+    "referral_program": {
+      "disposition": "global_catalog"
+    },
+    "sources": {
+      "disposition": "global_catalog"
+    },
+    "source_pages": {
+      "disposition": "global_catalog"
+    },
+    "partner_programs": {
+      "disposition": "global_catalog"
+    },
+    "spend_categories": {
+      "disposition": "global_catalog"
+    },
+    "parser_patterns": {
+      "disposition": "global_catalog"
+    },
+    "abuse_signals": {
+      "disposition": "platform_ops"
+    },
+    "acceptance_reports": {
+      "disposition": "platform_ops"
+    },
+    "acceptance_summary": {
+      "disposition": "platform_ops"
+    },
+    "admin_audit_log": {
+      "disposition": "platform_ops"
+    },
+    "admin_users": {
+      "disposition": "platform_ops"
+    },
+    "anonymization_audit_runs": {
+      "disposition": "platform_ops"
+    },
+    "app_status": {
+      "disposition": "platform_ops"
+    },
+    "app_versions": {
+      "disposition": "platform_ops"
+    },
+    "backup_runs": {
+      "disposition": "platform_ops"
+    },
+    "change_log": {
+      "disposition": "platform_ops"
+    },
+    "changelog_entries": {
+      "disposition": "platform_ops"
+    },
+    "data_error_reports": {
+      "disposition": "platform_ops"
+    },
+    "feature_flags": {
+      "disposition": "platform_ops"
+    },
+    "kill_switches": {
+      "disposition": "platform_ops"
+    },
+    "page_snapshots": {
+      "disposition": "platform_ops"
+    },
+    "parser_failures": {
+      "disposition": "platform_ops",
+      "reason": "parse telemetry"
+    },
+    "policy_alert_evidence": {
+      "disposition": "platform_ops"
+    },
+    "policy_change_alerts": {
+      "disposition": "platform_ops"
+    },
+    "remote_config": {
+      "disposition": "platform_ops"
+    },
+    "restore_drills": {
+      "disposition": "platform_ops"
+    },
+    "scrape_runs": {
+      "disposition": "platform_ops"
+    },
+    "support_tickets": {
+      "disposition": "platform_ops"
+    },
+    "ai_events": {
+      "disposition": "platform_ops"
+    },
+    "ai_jobs": {
+      "disposition": "platform_ops"
+    },
+    "ai_quota_days": {
+      "disposition": "platform_ops"
+    },
+    "analytics_events": {
+      "disposition": "platform_ops"
+    },
+    "contribution_salts": {
+      "disposition": "platform_ops"
+    },
+    "card_requests": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: user-applied card requests; candidate for a later wave"
+    },
+    "extraction_proposals": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: interactive review artifacts; candidate for later wave"
+    },
+    "forwarding_addresses": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: email ingest routing data; user re-enters after restore"
+    },
+    "imap_connections": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: credentials-adjacent ingest config; user reconnects after restore"
+    },
+    "inbound_emails": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: raw ingest payloads; statements themselves are exported"
+    },
+    "notifications": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: push inbox is ephemeral; history not restored"
+    },
+    "notification_muted_merchants": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: notification prefs table; candidate for later wave"
+    },
+    "notification_preferences": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: notification prefs table; candidate for later wave"
+    },
+    "partner_clicks": {
+      "disposition": "platform_ops",
+      "reason": "affiliate attribution telemetry, server-side"
+    },
+    "partner_conversions": {
+      "disposition": "platform_ops",
+      "reason": "affiliate conversion telemetry, server-side"
+    },
+    "referral_codes": {
+      "disposition": "excluded_with_intent",
+      "reason": "Server-issued referral codes are not exported; related account-linked invitation and attribution records are also outside the portable export, so this remains a recovery gap."
+    },
+    "referrals": {
+      "disposition": "excluded_with_intent",
+      "reason": "Account-linked referral relationships are not exported; the promotions schema contains separate referral and credit records that are also outside the portable export, so this remains a recovery gap."
+    },
+    "sync_conflicts": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: sync session artifacts; candidate for later wave"
+    },
+    "sync_cursors": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: sync session artifacts; candidate for later wave"
+    },
+    "transaction_tag_mutations": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: tag audit artifacts; tagged state is exported via transaction_tags/links"
+    },
+    "transaction_tag_transaction_aliases": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: tag alias mapping; candidate for later wave"
+    },
+    "user_consents": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: consent ledger; candidate for later wave"
+    },
+    "user_devices": {
+      "disposition": "excluded_with_intent",
+      "reason": "device registry is security-sensitive FCM state; re-registered by app"
+    },
+    "ai_provider_reservations": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "ai_provider_capacity_checks": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_learning_feedback": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_learning_candidate_decisions": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_rule_bundles": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_learning_examples": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_rule_candidates": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_rule_candidate_exposures": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_rule_candidate_assignments": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_learning_worker_runs": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "promotions.access_settings": {
+      "disposition": "global_catalog",
+      "reason": "Shared campaign policy/configuration; not included in the account-scoped portable export."
+    },
+    "promotions.campaign_versions": {
+      "disposition": "global_catalog",
+      "reason": "Shared campaign policy/configuration; not included in the account-scoped portable export."
+    },
+    "promotions.campaign_state": {
+      "disposition": "global_catalog",
+      "reason": "Shared campaign policy/configuration; not included in the account-scoped portable export."
+    },
+    "promotions.memberships": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.invitation_codes": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.referral_attributions": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.terms_acceptances": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.inviter_campaign_caps": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.reward_reservations": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.engagement_days": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.reward_entitlements": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.reward_spins": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.credit_accounts": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.credit_ledger": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.credit_redemptions": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.eligibility_claims": {
+      "disposition": "excluded_with_intent",
+      "reason": "User-linked referral, eligibility, or financial state is not included in the portable export; this is a recovery gap until a supported restore scope is implemented."
+    },
+    "promotions.reward_outbox": {
+      "disposition": "platform_ops",
+      "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."
+    },
+    "promotions.invitation_validation_limits": {
+      "disposition": "platform_ops",
+      "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."
+    },
+    "promotions.reward_outbox_attempts": {
+      "disposition": "platform_ops",
+      "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."
+    },
+    "promotions.reward_worker_heartbeats": {
+      "disposition": "platform_ops",
+      "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."
+    },
+    "promotions.referral_operator_holds": {
+      "disposition": "platform_ops",
+      "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."
+    },
+    "promotions.referral_operator_audit": {
+      "disposition": "platform_ops",
+      "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."
+    },
+    "user_merchant_category_rules": {
+      "disposition": "exported_v1",
+      "section": "user_merchant_category_rules"
+    },
+    "user_merchant_category_rule_audit": {
+      "disposition": "excluded_with_intent",
+      "reason": "append-only audit is operational history; the user-owned rule state is exported in user_merchant_category_rules"
+    },
+    "user_merchant_category_rule_idempotency": {
+      "disposition": "excluded_with_intent",
+      "reason": "ephemeral request replay keys are not portable user intent"
+    },
+    "financial_projections": {
+      "disposition": "excluded_with_intent",
+      "reason": "rebuildable domain projections derived from typed SMS facts and transaction history; source facts remain portable"
+    },
+    "portable_restore_sessions": {
+      "disposition": "excluded_with_intent",
+      "reason": "restore protocol staging metadata; never included in a portable archive"
+    },
+    "portable_restore_sections": {
+      "disposition": "excluded_with_intent",
+      "reason": "restore protocol upload declarations; ephemeral until commit or expiry"
+    },
+    "portable_restore_records": {
+      "disposition": "excluded_with_intent",
+      "reason": "untrusted restore rows; applied atomically and then discarded with the session"
+    },
+    "portable_backup_ledger": {
+      "disposition": "excluded_with_intent",
+      "reason": "idempotent committed-restore receipt; never included in a portable archive"
+    },
+    "transaction_category_bulk_previews": {
+      "disposition": "excluded_with_intent",
+      "reason": "short-lived category review snapshots; expired after the apply window and rebuilt on demand"
+    },
+    "transaction_category_bulk_operations": {
+      "disposition": "excluded_with_intent",
+      "reason": "category bulk operation receipts are server audit/idempotency state, not portable user data"
+    },
+    "transaction_category_bulk_operation_items": {
+      "disposition": "excluded_with_intent",
+      "reason": "category bulk audit details are derived operation history and are not restored into a new account"
+    },
+    "account_recovery.automatic_devices": {
+      "disposition": "excluded_with_intent",
+      "reason": "Per-device automatic recovery consent is managed through explicit recovery routes and never grants recovery-key retrieval. Complete paired PostgreSQL dumps preserve consent and opaque device bindings."
+    }
   }
 }

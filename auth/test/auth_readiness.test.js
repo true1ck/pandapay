@@ -16,6 +16,25 @@ const fullAccess = {
   can_delete: true,
 };
 
+test('enabled optional access audit checks migrated storage and INSERT without reading records', async () => {
+  const statements = [];
+  const query = async sql => {
+    statements.push(sql);
+    if (sql.includes('to_regclass')) return { rows: [{ table_exists: true }] };
+    if (sql.includes('has_table_privilege')) return { rows: [{ can_insert: true }] };
+    return { rows: [] };
+  };
+  await checkAuthReadiness(query, { env: { NODE_ENV: 'test', DB_ACCESS_LOGGING_ENABLED: 'true' } });
+  assert.equal(statements.length, 3);
+  assert.equal(statements.some(sql => /FROM public\.db_access_log/.test(sql)), false);
+  for (const failure of ['table', 'permission']) {
+    await assert.rejects(checkAuthReadiness(async sql => {
+      if (sql.includes('to_regclass')) return { rows: [{ table_exists: failure !== 'table' }] };
+      return { rows: [{ can_insert: false }] };
+    }, { env: { NODE_ENV: 'test', DB_ACCESS_LOGGING_ENABLED: '1' } }), /audit is unavailable/);
+  }
+});
+
 test('hosted readiness checks database and runtime abuse storage without writes', async () => {
   const statements = [];
   const status = await checkAuthReadiness(async sql => {

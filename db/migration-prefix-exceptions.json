@@ -1,0 +1,38 @@
+{
+  "format": "pandapay-migration-prefix-exceptions-v1",
+  "namespaces": {
+    "product_migrations": {
+      "0037": [
+        "0037_card_catalogue_import.sql",
+        "0037_get_profile_by_forwarding_address.sql"
+      ],
+      "0041": [
+        "0041_card_import_provenance.sql",
+        "0041_notification_budget_categories.sql"
+      ],
+      "0043": [
+        "0043_card_product_network_variants.sql",
+        "0043_ensure_pgcrypto_extensions.sql"
+      ],
+      "0044": [
+        "0044_card_upi_linkability_invariant.sql",
+        "0044_fix_dedupe_hash_extension_schema.sql"
+      ],
+      "0045": [
+        "0045_grant_app_user_extensions_usage.sql",
+        "0045_remove_unenforceable_reward_triggers.sql"
+      ],
+      "20261021120000": [
+        "20261021120000_referral_promotions_core.sql",
+        "20261021120000_sms_source_facts.sql"
+      ]
+    },
+    "product_seeds": {
+      "0002": [
+        "0002_demo_queue_data.sql",
+        "0002_more_demo_cards.sql"
+      ]
+    },
+    "auth_migrations": {}
+  }
+}

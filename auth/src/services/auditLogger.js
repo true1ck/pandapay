@@ -95,9 +95,7 @@ async function logAuthEvent({
   meta = {},
 }) {
   try {
-    // Ensure risk_level column exists (add if not present)
-    await ensureRiskLevelColumn();
-
+    // Schema is installed by auth migration 0008; request logging is DML only.
     const result = await db.query(
       `INSERT INTO auth_audit (
         user_id, action, status, risk_level, device_id, ip_address, user_agent, meta
@@ -151,29 +149,6 @@ async function logAuthEvent({
   } catch (err) {
     console.error('Auth audit event write failed', safeErrorCode(err));
     // Don't throw - audit logging should not break the main flow
-  }
-}
-
-/**
- * Ensure risk_level column exists in auth_audit table
- */
-async function ensureRiskLevelColumn() {
-  try {
-    await db.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'auth_audit' AND column_name = 'risk_level'
-        ) THEN
-          ALTER TABLE auth_audit ADD COLUMN risk_level VARCHAR(20) DEFAULT 'INFO';
-          CREATE INDEX IF NOT EXISTS idx_auth_audit_risk_level ON auth_audit(risk_level);
-        END IF;
-      END $$;
-    `);
-  } catch (err) {
-    // Column might already exist or table might not exist yet
-    // This is fine, the insert will handle it
   }
 }
 

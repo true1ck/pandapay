@@ -11,6 +11,7 @@ import '../../data/sync_api.dart';
 import 'split_sync.dart';
 import '../../data/local/financial_store.dart';
 import '../../data/user_categories_repository.dart';
+import '../../data/portable_backup/account_recovery_operation_gate.dart';
 import 'dart:convert';
 
 /// Plan Phase 4 — the client-side sync loop.
@@ -67,6 +68,14 @@ class SyncEngine {
   /// server is idempotent enough to survive that, the duplicate conflict rows
   /// it would generate are user-visible noise.
   Future<SyncResult> sync() async {
+    try {
+      return await AccountRecoveryOperationGate.process.run(_sync);
+    } on AccountRecoveryBusy {
+      return SyncResult.idle;
+    }
+  }
+
+  Future<SyncResult> _sync() async {
     if (_running) return SyncResult.idle;
     final api = _ref.read(syncApiProvider);
     if (api == null) return SyncResult.idle;

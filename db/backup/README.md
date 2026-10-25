@@ -132,6 +132,8 @@ for the destination platform and use the included scripts.
 
 ## Recovery host contract
 
+Optional restored-copy privilege/history review: `rehearse_local_backup.py <protected-folder> --image <cached-reviewed-image> --privilege-review` requires explicit `RESTORE_PRODUCT_RUNTIME_ROLE` and `RESTORE_AUTH_RUNTIME_ROLE` names. After both paired archive comparisons and application key/identity checks, it saves only encrypted detailed catalogue/ledger findings at `status/privilege-review.json.age`. Review completion is separate from strict acceptance; it performs no role/grant repair or migration. Existing backup schedule/retention and private-key custody are unchanged. See the [sync isolation and protected review record](../../docs/security-sync-isolation-implementation-2026-10-25.md) for the historical migration/baseline issue and remaining rollout gates.
+
 Required environment:
 
 - `RESTORE_ADMIN_DATABASE_URL`: privileged URL on the independent recovery

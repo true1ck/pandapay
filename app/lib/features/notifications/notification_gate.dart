@@ -168,6 +168,7 @@ class NotificationGate {
         importance: Importance.defaultImportance,
         priority: Priority.defaultPriority,
         icon: '@drawable/ic_notification',
+        largeIcon: DrawableResourceAndroidBitmap('ic_notification_logo'),
         color: AppColors.teal500,
       );
       const details = NotificationDetails(
@@ -206,6 +207,7 @@ class NotificationGate {
         importance: Importance.defaultImportance,
         priority: Priority.defaultPriority,
         icon: '@drawable/ic_notification',
+        largeIcon: DrawableResourceAndroidBitmap('ic_notification_logo'),
         color: AppColors.teal500,
       );
       final details = NotificationDetails(

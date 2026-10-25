@@ -59,16 +59,151 @@ class RecoveryStatus {
   }
 }
 
+/// A short-lived v2 replacement proof. The server-signed JWT is opaque to the
+/// client and is retained only for this in-memory flow.
+class RecoveryContactReplacementChallenge {
+  final String token;
+  final String identifier;
+  final String deviceId;
+  final String contactHint;
+  final DateTime expiresAt;
+  final int protocolVersion;
+
+  const RecoveryContactReplacementChallenge._({
+    required this.token,
+    required this.identifier,
+    required this.deviceId,
+    required this.contactHint,
+    required this.expiresAt,
+    required this.protocolVersion,
+  });
+}
+
 class RecoveryApi {
   final String authBaseUrl;
   final String accessToken;
   final http.Client _client;
+  final bool versionedOtpEnabled;
+  final DateTime Function() _now;
 
   RecoveryApi({
     required this.authBaseUrl,
     required this.accessToken,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+    this.versionedOtpEnabled = false,
+    DateTime Function()? now,
+  }) : _client = client ?? http.Client(),
+       _now = now ?? DateTime.now;
+
+  String _normalizedIdentifier(String value) {
+    final trimmed = value.trim();
+    return trimmed.contains('@') ? trimmed.toLowerCase() : trimmed;
+  }
+
+  Future<RecoveryContactReplacementChallenge> requestContactReplacementV2(
+    String identifier, {
+    required String deviceId,
+  }) async {
+    if (!versionedOtpEnabled ||
+        !RegExp(r'^[A-Za-z0-9:_-]{4,128}$').hasMatch(deviceId)) {
+      throw StateError('Please try requesting a new verification code.');
+    }
+    final normalized = _normalizedIdentifier(identifier);
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(identifier, 'identifier', 'must not be empty');
+    }
+    final response = await _client
+        .post(
+          Uri.parse('$authBaseUrl/users/me/recovery-contact/v2/request'),
+          headers: {
+            'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'identifier': identifier.trim(),
+            'device_id': deviceId,
+          }),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'Contact replacement failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    try {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final token = body['challenge'];
+      final hint = body['contact_hint'];
+      final version = body['version'];
+      final codeLength = body['code_length'];
+      final seconds = body['expires_in'];
+      if (token is! String ||
+          token.isEmpty ||
+          hint is! String ||
+          hint.isEmpty ||
+          version != 2 ||
+          codeLength != 6 ||
+          seconds is! int ||
+          seconds < 1 ||
+          seconds > 120) {
+        throw const FormatException();
+      }
+      return RecoveryContactReplacementChallenge._(
+        token: token,
+        identifier: normalized,
+        deviceId: deviceId,
+        contactHint: hint,
+        expiresAt: _now().add(Duration(seconds: seconds)),
+        protocolVersion: version as int,
+      );
+    } catch (_) {
+      throw ApiException(
+        'Contact replacement challenge unavailable',
+        userMessage:
+            'Unable to start contact replacement. Please try again shortly.',
+      );
+    }
+  }
+
+  Future<RecoveryStatus> verifyContactReplacementV2(
+    RecoveryContactReplacementChallenge challenge,
+    String code, {
+    required String identifier,
+    required String deviceId,
+  }) async {
+    if (!versionedOtpEnabled ||
+        challenge.protocolVersion != 2 ||
+        challenge.identifier != _normalizedIdentifier(identifier) ||
+        challenge.deviceId != deviceId ||
+        !_now().isBefore(challenge.expiresAt) ||
+        !RegExp(r'^\d{6}$').hasMatch(code)) {
+      throw StateError(
+        'Request a new six-digit verification code for this device.',
+      );
+    }
+    final response = await _client
+        .post(
+          Uri.parse('$authBaseUrl/users/me/recovery-contact/v2/verify'),
+          headers: {
+            'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'challenge': challenge.token,
+            'code': code,
+            'device_id': deviceId,
+          }),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'Contact replacement failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    return RecoveryStatus.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
 
   Future<String> requestContactReplacement(String identifier) async {
     final body = await _replacementRequest('request', {

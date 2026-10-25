@@ -1,0 +1,10 @@
+{
+  "result": "passed",
+  "version": "18.4 (Homebrew)",
+  "scope": "synthetic-owned-loopback-cluster",
+  "fixtures": [
+    "otp_purpose_postgres",
+    "auth_abuse_store_postgres"
+  ],
+  "actual_provider_or_customer_data": false
+}

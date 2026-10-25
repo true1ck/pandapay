@@ -1,0 +1,1 @@
+PASS: console browser independent restricted LOGIN/bootstrap replay, ordinary/PUBLIC/owner denial, encrypted AAD/cipher/key isolation, serialized refresh and rotation recovery, expiry/idle/100-row cleanup, session destruction and migration replay

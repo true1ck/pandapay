@@ -1,0 +1,31 @@
+{
+  "api/health": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "api/ready": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "database": "ready"
+    }
+  },
+  "auth/health": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "auth/ready": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "database": "ready"
+    }
+  },
+  "api/unauthenticated": {
+    "status": 401
+  }
+}

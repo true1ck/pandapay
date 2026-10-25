@@ -1,0 +1,50 @@
+{
+  "api": {
+    "checked_at_utc": "2026-10-25T06:03:30.092170+00:00",
+    "lock_sha256": "78d576e00816012541e0c414ec45351d07b9e327fa194ed726193351bba9ef5c",
+    "exit_code": 0,
+    "metadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "dependencies": {
+        "prod": 98,
+        "dev": 0,
+        "optional": 1,
+        "peer": 0,
+        "peerOptional": 0,
+        "total": 98
+      }
+    },
+    "advisory_ids": []
+  },
+  "auth": {
+    "checked_at_utc": "2026-10-25T06:03:30.539904+00:00",
+    "lock_sha256": "802ee82ef90e7b557bd077a4591fd7342e86f74761c912e4830449a000345497",
+    "exit_code": 0,
+    "metadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "dependencies": {
+        "prod": 186,
+        "dev": 0,
+        "optional": 1,
+        "peer": 0,
+        "peerOptional": 0,
+        "total": 186
+      }
+    },
+    "advisory_ids": []
+  }
+}

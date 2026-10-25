@@ -1,0 +1,702 @@
+{
+  "format": "pandapay-release-secret-audit-v1",
+  "source_sha256": "f79b61361c228ebc85c21f2baa486ced12322353bacc70be01f0c28d8babae54",
+  "network": "none",
+  "raw_values_emitted": false,
+  "heuristic": true,
+  "incomplete": false,
+  "history": {
+    "mode": "full-retained",
+    "scan_scope": "retained-git-refs/release-source/recognized-text",
+    "incomplete": false,
+    "shallow_repository": false,
+    "commits_listed": 651,
+    "commits_selected": 651,
+    "commits_attempted": 651,
+    "commits_examined": 651,
+    "blobs_attempted": 4235,
+    "blobs_read": 4235,
+    "blobs_examined": 4235,
+    "blobs_failed": 0,
+    "blobs_limit_rejected": 0,
+    "bytes_examined": 128093276,
+    "tree_entries_examined": 638860,
+    "tree_bytes_examined": 62015766,
+    "limits": {
+      "maxCommits": 20000,
+      "maxFiles": 5000,
+      "maxBytes": 134217728,
+      "maxTreeBytes": 16777216,
+      "maxTreeTotalBytes": 536870912,
+      "maxTreeEntries": 20000000,
+      "maxMs": 120000
+    },
+    "retained_history_complete": true
+  },
+  "archives": [],
+  "findings": [
+    {
+      "scope": "git-history",
+      "file": "api/test/imap_test.test.js",
+      "line": 88,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "api/test/imap_test.test.js",
+      "line": 115,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "app/android/app/google-services.json",
+      "line": 18,
+      "rule": "google-api-key",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "app/android/app/google-services.json",
+      "line": 37,
+      "rule": "google-api-key",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "app/android/app/google-services.json",
+      "line": 56,
+      "rule": "google-api-key",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "app/ios/Runner/GoogleService-Info.plist",
+      "line": 6,
+      "rule": "google-api-key",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "auth/test/current_session_verification.test.js",
+      "line": 97,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 38,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 38,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 47,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 47,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 48,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 48,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 48,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 48,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 48,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 48,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 48,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 48,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 49,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 226,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 226,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 227,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 227,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 227,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 227,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 292,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 292,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 373,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 373,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 374,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "git-history",
+      "file": "console/test/widget_test.dart",
+      "line": 529,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "api/test/imap_test.test.js",
+      "line": 88,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "api/test/imap_test.test.js",
+      "line": 115,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "api/test/partner_conversion_route.test.js",
+      "line": 10,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "app/android/app/google-services.json",
+      "line": 18,
+      "rule": "google-api-key",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "app/android/app/google-services.json",
+      "line": 37,
+      "rule": "google-api-key",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "app/android/app/google-services.json",
+      "line": 56,
+      "rule": "google-api-key",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "app/ios/Runner/GoogleService-Info.plist",
+      "line": 6,
+      "rule": "google-api-key",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "auth/test/current_session_verification.test.js",
+      "line": 97,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "console/lib/data/admin_api.dart",
+      "line": 192,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "console/test/widget_test.dart",
+      "line": 49,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "console/test/widget_test.dart",
+      "line": 374,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "console/test/widget_test.dart",
+      "line": 529,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "db/scripts/service_capabilities.js",
+      "line": 6,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "db/scripts/service_capabilities.js",
+      "line": 7,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "db/scripts/service_capabilities.js",
+      "line": 8,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "db/scripts/service_capabilities.js",
+      "line": 9,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "db/scripts/service_capabilities.js",
+      "line": 10,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "db/scripts/service_capabilities.js",
+      "line": 11,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "db/scripts/service_capabilities.js",
+      "line": 12,
+      "rule": "credential-assignment",
+      "count": 1
+    },
+    {
+      "scope": "working-tree",
+      "file": "db/tests/release_secret_audit.test.js",
+      "line": 164,
+      "rule": "private-key-marker",
+      "count": 1
+    }
+  ],
+  "history_provenance": {
+    "enabled": true,
+    "incomplete": false,
+    "records": [
+      {
+        "finding_index": 2,
+        "blob_id": "891b7b176e3f54e3409a2e75c6407a9427a1151e",
+        "observed_commit_id": "648bf220b72c6df85b28db80b3ffa1b7741ef5ae",
+        "file": "app/android/app/google-services.json",
+        "line": 18,
+        "rule": "google-api-key",
+        "count": 1
+      },
+      {
+        "finding_index": 3,
+        "blob_id": "891b7b176e3f54e3409a2e75c6407a9427a1151e",
+        "observed_commit_id": "648bf220b72c6df85b28db80b3ffa1b7741ef5ae",
+        "file": "app/android/app/google-services.json",
+        "line": 37,
+        "rule": "google-api-key",
+        "count": 1
+      },
+      {
+        "finding_index": 4,
+        "blob_id": "891b7b176e3f54e3409a2e75c6407a9427a1151e",
+        "observed_commit_id": "648bf220b72c6df85b28db80b3ffa1b7741ef5ae",
+        "file": "app/android/app/google-services.json",
+        "line": 56,
+        "rule": "google-api-key",
+        "count": 1
+      },
+      {
+        "finding_index": 5,
+        "blob_id": "c1f4cf4009f915e5cd270b5a4d9aa2f00757731d",
+        "observed_commit_id": "648bf220b72c6df85b28db80b3ffa1b7741ef5ae",
+        "file": "app/ios/Runner/GoogleService-Info.plist",
+        "line": 6,
+        "rule": "google-api-key",
+        "count": 1
+      },
+      {
+        "finding_index": 6,
+        "blob_id": "5c60857add46e0a20d20f14a188c4f29231dbe77",
+        "observed_commit_id": "648bf220b72c6df85b28db80b3ffa1b7741ef5ae",
+        "file": "auth/test/current_session_verification.test.js",
+        "line": 97,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 11,
+        "blob_id": "473fc6e5fcfd5b59afdc3e20958ca52d689074a9",
+        "observed_commit_id": "648bf220b72c6df85b28db80b3ffa1b7741ef5ae",
+        "file": "console/test/widget_test.dart",
+        "line": 48,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 28,
+        "blob_id": "473fc6e5fcfd5b59afdc3e20958ca52d689074a9",
+        "observed_commit_id": "648bf220b72c6df85b28db80b3ffa1b7741ef5ae",
+        "file": "console/test/widget_test.dart",
+        "line": 373,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 12,
+        "blob_id": "ae825a856b9df1a87666f846398baaea0bf5b90c",
+        "observed_commit_id": "953774d87ffef39895ff17fc9d0a7f554661bd9b",
+        "file": "console/test/widget_test.dart",
+        "line": 48,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 29,
+        "blob_id": "ae825a856b9df1a87666f846398baaea0bf5b90c",
+        "observed_commit_id": "953774d87ffef39895ff17fc9d0a7f554661bd9b",
+        "file": "console/test/widget_test.dart",
+        "line": 373,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 0,
+        "blob_id": "790461091c465a710046dbbf76ea91aa1e697487",
+        "observed_commit_id": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+        "file": "api/test/imap_test.test.js",
+        "line": 88,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 1,
+        "blob_id": "790461091c465a710046dbbf76ea91aa1e697487",
+        "observed_commit_id": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+        "file": "api/test/imap_test.test.js",
+        "line": 115,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 19,
+        "blob_id": "7d6781eacc3d57308a56f9c490b8fc008d517c53",
+        "observed_commit_id": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+        "file": "console/test/widget_test.dart",
+        "line": 49,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 30,
+        "blob_id": "7d6781eacc3d57308a56f9c490b8fc008d517c53",
+        "observed_commit_id": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+        "file": "console/test/widget_test.dart",
+        "line": 374,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 31,
+        "blob_id": "7d6781eacc3d57308a56f9c490b8fc008d517c53",
+        "observed_commit_id": "1025c0244350c4720a8ad11caf1bb42b7eb711c8",
+        "file": "console/test/widget_test.dart",
+        "line": 529,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 13,
+        "blob_id": "eeb34d5f0d30bc49b319d5fd939e2a1407a07452",
+        "observed_commit_id": "d8f25bd9c6eec3f0758f668c0ffc51f9c6a07cef",
+        "file": "console/test/widget_test.dart",
+        "line": 48,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 26,
+        "blob_id": "eeb34d5f0d30bc49b319d5fd939e2a1407a07452",
+        "observed_commit_id": "d8f25bd9c6eec3f0758f668c0ffc51f9c6a07cef",
+        "file": "console/test/widget_test.dart",
+        "line": 292,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 14,
+        "blob_id": "c122f006b2ef30b755be5eaa3f1248cfeaae5470",
+        "observed_commit_id": "03d14af295346e021edf5ba914aa10a332650f2b",
+        "file": "console/test/widget_test.dart",
+        "line": 48,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 27,
+        "blob_id": "c122f006b2ef30b755be5eaa3f1248cfeaae5470",
+        "observed_commit_id": "03d14af295346e021edf5ba914aa10a332650f2b",
+        "file": "console/test/widget_test.dart",
+        "line": 292,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 15,
+        "blob_id": "6436768454091af54ac7a86f08569de8054372df",
+        "observed_commit_id": "87bef30ebd59ec1802c4d928810c04bbfc8895e4",
+        "file": "console/test/widget_test.dart",
+        "line": 48,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 22,
+        "blob_id": "6436768454091af54ac7a86f08569de8054372df",
+        "observed_commit_id": "87bef30ebd59ec1802c4d928810c04bbfc8895e4",
+        "file": "console/test/widget_test.dart",
+        "line": 227,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 16,
+        "blob_id": "0486b15f92e8537add0bd124b635768ae93cdf83",
+        "observed_commit_id": "a189b8abd47002b4bc74d3a5422adfe54d91e264",
+        "file": "console/test/widget_test.dart",
+        "line": 48,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 23,
+        "blob_id": "0486b15f92e8537add0bd124b635768ae93cdf83",
+        "observed_commit_id": "a189b8abd47002b4bc74d3a5422adfe54d91e264",
+        "file": "console/test/widget_test.dart",
+        "line": 227,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 17,
+        "blob_id": "cfa63843d7e8947483dac5bd1f194589419c9fde",
+        "observed_commit_id": "6a7564849fac11be7b9c87845f2512e5c7291333",
+        "file": "console/test/widget_test.dart",
+        "line": 48,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 24,
+        "blob_id": "cfa63843d7e8947483dac5bd1f194589419c9fde",
+        "observed_commit_id": "6a7564849fac11be7b9c87845f2512e5c7291333",
+        "file": "console/test/widget_test.dart",
+        "line": 227,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 18,
+        "blob_id": "f857cfa81736eb14a6fa0f239512e49577dd6f5b",
+        "observed_commit_id": "771dfd47ec736e3bcac0a65da83f79bb84393981",
+        "file": "console/test/widget_test.dart",
+        "line": 48,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 25,
+        "blob_id": "f857cfa81736eb14a6fa0f239512e49577dd6f5b",
+        "observed_commit_id": "771dfd47ec736e3bcac0a65da83f79bb84393981",
+        "file": "console/test/widget_test.dart",
+        "line": 227,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 9,
+        "blob_id": "89aeca3f2e027f4610343369ccb1a2e4d70388ee",
+        "observed_commit_id": "fd41e26d7fbfa9e780085f4564615388dcce7d73",
+        "file": "console/test/widget_test.dart",
+        "line": 47,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 20,
+        "blob_id": "89aeca3f2e027f4610343369ccb1a2e4d70388ee",
+        "observed_commit_id": "fd41e26d7fbfa9e780085f4564615388dcce7d73",
+        "file": "console/test/widget_test.dart",
+        "line": 226,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 10,
+        "blob_id": "013022ab85530bd25a0b7977408c136f5ee92350",
+        "observed_commit_id": "4962de8448fe089ab35d43ee488186447c5d62b4",
+        "file": "console/test/widget_test.dart",
+        "line": 47,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 21,
+        "blob_id": "013022ab85530bd25a0b7977408c136f5ee92350",
+        "observed_commit_id": "4962de8448fe089ab35d43ee488186447c5d62b4",
+        "file": "console/test/widget_test.dart",
+        "line": 226,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 7,
+        "blob_id": "2f1a093f3fba7b8f0a3bc0c8b99aabcd4245cb16",
+        "observed_commit_id": "85f6ee33ac9f7e14ffb5a63d9d0baae0d81b73a1",
+        "file": "console/test/widget_test.dart",
+        "line": 38,
+        "rule": "credential-assignment",
+        "count": 1
+      },
+      {
+        "finding_index": 8,
+        "blob_id": "81d053bbf7b09ba6db06018861dcdcfa457055ee",
+        "observed_commit_id": "036d9d97605eeedd753598beef15c19c1310caee",
+        "file": "console/test/widget_test.dart",
+        "line": 38,
+        "rule": "credential-assignment",
+        "count": 1
+      }
+    ],
+    "limits": {
+      "maxRecords": 5000,
+      "maxBytes": 2097152
+    },
+    "records_bytes": 7313
+  }
+}
