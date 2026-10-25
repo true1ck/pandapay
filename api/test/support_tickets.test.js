@@ -5,6 +5,8 @@ const assert = require('node:assert/strict');
 const {
   SUPPORT_TICKET_KINDS,
   SUPPORT_TICKET_MAX_MESSAGE_LENGTH,
+  SUPPORT_TICKET_METADATA_SQL,
+  INSERT_SUPPORT_TICKET_SQL,
   validateSupportTicketPayload,
   createSupportTicketRateLimiter,
   createSupportTicketHandler,
@@ -66,8 +68,9 @@ test('registered route preserves optional authentication and inserts a signed-ou
     optionalAuth,
     withUserClient: async (userId, callback) => callback({
       query: async (sql, params) => {
+        if (sql === SUPPORT_TICKET_METADATA_SQL) return { rows: [{ id: 'ticket-1', created_at: 'now' }] };
         inserts.push({ userId, sql, params });
-        return { rows: [{ id: 'ticket-1', kind: params[1], state: 'pending', created_at: 'now' }] };
+        return { rows: [], rowCount: 1 };
       },
     }),
     limiter: createSupportTicketRateLimiter({ anonymousLimit: 4 }),
@@ -90,7 +93,8 @@ test('registered route preserves optional authentication and inserts a signed-ou
   assert.equal(res.body.ticket.id, 'ticket-1');
   assert.equal(inserts.length, 1);
   assert.equal(inserts[0].userId, null);
-  assert.deepEqual(inserts[0].params, [null, 'general', 'OTP is not arriving', '{"platform":"android","appVersion":"2.0.0"}', '2.0.0']);
+  assert.equal(inserts[0].sql, INSERT_SUPPORT_TICKET_SQL);
+  assert.deepEqual(inserts[0].params, ['ticket-1', null, 'general', 'OTP is not arriving', '{"platform":"android","appVersion":"2.0.0"}', '2.0.0']);
 });
 
 test('handler rejects invalid payloads before database access and rate-limits account or IP identity', async () => {
@@ -99,9 +103,10 @@ test('handler rejects invalid payloads before database access and rate-limits ac
   const limiter = createSupportTicketRateLimiter({ now: () => now, windowMs: 60_000, authenticatedLimit: 1, anonymousLimit: 1 });
   const handler = createSupportTicketHandler({
     limiter,
-    withUserClient: async (_userId, callback) => callback({ query: async () => {
+    withUserClient: async (_userId, callback) => callback({ query: async (sql) => {
+      if (sql === SUPPORT_TICKET_METADATA_SQL) return { rows: [{ id: 'ticket', created_at: 'now' }] };
       writes += 1;
-      return { rows: [{ id: 'ticket', kind: 'bug' }] };
+      return { rows: [], rowCount: 1 };
     } }),
   });
 

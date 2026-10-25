@@ -1,0 +1,79 @@
+{
+  "review": "Anonymous support ticket row-security compatibility",
+  "date": "2026-10-25",
+  "branch": "dev",
+  "base_commit": "cf808050c22f3d6126ef71327721a083d06920c3",
+  "before": {
+    "anonymous_submission_status": 500,
+    "postgres_error": "42501",
+    "cause": "INSERT RETURNING requires the owner-only SELECT policy, which excludes anonymous rows"
+  },
+  "checks": [
+    {
+      "command": "node api/test/support_tickets_postgres.js",
+      "status": "passed",
+      "postgres_version": "18.4 (Homebrew)",
+      "runtime_role": "NOSUPERUSER NOBYPASSRLS",
+      "rls_enabled_and_forced": true,
+      "scenarios": [
+        "legacy_returning_refused",
+        "anonymous_submission",
+        "anonymous_read_denied",
+        "member_submission",
+        "owner_read_only",
+        "pooled_identity_reset",
+        "foreign_insert_denied",
+        "history_preserved",
+        "operator_triage"
+      ],
+      "scope": "Fixture owns and removes a temporary loopback cluster containing synthetic data. It applies migrations 0001 through 0011, 0016, and the exact ticket/report policy section of 20261024223000. The dashboard view and later application schema are outside this fixture."
+    },
+    {
+      "command": "npm test (api)",
+      "status": "passed",
+      "tests_passed": 1114,
+      "tests_skipped": 2,
+      "tests_failed": 0,
+      "includes": "API syntax checks and all *.test.js API tests, including five support-ticket tests"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    }
+  ],
+  "sha256": {
+    "api/src/support_tickets.js": "54b0d48ef39a84b530d0428c067559bd06bc7a463f934b36282c6c8723e039e0",
+    "api/test/support_tickets.test.js": "b5c4d05de6c026b130c8d20dd7983560cd1d9fac7291bac30ff5424f3a7599c6",
+    "api/test/support_tickets_postgres.js": "b514bfcd0925a262979658c87639b6f19ea3ed8e8c63d044cd071668052d1be2",
+    "docs/security-and-backend-audit-2026-10-20.md": "ec1e14db125712ab9660370f40048985687e4eb975fbd279d635f158f3095a10",
+    "docs/security-and-backend-audit-2026-10-20.html": "79f7bc16d24aeb485ca9bb443877f093bda0b3aea37a65998845ba9ac753e1d8",
+    "docs/security-support-ticket-bounds-implementation-2026-10-25.md": "13cb5aee7803d06ea2abc625fdbf2c95f240224178ffed02f3baadb9e0c4f2d5"
+  },
+  "migration_source_sha256": {
+    "db/supabase/migrations/0001_extensions_and_enums.sql": "8a8ebc6a909b6a6bdeee5ce92996e34f4a3fce95fbbfdb3911d2da8934897beb",
+    "db/supabase/migrations/0002_reference_data.sql": "bc56fb212fa942671a67323db2a4d6894a3fd3d27acf5c76844949676517a186",
+    "db/supabase/migrations/0003_card_catalogue.sql": "30ca5f187eeeb4bf00fc15d2e2b4992f46da92a29719c582df161d73380b1bb9",
+    "db/supabase/migrations/0004_user_domain.sql": "4eff1d479a76b94aa0c48dee1f089313f89f165a8742a82356b5c1e72f626c60",
+    "db/supabase/migrations/0005_sync.sql": "0c91f64ba4b59b357703707b3295c84711f375fc07846972d29761dade385aa6",
+    "db/supabase/migrations/0006_ingest.sql": "773b5eb96008f8b1bfa84cdbfd341f69006dc0ad4cb9f39ba955f5baae166efa",
+    "db/supabase/migrations/0007_crowdsource.sql": "be09c0c4b091d95928eb796d4088514c74048fd61f10e292b32d741b1bc1e579",
+    "db/supabase/migrations/0008_admin_console.sql": "4273f831a46e768dd63e6a834373d581a4e745fd792032e5c82e8a8b9cf47d3f",
+    "db/supabase/migrations/0009_platform_ops.sql": "93a8b5c23bfad6c0589276f6bbc8ac2e72394a60d46741950e66c5a932d531bc",
+    "db/supabase/migrations/0010_functions_and_views.sql": "ac380d3aab775091ff3126b8acf1ff5589735c7f31660569f9f3d12382c6120f",
+    "db/supabase/migrations/0011_rls_policies.sql": "c5f0f72637602c4e671dc35a363b4d1659ba3def21a00210e843afdcc46ee349",
+    "db/supabase/migrations/0016_queue_tables_admin_rls.sql": "0d3c39ac3d354feb81b32738a9dbe10bc8947d22ba6e535249a8030fb843ce4f",
+    "db/supabase/migrations/20261024223000_support_tickets_dashboard_and_feedback.sql": "4022d7b4b3d0c063feda8d602f0973ecd0975f6321f76d22bd48d7caed2f8370"
+  },
+  "rollout": {
+    "new_migrations": 0,
+    "live_database_changes": false,
+    "production_deployed": false,
+    "audit_findings_closed": 0,
+    "unverified": [
+      "Full current-data migration and runtime-role acceptance",
+      "Hosted PostgreSQL 17 and intended-provider acceptance",
+      "Shared edge/store rate limiting and production capacity"
+    ]
+  },
+  "ticket_report_policy_section_sha256": "d7769b30175a52c7b1338db5132a04b04c60473eac87444aaf6b198ddfe4f899"
+}

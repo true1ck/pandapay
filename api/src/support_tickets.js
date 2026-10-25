@@ -11,6 +11,10 @@ const SUPPORT_TICKET_AUTHENTICATED_LIMIT = 5;
 const SUPPORT_TICKET_ANONYMOUS_LIMIT = 30;
 const SUPPORT_TICKET_MAX_RATE_LIMIT_ENTRIES = 50_000;
 const { safeErrorCode } = require('./safeErrorCode');
+const SUPPORT_TICKET_METADATA_SQL = 'SELECT gen_random_uuid() AS id, now() AS created_at';
+const INSERT_SUPPORT_TICKET_SQL = `INSERT INTO support_tickets
+  (id, profile_id, kind, message, diagnostics, app_version, state, created_at)
+  VALUES ($1, $2, $3, $4, $5, $6, 'pending', now())`;
 
 function validateSupportTicketPayload(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -145,15 +149,16 @@ function createSupportTicketHandler({ withUserClient, limiter = createSupportTic
 
     const { kind, message, diagnostics, appVersion } = parsed.value;
     try {
-      const result = await withUserClient(req.userId || null, (client) =>
-        client.query(
-          `INSERT INTO support_tickets (profile_id, kind, message, diagnostics, app_version)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING id, kind, state, created_at`,
-          [req.userId || null, kind, message, diagnostics === null ? null : JSON.stringify(diagnostics), appVersion],
-        ),
-      );
-      return res.status(201).json({ ticket: result.rows[0] });
+      const ticket = await withUserClient(req.userId || null, async (client) => {
+        // Generate the same UUID/database transaction time as the table
+        // defaults, then insert without RETURNING. Anonymous tickets are
+        // intentionally unreadable under RLS, including INSERT RETURNING.
+        const metadata = (await client.query(SUPPORT_TICKET_METADATA_SQL)).rows[0];
+        await client.query(INSERT_SUPPORT_TICKET_SQL, [metadata.id, req.userId || null, kind,
+          message, diagnostics === null ? null : JSON.stringify(diagnostics), appVersion]);
+        return { id: metadata.id, kind, state: 'pending', created_at: metadata.created_at };
+      });
+      return res.status(201).json({ ticket });
     } catch (err) {
       // Keep request data and PostgreSQL details out of routine logs.
       console.error('POST /support-tickets error', safeErrorCode(err));
@@ -178,6 +183,8 @@ module.exports = {
   SUPPORT_TICKET_AUTHENTICATED_LIMIT,
   SUPPORT_TICKET_ANONYMOUS_LIMIT,
   SUPPORT_TICKET_MAX_RATE_LIMIT_ENTRIES,
+  SUPPORT_TICKET_METADATA_SQL,
+  INSERT_SUPPORT_TICKET_SQL,
   validateSupportTicketPayload,
   createSupportTicketRateLimiter,
   createSupportTicketHandler,

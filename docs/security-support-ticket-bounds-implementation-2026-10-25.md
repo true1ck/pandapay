@@ -13,8 +13,18 @@ This is a narrow source-hardening slice for the post-merge `/support-tickets` ro
 
 ## Verification
 
-The focused Node test file covers malformed and oversized requests, the current flat mobile diagnostics, anonymous route registration and insertion, profile/IP rate limits, retry headers, map capacity and window expiry. The full API suite passes **1,114 tests with two skips and no failures**. The signed-out feedback form regression passes **1 test**, and the API syntax check passes. See [the recorded scoped verification](../artifacts/security-support-ticket-bounds-2026-10-25/verification.json).
+The initial bounds batch's focused Node test file covers malformed and oversized requests, the current flat mobile diagnostics, anonymous route registration and insertion, profile/IP rate limits, retry headers, map capacity and window expiry. Its full API suite passed **1,114 tests with two skips and no failures**. The signed-out feedback form regression passed **1 test**, and the API syntax check passed. See [that batch's scoped verification](../artifacts/security-support-ticket-bounds-2026-10-25/verification.json).
+
+## PostgreSQL row-policy follow-up
+
+A later local PostgreSQL fixture reproduced a failure missed by the mocked database tests: `INSERT ... RETURNING` needs the ticket's SELECT policy, which deliberately excludes anonymous rows. The restricted runtime role received PostgreSQL error `42501` and the API returned 500 for signed-out help submissions.
+
+The handler now generates the UUID and response timestamp with scalar database functions inside the existing transaction, then inserts without `RETURNING`. The insert uses the same transaction's `now()` and explicitly starts the ticket in `pending`. The 201 response retains `id`, `kind`, `state` and `created_at`; it does not read stored anonymous tickets or expand any policy/grant.
+
+`node api/test/support_tickets_postgres.js` owns and removes a temporary loopback cluster with synthetic data. It applies migrations 0001–0011, 0016, and the exact ticket/report policy section of `20261024223000_support_tickets_dashboard_and_feedback.sql`; the unrelated dashboard view and later application schema are outside this fixture. PostgreSQL **18.4** passes nine scenarios: the old RETURNING query is refused, anonymous submission works, anonymous reads are denied, member submission works, members see only their own tickets, pooled identity resets, foreign-profile inserts are denied, historical rows are preserved, and operators can triage all tickets. The current API suite passes **1,114 tests, two skips, zero failures**. [Follow-up verification](../artifacts/security-support-ticket-rls-2026-10-25/verification.json).
+
+This proves the source-policy behavior in the disposable fixture. Current-data upgrades, full runtime-role acceptance and hosted PostgreSQL 17/provider acceptance remain open.
 
 ## Limits and rollout
 
-The limiter is per Node process and is not shared across replicas or restarts. Its bounded map and per-identity quotas reduce accidental/repeated abuse; they do not establish a distributed abuse budget or launch capacity. Add and exercise a shared edge or database-backed admission control before unrestricted high-volume onboarding. Existing tickets and all database rows are untouched. No migration was added or run, no provider or production service was contacted, no deployment occurred, and no audit finding or launch gate was closed.
+The limiter is per Node process and is not shared across replicas or restarts. Its bounded map and per-identity quotas reduce accidental/repeated abuse; they do not establish a distributed abuse budget or launch capacity. Add and exercise a shared edge or database-backed admission control before unrestricted high-volume onboarding. This batch adds no schema migration and changes no live data or service. No audit finding or launch gate was closed.
