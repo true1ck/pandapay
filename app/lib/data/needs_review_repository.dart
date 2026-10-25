@@ -450,7 +450,9 @@ class NeedsReviewRepository {
               parsed.eventType == LocalSmsEventType.bill &&
               parsed.dueDate != null) {
             // Bill obligation with due date is resolvable
-          } else if (parsed?.reasonCodes.contains('next_premium_due_month_only') !=
+          } else if (parsed?.reasonCodes.contains(
+                'next_premium_due_month_only',
+              ) !=
               true) {
             kept.add(item);
             continue;
@@ -1552,6 +1554,31 @@ class NeedsReviewRepository {
           _persistResolvedBillObservationSync(db, namespace, parsed, item);
           return;
         } else {
+          final allTransactions = await _loadTransactionSnapshot(
+            db,
+            namespace,
+            txns,
+          );
+          final linked = deriveSmsBillRows(
+            observations: [
+              {
+                'event_type': parsed.eventType.wireValue,
+                'received_at': item.receivedAt.toIso8601String(),
+                'sender_bank': item.sender,
+                'biller_name': parsed.billerName,
+                'card_last4': parsed.cardLast4,
+                'account_last4': parsed.accountLast4,
+                'amount_due_paise': parsed.amountDue?.paise,
+                'minimum_due_paise': parsed.minimumDue?.paise,
+                'due_date': parsed.dueDate?.toIso8601String(),
+                'is_autopay': parsed.isAutopay,
+              },
+            ],
+            transactions: allTransactions,
+            cardsLast4ById: _loadCardLast4Sync(db, namespace),
+            now: now,
+            lookbackDays: 36525,
+          ).where((row) => row.state == SmsBillState.linked).firstOrNull;
           PastBillReceiptRepository(db, namespace: namespace).archiveBill(
             id: item.id,
             sender: item.sender,
@@ -1562,7 +1589,10 @@ class NeedsReviewRepository {
             cardLast4: parsed.cardLast4,
             accountLast4: parsed.accountLast4,
             body: item.body,
-            status: PastBillReceiptStatus.historicalUnpaid,
+            status: linked == null
+                ? PastBillReceiptStatus.historicalUnpaid
+                : PastBillReceiptStatus.paidLinked,
+            linkedTransactionId: linked?.linkedTxnId,
           );
           _persistResolvedBillObservationSync(db, namespace, parsed, item);
           return;

@@ -1,8 +1,6 @@
 import 'dart:ui' show Color;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import '../../app/design/app_theme.dart' show AppColors;
-
 /// Shared Android notification artwork and presentation settings.
 ///
 /// The Android drawable aliases in values/notification_branding.xml are the

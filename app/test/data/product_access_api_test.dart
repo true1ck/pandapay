@@ -38,8 +38,12 @@ void main() {
         Object? error;
         var completed = false;
         api.completeOnboarding().then<void>(
-          (_) { completed = true; },
-          onError: (Object value) { error = value; },
+          (_) {
+            completed = true;
+          },
+          onError: (Object value) {
+            error = value;
+          },
         );
         clock.flushMicrotasks();
         clock.elapse(const Duration(seconds: 14));
@@ -82,10 +86,13 @@ void main() {
     () async {
       final requests = <http.Request>[];
       final client = MockClient((request) async {
-        requests.add(request as http.Request);
+        requests.add(request);
         if (request.method == 'POST' &&
             request.url.path == '/onboarding/complete') {
-          if (requests.where((r) => r.url.path == '/onboarding/complete').length == 1) {
+          if (requests
+                  .where((r) => r.url.path == '/onboarding/complete')
+                  .length ==
+              1) {
             return http.Response(
               jsonEncode({'error': 'required_terms_missing'}),
               409,
@@ -156,15 +163,13 @@ void main() {
       await expectLater(
         api.completeOnboarding(),
         throwsA(
-          isA<ApiException>().having(
-            (e) => e.statusCode,
-            'statusCode',
-            409,
-          ).having(
-            (e) => e.errorCode,
-            'errorCode',
-            'required_terms_missing',
-          ),
+          isA<ApiException>()
+              .having((e) => e.statusCode, 'statusCode', 409)
+              .having(
+                (e) => e.errorCode,
+                'errorCode',
+                'required_terms_missing',
+              ),
         ),
       );
     },
@@ -199,16 +204,13 @@ void main() {
       );
     });
 
-    test(
-      'formats other raw snake_case errors into generic friendly message',
-      () {
-        const errorJson =
-            'POST /onboarding/complete failed: 400 {"error":"unknown_error_code"}';
-        final message = ApiException.friendlyMessageFrom(errorJson);
-        expect(message, 'Something went wrong. Please try again.');
-        expect(message.contains('unknown_error_code'), isFalse);
-      },
-    );
+    test('formats other raw snake_case errors into generic friendly message', () {
+      const errorJson =
+          'POST /onboarding/complete failed: 400 {"error":"unknown_error_code"}';
+      final message = ApiException.friendlyMessageFrom(errorJson);
+      expect(message, 'Something went wrong. Please try again.');
+      expect(message.contains('unknown_error_code'), isFalse);
+    });
   });
 
   group('invitation link handling', () {

@@ -1649,11 +1649,14 @@ class LocalSmsParser {
       final isInsuranceOrUtility =
           isInsuranceReminder ||
           _re(
-            r'\b(?:broadband|fiber|telecom|yojana|pension|subscription|utility|electricity|power|water|gas|dth|cable|maintenance)\b',
+            r'\b(?:broadband|fiber|telecom|yojana|pension|subscription|utility|electricity|power|water|gas|dth|cable)\b',
           ).hasMatch(body);
       final isCardStatement = cardLast4 != null;
+      // A due date alone does not prove recurrence. Generic invoices and
+      // maintenance demands are often one-off; only known recurring bill
+      // families or explicit cadence wording may create a commitment.
       final isUpcomingObligation =
-          (isInsuranceOrUtility || (due != null && !isCardStatement));
+          isInsuranceOrUtility || (cadenceHint != null && !isCardStatement);
       return observation(
         null,
         LocalSmsEventType.bill,

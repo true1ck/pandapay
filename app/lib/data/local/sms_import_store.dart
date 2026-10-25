@@ -4,6 +4,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../commitments_repository.dart';
 import '../past_bill_receipts.dart';
+import '../pending_bills.dart';
 
 import '../../features/sms_import/sms_text_hint.dart';
 import '../local_sms_parser.dart';
@@ -245,21 +246,19 @@ class SmsImportStore {
         final now = DateTime.now();
         final startOfToday = DateTime(now.year, now.month, now.day);
         final hasDueDate = observation.dueDate != null;
-        final isUpcomingBill =
-            hasDueDate && !observation.dueDate!.isBefore(startOfToday);
         final isPastDueBill =
             hasDueDate && observation.dueDate!.isBefore(startOfToday);
 
         if (isMandate ||
             (!isPastDueBill &&
-                (observation.disposition == LocalSmsDisposition.localCommitment ||
-                    (isBillObligation && isUpcomingBill)))) {
+                observation.disposition ==
+                    LocalSmsDisposition.localCommitment)) {
           final title = (observation.billerName?.trim().isNotEmpty == true)
               ? observation.billerName!.trim()
               : message.sender
-                  .toUpperCase()
-                  .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
-                  .replaceFirst(RegExp(r'-[A-Z]$'), '');
+                    .toUpperCase()
+                    .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
+                    .replaceFirst(RegExp(r'-[A-Z]$'), '');
           final category = CommitmentCategory.fromText(
             '$title ${message.sender}',
           );
@@ -271,9 +270,14 @@ class SmsImportStore {
             dueOn: observation.dueDate ?? message.receivedAt,
             cadence: CommitmentCadence.values.firstWhere(
               (value) => value.name == observation.cadenceHint,
-              orElse: () => LocalSmsParser.isActionableInsuranceRenewal(message.body)
-                  ? CommitmentCadence.oneTime
-                  : CommitmentCadence.monthly,
+              orElse: () => switch (category) {
+                CommitmentCategory.utility ||
+                CommitmentCategory.telecom ||
+                CommitmentCategory.loanOrEmi ||
+                CommitmentCategory.rent ||
+                CommitmentCategory.subscription => CommitmentCadence.monthly,
+                _ => CommitmentCadence.oneTime,
+              },
             ),
             source: CommitmentSource.sms,
             status: CommitmentStatus.due,
@@ -288,7 +292,37 @@ class SmsImportStore {
         } else if (isBillObligation && isPastDueBill) {
           // Pre-filtration: An expired bill with dueDate < today is historical.
           // Archive it into PastBillReceiptRepository rather than cluttering Needs Review.
-          PastBillReceiptRepository(store.database, namespace: namespace).archiveBill(
+          final transactions = store
+              .entities(namespace, 'transactions')
+              .map(TransactionEntry.fromJson)
+              .toList(growable: false);
+          final linked = deriveSmsBillRows(
+            observations: [
+              {
+                'event_type': observation.eventType.wireValue,
+                'received_at': message.receivedAt.toIso8601String(),
+                'sender_bank': message.sender,
+                'biller_name': observation.billerName,
+                'card_last4': observation.cardLast4,
+                'account_last4': observation.accountLast4,
+                'amount_due_paise': observation.amountDue?.paise,
+                'minimum_due_paise': observation.minimumDue?.paise,
+                'due_date': observation.dueDate?.toIso8601String(),
+                'is_autopay': observation.isAutopay,
+              },
+            ],
+            transactions: transactions,
+            cardsLast4ById: {
+              for (final card in cards)
+                if (card.last4 != null) card.id: card.last4!,
+            },
+            now: now,
+            lookbackDays: 36525,
+          ).where((row) => row.state == SmsBillState.linked).firstOrNull;
+          PastBillReceiptRepository(
+            store.database,
+            namespace: namespace,
+          ).archiveBill(
             id: 'commitment:$key',
             sender: message.sender,
             merchant: observation.billerName ?? message.sender,
@@ -298,7 +332,10 @@ class SmsImportStore {
             cardLast4: observation.cardLast4,
             accountLast4: observation.accountLast4,
             body: message.body,
-            status: PastBillReceiptStatus.historicalUnpaid,
+            status: linked == null
+                ? PastBillReceiptStatus.historicalUnpaid
+                : PastBillReceiptStatus.paidLinked,
+            linkedTransactionId: linked?.linkedTxnId,
           );
         } else if (observation.eventType == LocalSmsEventType.bill &&
             observation.cardLast4 == null &&
@@ -344,7 +381,8 @@ class SmsImportStore {
               : const <UserCard>[];
           final suffixCards = eligibleCards
               .where(
-                (card) => observation.cardLast4 != null &&
+                (card) =>
+                    observation.cardLast4 != null &&
                     card.last4 == observation.cardLast4,
               )
               .toList();

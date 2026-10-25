@@ -4351,13 +4351,11 @@ class _MerchantGroup extends StatelessWidget {
   final String merchant;
   final List<TransactionEntry> entries;
   final bool isCollapsible;
-  final bool initiallyExpanded;
 
   const _MerchantGroup({
     required this.merchant,
     required this.entries,
     this.isCollapsible = true,
-    this.initiallyExpanded = false,
   });
 
   @override
@@ -4489,7 +4487,7 @@ class _MerchantGroup extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
       child: _MerchantExpansionTile(
         storageKey: groupStorageKey,
-        initiallyExpanded: initiallyExpanded,
+        initiallyExpanded: false,
         merchant: merchant,
         amount: amount,
         subtitle: Column(

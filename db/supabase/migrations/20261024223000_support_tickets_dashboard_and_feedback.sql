@@ -31,10 +31,12 @@ select
   (select count(*) from policy_change_alerts where state='open')       as alerts_open,
   (select count(*) from data_error_reports where state='pending')      as error_reports_pending,
   (select count(*) from card_requests where state='pending')           as card_requests_pending,
-  (select count(*) from support_tickets where state='pending')         as support_tickets_pending,
   (select count(*) from merchant_conflicts where state='pending')      as conflicts_pending,
   (select count(*) from scrape_runs where status='failed'
      and started_at > now() - interval '7 days')                       as scrape_failures_7d,
   (select count(*) from card_products where status='published')        as cards_published,
   (select count(*) from card_products where status='published'
-     and verified_at < now() - interval '180 days')                    as cards_stale_180d;
+     and verified_at < now() - interval '180 days')                    as cards_stale_180d,
+  -- PostgreSQL only permits CREATE OR REPLACE VIEW to append columns. Keep
+  -- the original dashboard column order stable and add the new metric last.
+  (select count(*) from support_tickets where state='pending')         as support_tickets_pending;

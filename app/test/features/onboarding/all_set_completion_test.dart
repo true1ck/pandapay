@@ -179,9 +179,10 @@ void main() {
       final requests = <http.Request>[];
       final client = MockClient((request) async {
         requestedUrls.add(request.url.path);
-        requests.add(request as http.Request);
+        requests.add(request);
         if (request.url.path == '/onboarding/complete') {
-          if (requestedUrls.where((p) => p == '/onboarding/complete').length == 1) {
+          if (requestedUrls.where((p) => p == '/onboarding/complete').length ==
+              1) {
             return http.Response(
               jsonEncode({'error': 'required_terms_missing'}),
               409,
