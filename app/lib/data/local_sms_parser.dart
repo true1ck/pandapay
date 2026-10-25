@@ -391,7 +391,8 @@ class LocalSmsParser {
       (
         _re(r'\b(?:jio|airtel|vi|vodafone|idea|bsnl)\b', caseSensitive: false).hasMatch('$cleanSender $text') &&
         _re(r'\b[6-9]\d{9}\b').hasMatch(text) &&
-        _re(r'\b(?:recharge|top-?up|talktime|validity|prepaid|retention)\b').hasMatch(text) &&
+        _re(r'\b(?:recharge\s+now|(?:kindly\s+|please\s+)?recharge\s+your|validity\s+(?:is\s+)?expir|top-?up|talktime|retention)\b').hasMatch(text) &&
+        !_re(r'\b(?:successful|completed|done|received)\b').hasMatch(text) &&
         !hasMaskedAccount
       )
     ) && !hasDueDate && !_re(r'\b(?:statement|bill)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b').hasMatch(text);

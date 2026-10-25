@@ -70,16 +70,20 @@ test('Free-tier daily exhaustion releases capacity once with the next reset dela
   assert.equal(calls, 1);
 });
 
-test('Gemini Free-tier limits hard-cap configured settings at 5 RPM and 20 RPD', () => {
+test('Gemini Free-tier limits cap configured settings at 15 RPM and 1500 RPD', () => {
   const { providerLimits } = require('../src/ai_provider_quota_route');
   process.env.GEMINI_REQUESTS_PER_MINUTE = '12';
   process.env.GEMINI_TOKENS_PER_MINUTE = '500000';
   process.env.GEMINI_REQUESTS_PER_DAY = '200';
   assert.deepEqual(providerLimits(), {
-    requestsPerMinute: 5,
-    tokensPerMinute: 250000,
-    requestsPerDay: 20,
+    requestsPerMinute: 12,
+    tokensPerMinute: 500000,
+    requestsPerDay: 200,
   });
+  process.env.GEMINI_REQUESTS_PER_MINUTE = '20';
+  process.env.GEMINI_REQUESTS_PER_DAY = '2000';
+  assert.equal(providerLimits().requestsPerMinute, 15);
+  assert.equal(providerLimits().requestsPerDay, 1500);
   process.env.GEMINI_REQUESTS_PER_MINUTE = '0';
   assert.equal(providerLimits().requestsPerMinute, 5);
   process.env.GEMINI_REQUESTS_PER_DAY = '0';

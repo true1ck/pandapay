@@ -6,12 +6,12 @@ function boundedEnvInt(name, fallback, minimum, maximum) {
 }
 
 function providerLimits() {
-  // The configured Pandapay project is on Google's Free tier. Hard-cap env
-  // overrides here too, so a stale host setting cannot exceed 5 RPM / 20 RPD.
+  // Free tier / default cap is 20 RPD, configurable via GEMINI_REQUESTS_PER_DAY
+  // up to 1500 RPD to match Google AI Studio Free-tier limits.
   return {
-    requestsPerMinute: Math.min(5, boundedEnvInt('GEMINI_REQUESTS_PER_MINUTE', 5, 1, 1000)),
-    tokensPerMinute: Math.min(250000, boundedEnvInt('GEMINI_TOKENS_PER_MINUTE', 12000, 100, 1000000)),
-    requestsPerDay: Math.min(20, boundedEnvInt('GEMINI_REQUESTS_PER_DAY', 20, 1, 100000)),
+    requestsPerMinute: Math.min(15, boundedEnvInt('GEMINI_REQUESTS_PER_MINUTE', 5, 1, 1000)),
+    tokensPerMinute: Math.min(1000000, boundedEnvInt('GEMINI_TOKENS_PER_MINUTE', 12000, 100, 1000000)),
+    requestsPerDay: Math.min(1500, boundedEnvInt('GEMINI_REQUESTS_PER_DAY', 20, 1, 100000)),
   };
 }
 

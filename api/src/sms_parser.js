@@ -64,7 +64,8 @@ function isNonTransactionNoise(sender, body) {
     || (
       /\b(?:jio|airtel|vi|vodafone|idea|bsnl)\b/i.test(`${cleanSender} ${text}`)
       && /\b[6-9]\d{9}\b/.test(text)
-      && /\b(?:recharge|top-?up|talktime|validity|prepaid|retention)\b/i.test(text)
+      && /\b(?:recharge\s+now|(?:kindly\s+|please\s+)?recharge\s+your|validity\s+(?:is\s+)?expir|top-?up|talktime|retention)\b/i.test(text)
+      && !/\b(?:successful|completed|done|received)\b/i.test(text)
       && !hasMaskedAccount
     )
   ) && !hasDueDate && !/\b(?:statement|bill)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b/i.test(text);
