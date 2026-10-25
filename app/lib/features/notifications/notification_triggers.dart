@@ -11,7 +11,7 @@ import '../insights/payments_due_screen.dart' show paymentsDueProvider;
 /// whether any of the 7 trackable conditions is newly true and, if so, ask
 /// NotificationGate to fire it. Deliberately reuses each screen's existing
 /// provider rather than re-deriving the same numbers a second time —
-/// FeeWaiversScreen/BillingFloatScreen/PointsExpiryScreen/PaymentsDueScreen/
+/// FeeWaiversScreen/BillingFloatScreen/PointsExpiryScreen/BillsAndCommitmentsTab/
 /// MonthlySavingsScreen/NeedsReviewScreen all already compute exactly the
 /// state these checks need.
 ///
@@ -184,8 +184,8 @@ class NotificationTriggerRunner {
     if (due == null) return;
     final gate = ref.read(notificationGateProvider);
     for (final row in due) {
-      // Same daysUntilDue <= 5 "urgent" window PaymentsDueScreen's hero
-      // card already uses; only for cards autopay doesn't fully cover.
+      // Same daysUntilDue <= 5 "urgent" window the Bills & commitments tab
+      // already uses; only for cards autopay doesn't fully cover.
       if (row.daysUntilDue > 5 || row.daysUntilDue < 0 || !row.needsAttention) {
         continue;
       }

@@ -60,7 +60,7 @@ void main() {
     expect(find.text('card detail uc1 tab=statement'), findsOneWidget);
   });
 
-  testWidgets('renders bills and commitments below cards when cards are present', (
+  testWidgets('renders card rows when cards are present', (
     tester,
   ) async {
     final card = UserCard(
@@ -92,11 +92,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Test Card'), findsOneWidget);
-    expect(find.text('Bills & commitments'), findsOneWidget);
-    expect(find.text('Add bill'), findsOneWidget);
   });
 
-  testWidgets('renders bills and commitments section even when no cards owned', (
+  testWidgets('shows the no-cards empty state when no cards are owned', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -114,7 +112,5 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No cards yet'), findsOneWidget);
-    expect(find.text('Bills & commitments'), findsOneWidget);
-    expect(find.text('Add bill'), findsOneWidget);
   });
 }

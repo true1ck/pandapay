@@ -7,7 +7,6 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
-import '../insights/payments_due_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../referrals/invite_friends_screen.dart';
 import '../subscription_credits/subscription_credits_screen.dart';
@@ -92,28 +91,15 @@ class AccountScreen extends ConsumerWidget {
             // two UA-8 entries above.
             // Design 05 gives You direct rows for the things a user actually
             // reaches for, not only settings sub-hubs. Notifications (19),
-            // Payments due (13), Split planner (11), Invite friends (25) and
-            // Report an issue (26) are all screens the deck draws — they
-            // were reachable only two or three taps deep, or not at all.
+            // Split planner (11), Invite friends (25) and Report an issue (26)
+            // are all screens the deck draws — they were reachable only two
+            // or three taps deep, or not at all.
             AccountTile(
               icon: Icons.notifications_none_rounded,
               label: 'Notifications',
               badgeCount: ref.watch(unreadNotificationCountProvider),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-              ),
-            ),
-            const SizedBox(height: AppSpace.sm),
-            // Design 05 lists "Payments due" pointing at design 13, which is
-            // PaymentsDueScreen — not E8's calendar. The calendar keeps its
-            // own entry point on the Insights grid ("Due Dates"): it owns the
-            // month view and the per-card reminder toggles, which design 13
-            // has no room for.
-            AccountTile(
-              icon: Icons.receipt_long_outlined,
-              label: 'Bills & commitments',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PaymentsDueScreen()),
               ),
             ),
             const SizedBox(height: AppSpace.sm),

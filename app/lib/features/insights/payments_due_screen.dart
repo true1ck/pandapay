@@ -170,127 +170,36 @@ DateTime _clampToMonth(int year, int month, int day) {
   return DateTime(year, month, day > lastDayOfMonth ? lastDayOfMonth : day);
 }
 
-class PaymentsDueScreen extends ConsumerWidget {
-  const PaymentsDueScreen({super.key});
+/// Body of the "Bills & commitments" tab inside the Payments group. Renders
+/// only the list (or its loading/error state); the surrounding scaffold,
+/// app bar and tab strip belong to the parent route.
+class BillsAndCommitmentsTab extends ConsumerWidget {
+  const BillsAndCommitmentsTab({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final due = ref.watch(paymentsDueProvider);
 
-    return Scaffold(
-      backgroundColor: BambooInk.paper,
-      appBar: AppBar(
-        backgroundColor: BambooInk.paper,
-        foregroundColor: BambooInk.ink900,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          'Bills & commitments',
-          style: BambooFonts.heading(18, color: BambooInk.ink900),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_rounded, color: BambooInk.ink900),
-            tooltip: 'Add bill or policy',
-            onPressed: () => _showAddCommitmentSheet(context, ref),
-          ),
-        ],
+    return due.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
+        child: SkeletonList(count: 3),
       ),
-      body: AppBackground(
-        child: Column(
-          children: [
-            Expanded(
-              child: due.when(
-                loading: () => const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
-                  child: SkeletonList(count: 3),
-                ),
-                error: (err, _) => ErrorState(
-                  message: userFacingErrorMessage(err),
-                  onRetry: () => ref.invalidate(paymentsDueProvider),
-                ),
-                data: (rows) => _DueList(rows: rows),
-              ),
-            ),
-          ],
-        ),
+      error: (err, _) => ErrorState(
+        message: userFacingErrorMessage(err),
+        onRetry: () => ref.invalidate(paymentsDueProvider),
       ),
+      data: (rows) => _DueList(rows: rows),
     );
   }
 }
 
-/// Embeddable section containing central bills, SMS bills, upcoming commitments,
-/// and past bill receipts. Can be embedded directly inside any parent scroll view
-/// such as DueDateCalendarScreen.
-class BillsAndCommitmentsSection extends ConsumerWidget {
-  final List<CentralBillDedupKey> cardRows;
-  final bool showAddButton;
-  final bool showTitle;
-
-  const BillsAndCommitmentsSection({
-    super.key,
-    this.cardRows = const [],
-    this.showAddButton = true,
-    this.showTitle = true,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (showTitle || showAddButton) ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (showTitle)
-                Text(
-                  'Bills & commitments',
-                  style: BambooFonts.heading(17, color: BambooInk.ink900),
-                )
-              else
-                const SizedBox.shrink(),
-              if (showAddButton)
-                TextButton.icon(
-                  onPressed: () => showAddCommitmentSheet(context, ref),
-                  icon: const Icon(Icons.add_rounded, size: 16, color: BambooInk.jade),
-                  label: Text(
-                    'Add bill',
-                    style: BambooFonts.ui(
-                      12.5,
-                      color: BambooInk.jade,
-                      weight: FontWeight.w600,
-                    ),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpace.sm,
-                      vertical: AppSpace.xs,
-                    ),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpace.md),
-        ],
-        CentralBillsSection(cardRows: cardRows),
-        const SmsBillsSection(),
-        const _CommitmentsSection(),
-        const SizedBox(height: AppSpace.lg),
-        const _PastBillsPreview(),
-      ],
-    );
-  }
-}
-
-class _DueList extends StatelessWidget {
+class _DueList extends ConsumerWidget {
   final List<DuePayment> rows;
   const _DueList({required this.rows});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,
@@ -299,6 +208,39 @@ class _DueList extends StatelessWidget {
         AppSpace.xxl,
       ),
       children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Tooltip(
+              message: 'Add bill or policy',
+              child: TextButton.icon(
+                onPressed: () => showAddCommitmentSheet(context, ref),
+                icon: const Icon(
+                  Icons.add_rounded,
+                  size: 16,
+                  color: BambooInk.jade,
+                ),
+                label: Text(
+                  'Add bill',
+                  style: BambooFonts.ui(
+                    12.5,
+                    color: BambooInk.jade,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.sm,
+                    vertical: AppSpace.xs,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpace.xs),
         CentralBillsSection(
           cardRows: rows
               .map(
@@ -1238,9 +1180,6 @@ void showAddCommitmentSheet(BuildContext context, WidgetRef ref) {
     builder: (ctx) => const _AddCommitmentSheet(),
   );
 }
-
-void _showAddCommitmentSheet(BuildContext context, WidgetRef ref) =>
-    showAddCommitmentSheet(context, ref);
 
 class _AddCommitmentSheet extends ConsumerStatefulWidget {
   const _AddCommitmentSheet();

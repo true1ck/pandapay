@@ -644,8 +644,7 @@ class NeedsReviewRepository {
           }
 
           if (parsed.disposition == LocalSmsDisposition.sync &&
-              parsed.transaction != null &&
-              parsed.transaction!.entryKind == TxnEntryKind.spend) {
+              parsed.transaction != null) {
             final isWallet =
                 parsed.transaction!.instrument == TxnInstrument.wallet;
             final cardMatches =
@@ -775,7 +774,9 @@ class NeedsReviewRepository {
     final text = body.toLowerCase();
     return RegExp(
       r'\b(?:transaction\s+check\s+alert|check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|call\s+forwarding\b|sim\s+swap|service\s+alert|fraud\s+alert|suspicious\s+activity|'
-      r'modification\s+success!?|card\s+usage\s+settings?|card\s+(?:usage\s+)?settings?\s+(?:for|modified|updated)|card\s+controls?\s+(?:modified|updated)|card\s+usage\s+(?:limits?|controls?|preferences?)|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated)\b|'
+      r'modification\s+success!?|card\s+usage\s+settings?|card\s+(?:usage\s+)?settings?\s+(?:for|modified|updated)|card\s+controls?\s+(?:modified|updated)|card\s+usage\s+(?:limits?|controls?|preferences?)|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated|'
+      r'(?:daily|domestic|international|atm|pos|online)?\s*(?:transaction|usage)?\s*limits?\s*(?:of\s+(?:₹|rs\.?|inr)?\s*[\d,]+)?\s*(?:has\s+been|is)?\s*(?:set|modified|updated|changed|configured))\b|'
+      r'\b(?:positive\s+pay\s+(?:details|system|alert)|aadhaar\s+(?:linked|seeded)|npci\s+mapper)\b|'
       r'\b(?:will\s+remain\s+open\s+and\s+fully\s+operational|available\s+at\s+our\s+branches\s+during\s+normal\s+working\s+hours|submission\s+of\s+positive\s+pay\s+details\s+is\s+mandatory)\b|'
       r'\bdone\s+\d+\s+out\s+of\s+\d+\s+free\s+transactions\s+at\s+[\w\s]+atms\b|'
       r'\b(?:cdsl|nsdl)\s*:\s*(?:debit|credit)\s+in\s+a/c\b[\s\S]{0,40}\b(?:etf|bees|shares?|units?|mf)\b|'

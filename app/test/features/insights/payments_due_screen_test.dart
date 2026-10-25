@@ -16,7 +16,9 @@ void main() {
           paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
           commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
         ],
-        child: const MaterialApp(home: PaymentsDueScreen()),
+        child: const MaterialApp(
+          home: Scaffold(body: BillsAndCommitmentsTab()),
+        ),
       ),
     );
     await tester.pumpAndSettle();

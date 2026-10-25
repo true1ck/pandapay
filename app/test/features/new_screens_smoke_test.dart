@@ -110,7 +110,7 @@ Future<void> _pump(
 }
 
 void main() {
-  group('PaymentsDueScreen (design 13)', () {
+  group('BillsAndCommitmentsTab (design 13)', () {
     final cards = [
       _card(id: 'uc1', name: 'SBI Cashback', dueDay: 16, statementDay: 1),
       _card(
@@ -129,7 +129,7 @@ void main() {
 
     Future<void> pumpDue(WidgetTester tester, {Size? size}) => _pump(
       tester,
-      const PaymentsDueScreen(),
+      const Scaffold(body: BillsAndCommitmentsTab()),
       size: size ?? const Size(390, 844),
       overrides: [
         userCardsRepositoryProvider.overrideWithValue(
@@ -143,7 +143,6 @@ void main() {
       tester,
     ) async {
       await pumpDue(tester);
-      expect(find.text('Bills & commitments'), findsOneWidget);
       expect(find.text('Credit cards'), findsOneWidget);
       expect(find.text('HDFC Millennia'), findsOneWidget);
       expect(find.textContaining('Check the issuer'), findsOneWidget);
@@ -171,7 +170,7 @@ void main() {
     ) async {
       await _pump(
         tester,
-        const PaymentsDueScreen(),
+        const Scaffold(body: BillsAndCommitmentsTab()),
         overrides: [
           userCardsRepositoryProvider.overrideWithValue(_FakeRepo()),
           myCardsProvider.overrideWith(
@@ -187,7 +186,7 @@ void main() {
 
     testWidgets('survives a 320x640 viewport', (tester) async {
       await pumpDue(tester, size: const Size(320, 640));
-      expect(find.text('Bills & commitments'), findsOneWidget);
+      expect(find.text('Credit cards'), findsOneWidget);
     });
   });
 

@@ -10,8 +10,7 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../domain/cycle_engine.dart';
 import '../cards/card_visual.dart';
-import 'central_bills_section.dart';
-import 'payments_due_screen.dart';
+import 'payments_due_screen.dart' show DuePayment, paymentsDueProvider;
 
 /// ui-spec.md E8 Due Date Calendar. Statement/due days come from Task E-0's
 /// gap-fill (statementDay already existed client-side; dueDay is new).
@@ -27,15 +26,6 @@ class DueDateCalendarScreen extends ConsumerWidget {
     final pairs = ref.watch(ownedCardsWithProductProvider);
     final reminders = ref.watch(dueDateRemindersProvider);
     final duePayments = ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
-    final centralBillKeys = duePayments
-        .map(
-          (row) => CentralBillDedupKey(
-            last4: row.card.last4,
-            dueOn: row.dueOn,
-            amountInr: row.bill?.amountDue?.rupees,
-          ),
-        )
-        .toList(growable: false);
 
     return pairs.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -89,9 +79,6 @@ class DueDateCalendarScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpace.xl),
-              BillsAndCommitmentsSection(cardRows: centralBillKeys),
-              const SizedBox(height: AppSpace.xxl),
             ],
           );
         }
@@ -119,9 +106,6 @@ class DueDateCalendarScreen extends ConsumerWidget {
                       .toggle(userCard.id),
                 ),
               ),
-            const SizedBox(height: AppSpace.xl),
-            BillsAndCommitmentsSection(cardRows: centralBillKeys),
-            const SizedBox(height: AppSpace.xxl),
           ],
         );
       },

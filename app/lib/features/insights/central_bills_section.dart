@@ -8,8 +8,9 @@ import '../../app/providers.dart';
 import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
 
-/// Fingerprint of a card row already rendered by PaymentsDueScreen. Central
-/// bill projections matching this evidence stay hidden from the second list.
+/// Fingerprint of a card row already rendered by the Bills & commitments tab.
+/// Central bill projections matching this evidence stay hidden from the
+/// second list.
 class CentralBillDedupKey {
   final String? last4;
   final DateTime dueOn;

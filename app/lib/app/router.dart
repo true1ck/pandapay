@@ -43,6 +43,7 @@ import '../features/insights/milestones_screen.dart';
 import '../features/insights/missed_opportunities_screen.dart';
 import '../features/insights/monthly_savings_screen.dart';
 import '../features/insights/my_contributions_screen.dart';
+import '../features/insights/payments_due_screen.dart';
 import '../features/insights/portfolio_audit_screen.dart';
 import '../features/insights/budgets_screen.dart';
 import '../features/insights/grouped_insight_screen.dart';
@@ -761,6 +762,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const GroupedInsightScreen(
           title: 'Payments',
           tabs: [
+            (
+              label: 'Bills & commitments',
+              body: BillsAndCommitmentsTab(),
+            ),
             (label: 'Due dates', body: DueDateCalendarScreen()),
             (label: 'Interest-free days', body: BillingFloatScreen()),
             (label: 'Utilization', body: CreditUtilizationScreen()),

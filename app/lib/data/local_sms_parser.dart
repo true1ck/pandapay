@@ -5,6 +5,7 @@ import 'user_cards_repository.dart';
 import 'local/sms_intake_repository.dart';
 import 'local/sms_rule_bundle.dart';
 import 'indian_narration_sanitizer.dart';
+import 'flashtext_merchant_extractor.dart';
 
 enum LocalSmsEventType {
   transaction,
@@ -131,6 +132,29 @@ class LocalSmsParser {
   // learned from its own AutoPay message.
   static const version = 12;
 
+  static String? categoryDisplayName(String? slug) {
+    if (slug == null || slug.isEmpty) return null;
+    return switch (slug.toLowerCase()) {
+      'groceries' => 'Groceries',
+      'dining' => 'Dining',
+      'online' => 'Online Shopping',
+      'fuel' => 'Fuel',
+      'travel' => 'Travel',
+      'bills' => 'Bills & Utilities',
+      'health' => 'Health',
+      'entertainment' => 'Entertainment',
+      'rent' => 'Rent',
+      'investment' || 'investments' => 'Investments',
+      'emi' => 'EMI & Loans',
+      'insurance' => 'Insurance',
+      'education' => 'Education',
+      'income' => 'Income',
+      'wallet' => 'Wallet',
+      'cash' => 'Cash',
+      _ => slug[0].toUpperCase() + slug.substring(1),
+    };
+  }
+
   static bool isInvestmentFolioAllotment(String body) {
     final text = body.toLowerCase();
     final hasAllotment = RegExp(
@@ -223,6 +247,11 @@ class LocalSmsParser {
     ).hasMatch(text)) {
       return true;
     }
+    final orderNotice = _re(
+      r'\b(?:order\b[\s\S]{0,40}\b(?:out\s+for\s+delivery|delivered|arriving|picked\s+up|is\s+on\s+the\s+way)|we\s+have\s+received\s+your\s+order)\b',
+    ).hasMatch(text) && !_re(r'\b(?:debited|credited|charged)\b').hasMatch(text);
+    if (orderNotice) return false;
+
     final completed = _re(
       r'\b(?:your\s+(?:txn|transaction)\s+of|(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[*xX]*[\d,.]+|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)(?:\s+(?:by|with|for|towards|of|amounting\s+to))?\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[*xX]*\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:sent|cash\s+withdrawal|withdrawal|auto[-\s]?debit)\s*(?:of|by)?\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase|settlement|payout)\b[\s\S]{0,45}\b(?:successful|completed|initiated|processed))',
     ).hasMatch(text);
@@ -303,6 +332,11 @@ class LocalSmsParser {
         ).hasMatch(text)) {
       return true;
     }
+    final orderNotice = _re(
+      r'\b(?:order\b[\s\S]{0,40}\b(?:out\s+for\s+delivery|delivered|arriving|picked\s+up|is\s+on\s+the\s+way)|we\s+have\s+received\s+your\s+order)\b',
+    ).hasMatch(text) && !_re(r'\b(?:debited|credited|charged)\b').hasMatch(text);
+    if (orderNotice) return true;
+
     final completed = _re(
       r'\b(?:your\s+(?:txn|transaction)\s+of|(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[\d,.]+|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)(?:\s+(?:by|with|for|towards|of|amounting\s+to))?\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[*xX]*\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:sent|cash\s+withdrawal|withdrawal|auto[-\s]?debit)\s*(?:of|by)?\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase|settlement|payout)\b[\s\S]{0,45}\b(?:successful|completed|initiated|processed))',
     ).hasMatch(text);
@@ -520,7 +554,12 @@ class LocalSmsParser {
       ).hasMatch(body);
 
   static bool _feeCharge(String body) => _re(
-    r'\b(?:bank\s+charge|service\s+charge|processing\s+fee|convenience\s+fee|late\s+fee|annual\s+fee|maintenance\s+fee|finance\s+charge|interest\s+charge|interest\s+(?:on\s+)?(?:loan|emi)|(?:loan|emi)\s+interest|commission|brokerage\s+fee|gst\s+on\s+(?:fee|charge))\b',
+    r'\b(?:bank\s+charges?|service\s+charges?|processing\s+fees?|convenience\s+fees?|'
+    r'late\s+fees?|annual\s+fees?|maintenance\s+fees?|finance\s+charges?|interest\s+charges?|'
+    r'interest\s+(?:on\s+)?(?:loan|emi)|(?:loan|emi)\s+interest|commission|brokerage\s+fees?|'
+    r'gst\s+on\s+(?:fee|charge)|sms\s*(?:alert\s*)?charges?|debit\s*card\s*(?:annual\s*fee|amc|charges?)|'
+    r'consolidated\s*charges?|(?:non[- ]maintenance|amb|mab|qab|aqb)\s*charges?|'
+    r'(?:cheque|nach|ecs)\s*(?:bounce|return)\s*charges?|atm\s*(?:decline|usage|transaction)\s*charges?)\b',
   ).hasMatch(body);
 
   static bool _investmentProceeds(String body) =>
@@ -1541,7 +1580,7 @@ class LocalSmsParser {
       r'\b(?:declined|failed|failure|cancelled|canceled|pending|processing|unsuccessful|(?:is|was)\s+unsuccessful)\b',
     ).hasMatch(body);
     final balanceOnly = _re(
-      r'\b(?:available|avail|avl|current|closing|clr|new)\s*(?:balance|bal)\b|\bcredit\s+limit\b',
+      r'\b(?:available|avail|avl|current|closing|clr|new|talktime|talk\s*time|prepaid|fastag)\s*(?:balance|bal)\b|\bcredit\s+limit\b',
     ).hasMatch(body);
     final hasBillMarker =
         due != null ||
@@ -2075,13 +2114,29 @@ class LocalSmsParser {
         ? _transactionTimestamp(body, parsedDate, receivedAt) ?? parsedDate
         : receivedAt;
     final key = smsSourceKey(namespace, sender, body);
+    final textForMatching = merchant != null ? '$merchant $body' : body;
+    final ftMatch = FlashTextMerchantExtractor.defaultExtractor.extractFirst(textForMatching);
+    final categorySlug = ftMatch?.category ?? (billPayment
+        ? 'bills'
+        : loanRepayment
+        ? 'emi'
+        : feeCharge
+        ? 'bills'
+        : credit && _re(r'\bsalary\b').hasMatch(body)
+        ? 'income'
+        : investmentDebit
+        ? 'investments'
+        : null);
+    final categoryName = categoryDisplayName(categorySlug);
     return observation(
       TransactionEntry(
         id: 'local-sms:$key',
         sourceKey: key,
         amount: amount,
         occurredAt: date,
-        merchantName: merchant,
+        merchantName: merchant ?? ftMatch?.canonicalName,
+        categoryId: categorySlug,
+        categoryName: categoryName,
         userCardId: card?.id,
         cardDisplayName: card?.cardName,
         cardLast4: cardLast4,
@@ -2239,12 +2294,18 @@ class LocalSmsParser {
       }
 
       final key = smsSourceKey(namespace, sender, body);
+      final textForMatching = merchant != null ? '$merchant $body' : body;
+      final ftMatch = FlashTextMerchantExtractor.defaultExtractor.extractFirst(textForMatching);
+      final categorySlug = ftMatch?.category;
+      final categoryName = categoryDisplayName(categorySlug);
       final txn = TransactionEntry(
         id: 'local-sms:$key',
         sourceKey: key,
         userCardId: matchedCardId,
         amount: amount,
-        merchantName: merchant,
+        merchantName: merchant ?? ftMatch?.canonicalName,
+        categoryId: categorySlug,
+        categoryName: categoryName,
         occurredAt: receivedAt,
         instrument: instrument,
         instrumentKnown: instrumentKnown,
