@@ -249,7 +249,7 @@ class AppDatabase {
   AppDatabase._(this.db, {this.filePath}) {
     // SMS delivery opens another connection in a background isolate. Let
     // SQLite serialize commits rather than losing a message to SQLITE_BUSY.
-    db.execute('PRAGMA busy_timeout = 5000');
+    db.execute('PRAGMA busy_timeout = 30000');
     db.execute('PRAGMA journal_mode = WAL');
     db.execute(_schema);
     _ensureUserCategoriesSchema();

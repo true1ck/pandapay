@@ -6372,19 +6372,40 @@ class SmsAutoImportController {
     }
     final store = cache.financialStore;
     final path = store.database.filePath;
+    void captureDirect() {
+      final clientVersion =
+          _ref.read(appVersionProvider).valueOrNull ?? '1.0.0';
+      final ruleStore = SmsRuleBundleStore(store.database);
+      final rules = ruleStore.loadActiveBundleSync(clientVersion: clientVersion);
+      final candidateRules = ruleStore.loadCandidateBundlesSync(
+        clientVersion: clientVersion,
+        namespace: namespace,
+      );
+      SmsImportStore(
+        store,
+        downloadedRules: rules,
+        candidateRules: candidateRules,
+      ).captureBatch(namespace, messages);
+    }
+
     if (path == null) {
       // In-memory test databases cannot be reopened by another isolate.
-      SmsImportStore(store).captureBatch(namespace, messages);
+      captureDirect();
     } else {
-      final worker = _captureWorker ??= SmsCaptureWorker(
-        path,
-        clientVersion: _ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
-      );
-      final changed = await worker.capture(namespace, messages);
-      if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
-        throw StateError('Account changed during SMS capture');
+      try {
+        final worker = _captureWorker ??= SmsCaptureWorker(
+          path,
+          clientVersion: _ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+        );
+        final changed = await worker.capture(namespace, messages);
+        if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
+          throw StateError('Account changed during SMS capture');
+        }
+        store.notifyExternalChanges(namespace, changed);
+      } catch (e) {
+        debugPrint('Worker capture failed ($e), falling back to direct store capture');
+        captureDirect();
       }
-      store.notifyExternalChanges(namespace, changed);
     }
     _ref.invalidate(commitmentsProvider);
     _ref.invalidate(pendingRecoveryStatusProvider);
