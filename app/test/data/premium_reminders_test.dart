@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/commitments_repository.dart';
 import 'package:pandapay/data/premium_reminders.dart';
-import 'package:pandapay_domain/pandapay_domain.dart';
 
 Map<String, dynamic> _observation({
   required String body,
