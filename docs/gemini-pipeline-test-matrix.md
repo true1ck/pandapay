@@ -36,6 +36,21 @@ only fabricated prompts and do not touch user data.
 - Test and deployment run IDs/results are recorded in the task summary; do not
   put keys, SMS bodies, tokens, or user identifiers in this document.
 
+## Pilot-gate source correction (2026-10-25)
+
+Post-merge review found that `ENABLE_SMS_AI_QUEUE=true` bypassed database rollout
+flags and defaulted on in production compose, so the documented pause workflow
+could not reliably stop new admissions. The route now always applies the
+database master flag and deterministic per-profile AI cohort. A forward-only
+migration resets `sms_ai_queue_enabled` to disabled/0%; the earlier migration
+was left unchanged, and existing queue/message rows are preserved (so already
+accepted jobs may still drain). The focused
+queue suite passed **36/36**, including a regression with the old environment
+override set to `true`; the migration-prefix policy passed **5/5**. This is
+source evidence only: no migration, deployment, or provider call was made.
+See the [implementation record](security-ai-pilot-gate-implementation-2026-10-25.md)
+and [verification summary](../artifacts/security-ai-pilot-gate-2026-10-25/verification.json).
+
 ## Earlier session results (2026-10-24)
 
 These results describe the earlier session's checkout and production observations,

@@ -1,0 +1,32 @@
+{
+  "format": "pandapay-ai-pilot-gate-verification-v1",
+  "base_commit": "5598fe9",
+  "source_candidate_sha256": "0a4ad3c32aa4e2b9405c556f51a931b4116e822b62baf4e8147541ef42b08dd4",
+  "source_file_count": 1399,
+  "checks": [
+    {
+      "command": "node --test test/gemini_queue.test.js",
+      "working_directory": "api",
+      "status": "passed",
+      "passed": 36,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "node --test db/tests/migration_prefix_policy.test.js",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "node --check api/src/ai_queue_route.js",
+      "status": "passed"
+    }
+  ],
+  "database_migration_applied": false,
+  "production_deployed": false,
+  "provider_requests_sent": 0,
+  "customer_data_changed": false,
+  "finding_closures": []
+}

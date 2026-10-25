@@ -1066,13 +1066,20 @@ test('POST /ai/jobs honors the server-side AI rollout flag without altering loca
     { key: 'sms_facts_pipeline_enabled', is_enabled: true, rollout_percent: 100 },
     { key: 'sms_ai_queue_enabled', is_enabled: false, rollout_percent: 100 },
   ];
-  const response = await h.call('/ai/jobs', {
-    userId: PROFILE_A,
-    body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
-  });
-  assert.equal(response.status, 503);
-  assert.equal(response.body.error, 'ai_queue_disabled');
-  assert.equal(h.state.jobs.size, 0);
+  const previousOverride = process.env.ENABLE_SMS_AI_QUEUE;
+  process.env.ENABLE_SMS_AI_QUEUE = 'true';
+  try {
+    const response = await h.call('/ai/jobs', {
+      userId: PROFILE_A,
+      body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
+    });
+    assert.equal(response.status, 503);
+    assert.equal(response.body.error, 'ai_queue_disabled');
+    assert.equal(h.state.jobs.size, 0);
+  } finally {
+    if (previousOverride === undefined) delete process.env.ENABLE_SMS_AI_QUEUE;
+    else process.env.ENABLE_SMS_AI_QUEUE = previousOverride;
+  }
 });
 
 test('POST /ai/jobs accepts only profiles selected into the deterministic 1% pilot', async () => {
@@ -1099,15 +1106,22 @@ test('POST /ai/jobs accepts only profiles selected into the deterministic 1% pil
     };
   };
 
-  const inCohort = await forProfile(included);
-  assert.equal(inCohort.response.status, 200);
-  assert.equal(inCohort.h.state.jobs.size, 1);
+  const previousOverride = process.env.ENABLE_SMS_AI_QUEUE;
+  process.env.ENABLE_SMS_AI_QUEUE = 'true';
+  try {
+    const inCohort = await forProfile(included);
+    assert.equal(inCohort.response.status, 200);
+    assert.equal(inCohort.h.state.jobs.size, 1);
 
-  const outOfCohort = await forProfile(excluded);
-  assert.equal(outOfCohort.response.status, 503);
-  assert.equal(outOfCohort.response.body.error, 'ai_queue_disabled');
-  assert.equal(outOfCohort.h.state.jobs.size, 0);
-  assert.equal(outOfCohort.h.state.quota.size, 0);
+    const outOfCohort = await forProfile(excluded);
+    assert.equal(outOfCohort.response.status, 503);
+    assert.equal(outOfCohort.response.body.error, 'ai_queue_disabled');
+    assert.equal(outOfCohort.h.state.jobs.size, 0);
+    assert.equal(outOfCohort.h.state.quota.size, 0);
+  } finally {
+    if (previousOverride === undefined) delete process.env.ENABLE_SMS_AI_QUEUE;
+    else process.env.ENABLE_SMS_AI_QUEUE = previousOverride;
+  }
 });
 
 test('lease endpoint hands out nothing on an empty queue', async () => {

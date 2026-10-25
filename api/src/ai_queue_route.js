@@ -56,9 +56,6 @@ function registerAiQueueRoutes(app, {
   withUserClient,
 }) {
   async function aiQueueEnabled(client, profileId) {
-    if (process.env.ENABLE_SMS_AI_QUEUE === 'true' || process.env.ENABLE_SMS_AI_QUEUE === '1') {
-      return true;
-    }
     const rows = await client.query(
       `SELECT key, is_enabled, rollout_percent
          FROM feature_flags
