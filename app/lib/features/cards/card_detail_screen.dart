@@ -1095,35 +1095,26 @@ class _CardExpandableCategoryRowState
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.row.label,
-                        style: BambooFonts.ui(
-                          13.5,
-                          weight: FontWeight.w600,
-                          color: BambooInk.ink900,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                SpendingBreakdownHeader(
+                  label: Text(
+                    widget.row.label,
+                    style: BambooFonts.ui(
+                      13.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
                     ),
-                    const SizedBox(width: AppSpace.xs),
-                    Text(
-                      '${(ratio * 100).toStringAsFixed(0)}%',
-                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  percentage: '${(ratio * 100).toStringAsFixed(0)}%',
+                  amount: MoneyText(
+                    widget.row.total,
+                    confidence: Confidence.estimated,
+                    style: BambooFonts.ui(
+                      13.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink900,
                     ),
-                    const SizedBox(width: AppSpace.sm),
-                    MoneyText(
-                      widget.row.total,
-                      confidence: Confidence.estimated,
-                      style: BambooFonts.ui(
-                        13.5,
-                        weight: FontWeight.w700,
-                        color: BambooInk.ink900,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(

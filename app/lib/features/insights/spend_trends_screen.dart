@@ -1838,26 +1838,21 @@ class _ExpandableTagRowState extends State<_ExpandableTagRow> {
         ),
         size: 38,
       ),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              widget.tag.name,
-              style: BambooFonts.ui(13.5, color: BambooInk.ink900),
-              overflow: TextOverflow.ellipsis,
-            ),
+      title: SpendingBreakdownHeader(
+        label: Text(
+          widget.tag.name,
+          style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+          overflow: TextOverflow.ellipsis,
+        ),
+        amount: MoneyText(
+          widget.total,
+          confidence: Confidence.estimated,
+          style: BambooFonts.ui(
+            13.5,
+            weight: FontWeight.w600,
+            color: BambooInk.ink900,
           ),
-          const SizedBox(width: AppSpace.sm),
-          MoneyText(
-            widget.total,
-            confidence: Confidence.estimated,
-            style: BambooFonts.ui(
-              13.5,
-              weight: FontWeight.w600,
-              color: BambooInk.ink900,
-            ),
-          ),
-        ],
+        ),
       ),
       subtitle: Text(
         '${widget.txnCount} ${widget.txnCount == 1 ? 'transaction' : 'transactions'}',
@@ -1969,27 +1964,22 @@ class _TagCategoryRow extends StatelessWidget {
       visual: spendingCategoryVisual(category.label),
       size: 34,
     ),
-    title: Row(
-      children: [
-        Expanded(
-          child: Text(
-            category.label,
-            style: BambooFonts.ui(13, color: BambooInk.ink900),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+    title: SpendingBreakdownHeader(
+      label: Text(
+        category.label,
+        style: BambooFonts.ui(13, color: BambooInk.ink900),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      amount: MoneyText(
+        category.total,
+        confidence: Confidence.estimated,
+        style: BambooFonts.ui(
+          12.5,
+          weight: FontWeight.w600,
+          color: BambooInk.ink900,
         ),
-        const SizedBox(width: AppSpace.sm),
-        MoneyText(
-          category.total,
-          confidence: Confidence.estimated,
-          style: BambooFonts.ui(
-            12.5,
-            weight: FontWeight.w600,
-            color: BambooInk.ink900,
-          ),
-        ),
-      ],
+      ),
     ),
     subtitle: Text(
       '${category.txnCount} ${category.txnCount == 1 ? 'transaction' : 'transactions'} · Tap to see payments',
@@ -4020,37 +4010,22 @@ class _ExpandableCategoryRow extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    row.label,
-                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+            SpendingBreakdownHeader(
+              label: Text(
+                row.label,
+                style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                overflow: TextOverflow.ellipsis,
+              ),
+              percentage: '${(ratio * 100).toStringAsFixed(0)}%',
+              amount: MoneyText(
+                row.total,
+                confidence: Confidence.estimated,
+                style: BambooFonts.ui(
+                  13.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
                 ),
-                const SizedBox(width: AppSpace.sm),
-                Text(
-                  '${(ratio * 100).toStringAsFixed(0)}%',
-                  style: BambooFonts.ui(12, color: BambooInk.ink500),
-                ),
-                const SizedBox(width: AppSpace.sm),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerRight,
-                    child: MoneyText(
-                      row.total,
-                      confidence: Confidence.estimated,
-                      style: BambooFonts.ui(
-                        13.5,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink900,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
             const SizedBox(height: 2),
             Text(
@@ -4179,56 +4154,36 @@ class _ExpandableInstrumentRow extends StatelessWidget {
                 style: BambooFonts.ui(13.5, color: BambooInk.ink900),
               ),
               const SizedBox(height: 2),
-              Row(
-                children: [
-                  Text(
-                    '${(ratio * 100).toStringAsFixed(0)}%',
-                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+              SpendingBreakdownHeader(
+                label: const SizedBox.shrink(),
+                percentage: '${(ratio * 100).toStringAsFixed(0)}%',
+                amount: MoneyText(
+                  row.total,
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.ui(
+                    13.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
                   ),
-                  const Spacer(),
-                  MoneyText(
-                    row.total,
-                    confidence: Confidence.estimated,
-                    style: BambooFonts.ui(
-                      13.5,
-                      weight: FontWeight.w600,
-                      color: BambooInk.ink900,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ] else
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      row.label,
-                      style: BambooFonts.ui(13.5, color: BambooInk.ink900),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+              SpendingBreakdownHeader(
+                label: Text(
+                  row.label,
+                  style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                percentage: '${(ratio * 100).toStringAsFixed(0)}%',
+                amount: MoneyText(
+                  row.total,
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.ui(
+                    13.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
                   ),
-                  const SizedBox(width: AppSpace.sm),
-                  Text(
-                    '${(ratio * 100).toStringAsFixed(0)}%',
-                    style: BambooFonts.ui(12, color: BambooInk.ink500),
-                  ),
-                  const SizedBox(width: AppSpace.sm),
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: MoneyText(
-                        row.total,
-                        confidence: Confidence.estimated,
-                        style: BambooFonts.ui(
-                          13.5,
-                          weight: FontWeight.w600,
-                          color: BambooInk.ink900,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             const SizedBox(height: 2),
             Text(
@@ -4326,37 +4281,22 @@ class _ExpandableMerchantRow extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    row.label,
-                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+            SpendingBreakdownHeader(
+              label: Text(
+                row.label,
+                style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                overflow: TextOverflow.ellipsis,
+              ),
+              percentage: '${(ratio * 100).toStringAsFixed(0)}%',
+              amount: MoneyText(
+                row.total,
+                confidence: Confidence.estimated,
+                style: BambooFonts.ui(
+                  13.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
                 ),
-                const SizedBox(width: AppSpace.sm),
-                Text(
-                  '${(ratio * 100).toStringAsFixed(0)}%',
-                  style: BambooFonts.ui(12, color: BambooInk.ink500),
-                ),
-                const SizedBox(width: AppSpace.sm),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerRight,
-                    child: MoneyText(
-                      row.total,
-                      confidence: Confidence.estimated,
-                      style: BambooFonts.ui(
-                        13.5,
-                        weight: FontWeight.w600,
-                        color: BambooInk.ink900,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
             const SizedBox(height: 2),
             Text(
@@ -4796,26 +4736,21 @@ class _AccountRow extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    row.cardName,
-                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+            SpendingBreakdownHeader(
+              label: Text(
+                row.cardName,
+                style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                overflow: TextOverflow.ellipsis,
+              ),
+              amount: MoneyText(
+                row.total,
+                confidence: Confidence.estimated,
+                style: BambooFonts.ui(
+                  13.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
                 ),
-                const SizedBox(width: AppSpace.sm),
-                MoneyText(
-                  row.total,
-                  confidence: Confidence.estimated,
-                  style: BambooFonts.ui(
-                    13.5,
-                    weight: FontWeight.w600,
-                    color: BambooInk.ink900,
-                  ),
-                ),
-              ],
+              ),
             ),
             const SizedBox(height: 4),
             Text(
