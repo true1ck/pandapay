@@ -247,9 +247,11 @@ class LocalSmsParser {
     ).hasMatch(text)) {
       return true;
     }
-    final orderNotice = _re(
-      r'\b(?:order\b[\s\S]{0,40}\b(?:out\s+for\s+delivery|delivered|arriving|picked\s+up|is\s+on\s+the\s+way)|we\s+have\s+received\s+your\s+order)\b',
-    ).hasMatch(text) && !_re(r'\b(?:debited|credited|charged)\b').hasMatch(text);
+    final orderNotice =
+        _re(
+          r'\b(?:order\b[\s\S]{0,40}\b(?:out\s+for\s+delivery|delivered|arriving|picked\s+up|is\s+on\s+the\s+way)|we\s+have\s+received\s+your\s+order)\b',
+        ).hasMatch(text) &&
+        !_re(r'\b(?:debited|credited|charged)\b').hasMatch(text);
     if (orderNotice) return false;
 
     final completed = _re(
@@ -332,9 +334,11 @@ class LocalSmsParser {
         ).hasMatch(text)) {
       return true;
     }
-    final orderNotice = _re(
-      r'\b(?:order\b[\s\S]{0,40}\b(?:out\s+for\s+delivery|delivered|arriving|picked\s+up|is\s+on\s+the\s+way)|we\s+have\s+received\s+your\s+order)\b',
-    ).hasMatch(text) && !_re(r'\b(?:debited|credited|charged)\b').hasMatch(text);
+    final orderNotice =
+        _re(
+          r'\b(?:order\b[\s\S]{0,40}\b(?:out\s+for\s+delivery|delivered|arriving|picked\s+up|is\s+on\s+the\s+way)|we\s+have\s+received\s+your\s+order)\b',
+        ).hasMatch(text) &&
+        !_re(r'\b(?:debited|credited|charged)\b').hasMatch(text);
     if (orderNotice) return true;
 
     final completed = _re(
@@ -2115,18 +2119,22 @@ class LocalSmsParser {
         : receivedAt;
     final key = smsSourceKey(namespace, sender, body);
     final textForMatching = merchant != null ? '$merchant $body' : body;
-    final ftMatch = FlashTextMerchantExtractor.defaultExtractor.extractFirst(textForMatching);
-    final categorySlug = ftMatch?.category ?? (billPayment
-        ? 'bills'
-        : loanRepayment
-        ? 'emi'
-        : feeCharge
-        ? 'bills'
-        : credit && _re(r'\bsalary\b').hasMatch(body)
-        ? 'income'
-        : investmentDebit
-        ? 'investments'
-        : null);
+    final ftMatch = FlashTextMerchantExtractor.defaultExtractor.extractFirst(
+      textForMatching,
+    );
+    final categorySlug =
+        ftMatch?.category ??
+        (billPayment
+            ? 'bills'
+            : loanRepayment
+            ? 'emi'
+            : feeCharge
+            ? 'bills'
+            : credit && _re(r'\bsalary\b').hasMatch(body)
+            ? 'income'
+            : investmentDebit
+            ? 'investments'
+            : null);
     final categoryName = categoryDisplayName(categorySlug);
     return observation(
       TransactionEntry(
@@ -2206,7 +2214,7 @@ class LocalSmsParser {
 
       final amount = parseMoney(getGroup('amount') ?? getGroup('amountInr'));
       if (amount == null) return null;
-      final merchant = getGroup('merchant') ?? 'Unknown Merchant';
+      final merchant = getGroup('merchant');
       var instrument = TxnInstrument.upiBank;
       final rawInst =
           (rule.defaultFields['instrument'] ?? getGroup('instrument'))
@@ -2295,7 +2303,9 @@ class LocalSmsParser {
 
       final key = smsSourceKey(namespace, sender, body);
       final textForMatching = merchant != null ? '$merchant $body' : body;
-      final ftMatch = FlashTextMerchantExtractor.defaultExtractor.extractFirst(textForMatching);
+      final ftMatch = FlashTextMerchantExtractor.defaultExtractor.extractFirst(
+        textForMatching,
+      );
       final categorySlug = ftMatch?.category;
       final categoryName = categoryDisplayName(categorySlug);
       final txn = TransactionEntry(
