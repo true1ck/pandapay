@@ -22,6 +22,7 @@ enum NeedsReviewKind {
   investmentSettlement,
   mandate,
   receipt,
+  payLaterDrawdown,
 }
 
 enum AiReviewStatus { notChecked, queued, processing, checked, unavailable }
@@ -136,15 +137,20 @@ bool _capturesReviewableFinancial(NeedsReviewItem item) {
   final hasBillOrMandate = LocalSmsParser.isAutoPayNotice(item.body) ||
       RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate|auto[-\s]?debit|sip\b|standing\s+instruction)\b').hasMatch(bodyLower) ||
       RegExp(r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\bdue\s+(?:date|on|by)\b|\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\bbill\s+generated\b|\be-statement\s+generated\b').hasMatch(bodyLower);
+  final hasMovement = RegExp(
+    r'\b(?:debited|credited|spent|paid|charged|transferred|withdrawn|deposited|refunded|reversed|deducted)\b',
+    caseSensitive: false,
+  ).hasMatch(bodyLower);
 
-  if (!hasAmount && !hasBalanceSnapshot && !hasBillOrMandate) {
+  if (!hasAmount && !hasBalanceSnapshot && !hasBillOrMandate && !hasMovement) {
     return false;
   }
   if (capturesFinancialSms(item.body, sender: item.sender)) return true;
   return switch (NeedsReviewRepository.resolveItemKind(item).kind) {
     NeedsReviewKind.investmentSettlement ||
     NeedsReviewKind.mandate ||
-    NeedsReviewKind.receipt => true,
+    NeedsReviewKind.receipt ||
+    NeedsReviewKind.payLaterDrawdown => true,
     _ => false,
   };
 }
@@ -220,7 +226,8 @@ void addNeedsReviewSync(
     }
     return;
   }
-  if (parsed != null &&
+  if (!NeedsReviewRepository.isPayLaterDrawdown(item.body, sender: item.sender) &&
+      parsed != null &&
       parsed.eventType == LocalSmsEventType.bill &&
       parsed.cardLast4 == null &&
       parsed.dueDate != null) {
@@ -514,6 +521,10 @@ class NeedsReviewRepository {
           receivedAt: item.receivedAt,
           namespace: namespace,
         );
+        if (item.kind == NeedsReviewKind.payLaterDrawdown) {
+          kept.add(item);
+          continue;
+        }
         if (item.kind != NeedsReviewKind.transaction &&
             item.kind != NeedsReviewKind.mandate &&
             item.kind != NeedsReviewKind.receipt) {
@@ -769,6 +780,10 @@ class NeedsReviewRepository {
         kept.add(item);
         continue;
       }
+      if (item.kind == NeedsReviewKind.payLaterDrawdown) {
+        kept.add(item);
+        continue;
+      }
       if (item.kind != NeedsReviewKind.transaction &&
           item.kind != NeedsReviewKind.mandate &&
           item.kind != NeedsReviewKind.receipt) {
@@ -915,8 +930,45 @@ class NeedsReviewRepository {
     return true;
   }
 
+  static bool isPayLaterDrawdown(String body, {String? sender}) {
+    final text = body.toLowerCase();
+    final cleanSender = sender?.toLowerCase() ?? '';
+
+    final senderMatches = RegExp(
+      r'\b(?:axio|lazypay|lazypy|simpl|postpe)\b|axio|lazypay|lazypy|simpl|postpe',
+      caseSensitive: false,
+    ).hasMatch(cleanSender);
+
+    if (senderMatches) {
+      final hasDrawdownSignal = RegExp(
+        r'\b(?:amazon\s+)?pay\s+later\b|'
+        r'\b(?:availing|availed)\s+(?:amazon\s+)?pay\s+later\b|'
+        r'\b(?:availing|availed)\s+credit\s+of\b|'
+        r'\bpay\s+later\s+credit\b|'
+        r'\bpay\s+later(?:\s+[\w\d]+)?\s+(?:a\/c|account)\b|'
+        r'\b(?:lazypay|simpl|postpe)\b|'
+        r'\b(?:credit|drawdown|limit|repay(?:ment)?|emi|spent|paid|purchase|order|txn|transaction|availed|availing)\b',
+        caseSensitive: false,
+      ).hasMatch(text);
+      if (hasDrawdownSignal) return true;
+    }
+
+    return RegExp(
+      r'\b(?:(?:amazon|flipkart)\s+)?pay\s+later\b|'
+      r'\b(?:availing|availed)\s+(?:(?:amazon|flipkart)\s+)?pay\s+later\b|'
+      r'\b(?:availing|availed)\s+credit\s+of\b|'
+      r'\bpay\s+later\s+credit\b|'
+      r'\bpay\s+later(?:\s+[\w\d]+)?\s+(?:a\/c|account)\b|'
+      r'\b(?:lazypay|simpl|postpe)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+  }
+
   static NeedsReviewItem resolveItemKind(NeedsReviewItem item) {
     if (item.kind != NeedsReviewKind.transaction) return item;
+    if (isPayLaterDrawdown(item.body, sender: item.sender)) {
+      return item.copyWith(kind: NeedsReviewKind.payLaterDrawdown);
+    }
     if (isSecurityOrServiceAlert(item.body)) {
       return item.copyWith(kind: NeedsReviewKind.securityOrServiceAlert);
     }
@@ -1555,6 +1607,9 @@ class NeedsReviewRepository {
       return true;
     }
     final resolved = resolveItemKind(item);
+    if (resolved.kind == NeedsReviewKind.payLaterDrawdown) {
+      return false;
+    }
     if (resolved.kind == NeedsReviewKind.securityOrServiceAlert) {
       return true;
     }
@@ -1570,8 +1625,13 @@ class NeedsReviewRepository {
     return LocalSmsParser.isNonTransactionNoise(resolved.sender, resolved.body);
   }
 
-  bool _isNoiseOrStale(NeedsReviewItem item) =>
-      isNoiseItem(item) || !_capturesReviewableFinancial(item);
+  bool _isNoiseOrStale(NeedsReviewItem item) {
+    if (item.kind == NeedsReviewKind.payLaterDrawdown ||
+        isPayLaterDrawdown(item.body, sender: item.sender)) {
+      return !_capturesReviewableFinancial(item);
+    }
+    return isNoiseItem(item) || !_capturesReviewableFinancial(item);
+  }
 
   Future<void> add(
     NeedsReviewItem item, {
@@ -1628,7 +1688,8 @@ class NeedsReviewRepository {
       }
       return;
     }
-    if (parsed != null &&
+    if (!isPayLaterDrawdown(item.body, sender: item.sender) &&
+        parsed != null &&
         parsed.eventType == LocalSmsEventType.bill &&
         parsed.cardLast4 == null &&
         parsed.dueDate != null) {

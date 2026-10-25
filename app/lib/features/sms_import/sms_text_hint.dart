@@ -263,7 +263,7 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
   }
 
   final bettingOrGamblingSpam = RegExp(
-    r'\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling|huge\s+bonus\b[\s\S]{0,30}\b(?:bet|casino|slots|win))\b',
+    r'\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling|huge\s+bonus\b[\s\S]{0,30}\b(?:bet|casino|slots|win)|gbets\.win)\b',
   ).hasMatch(lower);
   if (bettingOrGamblingSpam) {
     return const SmsTriageResult(SmsTriageKind.promotion, 'betting_spam');
@@ -274,7 +274,7 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
   ).hasMatch(lower);
 
   final isLoanLimitMarketing = RegExp(
-    r'\b(?:new\s+credit\s+alert|your\s+loan\s+limit\s+is\s+revised|(?:loan|credit)\s+limit\b[\s\S]{0,30}\b(?:revised|increased|enhanced|updated))\b',
+    r'\b(?:new\s+credit\s+alert|your\s+loan\s+limit\s+is\s+revised|(?:loan|credit)\s+limit\b[\s\S]{0,30}\b(?:revised|increased|enhanced|updated)|digital\s+credit\s+power\s+is\s+(?:now\s+)?active|updated\s+limit\s+here\b|view\s+your\s+updated\s+limit)\b',
   ).hasMatch(lower) && !hasCurrencyAmount;
   if (isLoanLimitMarketing) {
     return const SmsTriageResult(SmsTriageKind.promotion, 'loan_limit_marketing');
@@ -315,11 +315,17 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
   final isAutoPay = LocalSmsParser.isAutoPayNotice(smsBody) ||
       RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate|auto[-\s]?debit|sip\b|standing\s+instruction)\b').hasMatch(lower);
 
+  final hasMovement = RegExp(
+    r'\b(?:debited|credited|spent|paid|charged|transferred|withdrawn|deposited|refunded|reversed|deducted)\b',
+    caseSensitive: false,
+  ).hasMatch(lower);
+
   final hasFinancialAnchor = hasCurrencyAmount ||
       balanceSnapshotEvidence ||
       hasDueDate ||
       hasBillGenerated ||
       isAutoPay ||
+      hasMovement ||
       LocalSmsParser.isActionableInsuranceRenewal(smsBody);
 
   if (!hasFinancialAnchor) {

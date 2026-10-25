@@ -410,6 +410,8 @@ class _BillsSummaryHero extends StatelessWidget {
                 ),
                 child: Text(
                   statusPillText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: BambooFonts.ui(
                     11,
                     weight: FontWeight.w600,
@@ -869,6 +871,7 @@ class _PastBillPreviewRow extends StatelessWidget {
                       color: BambooInk.ink900,
                     ),
                     overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -883,6 +886,8 @@ class _PastBillPreviewRow extends StatelessWidget {
                           ? BambooInk.clayInk
                           : BambooInk.jade,
                     ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ],
               ),
@@ -947,6 +952,8 @@ class _CalendarDateTile extends StatelessWidget {
         children: [
           Text(
             month,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: BambooFonts.ui(
               9.5,
               weight: FontWeight.w700,
@@ -955,6 +962,8 @@ class _CalendarDateTile extends StatelessWidget {
           ),
           Text(
             day,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: BambooFonts.heading(
               16,
               weight: FontWeight.w800,
@@ -1025,15 +1034,19 @@ class _ComingUpRow extends StatelessWidget {
                     color: isPaid ? BambooInk.ink500 : BambooInk.ink900,
                   ),
                   overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   dueDetail,
                   style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
                 if (isAutopay && !isPaid) ...[
                   const SizedBox(height: 3),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(
                         Icons.autorenew_rounded,
@@ -1041,12 +1054,16 @@ class _ComingUpRow extends StatelessWidget {
                         color: BambooInk.jade,
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        'AutoPay scheduled',
-                        style: BambooFonts.ui(
-                          11,
-                          color: BambooInk.jade,
-                          weight: FontWeight.w600,
+                      Flexible(
+                        child: Text(
+                          'AutoPay scheduled',
+                          style: BambooFonts.ui(
+                            11,
+                            color: BambooInk.jade,
+                            weight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ),
                     ],
@@ -1108,8 +1125,16 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: BambooFonts.heading(17, color: BambooInk.ink900)),
+        Flexible(
+          child: Text(
+            label,
+            style: BambooFonts.heading(17, color: BambooInk.ink900),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
         if (count != null) ...[
           const SizedBox(width: AppSpace.sm),
           Container(
@@ -1211,6 +1236,7 @@ class _CommitmentRow extends ConsumerWidget {
                           color: BambooInk.ink900,
                         ),
                         overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                       if (metaParts.isNotEmpty) ...[
                         const SizedBox(height: 2),
@@ -1218,6 +1244,7 @@ class _CommitmentRow extends ConsumerWidget {
                           metaParts.join(' · '),
                           style: BambooFonts.ui(11.5, color: BambooInk.ink700),
                           overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ],
                       const SizedBox(height: 2),
@@ -1280,6 +1307,7 @@ class _CommitmentRow extends ConsumerWidget {
                           color: BambooInk.rankBadgeInk,
                         ),
                         overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                     ),
                   ],
@@ -1306,6 +1334,8 @@ class _CommitmentRow extends ConsumerWidget {
           color: BambooInk.jade,
           weight: FontWeight.w600,
         ),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
       );
     }
     if (daysUntil < 0) {
@@ -1313,6 +1343,8 @@ class _CommitmentRow extends ConsumerWidget {
         return Text(
           'Active mandate · Auto-debited',
           style: BambooFonts.ui(12, color: BambooInk.ink500),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
         );
       }
       return Text(
@@ -1320,12 +1352,16 @@ class _CommitmentRow extends ConsumerWidget {
             ? 'Past due date · payment status unknown'
             : 'Due ${DateFormat('d MMM').format(commitment.dueOn)} · payment status unknown',
         style: BambooFonts.ui(12, color: BambooInk.clayInk),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
       );
     }
     if (commitment.isWithinGracePeriod(now)) {
       return Text(
         'Grace window · was due ${DateFormat('d MMM').format(commitment.dueOn)}',
         style: BambooFonts.ui(12, color: BambooInk.amber),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
       );
     }
     if (daysUntil == 0) {
@@ -1336,11 +1372,15 @@ class _CommitmentRow extends ConsumerWidget {
           color: BambooInk.clayInk,
           weight: FontWeight.w600,
         ),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
       );
     }
     return Text(
       'Due ${DateFormat('d MMM').format(commitment.dueOn)} · in ${daysUntil}d',
       style: BambooFonts.ui(12, color: BambooInk.ink500),
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
     );
   }
 }
@@ -1549,11 +1589,15 @@ class _CommitmentDetailSheet extends ConsumerWidget {
                       Text(
                         commitment.title,
                         style: BambooFonts.heading(18, color: BambooInk.ink900),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                       const SizedBox(height: 2),
                       Text(
                         commitment.category.label,
                         style: BambooFonts.ui(12, color: BambooInk.ink500),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                     ],
                   ),
@@ -1734,7 +1778,13 @@ class _DetailItem extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+          Flexible(
+            child: Text(
+              label,
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           const SizedBox(width: AppSpace.md),
           Flexible(
             child: Text(
@@ -2150,6 +2200,8 @@ class _EmptyHorizonState extends ConsumerWidget {
                     weight: FontWeight.w600,
                     color: BambooInk.ink900,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ],

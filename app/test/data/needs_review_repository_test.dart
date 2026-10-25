@@ -2494,4 +2494,133 @@ void main() {
       db.close();
     },
   );
+  group('Pay Later / BNPL Drawdown Classification and Retention', () {
+    test('isPayLaterDrawdown detects Axio, Amazon Pay Later, LazyPay, Simpl, postpe', () {
+      final samples = [
+        (
+          'Thank you for availing Pay Later credit of Rs 499 at Amazon on 12-Mar-2026. Your available limit is Rs 15,000',
+          'axio',
+        ),
+        (
+          'You have availed Pay Later credit of Rs 1200 on Amazon. Repay on 5th of next month',
+          'VM-axioFS',
+        ),
+        (
+          'Availed credit of Rs. 350 using Amazon Pay Later',
+          null,
+        ),
+        (
+          'Congrats, we have received your repayment towards your Pay Later XXX6016 a/c',
+          'VD-axioPL-S',
+        ),
+        (
+          'Your Amazon Pay Later EMI of Rs 1,450 has been scheduled',
+          null,
+        ),
+        (
+          'Rs 250 paid at Swiggy using LazyPay',
+          'VK-LAZYPY',
+        ),
+        (
+          'Transaction of Rs. 450 using Simpl',
+          'AX-SIMPL',
+        ),
+        (
+          'Availed credit of Rs 1,000 using postpe',
+          'BZ-POSTPE',
+        ),
+      ];
+
+      for (final (body, sender) in samples) {
+        expect(
+          NeedsReviewRepository.isPayLaterDrawdown(body, sender: sender),
+          isTrue,
+          reason: 'Failed for body: $body, sender: $sender',
+        );
+      }
+
+      // Non-matches
+      expect(
+        NeedsReviewRepository.isPayLaterDrawdown(
+          'Rs. 100 spent at FIRST SHOP on HDFC Bank Card ending 1234.',
+          sender: 'VM-HDFCBK',
+        ),
+        isFalse,
+      );
+      expect(
+        NeedsReviewRepository.isPayLaterDrawdown(
+          'Your OTP for login is 123456. Do not share it with anyone.',
+          sender: 'HDFCBK',
+        ),
+        isFalse,
+      );
+    });
+
+    test('resolveItemKind categorizes Pay Later messages as NeedsReviewKind.payLaterDrawdown', () {
+      final item = NeedsReviewItem(
+        id: 'axio-drawdown',
+        sender: 'VM-axioFS',
+        body: 'Thank you for availing Pay Later credit of Rs 499 at Amazon on 12-Mar-2026. Your available limit is Rs 15,000',
+        receivedAt: DateTime(2026, 3, 12),
+      );
+
+      final resolved = NeedsReviewRepository.resolveItemKind(item);
+      expect(resolved.kind, NeedsReviewKind.payLaterDrawdown);
+
+      final lazyPayItem = NeedsReviewItem(
+        id: 'lazypay-drawdown',
+        sender: 'VK-LAZYPY',
+        body: 'Rs 250 paid at Swiggy using LazyPay',
+        receivedAt: DateTime(2026, 3, 13),
+      );
+      expect(
+        NeedsReviewRepository.resolveItemKind(lazyPayItem).kind,
+        NeedsReviewKind.payLaterDrawdown,
+      );
+    });
+
+    test('round-trip JSON serialization preserves NeedsReviewKind.payLaterDrawdown', () {
+      final item = NeedsReviewItem(
+        id: 'pay-later-json',
+        sender: 'axio',
+        body: 'Availed credit of Rs. 350 using Amazon Pay Later',
+        receivedAt: DateTime(2026, 3, 12, 14, 30),
+        kind: NeedsReviewKind.payLaterDrawdown,
+      );
+
+      final json = item.toJson();
+      expect(json['kind'], 'payLaterDrawdown');
+
+      final deserialized = NeedsReviewItem.fromJson(json);
+      expect(deserialized.id, item.id);
+      expect(deserialized.sender, item.sender);
+      expect(deserialized.body, item.body);
+      expect(deserialized.receivedAt, item.receivedAt);
+      expect(deserialized.kind, NeedsReviewKind.payLaterDrawdown);
+    });
+
+    test('Pay Later drawdown items are retained in NeedsReviewRepository and not discarded as noise', () async {
+      final db = openInMemoryForTesting();
+      addTearDown(db.close);
+      const ns = 'user:paylater-test';
+      final repo = NeedsReviewRepository(
+        namespace: ns,
+        loadDatabase: () async => db,
+      );
+
+      final item = NeedsReviewItem(
+        id: 'axio-review-1',
+        sender: 'axio',
+        body: 'Thank you for availing Pay Later credit of Rs 499 at Amazon on 12-Mar-2026. Your available limit is Rs 15,000',
+        receivedAt: DateTime(2026, 3, 12),
+      );
+
+      await repo.add(item);
+
+      final all = await repo.fetchAll();
+      expect(all, hasLength(1));
+      expect(all.single.id, 'axio-review-1');
+      expect(all.single.kind, NeedsReviewKind.payLaterDrawdown);
+    });
+  });
 }

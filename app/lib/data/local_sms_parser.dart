@@ -415,7 +415,7 @@ class LocalSmsParser {
     if (loanOrCreditPowerMarketing) return true;
 
     final bettingOrGamblingSpam = _re(
-      r'\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling|huge\s+bonus\b[\s\S]{0,30}\b(?:bet|casino|slots|win))\b',
+      r'\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling|huge\s+bonus\b[\s\S]{0,30}\b(?:bet|casino|slots|win)|gbets\.win)\b',
     ).hasMatch(text);
     if (bettingOrGamblingSpam) return true;
 
