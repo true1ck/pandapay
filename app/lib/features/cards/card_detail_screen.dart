@@ -28,6 +28,71 @@ import '../../main.dart' show MoneyText;
 const _assumedGracePeriodDays =
     20; // matches billing_float_screen.dart's own assumption
 
+String _normalizedSpendCategoryLabel(String rawLabel) {
+  final normalized = rawLabel.trim().replaceAll(RegExp(r'\s+'), ' ');
+  final lower = normalized.toLowerCase();
+  if (normalized.isEmpty ||
+      lower == 'uncategorized' ||
+      lower == 'unclassified' ||
+      lower == 'unknown' ||
+      lower == 'others' ||
+      lower == 'other') {
+    return 'Other';
+  }
+  return normalized;
+}
+
+List<SpendBreakdownRow> _aggregateCardCategoryRows(
+  List<CardCategorySpendRow> rawRows,
+  String userCardId,
+) {
+  final filtered = rawRows.where(
+    (r) => r.cardId == userCardId && r.total.paise > 0 && r.txnCount > 0,
+  );
+  final map =
+      <
+        String,
+        ({String label, Money total, int txnCount, String? categoryId})
+      >{};
+
+  for (final r in filtered) {
+    final label = _normalizedSpendCategoryLabel(r.categoryName);
+    // Report rows may arrive both with and without a category ID. The label
+    // is the stable user-facing identity, so keying by it prevents duplicate
+    // rows such as "Other" / "Uncategorized" or ID/name variants.
+    final key = label.toLowerCase();
+
+    if (map.containsKey(key)) {
+      final existing = map[key]!;
+      map[key] = (
+        label: existing.label,
+        total: existing.total + r.total,
+        txnCount: existing.txnCount + r.txnCount,
+        categoryId: existing.categoryId ?? r.categoryId,
+      );
+    } else {
+      map[key] = (
+        label: label,
+        total: r.total,
+        txnCount: r.txnCount,
+        categoryId: r.categoryId,
+      );
+    }
+  }
+
+  return map.values
+      .map(
+        (v) => SpendBreakdownRow(
+          label: v.label,
+          total: v.total,
+          txnCount: v.txnCount,
+          categoryId: v.categoryId,
+        ),
+      )
+      .toList()
+    ..sort((a, b) => b.total.paise.compareTo(a.total.paise));
+}
+
 /// C2 Card Detail — one vertically scrollable card report (ui-spec Group C,
 /// implementation-plan-group-c-d.md).
 /// Deep-linkable at /cards/:id. Reads [myCardsWithProductProvider] (not
@@ -245,14 +310,11 @@ class CardDetailScreen extends ConsumerWidget {
                           ],
                         ),
                       ],
-                      if (userCard.creditLimit != null &&
-                          cardUtilization != null) ...[
-                        const SizedBox(height: AppSpace.xs),
-                        _CardUtilizationHeaderBar(
-                          card: userCard,
-                          result: cardUtilization,
-                        ),
-                      ],
+                      const SizedBox(height: AppSpace.xs),
+                      _CardUtilizationHeaderBar(
+                        card: userCard,
+                        result: cardUtilization,
+                      ),
                       const SizedBox(height: AppSpace.md),
                       _CardSpendingMixSection(userCard: userCard),
                       const SizedBox(height: AppSpace.lg),
@@ -361,17 +423,33 @@ class _CardDetailSection extends StatelessWidget {
 
 class _CardUtilizationHeaderBar extends StatelessWidget {
   final UserCard card;
-  final UtilizationResult result;
+  final UtilizationResult? result;
 
   const _CardUtilizationHeaderBar({required this.card, required this.result});
 
   @override
   Widget build(BuildContext context) {
-    final ratio = result.ratio;
-    final color = CreditUtilizationUi.color(ratio);
-    final limit = card.creditLimit!;
-    final available = limit - result.currentBalance;
-    final headroom = available.isNegative ? const Money.zero() : available;
+    final tracked = result;
+    final limit = card.creditLimit;
+    final hasLimit = limit != null && tracked != null;
+    final ratio = hasLimit ? tracked.ratio : 0.0;
+    final color = hasLimit
+        ? CreditUtilizationUi.color(ratio)
+        : BambooInk.ink500;
+    final icon = hasLimit
+        ? CreditUtilizationUi.icon(ratio)
+        : Icons.credit_score_outlined;
+    final title = hasLimit
+        ? 'Credit utilization: ${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}% · ${CreditUtilizationUi.label(ratio)}'
+        : 'Credit utilization · Add a limit';
+    String trailing;
+    if (hasLimit) {
+      final available = limit - tracked.currentBalance;
+      final headroom = available.isNegative ? const Money.zero() : available;
+      trailing = '${headroom.format(hidePaise: true)} headroom';
+    } else {
+      trailing = 'Add limit';
+    }
 
     return InkWell(
       onTap: () => context.push('/cards/${card.id}/edit'),
@@ -391,43 +469,49 @@ class _CardUtilizationHeaderBar extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(CreditUtilizationUi.icon(ratio), size: 15, color: color),
+                Icon(icon, size: 15, color: color),
                 const SizedBox(width: AppSpace.xs),
-                Text(
-                  'Credit utilization: ${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}% · ${CreditUtilizationUi.label(ratio)}',
-                  style: BambooFonts.ui(
-                    12,
-                    weight: FontWeight.w600,
-                    color: color,
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.ui(
+                      12,
+                      weight: FontWeight.w600,
+                      color: color,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 Text(
-                  '${headroom.format(hidePaise: true)} headroom',
+                  trailing,
                   style: BambooFonts.ui(
                     11.5,
                     weight: FontWeight.w600,
-                    color: BambooInk.ink700,
+                    color: hasLimit ? BambooInk.ink700 : BambooInk.jade,
                   ),
                 ),
                 const SizedBox(width: 2),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
                   size: 14,
-                  color: BambooInk.ink500,
+                  color: hasLimit ? BambooInk.ink500 : BambooInk.jade,
                 ),
               ],
             ),
-            const SizedBox(height: 5),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              child: LinearProgressIndicator(
-                value: ratio.clamp(0.0, 1.0),
-                minHeight: 6,
-                backgroundColor: BambooInk.paperMuted,
-                color: color,
+            if (hasLimit) ...[
+              const SizedBox(height: 7),
+              ClipRRect(
+                key: const Key('card_credit_utilization_bar'),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: LinearProgressIndicator(
+                  value: ratio.clamp(0.0, 1.0),
+                  minHeight: 6,
+                  backgroundColor: BambooInk.paperMuted,
+                  color: color,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -435,243 +519,67 @@ class _CardUtilizationHeaderBar extends StatelessWidget {
   }
 }
 
-class _CardUtilizationCard extends StatelessWidget {
-  final UserCard userCard;
-  final UtilizationResult? result;
+/// Horizontal unroll of the spending-mix donut: same category colours,
+/// same proportions, as a pill bar.
+class _SpendingMixStackedBar extends StatelessWidget {
+  final List<SpendBreakdownRow> rows;
 
-  const _CardUtilizationCard({required this.userCard, required this.result});
+  const _SpendingMixStackedBar({required this.rows});
 
   @override
   Widget build(BuildContext context) {
-    if (userCard.creditLimit == null || result == null) {
-      return CardSummaryPanel(
-        padding: const EdgeInsets.all(AppSpace.md),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: BambooInk.paperMuted,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.credit_score_outlined,
-                color: BambooInk.ink700,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: AppSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Track credit utilization',
-                    style: BambooFonts.heading(14, color: BambooInk.ink900),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Add credit limit to monitor cycle spend and protect your credit score.',
-                    style: BambooFonts.ui(12, color: BambooInk.ink500),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpace.xs),
-            TextButton(
-              onPressed: () => context.push('/cards/${userCard.id}/edit'),
-              style: TextButton.styleFrom(
-                foregroundColor: BambooInk.jade,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Add limit',
-                    style: BambooFonts.ui(
-                      12.5,
-                      weight: FontWeight.w700,
-                      color: BambooInk.jade,
-                    ),
-                  ),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    size: 16,
-                    color: BambooInk.jade,
-                  ),
-                ],
-              ),
-            ),
-          ],
+    final totalPaise = rows.fold<int>(0, (sum, row) => sum + row.total.paise);
+    final label = totalPaise <= 0
+        ? 'No spending mix this month'
+        : rows
+              .map(
+                (row) =>
+                    '${row.label} ${((row.total.paise / totalPaise) * 100).round()}%',
+              )
+              .join(', ');
+
+    return Semantics(
+      key: const Key('card_spending_mix_bar'),
+      label: 'Spending mix bar, $label',
+      child: SizedBox(
+        height: 14,
+        width: double.infinity,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: CustomPaint(
+            painter: _SpendingMixBarPainter(rows: rows, totalPaise: totalPaise),
+          ),
         ),
-      );
-    }
-
-    final ratio = result!.ratio;
-    final color = CreditUtilizationUi.color(ratio);
-    final limit = userCard.creditLimit!;
-    final available = limit - result!.currentBalance;
-    final headroom = available.isNegative ? const Money.zero() : available;
-
-    return CardSummaryPanel(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  CreditUtilizationUi.icon(ratio),
-                  size: 20,
-                  color: color,
-                ),
-              ),
-              const SizedBox(width: AppSpace.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Credit limit utilization',
-                      style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-                    ),
-                    Text(
-                      CreditUtilizationUi.label(ratio),
-                      style: BambooFonts.ui(
-                        12,
-                        weight: FontWeight.w600,
-                        color: color,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                '${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}%',
-                style: BambooFonts.heading(
-                  18,
-                  weight: FontWeight.w700,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpace.md),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            child: LinearProgressIndicator(
-              value: ratio.clamp(0.0, 1.0),
-              minHeight: 8,
-              backgroundColor: BambooInk.paperMuted,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Tracked spend',
-                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                  ),
-                  const SizedBox(height: 2),
-                  MoneyText(
-                    result!.currentBalance,
-                    confidence: Confidence.estimated,
-                    style: BambooFonts.ui(
-                      13.5,
-                      weight: FontWeight.w600,
-                      color: BambooInk.ink900,
-                    ),
-                  ),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    'Available headroom',
-                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                  ),
-                  const SizedBox(height: 2),
-                  MoneyText(
-                    headroom,
-                    confidence: Confidence.estimated,
-                    style: BambooFonts.ui(
-                      13.5,
-                      weight: FontWeight.w600,
-                      color: available.isNegative
-                          ? BambooInk.clay
-                          : BambooInk.jade,
-                    ),
-                  ),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'Limit',
-                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                  ),
-                  const SizedBox(height: 2),
-                  MoneyText(
-                    limit,
-                    confidence: Confidence.confirmed,
-                    style: BambooFonts.ui(
-                      13.5,
-                      weight: FontWeight.w600,
-                      color: BambooInk.ink900,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          if (ratio > 0.30) ...[
-            const SizedBox(height: AppSpace.md),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpace.sm,
-                vertical: AppSpace.xs + 2,
-              ),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline_rounded, size: 14, color: color),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      CreditUtilizationUi.guidance(ratio),
-                      style: BambooFonts.ui(11.5, color: color),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }
+}
+
+class _SpendingMixBarPainter extends CustomPainter {
+  final List<SpendBreakdownRow> rows;
+  final int totalPaise;
+
+  const _SpendingMixBarPainter({required this.rows, required this.totalPaise});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final track = Paint()..color = BambooInk.paperMuted;
+    canvas.drawRect(Offset.zero & size, track);
+    if (totalPaise <= 0 || size.width <= 0) return;
+
+    var x = 0.0;
+    for (final row in rows) {
+      final width = size.width * (row.total.paise / totalPaise);
+      if (width <= 0) continue;
+      final paint = Paint()..color = spendingCategoryVisual(row.label).accent;
+      canvas.drawRect(Rect.fromLTWH(x, 0, width, size.height), paint);
+      x += width;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpendingMixBarPainter oldDelegate) =>
+      oldDelegate.rows != rows || oldDelegate.totalPaise != totalPaise;
 }
 
 class _CardSpendingMixSection extends ConsumerStatefulWidget {
@@ -691,19 +599,8 @@ class _CardSpendingMixSectionState
 
   String _categoryKey(SpendBreakdownRow row) => row.label.toLowerCase();
 
-  String _categoryLabel(String rawLabel) {
-    final normalized = rawLabel.trim().replaceAll(RegExp(r'\s+'), ' ');
-    final lower = normalized.toLowerCase();
-    if (normalized.isEmpty ||
-        lower == 'uncategorized' ||
-        lower == 'unclassified' ||
-        lower == 'unknown' ||
-        lower == 'others' ||
-        lower == 'other') {
-      return 'Other';
-    }
-    return normalized;
-  }
+  String _categoryLabel(String rawLabel) =>
+      _normalizedSpendCategoryLabel(rawLabel);
 
   void _selectCategory(int? index, List<SpendBreakdownRow> rows) {
     setState(() {
@@ -719,53 +616,7 @@ class _CardSpendingMixSectionState
   List<SpendBreakdownRow> _aggregateCardCategories(
     List<CardCategorySpendRow> rawRows,
     String userCardId,
-  ) {
-    final filtered = rawRows.where(
-      (r) => r.cardId == userCardId && r.total.paise > 0 && r.txnCount > 0,
-    );
-    final map =
-        <
-          String,
-          ({String label, Money total, int txnCount, String? categoryId})
-        >{};
-
-    for (final r in filtered) {
-      final label = _categoryLabel(r.categoryName);
-      // Report rows may arrive both with and without a category ID. The label
-      // is the stable user-facing identity, so keying by it prevents duplicate
-      // rows such as "Other" / "Uncategorized" or ID/name variants.
-      final key = label.toLowerCase();
-
-      if (map.containsKey(key)) {
-        final existing = map[key]!;
-        map[key] = (
-          label: existing.label,
-          total: existing.total + r.total,
-          txnCount: existing.txnCount + r.txnCount,
-          categoryId: existing.categoryId ?? r.categoryId,
-        );
-      } else {
-        map[key] = (
-          label: label,
-          total: r.total,
-          txnCount: r.txnCount,
-          categoryId: r.categoryId,
-        );
-      }
-    }
-
-    return map.values
-        .map(
-          (v) => SpendBreakdownRow(
-            label: v.label,
-            total: v.total,
-            txnCount: v.txnCount,
-            categoryId: v.categoryId,
-          ),
-        )
-        .toList()
-      ..sort((a, b) => b.total.paise.compareTo(a.total.paise));
-  }
+  ) => _aggregateCardCategoryRows(rawRows, userCardId);
 
   List<TransactionEntry> _transactionsForCategory(
     SpendBreakdownRow row,
@@ -1635,19 +1486,18 @@ class _SpendSection extends ConsumerWidget {
         // — is the comparison people make in their heads anyway, and it is
         // wrong by a factor of twelve.
         final annualisedRewards = row.rewards * 12;
+        final mixRows = _aggregateCardCategoryRows(
+          data.byCardCategory,
+          userCard.id,
+        );
 
-        final utilization = ref.watch(creditUtilizationProvider)[userCard.id];
         return _SpendDisclosure(
           trailing: row.total.format(compact: true),
           details: [
-            if (userCard.creditLimit == null || utilization == null) ...[
-              _CardUtilizationCard(userCard: userCard, result: utilization),
-              const SizedBox(height: AppSpace.md),
-            ],
-            _SpendStatCard(
-              label: 'Spent this month',
-              value: row.total,
-              sub: '${row.txnCount} transaction${row.txnCount == 1 ? '' : 's'}',
+            _SpendBarSummary(
+              spend: row.total,
+              transactionCount: row.txnCount,
+              mixRows: mixRows,
             ),
             const SizedBox(height: AppSpace.md),
             _SpendStatCard(
@@ -1704,26 +1554,64 @@ class _SpendStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-          const SizedBox(height: 2),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                if (sub != null) ...[
+                  const SizedBox(height: 3),
+                  Text(sub!, style: BambooFonts.ui(12, color: BambooInk.ink500)),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpace.md),
           MoneyText(
             value,
             confidence: Confidence.estimated,
-            style: BambooFonts.money(24, color: BambooInk.ink900),
+            style: BambooFonts.money(18, color: BambooInk.ink900),
           ),
-          if (sub != null) ...[
-            const SizedBox(height: 6),
-            Text(sub!, style: BambooFonts.ui(12, color: BambooInk.ink500)),
-          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SpendBarSummary extends StatelessWidget {
+  final Money spend;
+  final int transactionCount;
+  final List<SpendBreakdownRow> mixRows;
+
+  const _SpendBarSummary({
+    required this.spend,
+    required this.transactionCount,
+    required this.mixRows,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
+      child: Column(
+        children: [
+          MoneyText(
+            spend,
+            confidence: Confidence.estimated,
+            style: BambooFonts.money(30, color: BambooInk.ink900),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            'spent this month · $transactionCount ${transactionCount == 1 ? 'transaction' : 'transactions'}',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: AppSpace.md),
+          _SpendingMixStackedBar(rows: mixRows),
         ],
       ),
     );

@@ -251,6 +251,25 @@ void main() {
       expect(find.textContaining('Credit utilization: 25%'), findsOneWidget);
       expect(find.textContaining('Healthy headroom'), findsOneWidget);
       expect(find.textContaining('75,000 headroom'), findsOneWidget);
+      expect(
+        find.byKey(const Key('card_credit_utilization_bar')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'renders empty credit utilization bar when the card has no credit limit',
+    (tester) async {
+      await _pump(tester, catalogue: [_fullCard()], owned: [_ownedCard()]);
+
+      expect(find.text('Credit utilization · Add a limit'), findsOneWidget);
+      expect(find.text('Add limit'), findsOneWidget);
+      expect(find.text('Track credit utilization'), findsNothing);
+      expect(
+        find.byKey(const Key('card_credit_utilization_bar')),
+        findsNothing,
+      );
     },
   );
 }
