@@ -1465,4 +1465,25 @@ void main() {
       );
     }
   });
+
+  test('Axio Pay Later bill becomes an upcoming bill, not an account', () {
+    const body =
+        'Your Pay Later bill of Rs 1038 will be debited on 5th of this month '
+        'from registered bank a/c. View Bill https://u.axio.co/axo/example -axio';
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-axioFS',
+      body: body,
+      receivedAt: DateTime(2026, 5, 1, 9, 30),
+    );
+
+    expect(result, isNotNull);
+    expect(result!.eventType, LocalSmsEventType.bill);
+    expect(result.disposition, LocalSmsDisposition.localCommitment);
+    expect(result.merchantName, 'Axio Pay Later');
+    expect(result.amountDue, Money.fromRupees(1038));
+    expect(result.dueDate, DateTime(2026, 5, 5));
+    expect(result.transaction, isNull);
+    expect(LocalSmsParser.isBankAccountMessage(body, 'VM-axioFS'), isFalse);
+  });
 }

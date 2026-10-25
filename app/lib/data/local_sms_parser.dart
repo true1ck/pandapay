@@ -1102,9 +1102,12 @@ class LocalSmsParser {
     } else {
       final isSetup =
           autopayLimit != null ||
-          _re(
-            r'\b(?:activation|activated|enabled|registered|created|set\s+up|maximum|max\s+limit|e[- ]?mandate)\b',
-          ).hasMatch(body);
+          (_re(
+                r'\b(?:activation|activated|enabled|registered|created|set\s+up|maximum|max\s+limit|e[- ]?mandate)\b',
+              ).hasMatch(body) &&
+              _re(
+                r'\b(?:auto[- ]?pay|autopay|mandate|e[- ]?mandate|e[- ]?nach|enach|standing\s+instruction|si\s+debit)\b',
+              ).hasMatch(body));
       return LocalSmsObservation(
         cardLast4: effectiveCardLast4,
         accountLast4: accountLast4,
@@ -1278,6 +1281,20 @@ class LocalSmsParser {
         if (due != null) break;
       }
     }
+    // Axio Pay Later bills use an ordinal relative date instead of a full
+    // calendar date: "will be debited on 5th of this month". Preserve the
+    // SMS's original month/year so historical imports do not drift into the
+    // current billing cycle.
+    if (due == null) {
+      final thisMonthDay = _re(
+        r'\b(?:will|shall|to)?\s*(?:be\s+)?(?:auto[- ]?)?(?:deducted|debited)\b[\s\S]{0,70}?\bon\s+(\d{1,2})(?:st|nd|rd|th)?\s+of\s+this\s+month\b',
+      ).firstMatch(body);
+      final day = int.tryParse(thisMonthDay?.group(1) ?? '');
+      if (day != null && day >= 1 && day <= 31) {
+        final candidate = DateTime(receivedAt.year, receivedAt.month, day);
+        if (candidate.month == receivedAt.month) due = candidate;
+      }
+    }
     if (due == null && isActionableInsuranceRenewal(body)) {
       final relative = _re(
         r'\b(?:expires?|expiry|premium\s+due|renewal\s+due|due\s+for\s+renewal)\s*(?:is\s+|on\s+)?(today|tomorrow|in\s+(\d{1,2})\s+days?)\b',
@@ -1436,9 +1453,17 @@ class LocalSmsParser {
     }
 
     final balance = money(balanceText);
-    final billerName =
-        extractBillerName(body) ??
-        (isInsuranceReminder ? 'Insurance policy' : null);
+    final isPayLaterBill =
+        _re(r'\bpay\s+later\s+bill\b').hasMatch(body) &&
+        _re(
+          r'\b(?:will|shall|to)\s+be\s+(?:auto[- ]?)?(?:debited|deducted)\b',
+        ).hasMatch(body);
+    final billerName = isPayLaterBill
+        ? (sender.toLowerCase().contains('axio')
+              ? 'Axio Pay Later'
+              : 'Pay Later')
+        : extractBillerName(body) ??
+              (isInsuranceReminder ? 'Insurance policy' : null);
     final cadenceHint =
         _re(r'\b(?:monthly|month)\b').hasMatch(body) ||
             _re(r'\b(?:for\s+the\s+month|month\s+of)\b').hasMatch(body)
@@ -1603,7 +1628,7 @@ class LocalSmsParser {
     final futureDebit = _re(
       r'\b(?:(?:will|shall|to|scheduled to|scheduled for)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)|for\s+(?:auto[- ]?)?debit|scheduled\s+for\s+(?:auto[- ]?)?debit|(?:maintain|keep)\s+sufficient\s+(?:bal|balance)\b[\s\S]{0,50}\b(?:debit|deduction)|(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|pre[- ]?debit)\b[\s\S]{0,50}?\bwill\s+be\b|(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|pre[- ]?debit)\b[\s\S]{0,50}?\b(?:attempted|scheduled)\b)\b',
     ).hasMatch(body);
-    if (isMerchantReceiptOrEbill(body)) {
+    if (isMerchantReceiptOrEbill(body) && !isPayLaterBill) {
       return observation(
         null,
         LocalSmsEventType.unknown,

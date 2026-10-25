@@ -132,6 +132,34 @@ void main() {
     );
   });
 
+  test('Axio Pay Later bill is stored only as an upcoming commitment', () {
+    const namespace = 'user:axio-pay-later';
+    const bill =
+        'Your Pay Later bill of Rs 1038 will be debited on 5th of this month '
+        'from registered bank a/c. View Bill https://u.axio.co/axo/example -axio';
+
+    SmsImportStore(cache.financialStore).capture(
+      namespace,
+      QueuedSms(
+        sender: 'VM-axioFS',
+        body: bill,
+        receivedAt: DateTime(2026, 5, 1, 9, 30),
+      ),
+    );
+
+    final commitments = db.db.select(
+      'SELECT payload FROM local_commitments WHERE namespace=?',
+      [namespace],
+    );
+    expect(commitments, hasLength(1));
+    final commitment = jsonDecode(commitments.single['payload'] as String);
+    expect(commitment['title'], 'Axio Pay Later');
+    expect(commitment['amount_paise'], 103800);
+    expect(commitment['due_on'], DateTime(2026, 5, 5).toIso8601String());
+    expect(cache.financialStore.bankAccounts(namespace), isEmpty);
+    expect(cache.financialStore.entities(namespace, 'transactions'), isEmpty);
+  });
+
   test('insurance renewals survive triage and use only evidenced cadence', () {
     for (final (evidence, cadence) in [
       ('', 'oneTime'),
