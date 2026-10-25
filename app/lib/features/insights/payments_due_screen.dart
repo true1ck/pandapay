@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
-import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_bill_ledger.dart';
 import '../../data/commitments_repository.dart';
@@ -18,7 +16,6 @@ import 'central_bills_section.dart';
 import 'insurance_premiums_section.dart';
 import 'sms_bills_section.dart';
 import 'past_bill_receipts_screen.dart';
-import 'subscriptions_screen.dart';
 
 // ---------------------------------------------------------------------------
 // Backward-compatible type aliases for existing test harnesses
@@ -341,189 +338,6 @@ class BillsHorizonSummary {
       totalBilled.paise == 0 && actionableCount == 0 && autopayCount == 0;
 }
 
-class _BillsSummaryHero extends StatelessWidget {
-  final BillsHorizonSummary summary;
-
-  const _BillsSummaryHero({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    final isUpcoming = summary.isUpcoming;
-    final total = isUpcoming ? summary.totalDue : summary.totalBilled;
-    final headline = isUpcoming
-        ? 'TOTAL DUE THIS CYCLE'
-        : 'BILLED IN ${summary.horizonLabel.toUpperCase()}';
-
-    final earliest = summary.earliestDue;
-    final daysUntil = earliest == null
-        ? null
-        : DateTime(earliest.year, earliest.month, earliest.day)
-            .difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day))
-            .inDays;
-
-    final String statusPillText;
-    if (isUpcoming) {
-      if (summary.totalDue.paise == 0 && summary.actionableCount == 0) {
-        statusPillText = 'All settled';
-      } else if (daysUntil != null && daysUntil >= 0) {
-        statusPillText = daysUntil == 0
-            ? 'Due today'
-            : 'Next due in ${daysUntil}d';
-      } else if (daysUntil != null && daysUntil < 0) {
-        statusPillText = 'Overdue items';
-      } else {
-        statusPillText = '${summary.actionableCount} due';
-      }
-    } else {
-      statusPillText = '${(summary.settledPct * 100).round()}% settled';
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
-        ),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      padding: const EdgeInsets.all(AppSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  headline,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: BambooFonts.ui(
-                    11,
-                    weight: FontWeight.w700,
-                    color: BambooInk.onSlateMuted,
-                  ).copyWith(letterSpacing: 1.1),
-                ),
-              ),
-              const SizedBox(width: AppSpace.xs),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: BambooInk.slateLow,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(color: const Color(0x1FFFFFFF)),
-                ),
-                child: Text(
-                  statusPillText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: BambooFonts.ui(
-                    11,
-                    weight: FontWeight.w600,
-                    color: isUpcoming && daysUntil != null && daysUntil <= 2
-                        ? BambooInk.clay
-                        : BambooInk.lime,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Text(
-            total.format(hidePaise: true),
-            style: BambooFonts.money(
-              30,
-              color: isUpcoming ? BambooInk.lime : BambooInk.onSlate,
-            ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            child: LinearProgressIndicator(
-              value: summary.settledPct,
-              minHeight: 6,
-              backgroundColor: BambooInk.slateLow,
-              valueColor: const AlwaysStoppedAnimation<Color>(BambooInk.lime),
-            ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          Row(
-            children: [
-              _HeroStatChip(
-                icon: Icons.check_circle_outline_rounded,
-                iconColor: BambooInk.jade,
-                label: summary.totalPaid.paise > 0
-                    ? '${summary.totalPaid.format(hidePaise: true)} paid'
-                    : '₹0 paid',
-              ),
-              const SizedBox(width: AppSpace.xs),
-              _HeroStatChip(
-                icon: Icons.pending_actions_rounded,
-                iconColor: summary.actionableCount > 0
-                    ? BambooInk.clay
-                    : BambooInk.onSlateSubtle,
-                label: '${summary.actionableCount} to pay',
-              ),
-              const SizedBox(width: AppSpace.xs),
-              _HeroStatChip(
-                icon: Icons.autorenew_rounded,
-                iconColor: BambooInk.lime,
-                label: '${summary.autopayCount} AutoPay',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroStatChip extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String label;
-
-  const _HeroStatChip({
-    required this.icon,
-    required this.iconColor,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        decoration: BoxDecoration(
-          color: BambooInk.slateLow,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0x1FFFFFFF)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: iconColor),
-            const SizedBox(width: 3),
-            Flexible(
-              child: Text(
-                label,
-                style: BambooFonts.ui(
-                  10,
-                  weight: FontWeight.w600,
-                  color: BambooInk.onSlate,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _DueList extends ConsumerWidget {
   final List<DuePayment> rows;
   final BillsHorizonFilter filter;
@@ -580,9 +394,6 @@ class _DueList extends ConsumerWidget {
               c.category == CommitmentCategory.tax ||
               c.category == CommitmentCategory.other,
         )
-        .toList(growable: false);
-    final subscriptions = visibleCommitments
-        .where((c) => c.category == CommitmentCategory.subscription)
         .toList(growable: false);
 
     final hasSms =
@@ -1453,15 +1264,6 @@ class _CommitmentRow extends ConsumerWidget {
   }
 }
 
-void _openSubscriptions(BuildContext context) {
-  try {
-    context.push(AppRoute.subscriptions);
-  } catch (_) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SubscriptionsScreen()),
-    );
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Interactive Commitment Detail Sheet — durable actions & payment rollover
