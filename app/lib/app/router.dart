@@ -767,8 +767,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               body: BillsAndCommitmentsTab(),
             ),
             (label: 'Due dates', body: DueDateCalendarScreen()),
-            (label: 'Interest-free days', body: BillingFloatScreen()),
-            (label: 'Utilization', body: CreditUtilizationScreen()),
           ],
         ),
       ),
