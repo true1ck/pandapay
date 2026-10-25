@@ -823,6 +823,67 @@ void main() {
   );
 
   test(
+    'fetchAll purges card-control, account-linking and settlement explanation rows already on disk',
+    () async {
+      final db = openInMemoryForTesting();
+      db.db.execute(
+        'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+      );
+      final legacyRows = [
+        NeedsReviewItem(
+          id: 'legacy-limit-update',
+          sender: 'VA-SLCBNK-S',
+          body:
+              'Your transaction limit for pinless UPI on your slice credit card has been updated. You can check and change it in the app - slice',
+          receivedAt: DateTime(2026, 10, 1),
+        ),
+        NeedsReviewItem(
+          id: 'legacy-security-tip',
+          sender: 'VM-HDFCBN-S',
+          body:
+              'Dear Customer, Security Tip-Enable Online use & Set Limit on HDFC Bank Credit Card 1366. Use NetBanking/MyCards/WhatsApp https://1.hdfc.bank.in/HDFCBK/s/yjGKjM5',
+          receivedAt: DateTime(2026, 10, 2),
+        ),
+        NeedsReviewItem(
+          id: 'legacy-netbanking-link',
+          sender: 'VD-HDFCBK-S',
+          body:
+              'HDFC Bank Credit Card has been linked for NetBanking. Pls login to NetBanking and select Credit Cards tab to view statement details or to make payment',
+          receivedAt: DateTime(2026, 10, 3),
+        ),
+        NeedsReviewItem(
+          id: 'legacy-lemonn-settlement',
+          sender: 'VK-LEMONN-S',
+          body:
+              'Dear SUJAY SHANTARAM KURTIKAR, as per SEBI and exchange guidelines, unused funds in your Lemonn trading account will be transferred back to your registered bank account on the day of settlement.',
+          receivedAt: DateTime(2026, 10, 4),
+        ),
+      ];
+      for (final item in legacyRows) {
+        db.db.execute('INSERT INTO local_needs_review VALUES (?,?,?)', [
+          'user:legacy-noise',
+          item.id,
+          jsonEncode(item.toJson()),
+        ]);
+      }
+
+      final repo = NeedsReviewRepository(
+        namespace: 'user:legacy-noise',
+        loadDatabase: () async => db,
+      );
+
+      expect(await repo.fetchAll(), isEmpty);
+      expect(
+        db.db.select('SELECT id FROM local_needs_review WHERE namespace=?', [
+          'user:legacy-noise',
+        ]),
+        isEmpty,
+      );
+      db.close();
+    },
+  );
+
+  test(
     'fetchAll purges regulatory balance reports, unsolicited tips, insurance renewals, wallet zero balance, and service alerts automatically',
     () async {
       final prefs = await SharedPreferences.getInstance();

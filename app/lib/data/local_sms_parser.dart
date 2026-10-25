@@ -130,7 +130,7 @@ class LocalSmsParser {
   // straight after the instrument ("Credit Card 8708 bill"), so the open
   // review queue is re-examined once more and a card's due day can finally be
   // learned from its own AutoPay message.
-  static const version = 12;
+  static const version = 13;
 
   static String? categoryDisplayName(String? slug) {
     if (slug == null || slug.isEmpty) return null;
@@ -406,7 +406,26 @@ class LocalSmsParser {
       r'\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b',
     ).hasMatch(text);
     if (isActionableInsuranceRenewal(body)) return false;
-    return offer || serviceNotice || operationalNotice || promotionalSender;
+    // Informational card/account controls carry no money movement, amount,
+    // due date, balance or mandate. They are matched last so a completed
+    // debit, bill, balance snapshot or limit-with-amount already returned
+    // false above and remains useful.
+    final controlNotice = _re(
+      r'\btransaction\s+limits?\b[\s\S]{0,60}\b(?:has|have|is|are)\s+been\s+(?:updated|changed|modified|set)\b'
+      r'|\bsecurity\s+tip\b[\s\S]{0,80}\b(?:enable|set|disable|protect|never\s+share|keep\s+your)\b'
+      r'|\benable\s+online\s+(?:use|usage|transactions?)\b'
+      r'|\bset\s+limit\s+on\b[\s\S]{0,40}\b(?:credit\s+card|card)\b'
+      r'|\b(?:credit\s+card|card|account)\b[\s\S]{0,50}\bhas\s+been\s+linked\b'
+      r'|\blinked\s+for\s+(?:net\s*banking|internet\s+banking|mobile\s+banking)\b'
+      r'|\bunused\s+funds\b[\s\S]{0,100}\b(?:transferred|settled|settlement)\b'
+      r'|\bas\s+per\s+sebi\b[\s\S]{0,120}\bsettlement\b'
+      r'|\bday\s+of\s+settlement\b',
+    ).hasMatch(text);
+    return offer ||
+        serviceNotice ||
+        operationalNotice ||
+        controlNotice ||
+        promotionalSender;
   }
 
   /// True only for a deposit/current/savings-bank alert. Account-shaped

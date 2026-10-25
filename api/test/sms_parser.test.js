@@ -11,6 +11,7 @@ const {
   parseTransactionDate,
   parseSmsTransactionTimestamp,
 } = require('../src/sms_parser');
+const { extractCreditLimit } = require('../src/card_limit_parser');
 
 // Realistic synthetic (not real customer) Indian bank SMS formats.
 
@@ -1328,6 +1329,42 @@ test('new noise patterns are identified as non-transaction noise in parity with 
   for (const [sender, body] of noiseAlerts) {
     assert.equal(isNonTransactionNoise(sender, body), true, 'Expected noise for: ' + body);
   }
+});
+
+test('card control, linking and settlement explanations are non-transaction noise', () => {
+  const controlNotices = [
+    ['VA-SLCBNK-S', 'Your transaction limit for pinless UPI on your slice credit card has been updated. You can check and change it in the app - slice'],
+    ['VM-HDFCBN-S', 'Dear Customer, Security Tip-Enable Online use & Set Limit on HDFC Bank Credit Card 1366. Use NetBanking/MyCards/WhatsApp https://1.hdfc.bank.in/HDFCBK/s/yjGKjM5'],
+    ['VD-HDFCBK-S', 'HDFC Bank Credit Card has been linked for NetBanking. Pls login to NetBanking and select Credit Cards tab to view statement details or to make payment'],
+    ['VK-LEMONN-S', 'Dear SUJAY SHANTARAM KURTIKAR, as per SEBI and exchange guidelines, unused funds in your Lemonn trading account will be transferred back to your registered bank account on the day of settlement.'],
+  ];
+  for (const [sender, body] of controlNotices) {
+    assert.equal(isNonTransactionNoise(sender, body), true, 'Expected noise for: ' + body);
+    const result = parseSmsAgainstPatterns([], { sender, body });
+    assert.equal(result.ok, false, 'Should not mint a transaction: ' + body);
+    assert.equal(result.reason, 'non_transaction_message');
+  }
+
+  const actionableMessages = [
+    'Your HDFC Bank Credit Card 1366 statement has been generated. Total due INR 5,000 by 05-Nov-2026.',
+    'Spent Rs 500 on HDFC Bank Credit Card 1366 at AMAZON on 20-Oct-2026.',
+    'AutoPay e-mandate registered for NETFLIX with maximum limit of INR 2,000 on card XX7105.',
+    'INR 5000 transferred to your bank account XXXX1234 on 20-Oct-2026.',
+    'Security tip: your HDFC Bank Credit Card ending 1366 was debited INR 500 at AMAZON on 20-Oct-2026.',
+    'Security Alert: Your HDFC Bank Credit Card ending 1366 was used for INR 5,000 at AMAZON on 20-Oct-2026. If not you, call 18002586161.',
+    'Txn of INR 500 declined on your HDFC Bank Credit Card 1366 because it exceeds your transaction limit.',
+    'Your HDFC Bank Credit Card ending 1366 credit limit has been set at INR 2,00,000.',
+  ];
+  for (const body of actionableMessages) {
+    assert.equal(isNonTransactionNoise('VM-HDFCBK-S', body), false, 'Should not be noise: ' + body);
+  }
+
+  // A limit alert is not a spend, but the explicit amount must still reach the
+  // card-limit sync path.
+  const limitAlert = 'Your HDFC Bank Credit Card ending 1366 credit limit has been set at INR 2,00,000.';
+  const detected = extractCreditLimit(limitAlert);
+  assert.equal(detected.amountInr, 200000);
+  assert.equal(detected.last4, '1366');
 });
 
 test('mutual fund folio unit allotment does not create a cash spend or duplicate investment transaction', () => {

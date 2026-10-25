@@ -68,6 +68,18 @@ function isNonTransactionNoise(sender, body) {
     || /\b(?:(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+for\b[\s\S]{0,50}\b(?:has\s+expired|expires\s+today|will\s+expire)\b|(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+expired\b|renew\s+your\s+expired\s+(?:two\s+wheeler|car|motor|vehicle|health)?\s*insurance\b|will\s+expire\s+on\b[\s\S]{0,50}\b(?:premium\s+starts?\s+(?:just\s+)?(?:at\s+)?(?:rs\.?|inr)|instant\s+renewal,\s+visit|renew\s+before\s+expiry))\b/i.test(text)
     || /\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+card\s+with\s+limit\s+upto|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application)\b/i.test(text)
     || /\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b/i.test(text)
+    // Informational card/account controls carry no money movement, amount,
+    // due date, balance or mandate. A completed debit, bill, balance snapshot
+    // or credit limit with an amount has already returned false above.
+    || /\btransaction\s+limits?\b[\s\S]{0,60}\b(?:has|have|is|are)\s+been\s+(?:updated|changed|modified|set)\b/i.test(text)
+    || /\bsecurity\s+tip\b[\s\S]{0,80}\b(?:enable|set|disable|protect|never\s+share|keep\s+your)\b/i.test(text)
+    || /\benable\s+online\s+(?:use|usage|transactions?)\b/i.test(text)
+    || /\bset\s+limit\s+on\b[\s\S]{0,40}\b(?:credit\s+card|card)\b/i.test(text)
+    || /\b(?:credit\s+card|card|account)\b[\s\S]{0,50}\bhas\s+been\s+linked\b/i.test(text)
+    || /\blinked\s+for\s+(?:net\s*banking|internet\s+banking|mobile\s+banking)\b/i.test(text)
+    || /\bunused\s+funds\b[\s\S]{0,100}\b(?:transferred|settled|settlement)\b/i.test(text)
+    || /\bas\s+per\s+sebi\b[\s\S]{0,120}\bsettlement\b/i.test(text)
+    || /\bday\s+of\s+settlement\b/i.test(text)
     || (/-p\s*$/i.test(String(sender || '')) && !/\b(?:txn|transaction|debited|credited|spent|paid|charged|received|refund|statement|bill\s+due)\b/i.test(text));
 }
 

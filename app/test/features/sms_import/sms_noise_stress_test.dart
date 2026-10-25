@@ -202,6 +202,87 @@ void main() {
     }
   });
 
+  group('Category 8b: Card controls, linking and settlement explanations', () {
+    final controlNotices = <(String sender, String body)>[
+      (
+        'VA-SLCBNK-S',
+        'Your transaction limit for pinless UPI on your slice credit card has been updated. You can check and change it in the app - slice',
+      ),
+      (
+        'VM-HDFCBN-S',
+        'Dear Customer, Security Tip-Enable Online use & Set Limit on HDFC Bank Credit Card 1366. Use NetBanking/MyCards/WhatsApp https://1.hdfc.bank.in/HDFCBK/s/yjGKjM5',
+      ),
+      (
+        'VD-HDFCBK-S',
+        'HDFC Bank Credit Card has been linked for NetBanking. Pls login to NetBanking and select Credit Cards tab to view statement details or to make payment',
+      ),
+      (
+        'VK-LEMONN-S',
+        'Dear SUJAY SHANTARAM KURTIKAR, as per SEBI and exchange guidelines, unused funds in your Lemonn trading account will be transferred back to your registered bank account on the day of settlement.',
+      ),
+    ];
+
+    for (final (sender, body) in controlNotices) {
+      test('Control notice rejected: "$body"', () {
+        expect(
+          LocalSmsParser.isNonTransactionNoise(sender, body),
+          isTrue,
+          reason: 'isNonTransactionNoise should be true for: $body',
+        );
+        expect(
+          capturesFinancialSms(body, sender: sender),
+          isFalse,
+          reason: 'capturesFinancialSms should be false for: $body',
+        );
+      });
+    }
+
+    final actionableMessages = <(String sender, String body)>[
+      (
+        'VM-HDFCBK-S',
+        'Your HDFC Bank Credit Card 1366 credit limit has been updated to INR 2,00,000.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'Your HDFC Bank Credit Card 1366 statement has been generated. Total due INR 5,000 by 05-Nov-2026.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'Spent Rs 500 on HDFC Bank Credit Card 1366 at AMAZON on 20-Oct-2026.',
+      ),
+      (
+        'VM-AXISBK-S',
+        'AutoPay e-mandate registered for NETFLIX with maximum limit of INR 2,000 on card XX7105.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'INR 5000 transferred to your bank account XXXX1234 on 20-Oct-2026.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'Security tip: your HDFC Bank Credit Card ending 1366 was debited INR 500 at AMAZON on 20-Oct-2026.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'Security Alert: Your HDFC Bank Credit Card ending 1366 was used for INR 5,000 at AMAZON on 20-Oct-2026. If not you, call 18002586161.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'Txn of INR 500 declined on your HDFC Bank Credit Card 1366 because it exceeds your transaction limit.',
+      ),
+    ];
+
+    for (final (sender, body) in actionableMessages) {
+      test('Actionable message kept: "$body"', () {
+        expect(
+          LocalSmsParser.isNonTransactionNoise(sender, body),
+          isFalse,
+          reason: 'isNonTransactionNoise should be false for: $body',
+        );
+      });
+    }
+  });
+
   group('Category 9: Lottery / Rewards Spam', () {
     final lotteryRewardsSpam = <(String sender, String body)>[
       ('VM-REWARD-P', 'You won Rs. 50,000 cash prize in Diwali Lucky Draw! Claim now by paying processing fee of Rs. 500 at http://claim-prize.in'),
