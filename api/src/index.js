@@ -6109,6 +6109,9 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
                -- counterparty's masked account, never the user's own; they
                -- must not mint account rows regardless of parser verdict.
                AND lower(coalesce(o.metadata->>'senderBank', '')) !~ 'upi'
+               -- Axio Pay Later identifiers are lending liabilities, not
+               -- deposit-bank accounts. Keep historical true verdicts out.
+               AND lower(coalesce(o.metadata->>'senderBank', '')) !~ 'axio'
                AND (
                 o.metadata->>'isBankAccount' = 'true'
                 OR (
@@ -6155,6 +6158,7 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
                     AND bo.metadata->>'accountLast4' = t.source_account_last4
                     AND COALESCE(bo.metadata->>'isBankAccount', 'legacy') <> 'false'
                     AND lower(coalesce(bo.metadata->>'senderBank', '')) !~ 'upi'
+                    AND lower(coalesce(bo.metadata->>'senderBank', '')) !~ 'axio'
                     AND (
                      bo.metadata->>'isBankAccount' = 'true'
                      OR (

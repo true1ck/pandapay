@@ -623,6 +623,27 @@ test('bank-account summary evidence excludes insurance and investment account su
     isBankAccountMessage('Avl Bal Rs.12000 for investment account ending 5702.'),
     false,
   );
+  assert.equal(
+    isBankAccountMessage(
+      'Hi Sujay, Your Pay Later a/c XXX6016 has got you personal loan upto Rs 4,00,000 with instant credit.',
+      'VM-axioFN',
+    ),
+    false,
+  );
+  assert.equal(
+    isBankAccountMessage(
+      'Reminder Sujay, by continuing timely EMI payments against your Pay Later a/c XXX6016, you are building a credit score.',
+      'VD-axioLN',
+    ),
+    false,
+  );
+  assert.equal(
+    isBankAccountMessage(
+      'We have received your timely repayment towards your Pay Later XXX6016 a/c.',
+      'VD-axioLN',
+    ),
+    false,
+  );
 });
 
 test('refunds and rewards are non-income movements, while credit-card bill receipts stay transfers', () => {

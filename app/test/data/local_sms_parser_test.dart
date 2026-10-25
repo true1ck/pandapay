@@ -1443,5 +1443,26 @@ void main() {
       ),
       isTrue,
     );
+
+    for (final (sender, body) in [
+      (
+        'VM-axioFN',
+        'Hi Sujay, Your Pay Later a/c XXX6016 has got you personal loan upto Rs 4,00,000 with instant credit.',
+      ),
+      (
+        'VD-axioLN',
+        'Reminder Sujay, by continuing timely EMI payments against your Pay Later a/c XXX6016, you are building a credit score.',
+      ),
+      (
+        'VD-axioLN',
+        'We have received your timely repayment towards your Pay Later XXX6016 a/c.',
+      ),
+    ]) {
+      expect(
+        LocalSmsParser.isBankAccountMessage(body, sender),
+        isFalse,
+        reason: '$sender must remain a lending liability, not a bank account',
+      );
+    }
   });
 }

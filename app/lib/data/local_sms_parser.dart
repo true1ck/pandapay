@@ -377,6 +377,15 @@ class LocalSmsParser {
   static bool isBankAccountMessage(String body, [String sender = '']) {
     final text = body.toLowerCase();
     if (text.trim().isEmpty) return false;
+    final senderText = sender.toLowerCase();
+    // Axio is a Pay Later / lending account, not a deposit bank. Its sender
+    // families use bank-like words such as "a/c", "credit", and "received"
+    // in eligibility and repayment promotions, which must never establish
+    // ownership of a savings/current account.
+    if (senderText.contains('axio') ||
+        RegExp(r'\b(?:pay\s+later|credit\s+line)\b').hasMatch(text)) {
+      return false;
+    }
     final hasExplicitAccount = RegExp(
       r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b',
     ).hasMatch(text);
@@ -400,7 +409,7 @@ class LocalSmsParser {
         ).hasMatch(text) ||
         RegExp(
           r'(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb|gucb|cosmos|svc|tjsb|nkgsb|kccb|coop|ucb)',
-        ).hasMatch(sender.toLowerCase());
+        ).hasMatch(senderText);
     final balanceMarker = RegExp(
       r'\b(?:(?:total\s+)?(?:available|avail|avl|current|closing|clr|new|remaining)\.?\s*(?:balance|bal)\b|bal(?:ance)?\.?\s*(?:is|:|-))',
     ).hasMatch(text);

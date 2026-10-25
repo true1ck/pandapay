@@ -654,10 +654,15 @@ class FinancialStore {
       // ponytail: gate here; full parser-side family fix when a corpus shows
       // more UPI-tagged senders.
       final upiServiceSender = RegExp(r'upi').hasMatch(sender);
+      // Existing observations created before the Pay Later classifier fix can
+      // still carry is_bank_account=true. Axio is a lender, so reject those
+      // stale rows at the account projection boundary as well.
+      final nonDepositSender = RegExp(r'axio').hasMatch(sender);
       if (account != null &&
           RegExp(r'^\d{4}$').hasMatch(account) &&
           bankAccount &&
           !upiServiceSender &&
+          !nonDepositSender &&
           (!cardSuffixes.contains(account) || row['is_bank_account'] == true)) {
         final canonical = canonicalBankSender(row['sender_bank']);
         byAccount.putIfAbsent('$canonical:$account', () => []).add(row);

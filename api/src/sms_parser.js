@@ -133,6 +133,11 @@ function extractAccountLast4(body) {
 function isBankAccountMessage(body, sender = '') {
   const text = String(body || '').toLowerCase();
   if (!text) return false;
+  const senderText = String(sender || '').toLowerCase();
+  // Axio sender families describe a Pay Later liability as an "a/c" and use
+  // words such as "credit" / "received" in loan offers and repayment status
+  // messages. Neither is evidence of an owned deposit bank account.
+  if (senderText.includes('axio') || /\b(?:pay\s+later|credit\s+line)\b/.test(text)) return false;
   const hasExplicitAccount = /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b/i.test(text);
   if (/\bcredit\s+card\b/i.test(text)) return false;
   if (!hasExplicitAccount && /\bdebit\s+card\b/i.test(text)) return false;
@@ -142,7 +147,7 @@ function isBankAccountMessage(body, sender = '') {
 
   const accountMarker = /\b(?:bank|a\/?c\.?|account|savings|current|upi|imps|neft|rtgs|atm)\b/.test(text);
   const bankIdentityMarker = /\b(?:bank|a\/?c\.?|savings|current|upi|imps|neft|rtgs|atm)\b/.test(text)
-    || /(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)/.test(String(sender || '').toLowerCase());
+    || /(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)/.test(senderText);
   const balanceMarker = /\b(?:(?:total\s+)?(?:available|avail|avl|current|closing|clr|new|remaining)\.?\s*(?:balance|bal)\b|bal(?:ance)?\.?\s*(?:is|:|-))/i.test(text);
   const movementMarker = /\b(?:debited|debit|credited|credit|paid|spent|sent|transferred|withdrawn|received|deposited)\b/.test(text);
   // The suffix must be accompanied by explicit account/bank language. A

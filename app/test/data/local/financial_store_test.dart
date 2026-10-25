@@ -582,6 +582,21 @@ void main() {
         'reason_codes': <String>[],
         'confidence': 0.9,
       });
+      // Simulate a stale pre-fix observation already persisted as a bank
+      // account. Projection-level filtering must remove it without requiring
+      // destructive local data deletion.
+      store.saveObservation('ns1', 'axio-pay-later', {
+        'id': 'axio-pay-later',
+        'sender_bank': 'VM-axioFN',
+        'parser_version': LocalSmsParser.version,
+        'received_at': '2024-11-30T04:26:03.644Z',
+        'account_last4': '6016',
+        'is_bank_account': true,
+        'card_last4': null,
+        'balance_paise': null,
+        'event_type': 'promotion',
+        'disposition': 'local_ignore',
+      });
 
       store.repairAutoPayArtifacts('ns1');
 
@@ -616,7 +631,9 @@ void main() {
           .entities('ns1', 'sms_observations')
           .map((o) => o['id'])
           .toSet();
-      expect(idsBefore, hasLength(2));
+      // The stale Axio observation is intentionally retained as audit data;
+      // bankAccounts() filters it at the projection boundary.
+      expect(idsBefore, hasLength(3));
       store.repairAutoPayArtifacts('ns1');
       expect(
         store.entities('ns1', 'sms_observations').map((o) => o['id']).toSet(),

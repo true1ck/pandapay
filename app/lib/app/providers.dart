@@ -3360,7 +3360,9 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   // its own rows in bankAccounts(). Checked on the RAW issuer strings —
   // canonicalBankSender collapses 'sbiupi' to 'sbi', hiding the marker.
   // ponytail: remove once server dedupes.
-  bool isUpiPhantom(BankAccountSummary account) => RegExp(r'upi').hasMatch(
+  bool isNonDepositAccount(BankAccountSummary account) => RegExp(
+    r'upi|axio',
+  ).hasMatch(
     [
       account.issuerSlug,
       account.issuerShortName,
@@ -3373,7 +3375,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
               as List)
           .cast<Map<String, dynamic>>()
           .map(BankAccountSummary.fromJson)
-          .where((account) => !isUpiPhantom(account))
+          .where((account) => !isNonDepositAccount(account))
           .toList();
 
   bool sameAccount(BankAccountSummary a, BankAccountSummary b) {
@@ -3396,7 +3398,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   ) {
     // UPI-platform families from rows the server parsed before the exclusion
     // existed — drop them at the merge point as well.
-    remote = remote.where((r) => !isUpiPhantom(r)).toList();
+    remote = remote.where((r) => !isNonDepositAccount(r)).toList();
     final merged = [...local];
     for (final incoming in remote) {
       final index = merged.indexWhere(
