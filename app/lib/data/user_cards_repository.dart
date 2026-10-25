@@ -2675,8 +2675,8 @@ class UserCardsRepository {
   }
 
   /// Design 19's inbox. Newest first, last seven days only; the server does
-  /// no grouping — the client buckets Today/Past week in the device's own
-  /// timezone.
+  /// no filtering by local day — the client trims to seven local calendar
+  /// days in the device's own timezone.
   Future<({List<AppNotification> items, int unreadCount})>
   fetchNotifications() async {
     final response = await _client.get(

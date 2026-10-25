@@ -8857,7 +8857,7 @@ app.get('/referrals', requireAuth, async (req, res) => {
  *
  * Read-only over the `notifications` table (0024). Nothing is synthesised
  * here: if a notification wasn't delivered and recorded, it doesn't appear.
- * The client groups Today/Past week off `created_at` in the device's own
+ * The client trims to the last seven calendar days in the device's own
  * timezone rather than the server guessing which local day a row belongs to.
  *
  * Only the last week is returned; older rows stay in the table but drop out

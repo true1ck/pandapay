@@ -9,7 +9,7 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show AppNotification;
 
 /// Design 19 "Notifications" — the inbox of things that already happened,
-/// newest first, grouped Today / Past week.
+/// newest first, under a single "Last 7 days" header.
 ///
 /// Everything here is a real row from `GET /notifications` (migration 0024).
 /// The mockup's four examples (a due date, nearby offers, a streak, a card
@@ -17,13 +17,15 @@ import '../../data/user_cards_repository.dart' show AppNotification;
 /// nothing is synthesised to fill the screen — an account with no deliveries
 /// gets the empty state, not a demo list.
 ///
-/// Only the last seven calendar days are shown. Older rows stay recorded but
+/// Only the last seven calendar days are shown; older rows stay recorded but
 /// drop off the list, so a long-lived account doesn't end up scrolling
-/// through months of history.
+/// through months of history. The window is rolling rather than a calendar
+/// week, so sub-headers like "Today" / "This week" would mislabel Monday's
+/// tail of last week — hence one header naming the window itself.
 ///
-/// Grouping happens client-side, in the device's own timezone: "Today" is a
-/// local-calendar question, and a server bucketing in UTC would move a
-/// 1 a.m. IST notification into yesterday.
+/// The window is computed client-side, in the device's own timezone: a
+/// server cutting at UTC midnight would drop a 1 a.m. IST notification a day
+/// early.
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
 
@@ -141,9 +143,8 @@ class _InboxList extends ConsumerWidget {
     }
 
     final now = ref.watch(clockProvider).now();
-    final today = DateTime(now.year, now.month, now.day);
-    // Seven calendar days including today. DateTime normalises a negative
-    // day-of-month across month boundaries, so this is safe on the 1st.
+    // Seven local calendar days including today. DateTime normalises a
+    // negative day-of-month across month boundaries, so this is safe on the 1st.
     final windowStart = DateTime(now.year, now.month, now.day - 6);
     final recent = items
         .where((n) => !n.createdAt.toLocal().isBefore(windowStart))
@@ -159,26 +160,11 @@ class _InboxList extends ConsumerWidget {
       );
     }
 
-    final todays = recent
-        .where((n) => !n.createdAt.toLocal().isBefore(today))
-        .toList();
-    final pastWeek = recent
-        .where((n) => n.createdAt.toLocal().isBefore(today))
-        .toList();
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
       children: [
-        if (todays.isNotEmpty) ...[
-          const _SectionLabel('Today'),
-          for (final n in todays) _NotificationTile(notification: n, now: now),
-        ],
-        if (pastWeek.isNotEmpty) ...[
-          if (todays.isNotEmpty) const SizedBox(height: AppSpace.md),
-          const _SectionLabel('Past week'),
-          for (final n in pastWeek)
-            _NotificationTile(notification: n, now: now),
-        ],
+        const _SectionLabel('Last 7 days'),
+        for (final n in recent) _NotificationTile(notification: n, now: now),
       ],
     );
   }

@@ -30,9 +30,7 @@ Widget _inbox(List<AppNotification> items, {int unreadCount = 0}) =>
     );
 
 void main() {
-  testWidgets('groups today and the past week, dropping older rows', (
-    tester,
-  ) async {
+  testWidgets('shows the last seven days and drops older rows', (tester) async {
     await tester.pumpWidget(
       _inbox([
         _notification('From today', _now.subtract(const Duration(hours: 2))),
@@ -42,9 +40,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('TODAY'), findsOneWidget);
-    expect(find.text('PAST WEEK'), findsOneWidget);
+    expect(find.text('LAST 7 DAYS'), findsOneWidget);
     expect(find.text('EARLIER'), findsNothing);
+    expect(find.text('TODAY'), findsNothing);
 
     expect(find.text('From today'), findsOneWidget);
     expect(find.text('Three days ago'), findsOneWidget);
