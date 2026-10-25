@@ -58,3 +58,22 @@ requests are handled safely by the app/API integration.
 The app can still show local notifications when remote delivery is unavailable;
 that must not be interpreted as proof that Novu/FCM delivery succeeded. The
 Settings test action is the end-to-end check once Novu is reachable.
+
+## Android artwork contract
+
+PandaPay has two Android notification resources:
+
+- `ic_notification.png` is the monochrome small/status-bar icon.
+- `ic_notification_large.png` is the expanded-notification artwork.
+
+All local notifications, foreground FCM notifications, and the geolocation
+foreground-service notification use these shared resources. Android's
+automatic renderer for a background FCM notification can apply only the
+manifest default small icon. The current Novu workflow sends notification
+payloads, so Android owns background presentation; do not also display those
+messages from the Flutter background handler because that would bypass the
+notification gate and can create duplicate alerts.
+
+Existing notifications are not redrawn after an APK update. Verify artwork on
+a newly delivered notification after installing the new build, and check the
+provider workflow if a background push still shows a stale icon.
