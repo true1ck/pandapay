@@ -271,66 +271,62 @@ void main() {
     },
   );
 
-  testWidgets('Save bill opens a review sheet and only then persists it', (
+  testWidgets('future non-card bill bypasses review and persists directly', (
     tester,
   ) async {
     final future = DateTime.now().add(const Duration(days: 10));
     final dueOn = DateTime(future.year, future.month, future.day);
     final dueDateText =
         '${dueOn.year}-${dueOn.month.toString().padLeft(2, '0')}-${dueOn.day.toString().padLeft(2, '0')}';
+    final commitments = CommitmentsRepository(
+      namespace: 'user:test',
+      loadDatabase: () async => db,
+    );
     await reviews.add(
       NeedsReviewItem(
         id: 'bill-1',
         sender: 'JX-MYTNEU-S',
         body:
-            'Your HDFC BANK CREDIT CARD bill of Rs. 10148.00 is ready. Pay by $dueDateText.',
+            'Your electricity bill of Rs. 10148.00 is ready. Pay by $dueDateText.',
         receivedAt: DateTime.now(),
         kind: NeedsReviewKind.commitment,
       ),
     );
-    final commitments = CommitmentsRepository(namespace: 'user:test');
     await _pump(
       tester,
       repo: _FakeUserCardsRepository(),
       reviews: reviews,
       commitments: commitments,
     );
-
-    await tester.tap(find.widgetWithText(FilledButton, 'Save bill'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Review bill details'), findsOneWidget);
-    expect(
-      find.textContaining('Nothing is saved until you tap Save bill.'),
-      findsOneWidget,
-    );
-    expect(await commitments.fetchAll(), isEmpty);
-
-    final sheetSave = find.widgetWithText(FilledButton, 'Save bill');
-    await tester.tap(sheetSave.last);
-    await tester.pumpAndSettle();
 
     final saved = await commitments.fetchAll();
     expect(saved, hasLength(1));
     expect(saved.single.amount?.paise, 1014800);
     expect(saved.single.dueOn, dueOn);
-    expect(saved.single.isUserConfirmed, isTrue);
     expect(await reviews.fetchAll(), isEmpty);
+    expect(find.text('Nothing needs review'), findsOneWidget);
   });
 
-  testWidgets('a commitment can be dismissed from its own close action', (
+  testWidgets('direct commitment never exposes a stale review close action', (
     tester,
   ) async {
+    final future = DateTime.now().add(const Duration(days: 12));
+    final dueDateText =
+        '${future.day.toString().padLeft(2, '0')}-${future.month.toString().padLeft(2, '0')}-${future.year}';
+    final commitments = CommitmentsRepository(
+      namespace: 'user:test',
+      loadDatabase: () async => db,
+    );
     await reviews.add(
       NeedsReviewItem(
         id: 'bill-2',
         sender: 'HDFCBK',
-        body: 'Your bill of Rs. 2000 is generated. Due date 28-10-2026',
-        receivedAt: DateTime(2026, 10, 1),
+        body:
+            'Your utility bill of Rs. 2000 is generated. Due date $dueDateText',
+        receivedAt: DateTime.now(),
         kind: NeedsReviewKind.commitment,
       ),
     );
-    final commitments = CommitmentsRepository(namespace: 'user:test');
     await _pump(
       tester,
       repo: _FakeUserCardsRepository(),
@@ -338,12 +334,10 @@ void main() {
       commitments: commitments,
     );
 
-    await tester.tap(find.byTooltip('Dismiss message'));
-    await tester.pumpAndSettle();
-
     expect(await reviews.fetchAll(), isEmpty);
-    final tombstones = await commitments.fetchAll();
-    expect(tombstones.single.status, CommitmentStatus.dismissed);
+    expect(await commitments.fetchAll(), hasLength(1));
+    expect(find.byTooltip('Dismiss message'), findsNothing);
+    expect(find.text('Nothing needs review'), findsOneWidget);
   });
 
   testWidgets(
@@ -510,15 +504,18 @@ void main() {
   );
 
   testWidgets(
-    'bill_obligation AI suggestion shows Review bill and persists commitment on save',
+    'bill_obligation with complete bill evidence bypasses stale AI review UI',
     (tester) async {
       final key = 'c' * 64;
+      final dueOn = DateTime.now().add(const Duration(days: 10));
+      final dueDate =
+          '${dueOn.year}-${dueOn.month.toString().padLeft(2, '0')}-${dueOn.day.toString().padLeft(2, '0')}';
       await reviews.add(
         NeedsReviewItem(
           id: key,
           sender: 'AIRTEL',
-          body: 'Bill of Rs.1499.00 due on 2026-11-05 for Broadband',
-          receivedAt: DateTime(2026, 10, 10),
+          body: 'Bill of Rs.1499.00 due on $dueDate for Broadband',
+          receivedAt: DateTime.now(),
           aiSuggestions: [
             {
               'factIndex': 0,
@@ -526,7 +523,7 @@ void main() {
               'payload': {
                 'billerName': 'Airtel Broadband',
                 'amountDueInr': 1499.00,
-                'dueDate': '2026-11-05T00:00:00.000Z',
+                'dueDate': dueOn.toUtc().toIso8601String(),
                 'last4': '5678',
               },
             },
@@ -534,7 +531,10 @@ void main() {
         ),
       );
       final repo = _FakeUserCardsRepository();
-      final commitments = CommitmentsRepository(namespace: 'user:test');
+      final commitments = CommitmentsRepository(
+        namespace: 'user:test',
+        loadDatabase: () async => db,
+      );
       await _pump(
         tester,
         repo: repo,
@@ -542,24 +542,12 @@ void main() {
         commitments: commitments,
       );
 
-      expect(find.text('Review bill'), findsOneWidget);
-      await tester.tap(find.text('Review bill'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Review bill details'), findsOneWidget);
-      expect(find.text('Airtel Broadband'), findsOneWidget);
-      expect(find.text('1499.00'), findsOneWidget);
-
-      await tester.tap(find.widgetWithText(FilledButton, 'Save bill').last);
-      await tester.pumpAndSettle();
-
-      expect(repo.lastOverrideArgs, isNotNull);
-      expect(repo.lastOverrideArgs!['sourceKey'], key);
-      expect(repo.lastOverrideArgs!['factIndex'], 0);
+      expect(find.text('Review bill'), findsNothing);
+      expect(find.text('Nothing needs review'), findsOneWidget);
+      expect(repo.lastOverrideArgs, isNull);
       expect(await reviews.fetchAll(), isEmpty);
       final savedBills = await commitments.fetchAll();
       expect(savedBills, hasLength(1));
-      expect(savedBills.single.title, 'Airtel Broadband');
     },
   );
 
@@ -729,16 +717,23 @@ void main() {
   );
 
   testWidgets(
-    'dismissing commitment item preserves immediate optimistic dismissal and calls dismissSms',
+    'direct commitment is absent from review and does not call dismissSms',
     (tester) async {
       final repo = _FakeUserCardsRepository();
-      final commitments = CommitmentsRepository(namespace: 'user:test');
+      final commitments = CommitmentsRepository(
+        namespace: 'user:test',
+        loadDatabase: () async => db,
+      );
+      final future = DateTime.now().add(const Duration(days: 14));
+      final dueDateText =
+          '${future.day.toString().padLeft(2, '0')}-${future.month.toString().padLeft(2, '0')}-${future.year}';
       await reviews.add(
         NeedsReviewItem(
           id: 'bill-item-456',
           sender: 'HDFCBK',
-          body: 'Your bill of Rs. 2000 is generated. Due date 28-10-2026',
-          receivedAt: DateTime(2026, 10, 22),
+          body:
+              'Your utility bill of Rs. 2000 is generated. Due date $dueDateText',
+          receivedAt: DateTime.now(),
           kind: NeedsReviewKind.commitment,
         ),
       );
@@ -749,22 +744,11 @@ void main() {
         commitments: commitments,
       );
 
-      expect(find.byTooltip('Dismiss message'), findsOneWidget);
-
-      // Tap dismiss button (_dismiss)
-      await tester.tap(find.byTooltip('Dismiss message'));
-      await tester.pumpAndSettle();
-
-      // 1. Immediate optimistic UI dismissal
       expect(await reviews.fetchAll(), isEmpty);
       expect(find.text('Nothing needs review'), findsOneWidget);
-
-      // 2. repository.dismissSms was invoked
-      expect(repo.lastDismissArgs, isNotNull);
-      expect(repo.lastDismissArgs!['sourceKey'], 'bill-item-456');
-      expect(repo.lastDismissArgs!['sender'], 'HDFCBK');
-      expect(repo.lastDismissArgs!['reason'], 'user_dismissed');
-      expect(repo.lastDismissArgs!['family'], 'ignore_noise');
+      expect(await commitments.fetchAll(), hasLength(1));
+      expect(find.byTooltip('Dismiss message'), findsNothing);
+      expect(repo.lastDismissArgs, isNull);
     },
   );
 

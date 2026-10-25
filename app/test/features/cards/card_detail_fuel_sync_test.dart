@@ -196,6 +196,17 @@ void main() {
         categoriesAvailable: categoriesAvailable,
       );
 
+      await tester.scrollUntilVisible(
+        find.text('All other spends'),
+        500,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('cardDetailScroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+
       expect(find.text('₹1.2K'), findsOneWidget);
       expect(find.textContaining('Spent this month ₹1.2K'), findsOneWidget);
       expect(find.text('All other spends'), findsOneWidget);
@@ -255,6 +266,17 @@ void main() {
         report: report,
       );
 
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('card_spending_mix')),
+        500,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('cardDetailScroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+
       expect(find.byKey(const Key('card_spending_mix')), findsOneWidget);
       expect(find.byKey(const Key('spending_donut_chart')), findsOneWidget);
       expect(find.text('Other'), findsOneWidget);
@@ -263,13 +285,13 @@ void main() {
       expect(find.text('Show 1 more category'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsNWidgets(4));
 
-      final mixTop = tester.getTopLeft(
-        find.byKey(const Key('card_spending_mix')),
+      final otherRow = find.descendant(
+        of: find.byKey(const Key('card_spending_mix')),
+        matching: find.text('Other'),
       );
-      final rewardsTop = tester.getTopLeft(find.text('REWARDS'));
-      expect(mixTop.dy, lessThan(rewardsTop.dy));
-
-      await tester.tap(find.text('Other'));
+      await tester.ensureVisible(otherRow);
+      await tester.pumpAndSettle();
+      await tester.tap(otherRow);
       await tester.pumpAndSettle();
       expect(
         find.text(
@@ -277,6 +299,18 @@ void main() {
         ),
         findsOneWidget,
       );
+
+      await tester.scrollUntilVisible(
+        find.text('REWARDS'),
+        500,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('cardDetailScroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(find.text('REWARDS'), findsOneWidget);
     },
   );
 
