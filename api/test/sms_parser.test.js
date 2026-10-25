@@ -1400,6 +1400,49 @@ test('biller onboarding and future bill promises are non-transaction noise', () 
   }
 });
 
+test('telecom retention deductions, airtime charges, and recharge reminders with 10-digit numbers are non-transaction noise', () => {
+  const noiseMessages = [
+    ['JZ-JIOPAY-S', 'Number retention charges of Rs. 9.88 has been deducted from Top-up balance on Jio Number 8010377706 as there was no usage observed for last 90 days. Kindly recharge your Jio Number with a valid plan to avoid these charges in future. To recharge, click http://tiny.jio.com/dmyjiorchgpl'],
+    ['VD-axioPL-S', 'Congrats Sujay, We have received your timely repayment towards your Pay Later XXX6016 a/c .You can now check your updated personal loan eligibility here https://u.axio.ac/axo/1XOUraa9OMgJw7 -axio'],
+    ['AD-AIRTEL-S', 'Recharge your Airtel number 9876543210 with Rs 299 to get unlimited calls and 1.5GB/day validity 28 days.'],
+    ['AD-AIRTEL-S', 'Rs. 10.00 debited from talktime balance on Airtel mobile 9876543210 towards value added service.'],
+    ['VI-CARE', 'Recharge your Vi number 9822012345 to get unlimited calls and data pack. Hurry!'],
+    ['VI-CARE', 'Rs. 20 deducted from main balance on Vi prepaid number 9822012345.'],
+    ['DZ-BSNL-S', 'Recharge your BSNL prepaid number 9443210987 with Rs 199 for 30 days validity.'],
+    ['DZ-BSNL-S', 'Rs 5 debited from core balance on BSNL number 9443210987.'],
+  ];
+  for (const [sender, body] of noiseMessages) {
+    assert.equal(isNonTransactionNoise(sender, body), true, 'Expected noise for: ' + body);
+    const result = parseSmsAgainstPatterns([], { sender, body });
+    assert.equal(result.ok, false, 'Should not match transaction: ' + body);
+    assert.equal(result.reason, 'non_transaction_message');
+  }
+});
+
+test('bank debits for mobile recharge with masked account or card are not noise', () => {
+  const bankRechargeMessages = [
+    ['VM-HDFCBK-S', 'A/c XX1234 debited Rs 299 for Jio recharge on 8010377706 on 25-Oct-26.'],
+    ['SBIINB', 'Dear SBI User, your A/c ending in 5678 debited by Rs. 299 on 25-Oct-26 for Vi recharge on 9822012345.'],
+    ['AXISBK', 'Card ending 4321 debited INR 499 towards Airtel recharge on 9876543210 on 25-10-26.'],
+    ['HDFCBK', 'A/c XX9876 debited Rs. 199 for BSNL prepaid recharge on 9443210987.'],
+  ];
+  for (const [sender, body] of bankRechargeMessages) {
+    assert.equal(isNonTransactionNoise(sender, body), false, 'Should not be noise: ' + body);
+  }
+});
+
+test('postpaid telecom bills with amount due or bill generated are not noise', () => {
+  const postpaidBillMessages = [
+    ['AD-AIRTEL-S', 'Airtel postpaid bill of Rs 599 for 9876543210 is generated. Due date 15-Nov'],
+    ['JZ-JIOPAY-S', 'Jio postpaid bill of Rs 399 generated for 8010377706. Amount due: Rs 399, due date 20-Nov-2026.'],
+    ['VI-CARE', 'Vi Postpaid: Bill generated for mobile 9822012345. Total amount due Rs. 701 by 12-Nov-2026.'],
+    ['DZ-BSNL-S', 'BSNL Postpaid bill of Rs 450 generated for 9443210987. Payment due date is 21-Nov-2026.'],
+  ];
+  for (const [sender, body] of postpaidBillMessages) {
+    assert.equal(isNonTransactionNoise(sender, body), false, 'Should not be noise: ' + body);
+  }
+});
+
 test('mutual fund folio unit allotment does not create a cash spend or duplicate investment transaction', () => {
   const amcMessages = [
     'Folio 12345/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',

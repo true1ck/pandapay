@@ -695,6 +695,18 @@ void main() {
         ),
         ('VZ-ViCARE-S', 'Call Forwarding is now active on your mobile number.'),
         (
+          'JZ-JIOPAY-S',
+          'Number retention charges of Rs. 9.88 has been deducted from Top-up balance on Jio Number 8010377706 as there was no usage observed for last 90 days. Kindly recharge your Jio Number with a valid plan to avoid these charges in future. To recharge, click http://tiny.jio.com/dmyjiorchgpl',
+        ),
+        (
+          'VD-axioPL-S',
+          'Congrats Sujay, We have received your timely repayment towards your Pay Later XXX6016 a/c .You can now check your updated personal loan eligibility here https://u.axio.ac/axo/1XOUraa9OMgJw7 -axio',
+        ),
+        (
+          'CP-AXISBK-S',
+          'You have added Goa Electricity Department 60008413407 to Axis Bank Bill Pay service. We will notify you once the bill is generated.',
+        ),
+        (
           'VM-HDFCBK-S',
           'Transaction Check Alert! We tried to contact you to confirm txn on Card 1234',
         ),
@@ -1559,5 +1571,51 @@ void main() {
 
     const talktimeAlert = 'Your talktime balance is Rs 5.50. Recharge now to stay connected: https://airtel.in/r';
     expect(LocalSmsParser.isNonTransactionNoise('AIRTEL', talktimeAlert), isTrue);
+  });
+
+  group('telecom carrier noise detection (4 agreed scenarios)', () {
+    test('Scenario 1: SIM retention charge & top-up balance deduction with unmasked 10-digit number is noise', () {
+      const s1Jio = 'Number retention charges of Rs. 9.88 has been deducted from Top-up balance on Jio Number 8010377706 as there was no usage observed for last 90 days. Kindly recharge your Jio Number with a valid plan to avoid these charges in future.';
+      expect(LocalSmsParser.isNonTransactionNoise('JZ-JIOPAY-S', s1Jio), isTrue);
+
+      const s1Airtel = 'Rs 20 deducted from top-up balance for number retention charges on 9876543210. Recharge your airtel number to avoid these charges.';
+      expect(LocalSmsParser.isNonTransactionNoise('AIRTEL', s1Airtel), isTrue);
+
+      const s1Vi = 'Rs 10 debited from main bal on Vi number 9876543210 as no usage observed for 60 days. Recharge with validity pack now.';
+      expect(LocalSmsParser.isNonTransactionNoise('VI-CARE', s1Vi), isTrue);
+    });
+
+    test('Scenario 2: telecom recharge upsell / reminder with unmasked 10-digit number without bank debit is noise', () {
+      const s2Jio = 'Recharge your Jio number 9876543210 with Rs 299 pack to enjoy unlimited calls and 1.5GB/day data. Recharge now!';
+      expect(LocalSmsParser.isNonTransactionNoise('AD-JIO', s2Jio), isTrue);
+
+      const s2Airtel = 'Validity for your Airtel prepaid number 9876543210 is expiring soon. Recharge now with top-up or unlimited pack.';
+      expect(LocalSmsParser.isNonTransactionNoise('AIRTEL', s2Airtel), isTrue);
+
+      const s2Vi = 'Recharge now! Get extra talktime on Rs 100 top-up on your Vi mobile 9876543210.';
+      expect(LocalSmsParser.isNonTransactionNoise('VI', s2Vi), isTrue);
+    });
+
+    test('Scenario 3: bank debit for telecom recharge with masked bank/card account MUST NOT be noise', () {
+      const s3Hdfc = 'A/c XX1234 debited Rs 299 for Jio recharge on 8010377706';
+      expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', s3Hdfc), isFalse);
+
+      const s3Axis = 'Your A/c ending 5678 is debited for INR 199.00 on 25-Oct-26 towards Airtel recharge of 9876543210.';
+      expect(LocalSmsParser.isNonTransactionNoise('AXISBK', s3Axis), isFalse);
+
+      const s3Icici = 'Card XX9012 debited by Rs 499 for Vi prepaid recharge of 9123456780.';
+      expect(LocalSmsParser.isNonTransactionNoise('ICICIB', s3Icici), isFalse);
+    });
+
+    test('Scenario 4: postpaid telecom bill with amount due / due date / bill generated MUST NOT be noise', () {
+      const s4Airtel = 'Your Airtel postpaid bill for 9876543210 has been generated. Amount due: Rs 499, Due date: 15-Nov-2026.';
+      expect(LocalSmsParser.isNonTransactionNoise('AIRTEL', s4Airtel), isFalse);
+
+      const s4Jio = 'Bill for your Jio number 9876543210 is ready. Total amount due is Rs 799 payable by 20-Nov-2026.';
+      expect(LocalSmsParser.isNonTransactionNoise('JIO', s4Jio), isFalse);
+
+      const s4Vi = 'Dear Customer, Vi postpaid bill generated for 9876543210. Bill amount: Rs 399. Payment due date: 10-Nov-2026.';
+      expect(LocalSmsParser.isNonTransactionNoise('VI-CARE', s4Vi), isFalse);
+    });
   });
 }

@@ -53,6 +53,31 @@ function isNonTransactionNoise(sender, body) {
   const hasMandate = /\b(?:auto\s*pay|autopay|e[- ]?mandate|mandate|standing\s+instruction|auto[- ]?debit)\b/i.test(text);
   const hasMovement = /\b(?:failed|declined|debited|credited|paid|charged|transferred|withdrawn)\b|\b(?:payment|transaction|txn)\b[\s\S]{0,20}\b(?:successful|completed|failed)\b/i.test(text);
   if (billerOnboarding && !hasCurrencyAmount && !hasDueDate && !hasMandate && !hasMovement) return true;
+  const hasMaskedAccount = /\b(?:a\/?c|account|card)\b[\s\S]{0,25}\b(?:xx|\*{2,}|ending(?:\s+(?:with|in))?\s*\d{3,4})\b|\b(?:xx|\*{2,})\d{3,4}\b/i.test(text);
+
+  const telecomCarrierNotice = (
+    /\b(?:number\s+)?retention\s+charges?\b/i.test(text)
+    || /\b(?:deducted|debited)\s+from\s+(?:top-?up|talktime|prepaid|main|core)\s+bal(?:ance)?\b/i.test(text)
+    || /\b(?:from|on)\s+top-?up\s+bal(?:ance)?\b/i.test(text)
+    || /\bno\s+usage\s+observed\b[\s\S]{0,40}\b(?:days?|recharge)\b/i.test(text)
+    || /\brecharge\s+your\s+(?:jio|airtel|vi|vodafone|idea|bsnl)?\s*number\b[\s\S]{0,60}\bto\s+avoid\s+(?:these\s+)?charges\b/i.test(text)
+    || (
+      /\b(?:jio|airtel|vi|vodafone|idea|bsnl)\b/i.test(`${cleanSender} ${text}`)
+      && /\b[6-9]\d{9}\b/.test(text)
+      && /\b(?:recharge|top-?up|talktime|validity|prepaid|retention)\b/i.test(text)
+      && !hasMaskedAccount
+    )
+  ) && !hasDueDate && !/\b(?:statement|bill)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b/i.test(text);
+  if (telecomCarrierNotice) return true;
+
+  // Repayment acknowledgments and loan eligibility checks that carry no
+  // transaction amount or debit evidence are informational cross-sells.
+  const repaymentCourtesyOrLoanUpsell = (
+    /\b(?:we\s+have\s+)?received\s+your\s+(?:timely\s+)?repayment\b[\s\S]{0,60}\btowards?\s+your\s+(?:pay\s*later|credit\s*line|loan)\b/i.test(text)
+    || /\b(?:check\s+your\s+)?(?:updated\s+)?personal\s+loan\s+eligibility\b/i.test(text)
+    || /\bpersonal\s+loan\s+eligibility\s+here\b/i.test(text)
+  ) && !hasCurrencyAmount;
+  if (repaymentCourtesyOrLoanUpsell) return true;
   if (/\b(?:payment|amount|minimum|total)\s+due\b|\bdue\s+date\b|\b(?:statement|bill|premium)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b/i.test(text)) return false;
   if (/\b(?:eligible\s+for\s+(?:[\w\s]{0,20}\s+)?(?:conversion|flexipay|emis?)|convert(?:ed|ing)?\b[\s\S]{0,60}?\b(?:in)?to\b[\s\S]{0,20}?\b(?:smart\s+|flexipay\s+|easy\s+)?emis?|can\s+(?:now\s+)?be\s+converted\s+(?:in)?to\s+emis?|flexipay\s+emis?)\b/i.test(text)
       && !/\b(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)\b/i.test(text)

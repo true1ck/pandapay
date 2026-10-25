@@ -25,8 +25,17 @@ String _feedbackSourceKey(String reviewId) {
   return commitment?.group(1) ?? reviewId;
 }
 
-TxnInstrument _instrumentFromReviewText(String body) {
+TxnInstrument _instrumentFromReviewText(String body, [String sender = '']) {
   final text = body.toLowerCase();
+  final senderText = sender.toLowerCase();
+  if (senderText.contains('axio') ||
+      text.contains('axio') ||
+      RegExp(r'\b(?:pay\s+later|credit\s+line)\b').hasMatch(text)) {
+    return TxnInstrument.other;
+  }
+  if (RegExp(r'\b(?:wallet|paytm\s+wallet|amazon\s+pay\s+balance)\b').hasMatch(text)) {
+    return TxnInstrument.wallet;
+  }
   final accountLike = RegExp(
     r'\b(?:a/c|account|upi|imps|neft)\b',
   ).hasMatch(text);
@@ -96,7 +105,7 @@ String _reviewTypeLabel(NeedsReviewItem item) {
   if (item.kind == NeedsReviewKind.mandate || _isMandateReview(item.body)) {
     return 'AutoPay mandate alert';
   }
-  final instrument = _instrumentFromReviewText(item.body);
+  final instrument = _instrumentFromReviewText(item.body, item.sender);
   return instrument == TxnInstrument.other
       ? 'Possible transaction'
       : _reviewInstrumentLabel(instrument);
@@ -2611,7 +2620,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
               12.5,
               weight: FontWeight.w700,
               color:
-                  _instrumentFromReviewText(item.body) == TxnInstrument.upiBank
+                  _instrumentFromReviewText(item.body, item.sender) == TxnInstrument.upiBank
                   ? BambooInk.jade
                   : BambooInk.ink500,
             ),

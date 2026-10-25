@@ -130,7 +130,7 @@ class LocalSmsParser {
   // straight after the instrument ("Credit Card 8708 bill"), so the open
   // review queue is re-examined once more and a card's due day can finally be
   // learned from its own AutoPay message.
-  static const version = 14;
+  static const version = 15;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -378,6 +378,34 @@ class LocalSmsParser {
         !hasMovement) {
       return true;
     }
+    final hasMaskedAccount = _re(
+      r'\b(?:a\/?c|account|card)\b[\s\S]{0,25}\b(?:xx|\*{2,}|ending(?:\s+(?:with|in))?\s*\d{3,4})\b|\b(?:xx|\*{2,})\d{3,4}\b',
+    ).hasMatch(text);
+
+    final telecomCarrierNotice = (
+      _re(r'\b(?:number\s+)?retention\s+charges?\b').hasMatch(text) ||
+      _re(r'\b(?:deducted|debited)\s+from\s+(?:top-?up|talktime|prepaid|main|core)\s+bal(?:ance)?\b').hasMatch(text) ||
+      _re(r'\b(?:from|on)\s+top-?up\s+bal(?:ance)?\b').hasMatch(text) ||
+      _re(r'\bno\s+usage\s+observed\b[\s\S]{0,40}\b(?:days?|recharge)\b').hasMatch(text) ||
+      _re(r'\brecharge\s+your\s+(?:jio|airtel|vi|vodafone|idea|bsnl)?\s*number\b[\s\S]{0,60}\bto\s+avoid\s+(?:these\s+)?charges\b').hasMatch(text) ||
+      (
+        _re(r'\b(?:jio|airtel|vi|vodafone|idea|bsnl)\b', caseSensitive: false).hasMatch('$cleanSender $text') &&
+        _re(r'\b[6-9]\d{9}\b').hasMatch(text) &&
+        _re(r'\b(?:recharge|top-?up|talktime|validity|prepaid|retention)\b').hasMatch(text) &&
+        !hasMaskedAccount
+      )
+    ) && !hasDueDate && !_re(r'\b(?:statement|bill)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b').hasMatch(text);
+    if (telecomCarrierNotice) return true;
+
+    // Repayment acknowledgments and loan eligibility checks that carry no
+    // transaction amount or debit evidence are informational cross-sells.
+    final repaymentCourtesyOrLoanUpsell = _re(
+      r'\b(?:we\s+have\s+)?received\s+your\s+(?:timely\s+)?repayment\b[\s\S]{0,60}\btowards?\s+your\s+(?:pay\s*later|credit\s*line|loan)\b|'
+      r'\b(?:check\s+your\s+)?(?:updated\s+)?personal\s+loan\s+eligibility\b|'
+      r'\bpersonal\s+loan\s+eligibility\s+here\b',
+    ).hasMatch(text) && !hasCurrencyAmount;
+    if (repaymentCourtesyOrLoanUpsell) return true;
+
     // A real amount due or statement remains useful even when the issuer
     // appends an offer. Let the bill parser handle it.
     if (_re(
@@ -717,7 +745,8 @@ class LocalSmsParser {
     r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin|passcode|secret code)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
     caseSensitive: false,
   ).hasMatch(body);
-  static RegExp _re(String s) => RegExp(s, caseSensitive: false);
+  static RegExp _re(String s, {bool caseSensitive = false}) =>
+      RegExp(s, caseSensitive: caseSensitive);
 
   /// Extracts a display-safe biller name without retaining the raw SMS.
   /// Bank sender IDs are transport identifiers (for example, TNBPAY), not

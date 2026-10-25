@@ -363,6 +363,44 @@ class NeedsReviewRepository {
         await prefs.setStringList(_needsReviewKey, corrupt);
       }
     }
+    final lastPurgedVersion =
+        prefs.getInt('pandapay.needs_review_noise_version') ?? 0;
+    if (lastPurgedVersion < LocalSmsParser.version) {
+      final rows = db.db.select(
+        'SELECT id, payload FROM local_needs_review WHERE namespace=?',
+        [namespace],
+      );
+      final noiseIds = <String>[];
+      for (final r in rows) {
+        try {
+          final item = NeedsReviewItem.fromJson(
+            jsonDecode(r['payload'] as String) as Map<String, dynamic>,
+          );
+          if (_isNoiseOrStale(item)) {
+            noiseIds.add(item.id);
+          }
+        } catch (_) {}
+      }
+      if (noiseIds.isNotEmpty) {
+        db.db.execute('SAVEPOINT purge_startup_noise');
+        try {
+          for (final id in noiseIds) {
+            db.db.execute(
+              'DELETE FROM local_needs_review WHERE namespace=? AND id=?',
+              [namespace, id],
+            );
+          }
+          db.db.execute('RELEASE SAVEPOINT purge_startup_noise');
+        } catch (_) {
+          db.db.execute('ROLLBACK TO SAVEPOINT purge_startup_noise');
+          db.db.execute('RELEASE SAVEPOINT purge_startup_noise');
+        }
+      }
+      await prefs.setInt(
+        'pandapay.needs_review_noise_version',
+        LocalSmsParser.version,
+      );
+    }
     return db;
   }
 

@@ -861,9 +861,24 @@ void main() {
         NeedsReviewItem(
           id: 'legacy-biller-onboarding',
           sender: 'CP-AXISBK-S',
+
           body:
               'You have added Goa Electricity Department 60008413407 to Axis Bank Bill Pay service. We will notify you once the bill is generated.',
           receivedAt: DateTime(2026, 10, 5),
+        ),
+        NeedsReviewItem(
+          id: 'legacy-jio-retention',
+          sender: 'JZ-JIOPAY-S',
+          body:
+              'Number retention charges of Rs. 9.88 has been deducted from Top-up balance on Jio Number 8010377706 as there was no usage observed for last 90 days. Kindly recharge your Jio Number with a valid plan to avoid these charges in future. To recharge, click http://tiny.jio.com/dmyjiorchgpl',
+          receivedAt: DateTime(2026, 10, 4),
+        ),
+        NeedsReviewItem(
+          id: 'legacy-axio-repayment',
+          sender: 'VD-axioPL-S',
+          body:
+              'Congrats Sujay, We have received your timely repayment towards your Pay Later XXX6016 a/c .You can now check your updated personal loan eligibility here https://u.axio.ac/axo/1XOUraa9OMgJw7 -axio',
+          receivedAt: DateTime(2026, 6, 10),
         ),
       ];
       for (final item in legacyRows) {
@@ -2220,6 +2235,162 @@ void main() {
       expect(updated.title, 'Emergent Labs');
       expect(updated.amount?.rupees, 500);
 
+      db.close();
+    },
+  );
+
+  test(
+    'startup purge removes telecom noise even when aiSuggestions or reason == "no_transaction_match" are present',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('pandapay.needs_review_noise_version', 14);
+
+      final db = openInMemoryForTesting();
+      db.db.execute(
+        'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+      );
+
+      final s1RetentionNoise = NeedsReviewItem(
+        id: 's1-jio-retention',
+        sender: 'JZ-JIOPAY-S',
+        body:
+            'Number retention charges of Rs. 9.88 has been deducted from Top-up balance on Jio Number 8010377706 as there was no usage observed for last 90 days. Kindly recharge your Jio Number with a valid plan to avoid these charges in future.',
+        receivedAt: DateTime(2026, 10, 4),
+        reason: 'no_transaction_match',
+        aiSuggestions: [
+          {'amount': 988, 'merchant': 'Jio'},
+        ],
+      );
+
+      final s2UpsellNoise = NeedsReviewItem(
+        id: 's2-airtel-upsell',
+        sender: 'AIRTEL',
+        body:
+            'Validity for your Airtel prepaid number 9876543210 is expiring soon. Recharge now with top-up or unlimited pack.',
+        receivedAt: DateTime(2026, 10, 5),
+        reason: 'no_transaction_match',
+        aiSuggestions: [
+          {'amount': 299, 'merchant': 'Airtel'},
+        ],
+      );
+
+      final s3BankDebitRecharge = NeedsReviewItem(
+        id: 's3-hdfc-recharge',
+        sender: 'HDFCBK',
+        body:
+            'A/c XX1234 debited Rs 299 for Jio recharge on 8010377706',
+        receivedAt: DateTime(2026, 10, 6),
+        reason: 'no_transaction_match',
+        aiSuggestions: [
+          {'amount': 299, 'merchant': 'Jio'},
+        ],
+      );
+
+      final s4PostpaidBill = NeedsReviewItem(
+        id: 's4-airtel-bill',
+        sender: 'AIRTEL',
+        body:
+            'Your Airtel postpaid bill for 9876543210 has been generated. Amount due: Rs 499, Due date: 15-Nov-2026.',
+        receivedAt: DateTime(2026, 10, 7),
+        reason: 'no_transaction_match',
+      );
+
+      const ns = 'user:telecom-purge-test';
+      for (final item in [s1RetentionNoise, s2UpsellNoise, s3BankDebitRecharge, s4PostpaidBill]) {
+        db.db.execute('INSERT INTO local_needs_review VALUES (?,?,?)', [
+          ns,
+          item.id,
+          jsonEncode(item.toJson()),
+        ]);
+      }
+
+      final repo = NeedsReviewRepository(
+        namespace: ns,
+        loadDatabase: () async => db,
+      );
+
+      // fetchAll triggers _database() where startup purge runs
+      await repo.fetchAll();
+
+      // Noise items (s1 & s2) must be purged from DB
+      final remainingIds = db.db.select(
+        'SELECT id FROM local_needs_review WHERE namespace = ?',
+        [ns],
+      ).map((r) => r['id'] as String).toList();
+
+      expect(remainingIds, contains('s3-hdfc-recharge'));
+      expect(remainingIds, isNot(contains('s1-jio-retention')));
+      expect(remainingIds, isNot(contains('s2-airtel-upsell')));
+
+      // s4PostpaidBill is a real bill: it was resolved into local_commitments, not treated as noise
+      final commitmentRows = db.db.select(
+        'SELECT payload FROM local_commitments WHERE namespace = ?',
+        [ns],
+      );
+      expect(commitmentRows, isNotEmpty);
+
+      // SharedPreferences version updated to LocalSmsParser.version (15)
+      expect(prefs.getInt('pandapay.needs_review_noise_version'), LocalSmsParser.version);
+
+      db.close();
+    },
+  );
+
+  test(
+    'add and addNeedsReviewSync reject telecom carrier noise while allowing bank recharge debits and bills',
+    () async {
+      final db = openInMemoryForTesting();
+      db.db.execute(
+        'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+      );
+
+      const ns = 'user:telecom-sync-test';
+      final s1Retention = NeedsReviewItem(
+        id: 'sync-s1-retention',
+        sender: 'JZ-JIOPAY-S',
+        body:
+            'Number retention charges of Rs. 9.88 has been deducted from Top-up balance on Jio Number 8010377706 as there was no usage observed for last 90 days. Kindly recharge your Jio Number with a valid plan to avoid these charges in future.',
+        receivedAt: DateTime(2026, 10, 4),
+      );
+      final s2Upsell = NeedsReviewItem(
+        id: 'sync-s2-upsell',
+        sender: 'AD-JIO',
+        body:
+            'Recharge your Jio number 9876543210 with Rs 299 pack to enjoy unlimited calls and 1.5GB/day data. Recharge now!',
+        receivedAt: DateTime(2026, 10, 5),
+      );
+      final s3Debit = NeedsReviewItem(
+        id: 'sync-s3-debit',
+        sender: 'HDFCBK',
+        body: 'A/c XX1234 debited Rs 299 for Jio recharge on 8010377706',
+        receivedAt: DateTime(2026, 10, 6),
+      );
+
+      addNeedsReviewSync(db, ns, s1Retention);
+      addNeedsReviewSync(db, ns, s2Upsell);
+      addNeedsReviewSync(db, ns, s3Debit);
+
+      final rows = db.db.select(
+        'SELECT id FROM local_needs_review WHERE namespace = ?',
+        [ns],
+      ).map((r) => r['id'] as String).toList();
+
+      expect(rows, ['sync-s3-debit']);
+
+      final repo = NeedsReviewRepository(
+        namespace: ns,
+        loadDatabase: () async => db,
+      );
+
+      await repo.add(s1Retention);
+      await repo.add(s2Upsell);
+
+      final rowsAfterAdd = db.db.select(
+        'SELECT id FROM local_needs_review WHERE namespace = ?',
+        [ns],
+      ).map((r) => r['id'] as String).toList();
+
+      expect(rowsAfterAdd, ['sync-s3-debit']);
       db.close();
     },
   );
