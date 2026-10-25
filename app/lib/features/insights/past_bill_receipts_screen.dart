@@ -6,9 +6,12 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/past_bill_receipts.dart';
+import 'bills_horizon.dart';
 
 class PastBillReceiptsScreen extends ConsumerWidget {
-  const PastBillReceiptsScreen({super.key});
+  final BillsHorizonFilter? filter;
+
+  const PastBillReceiptsScreen({super.key, this.filter});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,21 +37,30 @@ class PastBillReceiptsScreen extends ConsumerWidget {
           error: (_, _) => const Center(
             child: Text('Past bills are unavailable right now.'),
           ),
-          data: (items) => items.isEmpty
-              ? Center(
-                  child: Text(
-                    'No past bills or receipts yet.',
-                    style: BambooFonts.ui(14, color: BambooInk.ink500),
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(AppSpace.lg),
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: AppSpace.sm),
-                  itemBuilder: (_, index) =>
-                      _PastBillHistoryRow(item: items[index]),
-                ),
+          data: (allItems) {
+            final items = filter == null
+                ? allItems
+                : allItems
+                      .where(filter!.matchesReceipt)
+                      .toList(growable: false);
+            return items.isEmpty
+                ? Center(
+                    child: Text(
+                      filter == null || filter!.isUpcoming
+                          ? 'No past bills or receipts yet.'
+                          : 'No past bills or receipts in ${filter!.label}.',
+                      style: BambooFonts.ui(14, color: BambooInk.ink500),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(AppSpace.lg),
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: AppSpace.sm),
+                    itemBuilder: (_, index) =>
+                        _PastBillHistoryRow(item: items[index]),
+                  );
+          },
         ),
       ),
     );

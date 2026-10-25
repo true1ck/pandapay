@@ -4,7 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/bills_projection_api.dart';
+import 'package:pandapay/data/card_bill_ledger.dart';
 import 'package:pandapay/data/commitments_repository.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/past_bill_receipts.dart';
 import 'package:pandapay/data/pending_bills.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -364,6 +367,236 @@ void main() {
     expect(find.text('Upcoming'), findsOneWidget);
     expect(find.text('Future card'), findsOneWidget);
     expect(find.text('No upcoming bills'), findsNothing);
+  });
+
+  testWidgets('a past month prefers the issuer bill date over the saved day', (
+    tester,
+  ) async {
+    final row = DuePayment(
+      card: _card(id: 'uc1', name: 'HDFC card', dueDay: 30, statementDay: 1),
+      dueOn: DateTime(2026, 10, 28),
+      daysUntilDue: 3,
+      loggedThisCycle: Money.zero(),
+      bill: CardBill(
+        statementDate: DateTime(2026, 10, 1),
+        dueDate: DateTime(2026, 10, 28),
+        amountDue: Money.fromRupees(1200),
+        minimumDue: null,
+        paidToward: Money.zero(),
+        lastPaymentAt: null,
+        confidence: 0.9,
+      ),
+    );
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        paymentsDueProvider.overrideWith((ref) async => [row]),
+        commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+      ],
+    );
+    _setHorizon(tester, BillsHorizon.currentMonth);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Due 28 Oct'), findsOneWidget);
+    expect(find.textContaining('Due 30 Oct'), findsNothing);
+  });
+
+  testWidgets('a subscription commitment is not a blank tab', (tester) async {
+    final netflix = Commitment(
+      id: 'c-sub',
+      title: 'Netflix',
+      category: CommitmentCategory.subscription,
+      dueOn: DateTime(2026, 10, 28),
+      status: CommitmentStatus.due,
+      confidence: 1.0,
+    );
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+        commitmentsProvider.overrideWith((ref) async => [netflix]),
+      ],
+    );
+
+    expect(find.text('Subscriptions'), findsOneWidget);
+    expect(find.text('Netflix'), findsOneWidget);
+    expect(find.text('No upcoming bills'), findsNothing);
+  });
+
+  testWidgets('a local autopay mandate keeps the tab out of its empty state', (
+    tester,
+  ) async {
+    final db = openInMemoryForTesting();
+    final cache = ResponseCache(db);
+    addTearDown(db.close);
+    cache.financialStore.saveObservation('user:test', 'sms:bescom', {
+      'event_type': 'autopay',
+      'biller_name': 'BESCOM',
+      'card_last4': '7105',
+      'autopay_limit_paise': 250000,
+      'received_at': '2026-10-18T09:00:00Z',
+    });
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        cacheNamespaceProvider.overrideWithValue('user:test'),
+        responseCacheProvider.overrideWith((ref) async => cache),
+        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+        commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+      ],
+    );
+
+    expect(find.text('Autopay authorizations'), findsOneWidget);
+    expect(find.text('BESCOM'), findsOneWidget);
+    expect(find.text('No upcoming bills'), findsNothing);
+  });
+
+  testWidgets('a dismissed local bill falls back to the empty state', (
+    tester,
+  ) async {
+    final projection = BillProjection.fromJson({
+      'id': 'p1',
+      'projectionKind': 'bill_obligation',
+      'projectionKey': 'bill:bescom',
+      'status': 'active',
+      'projection': {
+        'billerName': 'BESCOM',
+        'dueDate': '2026-10-28T00:00:00.000',
+        'amountInr': 1200.0,
+      },
+    });
+    final dismissed = Commitment(
+      id: 'c-dismissed',
+      title: 'BESCOM',
+      category: CommitmentCategory.utility,
+      amount: Money.fromRupees(1200),
+      dueOn: DateTime(2026, 10, 28),
+      status: CommitmentStatus.dismissed,
+      confidence: 1.0,
+    );
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        centralBillsProjectionProvider.overrideWith(
+          (ref) async => BillProjectionSnapshot(
+            available: true,
+            projections: [projection],
+          ),
+        ),
+        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+        commitmentsProvider.overrideWith((ref) async => [dismissed]),
+      ],
+    );
+
+    expect(find.text('No upcoming bills'), findsOneWidget);
+    expect(find.text('BESCOM'), findsNothing);
+  });
+
+  testWidgets('past pending bills are not labelled Upcoming', (tester) async {
+    final pending = SmsBillRow(
+      id: 's-pending-past',
+      title: 'September power',
+      category: CommitmentCategory.utility,
+      amountDue: Money.fromRupees(500),
+      minimumDue: null,
+      isMinimumOnly: false,
+      dueDate: DateTime(2026, 9, 20),
+      receivedAt: DateTime(2026, 9, 15),
+      isAutopay: false,
+      sawFailedAttempt: false,
+      state: SmsBillState.pending,
+    );
+    final undated = SmsBillRow(
+      id: 's-undated',
+      title: 'September water',
+      category: CommitmentCategory.utility,
+      amountDue: Money.fromRupees(300),
+      minimumDue: null,
+      isMinimumOnly: false,
+      dueDate: null,
+      receivedAt: DateTime(2026, 9, 18),
+      isAutopay: false,
+      sawFailedAttempt: false,
+      state: SmsBillState.pending,
+    );
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        smsBillRowsProvider.overrideWith((ref) async => [pending, undated]),
+        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+        commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+      ],
+    );
+    _setHorizon(tester, BillsHorizon.lastMonth);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Payment not found yet'), findsOneWidget);
+    expect(find.text('No due date seen'), findsOneWidget);
+    expect(find.text('Upcoming'), findsNothing);
+    expect(find.textContaining('Received 18 Sep'), findsOneWidget);
+  });
+
+  testWidgets('a local load failure never renders a false empty state', (
+    tester,
+  ) async {
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+        commitmentsProvider.overrideWith(
+          (ref) async => throw Exception('db down'),
+        ),
+      ],
+    );
+
+    expect(find.text("Some bills couldn't load."), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('No upcoming bills'), findsNothing);
+  });
+
+  testWidgets('View all keeps the selected month', (tester) async {
+    PastBillReceipt receipt(String id, String merchant, DateTime at) =>
+        PastBillReceipt(
+          id: id,
+          sourceKey: id,
+          merchant: merchant,
+          amount: Money.fromRupees(500),
+          occurredAt: at,
+          receivedAt: at,
+          status: PastBillReceiptStatus.paidLinked,
+        );
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+        commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+        pastBillReceiptsProvider.overrideWith(
+          (ref) async => [
+            receipt('r-sep', 'September power', DateTime(2026, 9, 12)),
+            receipt('r-oct', 'October water', DateTime(2026, 10, 2)),
+          ],
+        ),
+      ],
+    );
+    _setHorizon(tester, BillsHorizon.lastMonth);
+    await tester.pumpAndSettle();
+
+    expect(find.text('September power'), findsOneWidget);
+    expect(find.text('October water'), findsNothing);
+
+    await tester.tap(find.text('View all'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Past bills & receipts'), findsOneWidget);
+    expect(find.text('September power'), findsOneWidget);
+    expect(find.text('October water'), findsNothing);
   });
 
   testWidgets('the longest horizon label fits a 320px header', (tester) async {

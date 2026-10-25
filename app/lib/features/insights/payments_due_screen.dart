@@ -186,16 +186,16 @@ List<DuePayment> _cardRowsForHorizon(
   final result = <DuePayment>[];
   for (final row in rows) {
     final day = row.card.dueDay;
-    DateTime? date = day == null ? null : filter.scheduledOccurrence(day);
     final billDate = row.bill?.dueDate;
-    if (billDate != null &&
-        filter.matchesDue(billDate) &&
-        (date == null || billDate.isAfter(date))) {
+    // A real issuer date outranks the saved-day projection whenever it falls
+    // inside the window; otherwise the saved due day supplies the occurrence.
+    DateTime? date;
+    if (billDate != null && filter.matchesDue(billDate)) {
       date = billDate;
+    } else if (day != null) {
+      date = filter.scheduledOccurrence(day);
     }
     if (date == null || !filter.matchesDue(date)) continue;
-    // A past-month view only has the next due date on the row, so the saved
-    // due day's scheduled occurrence is the truthful answer for that month.
     final billMatches =
         row.bill?.dueDate != null && _sameDay(row.bill!.dueDate!, date);
     result.add(
@@ -315,6 +315,9 @@ class _DueList extends ConsumerWidget {
     final receiptsAsync = ref.watch(pastBillReceiptsProvider);
     final centralAsync = ref.watch(centralBillsProjectionProvider);
     final commitments = commitmentsAsync.valueOrNull ?? const <Commitment>[];
+    final localFailed = commitmentsAsync.hasError ||
+        smsAsync.hasError ||
+        receiptsAsync.hasError;
     final settled = !commitmentsAsync.isLoading &&
         !smsAsync.isLoading &&
         !receiptsAsync.isLoading &&
@@ -326,13 +329,23 @@ class _DueList extends ConsumerWidget {
         (smsAsync.valueOrNull ?? const []).any(filter.matchesSmsBill);
     final hasReceipts =
         (receiptsAsync.valueOrNull ?? const []).any(filter.matchesReceipt);
-    final hasCentral = hasVisibleCentralBills(centralAsync.valueOrNull, filter);
+    final centralDedupKeys = cardRows
+        .map((row) => CentralBillDedupKey(last4: row.card.last4,
+            dueOn: row.dueOn, amountInr: row.bill?.amountDue?.rupees))
+        .toList(growable: false);
+    final hasCentral = hasVisibleCentralBills(centralAsync.valueOrNull, filter,
+        cardRows: centralDedupKeys, localCommitments: commitments);
+    final hasLocalMandates = filter.showsAutopay &&
+        localAutopayMandates(ref.watch(responseCacheProvider).valueOrNull,
+            ref.watch(cacheNamespaceProvider)).isNotEmpty;
     final showEmptyState = settled &&
+        !localFailed &&
         cardRows.isEmpty &&
         visibleCommitments.isEmpty &&
         !hasSms &&
         !hasReceipts &&
-        !hasCentral;
+        !hasCentral &&
+        !hasLocalMandates;
 
     DateTime? nextDue;
     if (!filter.isUpcoming) {
@@ -350,21 +363,11 @@ class _DueList extends ConsumerWidget {
         AppSpace.xxl,
       ),
       children: [
+        if (localFailed) const _BillsLoadError(),
         if (showEmptyState)
           _EmptyHorizonState(filter: filter, nextDue: nextDue)
         else ...[
-          CentralBillsSection(
-            cardRows: cardRows
-                .map(
-                  (row) => CentralBillDedupKey(
-                    last4: row.card.last4,
-                    dueOn: row.dueOn,
-                    amountInr: row.bill?.amountDue?.rupees,
-                  ),
-                )
-                .toList(growable: false),
-            filter: filter,
-          ),
+          CentralBillsSection(cardRows: centralDedupKeys, filter: filter),
           SmsBillsSection(filter: filter),
           if (cardRows.isNotEmpty) ...[
             _SectionHeader(label: 'Credit cards', count: cardRows.length),
@@ -393,6 +396,54 @@ class _DueList extends ConsumerWidget {
           const SizedBox(height: AppSpace.xl),
         ],
       ],
+    );
+  }
+}
+
+class _BillsLoadError extends ConsumerWidget {
+  const _BillsLoadError();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpace.md),
+      padding: const EdgeInsets.all(AppSpace.md),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 20,
+            color: BambooInk.clay,
+          ),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: Text(
+              "Some bills couldn't load.",
+              style: BambooFonts.ui(13, color: BambooInk.ink700),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.invalidate(commitmentsProvider);
+              ref.invalidate(smsBillRowsProvider);
+              ref.invalidate(pastBillReceiptsProvider);
+            },
+            child: Text(
+              'Retry',
+              style: BambooFonts.ui(
+                12,
+                color: BambooInk.jade,
+                weight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -426,7 +477,7 @@ class _PastBillsPreview extends ConsumerWidget {
             TextButton(
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => const PastBillReceiptsScreen(),
+                  builder: (_) => PastBillReceiptsScreen(filter: filter),
                 ),
               ),
               child: Text(
@@ -543,7 +594,9 @@ class _ComingUpRow extends StatelessWidget {
         ? '$dueLabel · today'
         : row.bill == null
         ? '$dueLabel · payment status unknown'
-        : dueLabel;
+        : row.bill!.isPaid
+        ? '$dueLabel · paid'
+        : '$dueLabel · past due';
 
     return Container(
       decoration: BoxDecoration(
@@ -913,6 +966,9 @@ class _CommitmentsSection extends ConsumerWidget {
         final renewals = active
             .where((c) => c.category == CommitmentCategory.insurance)
             .toList();
+        final subscriptions = active
+            .where((c) => c.category == CommitmentCategory.subscription)
+            .toList();
         final scheduled = active
             .where(
               (c) =>
@@ -935,6 +991,24 @@ class _CommitmentsSection extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpace.md),
               for (final item in utilities)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                  child: _CommitmentRow(commitment: item, filter: filter),
+                ),
+              if (renewals.isNotEmpty ||
+                  scheduled.isNotEmpty ||
+                  subscriptions.isNotEmpty)
+                const SizedBox(height: AppSpace.xl),
+            ],
+
+            // ── Subscriptions ─────────────────────────────────────────
+            if (subscriptions.isNotEmpty) ...[
+              _SectionHeader(
+                label: 'Subscriptions',
+                count: subscriptions.length,
+              ),
+              const SizedBox(height: AppSpace.md),
+              for (final item in subscriptions)
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpace.sm),
                   child: _CommitmentRow(commitment: item, filter: filter),

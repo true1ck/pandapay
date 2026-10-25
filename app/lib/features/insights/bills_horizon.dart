@@ -69,7 +69,7 @@ class BillsHorizonFilter {
       'Bills and receipts in ${_longMonth(now.year, now.month - 1)}',
     BillsHorizon.lastThreeMonths =>
       'Bills and receipts ${_monthRange(DateTime(now.year, now.month - 2), DateTime(now.year, now.month))}',
-    BillsHorizon.allHistory => 'Everything recorded so far',
+    BillsHorizon.allHistory => 'Bills and receipts stored on this device',
   };
 
   bool matchesDue(DateTime date) {
@@ -275,7 +275,7 @@ class _BillsHorizonSheetState extends State<_BillsHorizonSheet> {
                   icon: const Icon(Icons.close_rounded, size: 28),
                   color: BambooInk.ink900,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 ),
               ],
             ),
@@ -318,7 +318,7 @@ class _BillsHorizonSheetState extends State<_BillsHorizonSheet> {
               BillsHorizon.allHistory,
               Icons.all_inbox_rounded,
               'All history',
-              'Everything recorded so far',
+              'Bills and receipts stored on this device',
             ),
             const SizedBox(height: AppSpace.md),
             SizedBox(
@@ -351,54 +351,57 @@ class _BillsHorizonSheetState extends State<_BillsHorizonSheet> {
     final selected = _draft == horizon;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.sm),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => setState(() => _draft = horizon),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpace.md,
-            vertical: AppSpace.md,
-          ),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFFF1FFDF) : BambooInk.paper,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected ? BambooInk.lime : BambooInk.hairlineOnPaper,
-              width: selected ? 2 : 1,
+      child: Semantics(
+        selected: selected,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => setState(() => _draft = horizon),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpace.md,
+              vertical: AppSpace.md,
             ),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: BambooInk.ink900, size: 21),
-              const SizedBox(width: AppSpace.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: BambooFonts.ui(
-                        13.5,
-                        weight: FontWeight.w700,
-                        color: BambooInk.ink900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                    ),
-                  ],
-                ),
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFFF1FFDF) : BambooInk.paper,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: selected ? BambooInk.lime : BambooInk.hairlineOnPaper,
+                width: selected ? 2 : 1,
               ),
-              if (selected)
-                const Icon(
-                  Icons.check_circle_rounded,
-                  color: BambooInk.jade,
-                  size: 20,
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: BambooInk.ink900, size: 21),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: BambooFonts.ui(
+                          13.5,
+                          weight: FontWeight.w700,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                      ),
+                    ],
+                  ),
                 ),
-            ],
+                if (selected)
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    color: BambooInk.jade,
+                    size: 20,
+                  ),
+              ],
+            ),
           ),
         ),
       ),

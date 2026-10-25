@@ -7,7 +7,37 @@ import '../../app/env.dart';
 import '../../app/providers.dart';
 import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
+import '../../data/local/response_cache.dart';
 import 'bills_horizon.dart';
+
+String _identity(String? value) =>
+    (value ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+
+/// Local NACH/auto-debit evidence that has not been turned into a
+/// subscription. Shared so the tab's empty state and the section agree.
+List<Map<String, dynamic>> localAutopayMandates(
+  ResponseCache? cache,
+  String namespace,
+) {
+  if (cache == null) return const [];
+  final keys = <String>{};
+  final unique = <Map<String, dynamic>>[];
+  for (final row in cache.financialStore.entities(namespace, 'sms_observations')) {
+    if (row['event_type'] != 'autopay' ||
+        row['autopay_limit_paise'] is! num ||
+        isSubscriptionAutoPay(row['biller_name'] as String?)) {
+      continue;
+    }
+    final key = '${_identity(row['biller_name'] as String?)}'
+        '|${row['card_last4'] ?? row['account_last4'] ?? ''}';
+    if (keys.add(key)) unique.add(row);
+  }
+  return unique;
+}
+
+String _localMandateKey(Map<String, dynamic> row) =>
+    '${_identity(row['biller_name'] as String?)}'
+    '|${row['card_last4'] ?? row['account_last4'] ?? ''}';
 
 /// Fingerprint of a card row already rendered by the Bills & commitments tab.
 /// Central bill projections matching this evidence stay hidden from the
@@ -53,20 +83,10 @@ class CentralBillsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cache = ref.watch(responseCacheProvider).valueOrNull;
     final namespace = ref.watch(cacheNamespaceProvider);
-    final localMandates = cache == null
-        ? <Map<String, dynamic>>[]
-        : cache.financialStore.entities(namespace, 'sms_observations')
-            .where((row) => row['event_type'] == 'autopay' &&
-                row['autopay_limit_paise'] is num &&
-                !isSubscriptionAutoPay(row['biller_name'] as String?))
-            .toList(growable: false);
-    final localMandateKeys = <String>{};
-    final uniqueLocalMandates = <Map<String, dynamic>>[];
-    for (final row in localMandates) {
-      final key = '${_identity(row['biller_name'] as String?)}'
-          '|${row['card_last4'] ?? row['account_last4'] ?? ''}';
-      if (localMandateKeys.add(key)) uniqueLocalMandates.add(row);
-    }
+    final uniqueLocalMandates = localAutopayMandates(cache, namespace);
+    final localMandateKeys = {
+      for (final row in uniqueLocalMandates) _localMandateKey(row),
+    };
     final snapshot = ref.watch(centralBillsProjectionProvider).valueOrNull;
     final localCommitments = ref.watch(commitmentsProvider).valueOrNull ?? const <Commitment>[];
     final today = filter?.today ?? DateTime.now();
@@ -117,54 +137,59 @@ class CentralBillsSection extends ConsumerWidget {
       ],
     );
   }
-
-  bool _duplicatesExistingBill(
-    BillProjection row,
-    List<CentralBillDedupKey> cardRows,
-    List<Commitment> localCommitments,
-  ) {
-    final date = row.dueDate;
-    final amount = row.amountInr;
-    bool sameDay(DateTime? value) => value != null &&
-        date != null &&
-        value.year == date.year &&
-        value.month == date.month &&
-        value.day == date.day;
-    bool sameAmount(double? value) => amount != null &&
-        value != null &&
-        (value - amount).abs() < 0.01;
-
-    if (row.last4 != null &&
-        cardRows.any((card) =>
-            card.last4 == row.last4 &&
-            sameDay(card.dueOn) &&
-            sameAmount(card.amountInr))) {
-      return true;
-    }
-
-    final title = _identity(row.billerName ?? row.serviceName);
-    if (title.isEmpty) return false;
-    return localCommitments.any((commitment) {
-      final localTitle = _identity(commitment.title);
-      final sameTitle = localTitle == title ||
-          localTitle.contains(title) ||
-          title.contains(localTitle);
-      final localAmount = commitment.amount?.rupees;
-      return sameTitle && sameDay(commitment.dueOn) && sameAmount(localAmount);
-    });
-  }
-
-  String _identity(String? value) => (value ?? '')
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '');
 }
 
-/// Whether any central row would render under [filter]. Dedup is skipped on
-/// purpose: a false positive here only suppresses an empty state.
+bool _sameLocalDay(DateTime a, DateTime b) {
+  final left = a.toLocal();
+  final right = b.toLocal();
+  return left.year == right.year &&
+      left.month == right.month &&
+      left.day == right.day;
+}
+
+bool _duplicatesExistingBill(
+  BillProjection row,
+  List<CentralBillDedupKey> cardRows,
+  List<Commitment> localCommitments,
+) {
+  final date = row.dueDate;
+  if (date == null) return false;
+  final amount = row.amountInr;
+  bool sameAmount(double? value) => amount != null &&
+      value != null &&
+      (value - amount).abs() < 0.01;
+
+  if (row.last4 != null &&
+      cardRows.any((card) =>
+          card.last4 == row.last4 &&
+          _sameLocalDay(card.dueOn, date) &&
+          sameAmount(card.amountInr))) {
+    return true;
+  }
+
+  final title = _identity(row.billerName ?? row.serviceName);
+  if (title.isEmpty) return false;
+  return localCommitments.any((commitment) {
+    final localTitle = _identity(commitment.title);
+    final sameTitle = localTitle == title ||
+        localTitle.contains(title) ||
+        title.contains(localTitle);
+    final localAmount = commitment.amount?.rupees;
+    return sameTitle &&
+        _sameLocalDay(commitment.dueOn, date) &&
+        sameAmount(localAmount);
+  });
+}
+
+/// Whether any central row would render under [filter]. The same dedup and
+/// kind filters as [CentralBillsSection] apply, so an empty state is never
+/// hidden behind rows the section itself suppresses.
 bool hasVisibleCentralBills(
   BillProjectionSnapshot? snapshot,
-  BillsHorizonFilter? filter,
-) {
+  BillsHorizonFilter? filter, {
+  List<CentralBillDedupKey> cardRows = const [],
+  List<Commitment> localCommitments = const [],
+}) {
   if (snapshot == null || !snapshot.available) return false;
   final today = filter?.today ?? DateTime.now();
   final startOfToday = DateTime(today.year, today.month, today.day);
@@ -179,7 +204,9 @@ bool hasVisibleCentralBills(
     }
     final due = row.dueDate;
     if (due == null) return false;
-    return filter == null ? !due.isBefore(startOfToday) : filter.matchesDue(due);
+    final inWindow = filter == null ? !due.isBefore(startOfToday) : filter.matchesDue(due);
+    if (!inWindow) return false;
+    return !_duplicatesExistingBill(row, cardRows, localCommitments);
   });
 }
 

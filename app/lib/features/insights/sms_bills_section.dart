@@ -41,6 +41,7 @@ class _SmsBillsSectionState extends ConsumerState<SmsBillsSection> {
             ? rows
             : rows.where(widget.filter!.matchesSmsBill).toList(growable: false);
         if (visible.isEmpty) return const SizedBox.shrink();
+        final today = widget.filter?.today ?? _today();
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpace.xl),
           child: Column(
@@ -61,6 +62,7 @@ class _SmsBillsSectionState extends ConsumerState<SmsBillsSection> {
                   padding: const EdgeInsets.only(bottom: AppSpace.sm),
                   child: _BillRow(
                     bill: bill,
+                    today: today,
                     onTap: () => _showBill(context, ref, bill),
                   ),
                 ),
@@ -84,16 +86,26 @@ class _SmsBillsSectionState extends ConsumerState<SmsBillsSection> {
   }
 }
 
+DateTime _today() {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
+}
+
 class _BillRow extends StatelessWidget {
-  const _BillRow({required this.bill, required this.onTap});
+  const _BillRow({required this.bill, required this.today, required this.onTap});
   final SmsBillRow bill;
+  final DateTime today;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final overdue = bill.dueDate != null && bill.dueDate!.isBefore(today);
+    final undated = bill.dueDate == null;
     final (label, color) = switch (bill.state) {
       SmsBillState.linked => ('Payment found', BambooInk.jade),
-      SmsBillState.pending => ('Upcoming', BambooInk.ink500),
+      SmsBillState.pending => overdue
+          ? ('Payment not found yet', BambooInk.clayInk)
+          : (undated ? 'No due date seen' : 'Upcoming', BambooInk.ink500),
       SmsBillState.paymentNotDetected => (
         'Payment not detected',
         BambooChartColors.coral,
@@ -101,7 +113,9 @@ class _BillRow extends StatelessWidget {
     };
     final detail = [
       if (bill.dueDate != null)
-        'Due ${DateFormat('d MMM').format(bill.dueDate!)}',
+        'Due ${DateFormat('d MMM').format(bill.dueDate!)}'
+      else
+        'Received ${DateFormat('d MMM').format(bill.receivedAt.toLocal())}',
       if (bill.isMinimumOnly) 'Minimum due only',
       if (bill.cardLast4 != null) 'Card ••${bill.cardLast4}',
       if (bill.accountLast4 != null) 'Account ••${bill.accountLast4}',

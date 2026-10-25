@@ -52,6 +52,20 @@ void main() {
   });
 
   group('matchesDue', () {
+    test('classifies UTC instants by their local calendar day', () {
+      final october = _filter(BillsHorizon.currentMonth);
+      final novFirst = DateTime(2026, 11, 1).toUtc();
+      final octFirstEarly = DateTime(2026, 10, 1, 2).toUtc();
+
+      expect(october.matchesDue(novFirst), isFalse);
+      expect(_filter(BillsHorizon.upcoming).matchesDue(novFirst), isTrue);
+      expect(october.matchesDue(octFirstEarly), isTrue);
+      expect(
+        _filter(BillsHorizon.lastMonth).matchesDue(octFirstEarly),
+        isFalse,
+      );
+    });
+
     test('upcoming accepts today and later, rejects yesterday', () {
       final filter = _filter(BillsHorizon.upcoming);
       expect(filter.matchesDue(DateTime(2026, 10, 25)), isTrue);
@@ -140,6 +154,12 @@ void main() {
         ),
         isTrue,
       );
+    });
+
+    test('undated rows fall back to the local day of receivedAt', () {
+      final bill = _smsBill(receivedAt: DateTime(2026, 10, 1, 2).toUtc());
+      expect(_filter(BillsHorizon.currentMonth).matchesSmsBill(bill), isTrue);
+      expect(_filter(BillsHorizon.lastMonth).matchesSmsBill(bill), isFalse);
     });
 
     test('currentMonth drops a September row', () {
