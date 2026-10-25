@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-26",
+  "priority_rows": 10,
+  "columns": 5,
+  "markdown_html_match": true,
+  "local_evidence_links": 12,
+  "missing_priority_links": 0,
+  "statuses": {
+    "partial": 9,
+    "open": 1,
+    "accepted_for_launch": 0
+  },
+  "existing_script_blocks_unchanged": 2,
+  "visual_browser_verification": "not performed; file URL refused by browser policy"
+}

@@ -1,0 +1,11 @@
+{
+  "command": "npm test",
+  "working_directory": "api",
+  "result": "passed",
+  "tests": 1123,
+  "passed": 1121,
+  "failed": 0,
+  "skipped": 2,
+  "full_console_output_sha256": "850263812d0cb9a7402ca0902857bbdb2f2450c1710c4643918d407814c55d85",
+  "full_console_output_retention": "local temporary log; concise results are committed"
+}

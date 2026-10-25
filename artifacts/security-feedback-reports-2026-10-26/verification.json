@@ -1,0 +1,116 @@
+{
+  "review": "Public catalogue feedback RLS, request bounds and launch priority statuses",
+  "date": "2026-10-26",
+  "branch": "dev",
+  "base_commit": "b5af6eb744c46212707a6fae732fb07fe8b079b2",
+  "launch_priority_statuses": {
+    "partial": 9,
+    "open": 1,
+    "accepted_for_launch": 0
+  },
+  "checks": [
+    {
+      "command": "npm test (api)",
+      "status": "passed",
+      "passed": 1121,
+      "skipped": 2,
+      "failed": 0,
+      "includes": "API syntax checks and twelve focused feedback cases; scopes overlap",
+      "details": "api-test-summary.json"
+    },
+    {
+      "command": "node api/test/support_tickets_postgres.js",
+      "status": "passed",
+      "postgres_version": "18.4 (Homebrew)",
+      "support_scenarios": [
+        "legacy_returning_refused",
+        "anonymous_submission",
+        "anonymous_read_denied",
+        "member_submission",
+        "owner_read_only",
+        "pooled_identity_reset",
+        "foreign_insert_denied",
+        "history_preserved",
+        "operator_triage"
+      ],
+      "catalogue_report_scenarios": [
+        "legacy_report_returning_refused",
+        "anonymous_report_and_receipt",
+        "anonymous_report_read_denied",
+        "draft_and_missing_cards_hidden",
+        "member_report_owner_isolation",
+        "report_pooled_identity_reset",
+        "foreign_report_insert_denied",
+        "operator_report_triage",
+        "report_history_and_counts_preserved"
+      ],
+      "fixture": "Owned temporary loopback cluster with synthetic data, restricted runtime login, forced RLS and cleanup. No saved credentials or customer data."
+    },
+    {
+      "check": "HTML/Markdown priority table and evidence links",
+      "status": "passed",
+      "details": "html-verification.json"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    }
+  ],
+  "sha256": {
+    "api/package.json": "fec140ee9c50d5e2186a5e88968236ebb152606ae8fcea3395c3c26cfba9dbcc",
+    "api/src/index.js": "a5fb8901bf0a9eec0b9e386184d85b08e34e12f9e2e98442d8e8a587f05370a0",
+    "api/src/support_tickets.js": "7c023522d73278454028214fb38c0e82044b18509f66e99ce137e08a3011ce42",
+    "api/src/data_error_reports.js": "7e14804d8d0680323394b6e2aaa8af7eea8d5c4f2dc359da21da9bbce9e1a31f",
+    "api/src/feedback_rate_limit.js": "4bcc66f385a1b10df8379fc45e0ce6efafe7da63c0353792c0bd81bbb8b79d6d",
+    "api/test/data_error_reports.test.js": "e0c20464e4d9e7dacadf14ee4c91c7e70ae4c8fb8a2c9847a0f746872b7f7436",
+    "api/test/support_tickets_postgres.js": "e30078dee2a7cabf97f991dcc1878dc69aa4000c1756f00601516341c4de900d",
+    "app/lib/app/providers.dart": "1eb6d918e63551d4b3934c6505a7e19d54a21495a3615d9437684a1f9e73554d",
+    "docs/security-and-backend-audit-2026-10-20.md": "88c338da43459b15feb565eecf456d38e60783866106d538ed22f9fea908fa0a",
+    "docs/security-and-backend-audit-2026-10-20.html": "b3e2a74fe717efe728dcb51e93ab084ac5c826c051afa527b36ff3d81b1249f3",
+    "docs/security-feedback-reports-implementation-2026-10-26.md": "03cad689854aaf977ded5025395a6c322dd43d723049e871d47ae5c6e660c37d",
+    "artifacts/security-feedback-reports-2026-10-26/postgres-results.json": "5e442c91896a5e0574f65d4d66ac6c1e042abf25e43ba26e045fc92e133e23a3",
+    "artifacts/security-feedback-reports-2026-10-26/html-verification.json": "aada28c195f29e55109a4e326722067e4f7bb4e1aeb6e619891499b804b653fc",
+    "artifacts/security-feedback-reports-2026-10-26/api-test-summary.json": "2f1e25572a8a278c52259d52c2d3556503cc11a15d056338c244b60bcc0bd8a0"
+  },
+  "fixture_migrations_sha256": {
+    "db/supabase/migrations/0001_extensions_and_enums.sql": "8a8ebc6a909b6a6bdeee5ce92996e34f4a3fce95fbbfdb3911d2da8934897beb",
+    "db/supabase/migrations/0002_reference_data.sql": "bc56fb212fa942671a67323db2a4d6894a3fd3d27acf5c76844949676517a186",
+    "db/supabase/migrations/0003_card_catalogue.sql": "30ca5f187eeeb4bf00fc15d2e2b4992f46da92a29719c582df161d73380b1bb9",
+    "db/supabase/migrations/0004_user_domain.sql": "4eff1d479a76b94aa0c48dee1f089313f89f165a8742a82356b5c1e72f626c60",
+    "db/supabase/migrations/0005_sync.sql": "0c91f64ba4b59b357703707b3295c84711f375fc07846972d29761dade385aa6",
+    "db/supabase/migrations/0006_ingest.sql": "773b5eb96008f8b1bfa84cdbfd341f69006dc0ad4cb9f39ba955f5baae166efa",
+    "db/supabase/migrations/0007_crowdsource.sql": "be09c0c4b091d95928eb796d4088514c74048fd61f10e292b32d741b1bc1e579",
+    "db/supabase/migrations/0008_admin_console.sql": "4273f831a46e768dd63e6a834373d581a4e745fd792032e5c82e8a8b9cf47d3f",
+    "db/supabase/migrations/0009_platform_ops.sql": "93a8b5c23bfad6c0589276f6bbc8ac2e72394a60d46741950e66c5a932d531bc",
+    "db/supabase/migrations/0010_functions_and_views.sql": "ac380d3aab775091ff3126b8acf1ff5589735c7f31660569f9f3d12382c6120f",
+    "db/supabase/migrations/0011_rls_policies.sql": "c5f0f72637602c4e671dc35a363b4d1659ba3def21a00210e843afdcc46ee349",
+    "db/supabase/migrations/0015_card_products_rls_fix.sql": "fb8bdfd5e59c92e48dd667cf4abe350ebeb799df1f5d09db8cf404273333695a",
+    "db/supabase/migrations/0016_queue_tables_admin_rls.sql": "0d3c39ac3d354feb81b32738a9dbe10bc8947d22ba6e535249a8030fb843ce4f"
+  },
+  "partial_fixture_migration": {
+    "filename": "db/supabase/migrations/20261024223000_support_tickets_dashboard_and_feedback.sql",
+    "full_source_sha256": "4022d7b4b3d0c063feda8d602f0973ecd0975f6321f76d22bd48d7caed2f8370",
+    "section": "Only ticket/report policies and indexes before -- 3. Update v_data_quality_dashboard",
+    "section_sha256": "d7769b30175a52c7b1338db5132a04b04c60473eac87444aaf6b198ddfe4f899"
+  },
+  "runtime_limits": {
+    "window_ms": 3600000,
+    "per_profile": 5,
+    "per_anonymous_ip": 30,
+    "max_identities_per_endpoint": 50000,
+    "scope": "Separate in-memory map per endpoint per process. No distributed or durable quota claim."
+  },
+  "data_and_rollout": {
+    "new_migrations": 0,
+    "live_data_modified": false,
+    "production_deployed": false,
+    "keys_or_features_changed": false,
+    "audit_findings_closed": 0,
+    "unverified": [
+      "Hosted PostgreSQL 17 and intended provider",
+      "Current-data upgrade and full runtime-role/session acceptance",
+      "Shared admission, carrier-NAT and replica budgets",
+      "Independent recovery custody and production load/provider approvals"
+    ]
+  }
+}

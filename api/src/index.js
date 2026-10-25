@@ -27,6 +27,7 @@ const {
 const { registerPortableBackupRoutes } = require('./portable_backup/routes');
 const { registerPortableBackupRestoreRoutes } = require('./portable_backup/restore_routes');
 const { registerSupportTicketRoute } = require('./support_tickets');
+const { registerDataErrorReportRoute } = require('./data_error_reports');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
 const { replayCurrentCapConsumption } = require('./card_state_reconciliation');
 const {
@@ -1566,54 +1567,9 @@ app.post('/card-requests', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /data-error-reports — Task C-0b (ui-spec C7 "Report Wrong Data").
- * Pre-filled from whichever C2 tab/row the user tapped from: `fieldPath` is
- * a caller-supplied identifier of what's wrong (e.g. "reward_rules[0].rate"),
- * not validated against the actual card shape server-side — same trust
- * boundary as the rest of this route (a human reviews every report before
- * anything is published, per data_error_reports' review_state workflow).
- * `attachmentPath` is a pre-uploaded storage path, same division of
- * responsibility as card_requests.image_path above.
- */
-app.post('/data-error-reports', optionalAuth, async (req, res) => {
-  const { cardProductId, fieldPath, shownValue, claimedValue, sourceUrl, attachmentPath } = req.body || {};
-  if (!cardProductId || typeof cardProductId !== 'string') {
-    return res.status(400).json({ error: 'cardProductId is required' });
-  }
-  if (!fieldPath || typeof fieldPath !== 'string' || !fieldPath.trim()) {
-    return res.status(400).json({ error: 'fieldPath is required' });
-  }
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      const card = await client.query(`SELECT id FROM card_products WHERE id = $1`, [cardProductId]);
-      if (card.rows.length === 0) return null;
-
-      const inserted = await client.query(
-        `INSERT INTO data_error_reports
-           (profile_id, card_product_id, field_path, shown_value, claimed_value, source_url, attachment_path)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, card_product_id, field_path, state, created_at`,
-        [
-          req.userId || null,
-          cardProductId,
-          fieldPath.trim(),
-          shownValue ?? null,
-          claimedValue ?? null,
-          sourceUrl || null,
-          attachmentPath || null,
-        ]
-      );
-      return inserted.rows[0];
-    });
-
-    if (!result) return res.status(404).json({ error: 'card_product not found' });
-    res.status(201).json({ errorReport: result });
-  } catch (err) {
-    console.error('POST /data-error-reports error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+// Public catalogue feedback is reviewed before publication. The handler keeps
+// anonymous reporting compatible with owner-only read policies and bounds input.
+registerDataErrorReportRoute(app, { optionalAuth, withUserClient });
 
 /**
  * GET /merchants/search — B5: typed search over published merchants, by

@@ -1624,11 +1624,8 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   }
 });
 
-/// Task C-7/C-8: null when signed out, same pattern as every other
-/// auth-gated repository provider in this file — both card-requests and
-/// data-error-reports are owner-scoped writes (RLS `for all to public
-/// using (profile_id = pandapay.uid())`), so there's no meaningful
-/// signed-out path to support.
+/// Card feedback keeps the token optional so signed-out users can report
+/// catalogue errors. New-card requests require a signed-in member at the API.
 final cardFeedbackRepositoryProvider = Provider<CardFeedbackRepository>((ref) {
   final token = _stableSessionToken(ref);
   return CardFeedbackRepository(

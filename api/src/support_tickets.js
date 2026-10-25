@@ -6,10 +6,13 @@ const SUPPORT_TICKET_MAX_DIAGNOSTICS_BYTES = 4 * 1024;
 const SUPPORT_TICKET_MAX_DIAGNOSTIC_FIELDS = 24;
 const SUPPORT_TICKET_MAX_DIAGNOSTIC_STRING_LENGTH = 512;
 const SUPPORT_TICKET_MAX_APP_VERSION_LENGTH = 64;
-const SUPPORT_TICKET_RATE_WINDOW_MS = 60 * 60 * 1000;
-const SUPPORT_TICKET_AUTHENTICATED_LIMIT = 5;
-const SUPPORT_TICKET_ANONYMOUS_LIMIT = 30;
-const SUPPORT_TICKET_MAX_RATE_LIMIT_ENTRIES = 50_000;
+const {
+  createFeedbackRateLimiter: createSupportTicketRateLimiter,
+  FEEDBACK_RATE_WINDOW_MS: SUPPORT_TICKET_RATE_WINDOW_MS,
+  FEEDBACK_PROFILE_LIMIT: SUPPORT_TICKET_AUTHENTICATED_LIMIT,
+  FEEDBACK_ANONYMOUS_LIMIT: SUPPORT_TICKET_ANONYMOUS_LIMIT,
+  FEEDBACK_MAX_IDENTITIES: SUPPORT_TICKET_MAX_RATE_LIMIT_ENTRIES,
+} = require('./feedback_rate_limit');
 const { safeErrorCode } = require('./safeErrorCode');
 const SUPPORT_TICKET_METADATA_SQL = 'SELECT gen_random_uuid() AS id, now() AS created_at';
 const INSERT_SUPPORT_TICKET_SQL = `INSERT INTO support_tickets
@@ -75,59 +78,6 @@ function validateSupportTicketPayload(body) {
   return {
     ok: true,
     value: { kind, message: normalizedMessage, diagnostics: normalizedDiagnostics, appVersion: normalizedAppVersion },
-  };
-}
-
-/**
- * Bounded process-local backstop for this public support endpoint. It avoids
- * persistent IP storage; production still needs edge/shared admission control
- * when multiple API replicas are deployed.
- */
-function createSupportTicketRateLimiter({
-  now = () => Date.now(),
-  windowMs = SUPPORT_TICKET_RATE_WINDOW_MS,
-  authenticatedLimit = SUPPORT_TICKET_AUTHENTICATED_LIMIT,
-  anonymousLimit = SUPPORT_TICKET_ANONYMOUS_LIMIT,
-  maxEntries = SUPPORT_TICKET_MAX_RATE_LIMIT_ENTRIES,
-} = {}) {
-  for (const value of [windowMs, authenticatedLimit, anonymousLimit, maxEntries]) {
-    if (!Number.isSafeInteger(value) || value < 1) throw new TypeError('support-ticket limiter configuration is invalid');
-  }
-  const attempts = new Map();
-  let nextPruneAt = 0;
-
-  function prune(current) {
-    for (const [key, entry] of attempts) {
-      if (entry.resetAt <= current) attempts.delete(key);
-    }
-    nextPruneAt = current + Math.min(windowMs, 60_000);
-  }
-
-  return {
-    consume(identity, authenticated, current = now()) {
-      if (typeof identity !== 'string' || !identity) {
-        return { allowed: false, retryAfterSeconds: Math.ceil(windowMs / 1000) };
-      }
-      if (current >= nextPruneAt) prune(current);
-
-      const key = `${authenticated ? 'user' : 'ip'}:${identity}`;
-      const limit = authenticated ? authenticatedLimit : anonymousLimit;
-      const existing = attempts.get(key);
-      if (existing && existing.resetAt > current) {
-        if (existing.count >= limit) {
-          return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((existing.resetAt - current) / 1000)) };
-        }
-        existing.count += 1;
-        return { allowed: true, retryAfterSeconds: 0 };
-      }
-
-      if (attempts.size >= maxEntries) prune(current);
-      if (attempts.size >= maxEntries) {
-        return { allowed: false, retryAfterSeconds: Math.ceil(windowMs / 1000) };
-      }
-      attempts.set(key, { count: 1, resetAt: current + windowMs });
-      return { allowed: true, retryAfterSeconds: 0 };
-    },
   };
 }
 
