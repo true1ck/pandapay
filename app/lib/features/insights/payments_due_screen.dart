@@ -217,6 +217,9 @@ List<DuePayment> _cardRowsForHorizon(
 }
 
 bool _matchesCommitment(Commitment c, BillsHorizonFilter filter) {
+  // Subscriptions have their own dedicated screen (AppRoute.subscriptions).
+  // Exclude them from Payments Due to avoid cluttering actionable bills.
+  if (c.category == CommitmentCategory.subscription) return false;
   if (c.confidence < 0.85) return false;
   if (c.status == CommitmentStatus.needsConfirmation ||
       c.status == CommitmentStatus.dismissed) {
@@ -622,6 +625,8 @@ class _DueList extends ConsumerWidget {
       }
     }
 
+    // Preserved for when hero card is re-enabled:
+    // ignore: unused_element
     BillsHorizonSummary calculateSummary() {
       var duePaise = 0;
       var paidPaise = 0;
@@ -692,8 +697,6 @@ class _DueList extends ConsumerWidget {
       );
     }
 
-    final summary = calculateSummary();
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,
@@ -706,16 +709,14 @@ class _DueList extends ConsumerWidget {
         if (showEmptyState)
           _EmptyHorizonState(filter: filter, nextDue: nextDue)
         else ...[
-          // 1. Hero Card
-          _BillsSummaryHero(summary: summary),
-          const SizedBox(height: AppSpace.lg),
+          // Hero card is hidden for now as requested; can be re-enabled later.
           if (commitmentsAsync.isLoading)
             const Padding(
               padding: EdgeInsets.only(bottom: AppSpace.lg),
               child: SkeletonList(count: 2),
             ),
 
-          // 2. Upcoming bills (utilities & telecom)
+          // 1. Upcoming bills (utilities & telecom)
           if (utilities.isNotEmpty) ...[
             _SectionHeader(
               label: filter.isUpcoming ? 'Upcoming bills' : 'Bills',
@@ -730,7 +731,7 @@ class _DueList extends ConsumerWidget {
             const SizedBox(height: AppSpace.lg),
           ],
 
-          // 3. Credit cards (immediately following Upcoming bills)
+          // 2. Credit cards (immediately following Upcoming bills)
           if (cardRows.isNotEmpty) ...[
             _SectionHeader(label: 'Credit cards', count: cardRows.length),
             const SizedBox(height: AppSpace.xs),
@@ -753,7 +754,7 @@ class _DueList extends ConsumerWidget {
             const SizedBox(height: AppSpace.lg),
           ],
 
-          // 4. Insurance & renewals (CommitmentCategory.insurance + InsurancePremiumsSection)
+          // 3. Insurance & renewals (CommitmentCategory.insurance + InsurancePremiumsSection)
           if (renewals.isNotEmpty) ...[
             _SectionHeader(
               label: 'Insurance & renewals',
@@ -772,7 +773,7 @@ class _DueList extends ConsumerWidget {
             upcoming: filter.isUpcoming,
           ),
 
-          // 5. Scheduled payments (loans, EMIs, rent, education, tax, other)
+          // 4. Scheduled payments (loans, EMIs, rent, education, tax, other)
           if (scheduled.isNotEmpty) ...[
             _SectionHeader(
               label: 'Scheduled payments',
@@ -787,86 +788,11 @@ class _DueList extends ConsumerWidget {
             const SizedBox(height: AppSpace.lg),
           ],
 
-          // 6. Subscriptions (compact preview with header linking to AppRoute.subscriptions)
-          if (subscriptions.isNotEmpty) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: _SectionHeader(
-                    label: 'Subscriptions',
-                    count: subscriptions.length,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => _openSubscriptions(context),
-                  child: Text(
-                    'View all',
-                    style: BambooFonts.ui(
-                      12,
-                      color: BambooInk.jade,
-                      weight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.md),
-            for (final item in subscriptions.take(2))
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                child: _CommitmentRow(commitment: item, filter: filter),
-              ),
-            if (subscriptions.length > 2) ...[
-              const SizedBox(height: AppSpace.xs),
-              InkWell(
-                onTap: () => _openSubscriptions(context),
-                borderRadius: BorderRadius.circular(14),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpace.md,
-                    vertical: AppSpace.sm,
-                  ),
-                  decoration: BoxDecoration(
-                    color: BambooInk.paperMuted,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: BambooInk.hairlineOnPaper),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.subscriptions_outlined,
-                        size: 16,
-                        color: BambooInk.ink700,
-                      ),
-                      const SizedBox(width: AppSpace.sm),
-                      Expanded(
-                        child: Text(
-                          'Manage all ${subscriptions.length} subscriptions',
-                          style: BambooFonts.ui(
-                            12.5,
-                            color: BambooInk.ink700,
-                            weight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        size: 16,
-                        color: BambooInk.ink500,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: AppSpace.lg),
-          ],
-
-          // 7. Central bills
+          // 5. Central bills
           CentralBillsSection(cardRows: centralDedupKeys, filter: filter),
-          // 8. SMS bills
+          // 6. SMS bills
           SmsBillsSection(filter: filter),
-          // 9. Past bills preview
+          // 7. Past bills preview
           _PastBillsPreview(filter: filter),
           const SizedBox(height: AppSpace.xl),
         ],

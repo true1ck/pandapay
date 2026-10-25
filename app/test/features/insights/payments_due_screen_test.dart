@@ -402,28 +402,30 @@ void main() {
     expect(find.textContaining('Due 30 Oct'), findsNothing);
   });
 
-  testWidgets('a subscription commitment is not a blank tab', (tester) async {
-    final netflix = Commitment(
-      id: 'c-sub',
-      title: 'Netflix',
-      category: CommitmentCategory.subscription,
-      dueOn: DateTime(2026, 10, 28),
-      status: CommitmentStatus.due,
-      confidence: 1.0,
-    );
-    await _pumpBills(
-      tester,
-      overrides: [
-        ..._deterministicOverrides(),
-        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
-        commitmentsProvider.overrideWith((ref) async => [netflix]),
-      ],
-    );
+  testWidgets(
+    'a subscription commitment does not appear on payments due (managed in Subscriptions)',
+    (tester) async {
+      final netflix = Commitment(
+        id: 'c-sub',
+        title: 'Netflix',
+        category: CommitmentCategory.subscription,
+        dueOn: DateTime(2026, 10, 28),
+        status: CommitmentStatus.due,
+        confidence: 1.0,
+      );
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+          commitmentsProvider.overrideWith((ref) async => [netflix]),
+        ],
+      );
 
-    expect(find.text('Subscriptions'), findsOneWidget);
-    expect(find.text('Netflix'), findsOneWidget);
-    expect(find.text('No upcoming bills'), findsNothing);
-  });
+      expect(find.text('Subscriptions'), findsNothing);
+      expect(find.text('Netflix'), findsNothing);
+    },
+  );
 
   testWidgets('a local autopay mandate keeps the tab out of its empty state', (
     tester,
@@ -621,7 +623,7 @@ void main() {
   });
 
   testWidgets(
-    'hero card excludes unlinked SMS bills and sums verified cards and commitments',
+    'hero card is omitted for now and Upcoming bills renders directly at top',
     (tester) async {
       final goaElectricity = Commitment(
         id: 'c-goa',
@@ -647,40 +649,25 @@ void main() {
           confidence: 0.9,
         ),
       );
-      final rawSmsBill = SmsBillRow(
-        id: 'sms-astronomical',
-        title: 'Airtel bill',
-        category: CommitmentCategory.telecom,
-        amountDue: Money.fromPaise(93072059300),
-        minimumDue: null,
-        isMinimumOnly: false,
-        dueDate: DateTime(2026, 10, 29),
-        receivedAt: DateTime(2026, 10, 20),
-        isAutopay: false,
-        sawFailedAttempt: false,
-        state: SmsBillState.pending,
-      );
 
       await _pumpBills(
         tester,
         overrides: [
           ..._deterministicOverrides(),
-          smsBillRowsProvider.overrideWith((ref) async => [rawSmsBill]),
           paymentsDueProvider.overrideWith((ref) async => [cardRow]),
           commitmentsProvider.overrideWith((ref) async => [goaElectricity]),
           billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
         ],
       );
 
-      expect(find.text('₹1,854'), findsOneWidget);
-      expect(find.text('2 to pay'), findsOneWidget);
-      expect(find.text('₹93,07,22,447'), findsNothing);
-      expect(find.text('3 to pay'), findsNothing);
+      expect(find.text('TOTAL DUE THIS CYCLE'), findsNothing);
+      expect(find.text('Upcoming bills'), findsOneWidget);
+      expect(find.text('Goa electricity'), findsOneWidget);
     },
   );
 
   testWidgets(
-    'section order places Upcoming bills, then Credit cards, then Subscriptions',
+    'section order places Upcoming bills immediately followed by Credit cards (subscriptions excluded)',
     (tester) async {
       final utility = Commitment(
         id: 'c-util',
@@ -729,14 +716,12 @@ void main() {
 
       expect(find.text('Upcoming bills'), findsOneWidget);
       expect(find.text('Credit cards'), findsOneWidget);
-      expect(find.text('Subscriptions'), findsOneWidget);
+      expect(find.text('Subscriptions'), findsNothing);
 
       final upcomingY = tester.getTopLeft(find.text('Upcoming bills')).dy;
       final cardsY = tester.getTopLeft(find.text('Credit cards')).dy;
-      final subsY = tester.getTopLeft(find.text('Subscriptions')).dy;
 
       expect(upcomingY, lessThan(cardsY));
-      expect(cardsY, lessThan(subsY));
     },
   );
 }
