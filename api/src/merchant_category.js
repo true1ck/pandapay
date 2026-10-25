@@ -15,6 +15,9 @@ const BUILTIN_CATEGORY_RULES = [
     'swiggyinstamart', 'instamart', 'bigbasket', 'blinkit', 'zepto', 'jiomart',
     'dmart', 'reliancefresh', 'moreretail', 'naturebasket', 'supermarket',
     'grocery', 'groceries', 'spar', 'licious', 'fruits', 'vegetables', 'kirana',
+    'blinkcommerce', 'grofers', 'kiranakart', 'innovativeretail', 'supermarketgrocery',
+    'bbdaily', 'avenuesupermarts', 'relianceretail', 'reliancesmart', 'smartbazaar',
+    'countrydelight', 'freshtohome', 'delightfulgourmet', 'otipy', 'milkbasket',
   ] },
 
   { slug: 'dining', priority: 30, patterns: [
@@ -22,11 +25,18 @@ const BUILTIN_CATEGORY_RULES = [
     'eazydiner', 'restaurant', 'dining', 'cafe', 'coffee', 'bakery', 'biryani',
     'pizza', 'burger', 'food', 'sweets', 'sweetshop', 'mithai', 'confectionery',
     'abhikshapalace', 'haldiram',
+    'bundltechnologies', 'bundltech', 'eternallimited', 'zomatomedia', 'jubilantfoodworks',
+    'hardcastlerestaurants', 'westlife', 'connaughtplaza', 'restaurantbrandsasia',
+    'devyaniinternational', 'sapphirefoods', 'tatastarbucks', 'pizzahut', 'burgerking',
+    'subway', 'barbequenation', 'chaayos', 'chaipoint', 'bluetokai', 'thirdwavecoffee',
+    'theobroma', 'wowmomo', 'rebelfoods', 'faasos', 'behrouzbiryani', 'box8',
   ] },
 
   { slug: 'online', priority: 40, patterns: [
     'amazon', 'flipkart', 'myntra', 'ajio', 'nykaa', 'meesho', 'tatacliq',
     'shopsy', 'dresses', 'garments', 'apparel', 'clothing', 'fashion',
+    'fsnecommerce', 'croma', 'infinitiretail', 'reliancedigital', 'decathlon',
+    'shoppersstop', 'zara', 'h&m', 'uniqlo',
   ] },
 
   { slug: 'fuel', priority: 45, patterns: [
@@ -34,12 +44,18 @@ const BUILTIN_CATEGORY_RULES = [
     'bharatpetroleum', 'hindustanpetroleum', 'hpcl', 'bpcl', 'reliancepetroleum',
     'nayara', 'shell', 'jiobp', 'essar', 'petroleum', 'petrol', 'diesel',
     'fuelstation', 'fuel',
+    'autofuels', 'autocare', 'petroproducts', 'petrolbunk', 'fillingstation',
+    'cocooutlet', 'hpclcoco', 'bpclcoco', 'ioclcoco', 'cngstation', 'iglcng',
+    'mglcng', 'tatapowerev', 'zeoncharging', 'statiq', 'chargezone', 'athergrid',
   ] },
 
   { slug: 'travel', priority: 50, patterns: [
     'makemytrip', 'goibibo', 'cleartrip', 'easemytrip', 'irctc', 'redbus',
     'airindia', 'indigo', 'vistara', 'oyorooms', 'bookingcom', 'agoda',
     'olacabs', 'rapido', 'uber',
+    'anitechnologies', 'roppen', 'roppentransportation', 'interglobeaviation',
+    'spicejet', 'akasaair', 'fastag', 'netcfastag', 'tollplaza', 'nammayatri',
+    'movingtech', 'dmrc', 'bmrcl', 'nammametro', 'abhibus', 'zingbus',
   ] },
 
   { slug: 'entertainment', priority: 60, patterns: [
@@ -57,6 +73,11 @@ const BUILTIN_CATEGORY_RULES = [
     'airtel', 'vodafoneidea', 'tatapower', 'adanielectricity', 'bescom',
     'mahadiscom', 'bses', 'electricity', 'broadband', 'internetbill', 'dth',
     'recharge', 'waterbill', 'pipedgas', 'jiotelecom', 'jio',
+    'tsspdcl', 'tsnpdcl', 'tangedco', 'uppcl', 'wbsedcl', 'dhbvn', 'pspcl',
+    'kseb', 'jvvnl', 'torrentpower', 'cesc', 'ndmc', 'indraprasthagas', 'igl',
+    'mahanagargas', 'mgl', 'adanigas', 'gujaratgas', 'hpgas', 'bharatgas',
+    'indane', 'actfibernet', 'actcorp', 'tataplay', 'tatasky', 'dishtv', 'sundirect',
+    'hathway', 'excitel',
   ] },
 
   // Do not use plain `rent`: normalized names such as `PARENT` contain those

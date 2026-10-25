@@ -8,7 +8,10 @@ const {
   isBankAccountMessage,
   isNonTransactionNoise,
   isInvestmentFolioAllotment,
+  parseTransactionDate,
+  parseSmsTransactionTimestamp,
 } = require('../src/sms_parser');
+const { extractCreditLimit } = require('../src/card_limit_parser');
 
 // Realistic synthetic (not real customer) Indian bank SMS formats.
 
@@ -39,6 +42,73 @@ test('successful parse: HDFC-style SMS extracts all fields', () => {
   assert.equal(result.fields.date, '04-08-26');
 });
 
+test('a configured card pattern without merchant mapping retains an independently verified payee', () => {
+  const pattern = {
+    ...HDFC_PATTERN,
+    field_map: { amount: 1, last4: 2, date: 4 },
+  };
+  const result = parseSmsAgainstPatterns([pattern], {
+    sender: 'VM-HDFCBK-S',
+    body: 'Rs.1,499.00 spent on your HDFC Bank Card ending 4321 at AMAZON RETAIL on 04-08-26. Avl limit Rs.85,000.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'configured_pattern');
+  assert.equal(result.fields.merchant, 'AMAZON RETAIL');
+});
+
+test('merchant enrichment leaves payee absent when the card alert names none', () => {
+  const pattern = {
+    ...HDFC_PATTERN,
+    regex: 'Rs\\.?\\s?([\\d,]+\\.?\\d*) spent on your HDFC Bank Card ending (\\d{4})',
+    field_map: { amount: 1, last4: 2 },
+  };
+  const result = parseSmsAgainstPatterns([pattern], {
+    sender: 'VM-HDFCBK-S',
+    body: 'Rs.1,499.00 spent on your HDFC Bank Card ending 4321. Avl limit Rs.85,000.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.merchant, undefined);
+});
+
+test('Axis card alerts with merchant after date and time capture it before the support number', () => {
+  const sms = {
+    sender: 'VM-AXISBK-S',
+    body: 'Spent INR 505 Axis Bank Card no. XX0000 02-10-26 23:11:37 IST FLIPKART PA Avl Limit: INR 77901 Not you? SMS BLOCK 0000 to 9000000000',
+  };
+  const result = parseSmsAgainstPatterns([], sms);
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.merchant, 'FLIPKART PA');
+  assert.notEqual(result.fields.merchant, '9000000000');
+
+  const pattern = {
+    id: 'axis-card-partial',
+    sender_pattern: 'AXISBK',
+    regex: 'Spent INR ([0-9,]+) Axis Bank Card no\\. XX(\\d{4}) (\\d{2}-\\d{2}-\\d{2})',
+    field_map: { amount: 1, last4: 2, date: 3 },
+  };
+  const configured = parseSmsAgainstPatterns([pattern], sms);
+  assert.equal(configured.parserKind, 'configured_pattern');
+  assert.equal(configured.fields.merchant, 'FLIPKART PA');
+});
+
+test('explicit IST swipe time is retained and uncertain times use the bank date', () => {
+  const received = new Date('2026-10-02T17:42:00.000Z');
+  const exact = parseSmsTransactionTimestamp(
+    '02-10-26', 'Card XX0000 02-10-26 23:11:37 IST FLIPKART PA', received,
+  );
+  assert.equal(exact.date.toISOString(), '2026-10-02T17:41:37.000Z');
+  assert.equal(exact.precise, true);
+  const dateOnly = parseTransactionDate('02-10-26', received);
+  assert.equal(
+    parseSmsTransactionTimestamp('02-10-26', 'Card XX0000 02-10-26 23:11:37 FLIPKART PA', received).date.getTime(),
+    dateOnly.getTime(),
+  );
+  assert.equal(
+    parseSmsTransactionTimestamp('02-10-26', 'Card XX0000 02-10-26 25:11:37 IST FLIPKART PA', received).date.getTime(),
+    dateOnly.getTime(),
+  );
+});
+
 test('successful parse: ICICI-style SMS with alphabetic month in date', () => {
   const sms = {
     sender: 'AD-ICICIB',
@@ -49,6 +119,80 @@ test('successful parse: ICICI-style SMS with alphabetic month in date', () => {
   assert.equal(result.fields.amountInr, 250);
   assert.equal(result.fields.last4, '7788');
   assert.equal(result.fields.merchant, 'SWIGGY');
+});
+
+test('card suffixes retain spend details but require evidence for a credit/debit type on every parser path', () => {
+  const pattern = {
+    id: 'card-type-evidence',
+    regex: 'INR (\\d+) spent on .*?Card (?:XX)?(\\d{4}) at (\\w+)',
+    field_map: { amount: 1, last4: 2, merchant: 3 },
+  };
+  const cases = [
+    ['Bank Card XX7788', '', 'other'],
+    ['Bank Card 7788', ' Bal Rs.9000.', 'other'],
+    ['Bank Credit Card XX7788', '', 'credit_card'],
+    ['Bank Card XX7788', ' Avl Limit Rs.9000.', 'credit_card'],
+    ['Bank Card XX7788', ' Available credit limit Rs.9000.', 'credit_card'],
+    ['Bank Card XX7788', ' Avl. lmt Rs.9000.', 'credit_card'],
+    ['Bank Debit Card XX7788', ' Avl Limit Rs.9000.', 'debit_card'],
+    ['Bank Card XX7788', ' SMS BLOCK DC 7788.', 'debit_card'],
+  ];
+  for (const [cardLabel, footer, instrument] of cases) {
+    const sms = { sender: 'ICICIB', body: `INR 250 spent on ICICI ${cardLabel} at SWIGGY on 05-Aug-26.${footer}` };
+    for (const result of [
+      parseSms(pattern, sms),
+      parseConservativeBankSpend(sms),
+      parseSmsAgainstPatterns([], sms),
+      parseSmsAgainstPatterns([pattern], sms),
+    ]) {
+      assert.equal(result.ok, true, sms.body);
+      assert.equal(result.fields.instrument, instrument, sms.body);
+      assert.equal(result.fields.last4, '7788');
+      assert.equal(result.fields.amountInr, 250);
+      assert.equal(result.fields.merchant, 'SWIGGY');
+      assert.equal(result.fields.entryKind, 'spend');
+    }
+  }
+});
+
+test('last-resort card parser preserves an untyped paid alert and merchant enrichment', () => {
+  const sms = {
+    sender: 'BANK', body: 'INR 250 paid on Bank Card XX7788 at SWIGGY on 05-Aug-26.',
+  };
+  const pattern = {
+    id: 'paid-card', regex: 'INR (\\d+) paid on Bank Card XX(\\d{4})',
+    field_map: { amount: 1, last4: 2 },
+  };
+  for (const patterns of [[], [pattern]]) {
+    const result = parseSmsAgainstPatterns(patterns, sms);
+    assert.equal(result.ok, true);
+    assert.equal(result.fields.instrument, 'other');
+    assert.equal(result.fields.last4, '7788');
+    assert.equal(result.fields.merchant, 'SWIGGY');
+    assert.equal(result.fields.entryKind, 'spend');
+  }
+});
+
+test('card credits do not assume a generic or explicitly debit card is a credit card', () => {
+  for (const [label, instrument] of [
+    ['card', 'other'], ['debit card', 'debit_card'], ['credit card', 'credit_card'],
+  ]) {
+    const result = parseSmsAgainstPatterns([], {
+      sender: 'BANK', body: `INR 250 refunded to your ${label} XX7788.`,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.fields.instrument, instrument);
+    assert.equal(result.fields.last4, '7788');
+    assert.equal(result.fields.entryKind, 'transfer');
+  }
+});
+
+test('cardless configured patterns and suffix-free generic cards have no implicit credit type', () => {
+  const pattern = { regex: 'INR (\\d+) spent at (\\w+)', field_map: { amount: 1, merchant: 2 } };
+  assert.equal(parseSms(pattern, { body: 'INR 250 spent at SWIGGY.' }).fields.instrument, 'other');
+  const result = parseConservativeBankSpend({ body: 'INR 250 spent on Bank Card at SWIGGY.' });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.instrument, 'other');
 });
 
 test('built-in SMS parsing preserves UPI merchant and MCC metadata', () => {
@@ -478,6 +622,27 @@ test('bank-account summary evidence excludes insurance and investment account su
   );
   assert.equal(
     isBankAccountMessage('Avl Bal Rs.12000 for investment account ending 5702.'),
+    false,
+  );
+  assert.equal(
+    isBankAccountMessage(
+      'Hi Sujay, Your Pay Later a/c XXX6016 has got you personal loan upto Rs 4,00,000 with instant credit.',
+      'VM-axioFN',
+    ),
+    false,
+  );
+  assert.equal(
+    isBankAccountMessage(
+      'Reminder Sujay, by continuing timely EMI payments against your Pay Later a/c XXX6016, you are building a credit score.',
+      'VD-axioLN',
+    ),
+    false,
+  );
+  assert.equal(
+    isBankAccountMessage(
+      'We have received your timely repayment towards your Pay Later XXX6016 a/c.',
+      'VD-axioLN',
+    ),
     false,
   );
 });
@@ -963,12 +1128,12 @@ test('synthetic live-SMS matrix auto-parses completed spend alerts and rejects n
     {
       name: 'HDFC x-mask card spend',
       body: 'Spent Rs.210 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2026-10-02:13:50:00 Bal Rs.91903.82 Not You?',
-      expected: { amountInr: 210, last4: '8406', merchant: 'QUALITY FUEL STATION', instrument: 'credit_card' },
+      expected: { amountInr: 210, last4: '8406', merchant: 'QUALITY FUEL STATION', instrument: 'other' },
     },
     {
       name: 'HDFC bare card suffix spend',
       body: 'Rs.1229 spent on HDFC Bank Card 8708 at _ABHIKSHA PALACE. on 2026-10-02:13:51:00 Not U?',
-      expected: { amountInr: 1229, last4: '8708', merchant: 'ABHIKSHA PALACE', instrument: 'credit_card' },
+      expected: { amountInr: 1229, last4: '8708', merchant: 'ABHIKSHA PALACE', instrument: 'other' },
     },
     {
       name: 'UPI debit',
@@ -1166,6 +1331,118 @@ test('new noise patterns are identified as non-transaction noise in parity with 
   }
 });
 
+test('card control, linking and settlement explanations are non-transaction noise', () => {
+  const controlNotices = [
+    ['VA-SLCBNK-S', 'Your transaction limit for pinless UPI on your slice credit card has been updated. You can check and change it in the app - slice'],
+    ['VM-HDFCBN-S', 'Dear Customer, Security Tip-Enable Online use & Set Limit on HDFC Bank Credit Card 1366. Use NetBanking/MyCards/WhatsApp https://1.hdfc.bank.in/HDFCBK/s/yjGKjM5'],
+    ['VD-HDFCBK-S', 'HDFC Bank Credit Card has been linked for NetBanking. Pls login to NetBanking and select Credit Cards tab to view statement details or to make payment'],
+    ['VK-LEMONN-S', 'Dear SUJAY SHANTARAM KURTIKAR, as per SEBI and exchange guidelines, unused funds in your Lemonn trading account will be transferred back to your registered bank account on the day of settlement.'],
+  ];
+  for (const [sender, body] of controlNotices) {
+    assert.equal(isNonTransactionNoise(sender, body), true, 'Expected noise for: ' + body);
+    const result = parseSmsAgainstPatterns([], { sender, body });
+    assert.equal(result.ok, false, 'Should not mint a transaction: ' + body);
+    assert.equal(result.reason, 'non_transaction_message');
+  }
+
+  const actionableMessages = [
+    'Your HDFC Bank Credit Card 1366 statement has been generated. Total due INR 5,000 by 05-Nov-2026.',
+    'Spent Rs 500 on HDFC Bank Credit Card 1366 at AMAZON on 20-Oct-2026.',
+    'AutoPay e-mandate registered for NETFLIX with maximum limit of INR 2,000 on card XX7105.',
+    'INR 5000 transferred to your bank account XXXX1234 on 20-Oct-2026.',
+    'Security tip: your HDFC Bank Credit Card ending 1366 was debited INR 500 at AMAZON on 20-Oct-2026.',
+    'Security Alert: Your HDFC Bank Credit Card ending 1366 was used for INR 5,000 at AMAZON on 20-Oct-2026. If not you, call 18002586161.',
+    'Txn of INR 500 declined on your HDFC Bank Credit Card 1366 because it exceeds your transaction limit.',
+    'Your HDFC Bank Credit Card ending 1366 credit limit has been set at INR 2,00,000.',
+  ];
+  for (const body of actionableMessages) {
+    assert.equal(isNonTransactionNoise('VM-HDFCBK-S', body), false, 'Should not be noise: ' + body);
+  }
+
+  // A limit alert is not a spend, but the explicit amount must still reach the
+  // card-limit sync path.
+  const limitAlert = 'Your HDFC Bank Credit Card ending 1366 credit limit has been set at INR 2,00,000.';
+  const detected = extractCreditLimit(limitAlert);
+  assert.equal(detected.amountInr, 200000);
+  assert.equal(detected.last4, '1366');
+});
+
+test('biller onboarding and future bill promises are non-transaction noise', () => {
+  const onboardingNotices = [
+    ['CP-AXISBK-S', 'You have added Goa Electricity Department 60008413407 to Axis Bank Bill Pay service. We will notify you once the bill is generated.'],
+    ['AXISBK', 'You have successfully registered for paperless e-bill. We will notify you when the bill is generated.'],
+    ['HDFCBK', 'Bill Pay service has been activated for your account.'],
+    ['HDFCBK', 'Your first bill will be generated on 05-Nov-2026.'],
+    ['AXISBK', 'BillPay registration successful. You will receive your bill every month.'],
+    ['AXISBK', 'You will receive your bill on the 5th of every month.'],
+    ['AXISBK', 'Bill generation date: 05-Nov-2026.'],
+    ['AXISBK', 'Bill fetch is now enabled for your biller.'],
+    ['AXISBK', 'Your biller will send you the bill every month.'],
+    ['HDFCBK', 'You have added Goa Electricity Department as a payee.'],
+  ];
+  for (const [sender, body] of onboardingNotices) {
+    assert.equal(isNonTransactionNoise(sender, body), true, 'Expected noise for: ' + body);
+    const result = parseSmsAgainstPatterns([], { sender, body });
+    assert.equal(result.ok, false, 'Should not mint a bill: ' + body);
+    assert.equal(result.reason, 'non_transaction_message');
+  }
+
+  const actionableBillMessages = [
+    'Your electricity bill of Rs 1,200 is generated. Due on 05-Nov-2026.',
+    'Bill payment of Rs 500 scheduled on 05-Nov-2026.',
+    'You have added Goa Electricity Department to Bill Pay with AutoPay maximum limit INR 2,000.',
+    'Your bill is due today. Login to view.',
+    'Your first bill will be generated on 05-Nov-2026. Total due INR 500.',
+    'You have added Goa Electricity Department to Bill Pay. Bill payment failed.',
+  ];
+  for (const body of actionableBillMessages) {
+    assert.equal(isNonTransactionNoise('AXISBK', body), false, 'Should not be noise: ' + body);
+  }
+});
+
+test('telecom retention deductions, airtime charges, and recharge reminders with 10-digit numbers are non-transaction noise', () => {
+  const noiseMessages = [
+    ['JZ-JIOPAY-S', 'Number retention charges of Rs. 9.88 has been deducted from Top-up balance on Jio Number 8010377706 as there was no usage observed for last 90 days. Kindly recharge your Jio Number with a valid plan to avoid these charges in future. To recharge, click http://tiny.jio.com/dmyjiorchgpl'],
+    ['VD-axioPL-S', 'Congrats Sujay, We have received your timely repayment towards your Pay Later XXX6016 a/c .You can now check your updated personal loan eligibility here https://u.axio.ac/axo/1XOUraa9OMgJw7 -axio'],
+    ['AD-AIRTEL-S', 'Recharge your Airtel number 9876543210 with Rs 299 to get unlimited calls and 1.5GB/day validity 28 days.'],
+    ['AD-AIRTEL-S', 'Rs. 10.00 debited from talktime balance on Airtel mobile 9876543210 towards value added service.'],
+    ['VI-CARE', 'Recharge your Vi number 9822012345 to get unlimited calls and data pack. Hurry!'],
+    ['VI-CARE', 'Rs. 20 deducted from main balance on Vi prepaid number 9822012345.'],
+    ['DZ-BSNL-S', 'Recharge your BSNL prepaid number 9443210987 with Rs 199 for 30 days validity.'],
+    ['DZ-BSNL-S', 'Rs 5 debited from core balance on BSNL number 9443210987.'],
+  ];
+  for (const [sender, body] of noiseMessages) {
+    assert.equal(isNonTransactionNoise(sender, body), true, 'Expected noise for: ' + body);
+    const result = parseSmsAgainstPatterns([], { sender, body });
+    assert.equal(result.ok, false, 'Should not match transaction: ' + body);
+    assert.equal(result.reason, 'non_transaction_message');
+  }
+});
+
+test('bank debits for mobile recharge with masked account or card are not noise', () => {
+  const bankRechargeMessages = [
+    ['VM-HDFCBK-S', 'A/c XX1234 debited Rs 299 for Jio recharge on 8010377706 on 25-Oct-26.'],
+    ['SBIINB', 'Dear SBI User, your A/c ending in 5678 debited by Rs. 299 on 25-Oct-26 for Vi recharge on 9822012345.'],
+    ['AXISBK', 'Card ending 4321 debited INR 499 towards Airtel recharge on 9876543210 on 25-10-26.'],
+    ['HDFCBK', 'A/c XX9876 debited Rs. 199 for BSNL prepaid recharge on 9443210987.'],
+  ];
+  for (const [sender, body] of bankRechargeMessages) {
+    assert.equal(isNonTransactionNoise(sender, body), false, 'Should not be noise: ' + body);
+  }
+});
+
+test('postpaid telecom bills with amount due or bill generated are not noise', () => {
+  const postpaidBillMessages = [
+    ['AD-AIRTEL-S', 'Airtel postpaid bill of Rs 599 for 9876543210 is generated. Due date 15-Nov'],
+    ['JZ-JIOPAY-S', 'Jio postpaid bill of Rs 399 generated for 8010377706. Amount due: Rs 399, due date 20-Nov-2026.'],
+    ['VI-CARE', 'Vi Postpaid: Bill generated for mobile 9822012345. Total amount due Rs. 701 by 12-Nov-2026.'],
+    ['DZ-BSNL-S', 'BSNL Postpaid bill of Rs 450 generated for 9443210987. Payment due date is 21-Nov-2026.'],
+  ];
+  for (const [sender, body] of postpaidBillMessages) {
+    assert.equal(isNonTransactionNoise(sender, body), false, 'Should not be noise: ' + body);
+  }
+});
+
 test('mutual fund folio unit allotment does not create a cash spend or duplicate investment transaction', () => {
   const amcMessages = [
     'Folio 12345/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',
@@ -1183,6 +1460,18 @@ test('mutual fund folio unit allotment does not create a cash spend or duplicate
     assert.equal(result.isObservation, true);
     assert.ok(result.fields.amountInr > 0);
   }
+});
+
+test('Scapia txn-of card purchase parses without card last4 or configured patterns', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'AD-FEDSCP-S',
+    body: 'Your txn of ₹1,018 at 3 Rajdhani Parantha House on your Scapia Federal RuPay credit card earned you 5% rewards!',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'conservative_fallback');
+  assert.equal(result.fields.amountInr, 1018);
+  assert.equal(result.fields.merchant, '3 Rajdhani Parantha House');
+  assert.equal(result.fields.last4, undefined);
 });
 
 test('AutoPay activation and mandate notices are not flagged as noise and do not mint fake cash spend', () => {

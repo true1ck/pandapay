@@ -19,6 +19,7 @@ const assert = require('node:assert');
 const geminiQueue = require('../src/gemini_queue');
 const smsFacts = require('../src/sms_facts');
 const aiQueueRoute = require('../src/ai_queue_route');
+const smsObservationMigration = require('../src/sms_observation_migration');
 
 const PROFILE_A = '11111111-1111-1111-1111-111111111111';
 const PROFILE_B = '22222222-2222-2222-2222-222222222222';
@@ -153,11 +154,11 @@ function makeFakeClient() {
     }
 
     // --- ai_jobs -----------------------------------------------------------
-    if (norm.startsWith('SELECT id FROM ai_jobs WHERE profile_id')) {
+    if (norm.startsWith('SELECT id FROM ai_jobs WHERE profile_id') || norm.startsWith('SELECT id, status FROM ai_jobs WHERE profile_id')) {
       const job = [...state.jobs.values()].find(
         (j) => j.profile_id === params[0] && j.source_key === params[1],
       );
-      return { rows: job ? [{ id: job.id }] : [], rowCount: job ? 1 : 0 };
+      return { rows: job ? [{ id: job.id, status: job.status }] : [], rowCount: job ? 1 : 0 };
     }
     if (norm.startsWith('INSERT INTO ai_jobs')) {
       const key = `${params[0]}:${params[1]}`;
@@ -226,6 +227,16 @@ function makeFakeClient() {
         rowCount: 1,
       };
     }
+    if (norm.startsWith("UPDATE ai_jobs SET status = 'queued', payload =")) {
+      const job = state.jobs.get(params[0]);
+      if (!job) return { rows: [], rowCount: 0 };
+      job.status = 'queued';
+      job.payload = JSON.parse(params[1]);
+      job.attempts = 0;
+      job.lease_token = null;
+      job.lease_expires_at = null;
+      return { rows: [{ id: job.id }], rowCount: 1 };
+    }
     if (norm.startsWith("UPDATE ai_jobs SET status = 'queued'")) {
       const job = state.jobs.get(params[0]);
       if (!job || job.status !== 'leased' || job.lease_token !== params[1] || new Date(job.lease_expires_at) <= params[3]) {
@@ -256,6 +267,10 @@ function makeFakeClient() {
       job.lease_expires_at = null;
       return { rows: [], rowCount: 1 };
     }
+    if (norm.startsWith('DELETE FROM ai_jobs WHERE id')) {
+      const deleted = state.jobs.delete(params[0]);
+      return { rows: [], rowCount: deleted ? 1 : 0 };
+    }
     if (norm.startsWith('SELECT payload FROM ai_jobs WHERE id')) {
       const job = state.jobs.get(params[0]);
       return { rows: job ? [jsonbOut({ payload: job.payload })] : [], rowCount: job ? 1 : 0 };
@@ -279,8 +294,10 @@ function makeFakeClient() {
     }
     if (norm.startsWith('INSERT INTO ai_quota_days')) {
       const key = `${params[0]}:${todayKey()}`;
-      state.quota.set(key, (state.quota.get(key) || 0) + 1);
-      return { rows: [], rowCount: 1 };
+      const used = state.quota.get(key) || 0;
+      if (used >= params[1]) return { rows: [], rowCount: 0 };
+      state.quota.set(key, used + 1);
+      return { rows: [{ profile_id: params[0] }], rowCount: 1 };
     }
     if (norm.startsWith('INSERT INTO ai_events')) {
       state.events.push({
@@ -307,6 +324,8 @@ function makeFakeClient() {
         tokensLastMinute: 0,
         requestsPerMinuteLimit: params[0],
         tokensPerMinuteLimit: params[1],
+        requestsToday: 0,
+        requestsPerDayLimit: params[2],
         waitingLastMinute: 0,
         permanentlyBlockedLastMinute: 0,
       } }], rowCount: 1 };
@@ -452,6 +471,28 @@ test('acceptance is replay-safe: same source twice, one job, one event, one quot
   assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 1);
 });
 
+test('failed job can be re-queued with fresh payload', async () => {
+  const client = makeUserClient();
+  const first = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+  });
+  assert.equal(first.accepted, true);
+  await geminiQueue.failJob(client, first.jobId, PROFILE_A, 'test_failure');
+  assert.equal(client.state.jobs.get(first.jobId).status, 'failed');
+
+  const retry = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+  });
+  assert.equal(retry.accepted, true);
+  assert.equal(retry.reused, false);
+  assert.equal(retry.jobId, first.jobId);
+  assert.equal(client.state.jobs.get(first.jobId).status, 'queued');
+});
+
 test('sensitive payloads are refused before any job or quota write', async () => {
   const client = makeUserClient();
   const outcome = await geminiQueue.acceptOneJob(client, PROFILE_A, {
@@ -515,6 +556,27 @@ test('AI quota insert supplies the required day column', async () => {
     sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: 'Rs 100 debited',
   });
   assert.match(quotaSql, /\(profile_id, day, jobs_used\)/);
+});
+
+test('concurrent fresh accepts cannot exceed the daily quota or leave a rejected job', async () => {
+  const client = makeUserClient();
+  const quotaKey = `${PROFILE_A}:${todayKey()}`;
+  client.state.quota.set(quotaKey, geminiQueue.DAILY_QUOTA - 1);
+
+  const outcomes = await Promise.all([
+    geminiQueue.acceptOneJob(client, PROFILE_A, {
+      sourceKey: 'b'.repeat(64), sender: 'HDFCBK', body: BILL_BODY,
+    }),
+    geminiQueue.acceptOneJob(client, PROFILE_A, {
+      sourceKey: 'c'.repeat(64), sender: 'HDFCBK', body: BILL_BODY,
+    }),
+  ]);
+
+  assert.equal(outcomes.filter((item) => item.accepted).length, 1);
+  assert.equal(outcomes.filter((item) => item.reason === 'daily_quota_exhausted').length, 1);
+  assert.equal(client.state.quota.get(quotaKey), geminiQueue.DAILY_QUOTA);
+  assert.equal(client.state.jobs.size, 1);
+  assert.equal(client.state.events.filter((event) => event.event_type === 'accepted').length, 1);
 });
 
 test('AI sanitization hides full account IDs, addresses, references and URLs', () => {
@@ -619,6 +681,102 @@ test('a valid result lands, purges the body, and marks the job done', async () =
   assert.equal(JSON.parse(fact.provenance).channel, 'ai');
   assert.equal(job.result.reviewRequired, true, 'AI bill facts stay in Needs Review');
   assert.equal(job.result.specialists, null, 'AI result cannot mutate legacy projections');
+});
+
+const SWIGGY_BODY =
+  'Sent Rs.420.00 from HDFC Bank A/C **1797 to SWIGGY UPI on 24-10-26. UPI Ref 429812345678. Avail Bal: Rs.45,120.50';
+
+const SWIGGY_FACT = {
+  factType: 'posted_movement',
+  payload: {
+    amountRole: 'posted',
+    entryKind: 'spend',
+    amountInr: 420.0,
+    occurredAt: '2026-10-24T00:00:00.000Z',
+    instrument: 'upi_bank',
+    accountLast4: '1797',
+    issuerName: 'HDFC Bank',
+    merchant: 'Swiggy',
+    category: 'dining',
+    isComplete: true,
+    confidence: 0.98,
+  },
+};
+
+const PARTIAL_BODY =
+  'A/c XX1797 debited for INR 750.00 on 24-10-26. Info: POS-TXN. Avail Bal: 21,400.00.';
+
+const PARTIAL_FACT = {
+  factType: 'posted_movement',
+  payload: {
+    amountRole: 'posted',
+    entryKind: 'spend',
+    amountInr: 750.0,
+    occurredAt: '2026-10-24T00:00:00.000Z',
+    instrument: 'upi_bank',
+    accountLast4: '1797',
+    merchant: null,
+    category: 'other',
+    isComplete: false,
+    confidence: 0.65,
+  },
+};
+
+test('a high-confidence complete posted movement auto-resolves with a composite score', async () => {
+  const client = makeUserClient();
+  const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: SWIGGY_BODY,
+  });
+  await geminiQueue.leaseNextJob(client, 'worker:tok1', client.state.now);
+  const job = client.state.jobs.get(accepted.jobId);
+  const outcome = await geminiQueue.completeJobWithResult(client, {
+    job,
+    facts: [SWIGGY_FACT],
+  });
+  assert.equal(job.status, 'done');
+  assert.equal(job.result.reviewRequired, false);
+  assert.ok(job.result.confidenceScore >= 0.85, `score ${job.result.confidenceScore}`);
+  assert.equal(job.result.scores.length, 1);
+  assert.equal(job.result.scores[0].factType, 'posted_movement');
+  assert.equal(job.result.scores[0].isComplete, true);
+  assert.deepEqual(job.result.factTypes, ['posted_movement']);
+  assert.equal(outcome.reviewRequired, false);
+  assert.equal(outcome.confidenceScore, job.result.confidenceScore);
+});
+
+test('a partial or incomplete movement stays in Needs Review', async () => {
+  const client = makeUserClient();
+  const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: PARTIAL_BODY,
+  });
+  await geminiQueue.leaseNextJob(client, 'worker:tok1', client.state.now);
+  const job = client.state.jobs.get(accepted.jobId);
+  await geminiQueue.completeJobWithResult(client, { job, facts: [PARTIAL_FACT] });
+  assert.equal(job.result.reviewRequired, true);
+  assert.ok(job.result.confidenceScore < 0.85);
+  assert.equal(job.result.scores[0].isComplete, false);
+});
+
+test('an explicit reviewRequired override wins over the computed score', async () => {
+  const client = makeUserClient();
+  const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: SWIGGY_BODY,
+  });
+  await geminiQueue.leaseNextJob(client, 'worker:tok1', client.state.now);
+  const job = client.state.jobs.get(accepted.jobId);
+  await geminiQueue.completeJobWithResult(client, {
+    job,
+    facts: [SWIGGY_FACT],
+    reviewRequired: true,
+  });
+  assert.equal(job.result.reviewRequired, true);
+  assert.ok(job.result.confidenceScore >= 0.85, 'the score is still reported');
 });
 
 test('AI results only fill empty slots: device facts and overrides outrank the model', async () => {
@@ -917,6 +1075,41 @@ test('POST /ai/jobs honors the server-side AI rollout flag without altering loca
   assert.equal(h.state.jobs.size, 0);
 });
 
+test('POST /ai/jobs accepts only profiles selected into the deterministic 1% pilot', async () => {
+  const included = Array.from({ length: 1000 }, (_, i) => `pilot-${i}`).find(
+    (id) => smsObservationMigration.hashProfileBucket(id, 'sms_ai_queue_enabled') === 0,
+  );
+  const excluded = Array.from({ length: 1000 }, (_, i) => `outside-${i}`).find(
+    (id) => smsObservationMigration.hashProfileBucket(id, 'sms_ai_queue_enabled') !== 0,
+  );
+  assert.ok(included);
+  assert.ok(excluded);
+
+  const forProfile = async (userId) => {
+    const h = harness({});
+    h.state.featureFlags = [
+      { key: 'sms_ai_queue_enabled', is_enabled: true, rollout_percent: 1 },
+    ];
+    return {
+      h,
+      response: await h.call('/ai/jobs', {
+        userId,
+        body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
+      }),
+    };
+  };
+
+  const inCohort = await forProfile(included);
+  assert.equal(inCohort.response.status, 200);
+  assert.equal(inCohort.h.state.jobs.size, 1);
+
+  const outOfCohort = await forProfile(excluded);
+  assert.equal(outOfCohort.response.status, 503);
+  assert.equal(outOfCohort.response.body.error, 'ai_queue_disabled');
+  assert.equal(outOfCohort.h.state.jobs.size, 0);
+  assert.equal(outOfCohort.h.state.quota.size, 0);
+});
+
 test('lease endpoint hands out nothing on an empty queue', async () => {
   const h = harness({});
   const res = await h.call('/ai/jobs/lease', { body: {} });
@@ -987,6 +1180,106 @@ test('result endpoint requires the current lease token and job owner context', a
   assert.match(stale.body.error, /lease/);
 });
 
+test('valid AI result endpoint completes review-only without invoking projection specialists', async () => {
+  for (const facts of [[], BILL_FACTS]) {
+    const h = harness({});
+    const accepted = await h.call('/ai/jobs', {
+      userId: PROFILE_A,
+      body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
+    });
+    const lease = await h.call('/ai/jobs/lease', { body: {} });
+    const job = h.state.jobs.get(accepted.body.jobId);
+    job.lease_expires_at = new Date(Date.now() + 600000);
+    const result = await h.call('/ai/jobs/:id/result', {
+      params: { id: job.id },
+      body: { profileId: PROFILE_A, leaseToken: lease.body.job.leaseToken, facts },
+    });
+    assert.equal(result.status, 200);
+    assert.equal(job.status, 'done');
+    assert.equal(job.result.reviewRequired, true);
+    assert.equal(job.result.specialists, null);
+    assert.deepEqual(job.payload, { purged: true });
+    assert.equal(h.state.events.filter((event) => event.event_type === 'result').length, 1);
+  }
+});
+
+test('result endpoint carries the computed auto-resolution decision and score', async () => {
+  const h = harness({});
+  const accepted = await h.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: SWIGGY_BODY },
+  });
+  const lease = await h.call('/ai/jobs/lease', { body: {} });
+  const job = h.state.jobs.get(accepted.body.jobId);
+  job.lease_expires_at = new Date(Date.now() + 600000);
+  const result = await h.call('/ai/jobs/:id/result', {
+    params: { id: job.id },
+    body: { profileId: PROFILE_A, leaseToken: lease.body.job.leaseToken, facts: [SWIGGY_FACT] },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.jobStatus, 'done');
+  assert.equal(result.body.reviewRequired, false);
+  assert.ok(result.body.confidenceScore >= 0.85);
+  assert.equal(job.result.reviewRequired, false);
+  assert.equal(job.result.specialists, null);
+});
+
+test('source status omits AI facts the user already confirmed or corrected', async () => {
+  const h = harness({});
+  const body = `${BILL_BODY} Available balance INR 5000 for A/c XX1234.`;
+  const accepted = await geminiQueue.acceptOneJob(h.client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body,
+  });
+  const job = h.state.jobs.get(accepted.jobId);
+  const balanceFact = {
+    factType: 'balance_snapshot',
+    payload: {
+      availableBalanceInr: 5000,
+      asOfAt: '2026-10-20T18:30:00.000Z',
+      accountLast4: '1234',
+      instrument: 'upi_bank',
+    },
+  };
+  await geminiQueue.completeJobWithResult(h.client, {
+    job,
+    facts: [...BILL_FACTS, balanceFact],
+  });
+  const source = [...h.state.sources.values()][0];
+  const confirmedIndex = [...source.facts.values()].find(
+    (fact) => fact.fact_type === 'bill_obligation',
+  ).fact_index;
+  source.overrides.set(confirmedIndex, { amountDueInr: 3000 });
+
+  const query = h.client.query;
+  h.client.query = async (sql, params) => {
+    if (sql.replace(/\s+/g, ' ').trim().startsWith(
+      'SELECT id, status, result, attempts, created_at, updated_at FROM ai_jobs',
+    )) {
+      return { rows: [{
+        id: job.id,
+        status: job.status,
+        result: job.result,
+        attempts: job.attempts,
+        created_at: job.created_at,
+        updated_at: job.created_at,
+      }] };
+    }
+    return query(sql, params);
+  };
+
+  const response = await h.call('/ai/jobs/source/:sourceKey', {
+    userId: PROFILE_A,
+    params: { sourceKey: SOURCE_KEY },
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.suggestions.map((fact) => fact.factType), [
+    'balance_snapshot',
+  ]);
+  assert.equal(response.body.suggestions[0].factIndex === confirmedIndex, false);
+});
+
 // Phase 6: Admin monitoring & Learning loop
 
 test('admin monitoring endpoints return redacted metrics and timeline without raw body', async () => {
@@ -1003,7 +1296,8 @@ test('admin monitoring endpoints return redacted metrics and timeline without ra
   assert.equal(summaryRes.body.statusCounts.queued, 1);
   assert.equal(typeof summaryRes.body.oldestAgeSeconds, 'number');
   assert.equal(summaryRes.body.totalJobsToday, 1);
-  assert.equal(summaryRes.body.providerCapacity.requestsPerMinuteLimit, 10);
+  assert.equal(summaryRes.body.providerCapacity.requestsPerMinuteLimit, 5);
+  assert.equal(summaryRes.body.providerCapacity.requestsPerDayLimit, 20);
 
   // 2. Jobs list (no raw payload)
   const jobsRes = await h.call('/admin/sms-ai/jobs', { query: {} });

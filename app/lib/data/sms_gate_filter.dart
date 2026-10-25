@@ -51,7 +51,7 @@ class SmsGateFilter {
   static final _dematDepositoryRe = RegExp(
     r'\b(?:cdsl|nsdl)\s*:\s*(?:debit|credit)\s+in\s+a/?c\b[\s\S]{0,40}\b(?:etf|bees|shares?|units?|mf)\b|'
     r'\b(?:cdsl|nsdl)\s*:\s*(?:unpledge|pledge)\b|'
-    r'\b(?:updated\s+(?:your\s+)?address\s+under\s+folio|address\s+in\s+folio[^\w\n]*\w+\s+is\s+updated|based\s+on\s+feed\s+received\s+from\s+kra)\b|'
+    r'\b(?:updated\s+(?:your\s+)?address\s+(?:under|of)\s+folio|address\s+in\s+folio[^\w\n]*\w+\s+(?:is|has\s+been)\s+updated|based\s+on\s+(?:the\s+)?feed\s+received\s+from\s+kra)\b|'
     r'\b(?:bse\s+trade\s+confirmation|welcome\s+to\s+nse,\s+you\s+have\s+been\s+registered\b|registered\s+with\s+[\w\s]+in\s+segment(?:\(s\))?|traded\s+value\s+for\b|unsolicited\s+tips|online\s+investment\s+scams)\b',
     caseSensitive: false,
   );
@@ -113,8 +113,12 @@ class SmsGateFilter {
     }
 
     // Check promotional route suffix (-P)
+    final actionableInsuranceRenewal =
+        LocalSmsParser.isActionableInsuranceRenewal(body);
     final isPromoRoute = RegExp(r'-[Pp]$').hasMatch(trimmedSender);
-    if (isPromoRoute && !LocalSmsParser.isCompletedTransactionOrBill(body)) {
+    if (isPromoRoute &&
+        !LocalSmsParser.isCompletedTransactionOrBill(body) &&
+        !actionableInsuranceRenewal) {
       return const SmsGateVerdict.drop(SmsGateDropReason.promotionalNoise);
     }
 
@@ -123,7 +127,9 @@ class SmsGateFilter {
       return const SmsGateVerdict.drop(SmsGateDropReason.dematOrSecuritiesAlert);
     }
 
-    if (_earlyNoiseRe.hasMatch(body) && !_balanceSnapshotRe.hasMatch(body)) {
+    if (_earlyNoiseRe.hasMatch(body) &&
+        !_balanceSnapshotRe.hasMatch(body) &&
+        !actionableInsuranceRenewal) {
       return const SmsGateVerdict.drop(SmsGateDropReason.promotionalNoise);
     }
 
@@ -131,7 +137,9 @@ class SmsGateFilter {
     final hasAmountOrBalance = _currencyOrAmountIndicatorRe.hasMatch(body);
     final hasMovementVerb = _movementVerbIndicatorRe.hasMatch(body);
 
-    if (!hasAmountOrBalance && !hasMovementVerb) {
+    if (!hasAmountOrBalance &&
+        !hasMovementVerb &&
+        !actionableInsuranceRenewal) {
       return const SmsGateVerdict.drop(SmsGateDropReason.noFinancialKeywords);
     }
 

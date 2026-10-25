@@ -122,6 +122,13 @@ final cardRequestGroupsProvider = FutureProvider<List<Map<String, dynamic>>>((
   return api.fetchCardRequestGroups();
 });
 
+final supportTicketsProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchSupportTickets();
+});
+
 final errorReportsProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,
 ) async {

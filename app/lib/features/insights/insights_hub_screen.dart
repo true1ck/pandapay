@@ -45,20 +45,32 @@ import '../cards/card_visual.dart';
 /// Task E-0c: tiles with a real urgency signal (Caps, Milestones, Fee
 /// Waivers) sort nearest-deadline/closest-to-cap first via the shared
 /// scorer; tiles with no such notion (Billing Float, All Activity,
-/// Portfolio Audit, Spending Overview, Contributions, Credit Utilization,
-/// Due Dates, Lounge) are appended after in a fixed order — E3 in
-/// particular has no natural urgency (a utilization ratio isn't a
-/// deadline), so it stays unordered per the plan's own note.
-/// "12 tracked · 3 active" — one line covering everything behind the
-/// Limits & perks tile, so collapsing four tiles into one doesn't cost the
-/// at-a-glance counts the separate tiles used to give.
-String? _limitsHeadline(int caps, int milestones, int feeWaivers) {
+/// Portfolio Audit, Spending Overview, Contributions, Due Dates, Lounge)
+/// are appended after in a fixed order. Utilization has no natural urgency
+/// either — a ratio isn't a deadline — so its percentage rides on this
+/// tile's headline without changing the tile's urgency score or position.
+///
+/// "78% utilized · 3 caps · 1 milestone" — one line covering everything
+/// behind the Limits & perks tile, so collapsing six tiles into one doesn't
+/// cost the at-a-glance counts the separate tiles used to give.
+///
+/// [highUtilizationPct] leads when any owned card is over the 30% bureau
+/// guideline: it is the one figure here with a reason to act before the
+/// statement closes. Caps, milestones and waivers follow in that order,
+/// and the result stops at three parts so the line still fits the tile.
+String? _limitsHeadline(
+  int caps,
+  int milestones,
+  int feeWaivers,
+  int? highUtilizationPct,
+) {
   final parts = <String>[
+    if (highUtilizationPct != null) '$highUtilizationPct% utilized',
     if (caps > 0) '$caps cap${caps == 1 ? '' : 's'}',
     if (milestones > 0) '$milestones milestone${milestones == 1 ? '' : 's'}',
     if (feeWaivers > 0) '$feeWaivers waiver${feeWaivers == 1 ? '' : 's'}',
   ];
-  return parts.isEmpty ? null : parts.join(' · ');
+  return parts.isEmpty ? null : parts.take(3).join(' · ');
 }
 
 class InsightsHubScreen extends ConsumerWidget {
@@ -72,7 +84,8 @@ class InsightsHubScreen extends ConsumerWidget {
     // take up two permanent tiles in the grid. They appear as a single row
     // above it, and only when there is actually something to do — a queue
     // that is empty most of the time does not deserve standing real estate.
-    final needsReviewCount = ref.watch(needsReviewCountProvider);
+    final needsReviewCount =
+        ref.watch(needsReviewCountProvider).valueOrNull ?? 0;
     final duplicateCount =
         ref.watch(duplicateCandidatesProvider).valueOrNull?.length ?? 0;
 
@@ -105,6 +118,22 @@ class InsightsHubScreen extends ConsumerWidget {
       for (final (userCard, _) in owned)
         for (final fw in userCard.feeWaiverStates) fw,
     ];
+
+    // Utilization now sits behind Limits & perks, so the tile carries the
+    // figure from it worth acting on: the worst ratio among cards already
+    // over the 30% bureau guideline. Cards with no credit limit and cards
+    // under the threshold contribute nothing — a reassuring "12% utilized"
+    // would only crowd out the cap and milestone counts.
+    final utilization = ref.watch(creditUtilizationProvider);
+    int? highUtilizationPct;
+    for (final (userCard, _) in owned) {
+      final result = utilization[userCard.id];
+      if (result == null || !result.overThreshold) continue;
+      final pct = (result.ratio * 100).round();
+      if (highUtilizationPct == null || pct > highUtilizationPct) {
+        highUtilizationPct = pct;
+      }
+    }
 
     UrgencyScore? mostUrgentCap;
     for (final (userCard, cap) in capRows) {
@@ -145,10 +174,11 @@ class InsightsHubScreen extends ConsumerWidget {
     // SIX tiles, not eighteen.
     //
     // This grid had grown one tile per shipped screen, and most of them
-    // answered slices of the same few questions: Caps/Milestones/Fee
-    // Waivers/Lounge are all "progress toward a threshold on a card";
-    // Savings/Missed/Portfolio are all "did this wallet pay off";
-    // Due Dates/Float/Utilization are all "when and how much to pay". Laid
+    // answered slices of the same few questions: Caps, Milestones, Fee
+    // Waivers, Lounge, Interest-free days and Utilization all answer "what
+    // does this card give me, and where do I stand with it?"; Savings,
+    // Missed and Portfolio are all "did this wallet pay off?"; Bills &
+    // Commitments and Due Dates are all "what do I owe, and when?". Laid
     // out as eighteen equal choices, the grouping had to happen in the
     // user's head every single time — and "Spending Overview" had become a
     // strict subset of "Spending" once the latter gained periods, a
@@ -178,6 +208,7 @@ class InsightsHubScreen extends ConsumerWidget {
             capRows.length,
             milestoneRows.length,
             feeWaiverRows.length,
+            highUtilizationPct,
           ),
           onTap: () => context.push(AppRoute.limitsAndPerks),
         ),
@@ -209,7 +240,7 @@ class InsightsHubScreen extends ConsumerWidget {
       _InsightTile(
         icon: Icons.event_available_outlined,
         label: 'Payments',
-        headline: 'Due dates & credit',
+        headline: 'Bills & due dates',
         onTap: () => context.push(AppRoute.paymentsGroup),
       ),
       _InsightTile(
@@ -531,10 +562,7 @@ class _PeriodChips extends ConsumerWidget {
     );
   }
 
-  Future<void> _chooseCustomRange(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _chooseCustomRange(BuildContext context, WidgetRef ref) async {
     final now = ref.read(clockProvider).now();
     final current = ref.read(insightsCustomRangeProvider);
     final existing = current == null
@@ -822,7 +850,10 @@ class _CategoryPieState extends State<_CategoryPie> {
                           children: [
                             Text(
                               'Rewards',
-                              style: BambooFonts.ui(11, color: BambooInk.ink500),
+                              style: BambooFonts.ui(
+                                11,
+                                color: BambooInk.ink500,
+                              ),
                             ),
                             SizedBox(
                               width: 76,
@@ -831,8 +862,9 @@ class _CategoryPieState extends State<_CategoryPie> {
                                 child: MoneyText(
                                   widget.earnedTotal,
                                   confidence: Confidence.confirmed,
-                                  style: BambooFonts.money(
-                                    17,
+                                  style: BambooFonts.ui(
+                                    16,
+                                    weight: FontWeight.w800,
                                     color: BambooInk.ink900,
                                   ),
                                   hidePaise: true,
@@ -1114,8 +1146,7 @@ class _MissedPreview extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          row.entry.merchantName ??
-                              row.entry.categoryLabel,
+                          row.entry.merchantName ?? row.entry.categoryLabel,
                           style: BambooFonts.ui(
                             14,
                             weight: FontWeight.w600,

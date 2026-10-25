@@ -148,6 +148,11 @@ jobs:
           NOTIFICATION_SERVICE_URL: ${{ secrets.NOTIFICATION_SERVICE_URL }}
           NOTIFICATION_SERVICE_API_KEY: ${{ secrets.NOTIFICATION_SERVICE_API_KEY }}
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_FALLBACK_API_KEY: ${{ secrets.GEMINI_FALLBACK_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          GEMINI_FALLBACK_MODEL: ${{ secrets.GEMINI_FALLBACK_MODEL }}
+          AI_WORKER_TOKEN: ${{ secrets.AI_WORKER_TOKEN }}
         run: |
           test -n "$NOTIFICATION_SERVICE_URL"
           test -n "$NOTIFICATION_SERVICE_API_KEY"
@@ -156,6 +161,21 @@ jobs:
             printf 'export NOTIFICATION_SERVICE_API_KEY=%q\n' "$NOTIFICATION_SERVICE_API_KEY"
             if [ -n "$GOOGLE_PLACES_API_KEY" ]; then
               printf 'export GOOGLE_PLACES_API_KEY=%q\n' "$GOOGLE_PLACES_API_KEY"
+            fi
+            if [ -n "$GEMINI_API_KEY" ]; then
+              printf 'export GEMINI_API_KEY=%q\n' "$GEMINI_API_KEY"
+            fi
+            if [ -n "$GEMINI_FALLBACK_API_KEY" ]; then
+              printf 'export GEMINI_FALLBACK_API_KEY=%q\n' "$GEMINI_FALLBACK_API_KEY"
+            fi
+            if [ -n "$GEMINI_MODEL" ]; then
+              printf 'export GEMINI_MODEL=%q\n' "$GEMINI_MODEL"
+            fi
+            if [ -n "$GEMINI_FALLBACK_MODEL" ]; then
+              printf 'export GEMINI_FALLBACK_MODEL=%q\n' "$GEMINI_FALLBACK_MODEL"
+            fi
+            if [ -n "$AI_WORKER_TOKEN" ]; then
+              printf 'export AI_WORKER_TOKEN=%q\n' "$AI_WORKER_TOKEN"
             fi
             cat deploy/deploy.sh
           } | ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
@@ -169,7 +189,97 @@ jobs:
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
             'curl -fsS -m 10 http://127.0.0.1:4000/ready && echo && curl -fsS -m 10 http://127.0.0.1:3210/ready'
 
-      - name: Smoke test readiness and anonymous auth denial
+      - name: Check Gemini pipeline activity (aggregate only)
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/apps/pandapay
+          DBURL="$(sed -n 's/^ADMIN_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
+          test -n "$DBURL"
+          docker run --rm -i -e U="$DBURL" postgres:17-alpine sh -lc 'psql "$U" -X -qAt -v ON_ERROR_STOP=1' <<'SQL'
+          SELECT json_build_object(
+            'smsAiQueueEnabled', COALESCE((
+              SELECT is_enabled FROM public.feature_flags WHERE key = 'sms_ai_queue_enabled'
+            ), false),
+            'jobsLast24Hours', (
+              SELECT count(*) FROM public.ai_jobs WHERE created_at > now() - interval '24 hours'
+            ),
+            'jobsByStatusLast24Hours', COALESCE((
+              SELECT json_object_agg(status, job_count)
+              FROM (
+                SELECT status, count(*) AS job_count FROM public.ai_jobs
+                WHERE created_at > now() - interval '24 hours' GROUP BY status
+              ) AS counts
+            ), '{}'::json),
+            'providerReservationsLast24Hours', (
+              SELECT count(*) FROM public.ai_provider_reservations
+              WHERE created_at > now() - interval '24 hours'
+            ),
+            'successfulResultsLast24Hours', (
+              SELECT count(*) FROM public.ai_events
+              WHERE event_type = 'result' AND created_at > now() - interval '24 hours'
+            ),
+            'providerRetriesLast24Hours', (
+              SELECT count(*) FROM public.ai_events
+              WHERE event_type = 'provider_retry' AND created_at > now() - interval '24 hours'
+            )
+          );
+          SQL
+          REMOTE
+
+      - name: Smoke test authenticated nearby discovery API
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
+            'cd /home/ubuntu/apps/pandapay && docker compose --env-file .env -f docker-compose.prod.yml exec -T api node -' <<'NODE'
+          const jwt = require('jsonwebtoken');
+          const config = require('./src/config');
+
+          async function main() {
+            const secret = Object.values(config.jwtKeys)[0];
+            const token = jwt.sign(
+              { sub: 'production-smoke-test', role: 'authenticated', token_version: 1 },
+              secret,
+              { issuer: config.jwtIssuer, audience: config.jwtAudience, expiresIn: '60s' },
+            );
+            const response = await fetch('http://127.0.0.1:4000/merchants/nearby/google', {
+              method: 'POST',
+              headers: {
+                authorization: `Bearer ${token}`,
+                'content-type': 'application/json',
+              },
+              body: JSON.stringify({ lat: 18.5204, lng: 73.8567, radiusM: 2000 }),
+              signal: AbortSignal.timeout(25000),
+            });
+            const payload = await response.json();
+            const count = Array.isArray(payload.merchants) ? payload.merchants.length : -1;
+            console.log(JSON.stringify({
+              http_status: response.status,
+              source: payload.source || null,
+              merchant_count: count,
+              degraded: payload.degraded === true,
+              partial: payload.partial === true,
+              error: payload.error || null,
+              detail: payload.detail || null,
+            }));
+            if (!response.ok || count < 0
+              || !['google_places', 'google_maps', 'openstreetmap_fallback'].includes(payload.source)) {
+              process.exitCode = 1;
+            }
+          }
+
+          main().catch((error) => {
+            console.error('Nearby API smoke test failed:', error.name);
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Smoke test anonymous auth denial
         env:
           HOST: ${{ secrets.PROD_HOST }}
           DEPLOY_USER: ${{ secrets.PROD_USER }}

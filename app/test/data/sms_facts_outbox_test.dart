@@ -462,7 +462,7 @@ void main() {
       expect(SmsIntakeRepository(db).pending(namespace), isEmpty);
     });
 
-    test('balance-only capture leaves a facts row; bill capture rides both feeds', () {
+    test('balance and complete bills retain facts without legacy raw upload', () {
       final balance = 'Your A/c XX9876 available balance is Rs.9,000.00 as on 16-10-26.';
       SmsImportStore(cache.financialStore).capture(
         namespace,
@@ -477,7 +477,8 @@ void main() {
         namespace,
         QueuedSms(sender: 'AXISBK', body: bill, receivedAt: DateTime(2026, 10, 18, 10)),
       );
-      // Phase 3: bills ride the legacy batch AND the typed fact contract.
+      // Complete bills retain local evidence and typed facts, then acknowledge
+      // legacy intake so the raw SMS is not uploaded to the transaction parser.
       // Separate due roles keep the total and minimum from collapsing.
       final billRows = outbox.pending(namespace);
       expect(billRows, hasLength(2));
@@ -488,7 +489,36 @@ void main() {
         (billEnvelope['facts'] as List).map((f) => f['payload']['amountRole']).toSet(),
         {'due_total', 'due_minimum'},
       );
-      expect(SmsIntakeRepository(db).pending(namespace), hasLength(1));
+      final intake = SmsIntakeRepository(db);
+      final billKey = smsSourceKey(namespace, 'AXISBK', bill);
+      expect(intake.pending(namespace), isEmpty);
+      expect(intake.wasProcessed(namespace, billKey), isTrue);
+      final observation = cache.financialStore
+          .entities(namespace, 'sms_observations', id: billKey)
+          .single;
+      expect(observation['event_type'], 'bill');
+      expect(observation['sample_body'], bill);
+      expect(observation['card_last4'], '4321');
+      expect(observation['amount_due_paise'], 300000);
+      expect(observation['minimum_due_paise'], 60000);
+      expect(DateTime.parse(observation['due_date'] as String), DateTime(2026, 11, 5));
+    });
+
+    test('a bill missing its due date still waits for legacy parsing', () {
+      const bill =
+          'Your Axis Bank Credit Card XX4321 e-statement is generated. Total Amount Due INR 3,000.00.';
+      SmsImportStore(cache.financialStore).capture(
+        namespace,
+        QueuedSms(
+          sender: 'AXISBK',
+          body: bill,
+          receivedAt: DateTime(2026, 10, 18, 10),
+        ),
+      );
+      // A bill fact requires a due date; an incomplete parse must not lose the
+      // only remaining route that can resolve its missing information.
+      expect(outbox.pending(namespace), isEmpty);
+      expect(SmsIntakeRepository(db).pending(namespace).single.message.body, bill);
     });
 
     test('spend capture never mints facts; OTP stays invisible', () {

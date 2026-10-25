@@ -26,9 +26,9 @@ import '../sync/sync_engine.dart';
 ///   row says so: pausing here does not block anything at your bank.
 /// - "Remove this card" is an archive, not a delete — the transactions
 ///   logged against it stay, so your history and reward totals don't
-///   silently change. The card stops being ranked and moves to Wallet's
-///   Archived tab, from which it can come back. That's stated on the row
-///   rather than left for the user to discover.
+///   silently change. The card stops being ranked and moves to Deleted
+///   cards in Settings, from which it can come back. That's stated on the
+///   row rather than left for the user to discover.
 class CardActionsScreen extends ConsumerStatefulWidget {
   final UserCard card;
   final CardProduct product;
@@ -181,9 +181,9 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
           style: BambooFonts.heading(18, color: BambooInk.ink900),
         ),
         content: Text(
-          'PandaPay stops ranking it and moves it to Archived, where you can restore it any '
-          'time. Spends already logged against it stay in your history, so your totals do not '
-          'change. This does not close the card with your bank.',
+          'PandaPay stops ranking it and moves it to Deleted cards in Settings, where you can '
+          'restore it any time. Spends already logged against it stay in your history, so your '
+          'totals do not change. This does not close the card with your bank.',
           style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.5),
         ),
         actions: [
@@ -341,8 +341,8 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    'PandaPay stops ranking it and moves it to Archived. Your logged spends stay. '
-                    'This does not close the card with your bank.',
+                    'PandaPay stops ranking it and moves it to Deleted cards in Settings. Your logged '
+                    'spends stay. This does not close the card with your bank.',
                     style: BambooFonts.ui(
                       12.5,
                       color: BambooInk.clayInkMuted,

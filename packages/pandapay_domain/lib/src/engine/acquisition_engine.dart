@@ -9,11 +9,50 @@ import 'engine.dart';
 /// concept.
 class SpendProfile {
   final Map<String?, Money> annualSpendByCategory;
+  final bool isStarterProfile;
 
-  const SpendProfile({required this.annualSpendByCategory});
+  const SpendProfile({
+    required this.annualSpendByCategory,
+    this.isStarterProfile = false,
+  });
 
   Money get totalAnnualSpend =>
       annualSpendByCategory.values.fold(const Money.zero(), (sum, v) => sum + v);
+
+  bool get isEmptyOrZero =>
+      annualSpendByCategory.isEmpty || totalAnnualSpend <= const Money.zero();
+
+  /// Baseline annual spend profile for users without enough transaction history:
+  /// - dining: ₹5,000/mo = ₹60,000/yr (6,000,000 paise)
+  /// - groceries: ₹8,000/mo = ₹96,000/yr (9,600,000 paise)
+  /// - utilities/bills: ₹3,000/mo = ₹36,000/yr (3,600,000 paise)
+  /// - online shopping: ₹5,000/mo = ₹60,000/yr (6,000,000 paise)
+  /// - fuel: ₹3,000/mo = ₹36,000/yr (3,600,000 paise)
+  static const defaultStarterAnnualSpendBySlug = <String, Money>{
+    'dining': Money.fromPaise(6000000),
+    'groceries': Money.fromPaise(9600000),
+    'bills': Money.fromPaise(3600000),
+    'online': Money.fromPaise(6000000),
+    'fuel': Money.fromPaise(3600000),
+  };
+
+  /// Constructs a starter spend profile. If [categorySlugToIdMap] is provided,
+  /// category slugs are mapped to their corresponding IDs.
+  factory SpendProfile.starter({Map<String, String>? categorySlugToIdMap}) {
+    final map = <String?, Money>{};
+    for (final entry in defaultStarterAnnualSpendBySlug.entries) {
+      String? mappedKey = categorySlugToIdMap?[entry.key];
+      if (mappedKey == null && entry.key == 'bills') {
+        mappedKey = categorySlugToIdMap?['utilities'];
+      }
+      final key = mappedKey ?? entry.key;
+      map[key] = entry.value;
+    }
+    return SpendProfile(
+      annualSpendByCategory: map,
+      isStarterProfile: true,
+    );
+  }
 }
 
 /// One candidate card NOT already in the user's wallet, ranked by how much
@@ -45,12 +84,17 @@ class AcquisitionCandidate {
   /// [Recommendation.reasonLines] applies at transaction time.
   final Map<String?, Money> valueByCategory;
 
+  /// Whether this recommendation was evaluated against a baseline starter
+  /// spend profile rather than the user's real transaction history.
+  final bool isStarterProfile;
+
   const AcquisitionCandidate({
     required this.card,
     required this.projectedAnnualValue,
     required this.annualFeeNet,
     required this.uplift,
     required this.valueByCategory,
+    this.isStarterProfile = false,
   });
 
   bool get isWorthwhile => uplift > const Money.zero();
@@ -133,16 +177,20 @@ class CardAcquisitionRecommender {
     required List<CardProduct> candidates,
     required List<CardProduct> ownedCards,
     required SpendProfile spendProfile,
+    bool fallbackToStarterProfile = false,
     DateTime? now,
   }) {
+    final effectiveProfile = (fallbackToStarterProfile && spendProfile.isEmptyOrZero)
+        ? SpendProfile.starter()
+        : spendProfile;
     final ownedIds = ownedCards.map((c) => c.id).toSet();
-    final baseline = _evaluatePortfolio(ownedCards, spendProfile, now: now);
+    final baseline = _evaluatePortfolio(ownedCards, effectiveProfile, now: now);
 
     final results = <AcquisitionCandidate>[];
     for (final candidate in candidates) {
       if (ownedIds.contains(candidate.id)) continue;
 
-      final withCandidate = _evaluatePortfolio([...ownedCards, candidate], spendProfile, now: now);
+      final withCandidate = _evaluatePortfolio([...ownedCards, candidate], effectiveProfile, now: now);
       final candidateSpendByCategory =
           withCandidate.attributedSpendByCardAndCategory[candidate.id] ?? const {};
       final fee = _netAnnualFee(candidate, candidateSpendByCategory);
@@ -155,6 +203,7 @@ class CardAcquisitionRecommender {
         annualFeeNet: fee,
         uplift: uplift,
         valueByCategory: withCandidate.attributedValueByCardAndCategory[candidate.id] ?? const {},
+        isStarterProfile: effectiveProfile.isStarterProfile,
       ));
     }
 

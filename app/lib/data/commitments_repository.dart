@@ -93,10 +93,29 @@ enum CommitmentCategory {
     if (has('SUBSCRIPTION') ||
         has('MEMBERSHIP') ||
         has('GOOGLE PLAY') ||
+        has('GOOGLEPLAY') ||
+        has('GOOGLE ONE') ||
+        has('GOOGLEONE') ||
+        has('GOOGLE') ||
         has('NETFLIX') ||
         has('SPOTIFY') ||
         has('APPLE.COM') ||
+        has('APPLE') ||
         has('AMAZON PRIME') ||
+        has('PRIME VIDEO') ||
+        has('PRIMEVIDEO') ||
+        has('YOUTUBE') ||
+        has('HOTSTAR') ||
+        has('JIOCINEMA') ||
+        has('SONYLIV') ||
+        has('ZEE5') ||
+        has('CANVA') ||
+        has('ADOBE') ||
+        has('NOTION') ||
+        has('DROPBOX') ||
+        has('LINKEDIN') ||
+        has('MICROSOFT 365') ||
+        has('MICROSOFT365') ||
         has('OPENAI') ||
         s.contains('OPENAI') ||
         s.contains('CHATGPT') ||
@@ -142,6 +161,94 @@ enum CommitmentCategory {
     return CommitmentCategory.other;
   }
 }
+
+/// Identifies whether an AutoPay mandate/authorization belongs to a digital
+/// service subscription (e.g. OpenAI, Google Play, Netflix, Spotify) rather
+/// than a utility bill, telecom/broadband bill, insurance policy, loan/EMI,
+/// rent, tax, or credit card bill.
+bool isSubscriptionAutoPay(String? name) {
+  if (name == null || name.trim().isEmpty) return false;
+  final raw = name.trim();
+  final lower = raw.toLowerCase();
+  final normalized = lower.replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+  // 1. Explicitly return false for credit card bills and statements
+  if (RegExp(
+        r'\b(?:credit|debit)?\s*card\b|\bbill\b|\bstatement\b',
+        caseSensitive: false,
+      ).hasMatch(lower) ||
+      normalized.contains('creditcard') ||
+      normalized.contains('cardbill') ||
+      normalized.contains('cardautopay') ||
+      normalized.contains('statement')) {
+    return false;
+  }
+
+  // 2. Explicitly return false for utility billers, telecom, insurance, loan/EMI, rent, taxes
+  final category = CommitmentCategory.fromText(raw);
+  if (category == CommitmentCategory.utility ||
+      category == CommitmentCategory.telecom ||
+      category == CommitmentCategory.insurance ||
+      category == CommitmentCategory.loanOrEmi ||
+      category == CommitmentCategory.rent ||
+      category == CommitmentCategory.tax) {
+    return false;
+  }
+
+  if (RegExp(
+    r'\b(?:electricity|water|gas|utility|municipal|broadband|telecom|bescom|tneb|msedcl|bwssb|airtel|bsnl|act\s*fiber|hdfclife|icicipru|starhealth|lic|loan|emi)\b',
+    caseSensitive: false,
+  ).hasMatch(lower)) {
+    return false;
+  }
+
+  // 3. Category match
+  if (category == CommitmentCategory.subscription) {
+    return true;
+  }
+
+  // 4. Any text containing 'subscription' or 'membership'
+  if (lower.contains('subscription') || lower.contains('membership')) {
+    return true;
+  }
+
+  // 5. Subscription names and tokens
+  const tokens = [
+    'openai',
+    'openaillc',
+    'chatgpt',
+    'googleplay',
+    'googleone',
+    'google',
+    'netflix',
+    'spotify',
+    'amazonprime',
+    'primevideo',
+    'youtube',
+    'hotstar',
+    'jiocinema',
+    'sonyliv',
+    'zee5',
+    'canva',
+    'adobe',
+    'notion',
+    'dropbox',
+    'linkedinpremium',
+    'linkedin',
+    'microsoft365',
+    'apple',
+    'claude',
+    'anthropic',
+    'midjourney',
+    'cursor',
+    'github',
+  ];
+
+  return tokens.any(normalized.contains);
+}
+
+/// Alias for [isSubscriptionAutoPay].
+bool isSubscriptionMandate(String? name) => isSubscriptionAutoPay(name);
 
 enum CommitmentCadence {
   oneTime,

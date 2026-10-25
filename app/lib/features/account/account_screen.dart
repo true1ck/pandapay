@@ -7,7 +7,6 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
-import '../insights/payments_due_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../referrals/invite_friends_screen.dart';
 import '../subscription_credits/subscription_credits_screen.dart';
@@ -41,12 +40,12 @@ class AccountScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionInit = ref.watch(sessionInitProvider);
     if (sessionInit.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const _AccountLoading();
     }
 
     final profile = ref.watch(profileProvider);
     return profile.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const _AccountLoading(),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),
         onRetry: () => ref.invalidate(profileProvider),
@@ -92,28 +91,15 @@ class AccountScreen extends ConsumerWidget {
             // two UA-8 entries above.
             // Design 05 gives You direct rows for the things a user actually
             // reaches for, not only settings sub-hubs. Notifications (19),
-            // Payments due (13), Split planner (11), Invite friends (25) and
-            // Report an issue (26) are all screens the deck draws — they
-            // were reachable only two or three taps deep, or not at all.
+            // Split planner (11), Invite friends (25) and Report an issue (26)
+            // are all screens the deck draws — they were reachable only two
+            // or three taps deep, or not at all.
             AccountTile(
               icon: Icons.notifications_none_rounded,
               label: 'Notifications',
               badgeCount: ref.watch(unreadNotificationCountProvider),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-              ),
-            ),
-            const SizedBox(height: AppSpace.sm),
-            // Design 05 lists "Payments due" pointing at design 13, which is
-            // PaymentsDueScreen — not E8's calendar. The calendar keeps its
-            // own entry point on the Insights grid ("Due Dates"): it owns the
-            // month view and the per-card reminder toggles, which design 13
-            // has no room for.
-            AccountTile(
-              icon: Icons.receipt_long_outlined,
-              label: 'Bills & commitments',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PaymentsDueScreen()),
               ),
             ),
             const SizedBox(height: AppSpace.sm),
@@ -190,6 +176,38 @@ class AccountScreen extends ConsumerWidget {
             _WhatsNewTile(ref: ref),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// First-ever load. The tab used to be a bare white page with a centered
+/// spinner while GET /profile ran; show the shape of the screen instead so a
+/// slow first fetch reads as loading, not as an empty app. A cached profile
+/// now paints immediately (see profileProvider), so this only appears before
+/// the first successful fetch on this install.
+class _AccountLoading extends StatelessWidget {
+  const _AccountLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppBackground(
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          MediaQuery.paddingOf(context).top + AppSpace.lg,
+          AppSpace.lg,
+          AppShell.navClearance,
+        ),
+        children: const [
+          Skeleton(height: 186, radius: 30),
+          SizedBox(height: AppSpace.lg),
+          SkeletonRow(),
+          SkeletonRow(),
+          Skeleton(height: 56, radius: 16),
+          SizedBox(height: AppSpace.sm),
+          Skeleton(height: 56, radius: 16),
+        ],
       ),
     );
   }

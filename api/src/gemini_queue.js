@@ -69,7 +69,39 @@ async function acceptOneJob(client, profileId, { sourceKey, sender, body, occurr
   }
 
   const existing = await findJobBySourceKey(client, profileId, sourceKey);
-  if (existing) return { accepted: true, jobId: existing.id, reused: true };
+  if (existing) {
+    if (existing.status !== 'failed') {
+      return { accepted: true, jobId: existing.id, reused: true };
+    }
+    // Failed jobs can be re-queued when resubmitted by the device with fresh payload.
+    if (!(await withinDailyQuota(client, profileId))) {
+      return { accepted: false, reason: 'daily_quota_exhausted' };
+    }
+    const smsFacts = require('./sms_facts');
+    await client.query(
+      `UPDATE ai_jobs
+          SET status = 'queued',
+              payload = $2,
+              attempts = 0,
+              lease_token = NULL,
+              lease_expires_at = NULL,
+              updated_at = now()
+        WHERE id = $1`,
+      [
+        existing.id,
+        JSON.stringify({
+          sender,
+          body: redactBodyForAi(body),
+          bodyHash: smsFacts.bodyHashOf(sender, body),
+          occurredAt,
+          kind: 'classify_sms',
+        }),
+      ],
+    );
+    await bumpDailyQuota(client, profileId);
+    await recordEvent(client, existing.id, profileId, 'requeued', {});
+    return { accepted: true, jobId: existing.id, reused: false };
+  }
 
   if (!(await withinDailyQuota(client, profileId))) {
     return { accepted: false, reason: 'daily_quota_exhausted' };
@@ -110,7 +142,7 @@ async function acceptOneJob(client, profileId, { sourceKey, sender, body, occurr
 
 async function findJobBySourceKey(client, profileId, sourceKey) {
   const rows = await client.query(
-    `SELECT id FROM ai_jobs WHERE profile_id = $1 AND source_key = $2`,
+    `SELECT id, status FROM ai_jobs WHERE profile_id = $1 AND source_key = $2`,
     [profileId, sourceKey],
   );
   return rows.rows[0] || null;
@@ -239,10 +271,18 @@ async function completeJobWithResult(client, {
   batchMetadata = {},
   applySpecialists = null,
   persistSubscriptionMandate = null,
-  reviewRequired = true,
+  reviewRequired = null,
 }) {
   const smsFacts = require('./sms_facts');
+  const aiFactScoring = require('./ai_fact_scoring');
   const payload = job.payload || {};
+  // Composite confidence gate: reviewRequired is derived from the model facts
+  // and the redacted body. An explicit boolean from the caller still wins
+  // (e.g. a replayed job that was already triaged).
+  const assessment = aiFactScoring.assessFacts(facts, payload.body || '');
+  const effectiveReviewRequired = typeof reviewRequired === 'boolean'
+    ? reviewRequired
+    : assessment.reviewRequired;
   const existing = await smsFacts.loadSmsSourceFacts(client, job.profile_id, job.source_key);
   const existingFacts = existing ? existing.facts : [];
   const semanticParts = (fact) => {
@@ -302,8 +342,14 @@ async function completeJobWithResult(client, {
         SET status = 'done', result = $2, payload = $3,
             lease_token = NULL, lease_expires_at = NULL, updated_at = now()
       WHERE id = $1`,
-    [job.id, JSON.stringify({ landed, specialists, reviewRequired,
-      factTypes: facts.map((fact) => fact.factType) }), JSON.stringify({ purged: true })],
+    [job.id, JSON.stringify({
+      landed,
+      specialists,
+      reviewRequired: effectiveReviewRequired,
+      confidenceScore: assessment.composite,
+      scores: assessment.perFact,
+      factTypes: facts.map((fact) => fact.factType),
+    }), JSON.stringify({ purged: true })],
   );
   await recordEvent(client, job.id, job.profile_id, 'result', {
     landed: landed.length,
@@ -311,7 +357,12 @@ async function completeJobWithResult(client, {
     ...(batchMetadata.batchId ? { batchId: batchMetadata.batchId } : {}),
     ...(Number.isInteger(batchMetadata.batchSize) ? { batchSize: batchMetadata.batchSize } : {}),
   });
-  return { landed, specialists };
+  return {
+    landed,
+    specialists,
+    reviewRequired: effectiveReviewRequired,
+    confidenceScore: assessment.composite,
+  };
 }
 
 /**

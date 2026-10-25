@@ -99,6 +99,52 @@ void main() {
     expect(merchantField.controller!.text, 'Old Merchant');
   });
 
+  testWidgets('keeps an unknown payment method unset during unrelated edits', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository(
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(1250),
+        occurredAt: DateTime(2026, 3, 1),
+        merchantName: 'Unknown Source',
+        instrumentKnown: false,
+        source: 'sms',
+        status: 'active',
+      ),
+    );
+    await _pump(tester, repo: repo);
+
+    expect(find.text('Unknown — choose a method'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Merchant'),
+      'Renamed merchant',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(repo.lastEditArgs?['merchantName'], 'Renamed merchant');
+    expect(repo.lastEditArgs?['instrument'], isNull);
+  });
+
+  testWidgets('rejects non-finite amounts before saving', (tester) async {
+    final repo = _FakeUserCardsRepository(
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(100),
+        occurredAt: DateTime(2026, 3, 1),
+        source: 'sms',
+        status: 'active',
+      ),
+    );
+    await _pump(tester, repo: repo);
+    await tester.enterText(find.widgetWithText(TextField, 'Amount (₹)'), 'NaN');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter a valid amount greater than zero.'), findsOneWidget);
+    expect(repo.lastEditArgs, isNull);
+  });
+
   testWidgets('keeps the tapped row editable when the edit fetch loses auth', (
     tester,
   ) async {

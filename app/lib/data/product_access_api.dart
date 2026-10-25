@@ -34,9 +34,7 @@ class ProductAccessPolicy {
           : 'unavailable',
       minimumClientCapability: json['minimumClientCapability'] as String?,
       revision: json['revision'] is int ? json['revision'] as int : null,
-      campaign: campaign is Map
-          ? Map<String, dynamic>.from(campaign)
-          : null,
+      campaign: campaign is Map ? Map<String, dynamic>.from(campaign) : null,
     );
   }
 }
@@ -236,12 +234,42 @@ class ProductAccessApi implements ProductAccessRepository {
 
   @override
   Future<void> completeOnboarding() async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/onboarding/complete'),
-      headers: _headers,
-      body: '{}',
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/onboarding/complete'),
+          headers: _headers,
+          body: '{}',
+        )
+        .timeout(const Duration(seconds: 15));
     if (response.statusCode != 200) {
+      if (response.body.contains('required_terms_missing')) {
+        try {
+          final consentRes = await _client.post(
+            Uri.parse('$apiBaseUrl/consents'),
+            headers: _headers,
+            body: jsonEncode({
+              'purpose': 'terms',
+              'granted': true,
+              'policyVersion': appProductTermsVersion,
+              'sourceScreen': 'onboarding_complete',
+            }),
+          );
+          if (consentRes.statusCode == 201) {
+            final retryResponse = await _client
+                .post(
+                  Uri.parse('$apiBaseUrl/onboarding/complete'),
+                  headers: _headers,
+                  body: '{}',
+                )
+                .timeout(const Duration(seconds: 15));
+            if (retryResponse.statusCode == 200) {
+              final body =
+                  jsonDecode(retryResponse.body) as Map<String, dynamic>;
+              if (body['completed'] == true) return;
+            }
+          }
+        } catch (_) {}
+      }
       throw ApiException(
         'POST /onboarding/complete failed: '
         '${response.statusCode} ${response.body}',
@@ -346,11 +374,13 @@ String? invitationCodeFromUri(Uri uri) {
       segments.first.toLowerCase() == 'i') {
     return PendingInvitationStore.normalizeCode(segments[1]);
   }
-  if (uri.scheme == 'pandapay' && uri.host.toLowerCase() == 'i' &&
+  if (uri.scheme == 'pandapay' &&
+      uri.host.toLowerCase() == 'i' &&
       segments.length == 1) {
     return PendingInvitationStore.normalizeCode(segments.first);
   }
-  if (uri.scheme == 'pandapay' && uri.host.isEmpty &&
+  if (uri.scheme == 'pandapay' &&
+      uri.host.isEmpty &&
       segments.length == 2 &&
       segments.first.toLowerCase() == 'i') {
     return PendingInvitationStore.normalizeCode(segments[1]);

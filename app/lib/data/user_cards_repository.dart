@@ -57,6 +57,7 @@ class UserCard {
   /// day (no capture flow exists yet — C4 Edit Card, deferred) — Billing
   /// Cycle Float must degrade to a prompt rather than fabricate a date.
   final int? statementDay;
+  final String? statementDaySource;
   final DateTime? openedOn;
 
   /// Task E-0 (Group E plan): all three already existed in Postgres
@@ -73,6 +74,7 @@ class UserCard {
   /// vary by customer even when the card product is the same.
   final Money? annualFeeOverride;
   final int? dueDay;
+  final String? dueDaySource;
   final DateTime? anniversaryOn;
 
   /// Task C-1: only ever true when the caller passed `includeArchived` to
@@ -124,10 +126,12 @@ class UserCard {
     this.pointsBalance,
     this.feeWaiverStates = const [],
     this.statementDay,
+    this.statementDaySource,
     this.openedOn,
     this.creditLimit,
     this.annualFeeOverride,
     this.dueDay,
+    this.dueDaySource,
     this.anniversaryOn,
     this.isArchived = false,
     this.autopayMode = AutopayMode.off,
@@ -171,6 +175,7 @@ class UserCard {
           : _num(json['points_balance']),
       feeWaiverStates: feeWaiverStates.map(FeeWaiverProgress.fromJson).toList(),
       statementDay: json['statement_day'] as int?,
+      statementDaySource: json['statement_day_source'] as String?,
       openedOn: json['opened_on'] == null
           ? null
           : DateTime.parse(json['opened_on'] as String),
@@ -181,6 +186,7 @@ class UserCard {
           ? null
           : Money.fromRupees(_num(json['annual_fee_override_inr'])),
       dueDay: json['due_day'] as int?,
+      dueDaySource: json['due_day_source'] as String?,
       anniversaryOn: json['anniversary_on'] == null
           ? null
           : DateTime.parse(json['anniversary_on'] as String),
@@ -217,10 +223,12 @@ class UserCard {
     'total_points_earned': totalPointsEarned,
     'points_balance': pointsBalance,
     'statement_day': statementDay,
+    'statement_day_source': statementDaySource,
     'opened_on': openedOn?.toIso8601String(),
     'credit_limit_inr': creditLimit?.rupees,
     'annual_fee_override_inr': annualFeeOverride?.rupees,
     'due_day': dueDay,
+    'due_day_source': dueDaySource,
     'anniversary_on': anniversaryOn?.toIso8601String(),
     'is_archived': isArchived,
     'autopay_mode': autopayMode.wireValue,
@@ -640,6 +648,8 @@ class BankAccountSummary {
   final String? issuerName;
   final String? issuerShortName;
   final String? issuerLogoUrl;
+  final bool isBalanceManuallySet;
+  final DateTime? manualBalanceUpdatedAt;
 
   const BankAccountSummary({
     required this.accountLast4,
@@ -651,6 +661,8 @@ class BankAccountSummary {
     this.issuerName,
     this.issuerShortName,
     this.issuerLogoUrl,
+    this.isBalanceManuallySet = false,
+    this.manualBalanceUpdatedAt,
   });
 
   factory BankAccountSummary.fromJson(Map<String, dynamic> json) {
@@ -670,6 +682,10 @@ class BankAccountSummary {
       issuerName: json['issuerName'] as String?,
       issuerShortName: json['issuerShortName'] as String?,
       issuerLogoUrl: json['issuerLogoUrl'] as String?,
+      isBalanceManuallySet: json['isBalanceManuallySet'] == true,
+      manualBalanceUpdatedAt: json['manualBalanceUpdatedAt'] == null
+          ? null
+          : DateTime.parse(json['manualBalanceUpdatedAt'] as String),
     );
   }
 }
@@ -1802,9 +1818,17 @@ class UserCardsRepository {
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return SmsReconciliationResult(
+      reconciliationVersion:
+          (json['reconciliationVersion'] as num?)?.toInt() ?? 0,
       duplicateSuppressed: (json['duplicateSuppressed'] as num?)?.toInt() ?? 0,
+      crossSourceCandidatesCreated:
+          (json['crossSourceCandidatesCreated'] as num?)?.toInt() ?? 0,
       linkedCards: (json['linkedCards'] as num?)?.toInt() ?? 0,
       reclassified: (json['reclassified'] as num?)?.toInt() ?? 0,
+      classificationReclassified:
+          (json['classificationReclassified'] as num?)?.toInt() ?? 0,
+      remappedTransactions:
+          (json['remappedTransactions'] as num?)?.toInt() ?? 0,
       remainingLegacyRows: (json['remainingLegacyRows'] as num?)?.toInt() ?? 0,
     );
   }
@@ -1936,6 +1960,12 @@ class UserCardsRepository {
   }) async {
     final safeTemplate = redactSmsLearningText(templateText);
     final safeSample = redactSmsLearningText(sampleBody);
+    // A credential-bearing message has no safe learning evidence. The user's
+    // local dismissal is already complete, so don't enqueue or transmit it.
+    final hadEvidence =
+        (templateText?.trim().isNotEmpty ?? false) ||
+        (sampleBody?.trim().isNotEmpty ?? false);
+    if (hadEvidence && safeTemplate == null && safeSample == null) return true;
     final entry = DismissalQueueEntry(
       sourceKey: sourceKey,
       sender: sender,
@@ -2048,34 +2078,32 @@ class UserCardsRepository {
 
   /// SMS intelligence Phase 5: queues an unresolved SMS for server AI classification.
   /// Server deduplicates on (profile_id, source_id); retrying returns the same
-  /// job ID and does not burn quota. A 404, 400, 429 or network drop returns null;
-  /// failures never block the local intake flow.
+  /// job ID and does not burn quota. Server refusals (400, 429, 503) return null
+  /// so callers can distinguish explicit refusals from network errors.
+  /// Transport/network exceptions are rethrown so transient failures are not
+  /// swallowed as permanent rejections.
   Future<String?> submitAiJob({
     required String sourceKey,
     required String sender,
     required String body,
     DateTime? occurredAt,
   }) async {
-    try {
-      final response = await _client
-          .post(
-            Uri.parse('$apiBaseUrl/ai/jobs'),
-            headers: _headers,
-            body: jsonEncode({
-              'sourceKey': sourceKey,
-              'sender': sender,
-              'body': body,
-              if (occurredAt != null)
-                'occurredAt': occurredAt.toUtc().toIso8601String(),
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        return decoded['jobId'] as String?;
-      }
-    } catch (_) {
-      // Non-fatal by design
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/ai/jobs'),
+          headers: _headers,
+          body: jsonEncode({
+            'sourceKey': sourceKey,
+            'sender': sender,
+            'body': body,
+            if (occurredAt != null)
+              'occurredAt': occurredAt.toUtc().toIso8601String(),
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      return decoded['jobId'] as String?;
     }
     return null;
   }
@@ -2083,24 +2111,24 @@ class UserCardsRepository {
   /// Returns redacted status for a previously queued SMS. The body and lease
   /// token are never returned; callers use this only to refresh local review
   /// state after the background worker finishes.
+  ///
+  /// Returns null ONLY on HTTP 404 (job not found). Throws [ApiException] on
+  /// non-200 / non-404 server responses, and rethrows transport/network
+  /// exceptions so callers can distinguish missing jobs from transient drops.
   Future<Map<String, dynamic>?> fetchAiJobStatus(String sourceKey) async {
-    try {
-      final response = await _client
-          .get(
-            Uri.parse('$apiBaseUrl/ai/jobs/source/$sourceKey'),
-            headers: _headers,
-          )
-          .timeout(const Duration(seconds: 15));
-      if (response.statusCode == 404) return null;
-      if (response.statusCode != 200) {
-        throw ApiException(
-          'GET /ai/jobs/source failed: ${response.statusCode} ${response.body}',
-        );
-      }
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } catch (_) {
-      return null;
+    final response = await _client
+        .get(
+          Uri.parse('$apiBaseUrl/ai/jobs/source/$sourceKey'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 404) return null;
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'GET /ai/jobs/source failed: ${response.statusCode} ${response.body}',
+      );
     }
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   /// Task S-1a: the batched form of [logTransactionFromSms], for backup-file
@@ -2644,8 +2672,9 @@ class UserCardsRepository {
     );
   }
 
-  /// Design 19's inbox. Newest first; the server does no grouping — the
-  /// client buckets Today/Earlier in the device's own timezone.
+  /// Design 19's inbox. Newest first, last seven days only; the server does
+  /// no filtering by local day — the client trims to seven local calendar
+  /// days in the device's own timezone.
   Future<({List<AppNotification> items, int unreadCount})>
   fetchNotifications() async {
     final response = await _client.get(
@@ -2916,6 +2945,9 @@ class TransactionEntry {
   final Money amount;
   final DateTime occurredAt;
   final String? merchantName;
+
+  /// UPI address of the counterparty, when the source transaction includes it.
+  final String? merchantVpa;
   final String? categoryId;
 
   /// The reporting parent category. For a private subcategory, [categoryId]
@@ -2992,6 +3024,7 @@ class TransactionEntry {
     required this.amount,
     required this.occurredAt,
     this.merchantName,
+    this.merchantVpa,
     this.categoryId,
     this.parentCategoryId,
     this.parentUserCategoryId,
@@ -3035,6 +3068,7 @@ class TransactionEntry {
       'amount_inr': amount.rupees,
       'occurred_at': occurredAt.toIso8601String(),
       'merchant_name': merchantName,
+      'merchant_vpa': merchantVpa,
       'category_id': customCategoryId == null ? categoryId : null,
       'parent_category_id': parentCategoryId,
       'parent_user_category_id': parentUserCategoryId,
@@ -3073,6 +3107,7 @@ class TransactionEntry {
       amount: amount,
       occurredAt: occurredAt,
       merchantName: merchantName,
+      merchantVpa: merchantVpa,
       categoryId: categoryId,
       parentCategoryId: parentCategoryId,
       parentUserCategoryId: parentUserCategoryId,
@@ -3121,6 +3156,7 @@ class TransactionEntry {
       amount: Money.fromRupees(_num(json['amount_inr'])),
       occurredAt: DateTime.parse(json['occurred_at'] as String),
       merchantName: json['merchant_name'] as String?,
+      merchantVpa: json['merchant_vpa'] as String?,
       categoryId: userCategoryId == null
           ? rawCategoryId
           : 'custom:$userCategoryId',
@@ -3245,22 +3281,34 @@ class SmsImportState {
 }
 
 class SmsReconciliationResult {
+  final int reconciliationVersion;
   final int duplicateSuppressed;
+  final int crossSourceCandidatesCreated;
   final int linkedCards;
   final int reclassified;
+  final int classificationReclassified;
+  final int remappedTransactions;
   final int remainingLegacyRows;
 
   const SmsReconciliationResult({
+    required this.reconciliationVersion,
     required this.duplicateSuppressed,
+    required this.crossSourceCandidatesCreated,
     required this.linkedCards,
     required this.reclassified,
+    required this.classificationReclassified,
+    required this.remappedTransactions,
     required this.remainingLegacyRows,
   });
 
   const SmsReconciliationResult.zero()
-    : duplicateSuppressed = 0,
+    : reconciliationVersion = 0,
+      duplicateSuppressed = 0,
+      crossSourceCandidatesCreated = 0,
       linkedCards = 0,
       reclassified = 0,
+      classificationReclassified = 0,
+      remappedTransactions = 0,
       remainingLegacyRows = 0;
 }
 

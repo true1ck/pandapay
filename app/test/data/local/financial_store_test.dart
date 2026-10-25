@@ -3,8 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
+import 'package:pandapay/data/local/sms_intake_repository.dart';
+import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 
 TransactionEntry row(String id, {int day = 15, String? key, String? note}) =>
     TransactionEntry(
@@ -305,7 +308,9 @@ void main() {
         isDefault: false,
         last4: '7105',
         statementDay: 26,
+        statementDaySource: 'sms',
         dueDay: 2,
+        dueDaySource: 'sms',
       );
       store.replaceCards('a', [card]);
       store.saveObservation('a', 'obs1', {
@@ -363,7 +368,9 @@ void main() {
         isDefault: false,
         last4: '7105',
         statementDay: 26,
+        statementDaySource: 'sms',
         dueDay: 2,
+        dueDaySource: 'sms',
       );
       store.replaceCards('a', [card]);
       store.saveObservation('a', 'obs-axis', {
@@ -378,6 +385,260 @@ void main() {
       final updated = store.entities('a', 'cards').single;
       expect(updated['statement_day'], 14);
       expect(updated['due_day'], 2);
+    },
+  );
+
+  test('SMS observations never overwrite user-entered card days', () {
+    final card = UserCard(
+      id: 'c-user',
+      cardProductId: 'axis_fk',
+      cardName: 'Flipkart Axis Bank Credit Card',
+      isDefault: false,
+      last4: '7105',
+      statementDay: 26,
+      statementDaySource: 'user',
+      dueDay: 2,
+      dueDaySource: 'user',
+    );
+    store.replaceCards('a', [card]);
+    store.saveObservation('a', 'obs-user-days', {
+      'event_type': 'bill',
+      'card_last4': '7105',
+      'statement_date': '2026-10-14T10:00:00.000',
+      'statement_date_explicit': true,
+      'due_date': '2026-11-03T00:00:00.000',
+      'received_at': '2026-10-14T10:00:00.000',
+    });
+
+    store.syncCardDatesFromObservations('a');
+
+    final updated = store.entities('a', 'cards').single;
+    expect(updated['statement_day'], 26);
+    expect(updated['due_day'], 2);
+    expect(updated['statement_day_source'], 'user');
+    expect(updated['due_day_source'], 'user');
+  });
+
+  for (final historical in [false, true]) {
+    test('${historical ? 'historical repair' : 'date sync'} only learns unique active card dates', () {
+      UserCard card(String id, String suffix, {
+        String? type, bool archived = false, String? source, int? day,
+      }) => UserCard(
+        id: id, cardProductId: id, cardName: 'Card $id', isDefault: false,
+        last4: suffix, cardType: type, isArchived: archived,
+        dueDay: day, dueDaySource: source,
+        statementDay: day, statementDaySource: source,
+      );
+      store.replaceCards('a', [
+        card('active', '1001'),
+        card('debit', '1001', type: 'debit'),
+        card('archived', '1001', archived: true),
+        card('collision-one', '1002'), card('collision-two', '1002'),
+        card('only-debit', '1003', type: 'debit'),
+        card('only-archived', '1003', archived: true),
+        card('user', '1004', source: 'user', day: 7),
+        card('user-cleared', '1005', source: 'user'),
+        card('legacy', '1006', day: 8),
+      ]);
+      store.replaceCards('b', [card('active', '1001')]);
+      for (final suffix in ['1001', '1002', '1003', '1004', '1005', '1006']) {
+        if (historical) {
+          SmsIntakeRepository(db).capture('a', QueuedSms(
+            sender: 'HDFCBK',
+            body: 'AutoPay scheduled for your credit card ending in $suffix on 25-Oct-2026 for Rs 4500. Maintain sufficient balance in your account.',
+            receivedAt: DateTime(2026, 10, 20),
+          ));
+        } else {
+          store.saveObservation('a', suffix, {
+            'event_type': 'bill', 'card_last4': suffix,
+            'due_date': '2026-10-25', 'statement_date': '2026-10-20',
+            'received_at': '2026-10-20', 'is_autopay': true,
+          });
+        }
+      }
+      if (historical) {
+        store.repairAutoPayArtifacts('a');
+      } else {
+        store.syncCardDatesFromObservations('a');
+      }
+      final cards = store.entities('a', 'cards');
+      final active = cards.singleWhere((card) => card['id'] == 'active');
+      expect(active['due_day'], 25);
+      expect(active['due_day_source'], 'sms');
+      expect(active['statement_day'], isNull);
+      for (final card in cards.where((card) => card['id'] != 'active')) {
+        final id = card['id'];
+        final day = id == 'user' ? 7 : id == 'legacy' ? 8 : null;
+        expect(card['due_day'], day, reason: '$id due day');
+        expect(card['statement_day'], day, reason: '$id statement day');
+        final source = id == 'user' || id == 'user-cleared' ? 'user' : null;
+        expect(card['due_day_source'], source, reason: '$id due source');
+        expect(card['statement_day_source'], source, reason: '$id statement source');
+      }
+      expect(store.entities('b', 'cards').single['due_day'], isNull);
+    });
+  }
+
+  test('newer AutoPay uses an older verified statement day, not arrival day', () {
+    store.replaceCards('a', [const UserCard(
+      id: 'card', cardProductId: 'credit', cardName: 'Credit Card',
+      isDefault: false, last4: '7105',
+    )]);
+    store.saveObservation('a', 'statement', {
+      'event_type': 'bill', 'card_last4': '7105',
+      'statement_date': '2026-10-14', 'statement_date_explicit': true,
+      'due_date': '2026-11-02', 'received_at': '2026-10-15',
+    });
+    store.saveObservation('a', 'autopay', {
+      'event_type': 'bill', 'card_last4': '7105',
+      'statement_date': '2026-10-20', 'statement_date_explicit': false,
+      'due_date': '2026-11-03', 'received_at': '2026-10-20',
+      'reason_codes': ['mandate_notice'],
+    });
+    store.syncCardDatesFromObservations('a');
+    final updated = store.entities('a', 'cards').single;
+    expect(updated['due_day'], 3);
+    expect(updated['statement_day'], 14);
+    expect(updated['due_day_source'], 'sms');
+    expect(updated['statement_day_source'], 'sms');
+    store.saveObservation('a', 'printed-autopay-statement', {
+      'event_type': 'bill', 'card_last4': '7105',
+      'statement_date': '2026-10-16', 'statement_date_explicit': true,
+      'received_at': '2026-10-21', 'is_autopay': true,
+    });
+    store.syncCardDatesFromObservations('a');
+    expect(store.entities('a', 'cards').single['statement_day'], 16);
+  });
+
+  test('historical insurance repair keeps explicit cadence or one-time renewal', () {
+    for (final (evidence, cadence) in [('', 'oneTime'), ('Half-yearly premium.', 'halfYearly')]) {
+      final namespace = 'insurance-$cadence';
+      SmsIntakeRepository(db).capture(namespace, QueuedSms(
+        sender: 'HDFCER',
+        body: 'Your insurance expires on 25-Oct-2026. Premium of Rs 2000. AutoPay will be debited on 25-Oct-2026. $evidence',
+        receivedAt: DateTime(2026, 10, 20),
+      ));
+      store.repairAutoPayArtifacts(namespace);
+      final commitments = db.db.select(
+        'SELECT payload FROM local_commitments WHERE namespace=?', [namespace],
+      );
+      expect(jsonDecode(commitments.single['payload'] as String)['cadence'], cadence);
+    }
+  });
+
+  test(
+    'historical balance-bearing bank SMS resurfaces through the repair pass',
+    () {
+      db.db.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS sms_captured_messages (
+          namespace TEXT NOT NULL, id TEXT NOT NULL, sender TEXT NOT NULL,
+          body TEXT NOT NULL, received_at INTEGER NOT NULL,
+          processed INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(namespace, id)
+        );
+        ''',
+      );
+      const sliceBody =
+          'Rs. 1 received in A/c xx5799 on 30-Jul-26 from API Banking EB via '
+          'IMPS (Ref ID: 621107441979). Avl. Bal. Rs. 5,431.54 - slice';
+      const kotakBody =
+          'Rs. 1000.00 debited from A/c xx2626 on 30-Jul-26 towards UPI '
+          'ref 621107441980 blocked. - Kotak Bank';
+      final receivedAt =
+          DateTime.utc(2026, 7, 30, 15, 3, 43).millisecondsSinceEpoch;
+      for (final (id, sender, body) in [
+        ('slice-balance', 'VM-SLCBNK-T', sliceBody),
+        ('kotak-no-balance', 'VM-KOTAKB-T', kotakBody),
+        ('slice-current', 'VM-SLCBNK-T', sliceBody),
+      ]) {
+        db.db.execute(
+          'INSERT INTO sms_captured_messages(namespace,id,sender,body,received_at)'
+          ' VALUES (?,?,?,?,?)',
+          ['ns1', id, sender, body, receivedAt],
+        );
+      }
+      // A capture whose observation is already at the current parser version
+      // must be left untouched by the repair.
+      store.saveObservation('ns1', 'slice-current', {
+        'id': 'slice-current',
+        'sender_bank': 'SLCBNK',
+        'parser_version': LocalSmsParser.version,
+        'received_at': '2026-07-30T15:03:43.000Z',
+        'account_last4': '5799',
+        'is_bank_account': true,
+        'card_last4': null,
+        'biller_name': null,
+        'cadence_hint': null,
+        'balance_paise': null,
+        'amount_due_paise': null,
+        'minimum_due_paise': null,
+        'autopay_limit_paise': null,
+        'due_date': null,
+        'statement_date': null,
+        'statement_date_explicit': false,
+        'event_type': 'transaction',
+        'disposition': 'sync',
+        'reason_codes': <String>[],
+        'confidence': 0.9,
+      });
+      // Simulate a stale pre-fix observation already persisted as a bank
+      // account. Projection-level filtering must remove it without requiring
+      // destructive local data deletion.
+      store.saveObservation('ns1', 'axio-pay-later', {
+        'id': 'axio-pay-later',
+        'sender_bank': 'VM-axioFN',
+        'parser_version': LocalSmsParser.version,
+        'received_at': '2024-11-30T04:26:03.644Z',
+        'account_last4': '6016',
+        'is_bank_account': true,
+        'card_last4': null,
+        'balance_paise': null,
+        'event_type': 'promotion',
+        'disposition': 'local_ignore',
+      });
+
+      store.repairAutoPayArtifacts('ns1');
+
+      // Both SLCBNK rows group into one account; the Kotak debit SMS
+      // carries no balance, so it must never mint an observation.
+      final accounts = store.bankAccounts('ns1');
+      expect(accounts, hasLength(1));
+      expect(accounts.single.accountLast4, '5799');
+      expect(accounts.single.availableBalance?.paise, 543154);
+      expect(
+        accounts.single.latestBalanceSmsAt,
+        DateTime.parse('2026-07-30T15:03:43.000Z'),
+      );
+      expect(accounts.single.smsCount, 2);
+
+      final repaired =
+          store.entities('ns1', 'sms_observations', id: 'slice-balance');
+      expect(repaired, hasLength(1));
+      expect(repaired.single['is_bank_account'], isTrue);
+      expect(repaired.single['balance_paise'], 543154);
+
+      final untouched =
+          store.entities('ns1', 'sms_observations', id: 'slice-current');
+      expect(untouched, hasLength(1));
+      expect(untouched.single['balance_paise'], isNull);
+      expect(untouched.single['parser_version'], LocalSmsParser.version);
+
+      // Idempotent: a second pass neither duplicates observations nor
+      // overwrites the already-current one, and the accountless Kotak
+      // capture still produced nothing.
+      final idsBefore = store
+          .entities('ns1', 'sms_observations')
+          .map((o) => o['id'])
+          .toSet();
+      // The stale Axio observation is intentionally retained as audit data;
+      // bankAccounts() filters it at the projection boundary.
+      expect(idsBefore, hasLength(3));
+      store.repairAutoPayArtifacts('ns1');
+      expect(
+        store.entities('ns1', 'sms_observations').map((o) => o['id']).toSet(),
+        idsBefore,
+      );
     },
   );
 }

@@ -1,13 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'commitments_repository.dart';
+import 'past_bill_receipts.dart';
 import 'adjustment_matcher.dart';
 import 'local/app_database.dart';
+import 'local/financial_store.dart' show FinancialChange;
+import 'local/sms_learning_feedback.dart';
 import 'local_sms_parser.dart';
 import 'user_cards_repository.dart';
 import 'investment_classifier.dart';
+import '../features/sms_import/sms_text_hint.dart';
+import 'pending_bills.dart';
 
 enum NeedsReviewKind {
   transaction,
@@ -17,6 +23,8 @@ enum NeedsReviewKind {
   mandate,
   receipt,
 }
+
+enum AiReviewStatus { notChecked, queued, processing, checked, unavailable }
 
 /// Task D-4 (ui-spec D4 Needs Review Queue) â€” one raw SMS the parser
 /// couldn't match, kept entirely ON-DEVICE.
@@ -30,7 +38,7 @@ enum NeedsReviewKind {
 /// to give one user back their own message text â€” the two are different
 /// features that happen to share a trigger event (a failed parse). The
 /// existing review item stays on-device. If the server parser cannot classify
-/// it, the AI fallback may send a redacted copy to the configured Gemini
+/// it, the AI fallback may send a redacted copy to the configured PandaPay AI
 /// provider; local review remains available when AI is disabled or fails.
 /// ui-spec D4 explicitly wants "raw text shown for context," which a
 /// digit-stripped admin record structurally cannot provide. Rather than
@@ -39,7 +47,7 @@ enum NeedsReviewKind {
 /// keeps the raw SMS exactly where it already lives today: the device that
 /// received it. The separate, explicit AI fallback uploads only after the
 /// normal financial-message filter and removes sensitive identifiers on the
-/// server before calling Gemini.
+/// server before calling PandaPay AI.
 class NeedsReviewItem {
   final String id;
   final String sender;
@@ -48,6 +56,7 @@ class NeedsReviewItem {
   final DateTime receivedAt;
   final NeedsReviewKind kind;
   final List<Map<String, dynamic>>? aiSuggestions;
+  final AiReviewStatus aiStatus;
 
   const NeedsReviewItem({
     required this.id,
@@ -57,21 +66,23 @@ class NeedsReviewItem {
     required this.receivedAt,
     this.kind = NeedsReviewKind.transaction,
     this.aiSuggestions,
+    this.aiStatus = AiReviewStatus.notChecked,
   });
 
   NeedsReviewItem copyWith({
     NeedsReviewKind? kind,
     List<Map<String, dynamic>>? aiSuggestions,
-  }) =>
-      NeedsReviewItem(
-        id: id,
-        sender: sender,
-        body: body,
-        reason: reason,
-        receivedAt: receivedAt,
-        kind: kind ?? this.kind,
-        aiSuggestions: aiSuggestions ?? this.aiSuggestions,
-      );
+    AiReviewStatus? aiStatus,
+  }) => NeedsReviewItem(
+    id: id,
+    sender: sender,
+    body: body,
+    reason: reason,
+    receivedAt: receivedAt,
+    kind: kind ?? this.kind,
+    aiSuggestions: aiSuggestions ?? this.aiSuggestions,
+    aiStatus: aiStatus ?? this.aiStatus,
+  );
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -81,6 +92,7 @@ class NeedsReviewItem {
     'receivedAt': receivedAt.toIso8601String(),
     'kind': kind.name,
     if (aiSuggestions != null) 'aiSuggestions': aiSuggestions,
+    'aiStatus': aiStatus.name,
   };
 
   factory NeedsReviewItem.fromJson(Map<String, dynamic> json) {
@@ -101,11 +113,26 @@ class NeedsReviewItem {
                 .map((item) => Map<String, dynamic>.from(item))
                 .toList()
           : null,
+      aiStatus: AiReviewStatus.values.firstWhere(
+        (status) => status.name == json['aiStatus'],
+        orElse: () => AiReviewStatus.notChecked,
+      ),
     );
   }
 }
 
 const _needsReviewKey = 'pandapay_app.needs_review_queue_v1';
+
+bool _capturesReviewableFinancial(NeedsReviewItem item) {
+  if (LocalSmsParser.isActionableInsuranceRenewal(item.body)) return true;
+  if (capturesFinancialSms(item.body, sender: item.sender)) return true;
+  return switch (NeedsReviewRepository.resolveItemKind(item).kind) {
+    NeedsReviewKind.investmentSettlement ||
+    NeedsReviewKind.mandate ||
+    NeedsReviewKind.receipt => true,
+    _ => false,
+  };
+}
 
 /// Synchronous capture path used by the local SMS parser, which deliberately
 /// remains synchronous so foreground/background capture share one transaction.
@@ -117,6 +144,7 @@ void addNeedsReviewSync(
   List<TransactionEntry>? existingTransactions,
 }) {
   if (NeedsReviewRepository.isNoiseItem(item)) return;
+  if (!_capturesReviewableFinancial(item)) return;
   if (isInvestmentFolioAllotment(item.body) &&
       NeedsReviewRepository.hasMatchingInvestmentTransactionSync(
         database,
@@ -126,14 +154,24 @@ void addNeedsReviewSync(
       )) {
     return;
   }
-  if (NeedsReviewRepository.isMerchantReceiptOrEbill(item.body) &&
-      NeedsReviewRepository.hasMatchingSpendTransactionSync(
-        database,
-        namespace,
-        item,
-        transactions: existingTransactions,
-      )) {
-    return;
+  if (NeedsReviewRepository.isMerchantReceiptOrEbill(item.body)) {
+    final linkedId = NeedsReviewRepository.matchingSpendTransactionIdSync(
+      database,
+      namespace,
+      item,
+      transactions: existingTransactions,
+    );
+    if (linkedId != null) {
+      PastBillReceiptRepository(database, namespace: namespace).archiveReceipt(
+        id: item.id,
+        sender: item.sender,
+        body: item.body,
+        receivedAt: item.receivedAt,
+        linkedTransactionId: linkedId,
+        status: PastBillReceiptStatus.paidLinked,
+      );
+      return;
+    }
   }
   if (NeedsReviewRepository.isRefundOrReversal(item.body) &&
       NeedsReviewRepository.hasMatchingRefundDebitSync(
@@ -143,6 +181,71 @@ void addNeedsReviewSync(
         transactions: existingTransactions,
       )) {
     return;
+  }
+  final parsed = LocalSmsParser.parse(
+    body: item.body,
+    sender: item.sender,
+    receivedAt: item.receivedAt,
+    namespace: namespace,
+    // Learned user categories are a capture-level hint, not a new grammar:
+    // the same rule table SmsImportStore passes into every parse.
+    userCategoryRules: SmsLearningFeedback(
+      database,
+      namespace: namespace,
+    ).loadRulesSync(),
+  );
+  if (NeedsReviewRepository.isMonthOnlyPremiumNotice(parsed)) {
+    if (NeedsReviewRepository.isPastMonthOnlyPremiumNotice(parsed, item.body)) {
+      NeedsReviewRepository._archiveMonthOnlyPremiumSync(
+        database,
+        namespace,
+        parsed!,
+        item,
+      );
+    }
+    return;
+  }
+  if (parsed != null &&
+      parsed.eventType == LocalSmsEventType.bill &&
+      parsed.cardLast4 == null &&
+      parsed.dueDate != null) {
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    if (!parsed.dueDate!.isBefore(startOfToday)) {
+      NeedsReviewRepository._persistResolvedCommitmentSync(
+        database,
+        namespace,
+        parsed,
+        item,
+      );
+      NeedsReviewRepository._persistResolvedBillObservationSync(
+        database,
+        namespace,
+        parsed,
+        item,
+      );
+      return;
+    } else {
+      PastBillReceiptRepository(database, namespace: namespace).archiveBill(
+        id: item.id,
+        sender: item.sender,
+        merchant: parsed.billerName ?? item.sender,
+        amount: parsed.amountDue,
+        receivedAt: item.receivedAt,
+        dueDate: parsed.dueDate,
+        cardLast4: parsed.cardLast4,
+        accountLast4: parsed.accountLast4,
+        body: item.body,
+        status: PastBillReceiptStatus.historicalUnpaid,
+      );
+      NeedsReviewRepository._persistResolvedBillObservationSync(
+        database,
+        namespace,
+        parsed,
+        item,
+      );
+      return;
+    }
   }
   final resolved = NeedsReviewRepository.resolveItemKind(item);
   database.db.execute(
@@ -180,21 +283,43 @@ void addNeedsReviewSync(
     'INSERT OR REPLACE INTO local_needs_review VALUES (?,?,?)',
     [namespace, resolved.id, jsonEncode(resolved.toJson())],
   );
+  NeedsReviewRepository._notify(database, namespace, 'needs_review');
 }
 
 /// Plain on-device store, same SharedPreferences mechanism
 /// dueDateRemindersProvider (providers.dart) already uses for a similar
 /// "no server round-trip needed, this is purely local" case.
 class NeedsReviewRepository {
+  static final _changes = Expando<StreamController<FinancialChange>>();
+
+  static Stream<FinancialChange> changesFor(AppDatabase database) =>
+      (_changes[database] ??= StreamController<FinancialChange>.broadcast())
+          .stream;
+
+  static void _notify(AppDatabase database, String namespace, String entity) {
+    _changes[database]?.add(FinancialChange(namespace, entity));
+  }
+
   final String namespace;
   final Future<AppDatabase> Function()? loadDatabase;
   final List<TransactionEntry>? existingTransactions;
+  Future<AppDatabase>? _databaseFuture;
   NeedsReviewRepository({
     this.namespace = 'legacy',
     this.loadDatabase,
     this.existingTransactions,
   });
   Future<AppDatabase> _database() async {
+    final pending = _databaseFuture ??= _initializeDatabase();
+    try {
+      return await pending;
+    } catch (_) {
+      if (identical(_databaseFuture, pending)) _databaseFuture = null;
+      rethrow;
+    }
+  }
+
+  Future<AppDatabase> _initializeDatabase() async {
     final db = await loadDatabase!();
     db.db.execute(
       'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
@@ -203,18 +328,24 @@ class NeedsReviewRepository {
     final old = prefs.getStringList(_needsReviewKey);
     if (old != null && old.isNotEmpty) {
       final corrupt = <String>[];
+      final migrated = <NeedsReviewItem>[];
+      for (var i = 0; i < old.length; i++) {
+        if (i > 0 && i % 64 == 0) {
+          await Future<void>.delayed(Duration.zero);
+        }
+        try {
+          migrated.add(
+            NeedsReviewItem.fromJson(
+              jsonDecode(old[i]) as Map<String, dynamic>,
+            ),
+          );
+        } catch (_) {
+          corrupt.add(old[i]);
+        }
+      }
       db.db.execute('SAVEPOINT migrate_review');
       try {
-        for (final raw in old) {
-          NeedsReviewItem item;
-          try {
-            item = NeedsReviewItem.fromJson(
-              jsonDecode(raw) as Map<String, dynamic>,
-            );
-          } catch (_) {
-            corrupt.add(raw);
-            continue;
-          }
+        for (final item in migrated) {
           db.db.execute(
             "INSERT OR IGNORE INTO local_needs_review VALUES ('legacy',?,?)",
             [item.id, jsonEncode(item.toJson())],
@@ -232,7 +363,58 @@ class NeedsReviewRepository {
         await prefs.setStringList(_needsReviewKey, corrupt);
       }
     }
+    final lastPurgedVersion =
+        prefs.getInt('pandapay.needs_review_noise_version') ?? 0;
+    if (lastPurgedVersion < LocalSmsParser.version) {
+      final rows = db.db.select(
+        'SELECT id, payload FROM local_needs_review WHERE namespace=?',
+        [namespace],
+      );
+      final noiseIds = <String>[];
+      for (final r in rows) {
+        try {
+          final item = NeedsReviewItem.fromJson(
+            jsonDecode(r['payload'] as String) as Map<String, dynamic>,
+          );
+          if (_isNoiseOrStale(item)) {
+            noiseIds.add(item.id);
+          }
+        } catch (_) {}
+      }
+      if (noiseIds.isNotEmpty) {
+        db.db.execute('SAVEPOINT purge_startup_noise');
+        try {
+          for (final id in noiseIds) {
+            db.db.execute(
+              'DELETE FROM local_needs_review WHERE namespace=? AND id=?',
+              [namespace, id],
+            );
+          }
+          db.db.execute('RELEASE SAVEPOINT purge_startup_noise');
+        } catch (_) {
+          db.db.execute('ROLLBACK TO SAVEPOINT purge_startup_noise');
+          db.db.execute('RELEASE SAVEPOINT purge_startup_noise');
+        }
+      }
+      await prefs.setInt(
+        'pandapay.needs_review_noise_version',
+        LocalSmsParser.version,
+      );
+    }
     return db;
+  }
+
+  Future<int> count() async {
+    if (loadDatabase != null) {
+      final db = await _database();
+      final rows = db.db.select(
+        'SELECT COUNT(*) AS count FROM local_needs_review WHERE namespace=?',
+        [namespace],
+      );
+      return (rows.single['count'] as int?) ?? 0;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getStringList(_needsReviewKey) ?? const []).length;
   }
 
   Future<List<NeedsReviewItem>> fetchAll({
@@ -241,6 +423,12 @@ class NeedsReviewRepository {
     final txns = transactions ?? existingTransactions;
     if (loadDatabase != null) {
       final db = await _database();
+      Future<List<TransactionEntry>>? transactionSnapshot;
+      Future<List<TransactionEntry>> allTransactions() =>
+          transactionSnapshot ??= _loadTransactionSnapshot(db, namespace, txns);
+      Map<String, String>? cardLast4Snapshot;
+      Map<String, String> allCardLast4() =>
+          cardLast4Snapshot ??= _loadCardLast4Sync(db, namespace);
       final rows = db.db.select(
         'SELECT id, payload FROM local_needs_review WHERE namespace=?',
         [namespace],
@@ -248,7 +436,11 @@ class NeedsReviewRepository {
       final items = <NeedsReviewItem>[];
       final toUpdate = <NeedsReviewItem>[];
       final corruptIds = <String>[];
+      var readCount = 0;
       for (final r in rows) {
+        if (++readCount % 32 == 0) {
+          await Future<void>.delayed(Duration.zero);
+        }
         try {
           final raw = r['payload'] as String;
           final original = NeedsReviewItem.fromJson(
@@ -277,48 +469,117 @@ class NeedsReviewRepository {
             );
           }
           db.db.execute('RELEASE SAVEPOINT update_resolved_kinds');
+          _notify(db, namespace, 'needs_review');
         } catch (_) {
           db.db.execute('ROLLBACK TO SAVEPOINT update_resolved_kinds');
           db.db.execute('RELEASE SAVEPOINT update_resolved_kinds');
         }
       }
-      final noise = items.where(_isNoise).map((item) => item.id).toList();
+      final noise = items
+          .where(_isNoiseOrStale)
+          .map((item) => item.id)
+          .toList();
       if (noise.isNotEmpty) await removeAll(noise);
-      final nonNoise = items.where((item) => !_isNoise(item)).toList();
+      final nonNoise = items.where((item) => !_isNoiseOrStale(item)).toList();
       final kept = <NeedsReviewItem>[];
       final toRemove = <String>[];
       final now = DateTime.now();
+      var processed = 0;
       for (final item in nonNoise) {
+        if (++processed % 8 == 0) {
+          await Future<void>.delayed(Duration.zero);
+        }
         if (item.aiSuggestions != null && item.aiSuggestions!.isNotEmpty) {
           kept.add(item);
           continue;
         }
+        final parsed = LocalSmsParser.parse(
+          body: item.body,
+          sender: item.sender,
+          receivedAt: item.receivedAt,
+          namespace: namespace,
+        );
         if (item.kind != NeedsReviewKind.transaction &&
             item.kind != NeedsReviewKind.mandate &&
             item.kind != NeedsReviewKind.receipt) {
-          kept.add(item);
+          if (parsed != null &&
+              parsed.eventType == LocalSmsEventType.bill &&
+              parsed.dueDate != null) {
+            // Bill obligation with due date is resolvable
+          } else if (parsed?.reasonCodes.contains(
+                'next_premium_due_month_only',
+              ) !=
+              true) {
+            kept.add(item);
+            continue;
+          }
+        }
+        final needsTransactions =
+            isInvestmentFolioAllotment(item.body) ||
+            isMerchantReceiptOrEbill(item.body) ||
+            isRefundOrReversal(item.body) ||
+            (parsed?.eventType == LocalSmsEventType.bill &&
+                parsed?.dueDate != null &&
+                parsed!.dueDate!.isBefore(now));
+        final matchTransactions = needsTransactions
+            ? await allTransactions()
+            : const <TransactionEntry>[];
+        // Snapshot loading yields. Do not resolve a message dismissed or edited
+        // while that snapshot was being read.
+        final live = db.db.select(
+          'SELECT payload FROM local_needs_review WHERE namespace=? AND id=?',
+          [namespace, item.id],
+        );
+        if (live.isEmpty ||
+            jsonEncode(
+                  NeedsReviewItem.fromJson(
+                    jsonDecode(live.single['payload'] as String)
+                        as Map<String, dynamic>,
+                  ).toJson(),
+                ) !=
+                jsonEncode(item.toJson())) {
           continue;
         }
         if (isInvestmentFolioAllotment(item.body)) {
           if (_hasMatchingInvestmentTransaction(
-                item,
-                database: db,
-                transactions: txns,
-              )) {
+            item,
+            database: db,
+            transactions: matchTransactions,
+            transactionsAreComplete: true,
+          )) {
             toRemove.add(item.id);
             continue;
           }
         }
         if (isMerchantReceiptOrEbill(item.body)) {
-          if (_hasMatchingSpendTransaction(
-                item,
-                database: db,
-                transactions: txns,
-              )) {
+          final linkedId = matchingSpendTransactionIdSync(
+            db,
+            namespace,
+            item,
+            transactions: matchTransactions,
+            transactionsAreComplete: true,
+          );
+          if (linkedId != null) {
+            PastBillReceiptRepository(db, namespace: namespace).archiveReceipt(
+              id: item.id,
+              sender: item.sender,
+              body: item.body,
+              receivedAt: item.receivedAt,
+              linkedTransactionId: linkedId,
+              status: PastBillReceiptStatus.paidLinked,
+            );
             toRemove.add(item.id);
             continue;
           }
-          if (now.difference(item.receivedAt).abs() > const Duration(days: 30)) {
+          if (now.difference(item.receivedAt).abs() >
+              const Duration(days: 30)) {
+            PastBillReceiptRepository(db, namespace: namespace).archiveReceipt(
+              id: item.id,
+              sender: item.sender,
+              body: item.body,
+              receivedAt: item.receivedAt,
+              status: PastBillReceiptStatus.needsConfirmation,
+            );
             toRemove.add(item.id);
             continue;
           }
@@ -326,28 +587,35 @@ class NeedsReviewRepository {
 
         if (isRefundOrReversal(item.body)) {
           if (_hasMatchingRefundDebit(
-                item,
-                database: db,
-                transactions: txns,
-              )) {
+            item,
+            database: db,
+            transactions: matchTransactions,
+            transactionsAreComplete: true,
+          )) {
             toRemove.add(item.id);
             continue;
           }
         }
 
-        final parsed = LocalSmsParser.parse(
-          body: item.body,
-          sender: item.sender,
-          receivedAt: item.receivedAt,
-          namespace: namespace,
-        );
-
         if (parsed != null) {
-          final isCardBill = parsed.eventType == LocalSmsEventType.bill &&
+          if (isMonthOnlyPremiumNotice(parsed)) {
+            if (isPastMonthOnlyPremiumNotice(parsed, item.body, now: now)) {
+              _archiveMonthOnlyPremiumSync(db, namespace, parsed, item);
+            }
+            toRemove.add(item.id);
+            continue;
+          }
+          final isCardBill =
+              parsed.eventType == LocalSmsEventType.bill &&
               parsed.cardLast4 != null &&
               parsed.disposition != LocalSmsDisposition.localCommitment &&
               !parsed.reasonCodes.contains('mandate_notice');
-          final isMandateOrAutopay = !isCardBill &&
+          final isMonthOnlyPremium = parsed.reasonCodes.contains(
+            'next_premium_due_month_only',
+          );
+          final isMandateOrAutopay =
+              !isMonthOnlyPremium &&
+              !isCardBill &&
               (parsed.isAutopay ||
                   parsed.disposition == LocalSmsDisposition.localCommitment ||
                   parsed.reasonCodes.contains('mandate_notice') ||
@@ -369,16 +637,81 @@ class NeedsReviewRepository {
 
           if (parsed.eventType == LocalSmsEventType.bill &&
               (parsed.cardLast4 != null || parsed.dueDate != null)) {
+            final due = parsed.dueDate;
+            final now = DateTime.now();
+            final dueDay = due == null
+                ? null
+                : DateTime(due.year, due.month, due.day);
+            final today = DateTime(now.year, now.month, now.day);
+            if (due != null && dueDay != null && dueDay.isBefore(today)) {
+              final matchWindowStart = due.subtract(
+                Duration(days: parsed.cardLast4 == null ? 3 : 30),
+              );
+              final matchWindowEnd = due.add(const Duration(days: 10));
+              final windowTransactions = matchTransactions
+                  .where(
+                    (transaction) =>
+                        !transaction.occurredAt.isBefore(matchWindowStart) &&
+                        !transaction.occurredAt.isAfter(matchWindowEnd),
+                  )
+                  .toList(growable: false);
+              final billRows = deriveSmsBillRows(
+                observations: [
+                  {
+                    'event_type': parsed.eventType.wireValue,
+                    'received_at': item.receivedAt.toIso8601String(),
+                    'biller_name': parsed.billerName,
+                    'card_last4': parsed.cardLast4,
+                    'account_last4': parsed.accountLast4,
+                    'amount_due_paise': parsed.amountDue?.paise,
+                    'minimum_due_paise': parsed.minimumDue?.paise,
+                    'due_date': parsed.dueDate?.toIso8601String(),
+                    'is_autopay': parsed.isAutopay,
+                  },
+                ],
+                transactions: windowTransactions,
+                cardsLast4ById: allCardLast4(),
+                now: now,
+                lookbackDays: 36525,
+              );
+              final matched =
+                  billRows.isEmpty ||
+                      billRows.single.state != SmsBillState.linked ||
+                      parsed.amountDue == null
+                  ? null
+                  : billRows.single;
+              PastBillReceiptRepository(db, namespace: namespace).archiveBill(
+                id: item.id,
+                sender: item.sender,
+                merchant: parsed.billerName ?? item.sender,
+                amount: parsed.amountDue,
+                receivedAt: item.receivedAt,
+                dueDate: due,
+                cardLast4: parsed.cardLast4,
+                accountLast4: parsed.accountLast4,
+                body: item.body,
+                status: matched == null
+                    ? PastBillReceiptStatus.historicalUnpaid
+                    : PastBillReceiptStatus.paidLinked,
+                linkedTransactionId: matched?.linkedTxnId,
+              );
+            } else if (due != null &&
+                dueDay != null &&
+                !dueDay.isBefore(today) &&
+                parsed.cardLast4 == null) {
+              _persistResolvedCommitmentSync(db, namespace, parsed, item);
+            }
             _persistResolvedBillObservationSync(db, namespace, parsed, item);
             toRemove.add(item.id);
             continue;
           }
 
           if (parsed.disposition == LocalSmsDisposition.sync &&
-              parsed.transaction != null &&
-              parsed.transaction!.entryKind == TxnEntryKind.spend) {
-            final isWallet = parsed.transaction!.instrument == TxnInstrument.wallet;
-            final cardMatches = parsed.cardLast4 != null &&
+              parsed.transaction != null) {
+            final isWallet =
+                parsed.transaction!.instrument == TxnInstrument.wallet;
+            final cardMatches =
+                parsed.cardLast4 != null &&
                 _matchesUserCardSync(db, namespace, parsed.cardLast4!);
             final isNonCard = parsed.cardLast4 == null;
             if (isWallet || cardMatches || isNonCard) {
@@ -410,9 +743,9 @@ class NeedsReviewRepository {
           ),
         )
         .toList();
-    final noise = items.where(_isNoise).map((item) => item.id).toList();
+    final noise = items.where(_isNoiseOrStale).map((item) => item.id).toList();
     if (noise.isNotEmpty) await removeAll(noise);
-    final nonNoise = items.where((item) => !_isNoise(item)).toList();
+    final nonNoise = items.where((item) => !_isNoiseOrStale(item)).toList();
     final kept = <NeedsReviewItem>[];
     final toRemove = <String>[];
     final now = DateTime.now();
@@ -428,10 +761,7 @@ class NeedsReviewRepository {
         continue;
       }
       if (isMerchantReceiptOrEbill(item.body)) {
-        if (_hasMatchingSpendTransaction(
-              item,
-              transactions: txns,
-            )) {
+        if (_hasMatchingSpendTransaction(item, transactions: txns)) {
           toRemove.add(item.id);
           continue;
         }
@@ -441,10 +771,7 @@ class NeedsReviewRepository {
         }
       }
       if (isRefundOrReversal(item.body)) {
-        if (_hasMatchingRefundDebit(
-              item,
-              transactions: txns,
-            )) {
+        if (_hasMatchingRefundDebit(item, transactions: txns)) {
           toRemove.add(item.id);
           continue;
         }
@@ -456,11 +783,13 @@ class NeedsReviewRepository {
         namespace: namespace,
       );
       if (parsed != null) {
-        final isCardBill = parsed.eventType == LocalSmsEventType.bill &&
+        final isCardBill =
+            parsed.eventType == LocalSmsEventType.bill &&
             parsed.cardLast4 != null &&
             parsed.disposition != LocalSmsDisposition.localCommitment &&
             !parsed.reasonCodes.contains('mandate_notice');
-        final isMandateOrAutopay = !isCardBill &&
+        final isMandateOrAutopay =
+            !isCardBill &&
             (parsed.isAutopay ||
                 parsed.disposition == LocalSmsDisposition.localCommitment ||
                 parsed.reasonCodes.contains('mandate_notice') ||
@@ -486,7 +815,8 @@ class NeedsReviewRepository {
         if (parsed.disposition == LocalSmsDisposition.sync &&
             parsed.transaction != null &&
             parsed.transaction!.entryKind == TxnEntryKind.spend) {
-          final isWallet = parsed.transaction!.instrument == TxnInstrument.wallet;
+          final isWallet =
+              parsed.transaction!.instrument == TxnInstrument.wallet;
           final isNonCard = parsed.cardLast4 == null;
           if (isWallet || isNonCard) {
             toRemove.add(item.id);
@@ -503,10 +833,13 @@ class NeedsReviewRepository {
   }
 
   static bool isSecurityOrServiceAlert(String body) {
+    if (LocalSmsParser.isActionableInsuranceRenewal(body)) return false;
     final text = body.toLowerCase();
     return RegExp(
       r'\b(?:transaction\s+check\s+alert|check\s+alert|confirm\s+(?:the\s+)?(?:following\s+)?txn|call\s+forwarding\b|sim\s+swap|service\s+alert|fraud\s+alert|suspicious\s+activity|'
-      r'modification\s+success!?|card\s+usage\s+settings?|card\s+(?:usage\s+)?settings?\s+(?:for|modified|updated)|card\s+controls?\s+(?:modified|updated)|card\s+usage\s+(?:limits?|controls?|preferences?)|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated)\b|'
+      r'modification\s+success!?|card\s+usage\s+settings?|card\s+(?:usage\s+)?settings?\s+(?:for|modified|updated)|card\s+controls?\s+(?:modified|updated)|card\s+usage\s+(?:limits?|controls?|preferences?)|usage\s+(?:&|and)\s+transaction\s+limit|transaction\s+limits?\s+options?|limits?\s+(?:have|has)\s+been\s+updated|usage\s+options?\s+(?:have|has)\s+been\s+updated|'
+      r'(?:daily|domestic|international|atm|pos|online)?\s*(?:transaction|usage)?\s*limits?\s*(?:of\s+(?:₹|rs\.?|inr)?\s*[\d,]+)?\s*(?:has\s+been|is)?\s*(?:set|modified|updated|changed|configured))\b|'
+      r'\b(?:positive\s+pay\s+(?:details|system|alert)|aadhaar\s+(?:linked|seeded)|npci\s+mapper)\b|'
       r'\b(?:will\s+remain\s+open\s+and\s+fully\s+operational|available\s+at\s+our\s+branches\s+during\s+normal\s+working\s+hours|submission\s+of\s+positive\s+pay\s+details\s+is\s+mandatory)\b|'
       r'\bdone\s+\d+\s+out\s+of\s+\d+\s+free\s+transactions\s+at\s+[\w\s]+atms\b|'
       r'\b(?:cdsl|nsdl)\s*:\s*(?:debit|credit)\s+in\s+a/c\b[\s\S]{0,40}\b(?:etf|bees|shares?|units?|mf)\b|'
@@ -589,12 +922,14 @@ class NeedsReviewRepository {
     String namespace,
     NeedsReviewItem item, {
     List<TransactionEntry>? transactions,
+    bool transactionsAreComplete = false,
   }) {
     final extracted = LocalSmsParser.extractReceiptAmount(item.body);
     if (extracted == null || extracted.paise <= 0) return false;
 
-    if (transactions != null && transactions.isNotEmpty) {
+    if (transactions != null) {
       for (final txn in transactions) {
+        if (txn.status != 'active') continue;
         final entryKindStr = txn.entryKind.name.toLowerCase();
         final wireValueStr = txn.entryKind.wireValue.toLowerCase();
         if (entryKindStr != 'investment' &&
@@ -609,6 +944,7 @@ class NeedsReviewRepository {
           return true;
         }
       }
+      if (transactionsAreComplete) return false;
     }
 
     try {
@@ -630,6 +966,8 @@ class NeedsReviewRepository {
         if (payloadJson == null) continue;
         final data = jsonDecode(payloadJson) as Map<String, dynamic>;
 
+        if ((data['status'] ?? 'active') != 'active') continue;
+
         final entryKind = (data['entry_kind'] as String?)?.toLowerCase();
         if (entryKind != null &&
             entryKind != 'investment' &&
@@ -644,7 +982,8 @@ class NeedsReviewRepository {
           amountMatched = paiseCol == extracted.paise;
         } else if (amountInr != null) {
           amountMatched = (amountInr * 100).round() == extracted.paise;
-        } else if (data['amount'] is Map && (data['amount'] as Map)['paise'] is int) {
+        } else if (data['amount'] is Map &&
+            (data['amount'] as Map)['paise'] is int) {
           amountMatched = (data['amount'] as Map)['paise'] == extracted.paise;
         }
         if (!amountMatched) continue;
@@ -677,6 +1016,7 @@ class NeedsReviewRepository {
     NeedsReviewItem item, {
     AppDatabase? database,
     List<TransactionEntry>? transactions,
+    bool transactionsAreComplete = false,
   }) {
     final txns = transactions ?? existingTransactions;
     if (database != null) {
@@ -685,12 +1025,14 @@ class NeedsReviewRepository {
         namespace,
         item,
         transactions: txns,
+        transactionsAreComplete: transactionsAreComplete,
       );
     }
     final extracted = LocalSmsParser.extractReceiptAmount(item.body);
     if (extracted == null || extracted.paise <= 0) return false;
     if (txns != null) {
       for (final txn in txns) {
+        if (txn.status != 'active') continue;
         final entryKindStr = txn.entryKind.name.toLowerCase();
         final wireValueStr = txn.entryKind.wireValue.toLowerCase();
         if (entryKindStr != 'investment' &&
@@ -712,6 +1054,38 @@ class NeedsReviewRepository {
   static bool isMerchantReceiptOrEbill(String body) =>
       LocalSmsParser.isMerchantReceiptOrEbill(body);
 
+  static TransactionEntry? matchingSpendTransactionInList(
+    NeedsReviewItem item,
+    List<TransactionEntry>? transactions,
+  ) {
+    final extracted = LocalSmsParser.extractReceiptAmount(item.body);
+    if (extracted == null || extracted.paise <= 0) return null;
+    for (final txn in transactions ?? const <TransactionEntry>[]) {
+      if (txn.status != 'active') continue;
+      final entryKind = txn.entryKind.name.toLowerCase();
+      final wireValue = txn.entryKind.wireValue.toLowerCase();
+      if (entryKind != 'spend' &&
+          entryKind != 'payment' &&
+          wireValue != 'spend' &&
+          wireValue != 'payment') {
+        continue;
+      }
+      if (txn.amount.paise != extracted.paise ||
+          txn.occurredAt.difference(item.receivedAt).abs() >
+              const Duration(hours: 72)) {
+        continue;
+      }
+      if (_merchantMatchesOrOverlaps(
+        txn.merchantName,
+        item.body,
+        item.sender,
+      )) {
+        return txn;
+      }
+    }
+    return null;
+  }
+
   static bool _merchantMatchesOrOverlaps(
     String? txnMerchant,
     String receiptBody,
@@ -722,10 +1096,34 @@ class NeedsReviewRepository {
     }
     final merchantLower = txnMerchant.trim().toLowerCase();
     const stopWords = {
-      'pvt', 'ltd', 'limited', 'india', 'retail', 'store', 'stores',
-      'online', 'payment', 'payments', 'pay', 'corp', 'corporation',
-      'services', 'service', 'the', 'and', 'for', 'with', 'from',
-      'upi', 'pos', 'txn', 'bank', 'com', 'in', 'org', 'net',
+      'pvt',
+      'ltd',
+      'limited',
+      'india',
+      'retail',
+      'store',
+      'stores',
+      'online',
+      'payment',
+      'payments',
+      'pay',
+      'corp',
+      'corporation',
+      'services',
+      'service',
+      'the',
+      'and',
+      'for',
+      'with',
+      'from',
+      'upi',
+      'pos',
+      'txn',
+      'bank',
+      'com',
+      'in',
+      'org',
+      'net',
     };
     final rawTokens = merchantLower
         .split(RegExp(r'[^a-z0-9]+'))
@@ -736,8 +1134,14 @@ class NeedsReviewRepository {
       return true;
     }
 
-    final cleanBody = receiptBody.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    final cleanSender = receiptSender.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final cleanBody = receiptBody.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '',
+    );
+    final cleanSender = receiptSender.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '',
+    );
     final lowerBody = receiptBody.toLowerCase();
     final lowerSender = receiptSender.toLowerCase();
 
@@ -748,7 +1152,9 @@ class NeedsReviewRepository {
         }
       } else if (token.length == 3) {
         if (RegExp(r'\b' + RegExp.escape(token) + r'\b').hasMatch(lowerBody) ||
-            RegExp(r'\b' + RegExp.escape(token) + r'\b').hasMatch(lowerSender) ||
+            RegExp(
+              r'\b' + RegExp.escape(token) + r'\b',
+            ).hasMatch(lowerSender) ||
             cleanSender.contains(token)) {
           return true;
         }
@@ -763,29 +1169,30 @@ class NeedsReviewRepository {
     String namespace,
     NeedsReviewItem item, {
     List<TransactionEntry>? transactions,
+    bool transactionsAreComplete = false,
+  }) =>
+      matchingSpendTransactionIdSync(
+        database,
+        namespace,
+        item,
+        transactions: transactions,
+        transactionsAreComplete: transactionsAreComplete,
+      ) !=
+      null;
+
+  static String? matchingSpendTransactionIdSync(
+    AppDatabase database,
+    String namespace,
+    NeedsReviewItem item, {
+    List<TransactionEntry>? transactions,
+    bool transactionsAreComplete = false,
   }) {
     final extracted = LocalSmsParser.extractReceiptAmount(item.body);
-    if (extracted == null || extracted.paise <= 0) return false;
+    if (extracted == null || extracted.paise <= 0) return null;
 
-    if (transactions != null && transactions.isNotEmpty) {
-      for (final txn in transactions) {
-        final entryKindStr = txn.entryKind.name.toLowerCase();
-        final wireValueStr = txn.entryKind.wireValue.toLowerCase();
-        if (entryKindStr != 'spend' &&
-            entryKindStr != 'payment' &&
-            wireValueStr != 'spend' &&
-            wireValueStr != 'payment') {
-          continue;
-        }
-        if (txn.amount.paise != extracted.paise) continue;
-        if (txn.occurredAt.difference(item.receivedAt).abs() <=
-            const Duration(hours: 72)) {
-          if (_merchantMatchesOrOverlaps(txn.merchantName, item.body, item.sender)) {
-            return true;
-          }
-        }
-      }
-    }
+    final listed = matchingSpendTransactionInList(item, transactions);
+    if (listed != null) return listed.id;
+    if (transactionsAreComplete) return null;
 
     try {
       database.db.execute('''
@@ -798,7 +1205,7 @@ class NeedsReviewRepository {
         );
       ''');
       final rows = database.db.select(
-        "SELECT payload, occurred_at, amount_paise FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
+        "SELECT id, payload, occurred_at, amount_paise FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
         [namespace],
       );
       for (final row in rows) {
@@ -806,8 +1213,13 @@ class NeedsReviewRepository {
         if (payloadJson == null) continue;
         final data = jsonDecode(payloadJson) as Map<String, dynamic>;
 
+        if ((data['status'] ?? 'active') != 'active') continue;
         final entryKind = (data['entry_kind'] as String?)?.toLowerCase();
-        if (entryKind != null && entryKind != 'spend' && entryKind != 'payment') continue;
+        if (entryKind != null &&
+            entryKind != 'spend' &&
+            entryKind != 'payment') {
+          continue;
+        }
 
         final paiseCol = row['amount_paise'] as int?;
         final amountInr = data['amount_inr'] as num?;
@@ -816,7 +1228,8 @@ class NeedsReviewRepository {
           amountMatched = paiseCol == extracted.paise;
         } else if (amountInr != null) {
           amountMatched = (amountInr * 100).round() == extracted.paise;
-        } else if (data['amount'] is Map && (data['amount'] as Map)['paise'] is int) {
+        } else if (data['amount'] is Map &&
+            (data['amount'] as Map)['paise'] is int) {
           amountMatched = (data['amount'] as Map)['paise'] == extracted.paise;
         }
         if (!amountMatched) continue;
@@ -837,23 +1250,25 @@ class NeedsReviewRepository {
 
         if (occurredAt.difference(item.receivedAt).abs() <=
             const Duration(hours: 72)) {
-          final txnMerchant = data['merchant_name'] as String? ??
+          final txnMerchant =
+              data['merchant_name'] as String? ??
               data['merchant'] as String? ??
               data['merchantName'] as String?;
           if (_merchantMatchesOrOverlaps(txnMerchant, item.body, item.sender)) {
-            return true;
+            return row['id'] as String;
           }
         }
       }
     } catch (_) {}
 
-    return false;
+    return null;
   }
 
   bool _hasMatchingSpendTransaction(
     NeedsReviewItem item, {
     AppDatabase? database,
     List<TransactionEntry>? transactions,
+    bool transactionsAreComplete = false,
   }) {
     final txns = transactions ?? existingTransactions;
     if (database != null) {
@@ -862,12 +1277,14 @@ class NeedsReviewRepository {
         namespace,
         item,
         transactions: txns,
+        transactionsAreComplete: transactionsAreComplete,
       );
     }
     final extracted = LocalSmsParser.extractReceiptAmount(item.body);
     if (extracted == null || extracted.paise <= 0) return false;
     if (txns != null) {
       for (final txn in txns) {
+        if (txn.status != 'active') continue;
         final entryKindStr = txn.entryKind.name.toLowerCase();
         final wireValueStr = txn.entryKind.wireValue.toLowerCase();
         if (entryKindStr != 'spend' &&
@@ -879,7 +1296,11 @@ class NeedsReviewRepository {
         if (txn.amount.paise != extracted.paise) continue;
         if (txn.occurredAt.difference(item.receivedAt).abs() <=
             const Duration(hours: 72)) {
-          if (_merchantMatchesOrOverlaps(txn.merchantName, item.body, item.sender)) {
+          if (_merchantMatchesOrOverlaps(
+            txn.merchantName,
+            item.body,
+            item.sender,
+          )) {
             return true;
           }
         }
@@ -900,6 +1321,7 @@ class NeedsReviewRepository {
     String namespace,
     NeedsReviewItem item, {
     List<TransactionEntry>? transactions,
+    bool transactionsAreComplete = false,
   }) {
     final parsed = LocalSmsParser.parse(
       body: item.body,
@@ -907,7 +1329,8 @@ class NeedsReviewRepository {
       receivedAt: item.receivedAt,
       namespace: namespace,
     );
-    final refundAmount = parsed?.transaction?.amount ??
+    final refundAmount =
+        parsed?.transaction?.amount ??
         LocalSmsParser.extractReceiptAmount(item.body);
     if (refundAmount == null || refundAmount.paise <= 0) return false;
 
@@ -934,14 +1357,17 @@ class NeedsReviewRepository {
     refundMerchant ??= item.body;
 
     final candidateDebits = <TransactionEntry>[];
-    if (transactions != null && transactions.isNotEmpty) {
+    if (transactions != null) {
       candidateDebits.addAll(
-        transactions.where((t) => t.entryKind == TxnEntryKind.spend),
+        transactions.where(
+          (t) => t.status == 'active' && t.entryKind == TxnEntryKind.spend,
+        ),
       );
     }
 
-    try {
-      database.db.execute('''
+    if (!transactionsAreComplete) {
+      try {
+        database.db.execute('''
         CREATE TABLE IF NOT EXISTS financial_entities (
           namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,
           payload TEXT NOT NULL, observed_at INTEGER NOT NULL,
@@ -949,23 +1375,25 @@ class NeedsReviewRepository {
           occurred_at INTEGER, amount_paise INTEGER,
           PRIMARY KEY(namespace, entity, id)
         );
-      ''');
-      final rows = database.db.select(
-        "SELECT payload FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
-        [namespace],
-      );
-      for (final row in rows) {
-        final payloadJson = row['payload'] as String?;
-        if (payloadJson == null) continue;
-        try {
-          final data = jsonDecode(payloadJson) as Map<String, dynamic>;
-          final entry = TransactionEntry.fromJson(data);
-          if (entry.entryKind == TxnEntryKind.spend) {
-            candidateDebits.add(entry);
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
+        ''');
+        final rows = database.db.select(
+          "SELECT payload FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
+          [namespace],
+        );
+        for (final row in rows) {
+          final payloadJson = row['payload'] as String?;
+          if (payloadJson == null) continue;
+          try {
+            final data = jsonDecode(payloadJson) as Map<String, dynamic>;
+            final entry = TransactionEntry.fromJson(data);
+            if (entry.status == 'active' &&
+                entry.entryKind == TxnEntryKind.spend) {
+              candidateDebits.add(entry);
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
 
     final refundDate = parsed?.transaction?.occurredAt ?? item.receivedAt;
     final matchResult = AdjustmentMatcher.findMatchingDebit(
@@ -986,6 +1414,7 @@ class NeedsReviewRepository {
     NeedsReviewItem item, {
     AppDatabase? database,
     List<TransactionEntry>? transactions,
+    bool transactionsAreComplete = false,
   }) {
     final txns = transactions ?? existingTransactions;
     if (database != null) {
@@ -994,6 +1423,7 @@ class NeedsReviewRepository {
         namespace,
         item,
         transactions: txns,
+        transactionsAreComplete: transactionsAreComplete,
       );
     }
     final parsed = LocalSmsParser.parse(
@@ -1002,7 +1432,8 @@ class NeedsReviewRepository {
       receivedAt: item.receivedAt,
       namespace: namespace,
     );
-    final refundAmount = parsed?.transaction?.amount ??
+    final refundAmount =
+        parsed?.transaction?.amount ??
         LocalSmsParser.extractReceiptAmount(item.body);
     if (refundAmount == null || refundAmount.paise <= 0) return false;
 
@@ -1031,7 +1462,9 @@ class NeedsReviewRepository {
     final candidateDebits = <TransactionEntry>[];
     if (txns != null && txns.isNotEmpty) {
       candidateDebits.addAll(
-        txns.where((t) => t.entryKind == TxnEntryKind.spend),
+        txns.where(
+          (t) => t.status == 'active' && t.entryKind == TxnEntryKind.spend,
+        ),
       );
     }
 
@@ -1072,22 +1505,28 @@ class NeedsReviewRepository {
         'matched_at': DateTime.now().toUtc().toIso8601String(),
         'refund_sms_id': item.id,
       };
-      database.db.execute('''
+      database.db.execute(
+        '''
         INSERT INTO financial_entities(
           namespace, entity, id, payload, observed_at, pending, source_key, occurred_at, amount_paise
         ) VALUES (?, 'refund_adjustments', ?, ?, ?, 0, ?, ?, ?)
         ON CONFLICT(namespace, entity, id) DO UPDATE SET
           payload=excluded.payload, observed_at=excluded.observed_at
-      ''', [
-        namespace,
-        'refund_link:${item.id}',
-        jsonEncode(linkPayload),
-        item.receivedAt.millisecondsSinceEpoch,
-        item.id,
-        item.receivedAt.millisecondsSinceEpoch,
-        match.refundAmount.paise,
-      ]);
-    } catch (_) {}
+      ''',
+        [
+          namespace,
+          'refund_link:${item.id}',
+          jsonEncode(linkPayload),
+          item.receivedAt.millisecondsSinceEpoch,
+          item.id,
+          item.receivedAt.millisecondsSinceEpoch,
+          match.refundAmount.paise,
+        ],
+      );
+      _notify(database, namespace, 'transactions');
+    } catch (_) {
+      rethrow;
+    }
   }
 
   static bool isNoiseItem(NeedsReviewItem item) {
@@ -1116,18 +1555,34 @@ class NeedsReviewRepository {
     return LocalSmsParser.isNonTransactionNoise(resolved.sender, resolved.body);
   }
 
-  bool _isNoise(NeedsReviewItem item) => isNoiseItem(item);
+  bool _isNoiseOrStale(NeedsReviewItem item) =>
+      isNoiseItem(item) || !_capturesReviewableFinancial(item);
 
   Future<void> add(
     NeedsReviewItem item, {
     List<TransactionEntry>? transactions,
   }) async {
     if (isNoiseItem(item)) return;
+    if (!_capturesReviewableFinancial(item)) return;
     final txns = transactions ?? existingTransactions;
     if (isMerchantReceiptOrEbill(item.body)) {
       if (loadDatabase != null) {
         final db = await _database();
-        if (_hasMatchingSpendTransaction(item, database: db, transactions: txns)) {
+        final linkedId = matchingSpendTransactionIdSync(
+          db,
+          namespace,
+          item,
+          transactions: txns,
+        );
+        if (linkedId != null) {
+          PastBillReceiptRepository(db, namespace: namespace).archiveReceipt(
+            id: item.id,
+            sender: item.sender,
+            body: item.body,
+            receivedAt: item.receivedAt,
+            linkedTransactionId: linkedId,
+            status: PastBillReceiptStatus.paidLinked,
+          );
           return;
         }
       } else if (_hasMatchingSpendTransaction(item, transactions: txns)) {
@@ -1142,6 +1597,78 @@ class NeedsReviewRepository {
         }
       } else if (_hasMatchingRefundDebit(item, transactions: txns)) {
         return;
+      }
+    }
+    final parsed = LocalSmsParser.parse(
+      body: item.body,
+      sender: item.sender,
+      receivedAt: item.receivedAt,
+      namespace: namespace,
+    );
+    if (isMonthOnlyPremiumNotice(parsed)) {
+      if (loadDatabase != null &&
+          isPastMonthOnlyPremiumNotice(parsed, item.body)) {
+        final db = await _database();
+        _archiveMonthOnlyPremiumSync(db, namespace, parsed!, item);
+      }
+      return;
+    }
+    if (parsed != null &&
+        parsed.eventType == LocalSmsEventType.bill &&
+        parsed.cardLast4 == null &&
+        parsed.dueDate != null) {
+      if (loadDatabase != null) {
+        final db = await _database();
+        final now = DateTime.now();
+        final startOfToday = DateTime(now.year, now.month, now.day);
+        if (!parsed.dueDate!.isBefore(startOfToday)) {
+          _persistResolvedCommitmentSync(db, namespace, parsed, item);
+          _persistResolvedBillObservationSync(db, namespace, parsed, item);
+          return;
+        } else {
+          final allTransactions = await _loadTransactionSnapshot(
+            db,
+            namespace,
+            txns,
+          );
+          final linked = deriveSmsBillRows(
+            observations: [
+              {
+                'event_type': parsed.eventType.wireValue,
+                'received_at': item.receivedAt.toIso8601String(),
+                'sender_bank': item.sender,
+                'biller_name': parsed.billerName,
+                'card_last4': parsed.cardLast4,
+                'account_last4': parsed.accountLast4,
+                'amount_due_paise': parsed.amountDue?.paise,
+                'minimum_due_paise': parsed.minimumDue?.paise,
+                'due_date': parsed.dueDate?.toIso8601String(),
+                'is_autopay': parsed.isAutopay,
+              },
+            ],
+            transactions: allTransactions,
+            cardsLast4ById: _loadCardLast4Sync(db, namespace),
+            now: now,
+            lookbackDays: 36525,
+          ).where((row) => row.state == SmsBillState.linked).firstOrNull;
+          PastBillReceiptRepository(db, namespace: namespace).archiveBill(
+            id: item.id,
+            sender: item.sender,
+            merchant: parsed.billerName ?? item.sender,
+            amount: parsed.amountDue,
+            receivedAt: item.receivedAt,
+            dueDate: parsed.dueDate,
+            cardLast4: parsed.cardLast4,
+            accountLast4: parsed.accountLast4,
+            body: item.body,
+            status: linked == null
+                ? PastBillReceiptStatus.historicalUnpaid
+                : PastBillReceiptStatus.paidLinked,
+            linkedTransactionId: linked?.linkedTxnId,
+          );
+          _persistResolvedBillObservationSync(db, namespace, parsed, item);
+          return;
+        }
       }
     }
     final resolved = resolveItemKind(item);
@@ -1163,6 +1690,7 @@ class NeedsReviewRepository {
         'INSERT OR REPLACE INTO local_needs_review VALUES (?,?,?)',
         [namespace, resolved.id, jsonEncode(resolved.toJson())],
       );
+      _notify(db, namespace, 'needs_review');
       return;
     }
     final prefs = await SharedPreferences.getInstance();
@@ -1198,7 +1726,7 @@ class NeedsReviewRepository {
     ]);
   }
 
-  /// Persists owner-scoped, validated Gemini facts onto an existing local
+  /// Persists owner-scoped, validated PandaPay AI facts onto an existing local
   /// review row. It deliberately never recreates a row that the user already
   /// dismissed or resolved while the network request was in flight.
   Future<bool> updateAiSuggestions(
@@ -1216,11 +1744,14 @@ class NeedsReviewRepository {
       current.copyWith(aiSuggestions: suggestions).toJson(),
     );
     if (loadDatabase != null) {
-      (await _database()).db.execute(
+      final db = await _database();
+      db.db.execute(
         'UPDATE local_needs_review SET payload=? WHERE namespace=? AND id=?',
         [updated, namespace, id],
       );
-      return true;
+      final changed = db.db.updatedRows > 0;
+      if (changed) _notify(db, namespace, 'needs_review');
+      return changed;
     }
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
@@ -1245,10 +1776,12 @@ class NeedsReviewRepository {
   /// caller's concern (screen-level), not this store's.
   Future<void> remove(String id) async {
     if (loadDatabase != null) {
-      (await _database()).db.execute(
+      final db = await _database();
+      db.db.execute(
         'DELETE FROM local_needs_review WHERE namespace=? AND id=?',
         [namespace, id],
       );
+      if (db.db.updatedRows > 0) _notify(db, namespace, 'needs_review');
       return;
     }
     final prefs = await SharedPreferences.getInstance();
@@ -1259,20 +1792,109 @@ class NeedsReviewRepository {
     await prefs.setStringList(_needsReviewKey, kept);
   }
 
+  /// A month-only insurance reminder ("next premium falls due on 12/2024")
+  /// carries no day and no amount. Past months are archived as history, and
+  /// current or future months are shown on the Bills page, so neither belongs
+  /// in the open review queue.
+  static bool isMonthOnlyPremiumNotice(LocalSmsObservation? parsed) {
+    return parsed != null &&
+        parsed.eventType == LocalSmsEventType.bill &&
+        parsed.reasonCodes.contains('next_premium_due_month_only');
+  }
+
+  /// Once the month named by a month-only reminder has passed it is history,
+  /// not an open review task; no payment can ever be linked to it.
+  static bool isPastMonthOnlyPremiumNotice(
+    LocalSmsObservation? parsed,
+    String body, {
+    DateTime? now,
+  }) {
+    if (!isMonthOnlyPremiumNotice(parsed)) return false;
+    final month = LocalSmsParser.nextPremiumDueMonth(body);
+    if (month == null) return false;
+    final at = now ?? DateTime.now();
+    return DateTime(
+      month.year,
+      month.month,
+    ).isBefore(DateTime(at.year, at.month));
+  }
+
+  static void _archiveMonthOnlyPremiumSync(
+    AppDatabase database,
+    String namespace,
+    LocalSmsObservation parsed,
+    NeedsReviewItem item,
+  ) {
+    PastBillReceiptRepository(database, namespace: namespace).archiveBill(
+      // Archive under the source key so the observation-derived history and
+      // this archived row never show the same notice twice.
+      id: item.id.startsWith('commitment:')
+          ? item.id.substring('commitment:'.length)
+          : item.id,
+      sender: item.sender,
+      merchant: parsed.billerName ?? item.sender,
+      amount: null,
+      receivedAt: item.receivedAt,
+      dueDate: null,
+      status: PastBillReceiptStatus.needsConfirmation,
+      body: item.body,
+    );
+  }
+
+  Future<void> archivePastPremiumNotice(NeedsReviewItem item) async {
+    final parsed = LocalSmsParser.parse(
+      namespace: namespace,
+      sender: item.sender,
+      body: item.body,
+      receivedAt: item.receivedAt,
+    );
+    final month = LocalSmsParser.nextPremiumDueMonth(item.body);
+    final now = DateTime.now();
+    if (loadDatabase == null ||
+        parsed?.reasonCodes.contains('next_premium_due_month_only') != true ||
+        month == null ||
+        !DateTime(
+          month.year,
+          month.month,
+        ).isBefore(DateTime(now.year, now.month))) {
+      throw StateError('Only past month-only premium notices can be archived.');
+    }
+    final db = await _database();
+    final existing = db.db.select(
+      'SELECT id FROM local_needs_review WHERE namespace=? AND id=?',
+      [namespace, item.id],
+    );
+    if (existing.isEmpty) return;
+    PastBillReceiptRepository(db, namespace: namespace).archiveBill(
+      id: item.id,
+      sender: item.sender,
+      merchant: parsed?.billerName ?? item.sender,
+      amount: null,
+      receivedAt: item.receivedAt,
+      dueDate: null,
+      status: PastBillReceiptStatus.needsConfirmation,
+      body: item.body,
+    );
+    await remove(item.id);
+  }
+
   Future<void> removeAll(Iterable<String> ids) async {
     final idList = ids.toList();
     if (idList.isEmpty) return;
     if (loadDatabase != null) {
       final db = await _database();
       db.db.execute('SAVEPOINT remove_all_needs_review');
+      var changed = false;
       try {
         for (final id in idList) {
           db.db.execute(
             'DELETE FROM local_needs_review WHERE namespace=? AND id=?',
             [namespace, id],
           );
+          changed = changed || db.db.updatedRows > 0;
         }
         db.db.execute('RELEASE SAVEPOINT remove_all_needs_review');
+        if (changed) _notify(db, namespace, 'needs_review');
       } catch (_) {
         db.db.execute('ROLLBACK TO SAVEPOINT remove_all_needs_review');
         db.db.execute('RELEASE SAVEPOINT remove_all_needs_review');
@@ -1290,6 +1912,7 @@ class NeedsReviewRepository {
         .toList();
     await prefs.setStringList(_needsReviewKey, kept);
   }
+
   static void _persistResolvedTransactionSync(
     AppDatabase database,
     String namespace,
@@ -1306,7 +1929,8 @@ class NeedsReviewRepository {
           PRIMARY KEY(namespace, entity, id)
         );
       ''');
-      database.db.execute('''
+      database.db.execute(
+        '''
         INSERT INTO financial_entities(
           namespace, entity, id, payload, observed_at, pending, source_key, occurred_at, amount_paise
         ) VALUES (?, 'transactions', ?, ?, ?, 1, ?, ?, ?)
@@ -1314,16 +1938,49 @@ class NeedsReviewRepository {
           payload=excluded.payload, observed_at=excluded.observed_at,
           source_key=excluded.source_key, occurred_at=excluded.occurred_at,
           amount_paise=excluded.amount_paise
-      ''', [
-        namespace,
-        txn.id,
-        jsonEncode(txn.toJson()),
-        txn.occurredAt.millisecondsSinceEpoch,
-        sourceKey,
-        txn.occurredAt.millisecondsSinceEpoch,
-        txn.amount.paise,
-      ]);
-    } catch (_) {}
+      ''',
+        [
+          namespace,
+          txn.id,
+          jsonEncode(txn.toJson()),
+          txn.occurredAt.millisecondsSinceEpoch,
+          sourceKey,
+          txn.occurredAt.millisecondsSinceEpoch,
+          txn.amount.paise,
+        ],
+      );
+      _notify(database, namespace, 'transactions');
+    } catch (_) {
+      rethrow;
+    }
+  }
+
+  Future<bool> updateAiStatus(String id, AiReviewStatus status) async {
+    final items = await fetchAll();
+    final current = items.where((item) => item.id == id).firstOrNull;
+    if (current == null || current.aiStatus == status) return false;
+    final updated = jsonEncode(current.copyWith(aiStatus: status).toJson());
+    if (loadDatabase != null) {
+      final db = await _database();
+      db.db.execute(
+        'UPDATE local_needs_review SET payload=? WHERE namespace=? AND id=?',
+        [updated, namespace, id],
+      );
+      final changed = db.db.updatedRows > 0;
+      if (changed) _notify(db, namespace, 'needs_review');
+      return changed;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_needsReviewKey) ?? const [];
+    var changed = false;
+    final patched = raw.map((entry) {
+      final value = jsonDecode(entry) as Map<String, dynamic>;
+      if (value['id'] != id) return entry;
+      changed = true;
+      return updated;
+    }).toList();
+    if (changed) await prefs.setStringList(_needsReviewKey, patched);
+    return changed;
   }
 
   static void _persistResolvedBillObservationSync(
@@ -1365,21 +2022,30 @@ class NeedsReviewRepository {
         'event_type': parsed.eventType.wireValue,
         'disposition': parsed.disposition.wireValue,
         'reason_codes': parsed.reasonCodes,
+        'is_autopay': parsed.isAutopay,
+        'confidence': parsed.confidence,
+        'sample_body': item.body,
       };
-      database.db.execute('''
+      database.db.execute(
+        '''
         INSERT INTO financial_entities(
           namespace, entity, id, payload, observed_at, pending, source_key
         ) VALUES (?, 'sms_observations', ?, ?, ?, 0, ?)
         ON CONFLICT(namespace, entity, id) DO UPDATE SET
           payload=excluded.payload, observed_at=excluded.observed_at
-      ''', [
-        namespace,
-        item.id,
-        jsonEncode(obsPayload),
-        item.receivedAt.millisecondsSinceEpoch,
-        item.id,
-      ]);
-    } catch (_) {}
+      ''',
+        [
+          namespace,
+          item.id,
+          jsonEncode(obsPayload),
+          item.receivedAt.millisecondsSinceEpoch,
+          item.id,
+        ],
+      );
+      _notify(database, namespace, 'observations');
+    } catch (_) {
+      rethrow;
+    }
   }
 
   static void _persistResolvedCommitmentSync(
@@ -1398,21 +2064,19 @@ class NeedsReviewRepository {
         );
       ''');
       final commitmentId = 'commitment:${item.id}';
-      var title = (parsed.billerName != null && parsed.billerName!.trim().isNotEmpty)
+      var title =
+          (parsed.billerName != null && parsed.billerName!.trim().isNotEmpty)
           ? parsed.billerName!.trim()
           : 'Subscription / Mandate';
 
-      final Money amount;
+      final Money? amount;
       if (parsed.autopayLimit != null &&
           (parsed.amountDue == null || parsed.amountDue!.isZero)) {
         amount = parsed.autopayLimit!;
       } else if (parsed.amountDue != null && !parsed.amountDue!.isZero) {
         amount = parsed.amountDue!;
       } else {
-        amount = parsed.amount ??
-            parsed.autopayLimit ??
-            parsed.amountDue ??
-            const Money.zero();
+        amount = parsed.amount ?? parsed.autopayLimit ?? parsed.amountDue;
       }
 
       try {
@@ -1426,7 +2090,8 @@ class NeedsReviewRepository {
               jsonDecode(r['payload'] as String) as Map<String, dynamic>;
           final old = Commitment.fromJson(payload);
           final oldTitle = old.title.trim();
-          final isOldGeneric = oldTitle.isEmpty ||
+          final isOldGeneric =
+              oldTitle.isEmpty ||
               oldTitle == 'Subscription / Mandate' ||
               oldTitle.toLowerCase() == 'subscription' ||
               oldTitle.toLowerCase() == 'mandate';
@@ -1450,7 +2115,7 @@ class NeedsReviewRepository {
             final oldAmountPaise = old.amount?.paise;
             final oldAnchorDay = old.anchorDay;
             if (oldAmountPaise != null &&
-                oldAmountPaise == amount.paise &&
+                oldAmountPaise == amount?.paise &&
                 oldAnchorDay != null &&
                 oldAnchorDay == (parsed.dueDate ?? item.receivedAt).day) {
               final updatedCommitment = old.copyWith(
@@ -1461,6 +2126,7 @@ class NeedsReviewRepository {
                 'UPDATE local_commitments SET payload = ? WHERE namespace = ? AND id = ?',
                 [jsonEncode(updatedCommitment.toJson()), namespace, existingId],
               );
+              _notify(database, namespace, 'commitments');
               return;
             }
           }
@@ -1473,20 +2139,32 @@ class NeedsReviewRepository {
         category: CommitmentCategory.fromText(title),
         amount: amount,
         dueOn: parsed.dueDate ?? item.receivedAt,
+        identifier: parsed.accountLast4 == null
+            ? null
+            : '••••${parsed.accountLast4}',
+        cadence: CommitmentCadence.values.firstWhere(
+          (value) => value.name == parsed.cadenceHint,
+          orElse: () => LocalSmsParser.isActionableInsuranceRenewal(item.body)
+              ? CommitmentCadence.oneTime
+              : CommitmentCadence.monthly,
+        ),
         anchorDay: (parsed.dueDate ?? item.receivedAt).day,
         status: CommitmentStatus.due,
         source: CommitmentSource.sms,
         isUserConfirmed: false,
       );
-      database.db.execute('''
+      database.db.execute(
+        '''
         INSERT OR REPLACE INTO local_commitments VALUES (?, ?, ?)
-      ''', [
-        namespace,
-        commitment.id,
-        jsonEncode(commitment.toJson()),
-      ]);
-    } catch (_) {}
+      ''',
+        [namespace, commitment.id, jsonEncode(commitment.toJson())],
+      );
+      _notify(database, namespace, 'commitments');
+    } catch (_) {
+      rethrow;
+    }
   }
+
   static bool _matchesUserCardSync(
     AppDatabase? database,
     String namespace,
@@ -1506,5 +2184,61 @@ class NeedsReviewRepository {
       }
     } catch (_) {}
     return false;
+  }
+
+  static Map<String, String> _loadCardLast4Sync(
+    AppDatabase database,
+    String namespace,
+  ) {
+    try {
+      final rows = database.db.select(
+        "SELECT id, payload FROM financial_entities WHERE namespace = ? AND entity = 'cards'",
+        [namespace],
+      );
+      final result = <String, String>{};
+      for (final row in rows) {
+        final payload = jsonDecode(row['payload'] as String);
+        if (payload is Map<String, dynamic> && payload['last4'] is String) {
+          result[row['id'] as String] = payload['last4'] as String;
+        }
+      }
+      return result;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  static Future<List<TransactionEntry>> _loadTransactionSnapshot(
+    AppDatabase database,
+    String namespace,
+    List<TransactionEntry>? initialTransactions,
+  ) async {
+    final byId = <String, TransactionEntry>{
+      for (final transaction in initialTransactions ?? const [])
+        transaction.id: transaction,
+    };
+    try {
+      final rows = database.db.select(
+        "SELECT payload FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
+        [namespace],
+      );
+      for (var i = 0; i < rows.length; i++) {
+        if (i > 0 && i % 128 == 0) {
+          await Future<void>.delayed(Duration.zero);
+        }
+        try {
+          final transaction = TransactionEntry.fromJson(
+            jsonDecode(rows[i]['payload'] as String) as Map<String, dynamic>,
+          );
+          // Local edits/tombstones override a caller's older snapshot.
+          byId[transaction.id] = transaction;
+        } catch (_) {
+          // Ignore an invalid local row; valid transactions still participate.
+        }
+      }
+    } catch (_) {
+      // A fresh local store may not have transaction tables yet.
+    }
+    return byId.values.toList(growable: false);
   }
 }

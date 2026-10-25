@@ -42,6 +42,7 @@ class BestCardForWidget {
     required List<CardSnapshot> cards,
     String? categoryId,
     String? categorySlug,
+    String? merchantName,
     Money? amount,
     DateTime? now,
   }) {
@@ -50,6 +51,7 @@ class BestCardForWidget {
       amount: amount ?? defaultNominalAmount,
       categoryId: categoryId,
       categorySlug: categorySlug,
+      merchantName: merchantName,
       rail: TxnRail.swipe,
       now: now,
     );

@@ -10,19 +10,32 @@ import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/commitments_repository.dart';
-import '../../data/local_sms_parser.dart';
+import '../../data/local/auto_resolved_history_repository.dart';
 import '../../data/local/sms_facts_outbox.dart';
+import '../../data/local_sms_parser.dart';
 import '../../data/needs_review_repository.dart';
+import '../../data/sms_fact_contract.dart';
 import '../../data/user_cards_repository.dart'
     show TxnEntryKind, TxnInstrument, UserCard;
 
 String _feedbackSourceKey(String reviewId) {
-  final commitment = RegExp(r'^commitment:([a-fA-F0-9]{64})$').firstMatch(reviewId);
+  final commitment = RegExp(
+    r'^commitment:([a-fA-F0-9]{64})$',
+  ).firstMatch(reviewId);
   return commitment?.group(1) ?? reviewId;
 }
 
-TxnInstrument _instrumentFromReviewText(String body) {
+TxnInstrument _instrumentFromReviewText(String body, [String sender = '']) {
   final text = body.toLowerCase();
+  final senderText = sender.toLowerCase();
+  if (senderText.contains('axio') ||
+      text.contains('axio') ||
+      RegExp(r'\b(?:pay\s+later|credit\s+line)\b').hasMatch(text)) {
+    return TxnInstrument.other;
+  }
+  if (RegExp(r'\b(?:wallet|paytm\s+wallet|amazon\s+pay\s+balance)\b').hasMatch(text)) {
+    return TxnInstrument.wallet;
+  }
   final accountLike = RegExp(
     r'\b(?:a/c|account|upi|imps|neft)\b',
   ).hasMatch(text);
@@ -81,7 +94,10 @@ String _reviewTypeLabel(NeedsReviewItem item) {
   }
   if (item.kind == NeedsReviewKind.investmentSettlement ||
       _isInvestmentSettlement(item.body)) {
-    if (RegExp(r'\b(?:asba|ipo|lien)\b', caseSensitive: false).hasMatch(item.body)) {
+    if (RegExp(
+      r'\b(?:asba|ipo|lien)\b',
+      caseSensitive: false,
+    ).hasMatch(item.body)) {
       return 'ASBA / IPO lien block';
     }
     return 'Investment settlement payout';
@@ -89,7 +105,7 @@ String _reviewTypeLabel(NeedsReviewItem item) {
   if (item.kind == NeedsReviewKind.mandate || _isMandateReview(item.body)) {
     return 'AutoPay mandate alert';
   }
-  final instrument = _instrumentFromReviewText(item.body);
+  final instrument = _instrumentFromReviewText(item.body, item.sender);
   return instrument == TxnInstrument.other
       ? 'Possible transaction'
       : _reviewInstrumentLabel(instrument);
@@ -109,7 +125,8 @@ String _reviewReasonLabel(String? reason, String body) {
     return 'Mandate authorization or notification.';
   }
   return switch (reason) {
-    'no_transaction_match' => 'We could not match this message to a transaction.',
+    'no_transaction_match' =>
+      'We could not match this message to a transaction.',
     'unparseable_amount' => 'The amount in this message is unclear.',
     'ambiguous_account_debit' =>
       'We could not tell which account or payment method was used.',
@@ -150,6 +167,21 @@ String _reviewActionLabel(NeedsReviewItem item) {
   }
   return 'Review transaction';
 }
+
+/// The category the AI proposed for the first extracted fact, shown as a
+/// visible badge so a medium-confidence item can be resolved in one tap.
+String _suggestedCategoryName(NeedsReviewItem item) {
+  final first = item.aiSuggestions?.isNotEmpty == true
+      ? item.aiSuggestions!.first
+      : null;
+  final payload = first?['payload'];
+  final raw = payload is Map ? payload['category'] : null;
+  return LocalSmsParser.categoryDisplayName(raw is String ? raw : null) ??
+      'Review';
+}
+
+String _aiSuggestedSummary(NeedsReviewItem item) =>
+    '✦ AI suggested · ${_suggestedCategoryName(item)}';
 
 Future<void> _persistCommitmentDismissal(
   WidgetRef ref,
@@ -212,7 +244,9 @@ Future<void> _persistSmsFactCorrection(
   );
 
   final repository = ref.read(userCardsRepositoryProvider);
-  if (repository == null || ref.read(isOnlineProvider).valueOrNull == false) return;
+  if (repository == null || ref.read(isOnlineProvider).valueOrNull == false) {
+    return;
+  }
   try {
     final accepted = await repository.overrideSmsFact(
       sourceKey: sourceKey,
@@ -263,17 +297,18 @@ _ReviewFilterCategory _categorizeItem(NeedsReviewItem item) {
     return _ReviewFilterCategory.bills;
   }
   if (item.aiSuggestions?.isNotEmpty == true) {
-    final type = item.aiSuggestions!.first['factType'];
-    if (type == 'bill_obligation' || type == 'mandate_lifecycle') {
+    final types = item.aiSuggestions!.map((fact) => fact['factType']).toSet();
+    if (types.contains('posted_movement')) {
+      return _ReviewFilterCategory.spends;
+    }
+    if (types.contains('bill_obligation') ||
+        types.contains('mandate_lifecycle')) {
       return _ReviewFilterCategory.bills;
     }
-    if (type == 'balance_snapshot' ||
-        type == 'security_or_service_alert' ||
-        type == 'promotion') {
+    if (types.contains('balance_snapshot') ||
+        types.contains('security_or_service_alert') ||
+        types.contains('promotion')) {
       return _ReviewFilterCategory.alerts;
-    }
-    if (type == 'posted_movement') {
-      return _ReviewFilterCategory.spends;
     }
   }
   if (item.kind == NeedsReviewKind.securityOrServiceAlert ||
@@ -309,8 +344,10 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ActionChip(
-      onPressed: onTap,
+    return ChoiceChip(
+      selected: selected,
+      selectedColor: BambooInk.slate,
+      onSelected: (_) => onTap(),
       label: Text(label),
       labelStyle: BambooFonts.ui(
         12.5,
@@ -323,7 +360,7 @@ class _FilterChip extends StatelessWidget {
       ),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
     );
   }
 }
@@ -338,11 +375,171 @@ class NeedsReviewScreen extends ConsumerStatefulWidget {
 class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
   String? _selectedMonth;
   String? _selectedMonthLabel;
+  DateTimeRange? _customDateRange;
   _ReviewFilterCategory _selectedCategory = _ReviewFilterCategory.all;
+  int _selectedTab = 0;
+
+  Widget _buildTabSelector(int pendingCount, int autoCount) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.lg,
+        vertical: AppSpace.sm,
+      ),
+      child: SegmentedButton<int>(
+        segments: [
+          ButtonSegment(value: 0, label: Text('Needs Review ($pendingCount)')),
+          ButtonSegment(value: 1, label: Text('Auto-Resolved ($autoCount)')),
+        ],
+        selected: {_selectedTab},
+        showSelectedIcon: false,
+        onSelectionChanged: (selection) =>
+            setState(() => _selectedTab = selection.first),
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle: WidgetStatePropertyAll(
+            BambooFonts.ui(12.5, weight: FontWeight.w600),
+          ),
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: AppSpace.sm),
+          ),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? BambooInk.slate
+                : BambooInk.paperMuted,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? BambooInk.onSlate
+                : BambooInk.ink700,
+          ),
+          side: const WidgetStatePropertyAll(
+            BorderSide(color: BambooInk.hairlineOnPaper),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAutoResolvedTab() {
+    final history = ref.watch(autoResolvedHistoryProvider);
+    return history.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => ErrorState(
+        message: userFacingErrorMessage(err),
+        onRetry: () {
+          ref.invalidate(autoResolvedHistoryProvider);
+          ref.invalidate(autoResolvedCountProvider);
+        },
+      ),
+      data: (entries) {
+        if (entries.isEmpty) {
+          return const EmptyState(
+            icon: Icons.auto_awesome_outlined,
+            title: 'No auto-resolved items yet',
+            message:
+                'Confidently categorized alerts appear here so you can review or change them.',
+          );
+        }
+        final sorted = List<AutoResolvedHistoryEntry>.from(entries)
+          ..sort((a, b) {
+            final byTime = b.autoResolvedAt.compareTo(a.autoResolvedAt);
+            return byTime != 0 ? byTime : a.id.compareTo(b.id);
+          });
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(autoResolvedHistoryProvider);
+            ref.invalidate(autoResolvedCountProvider);
+            try {
+              await ref.read(autoResolvedHistoryProvider.future);
+            } catch (_) {
+              // The error state renders on the next build.
+            }
+          },
+          child: ListView.builder(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            itemCount: sorted.length,
+            itemBuilder: (context, index) => Padding(
+              key: ValueKey(sorted[index].id),
+              padding: const EdgeInsets.only(bottom: AppSpace.md),
+              child: _AutoResolvedCard(sorted[index]),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _chooseCustomDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialDateRange: _customDateRange,
+      helpText: 'Choose review dates',
+      saveText: 'Apply dates',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _customDateRange = picked;
+      _selectedMonth = null;
+      _selectedMonthLabel = null;
+    });
+  }
+
+  Future<void> _dismissAll(List<NeedsReviewItem> reviewItems) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Dismiss all ${reviewItems.length} review items?'),
+        content: const Text(
+          'This removes every item from Needs Review, even when a date or type filter is active.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Dismiss all'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final repo = ref.read(userCardsRepositoryProvider);
+    for (final item in reviewItems) {
+      if (item.kind == NeedsReviewKind.commitment) {
+        await _persistCommitmentDismissal(ref, item);
+      }
+      if (repo != null) {
+        repo
+            .dismissSms(
+              sourceKey: _feedbackSourceKey(item.id),
+              sender: item.sender,
+              sampleBody: item.body,
+              reason: 'user_dismissed',
+              family: 'ignore_noise',
+            )
+            .ignore();
+      }
+    }
+    final ids = [for (final item in reviewItems) item.id];
+    await ref.read(needsReviewRepositoryProvider).removeAll(ids);
+    ref.invalidate(commitmentsProvider);
+    ref.invalidate(needsReviewItemsProvider);
+    ref.invalidate(needsReviewCountProvider);
+  }
 
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(needsReviewItemsProvider);
+    final pendingItems = items.valueOrNull ?? const <NeedsReviewItem>[];
+    final autoCount = ref.watch(autoResolvedCountProvider).valueOrNull ?? 0;
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -355,175 +552,444 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
           style: BambooFonts.heading(18, color: BambooInk.ink900),
         ),
         actions: [
-          if ((items.valueOrNull ?? const []).isNotEmpty)
+          if (_selectedTab == 0 && pendingItems.isNotEmpty)
             TextButton(
               style: TextButton.styleFrom(foregroundColor: BambooInk.ink900),
-              onPressed: () async {
-                final reviewItems =
-                    items.valueOrNull ?? const <NeedsReviewItem>[];
-                final repo = ref.read(userCardsRepositoryProvider);
-                for (final item in reviewItems) {
-                  if (item.kind == NeedsReviewKind.commitment) {
-                    await _persistCommitmentDismissal(ref, item);
-                  }
-                  if (repo != null) {
-                    repo.dismissSms(
-                      sourceKey: _feedbackSourceKey(item.id),
-                      sender: item.sender,
-                      sampleBody: item.body,
-                      reason: 'user_dismissed',
-                      family: 'ignore_noise',
-                    ).ignore();
-                  }
-                }
-                final ids = [for (final item in reviewItems) item.id];
-                await ref.read(needsReviewRepositoryProvider).removeAll(ids);
-                ref.invalidate(commitmentsProvider);
-                ref.invalidate(needsReviewItemsProvider);
-              },
+              onPressed: () => _dismissAll(pendingItems),
               child: const Text('Dismiss all'),
             ),
         ],
       ),
       body: AppBackground(
-        child: items.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
-          data: (list) {
-            if (list.isEmpty) {
-              return const EmptyState(
-                icon: Icons.mark_email_read_outlined,
-                title: 'Nothing needs review',
-                message:
-                    'Messages we couldn\'t automatically parse show up here — nothing is ever dropped silently.',
-              );
-            }
+        child: Column(
+          children: [
+            _buildTabSelector(pendingItems.length, autoCount),
+            Expanded(
+              child: _selectedTab == 1
+                  ? _buildAutoResolvedTab()
+                  : items.when(
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (err, _) =>
+                          ErrorState(message: userFacingErrorMessage(err)),
+                      data: (list) {
+                        if (list.isEmpty) {
+                          return const EmptyState(
+                            icon: Icons.mark_email_read_outlined,
+                            title: 'Nothing needs review',
+                            message:
+                                'Messages we couldn\'t automatically parse show up here — nothing is ever dropped silently.',
+                          );
+                        }
 
-            final sortedList = List<NeedsReviewItem>.from(list)
-              ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+                        final sortedList = List<NeedsReviewItem>.from(list)
+                          ..sort((a, b) {
+                            final byDate = b.receivedAt.compareTo(a.receivedAt);
+                            return byDate != 0 ? byDate : a.id.compareTo(b.id);
+                          });
 
-            final monthMap = <String, ({String label, int count, DateTime date})>{};
-            for (final item in sortedList) {
-              final key = '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
-              final current = monthMap[key];
-              if (current == null) {
-                monthMap[key] = (
-                  label: DateFormat('MMM yyyy').format(item.receivedAt),
-                  count: 1,
-                  date: DateTime(item.receivedAt.year, item.receivedAt.month),
-                );
-              } else {
-                monthMap[key] = (
-                  label: current.label,
-                  count: current.count + 1,
-                  date: current.date,
-                );
-              }
-            }
+                        final monthMap =
+                            <String, ({String label, int count, DateTime date})>{};
+                        for (final item in sortedList) {
+                          final key =
+                              '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
+                          final current = monthMap[key];
+                          if (current == null) {
+                            monthMap[key] = (
+                              label: DateFormat('MMM yyyy').format(item.receivedAt),
+                              count: 1,
+                              date: DateTime(item.receivedAt.year, item.receivedAt.month),
+                            );
+                          } else {
+                            monthMap[key] = (
+                              label: current.label,
+                              count: current.count + 1,
+                              date: current.date,
+                            );
+                          }
+                        }
 
-            final availableMonths = monthMap.entries.map((e) => _MonthEntry(
-              key: e.key,
-              label: e.value.label,
-              count: e.value.count,
-              date: e.value.date,
-            )).toList()..sort((a, b) => b.date.compareTo(a.date));
+                        final availableMonths =
+                            monthMap.entries
+                                .map(
+                                  (e) => _MonthEntry(
+                                    key: e.key,
+                                    label: e.value.label,
+                                    count: e.value.count,
+                                    date: e.value.date,
+                                  ),
+                                )
+                                .toList()
+                              ..sort((a, b) => b.date.compareTo(a.date));
 
-            final filteredList = sortedList.where((item) {
-              if (_selectedMonth != null) {
-                final itemMonthKey = '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
-                if (itemMonthKey != _selectedMonth) return false;
-              }
-              if (_selectedCategory != _ReviewFilterCategory.all) {
-                if (_categorizeItem(item) != _selectedCategory) return false;
-              }
-              return true;
-            }).toList();
+                        final filteredList = sortedList.where((item) {
+                          if (_customDateRange != null) {
+                            final date = item.receivedAt;
+                            final start = _customDateRange!.start;
+                            final end = _customDateRange!.end;
+                            final rangeStart = DateTime(start.year, start.month, start.day);
+                            final rangeEndExclusive = DateTime(
+                              end.year,
+                              end.month,
+                              end.day + 1,
+                            );
+                            if (date.isBefore(rangeStart) ||
+                                !date.isBefore(rangeEndExclusive)) {
+                              return false;
+                            }
+                          }
+                          if (_selectedMonth != null) {
+                            final itemMonthKey =
+                                '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
+                            if (itemMonthKey != _selectedMonth) return false;
+                          }
+                          if (_selectedCategory != _ReviewFilterCategory.all) {
+                            if (_categorizeItem(item) != _selectedCategory) return false;
+                          }
+                          return true;
+                        }).toList();
 
-            return Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: BambooInk.hairlineOnPaper),
+                        return Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+                              decoration: const BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(color: BambooInk.hairlineOnPaper),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpace.lg,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        _FilterChip(
+                                          label: 'All time',
+                                          selected:
+                                              _selectedMonth == null &&
+                                              _customDateRange == null,
+                                          onTap: () => setState(() {
+                                            _selectedMonth = null;
+                                            _selectedMonthLabel = null;
+                                            _customDateRange = null;
+                                          }),
+                                        ),
+                                        const SizedBox(width: AppSpace.xs),
+                                        _FilterChip(
+                                          label: _customDateRange == null
+                                              ? 'Custom'
+                                              : '${DateFormat(_customDateRange!.start.year == _customDateRange!.end.year ? 'd MMM' : 'd MMM yy').format(_customDateRange!.start)}–${DateFormat('d MMM yy').format(_customDateRange!.end)}',
+                                          selected: _customDateRange != null,
+                                          onTap: _chooseCustomDateRange,
+                                        ),
+                                        for (final m in availableMonths) ...[
+                                          const SizedBox(width: AppSpace.xs),
+                                          _FilterChip(
+                                            label: '${m.label} (${m.count})',
+                                            selected: _selectedMonth == m.key,
+                                            onTap: () => setState(() {
+                                              _selectedMonth = m.key;
+                                              _selectedMonthLabel = m.label;
+                                              _customDateRange = null;
+                                            }),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpace.xs),
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpace.lg,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        for (
+                                          int i = 0;
+                                          i < _ReviewFilterCategory.values.length;
+                                          i++
+                                        ) ...[
+                                          if (i > 0) const SizedBox(width: AppSpace.xs),
+                                          _FilterChip(
+                                            label: _ReviewFilterCategory.values[i].label,
+                                            selected:
+                                                _selectedCategory ==
+                                                _ReviewFilterCategory.values[i],
+                                            onTap: () => setState(() {
+                                              _selectedCategory =
+                                                  _ReviewFilterCategory.values[i];
+                                            }),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: filteredList.isEmpty
+                                  ? EmptyState(
+                                      icon: Icons.filter_alt_off_outlined,
+                                      title: _selectedMonthLabel != null
+                                          ? 'No review items in $_selectedMonthLabel'
+                                          : _customDateRange != null
+                                          ? 'No review items in selected dates'
+                                          : 'No review items in ${_selectedCategory.label}',
+                                      message: 'Try changing your date or type filter.',
+                                    )
+                                  : RefreshIndicator(
+                                      onRefresh: () async {
+                                        ref.read(smsFlushTriggerProvider.notifier).state++;
+                                        ref.invalidate(needsReviewItemsProvider);
+                                        try {
+                                          await ref.read(needsReviewItemsProvider.future);
+                                        } catch (_) {}
+                                        await Future.delayed(const Duration(milliseconds: 600));
+                                      },
+                                      child: ListView.builder(
+                                        padding: const EdgeInsets.all(AppSpace.lg),
+                                      itemCount: filteredList.length,
+                                      itemBuilder: (context, index) => Padding(
+                                        key: ValueKey(filteredList[index].id),
+                                        padding: const EdgeInsets.only(bottom: AppSpace.md),
+                                        child:
+                                            filteredList[index].kind ==
+                                                NeedsReviewKind.commitment
+                                            ? _CommitmentNeedsReviewTile(
+                                                filteredList[index],
+                                              )
+                                            : _NeedsReviewTile(filteredList[index]),
+                                      ),
+                                    ),
+                                  ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AutoResolvedCard extends ConsumerStatefulWidget {
+  final AutoResolvedHistoryEntry entry;
+  const _AutoResolvedCard(this.entry);
+
+  @override
+  ConsumerState<_AutoResolvedCard> createState() => _AutoResolvedCardState();
+}
+
+class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
+  bool _busy = false;
+
+  String _dateLabel(AutoResolvedHistoryEntry entry) {
+    final showDue =
+        entry.resolvedKind == 'bill' &&
+        entry.dueDate != null &&
+        entry.dueDate!.isNotEmpty;
+    final raw = showDue ? entry.dueDate! : entry.occurredAt;
+    final parsed = DateTime.tryParse(raw)?.toLocal();
+    if (parsed == null) return showDue ? 'Due $raw' : raw;
+    final formatted = DateFormat('MMM d, yyyy').format(parsed);
+    return showDue ? 'Due $formatted' : 'On $formatted';
+  }
+
+  Future<void> _changeCategory() async {
+    final categories = smsSpendCategories.toList(growable: false);
+    final slug = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: BambooInk.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.72,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.lg,
+                AppSpace.sm,
+                AppSpace.sm,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Change category',
+                      style: BambooFonts.heading(17, color: BambooInk.ink900),
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
-                        child: Row(
-                          children: [
-                            _FilterChip(
-                              label: 'All time',
-                              selected: _selectedMonth == null,
-                              onTap: () => setState(() {
-                                _selectedMonth = null;
-                                _selectedMonthLabel = null;
-                              }),
-                            ),
-                            for (final m in availableMonths) ...[
-                              const SizedBox(width: AppSpace.xs),
-                              _FilterChip(
-                                label: '${m.label} (${m.count})',
-                                selected: _selectedMonth == m.key,
-                                onTap: () => setState(() {
-                                  _selectedMonth = m.key;
-                                  _selectedMonthLabel = m.label;
-                                }),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpace.xs),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
-                        child: Row(
-                          children: [
-                            for (int i = 0; i < _ReviewFilterCategory.values.length; i++) ...[
-                              if (i > 0) const SizedBox(width: AppSpace.xs),
-                              _FilterChip(
-                                label: _ReviewFilterCategory.values[i].label,
-                                selected: _selectedCategory == _ReviewFilterCategory.values[i],
-                                onTap: () => setState(() {
-                                  _selectedCategory = _ReviewFilterCategory.values[i];
-                                }),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
                   ),
-                ),
-                Expanded(
-                  child: filteredList.isEmpty
-                      ? EmptyState(
-                          icon: Icons.filter_alt_off_outlined,
-                          title: _selectedMonthLabel != null
-                              ? 'No review items in $_selectedMonthLabel'
-                              : 'No review items in ${_selectedCategory.label}',
-                          message: 'Try changing your month or type filter.',
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(AppSpace.lg),
-                          itemCount: filteredList.length,
-                          itemBuilder: (context, index) => Padding(
-                            padding: const EdgeInsets.only(bottom: AppSpace.md),
-                            child: filteredList[index].kind == NeedsReviewKind.commitment
-                                ? _CommitmentNeedsReviewTile(filteredList[index])
-                                : _NeedsReviewTile(filteredList[index]),
-                          ),
-                        ),
-                ),
-              ],
-            );
-          },
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.only(bottom: AppSpace.lg),
+                itemCount: categories.length,
+                itemBuilder: (context, index) {
+                  final categorySlug = categories[index];
+                  return ListTile(
+                    title: Text(
+                      LocalSmsParser.categoryDisplayName(categorySlug) ??
+                          categorySlug,
+                      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                    ),
+                    trailing: widget.entry.categorySlug == categorySlug
+                        ? const Icon(Icons.check_rounded, color: BambooInk.jade)
+                        : null,
+                    onTap: () => Navigator.of(context).pop(categorySlug),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+    if (slug == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(smsAutoResolutionControllerProvider)
+          .changeCategory(widget.entry, slug);
+      ref.invalidate(autoResolvedHistoryProvider);
+      ref.invalidate(autoResolvedCountProvider);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _moveToReview() async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(smsAutoResolutionControllerProvider)
+          .moveToReview(widget.entry);
+      ref.invalidate(autoResolvedHistoryProvider);
+      ref.invalidate(autoResolvedCountProvider);
+      ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
+      ref.invalidate(commitmentsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Moved to Needs Review')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = widget.entry;
+    return Container(
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.auto_awesome_rounded, color: BambooInk.jade),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.title,
+                      style: BambooFonts.heading(
+                        14.5,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '✦ Auto-Categorized by AI · ${entry.categoryName}',
+                      style: BambooFonts.ui(
+                        12.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.jade,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _dateLabel(entry),
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Text(
+                entry.amount.format(),
+                style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.xs),
+          Wrap(
+            spacing: AppSpace.sm,
+            runSpacing: AppSpace.xs,
+            children: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
+                ),
+                onPressed: _busy ? null : _changeCategory,
+                child: const Text('Change Category'),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
+                ),
+                onPressed: _busy ? null : _moveToReview,
+                child: const Text('Move to Review'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -557,15 +1023,18 @@ class _CommitmentNeedsReviewTileState
       // Immediate optimistic UI dismissal: remove and invalidate before background sync
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo != null) {
-        repo.dismissSms(
-          sourceKey: _feedbackSourceKey(widget.item.id),
-          sender: widget.item.sender,
-          sampleBody: widget.item.body,
-          reason: 'user_dismissed',
-          family: 'ignore_noise',
-        ).ignore();
+        repo
+            .dismissSms(
+              sourceKey: _feedbackSourceKey(widget.item.id),
+              sender: widget.item.sender,
+              sampleBody: widget.item.body,
+              reason: 'user_dismissed',
+              family: 'ignore_noise',
+            )
+            .ignore();
       }
     } catch (error) {
       if (mounted) {
@@ -600,12 +1069,33 @@ class _CommitmentNeedsReviewTileState
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(commitmentsProvider);
       ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
       // Phase 4: the confirmed decision also rides the typed-fact contract.
       // A structured override (source key + fact index + payload patch, no
       // raw text) makes the server's bill projection agree with the user
       // even if a later replay re-uploads the parser-derived payload — the
       // read path always applies user corrections first.
       await _overrideConfirmedBillFacts(ref, result);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _archivePastPremiumNotice() async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(needsReviewRepositoryProvider)
+          .archivePastPremiumNotice(widget.item);
+      ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
+      ref.invalidate(pastBillReceiptsProvider);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -671,6 +1161,17 @@ class _CommitmentNeedsReviewTileState
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
+    final parsed = _parse();
+    final nextPremiumMonth = LocalSmsParser.nextPremiumDueMonth(item.body);
+    final monthOnlyPremium =
+        parsed?.reasonCodes.contains('next_premium_due_month_only') == true;
+    final pastPremiumNotice =
+        monthOnlyPremium &&
+        nextPremiumMonth != null &&
+        DateTime(
+          nextPremiumMonth.year,
+          nextPremiumMonth.month,
+        ).isBefore(DateTime(DateTime.now().year, DateTime.now().month));
     return Container(
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
@@ -707,9 +1208,15 @@ class _CommitmentNeedsReviewTileState
           ),
           const SizedBox(height: 2),
           Text(
-            DateFormat('MMM d, yyyy • h:mm a').format(item.receivedAt.toLocal()),
+            DateFormat(
+              'MMM d, yyyy • h:mm a',
+            ).format(item.receivedAt.toLocal()),
             style: BambooFonts.ui(12, color: BambooInk.ink500),
           ),
+          if (item.aiSuggestions?.isNotEmpty == true) ...[
+            const SizedBox(height: AppSpace.xs),
+            _AiBadge(summary: _aiSuggestedSummary(item)),
+          ],
           const SizedBox(height: AppSpace.sm),
           Container(
             padding: const EdgeInsets.all(AppSpace.sm),
@@ -722,7 +1229,15 @@ class _CommitmentNeedsReviewTileState
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ),
-          if (item.reason != null) ...[
+          if (monthOnlyPremium && nextPremiumMonth != null) ...[
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              pastPremiumNotice
+                  ? 'Next premium was due ${DateFormat('MMMM yyyy').format(nextPremiumMonth)}. This notice will be archived without assuming payment.'
+                  : 'Next premium is due in ${DateFormat('MMMM yyyy').format(nextPremiumMonth)}. Choose the exact day before saving.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+          ] else if (item.reason != null) ...[
             const SizedBox(height: AppSpace.sm),
             Text(
               'Needs confirmation: ${humanizeIdentifier(item.reason)}',
@@ -759,7 +1274,11 @@ class _CommitmentNeedsReviewTileState
                     ),
                     textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
                   ),
-                  onPressed: _busy ? null : _reviewAndSaveCommitment,
+                  onPressed: _busy
+                      ? null
+                      : pastPremiumNotice
+                      ? _archivePastPremiumNotice
+                      : _reviewAndSaveCommitment,
                   child: _busy
                       ? const SizedBox(
                           width: 16,
@@ -769,7 +1288,13 @@ class _CommitmentNeedsReviewTileState
                             color: BambooInk.lime,
                           ),
                         )
-                      : const Text('Save bill'),
+                      : Text(
+                          pastPremiumNotice
+                              ? 'Archive past notice'
+                              : monthOnlyPremium
+                              ? 'Review reminder'
+                              : 'Save bill',
+                        ),
                 ),
               ),
             ],
@@ -810,20 +1335,29 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
     super.initState();
     final parsed = widget.parsed;
     final payload = widget.suggestionFact?['payload'] as Map<String, dynamic>?;
-    final suggestedTitle = parsed?.billerName?.trim() ??
+    final suggestedTitle =
+        parsed?.billerName?.trim() ??
         (payload?['billerName'] as String?)?.trim();
     _titleController = TextEditingController(
       text: suggestedTitle?.isNotEmpty == true
           ? suggestedTitle!
           : widget.item.sender,
     );
-    final amtPaise = parsed?.amountDue?.paise ??
-        (payload?['amountDueInr'] is num ? ((payload!['amountDueInr'] as num) * 100).round() : null) ??
-        (payload?['minimumDueInr'] is num ? ((payload!['minimumDueInr'] as num) * 100).round() : null);
+    final amtPaise =
+        parsed?.amountDue?.paise ??
+        (payload?['amountDueInr'] is num
+            ? ((payload!['amountDueInr'] as num) * 100).round()
+            : null) ??
+        (payload?['minimumDueInr'] is num
+            ? ((payload!['minimumDueInr'] as num) * 100).round()
+            : null);
     _amountController = TextEditingController(
       text: amtPaise == null ? '' : (amtPaise / 100).toStringAsFixed(2),
     );
-    final last4 = parsed?.accountLast4 ?? parsed?.cardLast4 ?? (payload?['last4'] as String?);
+    final last4 =
+        parsed?.accountLast4 ??
+        parsed?.cardLast4 ??
+        (payload?['last4'] as String?);
     _identifierController = TextEditingController(
       text: last4 == null || last4.isEmpty ? '' : '••••$last4',
     );
@@ -840,7 +1374,12 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
             : CommitmentCadence.monthly,
     };
     final dueStr = payload?['dueDate'] as String?;
-    _dueOn = parsed?.dueDate ?? (dueStr != null ? DateTime.tryParse(dueStr) : null);
+    final monthOnlyPremium =
+        parsed?.reasonCodes.contains('next_premium_due_month_only') == true;
+    _dueOn = monthOnlyPremium
+        ? null
+        : parsed?.dueDate ??
+              (dueStr != null ? DateTime.tryParse(dueStr) : null);
   }
 
   @override
@@ -883,7 +1422,7 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null) setState(() => _dueOn = picked);
+    if (picked != null && mounted) setState(() => _dueOn = picked);
   }
 
   void _save() {
@@ -893,7 +1432,11 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
     final amountValue = amountText.isEmpty ? null : double.tryParse(amountText);
     if (title.isEmpty ||
         dueOn == null ||
-        (amountValue != null && amountValue <= 0)) {
+        (amountText.isNotEmpty &&
+            (amountValue == null ||
+                !amountValue.isFinite ||
+                amountValue <= 0 ||
+                amountValue > 9999999999.99))) {
       return;
     }
     final identifier = _identifierController.text.trim();
@@ -909,12 +1452,19 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final nextPremiumMonth = LocalSmsParser.nextPremiumDueMonth(
+      widget.item.body,
+    );
     final amountText = _amountController.text.trim().replaceAll(',', '');
     final amountValue = amountText.isEmpty ? null : double.tryParse(amountText);
     final canSave =
         _titleController.text.trim().isNotEmpty &&
         _dueOn != null &&
-        (amountValue == null || amountValue > 0);
+        (amountText.isEmpty ||
+            (amountValue != null &&
+                amountValue.isFinite &&
+                amountValue > 0 &&
+                amountValue <= 9999999999.99));
     return Container(
       decoration: const BoxDecoration(
         color: BambooInk.paper,
@@ -1008,6 +1558,13 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
                 ),
               ),
             ),
+            if (nextPremiumMonth != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                'The SMS gives only ${DateFormat('MMMM yyyy').format(nextPremiumMonth)}, not an exact day. Select the verified day before saving; PandaPay will not assume the earlier premium was paid.',
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
+            ],
             const SizedBox(height: AppSpace.lg),
             DropdownButtonFormField<CommitmentCategory>(
               initialValue: _category,
@@ -1078,13 +1635,11 @@ class _ReviewBalanceSheet extends ConsumerStatefulWidget {
   final NeedsReviewItem item;
   final Map<String, dynamic>? fact;
 
-  const _ReviewBalanceSheet({
-    required this.item,
-    this.fact,
-  });
+  const _ReviewBalanceSheet({required this.item, this.fact});
 
   @override
-  ConsumerState<_ReviewBalanceSheet> createState() => _ReviewBalanceSheetState();
+  ConsumerState<_ReviewBalanceSheet> createState() =>
+      _ReviewBalanceSheetState();
 }
 
 class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
@@ -1098,14 +1653,18 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
     final payload = widget.fact?['payload'] as Map<String, dynamic>?;
     final balance = payload?['availableBalanceInr'];
     _balanceController = TextEditingController(
-      text: balance is num && balance.isFinite ? balance.toStringAsFixed(2) : '',
+      text: balance is num && balance.isFinite
+          ? balance.toStringAsFixed(2)
+          : '',
     );
     final account = payload?['accountLast4'] as String?;
     _accountController = TextEditingController(
       text: account != null && account.isNotEmpty ? account : '',
     );
     final asOfStr = payload?['asOfAt'] as String?;
-    _asOfAt = (asOfStr != null ? DateTime.tryParse(asOfStr) : null) ?? widget.item.receivedAt;
+    _asOfAt =
+        (asOfStr != null ? DateTime.tryParse(asOfStr) : null) ??
+        widget.item.receivedAt;
   }
 
   @override
@@ -1122,17 +1681,27 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null) setState(() => _asOfAt = picked);
+    if (picked != null && mounted) setState(() => _asOfAt = picked);
   }
 
   void _confirm() {
     final balText = _balanceController.text.trim().replaceAll(',', '');
     final balValue = double.tryParse(balText);
-    if (balValue == null || balValue < 0) return;
-    final acct = _accountController.text.trim().replaceAll(RegExp(r'[^\d]'), '');
+    if (balValue == null ||
+        !balValue.isFinite ||
+        balValue < 0 ||
+        balValue > 9999999999.99) {
+      return;
+    }
+    final acct = _accountController.text.trim().replaceAll(
+      RegExp(r'[^\d]'),
+      '',
+    );
     Navigator.of(context).pop((
       balance: balValue,
-      accountLast4: acct.length >= 4 ? acct.substring(acct.length - 4) : (acct.isEmpty ? null : acct),
+      accountLast4: acct.length >= 4
+          ? acct.substring(acct.length - 4)
+          : (acct.isEmpty ? null : acct),
       asOfAt: _asOfAt,
     ));
   }
@@ -1141,7 +1710,11 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
   Widget build(BuildContext context) {
     final balText = _balanceController.text.trim().replaceAll(',', '');
     final balValue = double.tryParse(balText);
-    final canConfirm = balValue != null && balValue >= 0;
+    final canConfirm =
+        balValue != null &&
+        balValue.isFinite &&
+        balValue >= 0 &&
+        balValue <= 9999999999.99;
 
     return Container(
       decoration: const BoxDecoration(
@@ -1161,7 +1734,10 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
           children: [
             Row(
               children: [
-                const Icon(Icons.account_balance_outlined, color: BambooInk.jade),
+                const Icon(
+                  Icons.account_balance_outlined,
+                  color: BambooInk.jade,
+                ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: Text(
@@ -1197,7 +1773,9 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
             const SizedBox(height: AppSpace.lg),
             TextField(
               controller: _balanceController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               onChanged: (_) => setState(() {}),
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
               decoration: InputDecoration(
@@ -1205,7 +1783,9 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
                 prefixText: '₹ ',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -1220,7 +1800,9 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
                 counterText: '',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -1232,7 +1814,9 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
                   labelText: 'As of date',
                   filled: true,
                   fillColor: BambooInk.glassFillOnPaper,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -1253,7 +1837,9 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.lime,
                 minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
               onPressed: canConfirm ? _confirm : null,
@@ -1270,13 +1856,11 @@ class _ReviewMandateSheet extends ConsumerStatefulWidget {
   final NeedsReviewItem item;
   final Map<String, dynamic>? fact;
 
-  const _ReviewMandateSheet({
-    required this.item,
-    this.fact,
-  });
+  const _ReviewMandateSheet({required this.item, this.fact});
 
   @override
-  ConsumerState<_ReviewMandateSheet> createState() => _ReviewMandateSheetState();
+  ConsumerState<_ReviewMandateSheet> createState() =>
+      _ReviewMandateSheetState();
 }
 
 class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
@@ -1292,7 +1876,9 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
     final payload = widget.fact?['payload'] as Map<String, dynamic>?;
     final name = payload?['mandateName'] as String?;
     _titleController = TextEditingController(
-      text: name != null && name.trim().isNotEmpty ? name.trim() : widget.item.sender,
+      text: name != null && name.trim().isNotEmpty
+          ? name.trim()
+          : widget.item.sender,
     );
     final limit = payload?['limitInr'] ?? payload?['amountLimitInr'];
     _amountController = TextEditingController(
@@ -1309,8 +1895,11 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
       'annual' => CommitmentCadence.annual,
       _ => CommitmentCadence.monthly,
     };
-    final asOfStr = payload?['asOfAt'] as String? ?? payload?['startDate'] as String?;
-    _dueOn = (asOfStr != null ? DateTime.tryParse(asOfStr) : null) ?? widget.item.receivedAt;
+    final asOfStr =
+        payload?['asOfAt'] as String? ?? payload?['startDate'] as String?;
+    _dueOn =
+        (asOfStr != null ? DateTime.tryParse(asOfStr) : null) ??
+        widget.item.receivedAt;
   }
 
   @override
@@ -1326,6 +1915,13 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
     if (title.isEmpty) return;
     final amtText = _amountController.text.trim().replaceAll(',', '');
     final amtValue = amtText.isEmpty ? null : double.tryParse(amtText);
+    if (amtText.isNotEmpty &&
+        (amtValue == null ||
+            !amtValue.isFinite ||
+            amtValue < 0 ||
+            amtValue > 9999999999.99)) {
+      return;
+    }
     final identifier = _identifierController.text.trim();
     Navigator.of(context).pop((
       title: title,
@@ -1401,13 +1997,17 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
                 labelText: 'Mandate or service name',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.lg),
             TextField(
               controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               onChanged: (_) => setState(() {}),
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
               decoration: InputDecoration(
@@ -1415,7 +2015,9 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
                 prefixText: '₹ ',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -1426,7 +2028,9 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
                 labelText: 'Repeats',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
               items: [
                 for (final cadence in CommitmentCadence.values)
@@ -1444,7 +2048,9 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
                 labelText: 'Account or card (optional)',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.xl),
@@ -1453,7 +2059,9 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.lime,
                 minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
               onPressed: title.isNotEmpty ? _confirm : null,
@@ -1477,26 +2085,7 @@ class _NeedsReviewTile extends ConsumerStatefulWidget {
 class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   bool _busy = false;
 
-  String get _aiSummary {
-    final types =
-        widget.item.aiSuggestions
-            ?.map((suggestion) => suggestion['factType'])
-            .whereType<String>()
-            .toSet() ??
-        const <String>{};
-    final labels = types.map(
-      (type) => switch (type) {
-        'posted_movement' => 'transaction',
-        'balance_snapshot' => 'bank balance',
-        'bill_obligation' => 'card bill',
-        'bill_payment' => 'bill payment',
-        'mandate_lifecycle' => 'mandate',
-        'card_identity_hint' => 'card detail',
-        _ => 'financial detail',
-      },
-    );
-    return 'Gemini suggests ${labels.join(', ')}. Check the SMS before saving.';
-  }
+  String get _aiSummary => _aiSuggestedSummary(widget.item);
 
   Future<void> _dismissNotATransaction() async {
     setState(() => _busy = true);
@@ -1504,15 +2093,18 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       // Immediate optimistic UI dismissal: remove and invalidate before background sync
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo != null) {
-        repo.dismissSms(
-          sourceKey: _feedbackSourceKey(widget.item.id),
-          sender: widget.item.sender,
-          sampleBody: widget.item.body,
-          reason: 'user_dismissed',
-          family: 'ignore_noise',
-        ).ignore();
+        repo
+            .dismissSms(
+              sourceKey: _feedbackSourceKey(widget.item.id),
+              sender: widget.item.sender,
+              sampleBody: widget.item.body,
+              reason: 'user_dismissed',
+              family: 'ignore_noise',
+            )
+            .ignore();
       }
     } catch (error) {
       if (mounted) {
@@ -1527,19 +2119,26 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
 
   Future<void> _resolveFactSuggestion(int factIndex) async {
     final current = widget.item.aiSuggestions ?? const [];
-    final remaining = current.where((s) => s['factIndex'] != factIndex).toList();
+    final remaining = current
+        .where((s) => s['factIndex'] != factIndex)
+        .toList();
     if (remaining.isEmpty) {
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
     } else {
-      await ref.read(needsReviewRepositoryProvider).updateAiSuggestions(widget.item.id, remaining);
+      await ref
+          .read(needsReviewRepositoryProvider)
+          .updateAiSuggestions(widget.item.id, remaining);
     }
     ref.invalidate(needsReviewItemsProvider);
+    ref.invalidate(needsReviewCountProvider);
   }
 
   Future<void> _reviewMovement([Map<String, dynamic>? movementFact]) async {
-    final fact = movementFact ?? widget.item.aiSuggestions
-        ?.where((suggestion) => suggestion['factType'] == 'posted_movement')
-        .firstOrNull;
+    final fact =
+        movementFact ??
+        widget.item.aiSuggestions
+            ?.where((suggestion) => suggestion['factType'] == 'posted_movement')
+            .firstOrNull;
     final result =
         await showModalBottomSheet<
           ({
@@ -1554,9 +2153,10 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
         >(
           context: context,
           isScrollControlled: true,
-          builder: (context) => _FillFieldsSheet(item: widget.item, suggestionFact: fact),
+          builder: (context) =>
+              _FillFieldsSheet(item: widget.item, suggestionFact: fact),
         );
-    if (result == null) return;
+    if (result == null || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref
@@ -1606,21 +2206,21 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   }
 
   Future<void> _reviewBalance([Map<String, dynamic>? balanceFact]) async {
-    final fact = balanceFact ?? widget.item.aiSuggestions
-        ?.where((s) => s['factType'] == 'balance_snapshot')
-        .firstOrNull;
-    final result = await showModalBottomSheet<
-      ({
-        double balance,
-        String? accountLast4,
-        DateTime asOfAt,
-      })
-    >(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => _ReviewBalanceSheet(item: widget.item, fact: fact),
-    );
-    if (result == null) return;
+    final fact =
+        balanceFact ??
+        widget.item.aiSuggestions
+            ?.where((s) => s['factType'] == 'balance_snapshot')
+            .firstOrNull;
+    final result =
+        await showModalBottomSheet<
+          ({double balance, String? accountLast4, DateTime asOfAt})
+        >(
+          context: context,
+          isScrollControlled: true,
+          builder: (context) =>
+              _ReviewBalanceSheet(item: widget.item, fact: fact),
+        );
+    if (result == null || !mounted) return;
     setState(() => _busy = true);
     try {
       final namespace = ref.read(cacheNamespaceProvider);
@@ -1629,7 +2229,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           .toUpperCase()
           .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
           .replaceFirst(RegExp(r'-[A-Z]$'), '');
-      final factIdx = (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
+      final factIdx =
+          (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
           ? fact['factIndex'] as int
           : 0;
       final obsId = widget.item.id.length == 64
@@ -1654,7 +2255,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           factIndex: factIdx,
           patch: {
             'availableBalanceInr': result.balance,
-            if (result.accountLast4 != null) 'accountLast4': result.accountLast4,
+            if (result.accountLast4 != null)
+              'accountLast4': result.accountLast4,
             'asOfAt': result.asOfAt.toUtc().toIso8601String(),
           },
           reason: 'confirmed in needs review',
@@ -1674,10 +2276,13 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   }
 
   Future<void> _reviewBill([Map<String, dynamic>? billFact]) async {
-    final fact = billFact ?? widget.item.aiSuggestions
-        ?.where((s) => s['factType'] == 'bill_obligation')
-        .firstOrNull;
-    final factIdx = (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
+    final fact =
+        billFact ??
+        widget.item.aiSuggestions
+            ?.where((s) => s['factType'] == 'bill_obligation')
+            .firstOrNull;
+    final factIdx =
+        (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
         ? fact['factIndex'] as int
         : 0;
     final result = await showModalBottomSheet<_BillReviewResult>(
@@ -1691,7 +2296,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
         },
       ),
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref
@@ -1737,21 +2342,21 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   }
 
   Future<void> _reviewMandate([Map<String, dynamic>? mandateFact]) async {
-    final fact = mandateFact ?? widget.item.aiSuggestions
-        ?.where((s) => s['factType'] == 'mandate_lifecycle')
-        .firstOrNull;
-    final factIdx = (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
+    final fact =
+        mandateFact ??
+        widget.item.aiSuggestions
+            ?.where((s) => s['factType'] == 'mandate_lifecycle')
+            .firstOrNull;
+    final factIdx =
+        (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
         ? fact['factIndex'] as int
         : 0;
     final result = await showModalBottomSheet<_BillReviewResult>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _ReviewMandateSheet(
-        item: widget.item,
-        fact: fact,
-      ),
+      builder: (context) => _ReviewMandateSheet(item: widget.item, fact: fact),
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref
@@ -1818,9 +2423,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           return;
         case 'security_or_service_alert':
         case 'promotion':
-          await _resolveFactSuggestion(
-            (first['factIndex'] as int?) ?? 0,
-          );
+          await _resolveFactSuggestion((first['factIndex'] as int?) ?? 0);
           return;
         case 'posted_movement':
         default:
@@ -1828,7 +2431,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           return;
       }
     }
-    if (widget.item.kind == NeedsReviewKind.mandate || _isMandateReview(widget.item.body)) {
+    if (widget.item.kind == NeedsReviewKind.mandate ||
+        _isMandateReview(widget.item.body)) {
       await _reviewMandate();
       return;
     }
@@ -1848,7 +2452,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       'balance_snapshot' => (
         Icons.account_balance_outlined,
         'Balance: ₹${((payload['availableBalanceInr'] as num?) ?? 0).toStringAsFixed(2)}',
-        payload['accountLast4'] != null ? 'A/c ••••${payload['accountLast4']}' : 'Bank balance',
+        payload['accountLast4'] != null
+            ? 'A/c ••••${payload['accountLast4']}'
+            : 'Bank balance',
         'Confirm',
       ),
       'bill_obligation' => (
@@ -1860,19 +2466,31 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       'mandate_lifecycle' => (
         Icons.autorenew_rounded,
         'Mandate: ${(payload['mandateName'] as String?) ?? 'AutoPay'}',
-        payload['limitInr'] != null ? 'Limit ₹${(payload['limitInr'] as num).toStringAsFixed(2)}' : 'Recurring mandate',
+        payload['limitInr'] != null
+            ? 'Limit ₹${(payload['limitInr'] as num).toStringAsFixed(2)}'
+            : 'Recurring mandate',
         'Confirm',
       ),
-      _ => (
-        Icons.info_outline,
-        'Financial detail',
-        type,
-        'Review',
+      'security_or_service_alert' => (
+        Icons.privacy_tip_outlined,
+        'Security or service alert',
+        'Not a transaction',
+        'Dismiss',
       ),
+      'promotion' => (
+        Icons.local_offer_outlined,
+        'Promotional message',
+        'Not a transaction',
+        'Dismiss',
+      ),
+      _ => (Icons.info_outline, 'Financial detail', type, 'Review'),
     };
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.xs),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.sm,
+        vertical: AppSpace.xs,
+      ),
       decoration: BoxDecoration(
         color: BambooInk.paper,
         borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -1886,16 +2504,25 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink900)),
-                Text(subtitle, style: BambooFonts.ui(11, color: BambooInk.ink500)),
+                Text(
+                  title,
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: BambooFonts.ui(11, color: BambooInk.ink500),
+                ),
               ],
             ),
           ),
           TextButton(
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              minimumSize: const Size(0, 32),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(48, 48),
             ),
             onPressed: _busy
                 ? null
@@ -1910,13 +2537,22 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                       case 'mandate_lifecycle':
                         await _reviewMandate(s);
                         break;
+                      case 'security_or_service_alert':
+                      case 'promotion':
+                        await _resolveFactSuggestion(
+                          (s['factIndex'] as int?) ?? 0,
+                        );
+                        break;
                       case 'posted_movement':
                       default:
                         await _reviewMovement(s);
                         break;
                     }
                   },
-            child: Text(actionLabel, style: BambooFonts.ui(12, weight: FontWeight.w700)),
+            child: Text(
+              actionLabel,
+              style: BambooFonts.ui(12, weight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -1948,7 +2584,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      DateFormat('MMM d, yyyy • h:mm a').format(item.receivedAt.toLocal()),
+                      DateFormat(
+                        'MMM d, yyyy • h:mm a',
+                      ).format(item.receivedAt.toLocal()),
                       style: BambooFonts.ui(12, color: BambooInk.ink500),
                     ),
                   ],
@@ -1982,18 +2620,17 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
               12.5,
               weight: FontWeight.w700,
               color:
-                  _instrumentFromReviewText(item.body) == TxnInstrument.upiBank
+                  _instrumentFromReviewText(item.body, item.sender) == TxnInstrument.upiBank
                   ? BambooInk.jade
                   : BambooInk.ink500,
             ),
           ),
           if (item.aiSuggestions?.isNotEmpty == true) ...[
             const SizedBox(height: AppSpace.xs),
-            Text(
-              _aiSummary,
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-            ),
+            _AiBadge(summary: _aiSummary),
           ],
+          const SizedBox(height: AppSpace.xs),
+          _AiStatusBadge(status: item.aiStatus),
           if (item.aiSuggestions != null && item.aiSuggestions!.length > 1) ...[
             const SizedBox(height: AppSpace.sm),
             for (final suggestion in item.aiSuggestions!)
@@ -2098,9 +2735,11 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
       _amountController.text = _draft.amount!.rupees.toStringAsFixed(2);
     }
     _merchantController.text = _draft.merchantName ?? '';
-    final movement = widget.suggestionFact ?? widget.item.aiSuggestions
-        ?.where((suggestion) => suggestion['factType'] == 'posted_movement')
-        .firstOrNull;
+    final movement =
+        widget.suggestionFact ??
+        widget.item.aiSuggestions
+            ?.where((suggestion) => suggestion['factType'] == 'posted_movement')
+            .firstOrNull;
     final payload = movement?['payload'];
     if (payload is Map) {
       final amount = payload['amountInr'];
@@ -2159,7 +2798,7 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
       firstDate: earliest,
       lastDate: latest,
     );
-    if (picked != null) setState(() => _occurredAt = picked);
+    if (picked != null && mounted) setState(() => _occurredAt = picked);
   }
 
   String _dateLabel(DateTime date) =>
@@ -2388,7 +3027,9 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
               onPressed: () {
-                final amount = double.tryParse(_amountController.text.trim());
+                final amount = double.tryParse(
+                  _amountController.text.trim().replaceAll(',', ''),
+                );
                 if (amount == null ||
                     !amount.isFinite ||
                     amount <= 0 ||
@@ -2416,6 +3057,121 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
               child: const Text('Save transaction'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AiBadge extends StatelessWidget {
+  final String summary;
+  const _AiBadge({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Color(0xFF8064C7).withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: Color(0xFF8064C7).withValues(alpha: 0.28)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_awesome_rounded,
+              size: 11,
+              color: Color(0xFF8064C7),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              summary,
+              style: BambooFonts.ui(
+                11.5,
+                weight: FontWeight.w600,
+                color: Color(0xFF8064C7),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AiStatusBadge extends ConsumerWidget {
+  final AiReviewStatus status;
+  const _AiStatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (label, icon, color) = switch (status) {
+      AiReviewStatus.notChecked => (
+        'AI review not started',
+        Icons.hourglass_empty,
+        BambooInk.ink500,
+      ),
+      AiReviewStatus.queued => (
+        'AI review queued',
+        Icons.schedule,
+        BambooInk.ink500,
+      ),
+      AiReviewStatus.processing => (
+        'AI review in progress',
+        Icons.autorenew_rounded,
+        BambooInk.jade,
+      ),
+      AiReviewStatus.checked => (
+        'AI review completed',
+        Icons.auto_awesome_rounded,
+        BambooInk.jade,
+      ),
+      AiReviewStatus.unavailable => (
+        'AI review unavailable · Tap to retry',
+        Icons.cloud_off_outlined,
+        BambooInk.ink500,
+      ),
+    };
+    final isRetryable = status == AiReviewStatus.unavailable;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Semantics(
+        label: label,
+        button: isRetryable,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: isRetryable
+              ? () {
+                  ref.read(smsFlushTriggerProvider.notifier).state++;
+                  ref.invalidate(needsReviewItemsProvider);
+                }
+              : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(color: color.withValues(alpha: 0.24)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 12, color: color),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: BambooFonts.ui(
+                    11.5,
+                    weight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -42,6 +42,60 @@ test('only bank-labelled references are extracted; unknown merchants are not exa
   assert.equal(result.automatic, false);
   assert.equal(result.merchantMatch, 'missing');
 });
+
+test('date-only SMS rows compare to statement time using the SMS observation timestamp', () => {
+  const sms = {
+    amount: 505,
+    occurred: '2026-10-02T00:00:00.000Z',
+    observedAt: '2026-10-02T17:41:37.000Z',
+    merchantName: null,
+    source: 'sms',
+    instrument: 'credit_card',
+    entryKind: 'spend',
+    userCardId: 'card-7105',
+  };
+  const statement = {
+    amount: 505,
+    occurred: '2026-10-02T17:41:00.000Z',
+    merchantName: 'FLIPKART',
+    source: 'statement',
+    instrument: 'credit_card',
+    entryKind: 'spend',
+    userCardId: 'card-7105',
+  };
+  const result = evaluateDuplicate(sms, statement);
+  assert.equal(result.automatic, false);
+  assert.equal(result.merchantMatch, 'missing');
+  assert.equal(result.timeDifferenceMinutes, 1);
+});
+test('explicit bank swipe time outranks a delayed SMS delivery time', () => {
+  const sms = {
+    amount: 505, occurred: '2026-10-02T17:41:37.000Z',
+    observedAt: '2026-10-02T18:30:00.000Z', transactionTimePrecise: true,
+    merchantName: 'FLIPKART PA', source: 'sms', instrument: 'credit_card',
+    userCardId: 'card-7105',
+  };
+  const statement = {
+    amount: 505, occurred: '2026-10-02T17:41:00.000Z',
+    merchantName: 'FLIPKART', source: 'statement', instrument: 'credit_card',
+    userCardId: 'card-7105',
+  };
+  assert.equal(evaluateDuplicate({ ...sms, transactionTimePrecise: false }, statement), null);
+  const result = evaluateDuplicate(sms, statement);
+  assert.equal(result.automatic, false);
+  assert.equal(result.timeDifferenceMinutes, 1);
+});
+test('absent SMS observation times fall back to occurred time instead of Unix epoch', () => {
+  for (const observedAt of [null, undefined, '', 'invalid']) {
+    const sms = { ...row, bankReference: null, observedAt };
+    const statement = { ...row, bankReference: null, source: 'statement' };
+    assert.ok(evaluateDuplicate(sms, statement), String(observedAt));
+    assert.equal(evaluateDuplicate({ ...sms, occurred: null }, statement), null);
+    assert.equal(evaluateDuplicate(
+      { ...sms, source: 'sms_bulk' }, { ...sms, observedAt: '1970-01-01T00:00:00Z' },
+    ), null);
+  }
+});
 test('non-Latin merchants retain distinguishing evidence', () => {
   assert.equal(evaluateDuplicate({...row, bankReference:null, merchantName:'दुकान'}, {...row, source:'statement', bankReference:null, merchantName:'भोजन'}), null);
 });

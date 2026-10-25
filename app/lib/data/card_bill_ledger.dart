@@ -86,6 +86,7 @@ class CardBill {
     final due = amountDue;
     return due != null &&
         due.paise > 0 &&
+        paidToward.paise > 0 &&
         paidToward.paise >= due.paise - _minimumCreditPaise;
   }
 
@@ -180,67 +181,34 @@ Map<String, CardBillLedger> deriveCardBills({
         }
       }
 
-      if (activeCandidates.length == 1) {
-        // If one candidate card has active cycle spend and others are disqualified, pick the active candidate!
-        target = activeCandidates.single;
-      } else if (activeCandidates.length > 1) {
-        // If multiple candidates have active spend, prioritize historical attribution,
-        // else pick the one with spend closest to the bill amount.
-        final historical = activeCandidates
-            .where((c) => _hasHistoricalAttribution(
-                  c,
-                  orphan.family,
-                  evidence,
-                  [...transactions, ...payments],
-                ))
-            .toList();
-        if (historical.length == 1) {
-          target = historical.single;
-        } else {
-          UserCard? bestMatch;
-          var bestDiff = double.infinity;
-          for (final candidate in activeCandidates) {
-            final diff =
-                (candidateSpends[candidate]! - billPaise).abs().toDouble();
-            if (diff < bestDiff) {
-              bestDiff = diff;
-              bestMatch = candidate;
-            }
-          }
-          target = bestMatch;
-        }
-      } else {
-        // Disqualified or no active spend in cycle: check historical attribution
-        final historical = candidates
-            .where((c) => _hasHistoricalAttribution(
-                  c,
-                  orphan.family,
-                  evidence,
-                  [...transactions, ...payments],
-                ))
-            .toList();
-        if (historical.length == 1) {
-          target = historical.single;
-        }
+      // Spend data can be incomplete; only use it to identify a bill when one
+      // candidate is within the same rounding band used for payment matching.
+      final spendMatches = activeCandidates.where((candidate) {
+        final difference = (candidateSpends[candidate]! - billPaise).abs();
+        return difference <= (billPaise * 0.02).ceil() + 100;
+      }).toList();
+      if (spendMatches.length == 1) {
+        target = spendMatches.single;
       }
     }
 
     if (target == null) {
       // Historical attribution fallback if orphan.amountDue was null or unresolved
       final historical = candidates
-          .where((c) => _hasHistoricalAttribution(
-                c,
-                orphan.family,
-                evidence,
-                [...transactions, ...payments],
-              ))
+          .where(
+            (c) => _hasHistoricalAttribution(c, orphan.family, evidence, [
+              ...transactions,
+              ...payments,
+            ]),
+          )
           .toList();
       if (historical.length == 1) {
         target = historical.single;
       } else {
         // Fallback: only attach if exactly one candidate has a direct name token match
-        final directlyNamed =
-            candidates.where((c) => _familyNamesCard(orphan.family, c)).toList();
+        final directlyNamed = candidates
+            .where((c) => _familyNamesCard(orphan.family, c))
+            .toList();
         if (directlyNamed.length == 1) {
           target = directlyNamed.single;
         }
@@ -255,7 +223,8 @@ Map<String, CardBillLedger> deriveCardBills({
   final ledgers = <String, CardBillLedger>{};
   for (final card in cards) {
     final own = evidence
-        .where((e) => e.cardLast4 != null && e.cardLast4 == card.last4)
+        .where((e) => e.cardLast4 != null && e.cardLast4 == card.last4 &&
+            cards.where((c) => c.last4 == e.cardLast4).length == 1)
         .toList();
     final attachedOrphans = orphanAttributed[card.id] ?? const [];
     final combined = [...own, ...attachedOrphans];
@@ -272,10 +241,22 @@ Map<String, CardBillLedger> deriveCardBills({
 
   final attributed = <String, List<TransactionEntry>>{};
   final residual = <TransactionEntry>[];
+  final seenPayments = <String>{};
   for (final txn in payments.where(isCardBillPaymentTxn)) {
+    if (!seenPayments.add(txn.id) ||
+        txn.amount.paise <= 0 ||
+        txn.occurredAt.isAfter(now)) {
+      continue;
+    }
     final card = _explicitCard(cards, txn);
     if (card != null) {
       attributed.putIfAbsent(card.id, () => []).add(txn);
+      continue;
+    }
+    // An explicit but unknown/ambiguous card must never fall back to another
+    // card merely because its bill window or amount happens to match.
+    if (txn.cardLast4 != null || txn.userCardId != null ||
+        _mentionedLast4(txn) != null) {
       continue;
     }
     final byWindow = [
@@ -323,13 +304,11 @@ Map<String, CardBillLedger> deriveCardBills({
 UserCard? _explicitCard(List<UserCard> cards, TransactionEntry txn) {
   final last4 = txn.cardLast4;
   if (last4 != null) {
-    return cards.firstWhereOrNull((c) => c.last4 == last4);
+    final hits = cards.where((c) => c.last4 == last4).toList();
+    return hits.length == 1
+        ? hits.single : hits.firstWhereOrNull((c) => c.id == txn.userCardId);
   }
-  final text = '${txn.merchantName ?? ''} ${txn.note ?? ''}';
-  final mentioned = RegExp(
-    r'(?:ending|x{2,6}\*?|no\.?|number)\s*[:#. ]?\s?(\d{4})',
-    caseSensitive: false,
-  ).firstMatch(text)?.group(1);
+  final mentioned = _mentionedLast4(txn);
   if (mentioned != null) {
     final hits = cards.where((c) => c.last4 == mentioned).toList();
     return hits.length == 1 ? hits.single : null;
@@ -339,6 +318,11 @@ UserCard? _explicitCard(List<UserCard> cards, TransactionEntry txn) {
   }
   return null;
 }
+
+String? _mentionedLast4(TransactionEntry txn) => RegExp(
+  r'(?:ending|x{2,6}\*?|no\.?|number)\s*[:#. ]?\s?(\d{4})',
+  caseSensitive: false,
+).firstMatch('${txn.merchantName ?? ''} ${txn.note ?? ''}')?.group(1);
 
 bool _windowCovers(CardBill bill, DateTime when) {
   final start = _day(bill.statementDate);
@@ -375,72 +359,96 @@ bool _fitsOrPartial(CardBill bill, Money amount) {
 CardBillLedger _attached(CardBillLedger ledger, List<TransactionEntry> txns) {
   CardBill settle(CardBill bill, Iterable<TransactionEntry> txns) {
     final paid = txns.fold(const Money.zero(), (sum, t) => sum + t.amount);
-    final lastAt = txns.map((t) => t.occurredAt).reduce(
-          (a, b) => a.isAfter(b) ? a : b,
-        );
+    final lastAt = txns
+        .map((t) => t.occurredAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
     return CardBill(
       statementDate: bill.statementDate,
       dueDate: bill.dueDate,
       amountDue: bill.amountDue,
       minimumDue: bill.minimumDue,
       paidToward: bill.paidToward + paid,
-      lastPaymentAt: bill.lastPaymentAt == null || lastAt.isAfter(bill.lastPaymentAt!)
+      lastPaymentAt:
+          bill.lastPaymentAt == null || lastAt.isAfter(bill.lastPaymentAt!)
           ? lastAt
           : bill.lastPaymentAt,
       confidence: bill.confidence,
+      statementDateVerified: bill.statementDateVerified,
+      isAutopay: bill.isAutopay,
     );
   }
 
-  final currentPayments = <TransactionEntry>[];
-  final previousPayments = <TransactionEntry>[];
-  for (final txn in txns) {
-    final beforeCurrent = ledger.current != null &&
+  final ordered = [...txns]
+    ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
+  for (final txn in ordered) {
+    final oldest = ledger.previous ?? ledger.current;
+    if (oldest == null || txn.occurredAt.isBefore(_day(oldest.statementDate))) {
+      continue;
+    }
+    final beforeCurrent =
+        ledger.current != null &&
         txn.occurredAt.isBefore(ledger.current!.statementDate);
-    final fitsPrevious = ledger.previous != null &&
+    final fitsPrevious =
+        ledger.previous != null &&
         !ledger.previous!.isPaid &&
         _fitsOrPartial(ledger.previous!, txn.amount);
-    final fitsCurrent = ledger.current != null &&
+    final fitsCurrent =
+        ledger.current != null &&
         !ledger.current!.isPaid &&
         _fitsOrPartial(ledger.current!, txn.amount);
-    final preferPrevious = !fitsCurrent ||
+    final preferPrevious =
+        !fitsCurrent ||
         (ledger.previous != null &&
             ledger.current != null &&
             ledger.previous!.amountDue != null &&
             ledger.current!.amountDue != null &&
             ((txn.amount - ledger.previous!.amountDue!).paise).abs() <
                 ((txn.amount - ledger.current!.amountDue!).paise).abs());
-    if (beforeCurrent || (fitsPrevious && (ledger.current == null || preferPrevious))) {
-      previousPayments.add(txn);
-    } else {
-      currentPayments.add(txn);
+    if (beforeCurrent ||
+        (fitsPrevious && (ledger.current == null || preferPrevious))) {
+      if (ledger.previous != null) {
+        ledger = CardBillLedger(
+          current: ledger.current,
+          previous: settle(ledger.previous!, [txn]),
+        );
+      }
+    } else if (ledger.current != null) {
+      ledger = CardBillLedger(
+        current: settle(ledger.current!, [txn]),
+        previous: ledger.previous,
+      );
     }
   }
-
-  final current = ledger.current == null || currentPayments.isEmpty
-      ? ledger.current
-      : settle(ledger.current!, currentPayments);
-  final previous = ledger.previous == null || previousPayments.isEmpty
-      ? ledger.previous
-      : settle(ledger.previous!, previousPayments);
-  return CardBillLedger(current: current, previous: previous);
+  return ledger;
 }
 
-List<CardBill> _mergeCycles(List<CardBillEvidence> rows, {required DateTime now}) {
+List<CardBill> _mergeCycles(
+  List<CardBillEvidence> rows, {
+  required DateTime now,
+}) {
   final ordered = [...rows]
     ..sort((a, b) => b.statementDate.compareTo(a.statementDate));
   ordered.retainWhere(
-    (e) => !e.statementDate.isAfter(now) && _day(now).difference(e.statementDate) <= const Duration(days: 95),
+    (e) =>
+        !e.statementDate.isAfter(now) &&
+        _day(now).difference(e.statementDate) <= const Duration(days: 95),
   );
   if (ordered.isEmpty) return const [];
-  final cycles = <List<CardBillEvidence>>[[ordered.first]];
+  final cycles = <List<CardBillEvidence>>[
+    [ordered.first],
+  ];
   for (final row in ordered.skip(1)) {
-    final inCycle = cycles.last.any(
-      (r) => (r.dueDate != null && row.dueDate != null && r.dueDate == row.dueDate) ||
-          r.statementDate.difference(row.statementDate).abs() <=
-          const Duration(days: 7),
-    );
-    if (inCycle) {
-      cycles.last.add(row);
+    final matchingCycle = cycles.firstWhereOrNull((cycle) => cycle.any(
+      (r) =>
+          (r.dueDate != null &&
+              row.dueDate != null &&
+              r.dueDate == row.dueDate) ||
+          ((r.dueDate == null || row.dueDate == null) &&
+              r.statementDate.difference(row.statementDate).abs() <=
+                  const Duration(days: 7)),
+    ));
+    if (matchingCycle != null) {
+      matchingCycle.add(row);
     } else if (cycles.length == 1) {
       cycles.add([row]);
     }
@@ -451,8 +459,9 @@ List<CardBill> _mergeCycles(List<CardBillEvidence> rows, {required DateTime now}
 CardBill _mergeOne(List<CardBillEvidence> cycle) {
   final ordered = [...cycle]
     ..sort((a, b) => b.statementDate.compareTo(a.statementDate));
-  final anchor =
-      ordered.firstWhere((e) => e.statementDateExplicit, orElse: () => ordered.first).statementDate;
+  final anchor = ordered
+      .firstWhere((e) => e.statementDateExplicit, orElse: () => ordered.first)
+      .statementDate;
   DateTime? due;
   for (final e in ordered) {
     if (e.dueDate != null && !e.dueDate!.isBefore(anchor)) {
@@ -472,8 +481,10 @@ CardBill _mergeOne(List<CardBillEvidence> cycle) {
   for (final e in ordered) {
     minimum ??= e.minimumDue;
   }
-  final confidence =
-      cycle.fold<double>(0, (best, e) => best > e.confidence ? best : e.confidence);
+  final confidence = cycle.fold<double>(
+    0,
+    (best, e) => best > e.confidence ? best : e.confidence,
+  );
   return CardBill(
     statementDate: anchor,
     dueDate: due,
@@ -483,14 +494,19 @@ CardBill _mergeOne(List<CardBillEvidence> cycle) {
     lastPaymentAt: null,
     confidence: confidence,
     isAutopay: cycle.any((e) => e.isAutopay),
-    statementDateVerified: cycle.any((e) => e.statementDateExplicit || e.isAutopay),
+    statementDateVerified: cycle.any(
+      (e) => e.statementDateExplicit || e.isAutopay,
+    ),
   );
 }
 
 DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 
 bool _familyNamesCard(String? family, UserCard card) =>
-    familyNamesCardDisplayName(family, '${card.nickname ?? ''} ${card.cardName}');
+    familyNamesCardDisplayName(
+      family,
+      '${card.nickname ?? ''} ${card.cardName}',
+    );
 
 extension _FirstWhereOrNull<T> on Iterable<T> {
   T? firstWhereOrNull(bool Function(T) test) {
@@ -501,10 +517,11 @@ extension _FirstWhereOrNull<T> on Iterable<T> {
   }
 }
 
-
-
 bool _isHdfcCard(UserCard card) {
-  final name = [card.nickname, card.cardName].whereType<String>().join(' ').toLowerCase();
+  final name = [
+    card.nickname,
+    card.cardName,
+  ].whereType<String>().join(' ').toLowerCase();
   return name.contains('hdfc') ||
       name.contains('moneyback') ||
       name.contains('millennia') ||
@@ -525,7 +542,8 @@ List<UserCard> _candidateCardsForEvidence(
   // 1. Aggregators / Co-brand sender families for HDFC Bank
   // MYTNEU/TNBPAy are sent by the Tata Neu app for ALL HDFC cards (including
   // MoneyBack+, Millennia, Regalia, etc.), not solely the co-branded card.
-  final isHdfcFamily = canonical == 'hdfc' ||
+  final isHdfcFamily =
+      canonical == 'hdfc' ||
       canonical == 'mytneu' ||
       canonical == 'tnbpay' ||
       canonical == 'tatanu';
@@ -540,7 +558,10 @@ List<UserCard> _candidateCardsForEvidence(
 
   // 3. General bank code prefix/slug match against card name/nickname
   final bankMatched = cards.where((c) {
-    final name = [c.nickname, c.cardName].whereType<String>().join(' ').toLowerCase();
+    final name = [
+      c.nickname,
+      c.cardName,
+    ].whereType<String>().join(' ').toLowerCase();
     return name.contains(canonical);
   }).toList();
   if (bankMatched.isNotEmpty) return bankMatched;
@@ -562,7 +583,9 @@ Money _calculateCandidateCycleSpend(
     if (isCardBillPaymentTxn(t)) continue;
     final merch = (t.merchantName ?? '').toLowerCase();
     final note = (t.note ?? '').toLowerCase();
-    if (merch.contains('bill payment') || note.contains('bill payment')) continue;
+    if (merch.contains('bill payment') || note.contains('bill payment')) {
+      continue;
+    }
     if (merch.contains('autopay') || note.contains('autopay')) continue;
     // Exclude large single anomaly transactions occurring at statement night
     if (t.amount.paise > 5000000) continue;
@@ -575,7 +598,8 @@ Money _calculateCandidateCycleSpend(
     );
     if (isKnownBill) continue;
 
-    final match = (t.userCardId != null && t.userCardId == card.id) ||
+    final match =
+        (t.userCardId != null && t.userCardId == card.id) ||
         (t.cardLast4 != null && t.cardLast4 == card.last4);
     if (!match) continue;
     if (t.occurredAt.isBefore(start) ||
@@ -595,19 +619,29 @@ bool _hasHistoricalAttribution(
 ) {
   if (orphanFamily == null || orphanFamily.isEmpty) return false;
   final canonical = canonicalBankSender(orphanFamily);
-  final isAggregator = (canonical == 'mytneu' ||
-      canonical == 'tnbpay' ||
-      canonical == 'tatanu');
+  final isAggregator =
+      (canonical == 'mytneu' || canonical == 'tnbpay' || canonical == 'tatanu');
 
   // 1. Evidence check: does any orphan bill from this sender family share an amount with an explicit bill for this candidate?
-  for (final orphan in evidence.where((e) => e.cardLast4 == null && e.amountDue != null)) {
+  for (final orphan in evidence.where(
+    (e) => e.cardLast4 == null && e.amountDue != null,
+  )) {
     if (orphan.family == null) continue;
     final orphanFam = canonicalBankSender(orphan.family);
-    final matchesFam = orphanFam == canonical ||
-        (isAggregator && (orphanFam == 'mytneu' || orphanFam == 'tnbpay' || orphanFam == 'tatanu'));
+    final matchesFam =
+        orphanFam == canonical ||
+        (isAggregator &&
+            (orphanFam == 'mytneu' ||
+                orphanFam == 'tnbpay' ||
+                orphanFam == 'tatanu'));
     if (!matchesFam) continue;
 
-    for (final ex in evidence.where((e) => e.cardLast4 != null && e.cardLast4 == candidate.last4 && e.amountDue != null)) {
+    for (final ex in evidence.where(
+      (e) =>
+          e.cardLast4 != null &&
+          e.cardLast4 == candidate.last4 &&
+          e.amountDue != null,
+    )) {
       if (orphan.amountDue == ex.amountDue) {
         return true;
       }
@@ -632,7 +666,8 @@ bool _hasHistoricalAttribution(
 
   // 2. Transactions / Payments check
   for (final t in txns) {
-    final cardMatch = (t.userCardId != null && t.userCardId == candidate.id) ||
+    final cardMatch =
+        (t.userCardId != null && t.userCardId == candidate.id) ||
         (t.cardLast4 != null && t.cardLast4 == candidate.last4) ||
         (candidate.last4 != null &&
             ((t.merchantName ?? '').contains(candidate.last4!) ||
@@ -641,7 +676,8 @@ bool _hasHistoricalAttribution(
 
     final merch = (t.merchantName ?? '').toLowerCase();
     final note = (t.note ?? '').toLowerCase();
-    final isPaymentOrAutopay = isCardBillPaymentTxn(t) ||
+    final isPaymentOrAutopay =
+        isCardBillPaymentTxn(t) ||
         merch.contains('bill payment') ||
         note.contains('bill payment') ||
         merch.contains('autopay') ||

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
@@ -10,7 +11,15 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import 'card_actions_screen.dart';
 import 'card_visual.dart';
-import '../insights/payments_due_screen.dart' show DuePayment, paymentsDueProvider;
+import '../insights/credit_utilization_ui.dart';
+import '../insights/spending_visuals.dart';
+import '../insights/spend_trends_screen.dart'
+    show SpendPeriodSelector, SpendingMixCard, spendingMixCategoryKey;
+import 'autopay_issuer_links.dart';
+import 'benefit_detail_screen.dart';
+import 'card_summary.dart';
+import '../insights/payments_due_screen.dart'
+    show DuePayment, paymentsDueProvider;
 import '../insights/lounge_access_screen.dart' show isInCurrentLoungeWindow;
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart';
@@ -19,6 +28,78 @@ import '../../main.dart' show MoneyText;
 
 const _assumedGracePeriodDays =
     20; // matches billing_float_screen.dart's own assumption
+
+/// Period selection is shared by the mix and performance sections for one
+/// card, without changing the global Spending screen's selection.
+final cardDetailSpendQueryProvider =
+    StateProvider.family<SpendReportQuery, String>(
+      (ref, userCardId) => const SpendReportQuery.preset(SpendPeriod.month),
+    );
+
+String _normalizedSpendCategoryLabel(String rawLabel) {
+  final normalized = rawLabel.trim().replaceAll(RegExp(r'\s+'), ' ');
+  final lower = normalized.toLowerCase();
+  if (normalized.isEmpty ||
+      lower == 'uncategorized' ||
+      lower == 'unclassified' ||
+      lower == 'unknown' ||
+      lower == 'others' ||
+      lower == 'other') {
+    return 'Other';
+  }
+  return normalized;
+}
+
+List<SpendBreakdownRow> _aggregateCardCategoryRows(
+  List<CardCategorySpendRow> rawRows,
+  String userCardId,
+) {
+  final filtered = rawRows.where(
+    (r) => r.cardId == userCardId && r.total.paise > 0 && r.txnCount > 0,
+  );
+  final map =
+      <
+        String,
+        ({String label, Money total, int txnCount, String? categoryId})
+      >{};
+
+  for (final r in filtered) {
+    final label = _normalizedSpendCategoryLabel(r.categoryName);
+    // Report rows may arrive both with and without a category ID. The label
+    // is the stable user-facing identity, so keying by it prevents duplicate
+    // rows such as "Other" / "Uncategorized" or ID/name variants.
+    final key = label.toLowerCase();
+
+    if (map.containsKey(key)) {
+      final existing = map[key]!;
+      map[key] = (
+        label: existing.label,
+        total: existing.total + r.total,
+        txnCount: existing.txnCount + r.txnCount,
+        categoryId: existing.categoryId ?? r.categoryId,
+      );
+    } else {
+      map[key] = (
+        label: label,
+        total: r.total,
+        txnCount: r.txnCount,
+        categoryId: r.categoryId,
+      );
+    }
+  }
+
+  return map.values
+      .map(
+        (v) => SpendBreakdownRow(
+          label: v.label,
+          total: v.total,
+          txnCount: v.txnCount,
+          categoryId: v.categoryId,
+        ),
+      )
+      .toList()
+    ..sort((a, b) => b.total.paise.compareTo(a.total.paise));
+}
 
 /// C2 Card Detail — one vertically scrollable card report (ui-spec Group C,
 /// implementation-plan-group-c-d.md).
@@ -120,15 +201,24 @@ class CardDetailScreen extends ConsumerWidget {
                   final spendSummary = ref.watch(
                     cardSpendSummaryProvider,
                   )[userCard.id];
+                  final cardUtilization = ref.watch(
+                    creditUtilizationProvider,
+                  )[userCard.id];
                   final duePayments =
-                      ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
+                      ref.watch(paymentsDueProvider).valueOrNull ??
+                      const <DuePayment>[];
                   final duePayment = duePayments
                       .where((d) => d.card.id == userCard.id)
                       .firstOrNull;
                   final sections = [
                     (
                       label: 'Rewards',
-                      body: _RewardsTab(product: product, embedded: true),
+                      body: _RewardsTab(
+                        product: product,
+                        userCardId: userCard.id,
+                        userCard: userCard,
+                        embedded: true,
+                      ),
                     ),
                     (
                       label: 'Spend',
@@ -170,6 +260,7 @@ class CardDetailScreen extends ConsumerWidget {
                       label: 'Statement',
                       body: _StatementTab(
                         userCard: userCard,
+                        product: product,
                         duePayment: duePayment,
                         embedded: true,
                       ),
@@ -199,10 +290,41 @@ class CardDetailScreen extends ConsumerWidget {
                         cycleSpend: spendSummary?.cycleTotal,
                         latestSpend: spendSummary?.latestSpend,
                         effectiveBillingDay:
-                            duePayment?.bill?.statementDate.day ?? userCard.statementDay,
+                            duePayment?.bill?.statementDate.day ??
+                            userCard.statementDay,
                         effectiveDueDay:
                             duePayment?.dueOn.day ?? userCard.dueDay,
                       ),
+                      if (userCard.isDefault || userCard.isArchived) ...[
+                        const SizedBox(height: AppSpace.sm),
+                        Row(
+                          children: [
+                            if (userCard.isDefault)
+                              const StatusPill(
+                                label: 'DEFAULT CARD',
+                                foreground: BambooInk.onSlate,
+                                background: BambooInk.slate,
+                                icon: Icons.check_circle_rounded,
+                              ),
+                            if (userCard.isArchived) ...[
+                              const SizedBox(width: AppSpace.xs),
+                              const StatusPill(
+                                label: 'PAUSED',
+                                foreground: BambooInk.onSlate,
+                                background: BambooInk.amber,
+                                icon: Icons.pause_circle_rounded,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: AppSpace.xs),
+                      _CardUtilizationHeaderBar(
+                        card: userCard,
+                        result: cardUtilization,
+                      ),
+                      const SizedBox(height: AppSpace.md),
+                      _CardSpendingMixSection(userCard: userCard),
                       const SizedBox(height: AppSpace.lg),
                       for (final section in ordered) ...[
                         _CardDetailSection(
@@ -215,6 +337,7 @@ class CardDetailScreen extends ConsumerWidget {
                           body: section.body,
                         ),
                       ],
+                      _RecentCardActivitySection(userCardId: userCard.id),
                     ],
                   );
                 },
@@ -306,6 +429,998 @@ class _CardDetailSection extends StatelessWidget {
   }
 }
 
+class _CardUtilizationHeaderBar extends StatelessWidget {
+  final UserCard card;
+  final UtilizationResult? result;
+
+  const _CardUtilizationHeaderBar({required this.card, required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    final tracked = result;
+    final limit = card.creditLimit;
+    final hasLimit = limit != null && tracked != null;
+    final ratio = hasLimit ? tracked.ratio : 0.0;
+    final color = hasLimit
+        ? CreditUtilizationUi.color(ratio)
+        : BambooInk.ink500;
+    final icon = hasLimit
+        ? CreditUtilizationUi.icon(ratio)
+        : Icons.credit_score_outlined;
+    final title = hasLimit
+        ? 'Credit utilization: ${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}% · ${CreditUtilizationUi.label(ratio)}'
+        : 'Credit utilization · Add a limit';
+    String trailing;
+    if (hasLimit) {
+      final available = limit - tracked.currentBalance;
+      final headroom = available.isNegative ? const Money.zero() : available;
+      trailing = '${headroom.format(hidePaise: true)} headroom';
+    } else {
+      trailing = 'Add limit';
+    }
+
+    return InkWell(
+      onTap: () => context.push('/cards/${card.id}/edit'),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.md,
+          vertical: AppSpace.sm,
+        ),
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 15, color: color),
+                const SizedBox(width: AppSpace.xs),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.ui(
+                      12,
+                      weight: FontWeight.w600,
+                      color: color,
+                    ),
+                  ),
+                ),
+                Text(
+                  trailing,
+                  style: BambooFonts.ui(
+                    11.5,
+                    weight: FontWeight.w600,
+                    color: hasLimit ? BambooInk.ink700 : BambooInk.jade,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 14,
+                  color: hasLimit ? BambooInk.ink500 : BambooInk.jade,
+                ),
+              ],
+            ),
+            if (hasLimit) ...[
+              const SizedBox(height: 7),
+              ClipRRect(
+                key: const Key('card_credit_utilization_bar'),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: LinearProgressIndicator(
+                  value: ratio.clamp(0.0, 1.0),
+                  minHeight: 6,
+                  backgroundColor: BambooInk.paperMuted,
+                  color: color,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Horizontal unroll of the spending-mix donut: same category colours,
+/// same proportions, as a pill bar.
+class _SpendingMixStackedBar extends StatelessWidget {
+  final List<SpendBreakdownRow> rows;
+
+  const _SpendingMixStackedBar({required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    final totalPaise = rows.fold<int>(0, (sum, row) => sum + row.total.paise);
+    final label = totalPaise <= 0
+        ? 'No spending mix this month'
+        : rows
+              .map(
+                (row) =>
+                    '${row.label} ${((row.total.paise / totalPaise) * 100).round()}%',
+              )
+              .join(', ');
+
+    return Semantics(
+      key: const Key('card_spending_mix_bar'),
+      label: 'Spending mix bar, $label',
+      child: SizedBox(
+        height: 14,
+        width: double.infinity,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: CustomPaint(
+            painter: _SpendingMixBarPainter(rows: rows, totalPaise: totalPaise),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SpendingMixBarPainter extends CustomPainter {
+  final List<SpendBreakdownRow> rows;
+  final int totalPaise;
+
+  const _SpendingMixBarPainter({required this.rows, required this.totalPaise});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final track = Paint()..color = BambooInk.paperMuted;
+    canvas.drawRect(Offset.zero & size, track);
+    if (totalPaise <= 0 || size.width <= 0) return;
+
+    var x = 0.0;
+    for (final row in rows) {
+      final width = size.width * (row.total.paise / totalPaise);
+      if (width <= 0) continue;
+      final paint = Paint()..color = spendingCategoryVisual(row.label).accent;
+      canvas.drawRect(Rect.fromLTWH(x, 0, width, size.height), paint);
+      x += width;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpendingMixBarPainter oldDelegate) =>
+      oldDelegate.rows != rows || oldDelegate.totalPaise != totalPaise;
+}
+
+class _CardSpendingMixSection extends ConsumerStatefulWidget {
+  final UserCard userCard;
+
+  const _CardSpendingMixSection({required this.userCard});
+
+  @override
+  ConsumerState<_CardSpendingMixSection> createState() =>
+      _CardSpendingMixSectionState();
+}
+
+class _CardSpendingMixSectionState
+    extends ConsumerState<_CardSpendingMixSection> {
+  String? _selectedCategoryKey;
+  bool _showAllCategories = false;
+
+  String _categoryKey(SpendBreakdownRow row) => spendingMixCategoryKey(row);
+
+  String _categoryLabel(String rawLabel) =>
+      _normalizedSpendCategoryLabel(rawLabel);
+
+  void _selectCategory(int? index, List<SpendBreakdownRow> rows) {
+    setState(() {
+      if (index == null || index >= rows.length) {
+        _selectedCategoryKey = null;
+      } else {
+        final key = _categoryKey(rows[index]);
+        _selectedCategoryKey = _selectedCategoryKey == key ? null : key;
+      }
+    });
+  }
+
+  List<SpendBreakdownRow> _aggregateCardCategories(
+    List<CardCategorySpendRow> rawRows,
+    String userCardId,
+  ) => _aggregateCardCategoryRows(rawRows, userCardId);
+
+  List<TransactionEntry> _transactionsForCategory(
+    SpendBreakdownRow row,
+    List<TransactionEntry> cardTransactions,
+  ) {
+    return cardTransactions.where((entry) {
+      if (row.categoryId != null &&
+          (entry.categoryId == row.categoryId ||
+              entry.userCategoryId == row.categoryId ||
+              entry.parentUserCategoryId == row.categoryId ||
+              entry.parentCategoryId == row.categoryId)) {
+        return true;
+      }
+      final entryCat = entry.categoryName == null
+          ? null
+          : _categoryLabel(entry.categoryName!).toLowerCase();
+      if (entryCat == null || entryCat.isEmpty || entryCat == 'other') {
+        return row.label.toLowerCase() == 'other';
+      }
+      return entryCat == row.label.toLowerCase();
+    }).toList();
+  }
+
+  List<TransactionEntry> _transactionsForReportPeriod(
+    List<TransactionEntry> transactions,
+    SpendReport report,
+  ) => transactions
+      .where(
+        (entry) =>
+            !entry.occurredAt.isBefore(report.periodStart) &&
+            entry.occurredAt.isBefore(report.periodEnd),
+      )
+      .toList();
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedQuery = ref.watch(
+      cardDetailSpendQueryProvider(widget.userCard.id),
+    );
+    final reportState = ref.watch(spendReportProvider(selectedQuery));
+    final allTransactions =
+        ref.watch(transactionsProvider).valueOrNull ??
+        const <TransactionEntry>[];
+    final cardTransactions = allTransactions
+        .where((e) => e.userCardId == widget.userCard.id)
+        .toList();
+
+    final content = reportState.when(
+      loading: () => const CardSummaryPanel(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpace.md),
+          child: SkeletonList(count: 3),
+        ),
+      ),
+      error: (err, _) => CardSummaryPanel(
+        child: ErrorState(
+          message: userFacingErrorMessage(err),
+          onRetry: () => ref.invalidate(spendReportProvider(selectedQuery)),
+        ),
+      ),
+      data: (data) {
+        if (data == null) {
+          return const SizedBox.shrink();
+        }
+
+        final periodTransactions = _transactionsForReportPeriod(
+          cardTransactions,
+          data,
+        );
+        final nonZeroRows = _aggregateCardCategories(
+          data.byCardCategory,
+          widget.userCard.id,
+        );
+
+        if (nonZeroRows.isEmpty) {
+          return CardSummaryPanel(
+            child: Row(
+              children: [
+                const SpendingVisualBadge(
+                  visual: SpendingVisual(
+                    icon: Icons.pie_chart_outline_rounded,
+                    accent: BambooChartColors.teal,
+                  ),
+                  size: 38,
+                ),
+                const SizedBox(width: AppSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Spending mix · ${data.displayLabel}',
+                        style: BambooFonts.heading(
+                          14.5,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'No spending recorded on this card for ${data.displayLabel.toLowerCase()} yet.',
+                        style: BambooFonts.ui(12, color: BambooInk.ink500),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final cardTotal = nonZeroRows.fold<Money>(
+          const Money.zero(),
+          (sum, r) => sum + r.total,
+        );
+
+        final matchedIndex = _selectedCategoryKey == null
+            ? -1
+            : nonZeroRows.indexWhere(
+                (row) => _categoryKey(row) == _selectedCategoryKey,
+              );
+        final selectedIndex = matchedIndex < 0 ? null : matchedIndex;
+        const initialVisibleCount = 4;
+        final visibleRows = nonZeroRows
+            .take(_showAllCategories ? nonZeroRows.length : initialVisibleCount)
+            .toList();
+        final remaining = (nonZeroRows.length - initialVisibleCount).clamp(
+          0,
+          nonZeroRows.length,
+        );
+
+        return Column(
+          key: const Key('card_spending_mix'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SpendingMixCard(
+              rows: nonZeroRows,
+              total: cardTotal,
+              selectedCategoryKey: _selectedCategoryKey,
+              onCategorySelected: (row) => setState(
+                () => _selectedCategoryKey = row == null
+                    ? null
+                    : _categoryKey(row),
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+            CardSummaryPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CATEGORY BREAKDOWN & MERCHANTS',
+                    style: BambooFonts.ui(
+                      11.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink500,
+                    ).copyWith(letterSpacing: 0.8),
+                  ),
+                  const SizedBox(height: AppSpace.sm),
+                  for (final row in visibleRows)
+                    _CardExpandableCategoryRow(
+                      row: row,
+                      total: cardTotal,
+                      entries: _transactionsForCategory(
+                        row,
+                        periodTransactions,
+                      ),
+                      initiallyExpanded:
+                          selectedIndex != null &&
+                          nonZeroRows.indexOf(row) == selectedIndex,
+                      onExpansionChanged: (expanded) {
+                        final index = nonZeroRows.indexOf(row);
+                        if (expanded && selectedIndex != index) {
+                          _selectCategory(index, nonZeroRows);
+                        } else if (!expanded && selectedIndex == index) {
+                          _selectCategory(null, nonZeroRows);
+                        }
+                      },
+                    ),
+                  if (remaining > 0)
+                    Align(
+                      alignment: Alignment.center,
+                      child: TextButton.icon(
+                        key: const Key('card_spending_mix_show_more'),
+                        onPressed: () => setState(
+                          () => _showAllCategories = !_showAllCategories,
+                        ),
+                        icon: Icon(
+                          _showAllCategories
+                              ? Icons.expand_less_rounded
+                              : Icons.expand_more_rounded,
+                          size: 18,
+                        ),
+                        label: Text(
+                          _showAllCategories
+                              ? 'Show fewer categories'
+                              : 'Show $remaining more ${remaining == 1 ? 'category' : 'categories'}',
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SpendPeriodSelector(
+          selected: selectedQuery,
+          filtersActive: false,
+          showFilters: false,
+          onChanged: (query) {
+            ref
+                    .read(
+                      cardDetailSpendQueryProvider(widget.userCard.id).notifier,
+                    )
+                    .state =
+                query;
+            setState(() {
+              _selectedCategoryKey = null;
+              _showAllCategories = false;
+            });
+          },
+        ),
+        content,
+      ],
+    );
+  }
+}
+
+class _CardExpandableCategoryRow extends StatefulWidget {
+  final SpendBreakdownRow row;
+  final Money total;
+  final List<TransactionEntry> entries;
+  final bool initiallyExpanded;
+  final ValueChanged<bool> onExpansionChanged;
+
+  const _CardExpandableCategoryRow({
+    required this.row,
+    required this.total,
+    required this.entries,
+    this.initiallyExpanded = false,
+    required this.onExpansionChanged,
+  });
+
+  @override
+  State<_CardExpandableCategoryRow> createState() =>
+      _CardExpandableCategoryRowState();
+}
+
+class _CardExpandableCategoryRowState
+    extends State<_CardExpandableCategoryRow> {
+  final ExpansibleController _controller = ExpansibleController();
+
+  @override
+  void didUpdateWidget(covariant _CardExpandableCategoryRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initiallyExpanded == widget.initiallyExpanded) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.initiallyExpanded) {
+        _controller.expand();
+      } else {
+        _controller.collapse();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  List<MapEntry<String, List<TransactionEntry>>> _merchantGroups() {
+    final grouped = <String, List<TransactionEntry>>{};
+    final unnamed = <MapEntry<String, List<TransactionEntry>>>[];
+    for (final entry in widget.entries) {
+      final merchant = entry.merchantName?.trim();
+      if (merchant == null || merchant.isEmpty) {
+        if (unnamed.isEmpty) {
+          unnamed.add(MapEntry('Merchant not captured', [entry]));
+        } else {
+          unnamed.first.value.add(entry);
+        }
+        continue;
+      }
+      grouped.putIfAbsent(merchant, () => []).add(entry);
+    }
+    return [...grouped.entries, ...unnamed]..sort((a, b) {
+      final aTotal = a.value.fold<int>(0, (s, e) => s + e.amount.paise);
+      final bTotal = b.value.fold<int>(0, (s, e) => s + e.amount.paise);
+      return bTotal.compareTo(aTotal);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = widget.total.isZero
+        ? 0.0
+        : (widget.row.total.paise / widget.total.paise).clamp(0.0, 1.0);
+    final visual = spendingCategoryVisual(widget.row.label);
+    final groups = _merchantGroups();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpace.sm),
+      decoration: BoxDecoration(
+        color: BambooInk.paperMuted.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        clipBehavior: Clip.antiAlias,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            key: PageStorageKey(
+              'card_cat_${widget.row.categoryId}_${widget.row.label}',
+            ),
+            controller: _controller,
+            initiallyExpanded: widget.initiallyExpanded,
+            onExpansionChanged: widget.onExpansionChanged,
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: AppSpace.md,
+              vertical: AppSpace.xs,
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(
+              AppSpace.md,
+              0,
+              AppSpace.md,
+              AppSpace.sm,
+            ),
+            leading: SpendingVisualBadge(visual: visual, size: 36),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SpendingBreakdownHeader(
+                  label: Text(
+                    widget.row.label,
+                    style: BambooFonts.ui(
+                      13.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  percentage: '${(ratio * 100).toStringAsFixed(0)}%',
+                  amount: MoneyText(
+                    widget.row.total,
+                    confidence: Confidence.estimated,
+                    style: BambooFonts.ui(
+                      13.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${widget.row.txnCount} ${widget.row.txnCount == 1 ? 'transaction' : 'transactions'} · Tap to see merchants',
+                  style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                ),
+                const SizedBox(height: 5),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  child: LinearProgressIndicator(
+                    value: ratio,
+                    minHeight: 4.5,
+                    backgroundColor: BambooInk.paperMuted,
+                    color: visual.accent,
+                  ),
+                ),
+              ],
+            ),
+            children: [
+              if (groups.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'No individual transaction records available for this period.',
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
+                  ),
+                )
+              else
+                for (final group in groups)
+                  _CardMerchantGroupItem(
+                    merchant: group.key,
+                    entries: group.value,
+                  ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CardMerchantGroupItem extends StatelessWidget {
+  final String merchant;
+  final List<TransactionEntry> entries;
+
+  const _CardMerchantGroupItem({required this.merchant, required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    final merchantTotal = entries.fold<Money>(
+      const Money.zero(),
+      (sum, e) => sum + e.amount,
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(top: AppSpace.xs),
+      padding: const EdgeInsets.all(AppSpace.sm),
+      decoration: BoxDecoration(
+        color: BambooInk.paper,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.store_outlined,
+                size: 15,
+                color: BambooInk.ink500,
+              ),
+              const SizedBox(width: AppSpace.xs),
+              Expanded(
+                child: Text(
+                  merchant,
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              MoneyText(
+                merchantTotal,
+                confidence: Confidence.confirmed,
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (final entry in entries)
+            InkWell(
+              onTap: () => context.push('/activity/${entry.id}'),
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
+                child: Row(
+                  children: [
+                    Text(
+                      '${entry.occurredAt.day} ${_monthAbbr(entry.occurredAt.month)}',
+                      style: BambooFonts.ui(11, color: BambooInk.ink500),
+                    ),
+                    const SizedBox(width: AppSpace.sm),
+                    if (entry.note != null && entry.note!.isNotEmpty)
+                      Expanded(
+                        child: Text(
+                          entry.note!,
+                          style: BambooFonts.ui(11, color: BambooInk.ink500),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                    MoneyText(
+                      entry.amount,
+                      confidence: Confidence.confirmed,
+                      style: BambooFonts.ui(12, color: BambooInk.ink900),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 14,
+                      color: BambooInk.ink500,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _monthAbbr(int month) => const [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][month - 1];
+}
+
+class _CardPointsSummaryTile extends ConsumerWidget {
+  final UserCard userCard;
+  final CardProduct product;
+
+  const _CardPointsSummaryTile({required this.userCard, required this.product});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final points = userCard.pointsBalance ?? userCard.totalPointsEarned;
+    final valueEstimate = Money.fromRupees(points * product.pointValueInr);
+    final ledger =
+        ref.watch(pointsLedgerProvider(userCard.id)).valueOrNull ??
+        const <PointsLedgerEntry>[];
+    final withExpiry = ledger.where((e) => e.expiresOn != null).toList()
+      ..sort((a, b) => a.expiresOn!.compareTo(b.expiresOn!));
+    final nearestExpiry = withExpiry.firstOrNull;
+    final daysToExpiry = nearestExpiry == null
+        ? null
+        : daysUntil(nearestExpiry.expiresOn!, DateTime.now());
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpace.md),
+      padding: const EdgeInsets.all(AppSpace.md),
+      decoration: BoxDecoration(
+        color: BambooInk.paperMuted,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: BambooChartColors.amber.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.stars_rounded,
+              color: BambooChartColors.amber,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '${points.toStringAsFixed(0)} pts',
+                      style: BambooFonts.heading(15, color: BambooInk.ink900),
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Text(
+                      '(≈ ${valueEstimate.format(hidePaise: true)})',
+                      style: BambooFonts.ui(
+                        12.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.jade,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                if (nearestExpiry != null && daysToExpiry != null)
+                  Text(
+                    daysToExpiry <= 30
+                        ? 'Expiring in $daysToExpiry days (${nearestExpiry.expiresOn!.day}/${nearestExpiry.expiresOn!.month})'
+                        : 'Next expiry in $daysToExpiry days',
+                    style: BambooFonts.ui(
+                      11.5,
+                      weight: FontWeight.w500,
+                      color: daysToExpiry <= 30
+                          ? BambooInk.clay
+                          : BambooInk.ink500,
+                    ),
+                  )
+                else
+                  Text(
+                    '${product.pointValueInr > 0 ? "1 pt = ₹${product.pointValueInr.toStringAsFixed(2)}" : "Rewards balance"} · No expiry on file',
+                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                  ),
+              ],
+            ),
+          ),
+          InkWell(
+            onTap: () => context.push(AppRoute.pointsExpiry),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Details',
+                    style: BambooFonts.ui(
+                      12,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink700,
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 16,
+                    color: BambooInk.ink500,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentCardActivitySection extends ConsumerWidget {
+  final String userCardId;
+
+  const _RecentCardActivitySection({required this.userCardId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final all =
+        ref.watch(transactionsProvider).valueOrNull ??
+        const <TransactionEntry>[];
+    final cardTxns = all.where((t) => t.userCardId == userCardId).toList()
+      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+
+    if (cardTxns.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final recent = cardTxns.take(4).toList();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.lg),
+      child: CardSummaryPanel(
+        padding: const EdgeInsets.all(AppSpace.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.history_rounded,
+                  size: 20,
+                  color: BambooInk.ink700,
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    'Recent Card Activity',
+                    style: BambooFonts.heading(15, color: BambooInk.ink900),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => context.push(AppRoute.activity),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View all',
+                        style: BambooFonts.ui(
+                          12.5,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: BambooInk.ink700,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.sm),
+            for (final txn in recent) ...[
+              InkWell(
+                onTap: () => context.push('/activity/${txn.id}'),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 4,
+                  ),
+                  child: Row(
+                    children: [
+                      SpendingVisualBadge(
+                        visual: spendingCategoryVisual(
+                          txn.categoryName ?? 'Other',
+                        ),
+                        size: 32,
+                      ),
+                      const SizedBox(width: AppSpace.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              txn.merchantName?.isNotEmpty == true
+                                  ? txn.merchantName!
+                                  : (txn.categoryName ?? 'Card transaction'),
+                              style: BambooFonts.ui(
+                                13,
+                                weight: FontWeight.w600,
+                                color: BambooInk.ink900,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '${txn.occurredAt.day} ${_monthName(txn.occurredAt.month)} · ${txn.categoryName ?? 'Other'}',
+                              style: BambooFonts.ui(
+                                11,
+                                color: BambooInk.ink500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      MoneyText(
+                        txn.amount,
+                        confidence: Confidence.confirmed,
+                        style: BambooFonts.ui(
+                          13.5,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpace.xs),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 14,
+                        color: BambooInk.ink500,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (txn != recent.last)
+                const Divider(color: BambooInk.hairlineOnPaper, height: 1),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _monthName(int month) => const [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][month - 1];
+}
+
 /// What this card actually did this month, and what it really paid.
 ///
 /// Card Detail had six tabs describing the card's TERMS — its rates, caps,
@@ -318,6 +1433,11 @@ class _CardDetailSection extends StatelessWidget {
 /// `GET /spend-report` already returns a per-card breakdown, so filtering
 /// it here keeps one definition of "spend on this card" instead of two that
 /// can drift.
+int _calendarMonthSpan(DateTime from, DateTime to) {
+  final months = (to.year - from.year) * 12 + to.month - from.month;
+  return months < 1 ? 1 : months;
+}
+
 class _SpendSection extends ConsumerWidget {
   final UserCard userCard;
   final CardProduct product;
@@ -325,8 +1445,8 @@ class _SpendSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final monthQuery = const SpendReportQuery.preset(SpendPeriod.month);
-    final report = ref.watch(spendReportProvider(monthQuery));
+    final selectedQuery = ref.watch(cardDetailSpendQueryProvider(userCard.id));
+    final report = ref.watch(spendReportProvider(selectedQuery));
 
     return report.when(
       loading: () => const _SpendDisclosure(
@@ -343,7 +1463,7 @@ class _SpendSection extends ConsumerWidget {
         details: [
           ErrorState(
             message: userFacingErrorMessage(err),
-            onRetry: () => ref.invalidate(spendReportProvider(monthQuery)),
+            onRetry: () => ref.invalidate(spendReportProvider(selectedQuery)),
           ),
         ],
       ),
@@ -374,7 +1494,8 @@ class _SpendSection extends ConsumerWidget {
             details: [
               EmptyState(
                 icon: Icons.show_chart_rounded,
-                title: 'Nothing on ${userCard.cardName}$suffix this month',
+                title:
+                    'Nothing on ${userCard.cardName}$suffix for ${selectedQuery.shortLabel.toLowerCase()} yet',
                 message:
                     'Once spend is logged against this card, you\'ll see what it earned and the '
                     'rate it really paid.',
@@ -390,19 +1511,30 @@ class _SpendSection extends ConsumerWidget {
         // alternative — comparing a month of rewards against a year of fee
         // — is the comparison people make in their heads anyway, and it is
         // wrong by a factor of twelve.
-        final annualisedRewards = row.rewards * 12;
+        final periodMonths = _calendarMonthSpan(
+          data.periodStart,
+          data.periodEnd,
+        );
+        final annualisedRewards = row.rewards * (12 / periodMonths);
+        final mixRows = _aggregateCardCategoryRows(
+          data.byCardCategory,
+          userCard.id,
+        );
 
         return _SpendDisclosure(
           trailing: row.total.format(compact: true),
+          subtitle:
+              '${selectedQuery.shortLabel} · actual spend and effective reward rate',
           details: [
-            _SpendStatCard(
-              label: 'Spent this month',
-              value: row.total,
-              sub: '${row.txnCount} transaction${row.txnCount == 1 ? '' : 's'}',
+            _SpendBarSummary(
+              spend: row.total,
+              transactionCount: row.txnCount,
+              mixRows: mixRows,
+              periodLabel: selectedQuery.shortLabel,
             ),
             const SizedBox(height: AppSpace.md),
             _SpendStatCard(
-              label: 'Earned this month',
+              label: 'Earned in ${selectedQuery.shortLabel.toLowerCase()}',
               value: row.rewards,
               sub: rate == null
                   ? null
@@ -415,9 +1547,9 @@ class _SpendSection extends ConsumerWidget {
                 label: 'Annual fee',
                 value: fee,
                 sub: annualisedRewards >= fee
-                    ? 'At this month\'s pace you\'d earn about '
+                    ? 'At this period\'s pace you\'d earn about '
                           '${annualisedRewards.format(compact: true)} a year — more than the fee.'
-                    : 'At this month\'s pace you\'d earn about '
+                    : 'At this period\'s pace you\'d earn about '
                           '${annualisedRewards.format(compact: true)} a year, which is less than '
                           'the fee. One month is a small sample — check the Savings Report before '
                           'deciding.',
@@ -432,15 +1564,20 @@ class _SpendSection extends ConsumerWidget {
 
 class _SpendDisclosure extends StatelessWidget {
   final String trailing;
+  final String subtitle;
   final List<Widget> details;
 
-  const _SpendDisclosure({required this.trailing, required this.details});
+  const _SpendDisclosure({
+    required this.trailing,
+    this.subtitle = 'This month · actual spend and effective reward rate',
+    required this.details,
+  });
 
   @override
   Widget build(BuildContext context) {
     return _CompactDisclosure(
       title: 'Spend',
-      subtitle: 'This month · actual spend and effective reward rate',
+      subtitle: subtitle,
       trailing: trailing,
       details: details,
     );
@@ -455,26 +1592,72 @@ class _SpendStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-          const SizedBox(height: 2),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+                if (sub != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    sub!,
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpace.md),
           MoneyText(
             value,
             confidence: Confidence.estimated,
-            style: BambooFonts.money(24, color: BambooInk.ink900),
+            style: BambooFonts.money(18, color: BambooInk.ink900),
           ),
-          if (sub != null) ...[
-            const SizedBox(height: 6),
-            Text(sub!, style: BambooFonts.ui(12, color: BambooInk.ink500)),
-          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SpendBarSummary extends StatelessWidget {
+  final Money spend;
+  final int transactionCount;
+  final List<SpendBreakdownRow> mixRows;
+  final String periodLabel;
+
+  const _SpendBarSummary({
+    required this.spend,
+    required this.transactionCount,
+    required this.mixRows,
+    required this.periodLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
+      child: Column(
+        children: [
+          MoneyText(
+            spend,
+            confidence: Confidence.estimated,
+            style: BambooFonts.money(30, color: BambooInk.ink900),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            'spent in ${periodLabel.toLowerCase()} · $transactionCount ${transactionCount == 1 ? 'transaction' : 'transactions'}',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: AppSpace.md),
+          _SpendingMixStackedBar(rows: mixRows),
         ],
       ),
     );
@@ -555,12 +1738,23 @@ class _CompactDisclosure extends StatelessWidget {
 
 class _RewardsTab extends ConsumerWidget {
   final CardProduct product;
+  final String userCardId;
+  final UserCard? userCard;
   final bool embedded;
-  const _RewardsTab({required this.product, this.embedded = false});
+  const _RewardsTab({
+    required this.product,
+    required this.userCardId,
+    this.userCard,
+    this.embedded = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final reportState = ref.watch(
+      spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
+    );
+    final report = reportState.valueOrNull;
     final fuelCategory = categories.where((c) => c.slug == 'fuel').firstOrNull;
     String categoryName(String? id) {
       if (id == null) return 'All other spends';
@@ -593,18 +1787,48 @@ class _RewardsTab extends ConsumerWidget {
         product.fuelRule!.waiverPercent > 0) {
       grouped.putIfAbsent('Fuel', () => []);
     }
-    String rateFor(String label, List<RewardRule> group) {
-      final isFuel =
-          label == 'Fuel' ||
-          (fuelCategory != null && label == fuelCategory.name);
-      if (isFuel && product.fuelRule != null && group.length == 1) {
-        final waiver = _rate(product.fuelRule!.waiverPercent);
-        return group.first.rate == 0
-            ? '$waiver% waiver'
-            : '${_rate(group.first.rate)}% + $waiver% waiver';
+    bool matchesCategory(CardCategorySpendRow row, String label) {
+      final ids = grouped[label]!
+          .map((rule) => rule.categoryId)
+          .whereType<String>()
+          .toSet();
+      if (label == 'Fuel' && grouped[label]!.isEmpty) {
+        // The report can arrive before category metadata. Its Fuel label is
+        // still usable for this synthesized waiver row until the ID resolves.
+        if (fuelCategory == null) {
+          return row.categoryId == 'fuel' ||
+              row.categoryName.toLowerCase() == 'fuel';
+        }
+        ids.add(fuelCategory.id);
       }
-      return group.length == 1 ? _rateLabel(group.first, product) : 'Multiple';
+      return row.categoryId != null
+          ? ids.contains(row.categoryId)
+          : row.categoryName.toLowerCase() == label.toLowerCase();
     }
+
+    String? categorySpendFor(String label) {
+      if (report == null) return null;
+      return report.byCardCategory
+          .where(
+            (row) =>
+                row.cardId == userCardId &&
+                (label == 'All other spends'
+                    ? !grouped.keys
+                          .where((key) => key != 'All other spends')
+                          .any((key) => matchesCategory(row, key))
+                    : matchesCategory(row, label)),
+          )
+          .fold<Money>(Money.zero(), (sum, row) => sum + row.total)
+          .format(compact: true);
+    }
+
+    final spendUnavailable = report == null
+        ? reportState.isLoading
+              ? 'Loading this month’s spend'
+              : reportState.hasError
+              ? 'Spend unavailable'
+              : 'Sign in to see actual spend'
+        : null;
 
     CapRule? capFor(RewardRule rule) => uniqueCapRules(product.capRules)
         .where(
@@ -619,6 +1843,8 @@ class _RewardsTab extends ConsumerWidget {
       shrinkWrap: embedded,
       physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
+        if (userCard != null)
+          _CardPointsSummaryTile(userCard: userCard!, product: product),
         if (product.verifiedAt != null)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.md),
@@ -630,14 +1856,28 @@ class _RewardsTab extends ConsumerWidget {
         for (final entry in grouped.entries)
           _CompactDisclosure(
             title: entry.key,
-            subtitle: entry.value.isEmpty
-                ? 'Surcharge waiver'
-                : entry.value.length == 1
-                ? _ruleSummary(entry.value.first)
-                : '${entry.value.length} reward rules · expand for rails and limits',
-            trailing: entry.value.isEmpty
-                ? '${_rate(product.fuelRule!.waiverPercent)}% waiver'
-                : rateFor(entry.key, entry.value),
+            subtitle: <String>[
+              entry.value.isEmpty
+                  ? 'Surcharge waiver'
+                  : entry.value.length == 1
+                  ? _ruleSummary(entry.value.first)
+                  : '${entry.value.length} reward rules · expand for rails and limits',
+              if (entry.value.isEmpty)
+                '${_rate(product.fuelRule!.waiverPercent)}% waiver'
+              else if (entry.value.length == 1)
+                'Reward ${_rateLabel(entry.value.first, product)}',
+              if (entry.key == 'Fuel' &&
+                  product.fuelRule != null &&
+                  entry.value.isNotEmpty)
+                '${_rate(product.fuelRule!.waiverPercent)}% waiver',
+              if (spendUnavailable != null)
+                spendUnavailable
+              else
+                'Spent this month ${categorySpendFor(entry.key)}',
+            ].join(' · '),
+            trailing:
+                categorySpendFor(entry.key) ??
+                (reportState.isLoading ? '…' : '—'),
             details: entry.value.isEmpty
                 ? [_fuelDetail(product.fuelRule!)]
                 : [
@@ -1401,7 +2641,35 @@ class _BenefitsTab extends ConsumerWidget {
                     ? 'Lounge access · ${humanizeIdentifier(benefit.networkProgram, fallback: 'eligible program')}'
                     : benefit.description ?? 'Card benefit',
                 trailing: usage,
-                details: details,
+                details: [
+                  ...details,
+                  const SizedBox(height: AppSpace.sm),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                        label: Text(
+                          isLounge
+                              ? 'Log visit & view lounge info'
+                              : 'View full benefit terms',
+                          style: BambooFonts.ui(12.5, weight: FontWeight.w600),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => BenefitDetailScreen(
+                                userCard: userCard,
+                                product: product,
+                                benefit: benefit,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               );
             },
           ),
@@ -1412,17 +2680,19 @@ class _BenefitsTab extends ConsumerWidget {
 
 class _StatementTab extends StatelessWidget {
   final UserCard userCard;
+  final CardProduct? product;
   final DuePayment? duePayment;
   final bool embedded;
   const _StatementTab({
     required this.userCard,
+    this.product,
     this.duePayment,
     this.embedded = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (userCard.statementDay == null) {
+    if (userCard.statementDay == null && duePayment?.bill == null) {
       return const EmptyState(
         icon: Icons.receipt_long_outlined,
         title: 'Statement date not set',
@@ -1430,53 +2700,217 @@ class _StatementTab extends StatelessWidget {
             'Add a statement day from Edit Card to see your billing cycle and interest-free float here.',
       );
     }
-    final float = billingCycleFloat(
-      statementDay: userCard.statementDay!,
-      gracePeriodDays: _assumedGracePeriodDays,
+    final float = userCard.statementDay != null
+        ? billingCycleFloat(
+            statementDay: userCard.statementDay!,
+            gracePeriodDays: _assumedGracePeriodDays,
+          )
+        : null;
+    final bill = duePayment?.bill;
+    final autopayUrl = officialAutopayUrl(
+      issuerName: product?.issuerName,
+      cardName: product?.name ?? userCard.cardName,
     );
+
     return ListView(
       padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(AppSpace.lg),
       shrinkWrap: embedded,
       physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
-        Container(
-          decoration: BoxDecoration(
-            color: BambooInk.glassFillOnPaper,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: BambooInk.hairlineOnPaper),
-          ),
-          padding: const EdgeInsets.all(AppSpace.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Statement cuts on day ${userCard.statementDay}',
-                style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-              ),
-              const SizedBox(height: AppSpace.sm),
-              Text(
-                'Next statement in ${float.daysUntilStatement} days',
-                style: BambooFonts.ui(13.5, color: BambooInk.ink900),
-              ),
-              const SizedBox(height: AppSpace.xs),
-              Text(
-                'Spending today gets up to ${float.totalInterestFreeDays} interest-free days '
-                '(assumes a $_assumedGracePeriodDays-day grace period to the due date).',
-                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-              ),
-              if (userCard.dueDay != null) ...[
+        if (bill != null) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: AppSpace.md),
+            decoration: BoxDecoration(
+              color: BambooInk.glassFillOnPaper,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              border: Border.all(color: BambooInk.hairlineOnPaper),
+            ),
+            padding: const EdgeInsets.all(AppSpace.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Active statement bill',
+                        style: BambooFonts.heading(15, color: BambooInk.ink900),
+                      ),
+                    ),
+                    if (bill.isPaid)
+                      const StatusPill(
+                        label: 'PAID IN FULL',
+                        foreground: BambooInk.onSlate,
+                        background: BambooInk.jade,
+                        icon: Icons.check_rounded,
+                      )
+                    else
+                      StatusPill(
+                        label: duePayment != null
+                            ? 'DUE IN ${duePayment!.daysUntilDue} DAYS'
+                            : 'PAYMENT DUE',
+                        foreground: BambooInk.onSlate,
+                        background: (duePayment?.daysUntilDue ?? 10) <= 3
+                            ? BambooInk.clay
+                            : BambooInk.amber,
+                        icon: Icons.schedule_rounded,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppSpace.md),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Total amount due',
+                          style: BambooFonts.ui(12, color: BambooInk.ink500),
+                        ),
+                        const SizedBox(height: 2),
+                        MoneyText(
+                          bill.amountDue ?? const Money.zero(),
+                          confidence: Confidence.confirmed,
+                          style: BambooFonts.heading(
+                            18,
+                            color: BambooInk.ink900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (bill.minimumDue != null && !bill.minimumDue!.isZero)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Minimum due',
+                            style: BambooFonts.ui(12, color: BambooInk.ink500),
+                          ),
+                          const SizedBox(height: 2),
+                          MoneyText(
+                            bill.minimumDue!,
+                            confidence: Confidence.confirmed,
+                            style: BambooFonts.ui(
+                              14,
+                              weight: FontWeight.w600,
+                              color: BambooInk.ink700,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
                 const SizedBox(height: AppSpace.sm),
                 Text(
-                  'Payment due on day ${userCard.dueDay}',
-                  style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                  'Statement cut on ${bill.statementDate.day} ${_monthName(bill.statementDate.month)} · Due on ${duePayment?.dueOn.day ?? userCard.dueDay} ${_monthName(duePayment?.dueOn.month ?? DateTime.now().month)}',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
                 ),
               ],
-            ],
+            ),
           ),
-        ),
+        ],
+        if (float != null)
+          Container(
+            decoration: BoxDecoration(
+              color: BambooInk.glassFillOnPaper,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              border: Border.all(color: BambooInk.hairlineOnPaper),
+            ),
+            padding: const EdgeInsets.all(AppSpace.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Statement cuts on day ${userCard.statementDay}',
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
+                const SizedBox(height: AppSpace.sm),
+                Text(
+                  'Next statement in ${float.daysUntilStatement} days',
+                  style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                ),
+                const SizedBox(height: AppSpace.xs),
+                Text(
+                  'Spending today gets up to ${float.totalInterestFreeDays} interest-free days '
+                  '(assumes a $_assumedGracePeriodDays-day grace period to the due date).',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+                if (userCard.dueDay != null) ...[
+                  const SizedBox(height: AppSpace.sm),
+                  Text(
+                    'Payment due on day ${userCard.dueDay}',
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        if (autopayUrl != null) ...[
+          const SizedBox(height: AppSpace.md),
+          Container(
+            padding: const EdgeInsets.all(AppSpace.md),
+            decoration: BoxDecoration(
+              color: BambooInk.paperMuted,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: BambooInk.hairlineOnPaper),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.account_balance_rounded,
+                  size: 20,
+                  color: BambooInk.ink700,
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Issuer payments & autopay',
+                        style: BambooFonts.ui(
+                          13,
+                          weight: FontWeight.w600,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                      Text(
+                        'Set up or verify autopay on official bank portal',
+                        style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => launchUrl(
+                    Uri.parse(autopayUrl),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                  child: const Text('Open portal'),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
+
+  static String _monthName(int month) => const [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][month - 1];
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

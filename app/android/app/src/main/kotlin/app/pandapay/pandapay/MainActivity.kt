@@ -1,13 +1,18 @@
 package app.pandapay.pandapay
 
+import android.app.Notification
+import android.app.NotificationManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import com.android.installreferrer.api.InstallReferrerClient
 import com.android.installreferrer.api.InstallReferrerStateListener
 import com.android.installreferrer.api.InstallReferrerClient.InstallReferrerResponse
@@ -38,6 +43,10 @@ class MainActivity : FlutterFragmentActivity() {
         const val PHONE_NUMBER_HINT_CHANNEL = "app.pandapay/phone_number_hint"
         const val DEVICE_INFO_CHANNEL = "app.pandapay/device_info"
         const val INSTALL_REFERRER_CHANNEL = "app.pandapay/install_referrer"
+        const val LOCATION_NOTIFICATION_CHANNEL = "app.pandapay/location_notification"
+        // Pinned geolocator_android 4.6.2 posts its foreground service here.
+        const val GEOLOCATOR_NOTIFICATION_ID = 75415
+        const val GEOLOCATOR_CHANNEL_ID = "geolocator_channel_01"
         const val INSTALL_REFERRER_PREFS = "pandapay_install_referrer"
         const val INSTALL_REFERRER_CHECKED = "checked"
         const val INVITATION_CODE_KEY = "invitation_code"
@@ -118,6 +127,23 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            LOCATION_NOTIFICATION_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "applyBrandIcons" -> {
+                    val smallIconName = call.argument<String>("smallIcon")
+                    val largeIconName = call.argument<String>("largeIcon")
+                    if (smallIconName == null || largeIconName == null) {
+                        result.success(null)
+                    } else {
+                        brandLocationNotification(smallIconName, largeIconName, result)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getInstalledUpiApps" -> result.success(installedUpiApps())
@@ -133,6 +159,59 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun brandLocationNotification(
+        smallIconName: String,
+        largeIconName: String,
+        result: MethodChannel.Result,
+    ) {
+        val smallIconId = resources.getIdentifier(smallIconName, "drawable", packageName)
+        val largeIconId = resources.getIdentifier(largeIconName, "drawable", packageName)
+        if (smallIconId == 0 || largeIconId == 0) {
+            android.util.Log.w("PandaPay", "Notification branding resource is missing")
+            result.success(null)
+            return
+        }
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val handler = Handler(Looper.getMainLooper())
+
+        fun update(attempt: Int) {
+            val active = try {
+                manager.activeNotifications.firstOrNull {
+                    it.id == GEOLOCATOR_NOTIFICATION_ID &&
+                        (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                            it.notification.channelId == GEOLOCATOR_CHANNEL_ID)
+                }
+            } catch (error: RuntimeException) {
+                android.util.Log.w("PandaPay", "Could not read location notification", error)
+                result.success(null)
+                return
+            }
+            if (active == null) {
+                if (attempt < 100) {
+                    handler.postDelayed({ update(attempt + 1) }, 100)
+                } else {
+                    result.success(null)
+                }
+                return
+            }
+
+            try {
+                // Keep Geolocator's foreground service notification, channel,
+                // content intent, and ongoing flags; change only its icons.
+                val notification = Notification.Builder.recoverBuilder(this, active.notification)
+                    .setSmallIcon(smallIconId)
+                    .setLargeIcon(Icon.createWithResource(this, largeIconId))
+                    .build()
+                manager.notify(active.tag, active.id, notification)
+            } catch (error: RuntimeException) {
+                android.util.Log.w("PandaPay", "Could not brand location notification", error)
+            }
+            result.success(null)
+        }
+
+        update(0)
     }
 
     /**

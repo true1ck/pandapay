@@ -94,3 +94,6 @@ app/.tmp-dart-appdata/
 
 # Local database backups
 backups/
+
+app/scratch/
+scratch/

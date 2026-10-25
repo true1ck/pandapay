@@ -117,3 +117,92 @@ SpendingVisual spendingInstrumentVisual(String instrument) {
     ),
   };
 }
+
+class SpendingVisualBadge extends StatelessWidget {
+  final SpendingVisual visual;
+  final double size;
+
+  const SpendingVisualBadge({
+    super.key,
+    required this.visual,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: visual.surface,
+      borderRadius: BorderRadius.circular(size * 0.32),
+    ),
+    alignment: Alignment.center,
+    child: Icon(visual.icon, size: size * 0.46, color: visual.accent),
+  );
+}
+
+/// A shared, column-aligned header for expandable spending breakdown rows.
+///
+/// The amount gets a stable trailing rail instead of participating in the
+/// row's flex calculation. This keeps differently sized figures (and their
+/// confidence icons) on the same right edge across adjacent cards.
+class SpendingBreakdownHeader extends StatelessWidget {
+  final Widget label;
+  final String? percentage;
+  final Widget amount;
+  final Key? percentageKey;
+  final Key? amountKey;
+  final double maxAmountWidth;
+
+  const SpendingBreakdownHeader({
+    super.key,
+    required this.label,
+    required this.amount,
+    this.percentage,
+    this.percentageKey,
+    this.amountKey,
+    this.maxAmountWidth = 112,
+  });
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      // Retain useful label space on compact phones while keeping every
+      // row under the same parent constraints on an identical rail.
+      final amountWidth = (constraints.maxWidth * 0.42)
+          .clamp(72.0, maxAmountWidth)
+          .toDouble();
+      return Row(
+        children: [
+          Expanded(child: label),
+          const SizedBox(width: AppSpace.sm),
+          if (percentage != null) ...[
+            SizedBox(
+              key: percentageKey,
+              width: 32,
+              child: Text(
+                percentage!,
+                textAlign: TextAlign.end,
+                maxLines: 1,
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
+            ),
+            const SizedBox(width: AppSpace.sm),
+          ],
+          SizedBox(
+            key: amountKey,
+            width: amountWidth,
+            child: Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerEnd,
+                child: amount,
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}

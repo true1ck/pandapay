@@ -536,6 +536,60 @@ class AdminApi {
   }
 
   /// AD-4.2/AD-5: the unified policy-change alert queue.
+  /// Support tickets and user feedback from global app settings and wallet.
+  Future<List<Map<String, dynamic>>> fetchSupportTickets({
+    String? state,
+    String? kind,
+  }) async {
+    final params = <String, String>{};
+    if (state != null) params['state'] = state;
+    if (kind != null) params['kind'] = kind;
+    final uri = Uri.parse('$apiBaseUrl/admin/support-tickets').replace(
+      queryParameters: params.isNotEmpty ? params : null,
+    );
+    final response = await _client.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'GET /admin/support-tickets failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['supportTickets'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> resolveSupportTicket(
+    String ticketId, {
+    String? responseText,
+    String? reason,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/support-tickets/$ticketId/resolve'),
+      headers: _headers,
+      body: jsonEncode({'response': ?responseText, 'reason': ?reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'POST /admin/support-tickets/$ticketId/resolve failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
+  Future<void> dismissSupportTicket(
+    String ticketId, {
+    String? reason,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/support-tickets/$ticketId/dismiss'),
+      headers: _headers,
+      body: jsonEncode({'reason': ?reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'POST /admin/support-tickets/$ticketId/dismiss failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
   Future<List<Map<String, dynamic>>> fetchAlerts() async {
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/admin/alerts'),

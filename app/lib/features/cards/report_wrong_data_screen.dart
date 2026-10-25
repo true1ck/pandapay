@@ -117,7 +117,7 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
     });
     try {
       await ref
-          .read(cardFeedbackRepositoryProvider)!
+          .read(cardFeedbackRepositoryProvider)
           .reportWrongData(
             cardProductId: widget.cardProductId,
             fieldPath: fieldPath,

@@ -59,4 +59,58 @@ void main() {
 
     expect(find.text('card detail uc1 tab=statement'), findsOneWidget);
   });
+
+  testWidgets('renders card rows when cards are present', (
+    tester,
+  ) async {
+    final card = UserCard(
+      id: 'uc1',
+      cardProductId: 'p1',
+      cardName: 'Test Card',
+      isDefault: false,
+      statementDay: 11,
+      dueDay: 16,
+    );
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Test Card',
+      network: CardNetwork.visa,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ownedCardsWithProductProvider.overrideWithValue(
+            AsyncData([(card, product)]),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: DueDateCalendarScreen()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Test Card'), findsOneWidget);
+  });
+
+  testWidgets('shows the no-cards empty state when no cards are owned', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ownedCardsWithProductProvider.overrideWithValue(
+            const AsyncData([]),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: DueDateCalendarScreen()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No cards yet'), findsOneWidget);
+  });
 }

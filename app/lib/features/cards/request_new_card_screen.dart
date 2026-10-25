@@ -47,7 +47,7 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
     });
     try {
       await ref
-          .read(cardFeedbackRepositoryProvider)!
+          .read(cardFeedbackRepositoryProvider)
           .requestNewCard(
             issuerName: _issuerController.text.trim(),
             productName: _productController.text.trim(),

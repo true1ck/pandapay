@@ -23,6 +23,8 @@ test('real database: app_user RLS, worker separation, advisory locks, and deleti
     // Always run inside a transaction that is rolled back at the end
     await client.query('BEGIN');
     try {
+      const operatorRole = await client.query('SELECT current_user AS role');
+      assert.equal(operatorRole.rows[0].role, 'postgres');
       const user1 = crypto.randomUUID();
       const user2 = crypto.randomUUID();
       const hmacKey = 'test_learning_secret_key_32_characters_long';

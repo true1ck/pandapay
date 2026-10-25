@@ -16,7 +16,7 @@ CardProduct _card(String id) =>
 
 void main() {
   testWidgets(
-    'home spending card opens Spending from whitespace and keeps donut selection',
+    'home spending card opens Spending from whitespace and donut center',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(360, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -62,9 +62,10 @@ void main() {
       );
 
       final router = GoRouter(
+        initialLocation: AppRoute.home,
         routes: [
           GoRoute(
-            path: '/',
+            path: AppRoute.home,
             builder: (context, state) => const Scaffold(body: HomeScreen()),
           ),
           GoRoute(
@@ -122,10 +123,14 @@ void main() {
       await tester.tap(find.byKey(const Key('spending_donut_center')));
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const Key('spending_donut_selected_detail')),
-        findsNothing,
+        find.text('Spending tab opened'),
+        findsOneWidget,
       );
 
+      // Return to Home so the card-level tap can be verified independently
+      // from the donut's center navigation.
+      router.go(AppRoute.home);
+      await tester.pumpAndSettle();
       final cardOrigin = tester.getTopLeft(
         find.byKey(const Key('home_spend_summary')),
       );

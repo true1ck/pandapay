@@ -39,6 +39,20 @@ CREATE TABLE IF NOT EXISTS local_needs_review (
   namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL,
   PRIMARY KEY(namespace,id)
 );
+CREATE TABLE IF NOT EXISTS local_commitments (
+  namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL,
+  PRIMARY KEY(namespace, id)
+);
+CREATE TABLE IF NOT EXISTS local_past_bill_receipts (
+  namespace TEXT NOT NULL,
+  id TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(namespace, id)
+);
+CREATE INDEX IF NOT EXISTS idx_local_past_bill_receipts_date
+  ON local_past_bill_receipts(namespace, updated_at DESC);
 CREATE TABLE IF NOT EXISTS cache_refresh_requests (key TEXT PRIMARY KEY);
 
 CREATE TABLE IF NOT EXISTS transaction_outbox_entries (
@@ -226,6 +240,50 @@ CREATE TABLE IF NOT EXISTS profile_name_cache (
   namespace TEXT PRIMARY KEY,
   display_name TEXT NOT NULL
 );
+
+-- Tier-1 auto-resolution receipt. A message the AI engine resolved without a
+-- user tap is removed from local_needs_review, so without this table the
+-- decision would be invisible and unreversible. One row per resolved source,
+-- scoped by namespace, ordered by the resolution time for the Auto-Resolved
+-- tab. amount_paise follows the same integer-money rule as every other table.
+CREATE TABLE IF NOT EXISTS local_auto_resolved_history (
+  id TEXT PRIMARY KEY,
+  namespace TEXT NOT NULL,
+  source_key TEXT NOT NULL,
+  sender TEXT NOT NULL,
+  resolved_kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  amount_paise INTEGER NOT NULL,
+  category_slug TEXT,
+  due_date TEXT,
+  occurred_at TEXT NOT NULL,
+  instrument TEXT,
+  account_last4 TEXT,
+  confidence REAL NOT NULL,
+  resolved_by TEXT NOT NULL DEFAULT 'ai',
+  auto_resolved_at INTEGER NOT NULL,
+  is_user_modified INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_auto_resolved_time
+  ON local_auto_resolved_history (namespace, auto_resolved_at DESC);
+
+-- Closed-loop learning: a category the user corrected once is applied to the
+-- next message from the same merchant without another AI round trip. Local
+-- first; `synced` only records whether the server has since learned the rule
+-- (the existing POST /merchant-category-rules needs a server transaction id,
+-- so local capture is authoritative until one exists).
+CREATE TABLE IF NOT EXISTS user_merchant_category_rules (
+  namespace TEXT NOT NULL,
+  pattern TEXT NOT NULL,
+  category_slug TEXT NOT NULL,
+  confidence REAL NOT NULL DEFAULT 1.0,
+  source TEXT NOT NULL DEFAULT 'user',
+  updated_at INTEGER NOT NULL,
+  synced INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(namespace, pattern)
+);
+CREATE INDEX IF NOT EXISTS idx_user_merchant_rules_namespace
+  ON user_merchant_category_rules(namespace);
 ''';
 
 class AppDatabase {
@@ -237,7 +295,7 @@ class AppDatabase {
   AppDatabase._(this.db, {this.filePath}) {
     // SMS delivery opens another connection in a background isolate. Let
     // SQLite serialize commits rather than losing a message to SQLITE_BUSY.
-    db.execute('PRAGMA busy_timeout = 5000');
+    db.execute('PRAGMA busy_timeout = 30000');
     db.execute('PRAGMA journal_mode = WAL');
     db.execute(_schema);
     _ensureUserCategoriesSchema();

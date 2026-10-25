@@ -19,7 +19,7 @@ AppDatabase _db() {
       occurred_at INTEGER, amount_paise INTEGER,
       PRIMARY KEY(namespace, entity, id)
     );
-    CREATE TABLE local_commitments (
+    CREATE TABLE IF NOT EXISTS local_commitments (
       namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL,
       PRIMARY KEY(namespace, id)
     );
@@ -31,28 +31,54 @@ void _seed(AppDatabase db, String sourceLocalPath) {
   db.db.execute(
     'INSERT INTO financial_entities(namespace,entity,id,payload,observed_at,pending) '
     'VALUES (?, ?, ?, ?, ?, ?)',
-    [namespace, 'transactions', 'txn-1',
-     jsonEncode({'note': 'Swiggy', 'amount_inr': '249.00', 'occurred_at': '2023-11-01T10:00:00.000Z'}),
-     1700000000000, 0],
+    [
+      namespace,
+      'transactions',
+      'txn-1',
+      jsonEncode({
+        'note': 'Swiggy',
+        'amount_inr': '249.00',
+        'occurred_at': '2023-11-01T10:00:00.000Z',
+      }),
+      1700000000000,
+      0,
+    ],
   );
   db.db.execute(
     'INSERT INTO financial_entities(namespace,entity,id,payload,observed_at,pending) '
     'VALUES (?, ?, ?, ?, ?, ?)',
-    [namespace, 'cards', 'card-1', jsonEncode({'bank': 'HDFC'}), 1700000000000, 0],
+    [
+      namespace,
+      'cards',
+      'card-1',
+      jsonEncode({'bank': 'HDFC'}),
+      1700000000000,
+      0,
+    ],
   );
   db.db.execute(
     'INSERT INTO local_commitments(namespace,id,payload) VALUES (?, ?, ?)',
-    [namespace, 'cm-1', jsonEncode({'card': 'card-1'})],
+    [
+      namespace,
+      'cm-1',
+      jsonEncode({'card': 'card-1'}),
+    ],
   );
   db.db.execute(
     'INSERT INTO transaction_attachments(id, transaction_id, file_name, local_path, mime_type, '
     'created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    ['att-1', 'txn-1', 'receipt.png', '$sourceLocalPath/att-1.png', 'image/png', 1700000000000],
+    [
+      'att-1',
+      'txn-1',
+      'receipt.png',
+      '$sourceLocalPath/att-1.png',
+      'image/png',
+      1700000000000,
+    ],
   );
 }
 
-String _sha256(File file) =>
-    sha256.convert(file.readAsBytesSync()).toString();
+String _sha256(File file) => sha256.convert(file.readAsBytesSync()).toString();
 
 void main() {
   late Directory stagingA;
@@ -68,7 +94,12 @@ void main() {
   });
 
   tearDown(() async {
-    for (final dir in [stagingA, stagingB, attachmentsDir, attachmentsSourceDir]) {
+    for (final dir in [
+      stagingA,
+      stagingB,
+      attachmentsDir,
+      attachmentsSourceDir,
+    ]) {
       for (var attempt = 0; attempt < 5; attempt++) {
         try {
           if (await dir.exists()) await dir.delete(recursive: true);
@@ -88,13 +119,21 @@ void main() {
       final sourceBytes = File('${attachmentsSourceDir.path}/att-1.png')
         ..writeAsBytesSync(List<int>.generate(64, (i) => i));
 
-      final source = LocalPortableSnapshotSource(appDb: sourceDb, namespace: namespace);
-      final sections = await source.capturePortableSections(stagingDirectory: stagingA);
+      final source = LocalPortableSnapshotSource(
+        appDb: sourceDb,
+        namespace: namespace,
+      );
+      final sections = await source.capturePortableSections(
+        stagingDirectory: stagingA,
+      );
       final attachments = await source.listPortableAttachments();
       expect(attachments.single.id, 'att-1');
 
       final collector = PortableAttachmentCollector();
-      final collected = await collector.collect(sources: attachments, stagingDirectory: stagingA);
+      final collected = await collector.collect(
+        sources: attachments,
+        stagingDirectory: stagingA,
+      );
       final attachmentId = collected.single.metadata.id;
       expect(collected.single.metadata.sha256, _sha256(sourceBytes));
 
@@ -159,35 +198,51 @@ void main() {
 
       final finalizer = PortableLocalRestoreFinalizer(
         writer: writer,
-        target: LocalPortableRestoreTargetInspector(appDb: targetDb, namespace: namespace),
+        target: LocalPortableRestoreTargetInspector(
+          appDb: targetDb,
+          namespace: namespace,
+        ),
       );
       final result = await finalizer.finalize(
         staged: staged,
-        serverCommit: const PortableRestoreServerCommit(serverRevision: 'e2e-rev', committed: true),
+        serverCommit: const PortableRestoreServerCommit(
+          serverRevision: 'e2e-rev',
+          committed: true,
+        ),
       );
       expect(result.sectionRows, greaterThan(0));
       expect(result.attachments, 1);
       await staged.cleanup();
 
       // The restored device recaptures an identical snapshot.
-      final restoredSource = LocalPortableSnapshotSource(appDb: targetDb, namespace: namespace);
-      final recaptured = await restoredSource.capturePortableSections(stagingDirectory: stagingB);
+      final restoredSource = LocalPortableSnapshotSource(
+        appDb: targetDb,
+        namespace: namespace,
+      );
+      final recaptured = await restoredSource.capturePortableSections(
+        stagingDirectory: stagingB,
+      );
       expect(recaptured.keys, sections.keys);
       for (final name in sections.keys) {
-      expect(
-        sections[name]!.readAsBytesSync(),
-        recaptured[name]!.readAsBytesSync(),
-        reason: 'section $name must survive the archive round trip',
-      );
-    }
+        expect(
+          sections[name]!.readAsBytesSync(),
+          recaptured[name]!.readAsBytesSync(),
+          reason: 'section $name must survive the archive round trip',
+        );
+      }
 
-    final sourceFile = File('${attachmentsSourceDir.path}/att-1.png');
-    final restoredAttachment = File('${attachmentsDir.path}/$attachmentId');
-    expect(await restoredAttachment.exists(), isTrue);
-    expect(await restoredAttachment.readAsBytes(), sourceFile.readAsBytesSync());
+      final sourceFile = File('${attachmentsSourceDir.path}/att-1.png');
+      final restoredAttachment = File('${attachmentsDir.path}/$attachmentId');
+      expect(await restoredAttachment.exists(), isTrue);
+      expect(
+        await restoredAttachment.readAsBytes(),
+        sourceFile.readAsBytesSync(),
+      );
 
       final restoredMeta = targetDb.db
-          .select('SELECT transaction_id, file_name, local_path FROM transaction_attachments')
+          .select(
+            'SELECT transaction_id, file_name, local_path FROM transaction_attachments',
+          )
           .single;
       expect(restoredMeta['transaction_id'], 'txn-1');
       expect(restoredMeta['file_name'], 'receipt.png');
@@ -198,7 +253,10 @@ void main() {
 
   test('populated target refuses staging', () async {
     final targetDb = _db();
-    final writer = LocalPortableRestoreTargetInspector(appDb: targetDb, namespace: namespace);
+    final writer = LocalPortableRestoreTargetInspector(
+      appDb: targetDb,
+      namespace: namespace,
+    );
     final state = await writer.inspectFreshNamespace();
     expect(state.isFresh, isTrue);
 

@@ -8,7 +8,9 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../cards/card_summary.dart';
+import 'billing_float_screen.dart';
 import 'caps_screen.dart';
+import 'credit_utilization_screen.dart';
 import 'fee_waivers_screen.dart';
 import 'grouped_insight_screen.dart';
 import 'lounge_access_screen.dart';
@@ -18,42 +20,56 @@ bool _isLounge(CardBenefit b) =>
     b.kind == BenefitKind.loungeDomestic ||
     b.kind == BenefitKind.loungeInternational;
 
-class LimitsAndPerksScreen extends ConsumerWidget {
+/// Limits & perks is a three-tab grouped insight: the card-by-card perks view
+/// (lounge summary plus each card's caps, milestones, fee waivers and lounge
+/// rows) alongside the two per-card views that answer the same question —
+/// how much breathing room does this wallet give me, and for how long.
+class LimitsAndPerksScreen extends StatelessWidget {
   const LimitsAndPerksScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const GroupedInsightScreen(
+      title: 'Limits & perks',
+      tabs: [
+        (label: 'Perks', body: _PerksTab()),
+        (label: 'Interest-free days', body: BillingFloatScreen()),
+        (label: 'Utilization', body: CreditUtilizationScreen()),
+      ],
+    );
+  }
+}
+
+class _PerksTab extends ConsumerWidget {
+  const _PerksTab();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cards = ref.watch(ownedCardsWithProductProvider);
-    return Scaffold(
-      backgroundColor: BambooInk.paper,
-      appBar: AppBar(title: const Text('Limits & perks')),
-      body: AppBackground(
-        child: cards.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => ErrorState(
-            message: userFacingErrorMessage(error),
-            onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
-          ),
-          data: (owned) => owned.isEmpty
-              ? const EmptyState(
-                  icon: Icons.credit_card_rounded,
-                  title: 'Your card benefits, together',
-                  message: 'Add a card to track its limits and perks.',
-                )
-              : ListView(
-                  padding: const EdgeInsets.all(AppSpace.lg),
-                  children: [
-                    if (owned.any((p) => p.$2.benefits.any(_isLounge))) ...[
-                      _LoungeOverview(owned: owned),
-                      const SizedBox(height: AppSpace.lg),
-                    ],
-                    const CardCapabilitySubheading('Your cards'),
-                    for (final (card, product) in owned)
-                      _CardPerks(card: card, product: product),
-                  ],
-                ),
-        ),
+    return cards.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => ErrorState(
+        message: userFacingErrorMessage(error),
+        onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
       ),
+      data: (owned) => owned.isEmpty
+          ? const EmptyState(
+              icon: Icons.credit_card_rounded,
+              title: 'Your card benefits, together',
+              message: 'Add a card to track its limits and perks.',
+            )
+          : ListView(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              children: [
+                if (owned.any((p) => p.$2.benefits.any(_isLounge))) ...[
+                  _LoungeOverview(owned: owned),
+                  const SizedBox(height: AppSpace.lg),
+                ],
+                const CardCapabilitySubheading('Your cards'),
+                for (final (card, product) in owned)
+                  _CardPerks(card: card, product: product),
+              ],
+            ),
     );
   }
 }

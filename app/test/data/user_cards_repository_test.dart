@@ -11,6 +11,74 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 /// (previously computed server-side for cap/milestone period math but never
 /// returned to a client) — Billing Cycle Float needs both.
 void main() {
+  group('SMS dismissal privacy', () {
+    test('does not persist or transmit a credential-bearing message', () async {
+      var requestCount = 0;
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'session-token',
+        client: MockClient((_) async {
+          requestCount += 1;
+          return http.Response('{}', 200);
+        }),
+      );
+
+      final dismissed = await repository.dismissSms(
+        sourceKey: List.filled(64, 'a').join(),
+        sender: 'HDFCBK',
+        sampleBody: 'Your OTP is 123456. Do not share it with anyone.',
+        reason: 'user_dismissed',
+      );
+
+      expect(dismissed, isTrue);
+      expect(requestCount, 0);
+      expect(repository.dismissalRetryQueue, isEmpty);
+    });
+  });
+
+  group('SMS history reconciliation version', () {
+    test(
+      'old API responses remain retryable after the v2 app update',
+      () async {
+        for (final response in [
+          http.Response('{}', 404),
+          http.Response(jsonEncode({'duplicateSuppressed': 1}), 200),
+        ]) {
+          final repository = UserCardsRepository(
+            apiBaseUrl: 'https://api.test',
+            accessToken: 'session-token',
+            client: MockClient((_) async => response),
+          );
+          final repaired = await repository.reconcileSmsHistory();
+          expect(repaired.reconciliationVersion, 0);
+        }
+      },
+    );
+
+    test('v2 response reports candidates for review refresh', () async {
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'session-token',
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'reconciliationVersion': 2,
+              'crossSourceCandidatesCreated': 1,
+              'classificationReclassified': 2,
+              'remappedTransactions': 3,
+            }),
+            200,
+          ),
+        ),
+      );
+      final repaired = await repository.reconcileSmsHistory();
+      expect(repaired.reconciliationVersion, 2);
+      expect(repaired.crossSourceCandidatesCreated, 1);
+      expect(repaired.classificationReclassified, 2);
+      expect(repaired.remappedTransactions, 3);
+    });
+  });
+
   group('TransactionEntry category labels', () {
     test('does not invent an Other subcategory when none was supplied', () {
       final transaction = TransactionEntry.fromJson({

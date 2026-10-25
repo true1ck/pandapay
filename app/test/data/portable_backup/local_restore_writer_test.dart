@@ -18,7 +18,7 @@ AppDatabase freshTargetDatabase() {
       occurred_at INTEGER, amount_paise INTEGER,
       PRIMARY KEY(namespace, entity, id)
     );
-    CREATE TABLE local_commitments (
+    CREATE TABLE IF NOT EXISTS local_commitments (
       namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL,
       PRIMARY KEY(namespace, id)
     );
@@ -36,18 +36,21 @@ AppDatabase seededDatabase() {
       occurred_at INTEGER, amount_paise INTEGER,
       PRIMARY KEY(namespace, entity, id)
     );
-    CREATE TABLE local_commitments (
+    CREATE TABLE IF NOT EXISTS local_commitments (
       namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL,
       PRIMARY KEY(namespace, id)
     );
   ''');
-  void entity(String entity, String id, Map<String, Object?> payload,
-          {int pending = 0}) =>
-      db.db.execute(
-        'INSERT INTO financial_entities(namespace,entity,id,payload,observed_at,pending) '
-        'VALUES (?, ?, ?, ?, ?, ?)',
-        [namespace, entity, id, jsonEncode(payload), 1700000000000, pending],
-      );
+  void entity(
+    String entity,
+    String id,
+    Map<String, Object?> payload, {
+    int pending = 0,
+  }) => db.db.execute(
+    'INSERT INTO financial_entities(namespace,entity,id,payload,observed_at,pending) '
+    'VALUES (?, ?, ?, ?, ?, ?)',
+    [namespace, entity, id, jsonEncode(payload), 1700000000000, pending],
+  );
   entity('transactions', 'txn-1', {
     'note': 'Swiggy',
     'amount_inr': '249.00',
@@ -58,12 +61,29 @@ AppDatabase seededDatabase() {
   db.db.execute(
     'INSERT INTO local_user_cards(id, card_product_id, nickname, last4, is_default, '
     'is_archived, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    ['luc-1', 'card_product-1', 'Daily driver', '5678', 1, 0, 1.5, 1700000000000],
+    [
+      'luc-1',
+      'card_product-1',
+      'Daily driver',
+      '5678',
+      1,
+      0,
+      1.5,
+      1700000000000,
+    ],
   );
   db.db.execute(
     'INSERT INTO user_categories(namespace,id,name,slug,match_terms_json,created_at,updated_at) '
     'VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [namespace, 'lc-1', 'Groceries', 'groceries', '["big","basket"]', 1700000000000, 1700000000000],
+    [
+      namespace,
+      'lc-1',
+      'Groceries',
+      'groceries',
+      '["big","basket"]',
+      1700000000000,
+      1700000000000,
+    ],
   );
   db.db.execute(
     'INSERT INTO transaction_tags(namespace,id,name,normalized_name,updated_at) '
@@ -77,23 +97,40 @@ AppDatabase seededDatabase() {
   );
   db.db.execute(
     'INSERT INTO local_commitments(namespace,id,payload) VALUES (?, ?, ?)',
-    [namespace, 'cm-1', jsonEncode({'card': 'card-1', 'due_day': 5})],
+    [
+      namespace,
+      'cm-1',
+      jsonEncode({'card': 'card-1', 'due_day': 5}),
+    ],
   );
   db.db.execute(
     'INSERT INTO local_needs_review(namespace,id,payload) VALUES (?, ?, ?)',
-    [namespace, 'nr-1', jsonEncode({'reason': 'amount_mismatch'})],
+    [
+      namespace,
+      'nr-1',
+      jsonEncode({'reason': 'amount_mismatch'}),
+    ],
   );
   db.db.execute(
     'INSERT INTO transaction_attachments(id, transaction_id, file_name, local_path, mime_type, '
     'created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    ['att-1', 'txn-1', 'receipt.png', 'docs/att-1.png', 'image/png', 1700000000000],
+    [
+      'att-1',
+      'txn-1',
+      'receipt.png',
+      'docs/att-1.png',
+      'image/png',
+      1700000000000,
+    ],
   );
   return db;
 }
 
 Future<Map<String, File>> runCapture(AppDatabase db, Directory staging) =>
-    LocalPortableSnapshotSource(appDb: db, namespace: namespace)
-        .capturePortableSections(stagingDirectory: staging);
+    LocalPortableSnapshotSource(
+      appDb: db,
+      namespace: namespace,
+    ).capturePortableSections(stagingDirectory: staging);
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -139,7 +176,10 @@ void main() {
           .split('\n')
           .map((line) => jsonDecode(line) as Map<String, dynamic>);
       if (entry.key.contains('sms')) {
-        await writer.insertHistoricalSmsRows(entry.key, Stream.fromIterable(rows));
+        await writer.insertHistoricalSmsRows(
+          entry.key,
+          Stream.fromIterable(rows),
+        );
       } else {
         await writer.insertPortableRows(entry.key, Stream.fromIterable(rows));
       }
@@ -184,7 +224,10 @@ void main() {
     ).single;
     expect(restored['id'], 'txn-1');
     expect(restored['amount_paise'], 24900);
-    expect(restored['occurred_at'], DateTime.parse('2023-11-01T10:00:00.000Z').millisecondsSinceEpoch);
+    expect(
+      restored['occurred_at'],
+      DateTime.parse('2023-11-01T10:00:00.000Z').millisecondsSinceEpoch,
+    );
   });
 
   test('restore wipes the target namespace before replay', () async {
@@ -202,7 +245,9 @@ void main() {
     await writer.beginFreshNamespace();
     await writer.commit();
     expect(
-      targetDb.db.select('SELECT COUNT(*) AS c FROM transaction_attachments').first['c'],
+      targetDb.db
+          .select('SELECT COUNT(*) AS c FROM transaction_attachments')
+          .first['c'],
       0,
     );
   });
@@ -225,7 +270,9 @@ void main() {
     await writer.insertPortableRows('transactions', Stream.fromIterable(rows));
     await writer.rollback();
     expect(
-      targetDb.db.select('SELECT COUNT(*) AS c FROM financial_entities').first['c'],
+      targetDb.db
+          .select('SELECT COUNT(*) AS c FROM financial_entities')
+          .first['c'],
       0,
     );
   });
@@ -237,7 +284,8 @@ void main() {
       namespace: namespace,
       attachmentsDirectory: attachmentsDir,
     );
-    final staged = File('${stagingA.path}/staged.bin')..writeAsBytesSync([1, 2, 3, 4]);
+    final staged = File('${stagingA.path}/staged.bin')
+      ..writeAsBytesSync([1, 2, 3, 4]);
     const attachment = PortableBackupAttachment(
       id: 'att-9',
       path: 'attachments/att-9.bin',
@@ -245,19 +293,27 @@ void main() {
       fileName: 'receipt.png',
       mimeType: 'image/png',
       byteLength: 4,
-      sha256: '0000000000000000000000000000000000000000000000000000000000000000',
+      sha256:
+          '0000000000000000000000000000000000000000000000000000000000000000',
     );
     await writer.beginFreshNamespace();
     await writer.installAttachment(metadata: attachment, stagedFile: staged);
     await writer.commit();
 
     final row = targetDb.db
-        .select('SELECT transaction_id, file_name, local_path FROM transaction_attachments')
+        .select(
+          'SELECT transaction_id, file_name, local_path FROM transaction_attachments',
+        )
         .single;
     expect(row['transaction_id'], 'txn-1');
     expect(row['file_name'], 'receipt.png');
     expect(row['local_path'], 'att-9');
-    expect(File('${attachmentsDir.path}/att-9').readAsBytesSync(), [1, 2, 3, 4]);
+    expect(File('${attachmentsDir.path}/att-9').readAsBytesSync(), [
+      1,
+      2,
+      3,
+      4,
+    ]);
   });
 
   test('unknown section names are rejected', () async {
@@ -269,7 +325,10 @@ void main() {
     );
     await writer.beginFreshNamespace();
     await expectLater(
-      writer.insertPortableRows('cached_responses', Stream.fromIterable(const [])),
+      writer.insertPortableRows(
+        'cached_responses',
+        Stream.fromIterable(const []),
+      ),
       throwsA(isA<FormatException>()),
     );
   });

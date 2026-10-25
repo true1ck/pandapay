@@ -2,9 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/bills_projection_api.dart';
+import 'package:pandapay/data/past_bill_receipts.dart';
+import 'package:pandapay/data/pending_bills.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/report_transaction_screen.dart';
 import 'package:pandapay/features/activity/transaction_detail_screen.dart';
+import 'package:pandapay/features/insights/bills_horizon.dart';
+import 'package:pandapay/features/insights/central_bills_section.dart';
 import 'package:pandapay/features/insights/payments_due_screen.dart';
 import 'package:pandapay/features/settings/settings_hub_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -110,7 +115,7 @@ Future<void> _pump(
 }
 
 void main() {
-  group('PaymentsDueScreen (design 13)', () {
+  group('BillsAndCommitmentsTab (design 13)', () {
     final cards = [
       _card(id: 'uc1', name: 'SBI Cashback', dueDay: 16, statementDay: 1),
       _card(
@@ -129,9 +134,17 @@ void main() {
 
     Future<void> pumpDue(WidgetTester tester, {Size? size}) => _pump(
       tester,
-      const PaymentsDueScreen(),
+      const Scaffold(body: BillsAndCommitmentsTab()),
       size: size ?? const Size(390, 844),
       overrides: [
+        clockProvider.overrideWithValue(TestClock(DateTime(2026, 10, 25, 12))),
+        smsBillRowsProvider.overrideWith((ref) async => const <SmsBillRow>[]),
+        pastBillReceiptsProvider.overrideWith(
+          (ref) async => const <PastBillReceipt>[],
+        ),
+        centralBillsProjectionProvider.overrideWith(
+          (ref) async => const BillProjectionSnapshot.unavailable(),
+        ),
         userCardsRepositoryProvider.overrideWithValue(
           _FakeRepo(transactions: [_txn()]),
         ),
@@ -143,7 +156,6 @@ void main() {
       tester,
     ) async {
       await pumpDue(tester);
-      expect(find.text('Bills & commitments'), findsOneWidget);
       expect(find.text('Credit cards'), findsOneWidget);
       expect(find.text('HDFC Millennia'), findsOneWidget);
       expect(find.textContaining('Check the issuer'), findsOneWidget);
@@ -171,23 +183,66 @@ void main() {
     ) async {
       await _pump(
         tester,
-        const PaymentsDueScreen(),
+        const Scaffold(body: BillsAndCommitmentsTab()),
         overrides: [
+          clockProvider.overrideWithValue(
+            TestClock(DateTime(2026, 10, 25, 12)),
+          ),
+          smsBillRowsProvider.overrideWith((ref) async => const <SmsBillRow>[]),
+          pastBillReceiptsProvider.overrideWith(
+            (ref) async => const <PastBillReceipt>[],
+          ),
+          centralBillsProjectionProvider.overrideWith(
+            (ref) async => const BillProjectionSnapshot.unavailable(),
+          ),
           userCardsRepositoryProvider.overrideWithValue(_FakeRepo()),
           myCardsProvider.overrideWith(
             (ref) async => [_card(id: 'uc1', name: 'No Due Day')],
           ),
         ],
       );
-      expect(
-        find.textContaining('No due dates set for your cards'),
-        findsOneWidget,
+      expect(find.text('No upcoming bills'), findsOneWidget);
+      expect(find.textContaining('add a due day in Cards'), findsOneWidget);
+    });
+
+    testWidgets('past month derives the scheduled card occurrence', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        const Scaffold(body: BillsAndCommitmentsTab()),
+        overrides: [
+          clockProvider.overrideWithValue(
+            TestClock(DateTime(2026, 10, 25, 12)),
+          ),
+          smsBillRowsProvider.overrideWith((ref) async => const <SmsBillRow>[]),
+          pastBillReceiptsProvider.overrideWith(
+            (ref) async => const <PastBillReceipt>[],
+          ),
+          centralBillsProjectionProvider.overrideWith(
+            (ref) async => const BillProjectionSnapshot.unavailable(),
+          ),
+          userCardsRepositoryProvider.overrideWithValue(_FakeRepo()),
+          myCardsProvider.overrideWith(
+            (ref) async => [
+              _card(
+                id: 'uc1',
+                name: 'SBI Cashback',
+                dueDay: 16,
+                statementDay: 1,
+              ),
+            ],
+          ),
+          billsHorizonProvider.overrideWith((ref) => BillsHorizon.lastMonth),
+        ],
       );
+      expect(find.text('Sep 2026'), findsOneWidget);
+      expect(find.textContaining('Due 16 Sep'), findsOneWidget);
     });
 
     testWidgets('survives a 320x640 viewport', (tester) async {
       await pumpDue(tester, size: const Size(320, 640));
-      expect(find.text('Bills & commitments'), findsOneWidget);
+      expect(find.text('Credit cards'), findsOneWidget);
     });
   });
 

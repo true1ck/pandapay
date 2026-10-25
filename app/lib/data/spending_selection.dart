@@ -18,15 +18,21 @@ class SpendingSelection {
     this.untagged = false,
   });
 
-  bool matches(TransactionEntry entry, {Iterable<String> tags = const []}) {
-    if (payment != null && entry.instrument != payment) return false;
+  bool matches(
+    TransactionEntry entry, {
+    Iterable<String> tags = const [],
+    List<BankAccountSummary> bankAccounts = const [],
+  }) {
+    if (payment != null && effectiveInstrument(entry) != payment) return false;
     if (categories.isNotEmpty && !categoryKeys(entry).any(categories.contains))
       return false;
     if (merchant != null &&
         normalize(merchant!) != normalize(merchantName(entry))) {
       return false;
     }
-    if (card != null && cardName(entry) != card) return false;
+    if (card != null && sourceName(entry, bankAccounts: bankAccounts) != card) {
+      return false;
+    }
     final ids = tags.toSet();
     if (untagged && ids.isNotEmpty) return false;
     if (tagIds.isNotEmpty && !tagIds.any(ids.contains)) return false;
@@ -39,10 +45,64 @@ class SpendingSelection {
       entry.merchantName?.trim().isNotEmpty == true
       ? entry.merchantName!.trim()
       : 'Unknown merchant';
-  static String cardName(TransactionEntry entry) =>
-      entry.cardDisplayName?.trim().isNotEmpty == true
-      ? entry.cardDisplayName!.trim()
-      : entry.instrument.label;
+  static TxnInstrument effectiveInstrument(TransactionEntry entry) =>
+      entry.instrumentKnown ? entry.instrument : TxnInstrument.other;
+
+  /// A saved card or masked funding account, used by the Accounts breakdown.
+  /// Issuer names are shown only when the observed account suffix maps to one
+  /// distinct issuer; suffix-only and ambiguous matches stay generic.
+  static String sourceName(
+    TransactionEntry entry, {
+    List<BankAccountSummary> bankAccounts = const [],
+  }) {
+    final savedName = entry.cardDisplayName?.trim();
+    if (savedName != null && savedName.isNotEmpty) {
+      return savedName;
+    }
+
+    final instrument = effectiveInstrument(entry);
+    if (instrument == TxnInstrument.creditCard ||
+        instrument == TxnInstrument.debitCard) {
+      if (entry.userCardId != null) return instrument.label;
+      return entry.cardLast4 == null
+          ? '${instrument.label} (unlinked)'
+          : '${instrument.label} ••${entry.cardLast4} (unlinked)';
+    }
+    if (entry.accountLast4 != null) {
+      final suffix = entry.accountLast4!;
+      final matching = bankAccounts
+          .where((account) => account.accountLast4 == suffix)
+          .toList();
+      final issuerKeys = matching
+          .map(
+            (account) =>
+                account.issuerSlug ??
+                account.issuerName ??
+                account.issuerShortName,
+          )
+          .whereType<String>()
+          .map((issuer) => issuer.trim().toLowerCase())
+          .where((issuer) => issuer.isNotEmpty)
+          .toSet();
+      if (issuerKeys.length == 1) {
+        final name = matching
+            .map((account) => account.issuerShortName ?? account.issuerName)
+            .whereType<String>()
+            .map((issuer) => issuer.trim())
+            .firstWhere((issuer) => issuer.isNotEmpty, orElse: () => '');
+        if (name.isNotEmpty) return '$name ••$suffix';
+      }
+      return 'Bank account ••$suffix';
+    }
+
+    return switch (instrument) {
+      TxnInstrument.upiBank => 'UPI bank account',
+      TxnInstrument.wallet => 'Wallet',
+      TxnInstrument.cash => 'Cash',
+      _ => 'Unknown source',
+    };
+  }
+
   static Set<String> categoryKeys(TransactionEntry entry) => {
     if (entry.categoryId != null) entry.categoryId!,
     if (entry.userCategoryId != null) 'custom:${entry.userCategoryId}',

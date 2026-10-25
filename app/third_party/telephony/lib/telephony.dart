@@ -586,33 +586,39 @@ class SmsMessage {
     final message = Map.castFrom<dynamic, dynamic, String, dynamic>(rawMessage);
     for (var column in columns) {
       final value = message[column._columnName];
+      // Method-channel payloads differ by source: inbox cursor rows are
+      // strings, while live/background Android broadcasts contain numbers.
+      final stringValue = value?.toString();
       switch (column._columnName) {
         case _SmsProjections.ID:
-          this.id = int.tryParse(value);
+          this.id = stringValue != null ? int.tryParse(stringValue) : null;
           break;
         case _SmsProjections.ORIGINATING_ADDRESS:
         case _SmsProjections.ADDRESS:
-          this.address = value;
+          this.address = stringValue;
           break;
         case _SmsProjections.MESSAGE_BODY:
         case _SmsProjections.BODY:
-          this.body = value;
+          this.body = stringValue;
           break;
         case _SmsProjections.DATE:
         case _SmsProjections.TIMESTAMP:
-          this.date = int.tryParse(value);
+          this.date = stringValue != null ? int.tryParse(stringValue) : null;
           break;
         case _SmsProjections.DATE_SENT:
-          this.dateSent = int.tryParse(value);
+          this.dateSent = stringValue != null ? int.tryParse(stringValue) : null;
           break;
         case _SmsProjections.READ:
-          this.read = int.tryParse(value) == 0 ? false : true;
+          final readInt = stringValue != null ? int.tryParse(stringValue) : null;
+          this.read = readInt == null ? null : (readInt != 0);
           break;
         case _SmsProjections.SEEN:
-          this.seen = int.tryParse(value) == 0 ? false : true;
+          final seenInt = stringValue != null ? int.tryParse(stringValue) : null;
+          this.seen = seenInt == null ? null : (seenInt != 0);
           break;
         case _SmsProjections.STATUS:
-          switch (int.tryParse(value)) {
+          final statusInt = stringValue != null ? int.tryParse(stringValue) : null;
+          switch (statusInt) {
             case 0:
               this.status = SmsStatus.STATUS_COMPLETE;
               break;
@@ -629,21 +635,26 @@ class SmsMessage {
           }
           break;
         case _SmsProjections.SUBJECT:
-          this.subject = value;
+          this.subject = stringValue;
           break;
         case _SmsProjections.SUBSCRIPTION_ID:
-          this.subscriptionId = int.tryParse(value);
+          this.subscriptionId =
+              stringValue != null ? int.tryParse(stringValue) : null;
           break;
         case _SmsProjections.THREAD_ID:
-          this.threadId = int.tryParse(value);
+          this.threadId = stringValue != null ? int.tryParse(stringValue) : null;
           break;
         case _SmsProjections.TYPE:
-          var smsTypeIndex = int.tryParse(value);
-          this.type =
-              smsTypeIndex != null ? SmsType.values[smsTypeIndex] : null;
+          var smsTypeIndex =
+              stringValue != null ? int.tryParse(stringValue) : null;
+          this.type = smsTypeIndex != null &&
+                  smsTypeIndex >= 0 &&
+                  smsTypeIndex < SmsType.values.length
+              ? SmsType.values[smsTypeIndex]
+              : null;
           break;
         case _SmsProjections.SERVICE_CENTER_ADDRESS:
-          this.serviceCenterAddress = value;
+          this.serviceCenterAddress = stringValue;
           break;
       }
     }

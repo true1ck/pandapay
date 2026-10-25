@@ -77,4 +77,96 @@ void main() {
     expect(selection.matches(expense('one'), tags: []), isTrue);
     expect(selection.matches(expense('two'), tags: ['office']), isFalse);
   });
+
+  test('unknown instrument is not treated as a credit card', () {
+    final legacy = TransactionEntry(
+      id: 'legacy',
+      amount: Money.fromRupees(100),
+      occurredAt: DateTime(2026, 10, 20),
+      instrument: TxnInstrument.creditCard,
+      instrumentKnown: false,
+      source: 'sms',
+      status: 'active',
+    );
+
+    expect(
+      const SpendingSelection(
+        payment: TxnInstrument.creditCard,
+      ).matches(legacy),
+      isFalse,
+    );
+    expect(
+      const SpendingSelection(payment: TxnInstrument.other).matches(legacy),
+      isTrue,
+    );
+  });
+
+  test('a masked source account is filterable as an account', () {
+    final upi = TransactionEntry(
+      id: 'upi',
+      amount: Money.fromRupees(100),
+      occurredAt: DateTime(2026, 10, 20),
+      accountLast4: '1234',
+      userCardId: null,
+      cardDisplayName: null,
+      instrument: TxnInstrument.upiBank,
+      source: 'sms',
+      status: 'active',
+    );
+    const selection = SpendingSelection(card: 'Bank account ••1234');
+
+    expect(SpendingSelection.sourceName(upi), 'Bank account ••1234');
+    expect(selection.matches(upi), isTrue);
+  });
+
+  test('a bank account and unlinked card with the same suffix stay separate', () {
+    final card = TransactionEntry(
+      id: 'card',
+      amount: Money.fromRupees(100),
+      occurredAt: DateTime(2026, 10, 20),
+      cardLast4: '9080',
+      instrument: TxnInstrument.creditCard,
+      source: 'sms',
+      status: 'active',
+    );
+    final account = TransactionEntry(
+      id: 'account',
+      amount: Money.fromRupees(100),
+      occurredAt: DateTime(2026, 10, 20),
+      accountLast4: '9080',
+      instrument: TxnInstrument.upiBank,
+      source: 'sms',
+      status: 'active',
+    );
+
+    const cardName = 'Credit card ••9080 (unlinked)';
+    expect(SpendingSelection.sourceName(card), cardName);
+    const accountName = 'Bank account ••9080';
+    expect(SpendingSelection.sourceName(account), accountName);
+    final entries = [card, account];
+    const cardSelection = SpendingSelection(card: cardName);
+    const accountSelection = SpendingSelection(card: accountName);
+    expect(
+      entries.where(cardSelection.matches).map((entry) => entry.id),
+      ['card'],
+    );
+    expect(
+      entries.where(accountSelection.matches).map((entry) => entry.id),
+      ['account'],
+    );
+    expect(
+      const SpendingSelection(
+        card: cardName,
+        payment: TxnInstrument.creditCard,
+      ).matches(account),
+      isFalse,
+    );
+    expect(
+      const SpendingSelection(
+        card: accountName,
+        payment: TxnInstrument.upiBank,
+      ).matches(account),
+      isTrue,
+    );
+  });
 }

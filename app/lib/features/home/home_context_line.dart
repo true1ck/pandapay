@@ -78,14 +78,30 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
     _locate(auto: true);
   }
 
+  String? _resolveCategorySlug(String? categoryIdOrSlug) {
+    if (categoryIdOrSlug == null) return null;
+    if (HomeScreen.categoryLabelFor(categoryIdOrSlug) != null) {
+      return categoryIdOrSlug;
+    }
+    final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
+    for (final c in categories) {
+      if (c.id == categoryIdOrSlug || c.slug == categoryIdOrSlug) {
+        return c.slug;
+      }
+    }
+    return null;
+  }
+
   void _restoreSnapshot(NearbyContextSnapshot snapshot) {
     _closest = snapshot.match;
     _state = snapshot.match == null
         ? _ContextState.noMatch
         : _ContextState.found;
-    final categoryId = snapshot.match?.candidate.categoryId;
-    if (categoryId != null && HomeScreen.categoryLabelFor(categoryId) != null) {
-      ref.read(selectedCategoryProvider.notifier).state = categoryId;
+    final categorySlug =
+        _resolveCategorySlug(snapshot.match?.candidate.categoryId);
+    if (categorySlug != null &&
+        HomeScreen.categoryLabelFor(categorySlug) != null) {
+      ref.read(selectedCategoryProvider.notifier).state = categorySlug;
     }
   }
 
@@ -162,10 +178,11 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
           _state = _ContextState.noMatch;
         });
       } else {
-        final nearestCategory = matches.first.candidate.categoryId;
-        if (nearestCategory != null &&
-            HomeScreen.categoryLabelFor(nearestCategory) != null) {
-          ref.read(selectedCategoryProvider.notifier).state = nearestCategory;
+        final nearestSlug =
+            _resolveCategorySlug(matches.first.candidate.categoryId);
+        if (nearestSlug != null &&
+            HomeScreen.categoryLabelFor(nearestSlug) != null) {
+          ref.read(selectedCategoryProvider.notifier).state = nearestSlug;
         }
         ref
             .read(homeNearbyContextProvider.notifier)
@@ -216,13 +233,20 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
       return const SizedBox.shrink();
     }
 
-    final recommendation = _closest!.candidate.categoryId == null
-        ? null
-        : ref
-              .watch(
-                bestCardForMerchantProvider(_closest!.candidate.categoryId),
-              )
-              .valueOrNull;
+    final candidate = _closest!.candidate;
+    final recommendation =
+        (candidate.categoryId == null && candidate.displayName == null)
+            ? null
+            : ref
+                  .watch(
+                    bestCardForMerchantProvider(
+                      MerchantRecommendationQuery(
+                        categoryId: candidate.categoryId,
+                        merchantName: candidate.displayName,
+                      ),
+                    ),
+                  )
+                  .valueOrNull;
 
     return Padding(
       // B5 (Task 14): this widget's own leading padding is now owned by

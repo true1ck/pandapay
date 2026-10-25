@@ -184,6 +184,18 @@ test('evaluateFeatureFlag handles boolean, 100%, 0%, and deterministic hash buck
   assert.ok(trueCount >= 30 && trueCount <= 70, `True count was ${trueCount}`);
 });
 
+test('1% pilot rollout is deterministic and selects approximately one in a hundred profiles', () => {
+  const pilot = { key: 'sms_ai_queue_enabled', is_enabled: true, rollout_percent: 1 };
+  let enabled = 0;
+  for (let i = 0; i < 10000; i++) {
+    const profileId = `pilot-profile-${i}`;
+    const result = migration.evaluateFeatureFlag(pilot, profileId);
+    assert.equal(result, migration.evaluateFeatureFlag(pilot, profileId));
+    if (result) enabled++;
+  }
+  assert.ok(enabled >= 50 && enabled <= 150, `1% pilot selected ${enabled}/10000 profiles`);
+});
+
 test('resolveSmsIntelligenceFlags respects master flag and individual family toggles', () => {
   // Master disabled
   const flagsMasterOff = [

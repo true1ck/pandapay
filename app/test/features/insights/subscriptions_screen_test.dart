@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/bills_projection_api.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
+import 'package:pandapay/features/insights/central_bills_section.dart';
 import 'package:pandapay/features/insights/subscriptions_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -431,6 +435,179 @@ void main() {
       expect(find.text('Monthly AutoPay'), findsNothing);
       expect(find.text('Card XX7105'), findsNothing);
       expect(find.textContaining('1,999'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'displays subscription autopay authorizations (OpenAI LLC, Google Play) when no recurring series exist without showing empty state',
+    (tester) async {
+      final db = openInMemoryForTesting();
+      final cache = ResponseCache(db);
+      cache.financialStore.saveObservation('user:test', 'sms:openai', {
+        'event_type': 'autopay',
+        'biller_name': 'OpenAI LLC',
+        'card_last4': '7105',
+        'autopay_limit_paise': 199900,
+        'received_at': '2026-10-18T09:00:00Z',
+      });
+      cache.financialStore.saveObservation('user:test', 'sms:googleplay', {
+        'event_type': 'autopay',
+        'biller_name': 'Google Play',
+        'card_last4': '7105',
+        'autopay_limit_paise': 185000,
+        'received_at': '2026-10-18T09:00:00Z',
+      });
+      // Non-subscription autopay should NOT be shown on subscriptions screen
+      cache.financialStore.saveObservation('user:test', 'sms:bescom', {
+        'event_type': 'autopay',
+        'biller_name': 'BESCOM',
+        'card_last4': '7105',
+        'autopay_limit_paise': 250000,
+        'received_at': '2026-10-18T09:00:00Z',
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            cacheNamespaceProvider.overrideWithValue('user:test'),
+            responseCacheProvider.overrideWith((ref) async => cache),
+            centralBillsProjectionProvider.overrideWith(
+              (ref) async => const BillProjectionSnapshot.unavailable(),
+            ),
+            recurringReportProvider.overrideWith(
+              (ref) async => const RecurringReport(
+                series: [],
+                totalAnnual: Money.zero(),
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: SubscriptionsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Empty state MUST NOT replace the autopay authorizations
+      expect(find.text('No subscriptions found yet'), findsNothing);
+      expect(find.text('Autopay authorizations'), findsOneWidget);
+      expect(find.text('OpenAI LLC'), findsOneWidget);
+      expect(find.text('AutoPay limit ₹1999'), findsOneWidget);
+      expect(find.text('Google Play'), findsOneWidget);
+      expect(find.text('AutoPay limit ₹1850'), findsOneWidget);
+      expect(find.text('BESCOM'), findsNothing);
+      expect(find.text('AutoPay setup reported'), findsNWidgets(2));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      db.close();
+    },
+  );
+
+  testWidgets(
+    'displays subscription autopay authorizations together with active subscriptions',
+    (tester) async {
+      final db = openInMemoryForTesting();
+      final cache = ResponseCache(db);
+      cache.financialStore.saveObservation('user:test', 'sms:openai', {
+        'event_type': 'autopay',
+        'biller_name': 'OpenAI LLC',
+        'card_last4': '7105',
+        'autopay_limit_paise': 199900,
+        'received_at': '2026-10-18T09:00:00Z',
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            cacheNamespaceProvider.overrideWithValue('user:test'),
+            responseCacheProvider.overrideWith((ref) async => cache),
+            centralBillsProjectionProvider.overrideWith(
+              (ref) async => const BillProjectionSnapshot.unavailable(),
+            ),
+            recurringReportProvider.overrideWith(
+              (ref) async => RecurringReport(
+                series: [
+                  RecurringSeries(
+                    id: 'netflix-active',
+                    displayName: 'Netflix',
+                    typicalAmount: Money.fromRupees(649),
+                    cadenceDays: 30,
+                    occurrenceCount: 3,
+                    annualCost: Money.fromRupees(7788),
+                    nextExpectedOn: DateTime(2026, 11, 15),
+                    setupConfirmed: true,
+                    cadenceConfirmed: true,
+                    engineStatus: 'confirmed',
+                  ),
+                ],
+                totalAnnual: Money.fromRupees(7788),
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: SubscriptionsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Netflix'), findsOneWidget);
+      expect(find.text('Autopay authorizations'), findsOneWidget);
+      expect(find.text('OpenAI LLC'), findsOneWidget);
+      expect(find.text('AutoPay limit ₹1999'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      db.close();
+    },
+  );
+
+  testWidgets(
+    'displays central subscription projection mandates and filters non-subscription mandates',
+    (tester) async {
+      final projectionSub = BillProjection.fromJson({
+        'id': 'mandate-googleplay',
+        'projectionKind': 'mandate',
+        'projectionKey': 'mandate:googleplay',
+        'status': 'active',
+        'projection': {
+          'billerName': 'Google Play',
+          'authorizationLimitInr': 1850,
+          'asOfAt': '2026-10-23T00:00:00Z',
+        },
+      });
+      final projectionUtility = BillProjection.fromJson({
+        'id': 'mandate-hdfc',
+        'projectionKind': 'mandate',
+        'projectionKey': 'mandate:hdfc',
+        'status': 'active',
+        'projection': {
+          'billerName': 'HDFC Life',
+          'authorizationLimitInr': 5000,
+          'asOfAt': '2026-10-23T00:00:00Z',
+        },
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            centralBillsProjectionProvider.overrideWith(
+              (ref) async => BillProjectionSnapshot(
+                available: true,
+                projections: [projectionSub, projectionUtility],
+              ),
+            ),
+            recurringReportProvider.overrideWith(
+              (ref) async => const RecurringReport(
+                series: [],
+                totalAnnual: Money.zero(),
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: SubscriptionsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Google Play'), findsOneWidget);
+      expect(find.text('AutoPay limit ₹1850'), findsOneWidget);
+      expect(find.text('HDFC Life'), findsNothing);
+      expect(find.text('No subscriptions found yet'), findsNothing);
     },
   );
 }

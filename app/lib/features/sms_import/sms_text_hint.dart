@@ -278,6 +278,13 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
     return const SmsTriageResult(SmsTriageKind.promotion, 'promotional_noise');
   }
 
+  if (LocalSmsParser.isActionableInsuranceRenewal(smsBody)) {
+    return const SmsTriageResult(
+      SmsTriageKind.financialCandidate,
+      'insurance_renewal',
+    );
+  }
+
   if (LocalSmsParser.isMerchantReceiptOrEbill(smsBody)) {
     return const SmsTriageResult(
       SmsTriageKind.financialCandidate,

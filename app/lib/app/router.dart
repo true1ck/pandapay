@@ -30,6 +30,7 @@ import '../features/cards/points_expiry_screen.dart';
 import '../features/cards/report_wrong_data_screen.dart';
 import '../features/cards/request_new_card_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/home/bank_accounts_screen.dart';
 import '../features/import/import_hub_screen.dart';
 import '../features/insights/billing_float_screen.dart';
 import '../features/insights/caps_screen.dart';
@@ -42,6 +43,7 @@ import '../features/insights/milestones_screen.dart';
 import '../features/insights/missed_opportunities_screen.dart';
 import '../features/insights/monthly_savings_screen.dart';
 import '../features/insights/my_contributions_screen.dart';
+import '../features/insights/payments_due_screen.dart';
 import '../features/insights/portfolio_audit_screen.dart';
 import '../features/insights/budgets_screen.dart';
 import '../features/insights/grouped_insight_screen.dart';
@@ -89,6 +91,7 @@ abstract final class AppRoute {
   static const inviteLinkPrefix = '/i';
   static const productActivation = '/account/activate';
   static const home = '/home';
+  static const bankAccounts = '/home/bank-accounts';
   static const cards = '/cards';
   static const insights = '/insights';
   static const account = '/account';
@@ -558,6 +561,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // user switches between, so a bottom-nav-persistent shell would be the
       // wrong pattern for them.
       GoRoute(
+        path: AppRoute.bankAccounts,
+        builder: (context, state) => const BankAccountsScreen(),
+      ),
+      GoRoute(
         path: AppRoute.caps,
         builder: (context, state) => Scaffold(
           appBar: AppBar(title: const Text('Caps & Limits')),
@@ -755,9 +762,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const GroupedInsightScreen(
           title: 'Payments',
           tabs: [
+            (
+              label: 'Bills & commitments',
+              body: BillsAndCommitmentsTab(),
+            ),
             (label: 'Due dates', body: DueDateCalendarScreen()),
-            (label: 'Interest-free days', body: BillingFloatScreen()),
-            (label: 'Utilization', body: CreditUtilizationScreen()),
           ],
         ),
       ),

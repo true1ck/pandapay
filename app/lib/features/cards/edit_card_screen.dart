@@ -236,7 +236,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
               const SizedBox(height: AppSpace.sm),
               Text(
                 "It stops appearing in recommendations right away. Its transaction history is kept, and you can "
-                "restore it any time from Wallet → Archived.",
+                "restore it any time from Settings → Manage deleted cards.",
                 style: BambooFonts.ui(13.5, color: BambooInk.ink500),
               ),
               const SizedBox(height: AppSpace.lg),
@@ -773,7 +773,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                 ),
                 const SizedBox(height: AppSpace.sm),
                 Text(
-                  "Removing keeps this card's full transaction history — nothing is deleted, and you can restore it any time from Wallet → Archived.",
+                  "Removing keeps this card's full transaction history — nothing is deleted, and you can restore it any time from Settings → Manage deleted cards.",
                   style: BambooFonts.ui(12, color: BambooInk.ink500),
                   textAlign: TextAlign.center,
                 ),

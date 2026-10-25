@@ -7,8 +7,8 @@ import '../../app/providers.dart'
         notificationPreferencesProvider,
         notificationPreferencesRepositoryProvider,
         recordAppNotification;
-import '../../app/design/app_theme.dart' show AppColors;
 import '../../data/notification_preferences_repository.dart';
+import 'notification_branding.dart';
 
 /// Userappimplementation_plan.md UA-8.3: "Quiet hours + daily frequency cap
 /// enforced centrally in a NotificationGate that every notification path
@@ -96,16 +96,8 @@ class NotificationGate {
 
   Future<void> _ensurePluginInitialized() async {
     if (_pluginInitialized) return;
-    const androidInit = AndroidInitializationSettings(
-      '@drawable/ic_notification',
-    );
-    const iosInit = DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestBadgePermission: false,
-      requestSoundPermission: false,
-    );
     await notifications.initialize(
-      const InitializationSettings(android: androidInit, iOS: iosInit),
+      NotificationBranding.initializationSettings,
     );
     _pluginInitialized = true;
   }
@@ -160,22 +152,12 @@ class NotificationGate {
     // missed record, and fire() still honestly reports success.
     try {
       await _ensurePluginInitialized();
-      const androidDetails = AndroidNotificationDetails(
-        'pandapay_alerts',
-        'PandaPay alerts',
-        channelDescription:
-            'Cap, milestone, bill, and other card alerts you\'ve opted into',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
-        icon: '@drawable/ic_notification',
-        largeIcon: DrawableResourceAndroidBitmap('ic_notification_logo'),
-        color: AppColors.teal500,
+      await notifications.show(
+        dedupeKey.hashCode,
+        title,
+        body,
+        NotificationBranding.alertDetails,
       );
-      const details = NotificationDetails(
-        android: androidDetails,
-        iOS: DarwinNotificationDetails(),
-      );
-      await notifications.show(dedupeKey.hashCode, title, body, details);
     } catch (_) {
       // See the comment above.
     }
@@ -199,26 +181,11 @@ class NotificationGate {
 
     try {
       await _ensurePluginInitialized();
-      const androidDetails = AndroidNotificationDetails(
-        'pandapay_alerts',
-        'PandaPay alerts',
-        channelDescription:
-            'Cap, milestone, bill, and other card alerts you\'ve opted into',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
-        icon: '@drawable/ic_notification',
-        largeIcon: DrawableResourceAndroidBitmap('ic_notification_logo'),
-        color: AppColors.teal500,
-      );
-      final details = NotificationDetails(
-        android: androidDetails,
-        iOS: DarwinNotificationDetails(),
-      );
       await notifications.show(
         (dedupeKey ?? '$category:$title').hashCode,
         title,
         body,
-        details,
+        NotificationBranding.alertDetails,
         payload: deepLink,
       );
     } catch (_) {

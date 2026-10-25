@@ -41,6 +41,44 @@ function isNonTransactionNoise(sender, body) {
     if (/^(?:[A-Za-z]{2}-)?\d{6}(?:-[A-Za-z])?$/.test(cleanSender)) return true;
   }
   const text = String(body || '').replace(/\s+/g, ' ');
+  // Biller onboarding only enrols a service; it does not report a bill.
+  // "Once the bill is generated" is a future promise, so it must be rejected
+  // before the bill-ready keep-rule below. Any amount, due date or
+  // AutoPay/mandate terms keep the message actionable.
+  const billerOnboarding = /\b(?:added|registered|enrolled|linked|activated|subscribed|enabled)\b[\s\S]{0,80}\b(?:bill\s*pay|billpay|bill\s*payment(?:\s+service)?|biller|payee|e[- ]?bill|paperless|bill\s+fetch|bill\s+alerts?)\b/i.test(text)
+    || /\b(?:bill\s*pay|billpay|biller|payee|e[- ]?bill|paperless|bill\s+fetch|bill\s+alerts?)\b[\s\S]{0,60}\b(?:added|registered|enrolled|linked|activated|subscribed|enabled|registration)\b/i.test(text)
+    || /\b(?:bill\s+will\s+be\s+generated|bill\s+generation\s+date|we\s+will\s+notify\s+you\b[\s\S]{0,60}\bbill\b|(?:you\s+will\s+(?:receive|get)|we\s+will\s+(?:send|notify|inform))\b[\s\S]{0,50}\bbill\b|\bwill\s+(?:send|notify|inform|share)\b[\s\S]{0,40}\bbill\b|(?:once|when|after)\b[\s\S]{0,30}\bbill\b[\s\S]{0,15}\b(?:is\s+|gets\s+)?generated\b)/i.test(text);
+  const hasCurrencyAmount = /(?:₹|\brs\.?|\binr)\s*[\d,]+|\b\d[\d,]*(?:\.\d{1,2})?\s*(?:₹|rs\.?|inr)\b/i.test(text);
+  const hasDueDate = /\b(?:payment|amount|total|minimum)\s+due\b|\bdue\s+(?:date|on|by)\b|\bpay(?:ment)?\s+(?:by|before)\b/i.test(text);
+  const hasMandate = /\b(?:auto\s*pay|autopay|e[- ]?mandate|mandate|standing\s+instruction|auto[- ]?debit)\b/i.test(text);
+  const hasMovement = /\b(?:failed|declined|debited|credited|paid|charged|transferred|withdrawn)\b|\b(?:payment|transaction|txn)\b[\s\S]{0,20}\b(?:successful|completed|failed)\b/i.test(text);
+  if (billerOnboarding && !hasCurrencyAmount && !hasDueDate && !hasMandate && !hasMovement) return true;
+  const hasMaskedAccount = /\b(?:a\/?c|account|card)\b[\s\S]{0,25}\b(?:xx|\*{2,}|ending(?:\s+(?:with|in))?\s*\d{3,4})\b|\b(?:xx|\*{2,})\d{3,4}\b/i.test(text);
+
+  const telecomCarrierNotice = (
+    /\b(?:number\s+)?retention\s+charges?\b/i.test(text)
+    || /\b(?:deducted|debited)\s+from\s+(?:top-?up|talktime|prepaid|main|core)\s+bal(?:ance)?\b/i.test(text)
+    || /\b(?:from|on)\s+top-?up\s+bal(?:ance)?\b/i.test(text)
+    || /\bno\s+usage\s+observed\b[\s\S]{0,40}\b(?:days?|recharge)\b/i.test(text)
+    || /\brecharge\s+your\s+(?:jio|airtel|vi|vodafone|idea|bsnl)?\s*number\b[\s\S]{0,60}\bto\s+avoid\s+(?:these\s+)?charges\b/i.test(text)
+    || (
+      /\b(?:jio|airtel|vi|vodafone|idea|bsnl)\b/i.test(`${cleanSender} ${text}`)
+      && /\b[6-9]\d{9}\b/.test(text)
+      && /\b(?:recharge\s+now|(?:kindly\s+|please\s+)?recharge\s+your|validity\s+(?:is\s+)?expir|top-?up|talktime|retention)\b/i.test(text)
+      && !/\b(?:successful|completed|done|received)\b/i.test(text)
+      && !hasMaskedAccount
+    )
+  ) && !hasDueDate && !/\b(?:statement|bill)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b/i.test(text);
+  if (telecomCarrierNotice) return true;
+
+  // Repayment acknowledgments and loan eligibility checks that carry no
+  // transaction amount or debit evidence are informational cross-sells.
+  const repaymentCourtesyOrLoanUpsell = (
+    /\b(?:we\s+have\s+)?received\s+your\s+(?:timely\s+)?repayment\b[\s\S]{0,60}\btowards?\s+your\s+(?:pay\s*later|credit\s*line|loan)\b/i.test(text)
+    || /\b(?:check\s+your\s+)?(?:updated\s+)?personal\s+loan\s+eligibility\b/i.test(text)
+    || /\bpersonal\s+loan\s+eligibility\s+here\b/i.test(text)
+  ) && !hasCurrencyAmount;
+  if (repaymentCourtesyOrLoanUpsell) return true;
   if (/\b(?:payment|amount|minimum|total)\s+due\b|\bdue\s+date\b|\b(?:statement|bill|premium)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b/i.test(text)) return false;
   if (/\b(?:eligible\s+for\s+(?:[\w\s]{0,20}\s+)?(?:conversion|flexipay|emis?)|convert(?:ed|ing)?\b[\s\S]{0,60}?\b(?:in)?to\b[\s\S]{0,20}?\b(?:smart\s+|flexipay\s+|easy\s+)?emis?|can\s+(?:now\s+)?be\s+converted\s+(?:in)?to\s+emis?|flexipay\s+emis?)\b/i.test(text)
       && !/\b(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)\b/i.test(text)
@@ -68,6 +106,18 @@ function isNonTransactionNoise(sender, body) {
     || /\b(?:(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+for\b[\s\S]{0,50}\b(?:has\s+expired|expires\s+today|will\s+expire)\b|(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+expired\b|renew\s+your\s+expired\s+(?:two\s+wheeler|car|motor|vehicle|health)?\s*insurance\b|will\s+expire\s+on\b[\s\S]{0,50}\b(?:premium\s+starts?\s+(?:just\s+)?(?:at\s+)?(?:rs\.?|inr)|instant\s+renewal,\s+visit|renew\s+before\s+expiry))\b/i.test(text)
     || /\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+card\s+with\s+limit\s+upto|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application)\b/i.test(text)
     || /\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b/i.test(text)
+    // Informational card/account controls carry no money movement, amount,
+    // due date, balance or mandate. A completed debit, bill, balance snapshot
+    // or credit limit with an amount has already returned false above.
+    || /\btransaction\s+limits?\b[\s\S]{0,60}\b(?:has|have|is|are)\s+been\s+(?:updated|changed|modified|set)\b/i.test(text)
+    || /\bsecurity\s+tip\b[\s\S]{0,80}\b(?:enable|set|disable|protect|never\s+share|keep\s+your)\b/i.test(text)
+    || /\benable\s+online\s+(?:use|usage|transactions?)\b/i.test(text)
+    || /\bset\s+limit\s+on\b[\s\S]{0,40}\b(?:credit\s+card|card)\b/i.test(text)
+    || /\b(?:credit\s+card|card|account)\b[\s\S]{0,50}\bhas\s+been\s+linked\b/i.test(text)
+    || /\blinked\s+for\s+(?:net\s*banking|internet\s+banking|mobile\s+banking)\b/i.test(text)
+    || /\bunused\s+funds\b[\s\S]{0,100}\b(?:transferred|settled|settlement)\b/i.test(text)
+    || /\bas\s+per\s+sebi\b[\s\S]{0,120}\bsettlement\b/i.test(text)
+    || /\bday\s+of\s+settlement\b/i.test(text)
     || (/-p\s*$/i.test(String(sender || '')) && !/\b(?:txn|transaction|debited|credited|spent|paid|charged|received|refund|statement|bill\s+due)\b/i.test(text));
 }
 
@@ -133,6 +183,11 @@ function extractAccountLast4(body) {
 function isBankAccountMessage(body, sender = '') {
   const text = String(body || '').toLowerCase();
   if (!text) return false;
+  const senderText = String(sender || '').toLowerCase();
+  // Axio sender families describe a Pay Later liability as an "a/c" and use
+  // words such as "credit" / "received" in loan offers and repayment status
+  // messages. Neither is evidence of an owned deposit bank account.
+  if (senderText.includes('axio') || /\b(?:pay\s+later|credit\s+line)\b/.test(text)) return false;
   const hasExplicitAccount = /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b/i.test(text);
   if (/\bcredit\s+card\b/i.test(text)) return false;
   if (!hasExplicitAccount && /\bdebit\s+card\b/i.test(text)) return false;
@@ -142,7 +197,7 @@ function isBankAccountMessage(body, sender = '') {
 
   const accountMarker = /\b(?:bank|a\/?c\.?|account|savings|current|upi|imps|neft|rtgs|atm)\b/.test(text);
   const bankIdentityMarker = /\b(?:bank|a\/?c\.?|savings|current|upi|imps|neft|rtgs|atm)\b/.test(text)
-    || /(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)/.test(String(sender || '').toLowerCase());
+    || /(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)/.test(senderText);
   const balanceMarker = /\b(?:(?:total\s+)?(?:available|avail|avl|current|closing|clr|new|remaining)\.?\s*(?:balance|bal)\b|bal(?:ance)?\.?\s*(?:is|:|-))/i.test(text);
   const movementMarker = /\b(?:debited|debit|credited|credit|paid|spent|sent|transferred|withdrawn|received|deposited)\b/.test(text);
   // The suffix must be accompanied by explicit account/bank language. A
@@ -618,7 +673,7 @@ function parseBuiltInWalletSpend(sms) {
   };
 }
 
-function inferInstrument(body, hasLast4) {
+function inferInstrument(body) {
   const text = String(body || '').toLowerCase();
   const walletDebit = /\b(?:debited\s+from|paid\s+from|deducted\s+from|spent\s+from|debited\s+using)\b[\s\S]{0,35}\b([a-zA-Z0-9]+)\s+wallet\b|\b([a-zA-Z0-9]+)\s+wallet\b[\s\S]{0,35}\b(?:debited|paid|deducted)\b/i.test(text);
   if (walletDebit || /\bfrom\s+(?:your\s+)?wallet\b|\bwallet\s+balance\b/i.test(text)) {
@@ -632,7 +687,10 @@ function inferInstrument(body, hasLast4) {
   // the card as DC in the fraud footer. They are not credit-card purchases.
   if (/\b(?:atm|withdrawn|cash\s+withdrawal)\b/.test(text) && !/\bcredit\s+card\b/.test(text)) return 'debit_card';
   if (/\b(?:block\s+dc|dc\s*\d{4})\b/.test(text) && !/\bcredit\s+card\b/.test(text)) return 'debit_card';
-  if (/\bcredit\s+card\b/.test(text) || (hasLast4 && /\bcard\b/.test(text))) return 'credit_card';
+  if (/\bcredit\s+card\b/.test(text)) return 'credit_card';
+  // A suffix identifies a card, not its type. Match the device's explicit
+  // credit-account evidence; an ordinary balance or bank name is insufficient.
+  if (/\bcard\b/.test(text) && /\b(?:avl\.?\s*(?:lmt|limit)|available\s+(?:credit|limit)|credit\s+limit|outstanding|statement|minimum\s+amount\s+due|total\s+amount\s+due|amount\s+due)\b/.test(text)) return 'credit_card';
   return null;
 }
 
@@ -651,6 +709,12 @@ function isSuccessfulSpend(body) {
   if (isNonTransactionAlert(text)) return false;
   return /\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b/.test(text)
     || /\b(?:payment|purchase|transaction)\b[\s\S]{0,80}\b(?:successful|successfully|completed)\b/.test(text)
+    // Issuer rewards-accomplishment alerts ("Your txn of ₹1,018 at M on
+    // your X card earned you 5% rewards!") carry no standard completion
+    // verb. Accept the txn-of-of shape only when it is not a pending
+    // attempt (isRejectedTransaction already excludes declined/failed).
+    || (/\b(?:your\s+)?txn\s+(?:of|for)\s*(?:₹|rs\.?|inr)?\s*[\d,.]+/.test(text)
+        && !/\b(?:initiated|pending|processing|in\s+progress|in\s+process)\b/.test(text))
     || isWalletLoadMessage(text);
 }
 
@@ -743,7 +807,7 @@ function parseBuiltInCardCredit(sms) {
       ...(last4Match ? { last4: last4Match[1] } : {}),
       merchant: refund ? 'Refund' : reward ? 'Reward or cashback' : transferKind === 'reversal' ? 'Reversal' : 'Card statement adjustment',
       transferKind,
-      instrument: 'credit_card',
+      instrument: inferInstrument(body) || 'other',
       entryKind: 'transfer',
     }, body),
   };
@@ -873,7 +937,7 @@ function parseBuiltInInvestmentMovement(sms) {
 function parseBuiltInUpiDebit(sms) {
   const body = String(sms?.body || '');
   if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_builtin_upi_match' };
-  const instrument = inferInstrument(body, false);
+  const instrument = inferInstrument(body);
   if (instrument !== 'upi_bank') return { ok: false, reason: 'no_builtin_upi_match' };
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_builtin_upi_match' };
@@ -935,8 +999,8 @@ function parseBuiltInCardSpend(sms) {
     || body.match(/\bcard\s+(?:no\.?\s*)?(\d{4})\b/i)
     || body.match(/\bcard\b[\s\S]{0,40}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|\.{3,}|last\s*4|no\.?)\D{0,5}(\d{4})/i);
   if (!last4Match) return { ok: false, reason: 'no_builtin_card_match' };
-  const instrument = inferInstrument(body, true);
-  if (instrument !== 'credit_card' && instrument !== 'debit_card') return { ok: false, reason: 'no_builtin_card_match' };
+  const instrument = inferInstrument(body) || 'other';
+  if (!['credit_card', 'debit_card', 'other'].includes(instrument)) return { ok: false, reason: 'no_builtin_card_match' };
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_builtin_card_match' };
   const amountInr = Number(amountMatch[1].replace(/,/g, ''));
@@ -948,6 +1012,7 @@ function parseBuiltInCardSpend(sms) {
   // the merchant when the message also contains "to 921...".
   const merchantMatch = body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block|card|bank|account|a\/c|max\s*limit|txn)\b|\s*\(|[.,;]|$|\r|\n)/i)
     || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|\s*\(|[.,;]|$|\r|\n)/i)
+    || body.match(/\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:IST\s+)?([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:avl|available|limit|not\s+you|sms\s+block|call)\b|[.;]|$|\r|\n)/i)
     || body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
     || body.match(/\b(?:at|to|for)\s+([A-Za-z_][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|was|is|has|successful|completed)\b|[.,]|$)/i);
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
@@ -1097,11 +1162,11 @@ function parseSms(pattern, sms) {
     // This prevents a stale/broad pattern from turning a debit-card alert
     // into a credit-card spend merely because its field_map says
     // `instrument=credit_card`.
-    const inferredInstrument = inferInstrument(sms.body, Boolean(fields.last4));
+    const inferredInstrument = inferInstrument(sms.body);
     const mappedInstrument = String(fields.instrument || '').trim().toLowerCase();
     fields.instrument = inferredInstrument
       || (['credit_card', 'debit_card'].includes(mappedInstrument) ? mappedInstrument : null)
-      || 'credit_card';
+      || 'other';
   }
   fields.entryKind = 'spend';
   return { ok: true, fields };
@@ -1137,12 +1202,10 @@ function parseConservativeBankSpend(sms) {
   if (isCardBillNotice(body)) {
     return { ok: false, reason: 'card_bill_notice' };
   }
-  if (!/\b(spent|spend|debited|purchase|purchased|used|transaction)\b/i.test(body)) {
+  if (!/\b(spent|spend|debited|purchase|purchased|used|transaction|txn)\b/i.test(body)) {
     return { ok: false, reason: 'no_spend_marker' };
   }
-  // Current auto-resolution is a credit-card pipeline. Requiring card
-  // evidence prevents an account debit/UPI notification from being assigned
-  // to an unrelated card just because amount and merchant look plausible.
+  // Require card context, but leave the card type unknown without evidence.
   if (!/\b(card|credit card)\b/i.test(body)) {
     return { ok: false, reason: 'no_card_marker' };
   }
@@ -1160,7 +1223,7 @@ function parseConservativeBankSpend(sms) {
     // Keep the fallback conservative, but preserve an explicit debit-card
     // signal so a purchase on a debit card is not labelled as credit-card
     // spend before the richer built-in parser gets a chance to run.
-    instrument: inferInstrument(body, Boolean(last4)) || 'credit_card',
+    instrument: inferInstrument(body) || 'other',
     entryKind: 'spend',
   };
   if (last4) fields.last4 = last4[1];
@@ -1168,10 +1231,11 @@ function parseConservativeBankSpend(sms) {
   const merchant = body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$|\r|\n)/i)
     || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$|\r|\n)/i)
     || body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
-    || body.match(/\b(?:at|to)\s+([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block|for\s+card)\b|[.;]|$)/i);
+    || body.match(/\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:IST\s+)?([A-Za-z_][-A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:avl|available|limit|not\s+you|sms\s+block|call)\b|[.;]|$|\r|\n)/i)
+    || body.match(/\b(?:at|to)\s+([A-Za-z0-9_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block|for\s+card)\b|[.;]|$)/i);
   if (merchant) {
     const value = merchant[1].trim().replace(/^_+/, '').replace(/[.,;:-]+$/, '').trim();
-    if (value && !/^(your|card|account|a\/c)$/i.test(value)) fields.merchant = value;
+    if (value && !/^(your|card|account|a\/c)$/i.test(value) && !/^\+?\d[\d\s-]{5,}$/.test(value)) fields.merchant = value;
   }
 
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
@@ -1185,6 +1249,20 @@ function patternPriority(pattern, result) {
   const senderSpecific = pattern.sender_pattern ? 1000 : 0;
   const version = Number(pattern.version) || 0;
   return senderSpecific + mappedFields * 100 + version;
+}
+
+// A configured pattern can identify a payment without mapping its payee.
+// Reuse the card parser only for the missing display field, and only when its
+// amount, card suffix and instrument agree with the accepted parse.
+function enrichMissingCardMerchant(result, sms) {
+  if (!result.ok || result.fields?.merchant) return result;
+  const card = parseBuiltInCardSpend(sms);
+  if (!card.ok || !card.fields.merchant) return result;
+  const fields = result.fields;
+  if (fields.amountInr !== card.fields.amountInr ||
+      !fields.last4 || fields.last4 !== card.fields.last4 ||
+      fields.instrument !== card.fields.instrument) return result;
+  return { ...result, fields: { ...fields, merchant: card.fields.merchant } };
 }
 
 function parseSmsAgainstPatterns(patterns, sms) {
@@ -1248,13 +1326,13 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (matches.length > 0) {
     matches.sort((left, right) => right.priority - left.priority);
     const { priority: _, ...best } = matches[0];
-    return best;
+    return enrichMissingCardMerchant(best, sms);
   }
 
   const builtin = parseBuiltInUpiDebit(sms);
   if (builtin.ok) return builtin;
   const fallback = parseConservativeBankSpend(sms);
-  if (fallback.ok) return { ...fallback, patternId: null };
+  if (fallback.ok) return enrichMissingCardMerchant({ ...fallback, patternId: null }, sms);
 
   // Keep the issuer-independent card parser as a final fallback for card
   // alerts whose wording is outside the conservative generic grammar.
@@ -1378,6 +1456,28 @@ function parseTransactionDate(raw, reference = new Date()) {
   return parsed;
 }
 
+// Some card alerts print the actual swipe time immediately after the bank's
+// transaction date. Use it only when the timezone is explicit; otherwise a
+// guessed timezone could move a purchase into the wrong day or month.
+function parseSmsTransactionTimestamp(rawDate, body, reference = new Date()) {
+  const explicit = String(body || '').match(/\b(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s+IST\b/i);
+  const date = parseTransactionDate(rawDate || explicit?.[1], reference);
+  if (!date || !explicit) return { date, precise: false };
+  const printedDate = parseTransactionDate(explicit[1], reference);
+  if (!printedDate || printedDate.getFullYear() !== date.getFullYear()
+      || printedDate.getMonth() !== date.getMonth()
+      || printedDate.getDate() !== date.getDate()) return { date, precise: false };
+  const hour = Number(explicit[2]);
+  const minute = Number(explicit[3]);
+  const second = Number(explicit[4] || 0);
+  if (hour > 23 || minute > 59 || second > 59) return { date, precise: false };
+  const timestamp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, second)
+    - 330 * 60 * 1000);
+  return timestamp <= new Date(reference.getTime() + 24 * 60 * 60 * 1000)
+    ? { date: timestamp, precise: true }
+    : { date, precise: false };
+}
+
 module.exports = {
   parseSms,
   parseSmsAgainstPatterns,
@@ -1391,6 +1491,7 @@ module.exports = {
   senderMatches,
   redactSmsShape,
   parseTransactionDate,
+  parseSmsTransactionTimestamp,
   isAmbiguousAccountDebit,
   isExplicitOwnAccountTransfer,
   KNOWN_FIELDS,

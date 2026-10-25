@@ -4,7 +4,10 @@ import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/card_bill_ledger.dart';
 import 'package:pandapay/data/local/sms_import_store.dart';
+import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
+import 'package:pandapay/data/past_bill_receipts.dart';
+import 'package:pandapay/data/premium_reminders.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/features/insights/payments_due_screen.dart';
@@ -397,54 +400,62 @@ void main() {
       },
     );
 
-    test('SQLite storage: saves, loads, and migrates from legacy SharedPreferences', () async {
-      final prefs = await SharedPreferences.getInstance();
-      const ns = 'user:sqlite-test';
-      // Put a legacy item in SharedPreferences
-      await prefs.setString(
-        'pandapay_app.commitments_v1:$ns',
-        '[{"id":"legacy-c1","title":"Electricity","category":"utility","due_on":"2026-10-25T00:00:00.000","cadence":"monthly","status":"due","source":"manual"}]',
-      );
+    test(
+      'SQLite storage: saves, loads, and migrates from legacy SharedPreferences',
+      () async {
+        final prefs = await SharedPreferences.getInstance();
+        const ns = 'user:sqlite-test';
+        // Put a legacy item in SharedPreferences
+        await prefs.setString(
+          'pandapay_app.commitments_v1:$ns',
+          '[{"id":"legacy-c1","title":"Electricity","category":"utility","due_on":"2026-10-25T00:00:00.000","cadence":"monthly","status":"due","source":"manual"}]',
+        );
 
-      final db = openInMemoryForTesting();
-      final repo = CommitmentsRepository(
-        namespace: ns,
-        loadDatabase: () async => db,
-      );
+        final db = openInMemoryForTesting();
+        final repo = CommitmentsRepository(
+          namespace: ns,
+          loadDatabase: () async => db,
+        );
 
-      // fetchAll should migrate the legacy item into SQLite
-      final items = await repo.fetchAll();
-      expect(items, hasLength(1));
-      expect(items.single.id, 'legacy-c1');
-      expect(items.single.title, 'Electricity');
+        // fetchAll should migrate the legacy item into SQLite
+        final items = await repo.fetchAll();
+        expect(items, hasLength(1));
+        expect(items.single.id, 'legacy-c1');
+        expect(items.single.title, 'Electricity');
 
-      // SharedPreferences key should be cleaned up
-      expect(prefs.getString('pandapay_app.commitments_v1:$ns'), isNull);
+        // SharedPreferences key should be cleaned up
+        expect(prefs.getString('pandapay_app.commitments_v1:$ns'), isNull);
 
-      // Verify row exists directly in local_commitments table
-      final rows = db.db.select('SELECT id FROM local_commitments WHERE namespace=?', [ns]);
-      expect(rows.map((r) => r['id']), ['legacy-c1']);
+        // Verify row exists directly in local_commitments table
+        final rows = db.db.select(
+          'SELECT id FROM local_commitments WHERE namespace=?',
+          [ns],
+        );
+        expect(rows.map((r) => r['id']), ['legacy-c1']);
 
-      // Add a new commitment via SQLite
-      await repo.save(Commitment(
-        id: 'new-c2',
-        title: 'Water Bill',
-        category: CommitmentCategory.utility,
-        dueOn: DateTime(2026, 11, 5),
-        cadence: CommitmentCadence.monthly,
-      ));
+        // Add a new commitment via SQLite
+        await repo.save(
+          Commitment(
+            id: 'new-c2',
+            title: 'Water Bill',
+            category: CommitmentCategory.utility,
+            dueOn: DateTime(2026, 11, 5),
+            cadence: CommitmentCadence.monthly,
+          ),
+        );
 
-      final allItems = await repo.fetchAll();
-      expect(allItems, hasLength(2));
-      expect(allItems.map((c) => c.id).toSet(), {'legacy-c1', 'new-c2'});
+        final allItems = await repo.fetchAll();
+        expect(allItems, hasLength(2));
+        expect(allItems.map((c) => c.id).toSet(), {'legacy-c1', 'new-c2'});
 
-      // Delete one item
-      await repo.delete('legacy-c1');
-      final remaining = await repo.fetchAll();
-      expect(remaining.map((c) => c.id), ['new-c2']);
+        // Delete one item
+        await repo.delete('legacy-c1');
+        final remaining = await repo.fetchAll();
+        expect(remaining.map((c) => c.id), ['new-c2']);
 
-      db.close();
-    });
+        db.close();
+      },
+    );
   });
 
   group('AutoPay & Mandate end-to-end integration', () {
@@ -475,117 +486,327 @@ void main() {
       db.close();
     });
 
-    test('credit card AutoPay notice populates sms_observations and CardBillLedger without entering Needs Review', () async {
-      final msg = QueuedSms(
-        sender: 'HDFCBK',
-        body: 'AutoPay Alert!\nYour HDFC Bank Credit Card 8708 bill of Rs 12,450.00 is scheduled for auto debit on 05-NOV-2026.',
-        receivedAt: DateTime(2026, 10, 22),
+    test(
+      'credit card AutoPay notice populates sms_observations and CardBillLedger without entering Needs Review',
+      () async {
+        final msg = QueuedSms(
+          sender: 'HDFCBK',
+          body:
+              'AutoPay Alert!\nYour HDFC Bank Credit Card 8708 bill of Rs 12,450.00 is scheduled for auto debit on 05-NOV-2026.',
+          receivedAt: DateTime(2026, 10, 22),
+        );
+
+        smsImportStore.capture(ns, msg);
+
+        // Verify sms_observations
+        final observations = financialStore.entities(ns, 'sms_observations');
+        expect(observations, hasLength(1));
+        final obs = observations.single;
+        expect(obs['card_last4'], '8708');
+        expect(obs['amount_due_paise'], 1245000);
+        expect(obs['due_date'], '2026-11-05T00:00:00.000');
+        expect(obs['is_autopay'], isTrue);
+        expect(
+          obs['reason_codes'],
+          containsAll(['autopay_notice', 'due_date_detected']),
+        );
+
+        // Verify CardBillLedger derivation
+        final card = UserCard.fromJson({
+          'id': 'card_hdfc',
+          'card_product_id': 'hdfc_regalia',
+          'card_name': 'HDFC Bank Credit Card',
+          'last4': '8708',
+          'is_default': false,
+        });
+        final evidence = CardBillEvidence(
+          cardLast4: obs['card_last4'] as String?,
+          family: obs['sender_bank'] as String?,
+          statementDate: DateTime.parse(obs['received_at'] as String),
+          statementDateExplicit: false,
+          dueDate: DateTime.parse(obs['due_date'] as String),
+          amountDue: Money.fromPaise(obs['amount_due_paise'] as int),
+          minimumDue: null,
+          confidence: 0.95,
+          isAutopay: obs['is_autopay'] == true,
+        );
+        final ledgers = deriveCardBills(
+          cards: [card],
+          evidence: [evidence],
+          payments: [],
+          now: DateTime(2026, 10, 25),
+        );
+        final ledger = ledgers[card.id];
+        expect(ledger, isNotNull);
+        expect(ledger!.current, isNotNull);
+        expect(ledger.current!.amountDue?.rupees, 12450.0);
+        expect(ledger.current!.dueDate, DateTime(2026, 11, 5));
+        expect(ledger.current!.isAutopay, isTrue);
+        expect(ledger.current!.statementDateVerified, isTrue);
+
+        // Verify intake decision is financial_auto and not review
+        final decisions = db.db.select(
+          'SELECT decision, state FROM sms_source_decisions WHERE namespace=?',
+          [ns],
+        );
+        expect(decisions, hasLength(1));
+        expect(decisions.first['decision'], 'financial_auto');
+        expect(decisions.first['state'], 'final');
+
+        // Verify Needs Review remains clean
+        final reviewItems = await needsReviewRepo.fetchAll();
+        expect(reviewItems, isEmpty);
+      },
+    );
+
+    test(
+      'non-card utility/mandate notice populates CommitmentsRepository as recurring commitments without entering Needs Review',
+      () async {
+        final yojanaMsg = QueuedSms(
+          sender: 'APYGOV',
+          body:
+              'Dear Subscriber, your contribution amount for Atal Pension Yojana PRAN 123456789012 is Rs 46/-. Auto debit from your account will be on 05-NOV-2026. Keep sufficient balance.',
+          receivedAt: DateTime(2026, 10, 22),
+        );
+        final broadbandMsg = QueuedSms(
+          sender: 'ALEGRA',
+          body:
+              'Payment of Rs.800/- is due towards your Alegra Broadband bill. AutoPay will be attempted on 20-Nov-2026.',
+          receivedAt: DateTime(2026, 10, 15),
+        );
+
+        smsImportStore.capture(ns, yojanaMsg);
+        smsImportStore.capture(ns, broadbandMsg);
+
+        // Verify CommitmentsRepository
+        final commitments = await commitmentsRepo.fetchAll();
+        expect(commitments, hasLength(2));
+
+        final yojana = commitments.firstWhere(
+          (c) => c.title.contains('Atal Pension Yojana'),
+        );
+        expect(yojana.amount?.rupees, 46.0);
+        expect(yojana.dueOn, DateTime(2026, 11, 5));
+        expect(yojana.category, CommitmentCategory.tax);
+        expect(yojana.source, CommitmentSource.sms);
+
+        final broadband = commitments.firstWhere(
+          (c) => c.title.contains('Alegra Broadband'),
+        );
+        expect(broadband.amount?.rupees, 800.0);
+        expect(broadband.dueOn, DateTime(2026, 11, 20));
+        expect(broadband.category, CommitmentCategory.telecom);
+        expect(broadband.source, CommitmentSource.sms);
+
+        // Verify intake decision is financial_auto and not review
+        final decisions = db.db.select(
+          'SELECT decision, state FROM sms_source_decisions WHERE namespace=?',
+          [ns],
+        );
+        expect(decisions, hasLength(2));
+        for (final row in decisions) {
+          expect(row['decision'], 'financial_auto');
+          expect(row['state'], 'final');
+        }
+
+        // Verify Needs Review remains clean
+        final reviewItems = await needsReviewRepo.fetchAll();
+        expect(reviewItems, isEmpty);
+      },
+    );
+
+    test(
+      'upcoming bills with future due dates populate CommitmentsRepository, while past bills archive to PastBillReceipts without entering Needs Review',
+      () async {
+        final futureDue = DateTime.now().add(const Duration(days: 14));
+        final pastDue = DateTime.now().subtract(const Duration(days: 14));
+        final futureDueStr =
+            '${futureDue.year}-${futureDue.month.toString().padLeft(2, '0')}-${futureDue.day.toString().padLeft(2, '0')}';
+        final pastDueStr =
+            '${pastDue.year}-${pastDue.month.toString().padLeft(2, '0')}-${pastDue.day.toString().padLeft(2, '0')}';
+
+        final upcomingElectricityMsg = QueuedSms(
+          sender: 'MYTNEU',
+          body:
+              'Your Goa Electricity bill of Rs. 927.00 is ready. Pay by $futureDueStr to avoid late charges.',
+          receivedAt: DateTime.now(),
+        );
+        final pastWaterMsg = QueuedSms(
+          sender: 'PWDGOA',
+          body:
+              'Dear Consumer, your PWD water bill of Rs. 420 is generated. Due date: $pastDueStr.',
+          receivedAt: pastDue,
+        );
+
+        smsImportStore.capture(ns, upcomingElectricityMsg);
+        smsImportStore.capture(ns, pastWaterMsg);
+
+        // Verify upcoming bill went directly to CommitmentsRepository
+        final commitments = await commitmentsRepo.fetchAll();
+        expect(commitments, hasLength(1));
+        final elec = commitments.single;
+        expect(elec.title, contains('Electricity'));
+        expect(elec.amount?.rupees, 927.0);
+        expect(elec.dueOn.day, futureDue.day);
+        expect(elec.dueOn.month, futureDue.month);
+
+        // Verify past bill went directly to PastBillReceiptRepository
+        final pastBills = PastBillReceiptRepository(
+          db,
+          namespace: ns,
+        ).fetchAll();
+        expect(pastBills, hasLength(1));
+        final past = pastBills.single;
+        expect(past.amount?.rupees, 420.0);
+        expect(past.status, PastBillReceiptStatus.historicalUnpaid);
+
+        // Verify Needs Review remains completely clean!
+        final reviewItems = await needsReviewRepo.fetchAll();
+        expect(reviewItems, isEmpty);
+      },
+    );
+
+    test(
+      'a past month-only LIC premium notice archives to history instead of Needs Review',
+      () async {
+        final now = DateTime.now();
+        final premiumMonth = DateTime(now.year, now.month - 1);
+        final monthText =
+            '${premiumMonth.month.toString().padLeft(2, '0')}/${premiumMonth.year}';
+        final receivedAt = DateTime(premiumMonth.year, premiumMonth.month, 12);
+
+        smsImportStore.capture(
+          ns,
+          QueuedSms(
+            sender: 'VM-LICIND',
+            body:
+                'Dear Customer, premium due from $monthText to $monthText '
+                'under policy no. 931670879 is adjusted on 12/$monthText. '
+                'Next Premium falls due on $monthText. -LIC of India',
+            receivedAt: receivedAt,
+          ),
+        );
+
+        final archived = PastBillReceiptRepository(
+          db,
+          namespace: ns,
+        ).fetchAll();
+        expect(archived, hasLength(1));
+        final receipt = archived.single;
+        expect(receipt.kind, PastBillReceiptKind.bill);
+        expect(receipt.status, PastBillReceiptStatus.needsConfirmation);
+        expect(receipt.amount, isNull);
+        expect(receipt.dueDate, isNull);
+        expect(receipt.body, contains('LIC of India'));
+
+        final reviewItems = await needsReviewRepo.fetchAll();
+        expect(reviewItems, isEmpty);
+      },
+    );
+
+    test(
+      'a current-month month-only LIC notice feeds Bills without entering Needs Review',
+      () async {
+        final now = DateTime.now();
+        final monthText =
+            '${now.month.toString().padLeft(2, '0')}/${now.year}';
+
+        smsImportStore.capture(
+          ns,
+          QueuedSms(
+            sender: 'VM-LICIND',
+            body:
+                'Dear Customer, premium due from $monthText to $monthText '
+                'under policy no. 931670879 is adjusted on 12/$monthText. '
+                'Next Premium falls due on $monthText. -LIC of India',
+            receivedAt: now,
+          ),
+        );
+
+        expect(await needsReviewRepo.fetchAll(), isEmpty);
+        expect(
+          PastBillReceiptRepository(db, namespace: ns).fetchAll(limit: null),
+          isEmpty,
+        );
+
+        final observations = financialStore.entities(ns, 'sms_observations');
+        expect(observations, hasLength(1));
+        expect(
+          observations.single['reason_codes'],
+          contains('next_premium_due_month_only'),
+        );
+        final reminders = derivePremiumReminders(
+          observations: observations,
+          now: now,
+        );
+        expect(reminders, hasLength(1));
+        expect(reminders.single.premiumMonth.month, now.month);
+        expect(reminders.single.premiumMonth.year, now.year);
+        expect(reminders.single.accountLast4, '0879');
+        expect(reminders.single.category, CommitmentCategory.insurance);
+      },
+    );
+
+    test('a paid historical utility bill is archived as linked, not unpaid', () {
+      final due = DateTime.now().subtract(const Duration(days: 14));
+      financialStore.saveTransactions(ns, [
+        TransactionEntry(
+          id: 'paid-water-bill',
+          amount: Money.fromRupees(420),
+          occurredAt: due.add(const Duration(days: 1)),
+          merchantName: 'PWD water',
+          instrument: TxnInstrument.upiBank,
+          entryKind: TxnEntryKind.spend,
+          source: 'manual',
+          status: 'active',
+        ),
+      ], completeQuery: const TransactionQuery());
+      final dueText =
+          '${due.year}-${due.month.toString().padLeft(2, '0')}-${due.day.toString().padLeft(2, '0')}';
+
+      smsImportStore.capture(
+        ns,
+        QueuedSms(
+          sender: 'PWDGOA',
+          body:
+              'Dear Consumer, your PWD water bill of Rs. 420 is generated. Due date: $dueText.',
+          receivedAt: due,
+        ),
       );
 
-      smsImportStore.capture(ns, msg);
-
-      // Verify sms_observations
-      final observations = financialStore.entities(ns, 'sms_observations');
-      expect(observations, hasLength(1));
-      final obs = observations.single;
-      expect(obs['card_last4'], '8708');
-      expect(obs['amount_due_paise'], 1245000);
-      expect(obs['due_date'], '2026-11-05T00:00:00.000');
-      expect(obs['is_autopay'], isTrue);
-      expect(obs['reason_codes'], containsAll(['autopay_notice', 'due_date_detected']));
-
-      // Verify CardBillLedger derivation
-      final card = UserCard.fromJson({
-        'id': 'card_hdfc',
-        'card_product_id': 'hdfc_regalia',
-        'card_name': 'HDFC Bank Credit Card',
-        'last4': '8708',
-        'is_default': false,
-      });
-      final evidence = CardBillEvidence(
-        cardLast4: obs['card_last4'] as String?,
-        family: obs['sender_bank'] as String?,
-        statementDate: DateTime.parse(obs['received_at'] as String),
-        statementDateExplicit: false,
-        dueDate: DateTime.parse(obs['due_date'] as String),
-        amountDue: Money.fromPaise(obs['amount_due_paise'] as int),
-        minimumDue: null,
-        confidence: 0.95,
-        isAutopay: obs['is_autopay'] == true,
-      );
-      final ledgers = deriveCardBills(
-        cards: [card],
-        evidence: [evidence],
-        payments: [],
-        now: DateTime(2026, 10, 25),
-      );
-      final ledger = ledgers[card.id];
-      expect(ledger, isNotNull);
-      expect(ledger!.current, isNotNull);
-      expect(ledger.current!.amountDue?.rupees, 12450.0);
-      expect(ledger.current!.dueDate, DateTime(2026, 11, 5));
-      expect(ledger.current!.isAutopay, isTrue);
-      expect(ledger.current!.statementDateVerified, isTrue);
-
-      // Verify intake decision is financial_auto and not review
-      final decisions = db.db.select(
-        'SELECT decision, state FROM sms_source_decisions WHERE namespace=?',
-        [ns],
-      );
-      expect(decisions, hasLength(1));
-      expect(decisions.first['decision'], 'financial_auto');
-      expect(decisions.first['state'], 'final');
-
-      // Verify Needs Review remains clean
-      final reviewItems = await needsReviewRepo.fetchAll();
-      expect(reviewItems, isEmpty);
+      final archived = PastBillReceiptRepository(
+        db,
+        namespace: ns,
+      ).fetchAll().single;
+      expect(archived.status, PastBillReceiptStatus.paidLinked);
+      expect(archived.linkedTransactionId, 'paid-water-bill');
     });
 
-    test('non-card utility/mandate notice populates CommitmentsRepository as recurring commitments without entering Needs Review', () async {
-      final yojanaMsg = QueuedSms(
-        sender: 'APYGOV',
-        body: 'Dear Subscriber, your contribution amount for Atal Pension Yojana PRAN 123456789012 is Rs 46/-. Auto debit from your account will be on 05-NOV-2026. Keep sufficient balance.',
-        receivedAt: DateTime(2026, 10, 22),
+    test('a generic dated invoice does not become a monthly commitment', () async {
+      final due = DateTime.now().add(const Duration(days: 14));
+      final dueText =
+          '${due.year}-${due.month.toString().padLeft(2, '0')}-${due.day.toString().padLeft(2, '0')}';
+      final parsed = LocalSmsParser.parse(
+        body:
+            'Your apartment repair bill amount due is Rs 750. Pay by $dueText.',
+        sender: 'VENDOR',
+        receivedAt: DateTime.now(),
+        namespace: ns,
       );
-      final broadbandMsg = QueuedSms(
-        sender: 'ALEGRA',
-        body: 'Payment of Rs.800/- is due towards your Alegra Broadband bill. AutoPay will be attempted on 20-Oct-2026.',
-        receivedAt: DateTime(2026, 10, 15),
+
+      expect(parsed?.eventType, LocalSmsEventType.bill);
+      expect(parsed?.disposition, isNot(LocalSmsDisposition.localCommitment));
+
+      smsImportStore.capture(
+        ns,
+        QueuedSms(
+          sender: 'VENDOR',
+          body:
+              'Your apartment repair bill amount due is Rs 750. Pay by $dueText.',
+          receivedAt: DateTime.now(),
+        ),
       );
-
-      smsImportStore.capture(ns, yojanaMsg);
-      smsImportStore.capture(ns, broadbandMsg);
-
-      // Verify CommitmentsRepository
-      final commitments = await commitmentsRepo.fetchAll();
-      expect(commitments, hasLength(2));
-
-      final yojana = commitments.firstWhere((c) => c.title.contains('Atal Pension Yojana'));
-      expect(yojana.amount?.rupees, 46.0);
-      expect(yojana.dueOn, DateTime(2026, 11, 5));
-      expect(yojana.category, CommitmentCategory.tax);
-      expect(yojana.source, CommitmentSource.sms);
-
-      final broadband = commitments.firstWhere((c) => c.title.contains('Alegra Broadband'));
-      expect(broadband.amount?.rupees, 800.0);
-      expect(broadband.dueOn, DateTime(2026, 10, 20));
-      expect(broadband.category, CommitmentCategory.telecom);
-      expect(broadband.source, CommitmentSource.sms);
-
-      // Verify intake decision is financial_auto and not review
-      final decisions = db.db.select(
-        'SELECT decision, state FROM sms_source_decisions WHERE namespace=?',
-        [ns],
-      );
-      expect(decisions, hasLength(2));
-      for (final row in decisions) {
-        expect(row['decision'], 'financial_auto');
-        expect(row['state'], 'final');
-      }
-
-      // Verify Needs Review remains clean
-      final reviewItems = await needsReviewRepo.fetchAll();
-      expect(reviewItems, isEmpty);
+      expect(await commitmentsRepo.fetchAll(), isEmpty);
     });
   });
 }

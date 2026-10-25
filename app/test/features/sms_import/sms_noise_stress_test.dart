@@ -202,6 +202,157 @@ void main() {
     }
   });
 
+  group('Category 8b: Card controls, linking and settlement explanations', () {
+    final controlNotices = <(String sender, String body)>[
+      (
+        'VA-SLCBNK-S',
+        'Your transaction limit for pinless UPI on your slice credit card has been updated. You can check and change it in the app - slice',
+      ),
+      (
+        'VM-HDFCBN-S',
+        'Dear Customer, Security Tip-Enable Online use & Set Limit on HDFC Bank Credit Card 1366. Use NetBanking/MyCards/WhatsApp https://1.hdfc.bank.in/HDFCBK/s/yjGKjM5',
+      ),
+      (
+        'VD-HDFCBK-S',
+        'HDFC Bank Credit Card has been linked for NetBanking. Pls login to NetBanking and select Credit Cards tab to view statement details or to make payment',
+      ),
+      (
+        'VK-LEMONN-S',
+        'Dear SUJAY SHANTARAM KURTIKAR, as per SEBI and exchange guidelines, unused funds in your Lemonn trading account will be transferred back to your registered bank account on the day of settlement.',
+      ),
+    ];
+
+    for (final (sender, body) in controlNotices) {
+      test('Control notice rejected: "$body"', () {
+        expect(
+          LocalSmsParser.isNonTransactionNoise(sender, body),
+          isTrue,
+          reason: 'isNonTransactionNoise should be true for: $body',
+        );
+        expect(
+          capturesFinancialSms(body, sender: sender),
+          isFalse,
+          reason: 'capturesFinancialSms should be false for: $body',
+        );
+      });
+    }
+
+    final actionableMessages = <(String sender, String body)>[
+      (
+        'VM-HDFCBK-S',
+        'Your HDFC Bank Credit Card 1366 credit limit has been updated to INR 2,00,000.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'Your HDFC Bank Credit Card 1366 statement has been generated. Total due INR 5,000 by 05-Nov-2026.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'Spent Rs 500 on HDFC Bank Credit Card 1366 at AMAZON on 20-Oct-2026.',
+      ),
+      (
+        'VM-AXISBK-S',
+        'AutoPay e-mandate registered for NETFLIX with maximum limit of INR 2,000 on card XX7105.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'INR 5000 transferred to your bank account XXXX1234 on 20-Oct-2026.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'Security tip: your HDFC Bank Credit Card ending 1366 was debited INR 500 at AMAZON on 20-Oct-2026.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'Security Alert: Your HDFC Bank Credit Card ending 1366 was used for INR 5,000 at AMAZON on 20-Oct-2026. If not you, call 18002586161.',
+      ),
+      (
+        'VM-HDFCBK-S',
+        'Txn of INR 500 declined on your HDFC Bank Credit Card 1366 because it exceeds your transaction limit.',
+      ),
+    ];
+
+    for (final (sender, body) in actionableMessages) {
+      test('Actionable message kept: "$body"', () {
+        expect(
+          LocalSmsParser.isNonTransactionNoise(sender, body),
+          isFalse,
+          reason: 'isNonTransactionNoise should be false for: $body',
+        );
+      });
+    }
+  });
+
+  group('Category 8c: Biller onboarding and future bill promises', () {
+    final onboardingNotices = <(String sender, String body)>[
+      (
+        'CP-AXISBK-S',
+        'You have added Goa Electricity Department 60008413407 to Axis Bank Bill Pay service. We will notify you once the bill is generated.',
+      ),
+      (
+        'AXISBK',
+        'You have successfully registered for paperless e-bill. We will notify you when the bill is generated.',
+      ),
+      ('HDFCBK', 'Bill Pay service has been activated for your account.'),
+      ('HDFCBK', 'Your first bill will be generated on 05-Nov-2026.'),
+      (
+        'AXISBK',
+        'BillPay registration successful. You will receive your bill every month.',
+      ),
+      ('AXISBK', 'You will receive your bill on the 5th of every month.'),
+      ('AXISBK', 'Bill generation date: 05-Nov-2026.'),
+      ('AXISBK', 'Bill fetch is now enabled for your biller.'),
+      ('AXISBK', 'Your biller will send you the bill every month.'),
+      ('HDFCBK', 'You have added Goa Electricity Department as a payee.'),
+    ];
+
+    for (final (sender, body) in onboardingNotices) {
+      test('Biller onboarding rejected: "$body"', () {
+        expect(
+          LocalSmsParser.isNonTransactionNoise(sender, body),
+          isTrue,
+          reason: 'isNonTransactionNoise should be true for: $body',
+        );
+        expect(
+          capturesFinancialSms(body, sender: sender),
+          isFalse,
+          reason: 'capturesFinancialSms should be false for: $body',
+        );
+      });
+    }
+
+    final actionableBillMessages = <(String sender, String body)>[
+      (
+        'AXISBK',
+        'Your electricity bill of Rs 1,200 is generated. Due on 05-Nov-2026.',
+      ),
+      ('AXISBK', 'Bill payment of Rs 500 scheduled on 05-Nov-2026.'),
+      (
+        'AXISBK',
+        'You have added Goa Electricity Department to Bill Pay with AutoPay maximum limit INR 2,000.',
+      ),
+      ('AXISBK', 'Your bill is due today. Login to view.'),
+      (
+        'AXISBK',
+        'Your first bill will be generated on 05-Nov-2026. Total due INR 500.',
+      ),
+      (
+        'AXISBK',
+        'You have added Goa Electricity Department to Bill Pay. Bill payment failed.',
+      ),
+    ];
+
+    for (final (sender, body) in actionableBillMessages) {
+      test('Actionable bill kept: "$body"', () {
+        expect(
+          LocalSmsParser.isNonTransactionNoise(sender, body),
+          isFalse,
+          reason: 'isNonTransactionNoise should be false for: $body',
+        );
+      });
+    }
+  });
+
   group('Category 9: Lottery / Rewards Spam', () {
     final lotteryRewardsSpam = <(String sender, String body)>[
       ('VM-REWARD-P', 'You won Rs. 50,000 cash prize in Diwali Lucky Draw! Claim now by paying processing fee of Rs. 500 at http://claim-prize.in'),

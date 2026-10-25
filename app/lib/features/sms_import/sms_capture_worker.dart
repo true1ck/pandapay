@@ -40,7 +40,7 @@ class SmsCaptureWorker {
           }
         }
       } else {
-        _fail(StateError('SMS capture worker stopped unexpectedly'));
+        _fail(StateError('SMS capture worker stopped unexpectedly: $message'));
       }
     });
   }
@@ -176,7 +176,7 @@ class SmsCaptureWorker {
           replies.send([
             id,
             <String>[],
-            'Local SMS capture failed (${error.runtimeType})',
+            'Local SMS capture failed: $error',
           ]);
         }
       });
@@ -184,7 +184,7 @@ class SmsCaptureWorker {
       replies.send([
         -1,
         <String>[],
-        'Local SMS storage unavailable (${error.runtimeType})',
+        'Local SMS storage unavailable: $error',
       ]);
     }
   }

@@ -36,6 +36,7 @@ const smsRuleBundle = require('./sms_rule_bundle');
 const HEX64 = /^[0-9a-f]{64}$/;
 const CANDIDATE_ID = /^[A-Za-z0-9._:-]{3,128}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SENSITIVE_SMS_EVIDENCE = /\b(?:otp|one[ .-]?time password|verification (?:code|number)|security code|access code|passcode|pin|cvv)\b/i;
 // Kept in lockstep with the on-device baseline/candidate comparison contract.
 // The worker also understands the historical aggregate labels used by older
 // clients, so those remain accepted during the migration window.
@@ -146,6 +147,10 @@ async function applyFactSpecialists(client, userId, resolution, {
   let mandatePersisted = false;
   const seenDates = new Set();
   for (const fact of resolution.facts) {
+    if (fact.status === 'superseded' || fact.status === 'discarded') continue;
+    // A device replay can load AI suggestions already stored on this source.
+    // Only an explicit saved correction promotes those suggestions to evidence.
+    if (fact.provenance?.channel === 'ai' && !fact.overridden) continue;
     if (fact.factType === 'mandate_lifecycle' && !mandatePersisted) {
       const parsed = syntheticMandateParse(fact);
       if (parsed) {
@@ -160,10 +165,17 @@ async function applyFactSpecialists(client, userId, resolution, {
     }
     const payload = fact.payload || {};
     const last4 = typeof payload.last4 === 'string' ? payload.last4 : null;
-    if (payload.statementDate) {
+    // Only a card-bill obligation is evidence for recurring card days. Other
+    // fact families may carry dates for their own lifecycle and must not heal
+    // the card profile.
+    const isCardBill = fact.factType === 'bill_obligation' &&
+      (!payload.instrument || payload.instrument === 'credit_card') &&
+      (!payload.cardType || payload.cardType === 'credit') &&
+      payload.targetKind !== 'utility_or_other_bill';
+    if (isCardBill && payload.statementDate) {
       // Several roles of one bill carry the same printed dates; heal each
-      // distinct date once.
-      const key = `s${istDayKey(payload.statementDate)}`;
+      // distinct card/date once. Multiple cards can legitimately share a date.
+      const key = `s:${last4 || userCardId || 'unmatched'}:${istDayKey(payload.statementDate)}`;
       if (!seenDates.has(key)) {
         seenDates.add(key);
         const sync = await importResolvers.syncStatementDayFromFact(client, userId, {
@@ -175,8 +187,8 @@ async function applyFactSpecialists(client, userId, resolution, {
         statementDayUpdated = statementDayUpdated || Boolean(sync?.updated);
       }
     }
-    if (payload.dueDate) {
-      const key = `d${istDayKey(payload.dueDate)}`;
+    if (isCardBill && payload.dueDate) {
+      const key = `d:${last4 || userCardId || 'unmatched'}:${istDayKey(payload.dueDate)}`;
       if (!seenDates.has(key)) {
         seenDates.add(key);
         const sync = await importResolvers.syncDueDayFromFact(client, userId, {
@@ -466,6 +478,19 @@ function registerSmsFactsRoutes(app, {
     }
     if (reason !== undefined && (typeof reason !== 'string' || reason.length > 200)) {
       return res.status(400).json({ error: 'reason must be a short optional string' });
+    }
+    // Older clients may still submit a credential-bearing message. A local
+    // dismissal is valid, but this content must not enter shared learning or
+    // an offline retry loop. Acknowledge it without persisting any evidence.
+    if ([sampleBody, templateText].some(
+      (value) => typeof value === 'string' && SENSITIVE_SMS_EVIDENCE.test(value),
+    )) {
+      return res.status(200).json({
+        dismissed: true,
+        sourceVerified: false,
+        learningRecorded: false,
+        learningReason: 'sensitive_sms',
+      });
     }
 
     try {

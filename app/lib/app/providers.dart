@@ -35,6 +35,8 @@ import '../data/local/recovery_deferred_sms.dart';
 import '../data/portable_backup/account_recovery_operation_gate.dart';
 import '../data/local/response_cache.dart';
 import '../data/local/financial_store.dart';
+import '../data/local/auto_resolved_history_repository.dart';
+import '../data/local/sms_auto_resolution_controller.dart';
 import '../data/local/sms_rule_bundle.dart';
 import '../data/local/sms_rule_bundle_store.dart';
 import '../data/local/sms_facts_outbox.dart';
@@ -49,16 +51,21 @@ import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
 import '../data/local_user_cards_repository.dart';
 import '../data/merchant_category_rules_repository.dart';
+import '../data/merchant_issue_rules_repository.dart';
 import '../data/merchant_search_repository.dart';
 import '../data/needs_review_repository.dart';
 import '../data/notification_preferences_repository.dart';
 import '../data/notification_devices_api.dart';
 import '../data/override_resolver.dart';
 import '../data/partner_apply_repository.dart';
+import '../data/pending_bills.dart';
+import '../data/past_bill_receipts.dart';
+import '../data/premium_reminders.dart';
 import '../data/recovery_api.dart';
 import '../data/referral_repository.dart';
 import '../data/spend_by_category_repository.dart';
 import '../data/spend_reports_repository.dart';
+import '../data/spending_selection.dart';
 import '../data/subscription_credits_repository.dart';
 import '../data/sync_api.dart';
 import '../data/token_store.dart';
@@ -120,6 +127,28 @@ bool reviewReplayShouldStop(Object error) {
     return true;
   }
   return true;
+}
+
+/// Determines whether an error from the AI queue represents an explicit, permanent refusal
+/// (such as HTTP 400 or HTTP 503 ai_queue_disabled), as opposed to a transient or network error.
+bool _isExplicitAiRefusal(Object error) {
+  if (error is ApiException) {
+    final status = error.statusCode;
+    if (status == 400) return true;
+    if (status == 503 &&
+        (error.errorCode == 'ai_queue_disabled' ||
+            error.debugMessage.contains('ai_queue_disabled'))) {
+      return true;
+    }
+    return false;
+  }
+  final message = error.toString().toLowerCase();
+  if (message.contains('ai_queue_disabled') ||
+      message.contains('status: 400') ||
+      message.contains('400 bad request')) {
+    return true;
+  }
+  return false;
 }
 
 final authApiProvider = Provider<AuthApi>(
@@ -399,35 +428,50 @@ final acquisitionCandidatesProvider =
       final userCards = ref.watch(userCardsProvider);
       final categorySpend = ref.watch(categorySpendProvider);
       final recommender = ref.watch(acquisitionRecommenderProvider);
+      final categories = ref.watch(categoriesProvider);
 
       if (catalogue.isLoading ||
           userCards.isLoading ||
-          categorySpend.isLoading) {
+          categorySpend.isLoading ||
+          categories.isLoading) {
         return const AsyncValue.loading();
       }
       final combinedError =
-          catalogue.error ?? userCards.error ?? categorySpend.error;
+          catalogue.error ??
+          userCards.error ??
+          categorySpend.error ??
+          categories.error;
       if (combinedError != null) {
         return AsyncValue.error(
           combinedError,
           catalogue.stackTrace ??
               userCards.stackTrace ??
-              categorySpend.stackTrace!,
+              categorySpend.stackTrace ??
+              categories.stackTrace!,
         );
       }
 
       final allCards = catalogue.requireValue;
       final wallet = userCards.requireValue;
       final spend = categorySpend.requireValue;
+      final categoryList = categories.requireValue;
 
       final ownedProducts = allCards
           .where((c) => wallet.any((w) => w.cardProductId == c.id))
           .toList();
-      final profile = SpendProfile(
-        annualSpendByCategory: {
-          for (final s in spend) s.categoryId: s.totalSpend,
-        },
-      );
+
+      final hasRealSpend = spend.any((s) => s.totalSpend > const Money.zero());
+      final SpendProfile profile;
+      if (hasRealSpend) {
+        profile = SpendProfile(
+          annualSpendByCategory: {
+            for (final s in spend) s.categoryId: s.totalSpend,
+          },
+        );
+      } else {
+        final slugToId = {for (final c in categoryList) c.slug: c.id};
+        profile = SpendProfile.starter(categorySlugToIdMap: slugToId);
+      }
 
       final results = recommender.rank(
         candidates: allCards,
@@ -917,7 +961,33 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
     // The local routing flag must never claim completion until the server has
     // persisted it. A failed request leaves the local flag false and safely
     // permits the user to retry from the final setup screen.
-    await api.completeOnboarding();
+    try {
+      await api.completeOnboarding();
+    } catch (error) {
+      if (error is ApiException &&
+          (error.errorCode == 'required_terms_missing' ||
+              error.userMessage.contains('required_terms_missing') ||
+              error.debugMessage.contains('required_terms_missing'))) {
+        final consents = _ref.read(consentsApiProvider);
+        if (consents != null) {
+          try {
+            await consents.submit(
+              purpose: 'terms',
+              granted: true,
+              policyVersion: appProductTermsVersion,
+              sourceScreen: 'onboarding_complete',
+            );
+            await api.completeOnboarding();
+          } catch (_) {
+            Error.throwWithStackTrace(error, StackTrace.current);
+          }
+        } else {
+          rethrow;
+        }
+      } else {
+        rethrow;
+      }
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_onboardingCompleteKey, true);
     state = const AsyncValue.data(true);
@@ -1019,22 +1089,97 @@ class DueDateRemindersController extends StateNotifier<Set<String>> {
 }
 
 /// Task D-4: on-device only, never uploaded — see NeedsReviewRepository's
-/// own doc-comment for why. `needsReviewItemsProvider` invalidates itself
-/// whenever an item is added/removed (each mutation site calls
-/// `ref.invalidate`), same pull-based refresh pattern as every other
-/// FutureProvider in this file rather than a StateNotifier — the store is
-/// a dumb list, not something with derived state worth a controller class.
-final needsReviewRepositoryProvider = Provider<NeedsReviewRepository>(
-  (ref) => NeedsReviewRepository(
-    namespace: ref.watch(cacheNamespaceProvider),
-    loadDatabase: () async =>
-        (await ref.read(responseCacheProvider.future)).financialStore.database,
-  ),
-);
-
-final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((ref) {
-  return ref.watch(needsReviewRepositoryProvider).fetchAll();
+/// own doc-comment for why. Repository writes feed the existing financial
+/// revision stream, keeping the cheap badge count and reconciled list current.
+final _reviewFinancialChangesProvider = FutureProvider<void>((ref) async {
+  StreamSubscription<FinancialChange>? subscription;
+  var disposed = false;
+  ref.onDispose(() {
+    disposed = true;
+    subscription?.cancel();
+  });
+  final cache = await _cacheOrNull(ref);
+  if (disposed || cache == null) return;
+  final store = cache.financialStore;
+  subscription = NeedsReviewRepository.changesFor(store.database).listen(
+    (change) => store.notifyExternalChanges(change.namespace, [change.entity]),
+  );
 });
+
+final needsReviewRepositoryProvider = Provider<NeedsReviewRepository>((ref) {
+  final namespace = ref.watch(cacheNamespaceProvider);
+  final cacheFuture = ref.watch(responseCacheProvider.future);
+  final notificationsReady = ref.watch(_reviewFinancialChangesProvider.future);
+  return NeedsReviewRepository(
+    namespace: namespace,
+    loadDatabase: () async {
+      await notificationsReady;
+      final store = (await cacheFuture).financialStore;
+      return store.database;
+    },
+  );
+});
+
+final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((
+  ref,
+) async {
+  final markReady = _financialChanges(ref, 'needs_review');
+  final markTransactionsReady = _financialChanges(ref, 'transactions');
+  final markObservationsReady = _financialChanges(ref, 'observations');
+  final items = await ref.watch(needsReviewRepositoryProvider).fetchAll();
+  markReady();
+  markTransactionsReady();
+  markObservationsReady();
+  return items;
+});
+
+/// Tier-1 auto-resolution receipts, newest first. A resolution is a normal
+/// financial-store change (entity 'auto_resolved_history'), so the same
+/// revision stream that refreshes transactions also refreshes this list.
+final autoResolvedHistoryProvider =
+    FutureProvider<List<AutoResolvedHistoryEntry>>((ref) async {
+      final markReady = _financialChanges(ref, 'auto_resolved_history');
+      final markTransactionsReady = _financialChanges(ref, 'transactions');
+      final store = (await ref.watch(responseCacheProvider.future)).financialStore;
+      final rows = AutoResolvedHistoryRepository(
+        store.database,
+        namespace: ref.watch(cacheNamespaceProvider),
+      ).fetchAll();
+      markReady();
+      markTransactionsReady();
+      return rows;
+    });
+
+final autoResolvedCountProvider = FutureProvider<int>((ref) async {
+  final markReady = _financialChanges(ref, 'auto_resolved_history');
+  final store = (await ref.watch(responseCacheProvider.future)).financialStore;
+  final count = AutoResolvedHistoryRepository(
+    store.database,
+    namespace: ref.watch(cacheNamespaceProvider),
+  ).count();
+  markReady();
+  return count;
+});
+
+/// Undo/correct actions for the Auto-Resolved tab. Synchronous by contract:
+/// the Needs Review flow always initializes [responseCacheProvider] first, so
+/// a missing cache is a programming error rather than a loading state.
+final smsAutoResolutionControllerProvider =
+    Provider<SmsAutoResolutionController>((ref) {
+      final cache = ref.watch(responseCacheProvider).valueOrNull;
+      if (cache == null) {
+        throw StateError(
+          'smsAutoResolutionControllerProvider requires responseCacheProvider '
+          'to be initialized before it is read',
+        );
+      }
+      return SmsAutoResolutionController(
+        database: cache.financialStore.database,
+        store: cache.financialStore,
+        reviewRepository: ref.watch(needsReviewRepositoryProvider),
+        namespace: ref.watch(cacheNamespaceProvider),
+      );
+    });
 
 /// The shared SMS rule bundle the server publishes: a versioned set of
 /// sender/word patterns the device applies locally, so a parser improvement
@@ -1055,8 +1200,11 @@ final activeSmsRuleBundleProvider = FutureProvider<SmsRuleBundle?>((ref) async {
 /// D1's badge (ui-spec §1: "Activity... with badge for D4 count") and
 /// Insights Hub's tile both read this rather than the full list, so
 /// neither has to unwrap an AsyncValue just to show a number.
-final needsReviewCountProvider = Provider<int>((ref) {
-  return ref.watch(needsReviewItemsProvider).valueOrNull?.length ?? 0;
+final needsReviewCountProvider = FutureProvider<int>((ref) async {
+  final markReady = _financialChanges(ref, 'needs_review');
+  final count = await ref.watch(needsReviewRepositoryProvider).count();
+  markReady();
+  return count;
 });
 
 final commitmentsRepositoryProvider = Provider<CommitmentsRepository>((ref) {
@@ -1069,6 +1217,8 @@ final commitmentsRepositoryProvider = Provider<CommitmentsRepository>((ref) {
 });
 
 final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
+  final markCommitmentsReady = _financialChanges(ref, 'commitments');
+  final markObservationsReady = _financialChanges(ref, 'observations');
   final repo = ref.watch(commitmentsRepositoryProvider);
   final manualList = await repo.fetchAll();
 
@@ -1182,20 +1332,234 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
       );
     }
 
+    markCommitmentsReady();
+    markObservationsReady();
     return [...manualList, ...detectedByIdentity.values];
   } catch (_) {
+    markCommitmentsReady();
+    markObservationsReady();
     return manualList;
   }
+});
+
+final _pastBillReceiptRevisionProvider = StreamProvider.family<int, String>((
+  ref,
+  namespace,
+) async* {
+  var version = 0;
+  await for (final changed in PastBillReceiptRepository.changes) {
+    if (changed == namespace) yield ++version;
+  }
+});
+
+final pastBillReceiptsProvider = FutureProvider<List<PastBillReceipt>>((
+  ref,
+) async {
+  var ready = false;
+  ref.listen(financialStoreRevisionProvider('observations'), (_, next) {
+    if (ready) ref.invalidateSelf();
+  });
+  final namespace = ref.watch(cacheNamespaceProvider);
+  ref.listen(_pastBillReceiptRevisionProvider(namespace), (_, next) {
+    if (ready) ref.invalidateSelf();
+  });
+  final db = await ref.watch(appDatabaseProvider.future);
+  final repository = PastBillReceiptRepository(db, namespace: namespace);
+  final allArchived = repository.fetchAll(limit: null);
+  final archived = allArchived.take(1000).toList(growable: false);
+  final knownSources = <String>{
+    for (final item in allArchived) item.sourceKey,
+    for (final item in allArchived)
+      if (item.sourceKey.startsWith('commitment:'))
+        item.sourceKey.substring('commitment:'.length),
+  };
+  String cycleKey(
+    String merchant,
+    String? cardLast4,
+    String? accountLast4,
+    DateTime due,
+    int? amountPaise,
+  ) => [
+    smsBillSlug(merchant),
+    cardLast4 ?? '',
+    accountLast4 ?? '',
+    DateTime(due.year, due.month, due.day).toIso8601String(),
+    amountPaise ?? '',
+  ].join('|');
+  final archivedCycles = <String>{
+    for (final item in allArchived)
+      if (item.kind == PastBillReceiptKind.bill && item.dueDate != null)
+        cycleKey(
+          item.merchant,
+          item.cardLast4,
+          item.accountLast4,
+          item.dueDate!,
+          item.amount?.paise,
+        ),
+  };
+  final cache = await ref.watch(responseCacheProvider.future);
+  final today = DateTime.now();
+  final currentMonth = DateTime(today.year, today.month);
+  final archiveCutoff = today.subtract(const Duration(days: 90));
+  final observedBillsByCycle = <String, PastBillReceipt>{};
+  for (final observation in cache.financialStore.entities(
+    namespace,
+    'sms_observations',
+  )) {
+    final event = observation['event_type'] as String?;
+    if (event != 'bill' && event != 'autopay') continue;
+    final id = observation['id'] as String?;
+    final received = DateTime.tryParse(
+      observation['received_at'] as String? ?? '',
+    );
+    if (id == null || knownSources.contains(id) || received == null) continue;
+    final premium = parseMonthOnlyPremium(observation);
+    if (premium != null) {
+      if (!premium.month.isBefore(currentMonth)) continue;
+      final premiumCycle = [
+        'premium',
+        smsBillSlug(premium.title),
+        premium.accountLast4 ?? '',
+        premium.month.toIso8601String(),
+      ].join('|');
+      final previous = observedBillsByCycle[premiumCycle];
+      if (previous != null && !received.isAfter(previous.receivedAt)) continue;
+      observedBillsByCycle[premiumCycle] = PastBillReceipt(
+        id: 'historical-sms-bill-$id',
+        sourceKey: id,
+        merchant: premium.title,
+        kind: PastBillReceiptKind.bill,
+        amount: null,
+        occurredAt: received,
+        receivedAt: received,
+        status: PastBillReceiptStatus.needsConfirmation,
+        accountLast4: premium.accountLast4,
+        sender: (observation['sender_bank'] as String?)?.trim(),
+        body: premium.body,
+      );
+      continue;
+    }
+    final due = DateTime.tryParse(observation['due_date'] as String? ?? '');
+    if (due == null) continue;
+    final dueDay = DateTime(due.year, due.month, due.day);
+    final todayDay = DateTime(today.year, today.month, today.day);
+    if (!dueDay.isBefore(todayDay) || !received.isBefore(archiveCutoff)) {
+      continue;
+    }
+    final biller = (observation['biller_name'] as String?)?.trim() ?? '';
+    final sender = (observation['sender_bank'] as String?)?.trim() ?? '';
+    final amountPaise =
+        observation['amount_due_paise'] as int? ??
+        observation['minimum_due_paise'] as int?;
+    if (biller.length < 3 && sender.length < 3) continue;
+    final merchant = biller.length >= 3 ? biller : sender;
+    // Reminder messages from the same bill cycle may have separate SMS IDs.
+    // Collapse only when the merchant, instrument, due day, and amount agree.
+    final billCycle = cycleKey(
+      merchant,
+      observation['card_last4'] as String?,
+      observation['account_last4'] as String?,
+      dueDay,
+      amountPaise,
+    );
+    if (archivedCycles.contains(billCycle)) continue;
+    final previous = observedBillsByCycle[billCycle];
+    if (previous != null && !received.isAfter(previous.receivedAt)) continue;
+    observedBillsByCycle[billCycle] = PastBillReceipt(
+      id: 'historical-sms-bill-$id',
+      sourceKey: id,
+      merchant: merchant,
+      kind: PastBillReceiptKind.bill,
+      amount: amountPaise == null ? null : Money.fromPaise(amountPaise),
+      occurredAt: due,
+      receivedAt: received,
+      dueDate: due,
+      status: PastBillReceiptStatus.needsConfirmation,
+      cardLast4: observation['card_last4'] as String?,
+      accountLast4: observation['account_last4'] as String?,
+      sender: sender,
+      body: observation['sample_body'] as String?,
+    );
+  }
+  ready = true;
+  return [...archived, ...observedBillsByCycle.values]
+    ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+});
+
+/// Bills pane input: bill/autopay sms_observations resolved against the
+/// logged transaction history. Covers what the commitments sections skip —
+/// card-linked bills, autopay reminders, any bill whose payment the app
+/// never saw — with the settled/pending/payment-not-detected state each.
+final smsBillRowsProvider = FutureProvider<List<SmsBillRow>>((ref) async {
+  var ready = false;
+  ref.listen(financialStoreRevisionProvider('observations'), (_, next) {
+    if (ready) ref.invalidateSelf();
+  });
+  ref.listen(financialStoreRevisionProvider('transactions'), (_, next) {
+    if (ready) ref.invalidateSelf();
+  });
+  final clockNow = ref.watch(clockProvider).now();
+  final cache = await ref.watch(responseCacheProvider.future);
+  final ns = ref.watch(cacheNamespaceProvider);
+  final observations = cache.financialStore.entities(ns, 'sms_observations');
+  final cardsLast4ById = {
+    for (final card in await ref.watch(myCardsProvider.future))
+      if (card.last4 != null) card.id: card.last4!,
+  };
+  final repo = ref.watch(userCardsRepositoryProvider);
+  final transactions = repo == null
+      ? const <TransactionEntry>[]
+      : await loadTransactionsWithOfflineCache(
+          ref,
+          repo: repo,
+          cacheKey: 'transactions:sms_bills',
+          from: clockNow.subtract(const Duration(days: 120)),
+        );
+  final taken = <String>{
+    for (final commitment in await ref.watch(commitmentsProvider.future))
+      smsBillIdentityForCommitment(commitment),
+  };
+  ready = true;
+  return deriveSmsBillRows(
+    observations: observations,
+    transactions: transactions,
+    cardsLast4ById: cardsLast4ById,
+    takenIdentities: taken,
+    now: clockNow,
+  );
+});
+
+/// Insurance renewals whose SMS named only a month. Past months belong to
+/// archived history, and rows with an amount already appear in the SMS bill
+/// list, so this feed is the only Bills surface for the remaining reminders.
+final premiumRemindersProvider = Provider<List<PremiumReminder>>((ref) {
+  ref.watch(financialStoreRevisionProvider('observations'));
+  final cache = ref.watch(responseCacheProvider).valueOrNull;
+  if (cache == null) return const [];
+  final namespace = ref.watch(cacheNamespaceProvider);
+  return derivePremiumReminders(
+    observations: cache.financialStore.entities(namespace, 'sms_observations'),
+    commitments: ref.watch(commitmentsProvider).valueOrNull ?? const [],
+    now: ref.watch(clockProvider).now(),
+  );
 });
 
 /// UA-3: the signed-in user's own profiles row (owner-scoped via RLS —
 /// api/'s GET /profile, proved end to end back in Chunk 1 but never called
 /// from the app itself until this chunk). Null when signed out or when a
 /// signed-in user hasn't completed onboarding yet (no profile row exists).
+///
+/// Cache-first, like `userCardsProvider`: this used to await the live request
+/// before returning anything, so the You tab held its whole first frame on
+/// GET /profile. A slow or unreachable API — or a backend busy with the
+/// launch-time refresh burst — showed a blank page with a spinner even though
+/// the last snapshot was already on disk. The cached row now paints
+/// immediately and [_warmDisplay] refreshes it behind the UI.
 final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final api = ref.watch(profileApiProvider);
   if (api == null) return null;
   const profileCacheKey = 'profile';
+  final namespace = ref.read(cacheNamespaceProvider);
   final cache = await _cacheOrNull(ref);
   final key = _scopedCacheKey(ref, profileCacheKey);
   final cached = await _readCacheOrNull(ref, cache, key);
@@ -1206,40 +1570,57 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
     return body['profile'] as Map<String, dynamic>?;
   }
 
-  try {
+  Future<Map<String, dynamic>?> fetch() async {
     final profile = await api.fetchProfile();
     if (profile != null) {
       cache?.financialStore.database.saveProfileDisplayName(
-        ref.read(cacheNamespaceProvider),
+        namespace,
         profile['display_name'] as String?,
       );
     }
+    return profile;
+  }
+
+  if (cached != null) {
+    try {
+      final profile = decodeCached();
+      _warmDisplay(
+        ref,
+        cache,
+        key,
+        cached.fetchedAt,
+        fetch,
+        (profile) => {'profile': profile},
+      );
+      return profile;
+    } catch (_) {
+      // A corrupt snapshot is not fatal; the request below repairs it.
+      await cache?.clear(key);
+    }
+  }
+
+  // Offline with nothing cached: a profile row is display metadata, not the
+  // session itself. Render the signed-in shell instead of waiting out a
+  // request that cannot succeed.
+  if (_isKnownOffline()) return null;
+
+  try {
+    final profile = await fetch();
     try {
       await cache?.put(key, jsonEncode({'profile': profile}));
     } catch (_) {}
     return profile;
   } catch (error) {
-    if (!_canUseReadCache(error) || cached == null) {
-      // Profile is display-only here. Account/settings screens can render
-      // their signed-in shell with a missing profile while the token refresh
-      // is retried, instead of showing "Missing or invalid access token".
-      if (_isAuthenticationFailure(error)) {
-        // A profile row is optional display metadata, not the account
-        // session itself. When the API rejects a stale access token and no
-        // profile snapshot exists yet, return null so You/settings can still
-        // render their local card and transaction data. Treating this as a
-        // page-fatal error made the whole tab look broken even though the
-        // account was still signed in locally and its cached data was safe.
-        return null;
-      }
-      rethrow;
+    if (_isAuthenticationFailure(error)) {
+      // A profile row is optional display metadata, not the account
+      // session itself. When the API rejects a stale access token and no
+      // profile snapshot exists yet, return null so You/settings can still
+      // render their local card and transaction data. Treating this as a
+      // page-fatal error made the whole tab look broken even though the
+      // account was still signed in locally and its cached data was safe.
+      return null;
     }
-    final cachedProfile = decodeCached();
-    cache?.financialStore.database.saveProfileDisplayName(
-      ref.read(cacheNamespaceProvider),
-      cachedProfile?['display_name'] as String?,
-    );
-    return cachedProfile;
+    rethrow;
   }
 });
 
@@ -1248,9 +1629,8 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
 /// data-error-reports are owner-scoped writes (RLS `for all to public
 /// using (profile_id = pandapay.uid())`), so there's no meaningful
 /// signed-out path to support.
-final cardFeedbackRepositoryProvider = Provider<CardFeedbackRepository?>((ref) {
+final cardFeedbackRepositoryProvider = Provider<CardFeedbackRepository>((ref) {
   final token = _stableSessionToken(ref);
-  if (token == null) return null;
   return CardFeedbackRepository(
     apiBaseUrl: _apiBaseUrl,
     accessToken: token,
@@ -1424,6 +1804,8 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
         if (matched.isNotEmpty ||
             negative ||
             inactive ||
+            outcome == 'imported' ||
+            outcome == 'duplicate' ||
             store.hasReceipt(namespace, key)) {
           acknowledgements.add(() {
             store.discardProvisional(
@@ -1432,6 +1814,8 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
               confirmedId: matched.isNotEmpty
                   ? matched.first.id
                   : inactive
+                  ? serverId
+                  : outcome == 'imported'
                   ? serverId
                   : null,
             );
@@ -1516,6 +1900,21 @@ final merchantCategoryRulesRepositoryProvider =
       final token = _stableSessionToken(ref);
       if (token == null) return null;
       return MerchantCategoryRulesRepository(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: token,
+        client: ref.read(authenticatedHttpClientProvider),
+      );
+    });
+
+/// Future merchant issue-flag rules use the same authenticated API contract
+/// as category rules but carry `action: flag`. Keeping a separate provider
+/// prevents a flag report from sharing category state or mutating a category
+/// rule accidentally.
+final merchantIssueRulesRepositoryProvider =
+    Provider<MerchantIssueRulesRepository?>((ref) {
+      final token = _stableSessionToken(ref);
+      if (token == null) return null;
+      return MerchantIssueRulesRepository(
         apiBaseUrl: _apiBaseUrl,
         accessToken: token,
         client: ref.read(authenticatedHttpClientProvider),
@@ -2492,6 +2891,35 @@ myCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   }
 });
 
+/// Cards the user has removed from their wallet. Wallet itself reads
+/// [myCardsProvider] (active cards only); this is the one surface that needs
+/// archived rows, so it keeps its own include-archived read rather than
+/// making every ranking/spend consumer filter them out.
+///
+/// Deliberately network-first through [_loadUserCardsWithOfflineCache]: the
+/// shared entity cache can legitimately hold active cards only after the last
+/// Wallet refresh, and treating that as "no archived cards" would wrongly
+/// render an empty Deleted cards screen. The include-archived snapshot is
+/// still used when the device is offline.
+///
+/// This build has no guest sessions — Settings is behind the auth gate — so a
+/// missing repository means the user is signed out, and the screen renders its
+/// sign-in state instead of reading stale local card rows.
+final archivedCardsProvider = FutureProvider<List<UserCard>>((ref) async {
+  final markReady = _financialChanges(ref, 'cards');
+  try {
+    final repo = ref.watch(userCardsRepositoryProvider);
+    if (repo == null) return const [];
+    return await _loadUserCardsWithOfflineCache(
+      ref,
+      repo,
+      includeArchived: true,
+    );
+  } finally {
+    markReady();
+  }
+});
+
 Future<List<UserCard>?> _readUserCardsCache(
   Ref ref, {
   required bool includeArchived,
@@ -3081,6 +3509,9 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   ref.listen(financialStoreRevisionProvider('observations'), (_, next) {
     if (ready) ref.invalidateSelf();
   });
+  ref.listen(financialStoreRevisionProvider('manual_bank_balances'), (_, next) {
+    if (ready) ref.invalidateSelf();
+  });
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   const cacheKey = 'bank_account_summaries';
@@ -3088,6 +3519,11 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   final localAccounts = cache?.financialStore.bankAccounts(
     ref.read(cacheNamespaceProvider),
   );
+  final manualBalances =
+      cache?.financialStore.manualBankBalances(
+        ref.read(cacheNamespaceProvider),
+      ) ??
+      const {};
   final key = _scopedCacheKey(ref, cacheKey);
   final cached = await _readCacheOrNull(ref, cache, key);
   // UPI-platform families (SBIUPI & friends) quote the counterparty's masked
@@ -3096,7 +3532,9 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   // its own rows in bankAccounts(). Checked on the RAW issuer strings —
   // canonicalBankSender collapses 'sbiupi' to 'sbi', hiding the marker.
   // ponytail: remove once server dedupes.
-  bool isUpiPhantom(BankAccountSummary account) => RegExp(r'upi').hasMatch(
+  bool isNonDepositAccount(BankAccountSummary account) => RegExp(
+    r'upi|axio',
+  ).hasMatch(
     [
       account.issuerSlug,
       account.issuerShortName,
@@ -3109,7 +3547,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
               as List)
           .cast<Map<String, dynamic>>()
           .map(BankAccountSummary.fromJson)
-          .where((account) => !isUpiPhantom(account))
+          .where((account) => !isNonDepositAccount(account))
           .toList();
 
   bool sameAccount(BankAccountSummary a, BankAccountSummary b) {
@@ -3132,7 +3570,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   ) {
     // UPI-platform families from rows the server parsed before the exclusion
     // existed — drop them at the merge point as well.
-    remote = remote.where((r) => !isUpiPhantom(r)).toList();
+    remote = remote.where((r) => !isNonDepositAccount(r)).toList();
     final merged = [...local];
     for (final incoming in remote) {
       final index = merged.indexWhere(
@@ -3184,14 +3622,64 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
         issuerName: primary.issuerName ?? secondary.issuerName,
         issuerShortName: primary.issuerShortName ?? secondary.issuerShortName,
         issuerLogoUrl: primary.issuerLogoUrl ?? secondary.issuerLogoUrl,
+        isBalanceManuallySet: primary.isBalanceManuallySet,
+        manualBalanceUpdatedAt: primary.manualBalanceUpdatedAt,
       );
     }
     return merged;
   }
 
+  List<BankAccountSummary> applyManualBalances(
+    List<BankAccountSummary> accounts,
+  ) => accounts.map((account) {
+    final issuer = canonicalBankSender(
+      account.issuerSlug ?? account.issuerShortName ?? account.issuerName,
+    );
+    final manual = manualBalances['$issuer:${account.accountLast4}'];
+    if (manual == null) return account;
+    return BankAccountSummary(
+      accountLast4: account.accountLast4,
+      availableBalance: manual.balance,
+      latestBalanceSmsAt: account.latestBalanceSmsAt,
+      latestSmsAt: account.latestSmsAt,
+      smsCount: account.smsCount,
+      issuerSlug: account.issuerSlug,
+      issuerName: account.issuerName,
+      issuerShortName: account.issuerShortName,
+      issuerLogoUrl: account.issuerLogoUrl,
+      isBalanceManuallySet: true,
+      manualBalanceUpdatedAt: manual.updatedAt,
+    );
+  }).toList();
+
   if (_isKnownOffline()) {
-    if (localAccounts != null && localAccounts.isNotEmpty) return localAccounts;
-    if (cached != null) return decode(cached);
+    final offlineAccounts = localAccounts != null && localAccounts.isNotEmpty
+        ? localAccounts
+        : cached != null
+        ? decode(cached)
+        : null;
+    if (offlineAccounts != null) {
+      final known = {
+        for (final account in offlineAccounts)
+          '${canonicalBankSender(account.issuerSlug ?? account.issuerShortName ?? account.issuerName)}:${account.accountLast4}',
+      };
+      return applyManualBalances([
+        ...offlineAccounts,
+        for (final manual in manualBalances.entries)
+          if (!known.contains(manual.key))
+            BankAccountSummary(
+              accountLast4: manual.key.split(':').last,
+              availableBalance: manual.value.balance,
+              latestBalanceSmsAt: null,
+              latestSmsAt: null,
+              smsCount: 0,
+              issuerSlug: manual.key.split(':').first,
+              issuerShortName: bankDisplayLabel(manual.key.split(':').first),
+              isBalanceManuallySet: true,
+              manualBalanceUpdatedAt: manual.value.updatedAt,
+            ),
+      ]);
+    }
   }
   try {
     final accounts = await repo.fetchBankAccountSummaries().timeout(
@@ -3222,11 +3710,30 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
       );
     } catch (_) {}
     ready = true;
-    return combined;
+    final known = {
+      for (final account in combined)
+        '${canonicalBankSender(account.issuerSlug ?? account.issuerShortName ?? account.issuerName)}:${account.accountLast4}',
+    };
+    return applyManualBalances([
+      ...combined,
+      for (final manual in manualBalances.entries)
+        if (!known.contains(manual.key))
+          BankAccountSummary(
+            accountLast4: manual.key.split(':').last,
+            availableBalance: manual.value.balance,
+            latestBalanceSmsAt: null,
+            latestSmsAt: null,
+            smsCount: 0,
+            issuerSlug: manual.key.split(':').first,
+            issuerShortName: bankDisplayLabel(manual.key.split(':').first),
+            isBalanceManuallySet: true,
+            manualBalanceUpdatedAt: manual.value.updatedAt,
+          ),
+    ]);
   } catch (error) {
     if (localAccounts != null && localAccounts.isNotEmpty) {
       ready = true;
-      return localAccounts;
+      return applyManualBalances(localAccounts);
     }
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
@@ -3235,7 +3742,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
       rethrow;
     }
     try {
-      return decode(cached);
+      return applyManualBalances(decode(cached));
     } catch (_) {
       await cache?.clear(key);
       rethrow;
@@ -3252,6 +3759,7 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
   ref,
 ) async {
   final markReady = _financialChanges(ref, 'observations');
+  final markTransactionsReady = _financialChanges(ref, 'transactions');
   final repo = ref.watch(userCardsRepositoryProvider);
   List<UserCard> cards;
   try {
@@ -3324,8 +3832,9 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
     for (final txn in allTxns)
       if (isCardBillPaymentTxn(txn)) txn,
   ];
-  if (evidence.isEmpty && usable.isEmpty) return const {};
   markReady();
+  markTransactionsReady();
+  if (evidence.isEmpty && usable.isEmpty) return const {};
   return deriveCardBills(
     cards: cards,
     evidence: evidence,
@@ -3812,7 +4321,10 @@ final financialStoreRevisionProvider = StreamProvider.family<int, String>((
   entity,
 ) async* {
   final namespace = ref.watch(cacheNamespaceProvider);
-  final cache = await _cacheOrNull(ref);
+  final notificationsReady = ref.watch(_reviewFinancialChangesProvider.future);
+  final cacheFuture = _cacheOrNull(ref);
+  await notificationsReady;
+  final cache = await cacheFuture;
   if (cache == null) return;
   var version = 0;
   await for (final changed in cache.financialStore.changes) {
@@ -4145,14 +4657,18 @@ String? _namedServiceAutoPayName(String? raw) {
   }
   const serviceTokens = [
     'openai',
+    'openaillc',
     'chatgpt',
     'netflix',
     'spotify',
     'amazonprime',
     'primevideo',
     'googleone',
+    'googleplay',
+    'google',
     'youtube',
     'hotstar',
+    'jiocinema',
     'sonyliv',
     'zee5',
     'canva',
@@ -4161,13 +4677,23 @@ String? _namedServiceAutoPayName(String? raw) {
     'dropbox',
     'linkedinpremium',
     'microsoft365',
+    'apple',
+    'claude',
+    'anthropic',
+    'midjourney',
+    'cursor',
+    'github',
   ];
   if (!serviceTokens.any(normalized.contains)) return null;
   if (normalized.contains('creditcard') || normalized.contains('utility')) {
     return null;
   }
-  if (normalized.contains('openai')) return 'OpenAI';
+  if (normalized.contains('openai') || normalized.contains('openaillc')) {
+    return 'OpenAI';
+  }
   if (normalized.contains('chatgpt')) return 'ChatGPT';
+  if (normalized.contains('googleplay')) return 'Google Play';
+  if (normalized.contains('googleone')) return 'Google One';
   return name;
 }
 
@@ -4316,6 +4842,18 @@ List<SpendBreakdownRow> _localBreakdownRows(
   ];
 }
 
+String _localSourceKey(TransactionEntry row) {
+  final instrument = row.instrumentKnown ? row.instrument : TxnInstrument.other;
+  return row.userCardId != null
+      ? 'card:${row.userCardId}'
+      : instrument == TxnInstrument.creditCard ||
+            instrument == TxnInstrument.debitCard
+      ? 'card-source:${instrument.wireValue}:${row.cardLast4 ?? 'unknown'}'
+      : row.accountLast4 != null
+      ? 'bank-account:${row.accountLast4}'
+      : 'source:${instrument.wireValue}';
+}
+
 List<CardSpendRow> _localCardRows(Iterable<TransactionEntry> rows) {
   final totals = <String, Money>{};
   final rewards = <String, Money>{};
@@ -4323,9 +4861,10 @@ List<CardSpendRow> _localCardRows(Iterable<TransactionEntry> rows) {
   final names = <String, String>{};
   final ids = <String, String?>{};
   for (final row in rows) {
-    final key =
-        row.userCardId ??
-        'other:${row.cardDisplayName ?? row.instrument.wireValue}';
+    final instrument = row.instrumentKnown
+        ? row.instrument
+        : TxnInstrument.other;
+    final key = _localSourceKey(row);
     totals[key] = (totals[key] ?? const Money.zero()) + row.amount;
     rewards[key] =
         (rewards[key] ?? const Money.zero()) +
@@ -4333,7 +4872,17 @@ List<CardSpendRow> _localCardRows(Iterable<TransactionEntry> rows) {
     counts[key] = (counts[key] ?? 0) + 1;
     names[key] =
         row.cardDisplayName ??
-        (row.instrumentKnown ? row.instrument.label : 'Cash & other');
+        (instrument == TxnInstrument.creditCard ||
+                instrument == TxnInstrument.debitCard
+            ? '${instrument.label}${row.cardLast4 == null ? ' (unlinked)' : ' ••${row.cardLast4} (unlinked)'}'
+            : row.accountLast4 != null
+            ? 'Bank account ••${row.accountLast4}'
+            : switch (instrument) {
+                TxnInstrument.upiBank => 'UPI bank account',
+                TxnInstrument.wallet => 'Wallet',
+                TxnInstrument.cash => 'Cash',
+                _ => 'Unknown source',
+              });
     ids[key] = row.userCardId;
   }
   final keys = totals.keys.toList()
@@ -4380,24 +4929,32 @@ List<CardCategorySpendRow> _localCardCategoryRows(
 ) {
   final totals = <String, Money>{};
   final counts = <String, int>{};
-  final names = <String, (String, String)>{};
+  final names = <String, (String?, String, String?, String)>{};
   for (final row in rows) {
-    final card =
-        row.cardDisplayName ??
-        (row.instrumentKnown ? row.instrument.label : 'Cash & other');
+    final card = SpendingSelection.sourceName(row);
     final category = row.categoryName ?? 'Other';
-    final key = '$card\u0000$category';
+    final categoryId =
+        row.parentCategoryId ??
+        row.parentUserCategoryId ??
+        row.userCategoryId ??
+        row.categoryId?.replaceFirst(RegExp(r'^custom:'), '');
+    final categoryKey = categoryId == null
+        ? 'label:$category'
+        : 'id:$categoryId';
+    final key = '${_localSourceKey(row)}\u0000$categoryKey';
     totals[key] = (totals[key] ?? const Money.zero()) + row.amount;
     counts[key] = (counts[key] ?? 0) + 1;
-    names[key] = (card, category);
+    names[key] = (row.userCardId, card, categoryId, category);
   }
   final keys = totals.keys.toList()
     ..sort((a, b) => totals[b]!.paise.compareTo(totals[a]!.paise));
   return [
     for (final key in keys)
       CardCategorySpendRow(
-        cardName: names[key]!.$1,
-        categoryName: names[key]!.$2,
+        cardId: names[key]!.$1,
+        cardName: names[key]!.$2,
+        categoryId: names[key]!.$3,
+        categoryName: names[key]!.$4,
         total: totals[key]!,
         txnCount: counts[key]!,
       ),
@@ -5125,11 +5682,36 @@ final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
 /// every card is evaluated as if its caps/milestones are fully fresh.
 final rankedRecommendationsProvider =
     Provider<AsyncValue<List<Recommendation>>>(
-      (ref) => _rankRecommendations(
-        ref,
-        amount: ref.watch(enteredAmountProvider),
-        categorySlug: ref.watch(selectedCategoryProvider),
-      ),
+      (ref) {
+        final selectedSlug = ref.watch(selectedCategoryProvider);
+        final nearby = ref.watch(homeNearbyContextProvider);
+        final match = nearby?.match;
+        String? merchantName;
+        String? nearbyCategoryId;
+
+        if (match != null) {
+          final candidate = match.candidate;
+          final categories =
+              ref.watch(categoriesProvider).valueOrNull ?? const [];
+          final cat = categories.firstWhereOrNull(
+            (c) =>
+                c.id == candidate.categoryId || c.slug == candidate.categoryId,
+          );
+          final merchantCategorySlug = cat?.slug ?? candidate.categoryId;
+          if (selectedSlug == null || selectedSlug == merchantCategorySlug) {
+            merchantName = candidate.displayName;
+            nearbyCategoryId = candidate.categoryId ?? cat?.id;
+          }
+        }
+
+        return _rankRecommendations(
+          ref,
+          amount: ref.watch(enteredAmountProvider),
+          categoryId: nearbyCategoryId,
+          categorySlug: selectedSlug,
+          merchantName: merchantName,
+        );
+      },
     );
 
 /// Context passed by Quick Add as the user fills in a transaction. Keeping
@@ -5198,7 +5780,10 @@ AsyncValue<List<Recommendation>> _rankRecommendations(
       ? categoryList.firstWhereOrNull(
           (category) => category.slug == categorySlug,
         )
-      : categoryList.firstWhereOrNull((category) => category.id == categoryId);
+      : categoryList.firstWhereOrNull(
+          (category) =>
+              category.id == categoryId || category.slug == categoryId,
+        );
   final requestedCategoryId = categoryId ?? resolvedCategory?.id;
   // Private subcategories are transaction labels, not published reward-rule
   // categories. Rank against their built-in parent while retaining the child
@@ -5376,13 +5961,21 @@ final geofenceMonitorServiceProvider = Provider<GeofenceMonitorService>((ref) {
   final service = GeofenceMonitorService(
     repo: ref.watch(nearbyMerchantsRepositoryProvider),
     notifications: ref.watch(localNotificationsPluginProvider),
+    namespace: ref.watch(cacheNamespaceProvider),
     // UA-8.3 (B2): closes the one real spec violation this pass found —
     // _notify() used to call flutter_local_notifications directly, bypassing
     // category_location, quiet hours, and the daily cap entirely.
     gate: ref.watch(notificationGateProvider),
     recommendationTextBuilder: (match) {
       final recommendation = ref
-          .read(bestCardForMerchantProvider(match.candidate.categoryId))
+          .read(
+            bestCardForMerchantProvider(
+              MerchantRecommendationQuery(
+                categoryId: match.candidate.categoryId,
+                merchantName: match.candidate.displayName,
+              ),
+            ),
+          )
           .valueOrNull;
       if (recommendation == null || recommendation.isExcluded) return null;
       final rate = recommendation.effectiveRatePerRupee;
@@ -5457,6 +6050,10 @@ final notificationTriggerLifecycleProvider = Provider<void>((ref) {
 ///
 /// A message stays queued unless the upload actually dealt with it, so a
 /// resume while offline loses nothing.
+/// Incremented to request an immediate on-demand reconciliation of pending SMS
+/// and AI review status (e.g. on pull-to-refresh).
+final smsFlushTriggerProvider = StateProvider<int>((ref) => 0);
+
 final smsBackgroundFlushProvider = Provider<void>((ref) {
   var workInProgress = false;
   var rerunRequested = false;
@@ -5542,50 +6139,108 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     var changed = false;
     for (final item in items) {
       if (ref.read(cacheNamespaceProvider) != namespace) break;
-      if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(item.id) ||
+      // A completed job returns its original fact list; do not restore facts
+      // the user already resolved from a still-open multi-fact review item.
+      if (item.aiSuggestions?.isNotEmpty == true) continue;
+      final cleanId = item.id.startsWith('commitment:')
+          ? item.id.substring('commitment:'.length)
+          : item.id;
+      if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(cleanId) ||
           LocalSmsParser.sensitive(item.body) ||
           !capturesFinancialSms(item.body, sender: item.sender)) {
         continue;
       }
       try {
-        final status = await repo.fetchAiJobStatus(item.id);
-        if (status == null) {
-          await repo.submitAiJob(
-            sourceKey: item.id,
+        final status = await repo.fetchAiJobStatus(cleanId);
+        if (status == null || status['status'] == 'failed') {
+          // Allow items that previously had AiReviewStatus.unavailable to be
+          // retried if status == null and they have no suggestions yet.
+          final jobId = await repo.submitAiJob(
+            sourceKey: cleanId,
             sender: item.sender,
             body: item.body,
             occurredAt: item.receivedAt,
           );
+          changed =
+              await reviewRepo.updateAiStatus(
+                item.id,
+                jobId == null
+                    ? AiReviewStatus.unavailable
+                    : AiReviewStatus.queued,
+              ) ||
+              changed;
           continue;
         }
+
+        final statusValue = switch (status['status']) {
+          'queued' => AiReviewStatus.queued,
+          'leased' => AiReviewStatus.processing,
+          'done' => AiReviewStatus.checked,
+          'failed' => AiReviewStatus.unavailable,
+          _ => item.aiStatus,
+        };
+        changed =
+            await reviewRepo.updateAiStatus(item.id, statusValue) || changed;
         final rawSuggestions = status['suggestions'];
+        final result = status['result'];
         if (status['status'] == 'done' && rawSuggestions is List) {
-          // The classifier's structured suggestions belong to the review item
-          // so the user sees what the model proposed before deciding.
           final suggestions = rawSuggestions
               .whereType<Map>()
               .map((value) => Map<String, dynamic>.from(value))
               .toList();
+          // Tier 1 auto-files the movement/bill and removes the row; Tier 2
+          // keeps it with a prefilled draft; Tier 3 drops it silently. The
+          // decision is made locally from the same composite score the server
+          // computed, so a stale/failed poll can never bypass the threshold.
+          final cache = await ref.read(responseCacheProvider.future);
+          final resolution = SmsImportStore(
+            cache.financialStore,
+          ).resolveAiSuggestions(
+            namespace,
+            item,
+            suggestions,
+            reviewRequired: result is Map
+                ? result['reviewRequired'] as bool?
+                : null,
+            serverScore: result is Map && result['confidenceScore'] is num
+                ? (result['confidenceScore'] as num).toDouble()
+                : null,
+          );
+          if (resolution.outcome == SmsAiResolutionOutcome.needsReview) {
+            changed =
+                await reviewRepo.updateAiSuggestions(item.id, suggestions) ||
+                changed;
+            changed =
+                await reviewRepo.updateAiStatus(
+                  item.id,
+                  AiReviewStatus.checked,
+                ) ||
+                changed;
+          } else {
+            // The row is already gone: never recreate it by updating.
+            changed = true;
+          }
+        }
+      } on Object catch (e) {
+        if (_isExplicitAiRefusal(e)) {
           changed =
-              await reviewRepo.updateAiSuggestions(item.id, suggestions) ||
+              await reviewRepo.updateAiStatus(
+                item.id,
+                AiReviewStatus.unavailable,
+              ) ||
               changed;
         }
-        final result = status['result'];
-        if (status['status'] == 'done' &&
-            result is Map &&
-            result['reviewRequired'] == false) {
-          await reviewRepo.remove(item.id);
-          changed = true;
-        }
-      } catch (_) {
-        // AI Gemini fallback: network or quota failure must never break
-        // the background worker; item remains safely reviewable manually.
+        // If fetchAiJobStatus or submitAiJob throws a network error,
+        // DO NOT mark the item as AiReviewStatus.unavailable!
+        // Leave it as notChecked (or its current status) and continue.
         continue;
       }
     }
     if (changed) {
       ref.invalidate(needsReviewItemsProvider);
       ref.invalidate(needsReviewCountProvider);
+      ref.invalidate(autoResolvedHistoryProvider);
+      ref.invalidate(autoResolvedCountProvider);
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       ref.invalidate(homeSummaryProvider);
@@ -5653,20 +6308,21 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         var changed = false;
         try {
           changed = await reconcileInbox();
-        } catch (_) {
+        } catch (e, st) {
+          debugPrint('reconcileInbox error: $e\n$st');
           // A provider/permission/network failure must not abort the remaining
           // queue retry and must not surface as an unhandled lifecycle error.
         }
         // Network reconciliation drains durable local rows; it never rereads
         // inbox history and can fail without undoing completed local capture.
         changed = await flush() > 0 || changed;
-        // Repair rows imported by older builds: this suppresses only a
-        // high-confidence SMS replay and fills categories for legacy rows.
+        // Repair rows imported by older builds, including categories and
+        // cross-source duplicate candidates that need a user's decision.
         // Run once per migration revision/account, not every five minutes.
         final repo = ref.read(userCardsRepositoryProvider);
         final prefs = await SharedPreferences.getInstance();
         final repairKey =
-            'pandapay_app.sms_history_repaired_at_v1_${ref.read(cacheNamespaceProvider)}';
+            'pandapay_app.sms_history_repaired_at_v2_${ref.read(cacheNamespaceProvider)}';
         final lastRepair = prefs.getInt(repairKey);
         final repairDue = lastRepair == null;
         if (repo != null &&
@@ -5674,14 +6330,24 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
             ref.read(isOnlineProvider).valueOrNull != false) {
           try {
             final repaired = await repo.reconcileSmsHistory();
-            await prefs.setInt(
-              repairKey,
-              DateTime.now().millisecondsSinceEpoch,
-            );
+            // An older API may accept this route but not include the v2
+            // cross-source repair. Retry after the backend rollout.
+            if (repaired.reconciliationVersion >= 2) {
+              await prefs.setInt(
+                repairKey,
+                DateTime.now().millisecondsSinceEpoch,
+              );
+            }
+            if (repaired.crossSourceCandidatesCreated > 0) {
+              ref.invalidate(duplicateCandidatesProvider);
+            }
             changed =
                 repaired.duplicateSuppressed > 0 ||
+                repaired.crossSourceCandidatesCreated > 0 ||
                 repaired.linkedCards > 0 ||
                 repaired.reclassified > 0 ||
+                repaired.classificationReclassified > 0 ||
+                repaired.remappedTransactions > 0 ||
                 changed;
           } catch (_) {
             /* Retry the one-time migration after connectivity returns. */
@@ -5746,6 +6412,10 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     if (previous?.valueOrNull == false && next.valueOrNull == true) {
       unawaited(flushAndRetry());
     }
+  });
+
+  ref.listen<int>(smsFlushTriggerProvider, (_, _) {
+    unawaited(flushAndRetry());
   });
 
   final listener = AppLifecycleListener(
@@ -5930,19 +6600,40 @@ class SmsAutoImportController {
     }
     final store = cache.financialStore;
     final path = store.database.filePath;
+    void captureDirect() {
+      final clientVersion =
+          _ref.read(appVersionProvider).valueOrNull ?? '1.0.0';
+      final ruleStore = SmsRuleBundleStore(store.database);
+      final rules = ruleStore.loadActiveBundleSync(clientVersion: clientVersion);
+      final candidateRules = ruleStore.loadCandidateBundlesSync(
+        clientVersion: clientVersion,
+        namespace: namespace,
+      );
+      SmsImportStore(
+        store,
+        downloadedRules: rules,
+        candidateRules: candidateRules,
+      ).captureBatch(namespace, messages);
+    }
+
     if (path == null) {
       // In-memory test databases cannot be reopened by another isolate.
-      SmsImportStore(store).captureBatch(namespace, messages);
+      captureDirect();
     } else {
-      final worker = _captureWorker ??= SmsCaptureWorker(
-        path,
-        clientVersion: _ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
-      );
-      final changed = await worker.capture(namespace, messages);
-      if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
-        throw StateError('Account changed during SMS capture');
+      try {
+        final worker = _captureWorker ??= SmsCaptureWorker(
+          path,
+          clientVersion: _ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
+        );
+        final changed = await worker.capture(namespace, messages);
+        if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
+          throw StateError('Account changed during SMS capture');
+        }
+        store.notifyExternalChanges(namespace, changed);
+      } catch (e) {
+        debugPrint('Worker capture failed ($e), falling back to direct store capture');
+        captureDirect();
       }
-      store.notifyExternalChanges(namespace, changed);
     }
     _ref.invalidate(commitmentsProvider);
     _ref.invalidate(pendingRecoveryStatusProvider);
@@ -6133,7 +6824,8 @@ class SmsAutoImportController {
           dueDatesUpdated += result.dueDatesUpdated;
           statementDaysUpdated += result.statementDaysUpdated;
         }
-      } catch (_) {
+      } catch (e, st) {
+        debugPrint('_syncPendingMessages batch error: $e\n$st');
         // Local capture/progress is already durable. Retry only this outbox.
         for (final entry in pending) {
           intake.failed(namespace, entry.id);
@@ -6338,8 +7030,41 @@ final _bestCardForWidgetProvider = Provider<BestCardForWidget>((ref) {
 /// recommendation on Home. Same resolveActiveOverrideCardProductId call
 /// rankedRecommendationsProvider makes, so the two never disagree about
 /// which override is active for a given category.
+class MerchantRecommendationQuery {
+  final String? categoryId;
+  final String? merchantName;
+
+  const MerchantRecommendationQuery({this.categoryId, this.merchantName});
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MerchantRecommendationQuery &&
+          other.categoryId == categoryId &&
+          other.merchantName == merchantName;
+
+  @override
+  int get hashCode => Object.hash(categoryId, merchantName);
+}
+
 final bestCardForMerchantProvider =
-    Provider.family<AsyncValue<Recommendation?>, String?>((ref, categoryId) {
+    Provider.family<AsyncValue<Recommendation?>, Object?>((ref, arg) {
+      final String? categoryId;
+      final String? merchantName;
+      if (arg is MerchantRecommendationQuery) {
+        categoryId = arg.categoryId;
+        merchantName = arg.merchantName;
+      } else if (arg is ({String? categoryId, String? merchantName})) {
+        categoryId = arg.categoryId;
+        merchantName = arg.merchantName;
+      } else if (arg is String?) {
+        categoryId = arg;
+        merchantName = null;
+      } else {
+        categoryId = null;
+        merchantName = null;
+      }
+
       final catalogue = ref.watch(catalogueProvider);
       final userCards = ref.watch(userCardsProvider);
       final overrides = ref.watch(cardOverridesProvider);
@@ -6365,10 +7090,18 @@ final bestCardForMerchantProvider =
                 .where((c) => wallet.any((w) => w.cardProductId == c.id))
                 .toList();
 
+      final categories = ref.watch(categoriesProvider);
+      final categoryList = categories.valueOrNull ?? const <SpendCategory>[];
+      final matchedCategory = categoryList.firstWhereOrNull(
+        (c) => c.id == categoryId || c.slug == categoryId,
+      );
+      final resolvedCategoryId = matchedCategory?.id ?? categoryId;
+      final categorySlug = matchedCategory?.slug;
+
       final overrideProductId = resolveActiveOverrideCardProductId(
         overrides: overrides.requireValue,
         wallet: wallet,
-        categoryId: categoryId,
+        categoryId: resolvedCategoryId,
       );
 
       final snapshots = _userCardSnapshots(
@@ -6377,16 +7110,12 @@ final bestCardForMerchantProvider =
         forcedOverrideCardId: overrideProductId,
       );
 
-      final categories = ref.watch(categoriesProvider);
-      final categorySlug = categories.valueOrNull
-          ?.firstWhereOrNull((c) => c.id == categoryId)
-          ?.slug;
-
       return AsyncValue.data(
         picker.pickBestCard(
           cards: snapshots,
-          categoryId: categoryId,
+          categoryId: resolvedCategoryId,
           categorySlug: categorySlug,
+          merchantName: merchantName,
           now: ref.watch(clockProvider).now(),
         ),
       );

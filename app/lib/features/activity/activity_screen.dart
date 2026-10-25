@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../../app/category_picker.dart';
+
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
@@ -54,7 +56,7 @@ class ActivityScreen extends ConsumerStatefulWidget {
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   final Set<String> _selectedIds = {};
   bool _selecting = false;
-  bool _changingTags = false;
+  bool _isBulkOperating = false;
   late bool _initialFilterReady = !_hasInitialFilter;
 
   bool get _hasInitialFilter =>
@@ -124,7 +126,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     required bool remove,
   }) async {
     final repository = ref.read(transactionTagsProvider);
-    if (repository == null || _changingTags) return;
+    if (repository == null || _isBulkOperating) return;
     final ids = visible
         .where((entry) => _selectedIds.contains(entry.id))
         .map((entry) => entry.id)
@@ -141,7 +143,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         !mounted ||
         ref.read(transactionTagsProvider) != repository)
       return;
-    setState(() => _changingTags = true);
+    setState(() => _isBulkOperating = true);
     try {
       if (remove) {
         await repository.unassign(ids, chosen.toList());
@@ -153,6 +155,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           _selectedIds.clear();
           _selecting = false;
         });
+        ref.invalidate(activityTransactionsProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -169,7 +172,237 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
     } finally {
-      if (mounted) setState(() => _changingTags = false);
+      if (mounted) setState(() => _isBulkOperating = false);
+    }
+  }
+
+  Future<void> _bulkCategorize(List<TransactionEntry> visible) async {
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null || _isBulkOperating) return;
+    final ids = visible
+        .where((entry) => _selectedIds.contains(entry.id))
+        .map((entry) => entry.id)
+        .toList();
+    if (ids.isEmpty) return;
+
+    var categories = ref.read(categoriesProvider).valueOrNull;
+    if (categories == null) {
+      try {
+        categories = await ref.read(categoriesProvider.future);
+      } catch (_) {}
+    }
+    categories ??= const [];
+    if (!mounted) return;
+
+    final chosen = await showCategoryBottomSheet(
+      context,
+      ref,
+      categories,
+      title: 'Set category for ${ids.length} transactions',
+    );
+    if (chosen == null || !mounted) return;
+
+    setState(() => _isBulkOperating = true);
+    try {
+      await Future.wait(
+        ids.map((id) => repo.editTransaction(id, categoryId: chosen)),
+      );
+      if (mounted) {
+        setState(() {
+          _selectedIds.clear();
+          _selecting = false;
+        });
+        ref.invalidate(activityTransactionsProvider);
+        ref.invalidate(transactionsProvider);
+        ref.invalidate(homeSummaryProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Category updated for ${ids.length} transaction${ids.length == 1 ? '' : 's'}',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingErrorMessage(error))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBulkOperating = false);
+    }
+  }
+
+  Future<void> _bulkAssignCard(List<TransactionEntry> visible) async {
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null || _isBulkOperating) return;
+    final ids = visible
+        .where((entry) => _selectedIds.contains(entry.id))
+        .map((entry) => entry.id)
+        .toList();
+    if (ids.isEmpty) return;
+
+    var cards = ref.read(userCardsProvider).valueOrNull;
+    if (cards == null) {
+      try {
+        cards = await ref.read(userCardsProvider.future);
+      } catch (_) {}
+    }
+    cards ??= const [];
+    if (!mounted) return;
+    final activeCards = cards.where((c) => !c.isArchived).toList();
+    if (activeCards.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No active cards found to assign.')),
+      );
+      return;
+    }
+
+    final chosen = await showModalBottomSheet<UserCard>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+              child: Text(
+                'Assign to card (${ids.length} transactions)',
+                style: BambooFonts.heading(18, color: BambooInk.ink900),
+              ),
+            ),
+            for (final card in activeCards)
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: BambooInk.slate.withValues(alpha: 0.08),
+                  child: const Icon(
+                    Icons.credit_card_outlined,
+                    color: BambooInk.ink700,
+                  ),
+                ),
+                title: Text(
+                  card.nickname?.isNotEmpty == true
+                      ? card.nickname!
+                      : card.cardName,
+                  style: BambooFonts.ui(15, color: BambooInk.ink900),
+                ),
+                subtitle: card.last4 != null
+                    ? Text(
+                        '•••• ${card.last4}',
+                        style: BambooFonts.ui(13, color: BambooInk.ink500),
+                      )
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(card),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+
+    setState(() => _isBulkOperating = true);
+    try {
+      await Future.wait(
+        ids.map((id) => repo.editTransaction(id, userCardId: chosen.id)),
+      );
+      if (mounted) {
+        setState(() {
+          _selectedIds.clear();
+          _selecting = false;
+        });
+        ref.invalidate(activityTransactionsProvider);
+        ref.invalidate(userCardsProvider);
+        ref.invalidate(transactionsProvider);
+        ref.invalidate(homeSummaryProvider);
+        final cardTitle = chosen.nickname?.isNotEmpty == true
+            ? chosen.nickname!
+            : chosen.cardName;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Assigned ${ids.length} transaction${ids.length == 1 ? '' : 's'} to $cardTitle',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingErrorMessage(error))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBulkOperating = false);
+    }
+  }
+
+  Future<void> _bulkDelete(List<TransactionEntry> visible) async {
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null || _isBulkOperating) return;
+    final ids = visible
+        .where((entry) => _selectedIds.contains(entry.id))
+        .map((entry) => entry.id)
+        .toList();
+    if (ids.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          'Delete ${ids.length} transaction${ids.length == 1 ? '' : 's'}?',
+        ),
+        content: const Text(
+          'They will be excluded from spend and moved to Deleted Transactions. You can restore them anytime.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isBulkOperating = true);
+    try {
+      await Future.wait(
+        ids.map((id) => repo.ignoreTransaction(id, reason: 'manual')),
+      );
+      if (mounted) {
+        setState(() {
+          _selectedIds.clear();
+          _selecting = false;
+        });
+        ref.invalidate(activityTransactionsProvider);
+        ref.invalidate(userCardsProvider);
+        ref.invalidate(transactionsProvider);
+        ref.invalidate(homeSummaryProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${ids.length} transaction${ids.length == 1 ? '' : 's'} deleted',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingErrorMessage(error))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBulkOperating = false);
     }
   }
 
@@ -220,22 +453,21 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 ),
                 const SizedBox(height: AppSpace.sm),
                 _FilterRow(filter: filter),
-                if (tagRepository != null)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: _changingTags
-                          ? null
-                          : () => setState(() {
-                              _selecting = !_selecting;
-                              _selectedIds.clear();
-                            }),
-                      icon: Icon(_selecting ? Icons.close : Icons.checklist),
-                      label: Text(
-                        _selecting ? 'Cancel selection' : 'Select transactions',
-                      ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _isBulkOperating
+                        ? null
+                        : () => setState(() {
+                            _selecting = !_selecting;
+                            _selectedIds.clear();
+                          }),
+                    icon: Icon(_selecting ? Icons.close : Icons.checklist),
+                    label: Text(
+                      _selecting ? 'Cancel selection' : 'Select transactions',
                     ),
                   ),
+                ),
               ],
             ),
           ),
@@ -280,123 +512,127 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   (a, e) => a + e.amount,
                 );
 
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpace.lg,
-                    AppSpace.lg,
-                    AppSpace.lg,
-                    0,
-                  ),
+                return Column(
                   children: [
-                    if (_selecting) ...[
-                      Text('$visibleSelected selected'),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          TextButton(
-                            onPressed: _changingTags
-                                ? null
-                                : () => setState(() {
-                                    _selectedIds.clear();
-                                    if (visibleSelected != entries.length) {
-                                      _selectedIds.addAll(
-                                        entries.map((e) => e.id),
-                                      );
-                                    }
-                                  }),
-                            child: Text(
-                              visibleSelected == entries.length
-                                  ? 'Deselect all'
-                                  : 'Select all',
-                            ),
-                          ),
-                          TextButton.icon(
-                            onPressed: visibleSelected == 0 || _changingTags
-                                ? null
-                                : () => _changeTags(entries, remove: false),
-                            icon: const Icon(Icons.label_outline),
-                            label: const Text('Add tags'),
-                          ),
-                          TextButton.icon(
-                            onPressed: visibleSelected == 0 || _changingTags
-                                ? null
-                                : () => _changeTags(entries, remove: true),
-                            icon: const Icon(Icons.label_off_outlined),
-                            label: const Text('Remove tags'),
-                          ),
-                        ],
-                      ),
-                      if (_changingTags) const LinearProgressIndicator(),
-                    ],
-                    _SummaryCard(
-                      title: _summaryTitle(filter),
-                      totalIncoming: totalIncoming,
-                      totalOutgoing: totalOutgoing,
-                      count: entries.where((e) => e.status == 'active').length,
-                    ),
-                    const SizedBox(height: AppSpace.lg),
-                    for (final group in grouped) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                        child: Text(
-                          _dayLabel(group.day),
-                          style: BambooFonts.heading(
-                            13,
-                            color: BambooInk.ink500,
-                          ),
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpace.lg,
+                          AppSpace.lg,
+                          AppSpace.lg,
+                          0,
                         ),
-                      ),
-                      for (final entry in group.entries)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                          child: Row(
-                            children: [
-                              if (_selecting)
-                                Checkbox(
-                                  key: ValueKey('activity-select-${entry.id}'),
-                                  value: _selectedIds.contains(entry.id),
-                                  onChanged: _changingTags
-                                      ? null
-                                      : (value) => setState(() {
-                                          if (value == true) {
-                                            _selectedIds.add(entry.id);
-                                          } else {
-                                            _selectedIds.remove(entry.id);
-                                          }
-                                        }),
-                                ),
-                              Expanded(
-                                child: _TransactionTile(
-                                  entry,
-                                  tagNames:
-                                      (tagRepository?.tagsForTransaction(
-                                                entry.id,
-                                                fallback: entry.tags,
-                                              ) ??
-                                              entry.tags)
-                                          .map((tag) => tag.name)
-                                          .toList(),
-                                  onTap: () {
-                                    if (_selecting) {
-                                      if (!_changingTags)
-                                        setState(() {
-                                          if (!_selectedIds.remove(entry.id))
-                                            _selectedIds.add(entry.id);
-                                        });
-                                    } else {
-                                      context.push(
-                                        '/activity/${entry.id}',
-                                        extra: entry,
-                                      );
-                                    }
-                                  },
+                        children: [
+                          _SummaryCard(
+                            title: _summaryTitle(filter),
+                            totalIncoming: totalIncoming,
+                            totalOutgoing: totalOutgoing,
+                            count: entries
+                                .where((e) => e.status == 'active')
+                                .length,
+                          ),
+                          const SizedBox(height: AppSpace.lg),
+                          for (final group in grouped) ...[
+                            Padding(
+                              padding:
+                                  const EdgeInsets.only(bottom: AppSpace.sm),
+                              child: Text(
+                                _dayLabel(group.day),
+                                style: BambooFonts.heading(
+                                  13,
+                                  color: BambooInk.ink500,
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      const SizedBox(height: AppSpace.sm),
-                    ],
+                            ),
+                            for (final entry in group.entries)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.only(bottom: AppSpace.sm),
+                                child: Row(
+                                  children: [
+                                    if (_selecting)
+                                      Checkbox(
+                                        key: ValueKey(
+                                            'activity-select-${entry.id}'),
+                                        value: _selectedIds.contains(entry.id),
+                                        onChanged: _isBulkOperating
+                                            ? null
+                                            : (value) => setState(() {
+                                                if (value == true) {
+                                                  _selectedIds.add(entry.id);
+                                                } else {
+                                                  _selectedIds.remove(entry.id);
+                                                }
+                                              }),
+                                      ),
+                                    Expanded(
+                                      child: _TransactionTile(
+                                        entry,
+                                        tagNames:
+                                            (tagRepository?.tagsForTransaction(
+                                                      entry.id,
+                                                      fallback: entry.tags,
+                                                    ) ??
+                                                    entry.tags)
+                                                .map((tag) => tag.name)
+                                                .toList(),
+                                        onTap: () {
+                                          if (_selecting) {
+                                            if (!_isBulkOperating) {
+                                              setState(() {
+                                                if (!_selectedIds
+                                                    .remove(entry.id)) {
+                                                  _selectedIds.add(entry.id);
+                                                }
+                                              });
+                                            }
+                                          } else {
+                                            context.push(
+                                              '/activity/${entry.id}',
+                                              extra: entry,
+                                            );
+                                          }
+                                        },
+                                        onLongPress:
+                                            _selecting || _isBulkOperating
+                                                ? null
+                                                : () => setState(() {
+                                                      _selecting = true;
+                                                      _selectedIds
+                                                          .add(entry.id);
+                                                    }),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(height: AppSpace.sm),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (_selecting)
+                      _BulkActionBar(
+                        selectedCount: visibleSelected,
+                        totalCount: entries.length,
+                        isBusy: _isBulkOperating,
+                        onSelectAll: () => setState(() {
+                          if (visibleSelected == entries.length) {
+                            _selectedIds.clear();
+                          } else {
+                            _selectedIds.addAll(entries.map((e) => e.id));
+                          }
+                        }),
+                        onAddTags: tagRepository != null
+                            ? () => _changeTags(entries, remove: false)
+                            : null,
+                        onRemoveTags: tagRepository != null
+                            ? () => _changeTags(entries, remove: true)
+                            : null,
+                        onSetCategory: () => _bulkCategorize(entries),
+                        onAssignCard: () => _bulkAssignCard(entries),
+                        onDelete: () => _bulkDelete(entries),
+                      ),
                   ],
                 );
               },
@@ -1344,10 +1580,12 @@ class _SummaryMetric extends StatelessWidget {
 class _TransactionTile extends StatelessWidget {
   final TransactionEntry entry;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final List<String> tagNames;
   const _TransactionTile(
     this.entry, {
     required this.onTap,
+    this.onLongPress,
     this.tagNames = const [],
   });
 
@@ -1408,6 +1646,7 @@ class _TransactionTile extends StatelessWidget {
     // See account_screen.dart's _AccountTile for why Pressable, not InkWell.
     return Pressable(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         decoration: BoxDecoration(
           color: BambooInk.glassFillOnPaper,
@@ -1580,5 +1819,140 @@ extension _FirstOrNull<T> on Iterable<T> {
   T? get firstOrNull {
     final it = iterator;
     return it.moveNext() ? it.current : null;
+  }
+}
+
+
+class _BulkActionBar extends StatelessWidget {
+  final int selectedCount;
+  final int totalCount;
+  final bool isBusy;
+  final VoidCallback onSelectAll;
+  final VoidCallback? onAddTags;
+  final VoidCallback? onRemoveTags;
+  final VoidCallback onSetCategory;
+  final VoidCallback onAssignCard;
+  final VoidCallback onDelete;
+
+  const _BulkActionBar({
+    required this.selectedCount,
+    required this.totalCount,
+    required this.isBusy,
+    required this.onSelectAll,
+    this.onAddTags,
+    this.onRemoveTags,
+    required this.onSetCategory,
+    required this.onAssignCard,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final allSelected = totalCount > 0 && selectedCount == totalCount;
+    return Container(
+      decoration: BoxDecoration(
+        color: BambooInk.paper,
+        border: const Border(top: BorderSide(color: BambooInk.hairlineOnPaper)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D2B313A),
+            blurRadius: 12,
+            offset: Offset(0, -3),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isBusy) const LinearProgressIndicator(),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpace.lg,
+                vertical: AppSpace.xs,
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    '$selectedCount selected',
+                    style: BambooFonts.heading(13, color: BambooInk.ink700),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: isBusy ? null : onSelectAll,
+                    child: Text(allSelected ? 'Deselect all' : 'Select all'),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.sm,
+                0,
+                AppSpace.sm,
+                AppSpace.sm,
+              ),
+              child: Row(
+                children: [
+                  if (onAddTags != null || onRemoveTags != null)
+                    PopupMenuButton<bool>(
+                      enabled: selectedCount > 0 && !isBusy,
+                      icon: const Icon(Icons.label_outline),
+                      tooltip: 'Tags',
+                      onSelected: (remove) =>
+                          remove ? onRemoveTags?.call() : onAddTags?.call(),
+                      itemBuilder: (_) => [
+                        if (onAddTags != null)
+                          const PopupMenuItem(
+                            value: false,
+                            child: Row(
+                              children: [
+                                Icon(Icons.label_outline, size: 20),
+                                SizedBox(width: 8),
+                                Text('Add tags'),
+                              ],
+                            ),
+                          ),
+                        if (onRemoveTags != null)
+                          const PopupMenuItem(
+                            value: true,
+                            child: Row(
+                              children: [
+                                Icon(Icons.label_off_outlined, size: 20),
+                                SizedBox(width: 8),
+                                Text('Remove tags'),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  IconButton(
+                    onPressed:
+                        selectedCount > 0 && !isBusy ? onSetCategory : null,
+                    icon: const Icon(Icons.category_outlined),
+                    tooltip: 'Set category',
+                  ),
+                  IconButton(
+                    onPressed:
+                        selectedCount > 0 && !isBusy ? onAssignCard : null,
+                    icon: const Icon(Icons.credit_card_outlined),
+                    tooltip: 'Assign card',
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: selectedCount > 0 && !isBusy ? onDelete : null,
+                    icon: const Icon(Icons.delete_outline),
+                    color: AppColors.error,
+                    tooltip: 'Delete',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

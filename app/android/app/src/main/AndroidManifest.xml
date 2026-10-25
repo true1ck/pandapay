@@ -131,7 +131,10 @@
              Android needs its monochrome mask for background push messages. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_notification" />
+            android:resource="@drawable/pandapay_notification_small_icon" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/pandapay_notification_accent_color" />
 
         <!-- Launcher widgets. Providers are exported so Android's widget host
              can send APPWIDGET_UPDATE and open each item in the picker. -->

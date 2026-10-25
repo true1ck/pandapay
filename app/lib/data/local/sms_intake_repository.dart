@@ -61,8 +61,10 @@ class SmsSourceDecision {
 class SmsIntakeRepository {
   final AppDatabase database;
   final DateTime Function() now;
+  static final _initialized = <Object>{};
   SmsIntakeRepository(this.database, {DateTime Function()? now})
     : now = now ?? DateTime.now {
+    if (_initialized.add(database.db)) {
     database.db.execute('''
       CREATE TABLE IF NOT EXISTS sms_intake (
         namespace TEXT NOT NULL, id TEXT NOT NULL, sender TEXT NOT NULL,
@@ -102,6 +104,7 @@ class SmsIntakeRepository {
     database.db.execute(
       'CREATE INDEX IF NOT EXISTS sms_pending_retry ON sms_intake(namespace,next_attempt)',
     );
+    }
   }
 
   SmsSourceDecision? decision(String namespace, String sourceKey) {
@@ -217,7 +220,7 @@ class SmsIntakeRepository {
 
   bool wasProcessed(String namespace, String id) => database.db.select(
     'SELECT 1 FROM sms_captured_messages WHERE namespace=? AND id=? AND processed=1 '
-    'UNION ALL SELECT 1 FROM sms_source_decisions WHERE namespace=? AND source_key=? AND state="final"',
+    "UNION ALL SELECT 1 FROM sms_source_decisions WHERE namespace=? AND source_key=? AND state='final'",
     [namespace, id, namespace, id],
   ).isNotEmpty;
 
@@ -294,7 +297,7 @@ class SmsIntakeRepository {
         id,
       ]);
       database.db.execute(
-        'UPDATE sms_source_decisions SET state="final" WHERE namespace=? AND source_key=?',
+        "UPDATE sms_source_decisions SET state='final' WHERE namespace=? AND source_key=?",
         [ns, id],
       );
       database.db.execute('RELEASE SAVEPOINT sms_ack');

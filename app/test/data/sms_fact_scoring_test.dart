@@ -1,0 +1,176 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/sms_fact_scoring.dart';
+
+Map<String, dynamic> fact(
+  String type,
+  Map<String, dynamic> payload,
+) => {'factType': type, 'payload': payload};
+
+const swiggyBody =
+    'Sent Rs.420.00 from HDFC Bank A/C **1797 to SWIGGY UPI on 24-10-26. '
+    'UPI Ref 429812345678. Avail Bal: Rs.45,120.50';
+
+Map<String, dynamic> swiggyFact({
+  bool isComplete = true,
+  double confidence = 0.98,
+}) => fact('posted_movement', {
+  'amountRole': 'posted',
+  'entryKind': 'spend',
+  'amountInr': 420.0,
+  'occurredAt': '2026-10-24T00:00:00.000Z',
+  'instrument': 'upi_bank',
+  'accountLast4': '1797',
+  'issuerName': 'HDFC Bank',
+  'merchant': 'Swiggy',
+  'category': 'dining',
+  'isComplete': isComplete,
+  'confidence': confidence,
+});
+
+const partialBody =
+    'A/c XX1797 debited for INR 750.00 on 24-10-26. Info: POS-TXN. '
+    'Avail Bal: 21,400.00.';
+
+Map<String, dynamic> partialFact() => fact('posted_movement', {
+  'amountRole': 'posted',
+  'entryKind': 'spend',
+  'amountInr': 750.0,
+  'occurredAt': '2026-10-24T00:00:00.000Z',
+  'instrument': 'upi_bank',
+  'accountLast4': '1797',
+  'category': 'other',
+  'isComplete': false,
+  'confidence': 0.65,
+});
+
+const axisBillBody =
+    'Your Axis Bank Credit Card XX8891 statement generated. Total Due: '
+    'Rs 14,850.00, Min Due: Rs 750.00, Due Date: 12-Nov-2026.';
+
+Map<String, dynamic> axisBillFact({bool isComplete = true}) =>
+    fact('bill_obligation', {
+      'amountRole': 'due_total',
+      'amountDueInr': 14850.0,
+      'dueDate': '2026-11-12T00:00:00.000Z',
+      'instrument': 'credit_card',
+      'last4': '8891',
+      'issuerName': 'Axis Bank',
+      'billerName': 'Axis Bank Credit Card',
+      'category': 'bills',
+      'targetKind': 'card_bill',
+      'isComplete': isComplete,
+      'confidence': 0.99,
+    });
+
+void main() {
+  test('complete high-confidence Swiggy spend is auto-resolvable', () {
+    final assessment = assessSmsFacts([swiggyFact()], swiggyBody);
+    expect(assessment.primaryFact?['factType'], 'posted_movement');
+    expect(assessment.composite, greaterThanOrEqualTo(kSmsAutoResolveThreshold));
+    expect(assessment.isComplete, isTrue);
+    expect(assessment.autoResolvable, isTrue);
+    final scored = assessment.facts.single;
+    expect(scored.model, closeTo(0.98, 0.0001));
+    expect(scored.completeness, 1.0);
+    expect(scored.disambiguation, 1.0);
+    expect(scored.evidence, greaterThan(0.8));
+  });
+
+  test('partial draft (isComplete false, confidence .65) needs review', () {
+    final assessment = assessSmsFacts([partialFact()], partialBody);
+    expect(assessment.composite, greaterThanOrEqualTo(kSmsReviewThreshold));
+    expect(assessment.composite, lessThan(kSmsAutoResolveThreshold));
+    expect(assessment.isComplete, isFalse);
+    expect(assessment.autoResolvable, isFalse);
+  });
+
+  test('complete card bill obligation is auto-resolvable', () {
+    final assessment = assessSmsFacts([axisBillFact()], axisBillBody);
+    expect(assessment.composite, greaterThanOrEqualTo(kSmsAutoResolveThreshold));
+    expect(assessment.autoResolvable, isTrue);
+  });
+
+  test('a complete flag the model did not assert blocks auto-resolution', () {
+    final assessment = assessSmsFacts(
+      [axisBillFact(isComplete: false)],
+      axisBillBody,
+    );
+    expect(assessment.composite, greaterThanOrEqualTo(kSmsAutoResolveThreshold));
+    expect(assessment.autoResolvable, isFalse);
+  });
+
+  test('noise sorts to the review tier with no actionable fact', () {
+    final assessment = assessSmsFacts([
+      fact('promotion', {
+        'amountRole': 'proposed',
+        'proposedAmountInr': 500.0,
+        'isComplete': true,
+      }),
+    ], 'Get 10% cashback on your next Amazon purchase. Offer valid till 30 Nov.');
+    expect(assessment.composite, 0);
+    expect(assessment.primaryFact, isNull);
+    expect(assessment.isComplete, isFalse);
+    expect(assessment.autoResolvable, isFalse);
+    expect(assessment.composite, lessThan(kSmsReviewThreshold));
+  });
+
+  test('informational facts never gate the decision', () {
+    final assessment = assessSmsFacts([
+      swiggyFact(),
+      fact('balance_snapshot', {
+        'availableBalanceInr': 45120.5,
+        'asOfAt': '2026-10-24T00:00:00.000Z',
+        'instrument': 'upi_bank',
+        'accountLast4': '1797',
+        'isComplete': false,
+      }),
+    ], swiggyBody);
+    expect(assessment.facts, hasLength(2));
+    expect(assessment.autoResolvable, isTrue);
+  });
+
+  test('promotional footers do not disqualify completion evidence', () {
+    const body =
+        'Rs 500.00 debited from A/c XX1234 on 24-Oct-26. '
+        'You are eligible for a personal loan of Rs 5 Lakh.';
+    expect(smsHasCompletionEvidence(body), isTrue);
+    final assessment = assessSmsFacts(
+      [
+        fact('posted_movement', {
+          'amountRole': 'posted',
+          'entryKind': 'spend',
+          'amountInr': 500.0,
+          'occurredAt': '2026-10-24T00:00:00.000Z',
+          'instrument': 'upi_bank',
+          'accountLast4': '1234',
+          'merchant': 'SOME STORE',
+          'category': 'other',
+          'isComplete': true,
+          'confidence': 0.9,
+        }),
+      ],
+      body,
+    );
+    expect(assessment.facts.single.evidence, 1.0);
+    expect(assessment.autoResolvable, isTrue);
+  });
+
+  test('completion verbs cover disbursement and investment families', () {
+    expect(
+      smsHasCompletionEvidence('Loan of Rs 2,00,000 disbursed to A/c XX1234.'),
+      isTrue,
+    );
+    expect(
+      smsHasCompletionEvidence('Rs 5,000 invested in Axis Bluechip Fund.'),
+      isTrue,
+    );
+    expect(
+      smsHasCompletionEvidence('Payout of Rs 1,944.38 processed today.'),
+      isTrue,
+    );
+    expect(
+      smsHasCompletionEvidence('Rs 500 will be debited on 24-Oct-26.'),
+      isFalse,
+    );
+  });
+}

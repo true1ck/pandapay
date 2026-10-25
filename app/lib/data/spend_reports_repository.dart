@@ -142,11 +142,11 @@ class SpendBreakdownRow {
   });
 }
 
-/// One card's contribution to a period.
+/// One payment source's contribution to a period (saved card, bank account,
+/// wallet, cash, or an unclassified source).
 class CardSpendRow {
-  /// Null for the "Cash & other" row — non-card spend is included so the
-  /// per-card breakdown always reconciles with the headline total instead
-  /// of quietly omitting cash and leaving a gap the user can't explain.
+  /// Null for sources that are not a saved card. Non-card spend remains in
+  /// the breakdown so it reconciles with the headline total.
   final String? cardId;
   final String cardName;
   final Money total;
@@ -180,7 +180,7 @@ class CardSpendRow {
   Money? get netOfFee => annualFee == null ? null : rewards - annualFee!;
 }
 
-/// One payment-method contribution to a period.
+/// One payment-method contribution to a period, independent of funding source.
 class InstrumentSpendRow {
   final String instrument;
   final Money total;
@@ -198,19 +198,23 @@ class InstrumentSpendRow {
     'upi_bank' => 'UPI from bank account',
     'cash' => 'Cash',
     'wallet' => 'Wallets',
-    _ => 'Other',
+    _ => 'Other or unknown payment method',
   };
 }
 
 /// Spend split by both the payment method/card and category.
 class CardCategorySpendRow {
+  final String? cardId;
   final String cardName;
+  final String? categoryId;
   final String categoryName;
   final Money total;
   final int txnCount;
 
   const CardCategorySpendRow({
+    this.cardId,
     required this.cardName,
+    this.categoryId,
     required this.categoryName,
     required this.total,
     required this.txnCount,
@@ -369,7 +373,7 @@ class SpendReport {
           .map(
             (e) => CardSpendRow(
               cardId: e['cardId'] as String?,
-              cardName: e['cardName'] as String? ?? 'Cash & other',
+              cardName: e['cardName'] as String? ?? 'Unknown source',
               total: _money(e['totalInr']),
               rewards: _money(e['rewardsInr']),
               txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,
@@ -396,7 +400,9 @@ class SpendReport {
           .cast<Map<String, dynamic>>()
           .map(
             (e) => CardCategorySpendRow(
-              cardName: e['cardName'] as String? ?? 'Cash & other',
+              cardId: e['cardId'] as String?,
+              cardName: e['cardName'] as String? ?? 'Unknown source',
+              categoryId: e['categoryId'] as String?,
               categoryName: _displayCategoryName(e['categoryName'] as String?),
               total: _money(e['totalInr']),
               txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,

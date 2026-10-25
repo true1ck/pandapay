@@ -61,12 +61,16 @@ CardProduct _fullCard() => CardProduct(
   ],
 );
 
-UserCard _ownedCard({Map<String, Money> capConsumed = const {}}) => UserCard(
+UserCard _ownedCard({
+  Map<String, Money> capConsumed = const {},
+  Money? creditLimit,
+}) => UserCard(
   id: 'uc1',
   cardProductId: 'p1',
   nickname: 'My Test Card',
   cardName: 'Test Card',
   isDefault: false,
+  creditLimit: creditLimit,
   capConsumed: capConsumed,
   statementDay: 5,
   dueDay: 25,
@@ -132,6 +136,16 @@ void main() {
       expect(find.text('My Test Card'), findsOneWidget);
       expect(find.byType(TabBar), findsNothing);
       expect(find.text('REWARDS'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Spend'),
+        300,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('cardDetailScroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       expect(find.text('Spend'), findsOneWidget);
       expect(find.text('Spent this month'), findsNothing);
     },
@@ -142,7 +156,7 @@ void main() {
     (tester) async {
       await _pump(tester, catalogue: [_fullCard()], owned: [_ownedCard()]);
       expect(find.text('Bills & Utilities'), findsOneWidget);
-      expect(find.text('5%'), findsOneWidget);
+      expect(find.textContaining('Reward 5%'), findsOneWidget);
       expect(find.textContaining('Verified March 2026'), findsOneWidget);
     },
   );
@@ -210,4 +224,62 @@ void main() {
     expect(find.text('Statement cuts on day 5'), findsOneWidget);
     expect(find.text('Payment due on day 25'), findsOneWidget);
   });
+
+  testWidgets(
+    'renders credit utilization header bar when card has credit limit and tracked spend',
+    (tester) async {
+      final cardWithLimit = _ownedCard(creditLimit: Money.fromRupees(100000));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            catalogueRepositoryProvider.overrideWithValue(
+              _FakeCatalogueRepository([_fullCard()]),
+            ),
+            categoryRepositoryProvider.overrideWithValue(
+              _FakeCategoryRepository(),
+            ),
+            categoriesProvider.overrideWith(
+              (ref) => _FakeCategoryRepository().fetchCategories(),
+            ),
+            userCardsProvider.overrideWith((ref) async => [cardWithLimit]),
+            myCardsProvider.overrideWith((ref) async => [cardWithLimit]),
+            creditUtilizationProvider.overrideWith(
+              (ref) => {
+                'uc1': UtilizationResult(
+                  ratio: 0.25,
+                  currentBalance: Money.fromRupees(25000),
+                  overThreshold: false,
+                ),
+              },
+            ),
+          ],
+          child: const MaterialApp(home: CardDetailScreen(userCardId: 'uc1')),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Credit utilization: 25%'), findsOneWidget);
+      expect(find.textContaining('Healthy headroom'), findsOneWidget);
+      expect(find.textContaining('75,000 headroom'), findsOneWidget);
+      expect(
+        find.byKey(const Key('card_credit_utilization_bar')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'renders empty credit utilization bar when the card has no credit limit',
+    (tester) async {
+      await _pump(tester, catalogue: [_fullCard()], owned: [_ownedCard()]);
+
+      expect(find.text('Credit utilization · Add a limit'), findsOneWidget);
+      expect(find.text('Add limit'), findsOneWidget);
+      expect(find.text('Track credit utilization'), findsNothing);
+      expect(
+        find.byKey(const Key('card_credit_utilization_bar')),
+        findsNothing,
+      );
+    },
+  );
 }

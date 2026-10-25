@@ -120,6 +120,19 @@ void main() {
       expect(verdict.action, SmsGateAction.drop);
     });
 
+    test('passes dated insurance expiry notices for renewal tracking', () {
+      const body =
+          'Vehicle insurance for DL01CD5678 will expire tomorrow. Premium Rs 2150.';
+      final verdict = SmsGateFilter.evaluate('VM-HDFCER-S', body);
+      expect(verdict.action, SmsGateAction.pass);
+      expect(verdict.normalizedSender, 'HDFCER');
+      expect(SmsGateFilter.evaluate('VM-HDFCER-P', body).action, SmsGateAction.pass);
+      expect(SmsGateFilter.evaluate('9876543210', body).dropReason,
+          SmsGateDropReason.telemarketingOrP2p);
+      expect(SmsGateFilter.evaluate('VM-HDFCER-S', '$body OTP 123456').dropReason,
+          SmsGateDropReason.otpOrSecurity);
+    });
+
     test('Passes valid debit, credit, bill, and autopay notifications', () {
       const debitMsg =
           'Rs. 1,450.00 debited from HDFC Bank A/c ending 1234 on 22-Oct-26 at Swiggy. Avl bal: Rs. 45,000.';

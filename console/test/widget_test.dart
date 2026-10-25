@@ -888,6 +888,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Data Quality'), 100);
     await tester.tap(find.text('Data Quality'));
     await tester.pumpAndSettle();
 

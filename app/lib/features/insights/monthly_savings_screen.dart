@@ -648,14 +648,25 @@ class _RewardCategoryBreakdownState extends State<_RewardCategoryBreakdown> {
                     children: [
                       Text(
                         'Earned',
-                        style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+                        style: BambooFonts.ui(10, color: BambooInk.ink500),
                       ),
-                      MoneyText(
-                        widget.earnedTotal,
-                        confidence: Confidence.confirmed,
-                        style: BambooFonts.money(16, color: BambooInk.ink900),
-                        hidePaise: true,
-                        showConfidenceIcon: false,
+                      const SizedBox(height: 1),
+                      SizedBox(
+                        width: 70,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: MoneyText(
+                            widget.earnedTotal,
+                            confidence: Confidence.confirmed,
+                            style: BambooFonts.ui(
+                              13.5,
+                              weight: FontWeight.w800,
+                              color: BambooInk.ink900,
+                            ),
+                            hidePaise: true,
+                            showConfidenceIcon: false,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -819,7 +830,7 @@ class _RewardDonutPainter extends CustomPainter {
     }
     canvas.drawCircle(
       center,
-      radius * 0.62,
+      radius * 0.64,
       Paint()..color = BambooInk.glassFillOnPaper,
     );
   }

@@ -25,4 +25,24 @@ void main() {
     expect(error.errorCode, 'internal_error');
     expect(error.requestId, 'req-123');
   });
+
+  group('friendlyMessageFrom', () {
+    test('formats required_terms_missing to user-facing terms prompt', () {
+      expect(
+        ApiException.friendlyMessageFrom(
+          'POST /onboarding/complete failed: 409 {"error":"required_terms_missing"}',
+        ),
+        'Please accept the terms to complete setup.',
+      );
+    });
+
+    test('replaces snake_case errors with generic friendly message', () {
+      expect(
+        ApiException.friendlyMessageFrom(
+          'POST /api failed: 400 {"error":"invalid_parameter_state"}',
+        ),
+        'Something went wrong. Please try again.',
+      );
+    });
+  });
 }

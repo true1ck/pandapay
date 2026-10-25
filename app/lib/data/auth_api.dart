@@ -315,6 +315,11 @@ class AuthApi {
 /// end to end from the app side (Chunk 1 built and proved the backend;
 /// nothing on the app side ever called it until now).
 class ProfileApi {
+  // Same cold-start rule as AuthApi: an unreachable API must fail into the
+  // cached-profile fallback instead of holding the You tab's first frame for
+  // as long as the OS keeps a TCP connect attempt alive.
+  static const _requestTimeout = Duration(seconds: 8);
+
   final String apiBaseUrl;
   final String accessToken;
   final http.Client _client;
@@ -330,10 +335,9 @@ class ProfileApi {
   };
 
   Future<Map<String, dynamic>?> fetchProfile() async {
-    final response = await _client.get(
-      Uri.parse('$apiBaseUrl/profile'),
-      headers: _headers,
-    );
+    final response = await _client
+        .get(Uri.parse('$apiBaseUrl/profile'), headers: _headers)
+        .timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'GET /profile failed: ${response.statusCode} ${response.body}',
