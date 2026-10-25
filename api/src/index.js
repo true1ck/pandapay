@@ -8857,8 +8857,13 @@ app.get('/referrals', requireAuth, async (req, res) => {
  *
  * Read-only over the `notifications` table (0024). Nothing is synthesised
  * here: if a notification wasn't delivered and recorded, it doesn't appear.
- * The client groups Today/Earlier off `created_at` in the device's own
+ * The client groups Today/Past week off `created_at` in the device's own
  * timezone rather than the server guessing which local day a row belongs to.
+ *
+ * Only the last week is returned; older rows stay in the table but drop out
+ * of the inbox (and the unread badge) so the list doesn't grow forever. The
+ * SQL window carries a day of slack because the client trims to seven *local*
+ * calendar days, which can start up to a day earlier than UTC's now() - 7d.
  */
 app.get('/notifications', requireAuth, async (req, res) => {
   const limit = Math.min(Number.parseInt(req.query.limit, 10) || 50, 200);
@@ -8868,6 +8873,7 @@ app.get('/notifications', requireAuth, async (req, res) => {
         `SELECT id, category, severity, title, body, deep_link, read_at, created_at
            FROM notifications
           WHERE profile_id = $1
+            AND created_at > now() - interval '8 days'
           ORDER BY created_at DESC
           LIMIT $2`,
         [req.userId, limit]

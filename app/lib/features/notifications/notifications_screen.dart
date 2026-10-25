@@ -9,13 +9,17 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show AppNotification;
 
 /// Design 19 "Notifications" — the inbox of things that already happened,
-/// newest first, grouped Today / Earlier.
+/// newest first, grouped Today / Past week.
 ///
 /// Everything here is a real row from `GET /notifications` (migration 0024).
 /// The mockup's four examples (a due date, nearby offers, a streak, a card
 /// added) are exactly the four categories the app actually records, but
 /// nothing is synthesised to fill the screen — an account with no deliveries
 /// gets the empty state, not a demo list.
+///
+/// Only the last seven calendar days are shown. Older rows stay recorded but
+/// drop off the list, so a long-lived account doesn't end up scrolling
+/// through months of history.
 ///
 /// Grouping happens client-side, in the device's own timezone: "Today" is a
 /// local-calendar question, and a server bucketing in UTC would move a
@@ -138,10 +142,27 @@ class _InboxList extends ConsumerWidget {
 
     final now = ref.watch(clockProvider).now();
     final today = DateTime(now.year, now.month, now.day);
-    final todays = items
+    // Seven calendar days including today. DateTime normalises a negative
+    // day-of-month across month boundaries, so this is safe on the 1st.
+    final windowStart = DateTime(now.year, now.month, now.day - 6);
+    final recent = items
+        .where((n) => !n.createdAt.toLocal().isBefore(windowStart))
+        .toList();
+
+    if (recent.isEmpty) {
+      return const EmptyState(
+        icon: Icons.notifications_none_rounded,
+        title: 'Nothing this week',
+        message:
+            'Notifications drop off the inbox after seven days, so this list '
+            'stays short. Due-date nudges, cap warnings and nearby offers land here.',
+      );
+    }
+
+    final todays = recent
         .where((n) => !n.createdAt.toLocal().isBefore(today))
         .toList();
-    final earlier = items
+    final pastWeek = recent
         .where((n) => n.createdAt.toLocal().isBefore(today))
         .toList();
 
@@ -152,10 +173,11 @@ class _InboxList extends ConsumerWidget {
           const _SectionLabel('Today'),
           for (final n in todays) _NotificationTile(notification: n, now: now),
         ],
-        if (earlier.isNotEmpty) ...[
+        if (pastWeek.isNotEmpty) ...[
           if (todays.isNotEmpty) const SizedBox(height: AppSpace.md),
-          const _SectionLabel('Earlier'),
-          for (final n in earlier) _NotificationTile(notification: n, now: now),
+          const _SectionLabel('Past week'),
+          for (final n in pastWeek)
+            _NotificationTile(notification: n, now: now),
         ],
       ],
     );
