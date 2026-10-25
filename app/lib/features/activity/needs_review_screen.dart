@@ -739,6 +739,9 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                                       onRefresh: () async {
                                         ref.read(smsFlushTriggerProvider.notifier).state++;
                                         ref.invalidate(needsReviewItemsProvider);
+                                        try {
+                                          await ref.read(needsReviewItemsProvider.future);
+                                        } catch (_) {}
                                         await Future.delayed(const Duration(milliseconds: 600));
                                       },
                                       child: ListView.builder(
@@ -3090,12 +3093,12 @@ class _AiBadge extends StatelessWidget {
   }
 }
 
-class _AiStatusBadge extends StatelessWidget {
+class _AiStatusBadge extends ConsumerWidget {
   final AiReviewStatus status;
   const _AiStatusBadge({required this.status});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final (label, icon, color) = switch (status) {
       AiReviewStatus.notChecked => (
         'AI review not started',
@@ -3118,36 +3121,47 @@ class _AiStatusBadge extends StatelessWidget {
         BambooInk.jade,
       ),
       AiReviewStatus.unavailable => (
-        'AI review unavailable',
+        'AI review unavailable · Tap to retry',
         Icons.cloud_off_outlined,
         BambooInk.ink500,
       ),
     };
+    final isRetryable = status == AiReviewStatus.unavailable;
     return Align(
       alignment: Alignment.centerLeft,
       child: Semantics(
         label: label,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(color: color.withValues(alpha: 0.24)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 12, color: color),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: BambooFonts.ui(
-                  11.5,
-                  weight: FontWeight.w600,
-                  color: color,
+        button: isRetryable,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: isRetryable
+              ? () {
+                  ref.read(smsFlushTriggerProvider.notifier).state++;
+                  ref.invalidate(needsReviewItemsProvider);
+                }
+              : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(color: color.withValues(alpha: 0.24)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 12, color: color),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: BambooFonts.ui(
+                    11.5,
+                    weight: FontWeight.w600,
+                    color: color,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

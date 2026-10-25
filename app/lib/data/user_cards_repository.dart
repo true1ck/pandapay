@@ -2078,34 +2078,32 @@ class UserCardsRepository {
 
   /// SMS intelligence Phase 5: queues an unresolved SMS for server AI classification.
   /// Server deduplicates on (profile_id, source_id); retrying returns the same
-  /// job ID and does not burn quota. A 404, 400, 429 or network drop returns null;
-  /// failures never block the local intake flow.
+  /// job ID and does not burn quota. Server refusals (400, 429, 503) return null
+  /// so callers can distinguish explicit refusals from network errors.
+  /// Transport/network exceptions are rethrown so transient failures are not
+  /// swallowed as permanent rejections.
   Future<String?> submitAiJob({
     required String sourceKey,
     required String sender,
     required String body,
     DateTime? occurredAt,
   }) async {
-    try {
-      final response = await _client
-          .post(
-            Uri.parse('$apiBaseUrl/ai/jobs'),
-            headers: _headers,
-            body: jsonEncode({
-              'sourceKey': sourceKey,
-              'sender': sender,
-              'body': body,
-              if (occurredAt != null)
-                'occurredAt': occurredAt.toUtc().toIso8601String(),
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        return decoded['jobId'] as String?;
-      }
-    } catch (_) {
-      // Non-fatal by design
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/ai/jobs'),
+          headers: _headers,
+          body: jsonEncode({
+            'sourceKey': sourceKey,
+            'sender': sender,
+            'body': body,
+            if (occurredAt != null)
+              'occurredAt': occurredAt.toUtc().toIso8601String(),
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      return decoded['jobId'] as String?;
     }
     return null;
   }
@@ -2113,24 +2111,24 @@ class UserCardsRepository {
   /// Returns redacted status for a previously queued SMS. The body and lease
   /// token are never returned; callers use this only to refresh local review
   /// state after the background worker finishes.
+  ///
+  /// Returns null ONLY on HTTP 404 (job not found). Throws [ApiException] on
+  /// non-200 / non-404 server responses, and rethrows transport/network
+  /// exceptions so callers can distinguish missing jobs from transient drops.
   Future<Map<String, dynamic>?> fetchAiJobStatus(String sourceKey) async {
-    try {
-      final response = await _client
-          .get(
-            Uri.parse('$apiBaseUrl/ai/jobs/source/$sourceKey'),
-            headers: _headers,
-          )
-          .timeout(const Duration(seconds: 15));
-      if (response.statusCode == 404) return null;
-      if (response.statusCode != 200) {
-        throw ApiException(
-          'GET /ai/jobs/source failed: ${response.statusCode} ${response.body}',
-        );
-      }
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } catch (_) {
-      return null;
+    final response = await _client
+        .get(
+          Uri.parse('$apiBaseUrl/ai/jobs/source/$sourceKey'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 404) return null;
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'GET /ai/jobs/source failed: ${response.statusCode} ${response.body}',
+      );
     }
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   /// Task S-1a: the batched form of [logTransactionFromSms], for backup-file

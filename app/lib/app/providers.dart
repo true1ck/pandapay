@@ -127,6 +127,28 @@ bool reviewReplayShouldStop(Object error) {
   return true;
 }
 
+/// Determines whether an error from the AI queue represents an explicit, permanent refusal
+/// (such as HTTP 400 or HTTP 503 ai_queue_disabled), as opposed to a transient or network error.
+bool _isExplicitAiRefusal(Object error) {
+  if (error is ApiException) {
+    final status = error.statusCode;
+    if (status == 400) return true;
+    if (status == 503 &&
+        (error.errorCode == 'ai_queue_disabled' ||
+            error.debugMessage.contains('ai_queue_disabled'))) {
+      return true;
+    }
+    return false;
+  }
+  final message = error.toString().toLowerCase();
+  if (message.contains('ai_queue_disabled') ||
+      message.contains('status: 400') ||
+      message.contains('400 bad request')) {
+    return true;
+  }
+  return false;
+}
+
 final authApiProvider = Provider<AuthApi>(
   (ref) => AuthApi(authBaseUrl: _authBaseUrl),
 );
@@ -6104,6 +6126,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       try {
         final status = await repo.fetchAiJobStatus(cleanId);
         if (status == null || status['status'] == 'failed') {
+          // Allow items that previously had AiReviewStatus.unavailable to be
+          // retried if status == null and they have no suggestions yet.
           final jobId = await repo.submitAiJob(
             sourceKey: cleanId,
             sender: item.sender,
@@ -6120,12 +6144,13 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
               changed;
           continue;
         }
+
         final statusValue = switch (status['status']) {
           'queued' => AiReviewStatus.queued,
           'leased' => AiReviewStatus.processing,
           'done' => AiReviewStatus.checked,
           'failed' => AiReviewStatus.unavailable,
-          _ => AiReviewStatus.unavailable,
+          _ => item.aiStatus,
         };
         changed =
             await reviewRepo.updateAiStatus(item.id, statusValue) || changed;
@@ -6169,9 +6194,18 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
             changed = true;
           }
         }
-      } catch (_) {
-        // AI fallback: network or quota failure must never break the
-        // background worker; item remains safely reviewable manually.
+      } on Object catch (e) {
+        if (_isExplicitAiRefusal(e)) {
+          changed =
+              await reviewRepo.updateAiStatus(
+                item.id,
+                AiReviewStatus.unavailable,
+              ) ||
+              changed;
+        }
+        // If fetchAiJobStatus or submitAiJob throws a network error,
+        // DO NOT mark the item as AiReviewStatus.unavailable!
+        // Leave it as notChecked (or its current status) and continue.
         continue;
       }
     }
@@ -6343,6 +6377,10 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     if (previous?.valueOrNull == false && next.valueOrNull == true) {
       unawaited(flushAndRetry());
     }
+  });
+
+  ref.listen<int>(smsFlushTriggerProvider, (_, _) {
+    unawaited(flushAndRetry());
   });
 
   final listener = AppLifecycleListener(

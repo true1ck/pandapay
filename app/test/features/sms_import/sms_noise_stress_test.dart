@@ -283,6 +283,76 @@ void main() {
     }
   });
 
+  group('Category 8c: Biller onboarding and future bill promises', () {
+    final onboardingNotices = <(String sender, String body)>[
+      (
+        'CP-AXISBK-S',
+        'You have added Goa Electricity Department 60008413407 to Axis Bank Bill Pay service. We will notify you once the bill is generated.',
+      ),
+      (
+        'AXISBK',
+        'You have successfully registered for paperless e-bill. We will notify you when the bill is generated.',
+      ),
+      ('HDFCBK', 'Bill Pay service has been activated for your account.'),
+      ('HDFCBK', 'Your first bill will be generated on 05-Nov-2026.'),
+      (
+        'AXISBK',
+        'BillPay registration successful. You will receive your bill every month.',
+      ),
+      ('AXISBK', 'You will receive your bill on the 5th of every month.'),
+      ('AXISBK', 'Bill generation date: 05-Nov-2026.'),
+      ('AXISBK', 'Bill fetch is now enabled for your biller.'),
+      ('AXISBK', 'Your biller will send you the bill every month.'),
+      ('HDFCBK', 'You have added Goa Electricity Department as a payee.'),
+    ];
+
+    for (final (sender, body) in onboardingNotices) {
+      test('Biller onboarding rejected: "$body"', () {
+        expect(
+          LocalSmsParser.isNonTransactionNoise(sender, body),
+          isTrue,
+          reason: 'isNonTransactionNoise should be true for: $body',
+        );
+        expect(
+          capturesFinancialSms(body, sender: sender),
+          isFalse,
+          reason: 'capturesFinancialSms should be false for: $body',
+        );
+      });
+    }
+
+    final actionableBillMessages = <(String sender, String body)>[
+      (
+        'AXISBK',
+        'Your electricity bill of Rs 1,200 is generated. Due on 05-Nov-2026.',
+      ),
+      ('AXISBK', 'Bill payment of Rs 500 scheduled on 05-Nov-2026.'),
+      (
+        'AXISBK',
+        'You have added Goa Electricity Department to Bill Pay with AutoPay maximum limit INR 2,000.',
+      ),
+      ('AXISBK', 'Your bill is due today. Login to view.'),
+      (
+        'AXISBK',
+        'Your first bill will be generated on 05-Nov-2026. Total due INR 500.',
+      ),
+      (
+        'AXISBK',
+        'You have added Goa Electricity Department to Bill Pay. Bill payment failed.',
+      ),
+    ];
+
+    for (final (sender, body) in actionableBillMessages) {
+      test('Actionable bill kept: "$body"', () {
+        expect(
+          LocalSmsParser.isNonTransactionNoise(sender, body),
+          isFalse,
+          reason: 'isNonTransactionNoise should be false for: $body',
+        );
+      });
+    }
+  });
+
   group('Category 9: Lottery / Rewards Spam', () {
     final lotteryRewardsSpam = <(String sender, String body)>[
       ('VM-REWARD-P', 'You won Rs. 50,000 cash prize in Diwali Lucky Draw! Claim now by paying processing fee of Rs. 500 at http://claim-prize.in'),

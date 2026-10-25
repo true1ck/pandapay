@@ -858,6 +858,13 @@ void main() {
               'Dear SUJAY SHANTARAM KURTIKAR, as per SEBI and exchange guidelines, unused funds in your Lemonn trading account will be transferred back to your registered bank account on the day of settlement.',
           receivedAt: DateTime(2026, 10, 4),
         ),
+        NeedsReviewItem(
+          id: 'legacy-biller-onboarding',
+          sender: 'CP-AXISBK-S',
+          body:
+              'You have added Goa Electricity Department 60008413407 to Axis Bank Bill Pay service. We will notify you once the bill is generated.',
+          receivedAt: DateTime(2026, 10, 5),
+        ),
       ];
       for (final item in legacyRows) {
         db.db.execute('INSERT INTO local_needs_review VALUES (?,?,?)', [

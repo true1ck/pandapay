@@ -1367,6 +1367,39 @@ test('card control, linking and settlement explanations are non-transaction nois
   assert.equal(detected.last4, '1366');
 });
 
+test('biller onboarding and future bill promises are non-transaction noise', () => {
+  const onboardingNotices = [
+    ['CP-AXISBK-S', 'You have added Goa Electricity Department 60008413407 to Axis Bank Bill Pay service. We will notify you once the bill is generated.'],
+    ['AXISBK', 'You have successfully registered for paperless e-bill. We will notify you when the bill is generated.'],
+    ['HDFCBK', 'Bill Pay service has been activated for your account.'],
+    ['HDFCBK', 'Your first bill will be generated on 05-Nov-2026.'],
+    ['AXISBK', 'BillPay registration successful. You will receive your bill every month.'],
+    ['AXISBK', 'You will receive your bill on the 5th of every month.'],
+    ['AXISBK', 'Bill generation date: 05-Nov-2026.'],
+    ['AXISBK', 'Bill fetch is now enabled for your biller.'],
+    ['AXISBK', 'Your biller will send you the bill every month.'],
+    ['HDFCBK', 'You have added Goa Electricity Department as a payee.'],
+  ];
+  for (const [sender, body] of onboardingNotices) {
+    assert.equal(isNonTransactionNoise(sender, body), true, 'Expected noise for: ' + body);
+    const result = parseSmsAgainstPatterns([], { sender, body });
+    assert.equal(result.ok, false, 'Should not mint a bill: ' + body);
+    assert.equal(result.reason, 'non_transaction_message');
+  }
+
+  const actionableBillMessages = [
+    'Your electricity bill of Rs 1,200 is generated. Due on 05-Nov-2026.',
+    'Bill payment of Rs 500 scheduled on 05-Nov-2026.',
+    'You have added Goa Electricity Department to Bill Pay with AutoPay maximum limit INR 2,000.',
+    'Your bill is due today. Login to view.',
+    'Your first bill will be generated on 05-Nov-2026. Total due INR 500.',
+    'You have added Goa Electricity Department to Bill Pay. Bill payment failed.',
+  ];
+  for (const body of actionableBillMessages) {
+    assert.equal(isNonTransactionNoise('AXISBK', body), false, 'Should not be noise: ' + body);
+  }
+});
+
 test('mutual fund folio unit allotment does not create a cash spend or duplicate investment transaction', () => {
   const amcMessages = [
     'Folio 12345/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',

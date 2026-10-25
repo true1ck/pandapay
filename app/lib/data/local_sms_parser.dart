@@ -130,7 +130,7 @@ class LocalSmsParser {
   // straight after the instrument ("Credit Card 8708 bill"), so the open
   // review queue is re-examined once more and a card's due day can finally be
   // learned from its own AutoPay message.
-  static const version = 13;
+  static const version = 14;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -343,6 +343,41 @@ class LocalSmsParser {
       }
     }
     final text = body.replaceAll(RegExp(r'\s+'), ' ');
+    // Biller onboarding only enrols a service; it does not report a bill.
+    // "Once the bill is generated" is a future promise, so it must be
+    // rejected before the bill-ready keep-rule below. Any amount, due date
+    // or AutoPay/mandate terms keep the message actionable.
+    final billerOnboarding =
+        _re(
+              r'\b(?:added|registered|enrolled|linked|activated|subscribed|enabled)\b[\s\S]{0,80}\b(?:bill\s*pay|billpay|bill\s*payment(?:\s+service)?|biller|payee|e[- ]?bill|paperless|bill\s+fetch|bill\s+alerts?)\b',
+            ).hasMatch(text) ||
+            _re(
+              r'\b(?:bill\s*pay|billpay|biller|payee|e[- ]?bill|paperless|bill\s+fetch|bill\s+alerts?)\b[\s\S]{0,60}\b(?:added|registered|enrolled|linked|activated|subscribed|enabled|registration)\b',
+            ).hasMatch(text) ||
+            _re(
+              r'\b(?:bill\s+will\s+be\s+generated|bill\s+generation\s+date|we\s+will\s+notify\s+you\b[\s\S]{0,60}\bbill\b|(?:you\s+will\s+(?:receive|get)|we\s+will\s+(?:send|notify|inform))\b[\s\S]{0,50}\bbill\b|\bwill\s+(?:send|notify|inform|share)\b[\s\S]{0,40}\bbill\b|(?:once|when|after)\b[\s\S]{0,30}\bbill\b[\s\S]{0,15}\b(?:is\s+|gets\s+)?generated\b)',
+            ).hasMatch(text);
+    final hasCurrencyAmount = _re(
+      r'(?:₹|\brs\.?|\binr)\s*[\d,]+|\b\d[\d,]*(?:\.\d{1,2})?\s*(?:₹|rs\.?|inr)\b',
+    ).hasMatch(text);
+    final hasDueDate = _re(
+      r'\b(?:payment|amount|total|minimum)\s+due\b|\bdue\s+(?:date|on|by)\b|\bpay(?:ment)?\s+(?:by|before)\b',
+    ).hasMatch(text);
+    final hasMandate =
+        isAutoPayNotice(text) ||
+        _re(
+          r'\b(?:auto\s*pay|autopay|e[- ]?mandate|mandate|standing\s+instruction|auto[- ]?debit)\b',
+        ).hasMatch(text);
+    final hasMovement = _re(
+      r'\b(?:failed|declined|debited|credited|paid|charged|transferred|withdrawn)\b|\b(?:payment|transaction|txn)\b[\s\S]{0,20}\b(?:successful|completed|failed)\b',
+    ).hasMatch(text);
+    if (billerOnboarding &&
+        !hasCurrencyAmount &&
+        !hasDueDate &&
+        !hasMandate &&
+        !hasMovement) {
+      return true;
+    }
     // A real amount due or statement remains useful even when the issuer
     // appends an offer. Let the bill parser handle it.
     if (_re(
