@@ -211,7 +211,6 @@ class HomeScreen extends ConsumerWidget {
                       ),
                       const _AlertsStrip(),
                       const _UtilizationWarningBanner(),
-                      const _HomeCategories(),
                       const _HomeDuesAndReminders(),
                       const _HomeAccountSnapshot(),
                       const SizedBox(height: AppSpace.lg),
