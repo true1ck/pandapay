@@ -289,7 +289,7 @@ void main() {
   });
 
   testWidgets(
-    'Dismiss all confirms the full queue even while a date filter is active',
+    'Dismiss filtered confirms and removes only visible items when a date filter is active',
     (tester) async {
       await reviews.add(
         NeedsReviewItem(
@@ -313,12 +313,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('VM-SEP'), findsNothing);
 
-      await tester.tap(find.text('Dismiss all'));
+      await tester.tap(find.text('Dismiss filtered (1)'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Dismiss all 2 review items?'), findsOneWidget);
+      expect(find.text('Dismiss 1 filtered review items?'), findsOneWidget);
       expect(
-        find.textContaining('even when a date or type filter is active'),
+        find.text(
+          'This removes only the 1 items currently visible under this filter. Other review items will not be affected.',
+        ),
         findsOneWidget,
       );
       await tester.tap(find.text('Cancel'));
@@ -327,13 +329,114 @@ void main() {
       expect(find.text('VM-OCT'), findsOneWidget);
       expect(find.text('VM-SEP'), findsNothing);
 
-      await tester.tap(find.text('Dismiss all'));
+      await tester.tap(find.text('Dismiss filtered (1)'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Dismiss all'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Dismiss filtered'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Nothing needs review'), findsOneWidget);
+      final remaining = await reviews.fetchAll();
+      expect(remaining, hasLength(1));
+      expect(remaining.single.id, '2');
+    },
+  );
+
+  testWidgets(
+    'BundleReviewCard displays aggregated Pay Later drawdown bundle and expands/dismisses',
+    (tester) async {
+      final repo = _FakeUserCardsRepository();
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'axio-1',
+          sender: 'AX-axioFS-S',
+          body: 'You have availed Amazon Pay Later credit of Rs. 250.00 for order on Amazon.',
+          receivedAt: DateTime(2026, 3, 10),
+          kind: NeedsReviewKind.payLaterDrawdown,
+        ),
+      );
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'axio-2',
+          sender: 'AX-axioFS-S',
+          body: 'You have availed Amazon Pay Later credit of Rs. 450.00 for order on Swiggy.',
+          receivedAt: DateTime(2026, 3, 15),
+          kind: NeedsReviewKind.payLaterDrawdown,
+        ),
+      );
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'axio-3',
+          sender: 'AX-axioFS-S',
+          body: 'You have availed Amazon Pay Later credit of Rs. 100.00 for order on Uber.',
+          receivedAt: DateTime(2026, 3, 20),
+          kind: NeedsReviewKind.payLaterDrawdown,
+        ),
+      );
+
+      await _pump(tester, repo: repo, reviews: reviews);
+
+      expect(find.text('Amazon Pay Later (Axio)'), findsOneWidget);
+      expect(find.text('3 messages'), findsOneWidget);
+      expect(find.text('Total: ₹800.00'), findsOneWidget);
+      expect(find.text('Credit line drawdowns (billed in monthly AutoPay)'), findsOneWidget);
+      expect(find.text('Dismiss all 3 (Billed in AutoPay)'), findsOneWidget);
+      expect(find.text('Show all 3'), findsOneWidget);
+
+      // Expanding shows individual message tiles
+      await tester.tap(find.text('Show all 3'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hide messages'), findsOneWidget);
+      expect(find.textContaining('Uber'), findsOneWidget);
+      expect(find.textContaining('Swiggy'), findsOneWidget);
+      expect(find.textContaining('Amazon'), findsWidgets);
+
+      // Tapping bulk dismiss removes all 3 from repository and sends feedback
+      await tester.tap(find.text('Dismiss all 3 (Billed in AutoPay)'));
+      await tester.pumpAndSettle();
+
       expect(await reviews.fetchAll(), isEmpty);
+      expect(find.text('Nothing needs review'), findsOneWidget);
+      expect(repo.allDismissArgs, hasLength(3));
+      expect(
+        repo.allDismissArgs.every((a) => a['reason'] == 'bundle_dismissed'),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'Pay Later / BNPL filter chip isolates Pay Later drawdowns',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'spend-1',
+          sender: 'VM-HDFCBK',
+          body: 'Rs. 500 spent on Card ending 1234 at RELIANCE.',
+          receivedAt: DateTime(2026, 3, 10),
+        ),
+      );
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'paylater-1',
+          sender: 'AX-axioFS-S',
+          body: 'You have availed Amazon Pay Later credit of Rs. 250.00.',
+          receivedAt: DateTime(2026, 3, 15),
+          kind: NeedsReviewKind.payLaterDrawdown,
+        ),
+      );
+
+      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+      expect(find.text('VM-HDFCBK'), findsOneWidget);
+      expect(find.text('AX-axioFS-S'), findsOneWidget);
+
+      await tester.tap(find.text('Pay Later / BNPL'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('VM-HDFCBK'), findsNothing);
+      expect(find.text('AX-axioFS-S'), findsOneWidget);
+      expect(find.text('Pay Later / Credit line drawdown'), findsOneWidget);
+      expect(find.text('Review drawdown'), findsOneWidget);
     },
   );
 

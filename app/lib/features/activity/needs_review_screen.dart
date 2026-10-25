@@ -17,6 +17,7 @@ import '../../data/needs_review_repository.dart';
 import '../../data/sms_fact_contract.dart';
 import '../../data/user_cards_repository.dart'
     show TxnEntryKind, TxnInstrument, UserCard;
+import 'needs_review_clustering.dart';
 
 String _feedbackSourceKey(String reviewId) {
   final commitment = RegExp(
@@ -76,6 +77,10 @@ bool _isMandateReview(String body) =>
     NeedsReviewRepository.isMandateReview(body);
 
 String _reviewTypeLabel(NeedsReviewItem item) {
+  if (item.kind == NeedsReviewKind.payLaterDrawdown ||
+      NeedsReviewRepository.isPayLaterDrawdown(item.body, sender: item.sender)) {
+    return 'Pay Later / Credit line drawdown';
+  }
   if (item.kind == NeedsReviewKind.securityOrServiceAlert ||
       _isSecurityOrServiceAlert(item.body)) {
     return 'Security or service alert';
@@ -112,6 +117,9 @@ String _reviewTypeLabel(NeedsReviewItem item) {
 }
 
 String _reviewReasonLabel(String? reason, String body) {
+  if (NeedsReviewRepository.isPayLaterDrawdown(body)) {
+    return 'Credit facility drawdown (Amazon Pay Later / Axio). Actual debit occurs via monthly AutoPay bill payment.';
+  }
   if (_isSecurityOrServiceAlert(body)) {
     return 'Verification or service notice — not a spending transaction.';
   }
@@ -138,6 +146,10 @@ String _reviewReasonLabel(String? reason, String body) {
 }
 
 String _reviewActionLabel(NeedsReviewItem item) {
+  if (item.kind == NeedsReviewKind.payLaterDrawdown ||
+      NeedsReviewRepository.isPayLaterDrawdown(item.body, sender: item.sender)) {
+    return 'Review drawdown';
+  }
   if (item.kind == NeedsReviewKind.securityOrServiceAlert ||
       _isSecurityOrServiceAlert(item.body)) {
     return 'Dismiss alert';
@@ -284,13 +296,18 @@ enum _ReviewFilterCategory {
   all('All types'),
   spends('Spends / Debits'),
   bills('Bills & Mandates'),
-  alerts('Alerts & Notices');
+  alerts('Alerts & Notices'),
+  payLater('Pay Later / BNPL');
 
   final String label;
   const _ReviewFilterCategory(this.label);
 }
 
 _ReviewFilterCategory _categorizeItem(NeedsReviewItem item) {
+  if (item.kind == NeedsReviewKind.payLaterDrawdown ||
+      NeedsReviewRepository.isPayLaterDrawdown(item.body, sender: item.sender)) {
+    return _ReviewFilterCategory.payLater;
+  }
   if (item.kind == NeedsReviewKind.commitment ||
       item.kind == NeedsReviewKind.mandate ||
       _isMandateReview(item.body)) {
@@ -489,13 +506,23 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
     });
   }
 
-  Future<void> _dismissAll(List<NeedsReviewItem> reviewItems) async {
+  Future<void> _dismissItems(
+    List<NeedsReviewItem> itemsToDismiss, {
+    required int totalPendingCount,
+  }) async {
+    final isFiltered = itemsToDismiss.length < totalPendingCount;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Dismiss all ${reviewItems.length} review items?'),
-        content: const Text(
-          'This removes every item from Needs Review, even when a date or type filter is active.',
+        title: Text(
+          isFiltered
+              ? 'Dismiss ${itemsToDismiss.length} filtered review items?'
+              : 'Dismiss all $totalPendingCount review items?',
+        ),
+        content: Text(
+          isFiltered
+              ? 'This removes only the ${itemsToDismiss.length} items currently visible under this filter. Other review items will not be affected.'
+              : 'This removes all $totalPendingCount items from Needs Review.',
         ),
         actions: [
           TextButton(
@@ -504,7 +531,7 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Dismiss all'),
+            child: Text(isFiltered ? 'Dismiss filtered' : 'Dismiss all'),
           ),
         ],
       ),
@@ -512,7 +539,7 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
     if (confirmed != true || !mounted) return;
 
     final repo = ref.read(userCardsRepositoryProvider);
-    for (final item in reviewItems) {
+    for (final item in itemsToDismiss) {
       if (item.kind == NeedsReviewKind.commitment) {
         await _persistCommitmentDismissal(ref, item);
       }
@@ -528,7 +555,7 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
             .ignore();
       }
     }
-    final ids = [for (final item in reviewItems) item.id];
+    final ids = [for (final item in itemsToDismiss) item.id];
     await ref.read(needsReviewRepositoryProvider).removeAll(ids);
     ref.invalidate(commitmentsProvider);
     ref.invalidate(needsReviewItemsProvider);
@@ -540,6 +567,74 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
     final items = ref.watch(needsReviewItemsProvider);
     final pendingItems = items.valueOrNull ?? const <NeedsReviewItem>[];
     final autoCount = ref.watch(autoResolvedCountProvider).valueOrNull ?? 0;
+
+    final sortedList = List<NeedsReviewItem>.from(pendingItems)
+      ..sort((a, b) {
+        final byDate = b.receivedAt.compareTo(a.receivedAt);
+        return byDate != 0 ? byDate : a.id.compareTo(b.id);
+      });
+
+    final monthMap =
+        <String, ({String label, int count, DateTime date})>{};
+    for (final item in sortedList) {
+      final key =
+          '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
+      final current = monthMap[key];
+      if (current == null) {
+        monthMap[key] = (
+          label: DateFormat('MMM yyyy').format(item.receivedAt),
+          count: 1,
+          date: DateTime(item.receivedAt.year, item.receivedAt.month),
+        );
+      } else {
+        monthMap[key] = (
+          label: current.label,
+          count: current.count + 1,
+          date: current.date,
+        );
+      }
+    }
+
+    final availableMonths =
+        monthMap.entries
+            .map(
+              (e) => _MonthEntry(
+                key: e.key,
+                label: e.value.label,
+                count: e.value.count,
+                date: e.value.date,
+              ),
+            )
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
+
+    final filteredList = sortedList.where((item) {
+      if (_customDateRange != null) {
+        final date = item.receivedAt;
+        final start = _customDateRange!.start;
+        final end = _customDateRange!.end;
+        final rangeStart = DateTime(start.year, start.month, start.day);
+        final rangeEndExclusive = DateTime(
+          end.year,
+          end.month,
+          end.day + 1,
+        );
+        if (date.isBefore(rangeStart) ||
+            !date.isBefore(rangeEndExclusive)) {
+          return false;
+        }
+      }
+      if (_selectedMonth != null) {
+        final itemMonthKey =
+            '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
+        if (itemMonthKey != _selectedMonth) return false;
+      }
+      if (_selectedCategory != _ReviewFilterCategory.all) {
+        if (_categorizeItem(item) != _selectedCategory) return false;
+      }
+      return true;
+    }).toList();
+
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -552,11 +647,18 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
           style: BambooFonts.heading(18, color: BambooInk.ink900),
         ),
         actions: [
-          if (_selectedTab == 0 && pendingItems.isNotEmpty)
+          if (_selectedTab == 0 && pendingItems.isNotEmpty && filteredList.isNotEmpty)
             TextButton(
               style: TextButton.styleFrom(foregroundColor: BambooInk.ink900),
-              onPressed: () => _dismissAll(pendingItems),
-              child: const Text('Dismiss all'),
+              onPressed: () => _dismissItems(
+                filteredList,
+                totalPendingCount: pendingItems.length,
+              ),
+              child: Text(
+                filteredList.length < pendingItems.length
+                    ? 'Dismiss filtered (${filteredList.length})'
+                    : 'Dismiss all',
+              ),
             ),
         ],
       ),
@@ -581,73 +683,6 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                                 'Messages we couldn\'t automatically parse show up here — nothing is ever dropped silently.',
                           );
                         }
-
-                        final sortedList = List<NeedsReviewItem>.from(list)
-                          ..sort((a, b) {
-                            final byDate = b.receivedAt.compareTo(a.receivedAt);
-                            return byDate != 0 ? byDate : a.id.compareTo(b.id);
-                          });
-
-                        final monthMap =
-                            <String, ({String label, int count, DateTime date})>{};
-                        for (final item in sortedList) {
-                          final key =
-                              '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
-                          final current = monthMap[key];
-                          if (current == null) {
-                            monthMap[key] = (
-                              label: DateFormat('MMM yyyy').format(item.receivedAt),
-                              count: 1,
-                              date: DateTime(item.receivedAt.year, item.receivedAt.month),
-                            );
-                          } else {
-                            monthMap[key] = (
-                              label: current.label,
-                              count: current.count + 1,
-                              date: current.date,
-                            );
-                          }
-                        }
-
-                        final availableMonths =
-                            monthMap.entries
-                                .map(
-                                  (e) => _MonthEntry(
-                                    key: e.key,
-                                    label: e.value.label,
-                                    count: e.value.count,
-                                    date: e.value.date,
-                                  ),
-                                )
-                                .toList()
-                              ..sort((a, b) => b.date.compareTo(a.date));
-
-                        final filteredList = sortedList.where((item) {
-                          if (_customDateRange != null) {
-                            final date = item.receivedAt;
-                            final start = _customDateRange!.start;
-                            final end = _customDateRange!.end;
-                            final rangeStart = DateTime(start.year, start.month, start.day);
-                            final rangeEndExclusive = DateTime(
-                              end.year,
-                              end.month,
-                              end.day + 1,
-                            );
-                            if (date.isBefore(rangeStart) ||
-                                !date.isBefore(rangeEndExclusive)) {
-                              return false;
-                            }
-                          }
-                          if (_selectedMonth != null) {
-                            final itemMonthKey =
-                                '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
-                            if (itemMonthKey != _selectedMonth) return false;
-                          }
-                          if (_selectedCategory != _ReviewFilterCategory.all) {
-                            if (_categorizeItem(item) != _selectedCategory) return false;
-                          }
-                          return true;
-                        }).toList();
 
                         return Column(
                           children: [
@@ -753,21 +788,34 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                                         } catch (_) {}
                                         await Future.delayed(const Duration(milliseconds: 600));
                                       },
-                                      child: ListView.builder(
-                                        padding: const EdgeInsets.all(AppSpace.lg),
-                                      itemCount: filteredList.length,
-                                      itemBuilder: (context, index) => Padding(
-                                        key: ValueKey(filteredList[index].id),
-                                        padding: const EdgeInsets.only(bottom: AppSpace.md),
-                                        child:
-                                            filteredList[index].kind ==
-                                                NeedsReviewKind.commitment
-                                            ? _CommitmentNeedsReviewTile(
-                                                filteredList[index],
-                                              )
-                                            : _NeedsReviewTile(filteredList[index]),
+                                      child: Builder(
+                                        builder: (context) {
+                                          final groups = clusterReviewItems(filteredList);
+                                          return ListView.builder(
+                                            padding: const EdgeInsets.all(AppSpace.lg),
+                                            itemCount: groups.length,
+                                            itemBuilder: (context, index) {
+                                              final group = groups[index];
+                                              return Padding(
+                                                key: ValueKey(
+                                                  switch (group) {
+                                                    BundleReviewGroup(:final key) => 'bundle_$key',
+                                                    SingleReviewGroup(:final item) => item.id,
+                                                  },
+                                                ),
+                                                padding: const EdgeInsets.only(bottom: AppSpace.md),
+                                                child: switch (group) {
+                                                  BundleReviewGroup() => _ReviewBundleCard(group: group),
+                                                  SingleReviewGroup(:final item) =>
+                                                    item.kind == NeedsReviewKind.commitment
+                                                        ? _CommitmentNeedsReviewTile(item)
+                                                        : _NeedsReviewTile(item),
+                                                },
+                                              );
+                                            },
+                                          );
+                                        },
                                       ),
-                                    ),
                                   ),
                             ),
                           ],
@@ -2694,6 +2742,214 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewBundleCard extends ConsumerStatefulWidget {
+  final BundleReviewGroup group;
+
+  const _ReviewBundleCard({required this.group});
+
+  @override
+  ConsumerState<_ReviewBundleCard> createState() => _ReviewBundleCardState();
+}
+
+class _ReviewBundleCardState extends ConsumerState<_ReviewBundleCard> {
+  bool _expanded = false;
+  bool _busy = false;
+
+  Future<void> _dismissBundle() async {
+    setState(() => _busy = true);
+    try {
+      final repo = ref.read(userCardsRepositoryProvider);
+      for (final item in widget.group.items) {
+        if (item.kind == NeedsReviewKind.commitment) {
+          await _persistCommitmentDismissal(ref, item);
+        }
+        if (repo != null) {
+          repo
+              .dismissSms(
+                sourceKey: _feedbackSourceKey(item.id),
+                sender: item.sender,
+                sampleBody: item.body,
+                reason: 'bundle_dismissed',
+                family: 'ignore_noise',
+              )
+              .ignore();
+        }
+      }
+      final ids = [for (final item in widget.group.items) item.id];
+      await ref.read(needsReviewRepositoryProvider).removeAll(ids);
+      ref.invalidate(commitmentsProvider);
+      ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Widget _buildBadge(String text, {Color? color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: (color ?? BambooInk.ink700).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(
+          color: (color ?? BambooInk.ink700).withValues(alpha: 0.18),
+        ),
+      ),
+      child: Text(
+        text,
+        style: BambooFonts.ui(
+          11,
+          weight: FontWeight.w600,
+          color: color ?? BambooInk.ink700,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final group = widget.group;
+    final dateSpan = formatBundleDateSpan(group.earliest, group.latest);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppSpace.xs),
+                decoration: BoxDecoration(
+                  color: BambooInk.paperMuted,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: const Icon(
+                  Icons.layers_rounded,
+                  size: 20,
+                  color: BambooInk.ink700,
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.title,
+                      style: BambooFonts.heading(15, color: BambooInk.ink900),
+                    ),
+                    const SizedBox(height: AppSpace.xs),
+                    Wrap(
+                      spacing: AppSpace.xs,
+                      runSpacing: AppSpace.xs,
+                      children: [
+                        _buildBadge('${group.items.length} messages'),
+                        if (group.totalAmount != null)
+                          _buildBadge(
+                            'Total: ₹${group.totalAmount!.rupees.toStringAsFixed(2)}',
+                            color: BambooInk.jade,
+                          ),
+                        _buildBadge(dateSpan),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpace.xs),
+                    Text(
+                      group.subtitle,
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.md),
+          Wrap(
+            spacing: AppSpace.sm,
+            runSpacing: AppSpace.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton(
+                onPressed: _busy ? null : _dismissBundle,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  foregroundColor: BambooInk.ink900,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.md,
+                    vertical: AppSpace.xs,
+                  ),
+                ),
+                child: _busy
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: BambooInk.ink700,
+                        ),
+                      )
+                    : Text(
+                        group.isPayLater
+                            ? 'Dismiss all ${group.items.length} (Billed in AutoPay)'
+                            : 'Dismiss all ${group.items.length}',
+                        style: BambooFonts.ui(12, weight: FontWeight.w600),
+                      ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  foregroundColor: BambooInk.ink700,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.sm,
+                    vertical: AppSpace.xs,
+                  ),
+                ),
+                icon: Icon(
+                  _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                  size: 18,
+                ),
+                label: Text(
+                  _expanded ? 'Hide messages' : 'Show all ${group.items.length}',
+                  style: BambooFonts.ui(12, weight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          if (_expanded) ...[
+            const SizedBox(height: AppSpace.sm),
+            const Divider(color: BambooInk.hairlineOnPaper),
+            const SizedBox(height: AppSpace.sm),
+            Padding(
+              padding: const EdgeInsets.only(left: AppSpace.sm),
+              child: Column(
+                children: [
+                  for (final item in group.items)
+                    Padding(
+                      key: ValueKey(item.id),
+                      padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                      child: item.kind == NeedsReviewKind.commitment
+                          ? _CommitmentNeedsReviewTile(item)
+                          : _NeedsReviewTile(item),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

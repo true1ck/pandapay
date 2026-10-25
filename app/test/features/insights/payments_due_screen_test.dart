@@ -619,4 +619,124 @@ void main() {
     expect(find.text('Aug – Oct 2026'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'hero card excludes unlinked SMS bills and sums verified cards and commitments',
+    (tester) async {
+      final goaElectricity = Commitment(
+        id: 'c-goa',
+        title: 'Goa electricity',
+        category: CommitmentCategory.utility,
+        amount: Money.fromRupees(927),
+        dueOn: DateTime(2026, 10, 28),
+        status: CommitmentStatus.due,
+        confidence: 1.0,
+      );
+      final cardRow = DuePayment(
+        card: _card(id: 'c1', name: 'Goa Card', dueDay: 28),
+        dueOn: DateTime(2026, 10, 28),
+        daysUntilDue: 3,
+        loggedThisCycle: Money.zero(),
+        bill: CardBill(
+          statementDate: DateTime(2026, 10, 1),
+          dueDate: DateTime(2026, 10, 28),
+          amountDue: Money.fromRupees(927),
+          minimumDue: null,
+          paidToward: Money.zero(),
+          lastPaymentAt: null,
+          confidence: 0.9,
+        ),
+      );
+      final rawSmsBill = SmsBillRow(
+        id: 'sms-astronomical',
+        title: 'Airtel bill',
+        category: CommitmentCategory.telecom,
+        amountDue: Money.fromPaise(93072059300),
+        minimumDue: null,
+        isMinimumOnly: false,
+        dueDate: DateTime(2026, 10, 29),
+        receivedAt: DateTime(2026, 10, 20),
+        isAutopay: false,
+        sawFailedAttempt: false,
+        state: SmsBillState.pending,
+      );
+
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          smsBillRowsProvider.overrideWith((ref) async => [rawSmsBill]),
+          paymentsDueProvider.overrideWith((ref) async => [cardRow]),
+          commitmentsProvider.overrideWith((ref) async => [goaElectricity]),
+          billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+        ],
+      );
+
+      expect(find.text('₹1,854'), findsOneWidget);
+      expect(find.text('2 to pay'), findsOneWidget);
+      expect(find.text('₹93,07,22,447'), findsNothing);
+      expect(find.text('3 to pay'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'section order places Upcoming bills, then Credit cards, then Subscriptions',
+    (tester) async {
+      final utility = Commitment(
+        id: 'c-util',
+        title: 'Goa electricity',
+        category: CommitmentCategory.utility,
+        amount: Money.fromRupees(927),
+        dueOn: DateTime(2026, 10, 28),
+        status: CommitmentStatus.due,
+        confidence: 1.0,
+      );
+      final subscription = Commitment(
+        id: 'c-sub',
+        title: 'Netflix',
+        category: CommitmentCategory.subscription,
+        dueOn: DateTime(2026, 10, 28),
+        status: CommitmentStatus.due,
+        confidence: 1.0,
+      );
+      final cardRow = DuePayment(
+        card: _card(id: 'c1', name: 'HDFC Regalia', dueDay: 28),
+        dueOn: DateTime(2026, 10, 28),
+        daysUntilDue: 3,
+        loggedThisCycle: Money.zero(),
+        bill: CardBill(
+          statementDate: DateTime(2026, 10, 1),
+          dueDate: DateTime(2026, 10, 28),
+          amountDue: Money.fromRupees(927),
+          minimumDue: null,
+          paidToward: Money.zero(),
+          lastPaymentAt: null,
+          confidence: 0.9,
+        ),
+      );
+
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          paymentsDueProvider.overrideWith((ref) async => [cardRow]),
+          commitmentsProvider.overrideWith(
+            (ref) async => [utility, subscription],
+          ),
+          billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+        ],
+      );
+
+      expect(find.text('Upcoming bills'), findsOneWidget);
+      expect(find.text('Credit cards'), findsOneWidget);
+      expect(find.text('Subscriptions'), findsOneWidget);
+
+      final upcomingY = tester.getTopLeft(find.text('Upcoming bills')).dy;
+      final cardsY = tester.getTopLeft(find.text('Credit cards')).dy;
+      final subsY = tester.getTopLeft(find.text('Subscriptions')).dy;
+
+      expect(upcomingY, lessThan(cardsY));
+      expect(cardsY, lessThan(subsY));
+    },
+  );
 }

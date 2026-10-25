@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_bill_ledger.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/past_bill_receipts.dart';
-import '../../data/pending_bills.dart';
 import '../../data/user_cards_repository.dart';
 import 'bills_horizon.dart';
 import 'central_bills_section.dart';
 import 'insurance_premiums_section.dart';
 import 'sms_bills_section.dart';
 import 'past_bill_receipts_screen.dart';
+import 'subscriptions_screen.dart';
 
 // ---------------------------------------------------------------------------
 // Backward-compatible type aliases for existing test harnesses
@@ -549,7 +551,37 @@ class _DueList extends ConsumerWidget {
         !centralAsync.isLoading;
     final visibleCommitments = commitments
         .where((c) => _matchesCommitment(c, filter))
+        .toList()
+      ..sort(
+        (a, b) => filter.isUpcoming
+            ? a.dueOn.compareTo(b.dueOn)
+            : b.dueOn.compareTo(a.dueOn),
+      );
+
+    final utilities = visibleCommitments
+        .where(
+          (c) =>
+              c.category == CommitmentCategory.utility ||
+              c.category == CommitmentCategory.telecom,
+        )
         .toList(growable: false);
+    final renewals = visibleCommitments
+        .where((c) => c.category == CommitmentCategory.insurance)
+        .toList(growable: false);
+    final scheduled = visibleCommitments
+        .where(
+          (c) =>
+              c.category == CommitmentCategory.loanOrEmi ||
+              c.category == CommitmentCategory.rent ||
+              c.category == CommitmentCategory.education ||
+              c.category == CommitmentCategory.tax ||
+              c.category == CommitmentCategory.other,
+        )
+        .toList(growable: false);
+    final subscriptions = visibleCommitments
+        .where((c) => c.category == CommitmentCategory.subscription)
+        .toList(growable: false);
+
     final hasSms =
         (smsAsync.valueOrNull ?? const []).any(filter.matchesSmsBill);
     final hasReceipts =
@@ -649,26 +681,6 @@ class _DueList extends ConsumerWidget {
         }
       }
 
-      final visibleSms = (smsAsync.valueOrNull ?? const <SmsBillRow>[])
-          .where(filter.matchesSmsBill);
-      for (final b in visibleSms) {
-        if (b.state == SmsBillState.linked) {
-          paidPaise += b.amountDue.paise;
-        } else {
-          duePaise += b.amountDue.paise;
-          if (b.isAutopay) {
-            autopay++;
-          } else {
-            actionable++;
-          }
-          if (filter.isUpcoming &&
-              b.dueDate != null &&
-              (earliest == null || b.dueDate!.isBefore(earliest))) {
-            earliest = b.dueDate;
-          }
-        }
-      }
-
       return BillsHorizonSummary(
         totalDue: Money.fromPaise(duePaise),
         totalPaid: Money.fromPaise(paidPaise),
@@ -694,9 +706,31 @@ class _DueList extends ConsumerWidget {
         if (showEmptyState)
           _EmptyHorizonState(filter: filter, nextDue: nextDue)
         else ...[
+          // 1. Hero Card
           _BillsSummaryHero(summary: summary),
           const SizedBox(height: AppSpace.lg),
-          _CommitmentsSection(filter: filter),
+          if (commitmentsAsync.isLoading)
+            const Padding(
+              padding: EdgeInsets.only(bottom: AppSpace.lg),
+              child: SkeletonList(count: 2),
+            ),
+
+          // 2. Upcoming bills (utilities & telecom)
+          if (utilities.isNotEmpty) ...[
+            _SectionHeader(
+              label: filter.isUpcoming ? 'Upcoming bills' : 'Bills',
+              count: utilities.length,
+            ),
+            const SizedBox(height: AppSpace.md),
+            for (final item in utilities)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                child: _CommitmentRow(commitment: item, filter: filter),
+              ),
+            const SizedBox(height: AppSpace.lg),
+          ],
+
+          // 3. Credit cards (immediately following Upcoming bills)
           if (cardRows.isNotEmpty) ...[
             _SectionHeader(label: 'Credit cards', count: cardRows.length),
             const SizedBox(height: AppSpace.xs),
@@ -718,13 +752,121 @@ class _DueList extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpace.lg),
           ],
-          CentralBillsSection(cardRows: centralDedupKeys, filter: filter),
-          SmsBillsSection(filter: filter),
+
+          // 4. Insurance & renewals (CommitmentCategory.insurance + InsurancePremiumsSection)
+          if (renewals.isNotEmpty) ...[
+            _SectionHeader(
+              label: 'Insurance & renewals',
+              count: renewals.length,
+            ),
+            const SizedBox(height: AppSpace.md),
+            for (final item in renewals)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                child: _CommitmentRow(commitment: item, filter: filter),
+              ),
+            if (visiblePremiums.isEmpty) const SizedBox(height: AppSpace.lg),
+          ],
           InsurancePremiumsSection(
             reminders: visiblePremiums,
             upcoming: filter.isUpcoming,
           ),
-          const SizedBox(height: AppSpace.lg),
+
+          // 5. Scheduled payments (loans, EMIs, rent, education, tax, other)
+          if (scheduled.isNotEmpty) ...[
+            _SectionHeader(
+              label: 'Scheduled payments',
+              count: scheduled.length,
+            ),
+            const SizedBox(height: AppSpace.md),
+            for (final item in scheduled)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                child: _CommitmentRow(commitment: item, filter: filter),
+              ),
+            const SizedBox(height: AppSpace.lg),
+          ],
+
+          // 6. Subscriptions (compact preview with header linking to AppRoute.subscriptions)
+          if (subscriptions.isNotEmpty) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _SectionHeader(
+                    label: 'Subscriptions',
+                    count: subscriptions.length,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => _openSubscriptions(context),
+                  child: Text(
+                    'View all',
+                    style: BambooFonts.ui(
+                      12,
+                      color: BambooInk.jade,
+                      weight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.md),
+            for (final item in subscriptions.take(2))
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                child: _CommitmentRow(commitment: item, filter: filter),
+              ),
+            if (subscriptions.length > 2) ...[
+              const SizedBox(height: AppSpace.xs),
+              InkWell(
+                onTap: () => _openSubscriptions(context),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.md,
+                    vertical: AppSpace.sm,
+                  ),
+                  decoration: BoxDecoration(
+                    color: BambooInk.paperMuted,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: BambooInk.hairlineOnPaper),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.subscriptions_outlined,
+                        size: 16,
+                        color: BambooInk.ink700,
+                      ),
+                      const SizedBox(width: AppSpace.sm),
+                      Expanded(
+                        child: Text(
+                          'Manage all ${subscriptions.length} subscriptions',
+                          style: BambooFonts.ui(
+                            12.5,
+                            color: BambooInk.ink700,
+                            weight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: BambooInk.ink500,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpace.lg),
+          ],
+
+          // 7. Central bills
+          CentralBillsSection(cardRows: centralDedupKeys, filter: filter),
+          // 8. SMS bills
+          SmsBillsSection(filter: filter),
+          // 9. Past bills preview
           _PastBillsPreview(filter: filter),
           const SizedBox(height: AppSpace.xl),
         ],
@@ -1385,128 +1527,12 @@ class _CommitmentRow extends ConsumerWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Commitments section — backed by durable CommitmentsRepository
-// ---------------------------------------------------------------------------
-
-class _CommitmentsSection extends ConsumerWidget {
-  final BillsHorizonFilter filter;
-
-  const _CommitmentsSection({required this.filter});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final commitmentsAsync = ref.watch(commitmentsProvider);
-
-    return commitmentsAsync.when(
-      loading: () => const SkeletonList(count: 2),
-      error: (_, _) => const SizedBox.shrink(),
-      data: (commitments) {
-        final active =
-            commitments
-                .where((c) => _matchesCommitment(c, filter))
-                .toList()
-              ..sort(
-                (a, b) => filter.isUpcoming
-                    ? a.dueOn.compareTo(b.dueOn)
-                    : b.dueOn.compareTo(a.dueOn),
-              );
-
-        if (active.isEmpty) return const SizedBox.shrink();
-
-        // 2. Hide empty categories (no placeholder zeroes).
-        final utilities = active
-            .where(
-              (c) =>
-                  c.category == CommitmentCategory.utility ||
-                  c.category == CommitmentCategory.telecom,
-            )
-            .toList();
-        final renewals = active
-            .where((c) => c.category == CommitmentCategory.insurance)
-            .toList();
-        final subscriptions = active
-            .where((c) => c.category == CommitmentCategory.subscription)
-            .toList();
-        final scheduled = active
-            .where(
-              (c) =>
-                  c.category == CommitmentCategory.loanOrEmi ||
-                  c.category == CommitmentCategory.rent ||
-                  c.category == CommitmentCategory.education ||
-                  c.category == CommitmentCategory.tax ||
-                  c.category == CommitmentCategory.other,
-            )
-            .toList();
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Utilities & telecom group ─────────────────────────────
-            if (utilities.isNotEmpty) ...[
-              _SectionHeader(
-                label: filter.isUpcoming ? 'Upcoming bills' : 'Bills',
-                count: utilities.length,
-              ),
-              const SizedBox(height: AppSpace.md),
-              for (final item in utilities)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                  child: _CommitmentRow(commitment: item, filter: filter),
-                ),
-              if (renewals.isNotEmpty ||
-                  scheduled.isNotEmpty ||
-                  subscriptions.isNotEmpty)
-                const SizedBox(height: AppSpace.xl),
-            ],
-
-            // ── Subscriptions ─────────────────────────────────────────
-            if (subscriptions.isNotEmpty) ...[
-              _SectionHeader(
-                label: 'Subscriptions',
-                count: subscriptions.length,
-              ),
-              const SizedBox(height: AppSpace.md),
-              for (final item in subscriptions)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                  child: _CommitmentRow(commitment: item, filter: filter),
-                ),
-              if (renewals.isNotEmpty || scheduled.isNotEmpty)
-                const SizedBox(height: AppSpace.xl),
-            ],
-
-            // ── Renewals & Insurance policies group ───────────────────
-            if (renewals.isNotEmpty) ...[
-              _SectionHeader(
-                label: 'Insurance & renewals',
-                count: renewals.length,
-              ),
-              const SizedBox(height: AppSpace.md),
-              for (final item in renewals)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                  child: _CommitmentRow(commitment: item, filter: filter),
-                ),
-              if (scheduled.isNotEmpty) const SizedBox(height: AppSpace.xl),
-            ],
-
-            // ── Scheduled payments (Loans, EMIs, Rent) ────────────────
-            if (scheduled.isNotEmpty) ...[
-              _SectionHeader(
-                label: 'Scheduled payments',
-                count: scheduled.length,
-              ),
-              const SizedBox(height: AppSpace.md),
-              for (final item in scheduled)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                  child: _CommitmentRow(commitment: item, filter: filter),
-                ),
-            ],
-          ],
-        );
-      },
+void _openSubscriptions(BuildContext context) {
+  try {
+    context.push(AppRoute.subscriptions);
+  } catch (_) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SubscriptionsScreen()),
     );
   }
 }
