@@ -108,7 +108,7 @@ void main() {
 
   test('rich local bill commitments are acknowledged without raw upload', () {
     const bill =
-        'Alegra Broadband ... Payment of Rs.800/- is due on 24-10-2026.';
+        'Alegra Broadband ... Payment of Rs.800/- is due on 24-11-2026.';
     SmsImportStore(cache.financialStore).capture(
       'user:account-a',
       QueuedSms(
@@ -143,7 +143,7 @@ void main() {
       QueuedSms(
         sender: 'VM-axioFS',
         body: bill,
-        receivedAt: DateTime(2026, 5, 1, 9, 30),
+        receivedAt: DateTime(2026, 11, 1, 9, 30),
       ),
     );
 
@@ -155,7 +155,7 @@ void main() {
     final commitment = jsonDecode(commitments.single['payload'] as String);
     expect(commitment['title'], 'Axio Pay Later');
     expect(commitment['amount_paise'], 103800);
-    expect(commitment['due_on'], DateTime(2026, 5, 5).toIso8601String());
+    expect(commitment['due_on'], DateTime(2026, 11, 5).toIso8601String());
     expect(cache.financialStore.bankAccounts(namespace), isEmpty);
     expect(cache.financialStore.entities(namespace, 'transactions'), isEmpty);
   });

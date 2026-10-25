@@ -1769,7 +1769,7 @@ void main() {
     final standaloneRefund =
         jsonDecode(standaloneRefundRows.single['payload'] as String)
             as Map<String, dynamic>;
-    expect(standaloneRefund['amount_paise'], 80000);
+    expect(standaloneRefund['amount_inr'], 800.0);
     expect(standaloneRefund['entry_kind'], 'transfer');
 
     // Verify add() and addNeedsReviewSync() also auto-link and do not queue when matching spend exists

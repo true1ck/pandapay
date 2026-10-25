@@ -570,7 +570,7 @@ void main() {
         final broadbandMsg = QueuedSms(
           sender: 'ALEGRA',
           body:
-              'Payment of Rs.800/- is due towards your Alegra Broadband bill. AutoPay will be attempted on 20-Oct-2026.',
+              'Payment of Rs.800/- is due towards your Alegra Broadband bill. AutoPay will be attempted on 20-Nov-2026.',
           receivedAt: DateTime(2026, 10, 15),
         );
 
@@ -593,7 +593,7 @@ void main() {
           (c) => c.title.contains('Alegra Broadband'),
         );
         expect(broadband.amount?.rupees, 800.0);
-        expect(broadband.dueOn, DateTime(2026, 10, 20));
+        expect(broadband.dueOn, DateTime(2026, 11, 20));
         expect(broadband.category, CommitmentCategory.telecom);
         expect(broadband.source, CommitmentSource.sms);
 
