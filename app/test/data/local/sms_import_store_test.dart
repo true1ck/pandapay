@@ -31,7 +31,7 @@ void main() {
 
     final sms = QueuedSms(
       sender: 'TS-TSSPDCL',
-      body: 'TSSPDCL Electricity Bill: Payment of Rs.1450.00 is due on $day-$month-$year.',
+      body: 'TSSPDCL Electricity Bill for service no 12345. Bill amount is Rs 1450.00. Due date is $day-$month-$year.',
       receivedAt: DateTime.now(),
     );
 
@@ -68,7 +68,7 @@ void main() {
 
     final sms = QueuedSms(
       sender: 'TS-TSSPDCL',
-      body: 'TSSPDCL Electricity Bill: Payment of Rs.1450.00 is due on $day-$month-$year.',
+      body: 'TSSPDCL Electricity Bill for service no 12345. Bill amount is Rs 1450.00. Due date is $day-$month-$year.',
       receivedAt: pastDate.subtract(const Duration(days: 5)),
     );
 
