@@ -1433,6 +1433,11 @@ class _RecentCardActivitySection extends ConsumerWidget {
 /// `GET /spend-report` already returns a per-card breakdown, so filtering
 /// it here keeps one definition of "spend on this card" instead of two that
 /// can drift.
+int _calendarMonthSpan(DateTime from, DateTime to) {
+  final months = (to.year - from.year) * 12 + to.month - from.month;
+  return months < 1 ? 1 : months;
+}
+
 class _SpendSection extends ConsumerWidget {
   final UserCard userCard;
   final CardProduct product;
@@ -1440,8 +1445,8 @@ class _SpendSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final monthQuery = const SpendReportQuery.preset(SpendPeriod.month);
-    final report = ref.watch(spendReportProvider(monthQuery));
+    final selectedQuery = ref.watch(cardDetailSpendQueryProvider(userCard.id));
+    final report = ref.watch(spendReportProvider(selectedQuery));
 
     return report.when(
       loading: () => const _SpendDisclosure(
@@ -1458,7 +1463,7 @@ class _SpendSection extends ConsumerWidget {
         details: [
           ErrorState(
             message: userFacingErrorMessage(err),
-            onRetry: () => ref.invalidate(spendReportProvider(monthQuery)),
+            onRetry: () => ref.invalidate(spendReportProvider(selectedQuery)),
           ),
         ],
       ),
@@ -1489,7 +1494,8 @@ class _SpendSection extends ConsumerWidget {
             details: [
               EmptyState(
                 icon: Icons.show_chart_rounded,
-                title: 'Nothing on ${userCard.cardName}$suffix this month',
+                title:
+                    'Nothing on ${userCard.cardName}$suffix for ${selectedQuery.shortLabel.toLowerCase()} yet',
                 message:
                     'Once spend is logged against this card, you\'ll see what it earned and the '
                     'rate it really paid.',
@@ -1505,7 +1511,11 @@ class _SpendSection extends ConsumerWidget {
         // alternative — comparing a month of rewards against a year of fee
         // — is the comparison people make in their heads anyway, and it is
         // wrong by a factor of twelve.
-        final annualisedRewards = row.rewards * 12;
+        final periodMonths = _calendarMonthSpan(
+          data.periodStart,
+          data.periodEnd,
+        );
+        final annualisedRewards = row.rewards * (12 / periodMonths);
         final mixRows = _aggregateCardCategoryRows(
           data.byCardCategory,
           userCard.id,
@@ -1513,15 +1523,18 @@ class _SpendSection extends ConsumerWidget {
 
         return _SpendDisclosure(
           trailing: row.total.format(compact: true),
+          subtitle:
+              '${selectedQuery.shortLabel} · actual spend and effective reward rate',
           details: [
             _SpendBarSummary(
               spend: row.total,
               transactionCount: row.txnCount,
               mixRows: mixRows,
+              periodLabel: selectedQuery.shortLabel,
             ),
             const SizedBox(height: AppSpace.md),
             _SpendStatCard(
-              label: 'Earned this month',
+              label: 'Earned in ${selectedQuery.shortLabel.toLowerCase()}',
               value: row.rewards,
               sub: rate == null
                   ? null
@@ -1534,9 +1547,9 @@ class _SpendSection extends ConsumerWidget {
                 label: 'Annual fee',
                 value: fee,
                 sub: annualisedRewards >= fee
-                    ? 'At this month\'s pace you\'d earn about '
+                    ? 'At this period\'s pace you\'d earn about '
                           '${annualisedRewards.format(compact: true)} a year — more than the fee.'
-                    : 'At this month\'s pace you\'d earn about '
+                    : 'At this period\'s pace you\'d earn about '
                           '${annualisedRewards.format(compact: true)} a year, which is less than '
                           'the fee. One month is a small sample — check the Savings Report before '
                           'deciding.',
@@ -1551,15 +1564,20 @@ class _SpendSection extends ConsumerWidget {
 
 class _SpendDisclosure extends StatelessWidget {
   final String trailing;
+  final String subtitle;
   final List<Widget> details;
 
-  const _SpendDisclosure({required this.trailing, required this.details});
+  const _SpendDisclosure({
+    required this.trailing,
+    this.subtitle = 'This month · actual spend and effective reward rate',
+    required this.details,
+  });
 
   @override
   Widget build(BuildContext context) {
     return _CompactDisclosure(
       title: 'Spend',
-      subtitle: 'This month · actual spend and effective reward rate',
+      subtitle: subtitle,
       trailing: trailing,
       details: details,
     );
@@ -1613,11 +1631,13 @@ class _SpendBarSummary extends StatelessWidget {
   final Money spend;
   final int transactionCount;
   final List<SpendBreakdownRow> mixRows;
+  final String periodLabel;
 
   const _SpendBarSummary({
     required this.spend,
     required this.transactionCount,
     required this.mixRows,
+    required this.periodLabel,
   });
 
   @override
@@ -1633,7 +1653,7 @@ class _SpendBarSummary extends StatelessWidget {
           ),
           const SizedBox(height: 1),
           Text(
-            'spent this month · $transactionCount ${transactionCount == 1 ? 'transaction' : 'transactions'}',
+            'spent in ${periodLabel.toLowerCase()} · $transactionCount ${transactionCount == 1 ? 'transaction' : 'transactions'}',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.md),

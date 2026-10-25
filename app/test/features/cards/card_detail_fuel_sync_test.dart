@@ -390,32 +390,34 @@ void main() {
           )
           .first,
     );
-      expect(find.textContaining('₹1,200'), findsWidgets);
+    expect(find.textContaining('₹1,200'), findsWidgets);
 
     await tester.tap(find.byIcon(Icons.calendar_month_rounded).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Last month'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Apply range'));
+    await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.byKey(const Key('card_spending_mix')));
-      const monthNames = <String>[
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      final previousLabel =
-          '${monthNames[(now.month + 10) % 12]} ${now.month == 1 ? now.year - 1 : now.year}';
-      expect(find.text(previousLabel), findsOneWidget);
-      expect(find.textContaining('₹250'), findsWidgets);
+    await tester.ensureVisible(find.byKey(const Key('card_spending_mix')));
+    const monthNames = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final previousLabel =
+        '${monthNames[(now.month + 10) % 12]} ${now.month == 1 ? now.year - 1 : now.year}';
+    expect(find.text(previousLabel), findsOneWidget);
+    expect(find.textContaining('₹250'), findsWidgets);
     expect(find.textContaining('No spending recorded'), findsNothing);
   });
 
