@@ -7,7 +7,7 @@ const start = source.indexOf("app.post('/duplicate-candidates/:id/resolve'");
 const end = source.indexOf("app.patch('/transactions/:id'", start);
 assert.ok(start >= 0 && end > start);
 const register = new Function('app', 'requireAuth', 'withUserClient', 'DUPLICATE_RESOLUTIONS',
-  'loadUserCardForState', 'applyTransactionState', 'reverseTransactionState', 'transactionTags',
+  'loadUserCardForState', 'applyTransactionState', 'reverseTransactionState', 'transactionTags', 'safeErrorCode',
   source.slice(start, end));
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const smsA = id(1), smsB = id(2), statement = id(3), pairA = id(4), pairB = id(5);
@@ -76,7 +76,7 @@ function harness({ backfill = false, instrument = 'credit_card', missingCard = f
     async (_client, _user, cardId) => missingCard ? null : { id: cardId },
     async (_client, _user, _card, args) => { applied.push(args.txnId); },
     async (_client, _user, _card, txn) => { reversed.push(txn.id); },
-    { mergeTransactionTags: async () => {} });
+    { mergeTransactionTags: async () => {} }, require('../src/safeErrorCode').safeErrorCode);
   return {
     get rows() { return rows; }, get pairs() { return pairs; },
     get applied() { return applied; }, get reversed() { return reversed; },

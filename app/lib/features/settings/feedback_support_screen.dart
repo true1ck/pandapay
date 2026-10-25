@@ -218,6 +218,7 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
           controller: _messageController,
           minLines: 4,
           maxLines: 8,
+          maxLength: 4000,
           style: BambooFonts.ui(14.5, color: BambooInk.ink900),
           decoration: InputDecoration(
             hintText: 'Describe the issue or request…',

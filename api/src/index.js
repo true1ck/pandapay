@@ -26,6 +26,7 @@ const {
 } = require('./referral_routes');
 const { registerPortableBackupRoutes } = require('./portable_backup/routes');
 const { registerPortableBackupRestoreRoutes } = require('./portable_backup/restore_routes');
+const { registerSupportTicketRoute } = require('./support_tickets');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
 const { replayCurrentCapConsumption } = require('./card_state_reconciliation');
 const {
@@ -9550,37 +9551,9 @@ const accountLifecycleHandlers=require('./account_lifecycle_routes').createAccou
 app.post('/account/delete-request',requireAuth,accountLifecycleHandlers.requestDeletion);
 app.delete('/account/delete-request',requireAuth,accountLifecycleHandlers.cancelDeletion);
 
-const SUPPORT_TICKET_KINDS = ['bug', 'wrong_card_data', 'card_request', 'general'];
-
-/**
- * POST /support-tickets — Task H-0e / H9. support_tickets
- * (0009_platform_ops.sql) already enforces the same kind check via a DB
- * CHECK constraint; validating here first turns a bad value into a clean
- * 400 instead of a raw constraint-violation 500.
- */
-app.post('/support-tickets', optionalAuth, async (req, res) => {
-  const { kind, message, diagnostics, appVersion } = req.body || {};
-  if (!SUPPORT_TICKET_KINDS.includes(kind)) {
-    return res.status(400).json({ error: `kind must be one of ${SUPPORT_TICKET_KINDS.join(', ')}` });
-  }
-  if (!message || typeof message !== 'string' || !message.trim()) {
-    return res.status(400).json({ error: 'message is required' });
-  }
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `INSERT INTO support_tickets (profile_id, kind, message, diagnostics, app_version)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, kind, state, created_at`,
-        [req.userId || null, kind, message.trim(), diagnostics ? JSON.stringify(diagnostics) : null, appVersion || null]
-      )
-    );
-    res.status(201).json({ ticket: result.rows[0] });
-  } catch (err) {
-    console.error('POST /support-tickets error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+// Keep the deliberately public signed-out feedback flow (used for OTP help),
+// while bounding user-controlled text/diagnostics before any database write.
+registerSupportTicketRoute(app, { optionalAuth, withUserClient });
 
 /**
  * GET /changelog — Task H-0e / H10. No auth required — release notes

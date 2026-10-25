@@ -1,0 +1,69 @@
+{
+  "review": "Support ticket request bounds",
+  "date": "2026-10-25",
+  "branch": "dev",
+  "base_commit": "81295ff03578411d1c162bfd59e32302d83c5edf",
+  "checks": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "tests_passed": 1114,
+      "tests_skipped": 2,
+      "tests_failed": 0,
+      "includes": "npm run check and all API test files"
+    },
+    {
+      "command": "node --test test/support_tickets.test.js",
+      "status": "passed",
+      "tests_passed": 5,
+      "tests_failed": 0
+    },
+    {
+      "command": "flutter test test/features/settings/feedback_support_screen_test.dart",
+      "status": "passed",
+      "tests_passed": 1,
+      "tests_failed": 0
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    },
+    {
+      "command": "dart format --output=none --set-exit-if-changed lib/data/support_api.dart",
+      "status": "passed",
+      "files_changed": 0
+    }
+  ],
+  "scope": [
+    "api/package.json",
+    "api/src/index.js",
+    "api/src/support_tickets.js",
+    "api/test/support_tickets.test.js",
+    "api/test/duplicate_resolution.test.js",
+    "app/lib/data/support_api.dart",
+    "app/lib/features/settings/feedback_support_screen.dart",
+    "docs/security-and-backend-audit-2026-10-20.md",
+    "docs/security-and-backend-audit-2026-10-20.html",
+    "docs/security-support-ticket-bounds-implementation-2026-10-25.md"
+  ],
+  "sha256": {
+    "api/package.json": "e21e10a16e45b1f97c5ace7b3bb4e79a15013563c00cbda006edd35b4b2ab38b",
+    "api/src/index.js": "dbcf88c90b84ccdf715b3bc5da79d4f3aff826be6727b7838145a7d64925e447",
+    "api/src/support_tickets.js": "867d72b1e84bc184ef1c51986854a2d3891807429135a9ac21b688663cc1b9ca",
+    "api/test/support_tickets.test.js": "92d2a9842aded836993c8b4211377c04c7d7affc5e3c815e18cd2f43d98d8cd3",
+    "api/test/duplicate_resolution.test.js": "d1114d6b6957d698cb96f7dd688135f8ae0c4a57f6274530f97ff5f445246292",
+    "app/lib/data/support_api.dart": "5414751dedd79fa62933010170c0746984add4762b69f19e2b3de75bf3cd7fb8",
+    "app/lib/features/settings/feedback_support_screen.dart": "db0ccda12fc38299ac902a41c7d2f67463f6a4563b3037b2697ce1f5558ee3ab",
+    "docs/security-and-backend-audit-2026-10-20.md": "553b2ae6506df96da4dc9ed69a2dcba6e802dcd8dbde00074c0872139d9fb3df",
+    "docs/security-and-backend-audit-2026-10-20.html": "182ad08ac6eee40229026aeeffc4cc2e857d7dbdab416d0d8fb2a4ae469678c8",
+    "docs/security-support-ticket-bounds-implementation-2026-10-25.md": "972efa78330a8d3d94f769549585c211a7da7d78b7546c19b972d30c6092a1e6"
+  },
+  "data_and_rollout": {
+    "schema_changed": false,
+    "migration_added_or_applied": false,
+    "existing_rows_modified": false,
+    "production_deployed": false,
+    "audit_findings_closed": 0,
+    "known_limit": "The rate limiter is process-local and resets on restart; use a shared edge or database-backed control before multi-replica or unrestricted high-volume production."
+  }
+}
