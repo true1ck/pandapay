@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../commitments_repository.dart';
+import '../past_bill_receipts.dart';
 
 import '../../features/sms_import/sms_text_hint.dart';
 import '../local_sms_parser.dart';
@@ -234,10 +235,31 @@ class SmsImportStore {
         if (observation.transaction != null) {
           store.saveProvisional(namespace, observation.transaction!);
         }
-        if (observation.disposition == LocalSmsDisposition.localCommitment ||
-            (observation.reasonCodes.contains('mandate_notice') &&
-                observation.cardLast4 == null)) {
-          final title = observation.billerName ?? 'Subscription';
+        final isMandate =
+            observation.reasonCodes.contains('mandate_notice') &&
+            observation.cardLast4 == null;
+        final isBillObligation =
+            observation.eventType == LocalSmsEventType.bill &&
+            observation.cardLast4 == null &&
+            !isMandate;
+        final now = DateTime.now();
+        final startOfToday = DateTime(now.year, now.month, now.day);
+        final hasDueDate = observation.dueDate != null;
+        final isUpcomingBill =
+            hasDueDate && !observation.dueDate!.isBefore(startOfToday);
+        final isPastDueBill =
+            hasDueDate && observation.dueDate!.isBefore(startOfToday);
+
+        if (isMandate ||
+            (!isPastDueBill &&
+                (observation.disposition == LocalSmsDisposition.localCommitment ||
+                    (isBillObligation && isUpcomingBill)))) {
+          final title = (observation.billerName?.trim().isNotEmpty == true)
+              ? observation.billerName!.trim()
+              : message.sender
+                  .toUpperCase()
+                  .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
+                  .replaceFirst(RegExp(r'-[A-Z]$'), '');
           final category = CommitmentCategory.fromText(
             '$title ${message.sender}',
           );
@@ -263,12 +285,27 @@ class SmsImportStore {
             'INSERT OR REPLACE INTO local_commitments VALUES (?, ?, ?)',
             [namespace, commitment.id, jsonEncode(commitment.toJson())],
           );
-        }
-        if (observation.eventType == LocalSmsEventType.bill &&
+        } else if (isBillObligation && isPastDueBill) {
+          // Pre-filtration: An expired bill with dueDate < today is historical.
+          // Archive it into PastBillReceiptRepository rather than cluttering Needs Review.
+          PastBillReceiptRepository(store.database, namespace: namespace).archiveBill(
+            id: 'commitment:$key',
+            sender: message.sender,
+            merchant: observation.billerName ?? message.sender,
+            amount: observation.amountDue,
+            receivedAt: message.receivedAt,
+            dueDate: observation.dueDate,
+            cardLast4: observation.cardLast4,
+            accountLast4: observation.accountLast4,
+            body: message.body,
+            status: PastBillReceiptStatus.historicalUnpaid,
+          );
+        } else if (observation.eventType == LocalSmsEventType.bill &&
             observation.cardLast4 == null &&
             observation.disposition != LocalSmsDisposition.localCommitment &&
             !observation.reasonCodes.contains('mandate_notice') &&
-            (observation.dueDate == null || observation.confidence < .85)) {
+            observation.dueDate == null &&
+            observation.confidence < .85) {
           addNeedsReviewSync(
             store.database,
             namespace,

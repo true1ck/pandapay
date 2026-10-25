@@ -1640,21 +1640,25 @@ class LocalSmsParser {
       final isInsuranceOrUtility =
           isInsuranceReminder ||
           _re(
-            r'\b(?:broadband|fiber|telecom|yojana|pension|subscription|utility)\b',
+            r'\b(?:broadband|fiber|telecom|yojana|pension|subscription|utility|electricity|power|water|gas|dth|cable|maintenance)\b',
           ).hasMatch(body);
+      final isCardStatement = cardLast4 != null;
+      final isUpcomingObligation =
+          (isInsuranceOrUtility || (due != null && !isCardStatement));
       return observation(
         null,
         LocalSmsEventType.bill,
         nextPremiumMonth != null && nextPremiumDue == null
             ? LocalSmsDisposition.review
-            : isInsuranceOrUtility
+            : isUpcomingObligation
             ? LocalSmsDisposition.localCommitment
             : LocalSmsDisposition.localObservation,
         [
           if (due != null) 'due_date_detected',
           if (nextPremiumMonth != null && nextPremiumDue == null)
             'next_premium_due_month_only',
-          if (isInsuranceOrUtility) 'commitment_detected',
+          if (isInsuranceOrUtility || isUpcomingObligation)
+            'commitment_detected',
         ],
       );
     }

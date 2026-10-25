@@ -826,7 +826,7 @@ class _CommitmentsSection extends ConsumerWidget {
                       c.status != CommitmentStatus.needsConfirmation &&
                       c.status != CommitmentStatus.dismissed &&
                       c.status != CommitmentStatus.paid &&
-                      c.dueOn.isAfter(startOfToday),
+                      !c.dueOn.isBefore(startOfToday),
                 )
                 .toList()
               ..sort((a, b) => a.dueOn.compareTo(b.dueOn));

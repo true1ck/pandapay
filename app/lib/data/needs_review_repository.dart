@@ -181,6 +181,54 @@ void addNeedsReviewSync(
       )) {
     return;
   }
+  final parsed = LocalSmsParser.parse(
+    body: item.body,
+    sender: item.sender,
+    receivedAt: item.receivedAt,
+    namespace: namespace,
+  );
+  if (parsed != null &&
+      parsed.eventType == LocalSmsEventType.bill &&
+      parsed.cardLast4 == null &&
+      parsed.dueDate != null) {
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    if (!parsed.dueDate!.isBefore(startOfToday)) {
+      NeedsReviewRepository._persistResolvedCommitmentSync(
+        database,
+        namespace,
+        parsed,
+        item,
+      );
+      NeedsReviewRepository._persistResolvedBillObservationSync(
+        database,
+        namespace,
+        parsed,
+        item,
+      );
+      return;
+    } else {
+      PastBillReceiptRepository(database, namespace: namespace).archiveBill(
+        id: item.id,
+        sender: item.sender,
+        merchant: parsed.billerName ?? item.sender,
+        amount: parsed.amountDue,
+        receivedAt: item.receivedAt,
+        dueDate: parsed.dueDate,
+        cardLast4: parsed.cardLast4,
+        accountLast4: parsed.accountLast4,
+        body: item.body,
+        status: PastBillReceiptStatus.historicalUnpaid,
+      );
+      NeedsReviewRepository._persistResolvedBillObservationSync(
+        database,
+        namespace,
+        parsed,
+        item,
+      );
+      return;
+    }
+  }
   final resolved = NeedsReviewRepository.resolveItemKind(item);
   database.db.execute(
     'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
@@ -398,7 +446,11 @@ class NeedsReviewRepository {
         if (item.kind != NeedsReviewKind.transaction &&
             item.kind != NeedsReviewKind.mandate &&
             item.kind != NeedsReviewKind.receipt) {
-          if (parsed?.reasonCodes.contains('next_premium_due_month_only') !=
+          if (parsed != null &&
+              parsed.eventType == LocalSmsEventType.bill &&
+              parsed.dueDate != null) {
+            // Bill obligation with due date is resolvable
+          } else if (parsed?.reasonCodes.contains('next_premium_due_month_only') !=
               true) {
             kept.add(item);
             continue;
@@ -578,6 +630,11 @@ class NeedsReviewRepository {
                     : PastBillReceiptStatus.paidLinked,
                 linkedTransactionId: matched?.linkedTxnId,
               );
+            } else if (due != null &&
+                dueDay != null &&
+                !dueDay.isBefore(today) &&
+                parsed.cardLast4 == null) {
+              _persistResolvedCommitmentSync(db, namespace, parsed, item);
             }
             _persistResolvedBillObservationSync(db, namespace, parsed, item);
             toRemove.add(item.id);
@@ -1474,6 +1531,42 @@ class NeedsReviewRepository {
         }
       } else if (_hasMatchingRefundDebit(item, transactions: txns)) {
         return;
+      }
+    }
+    final parsed = LocalSmsParser.parse(
+      body: item.body,
+      sender: item.sender,
+      receivedAt: item.receivedAt,
+      namespace: namespace,
+    );
+    if (parsed != null &&
+        parsed.eventType == LocalSmsEventType.bill &&
+        parsed.cardLast4 == null &&
+        parsed.dueDate != null) {
+      if (loadDatabase != null) {
+        final db = await _database();
+        final now = DateTime.now();
+        final startOfToday = DateTime(now.year, now.month, now.day);
+        if (!parsed.dueDate!.isBefore(startOfToday)) {
+          _persistResolvedCommitmentSync(db, namespace, parsed, item);
+          _persistResolvedBillObservationSync(db, namespace, parsed, item);
+          return;
+        } else {
+          PastBillReceiptRepository(db, namespace: namespace).archiveBill(
+            id: item.id,
+            sender: item.sender,
+            merchant: parsed.billerName ?? item.sender,
+            amount: parsed.amountDue,
+            receivedAt: item.receivedAt,
+            dueDate: parsed.dueDate,
+            cardLast4: parsed.cardLast4,
+            accountLast4: parsed.accountLast4,
+            body: item.body,
+            status: PastBillReceiptStatus.historicalUnpaid,
+          );
+          _persistResolvedBillObservationSync(db, namespace, parsed, item);
+          return;
+        }
       }
     }
     final resolved = resolveItemKind(item);

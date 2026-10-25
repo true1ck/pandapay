@@ -5,6 +5,7 @@ import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/card_bill_ledger.dart';
 import 'package:pandapay/data/local/sms_import_store.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
+import 'package:pandapay/data/past_bill_receipts.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/features/insights/payments_due_screen.dart';
@@ -587,5 +588,53 @@ void main() {
       final reviewItems = await needsReviewRepo.fetchAll();
       expect(reviewItems, isEmpty);
     });
+
+    test(
+      'upcoming bills with future due dates populate CommitmentsRepository, while past bills archive to PastBillReceipts without entering Needs Review',
+      () async {
+        final futureDue = DateTime.now().add(const Duration(days: 14));
+        final pastDue = DateTime.now().subtract(const Duration(days: 14));
+        final futureDueStr =
+            '${futureDue.year}-${futureDue.month.toString().padLeft(2, '0')}-${futureDue.day.toString().padLeft(2, '0')}';
+        final pastDueStr =
+            '${pastDue.year}-${pastDue.month.toString().padLeft(2, '0')}-${pastDue.day.toString().padLeft(2, '0')}';
+
+        final upcomingElectricityMsg = QueuedSms(
+          sender: 'MYTNEU',
+          body:
+              'Your Goa Electricity bill of Rs. 927.00 is ready. Pay by $futureDueStr to avoid late charges.',
+          receivedAt: DateTime.now(),
+        );
+        final pastWaterMsg = QueuedSms(
+          sender: 'PWDGOA',
+          body:
+              'Dear Consumer, your PWD water bill of Rs. 420 is generated. Due date: $pastDueStr.',
+          receivedAt: pastDue,
+        );
+
+        smsImportStore.capture(ns, upcomingElectricityMsg);
+        smsImportStore.capture(ns, pastWaterMsg);
+
+        // Verify upcoming bill went directly to CommitmentsRepository
+        final commitments = await commitmentsRepo.fetchAll();
+        expect(commitments, hasLength(1));
+        final elec = commitments.single;
+        expect(elec.title, contains('Electricity'));
+        expect(elec.amount?.rupees, 927.0);
+        expect(elec.dueOn.day, futureDue.day);
+        expect(elec.dueOn.month, futureDue.month);
+
+        // Verify past bill went directly to PastBillReceiptRepository
+        final pastBills = PastBillReceiptRepository(db, namespace: ns).fetchAll();
+        expect(pastBills, hasLength(1));
+        final past = pastBills.single;
+        expect(past.amount?.rupees, 420.0);
+        expect(past.status, PastBillReceiptStatus.historicalUnpaid);
+
+        // Verify Needs Review remains completely clean!
+        final reviewItems = await needsReviewRepo.fetchAll();
+        expect(reviewItems, isEmpty);
+      },
+    );
   });
 }
