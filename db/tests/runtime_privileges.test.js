@@ -35,6 +35,12 @@ test('owner/superuser/RLS/view and DDL-like grants are inventoried as failures',
  i.effectiveRelations=[{role:'runtime_test',schema:'private',relation:'data',privileges:['TRUNCATE','SELECT']}];
  const result=evaluatePolicy(i,policy());for(const code of ['privileged_role','runtime_owns_relation','table_rls_disabled','table_force_rls_disabled','view_owner_execution','runtime_schema_create','runtime_database_create','runtime_ddl_like_privilege','effective_access_without_rls'])assert.ok(codes(result).includes(code),code);
 });
+test('configured exposure roles fail when they carry dangerous role attributes',()=>{
+ const p=policy(),i=inventory();p.roles.push({name:'anon_fixture',kind:'exposure',required:false});
+ i.roles.push({name:'anon_fixture',login:false,superuser:true,bypass_rls:true,create_role:false,create_database:false,replication:false});
+ const result=evaluatePolicy(i,p);assert.ok(codes(result).includes('privileged_role'));
+ assert.deepEqual(result.findings.find(value=>value.code==='privileged_role'&&value.role==='anon_fixture').details,['superuser','bypass_rls']);
+});
 test('nested membership and SET/ADMIN permission to definer owners fail',()=>{
  const i=inventory();i.memberships=[{member:'runtime_test',role:'definer_owner_test',inherit:false,can_set:true,admin:true,parent_superuser:true}];
  const result=evaluatePolicy(i,policy());for(const code of ['unreviewed_membership','membership_admin_option','privileged_membership','definer_owner_reachable'])assert.ok(codes(result).includes(code));

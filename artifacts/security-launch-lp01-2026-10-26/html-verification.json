@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-26",
+  "priority_rows": 10,
+  "columns": 5,
+  "markdown_html_match": true,
+  "local_priority_evidence_links": 12,
+  "all_links_exist": true,
+  "plan_sections_in_order": 10,
+  "plan_execution_tracker_rows": 10,
+  "priority_statuses": {
+    "partial": 9,
+    "open": 1,
+    "accepted_for_launch": 0
+  },
+  "existing_script_blocks_unchanged": 2,
+  "visual_browser_verification": "not rerun; local file URLs were refused by the browser tool in the prior status update"
+}

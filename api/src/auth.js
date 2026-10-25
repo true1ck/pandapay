@@ -72,10 +72,15 @@ function cacheSession(key, value) {
   if (sessionCache.size >= SESSION_CACHE_MAX_ENTRIES) {
     const now = Date.now();
     for (const [entryKey, entry] of sessionCache) {
-      if (entry.expiresAt <= now || sessionCache.size >= SESSION_CACHE_MAX_ENTRIES) {
+      if (entry.expiresAt <= now) {
         sessionCache.delete(entryKey);
       }
     }
+  }
+  while (sessionCache.size >= SESSION_CACHE_MAX_ENTRIES) {
+    const oldestKey = sessionCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    sessionCache.delete(oldestKey);
   }
   sessionCache.set(key, { value, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
 }

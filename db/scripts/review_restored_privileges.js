@@ -41,7 +41,8 @@ function compareLedger(rows, files) {
   }
   return { entries: rows.length, unknown, mismatched, missingChecksum, duplicate,
     pending: [...known.keys()].filter(name => !seen.has(name)),
-    history_known: unknown.length === 0 && mismatched.length === 0 && duplicate.length === 0 };
+    history_known: unknown.length === 0 && mismatched.length === 0 && duplicate.length === 0,
+    history_checksums_verified: unknown.length === 0 && mismatched.length === 0 && duplicate.length === 0 && missingChecksum.length === 0 };
 }
 async function reviewRestoredPrivileges({ product, auth, env = process.env, encrypt = spawnSync } = {}) {
   const roles = inputs(env), reports = {};
@@ -77,6 +78,7 @@ async function reviewRestoredPrivileges({ product, auth, env = process.env, encr
   fs.renameSync(pending, filename);
   return { product_blocking: reports.product.summary.blocking, auth_blocking: reports.auth.summary.blocking,
     history_unknown: history.unknown.length, history_mismatched: history.mismatched.length, history_duplicate: history.duplicate.length,
-    strict_pass: reports.product.strict_pass && reports.auth.strict_pass && history.history_known && history.ledger_present };
+    history_missing_checksum: history.missingChecksum.length,
+    strict_pass: reports.product.strict_pass && reports.auth.strict_pass && history.history_checksums_verified && history.ledger_present };
 }
 module.exports = { inputs, compareLedger, reviewRestoredPrivileges };

@@ -196,7 +196,9 @@ function evaluatePolicy(inventory, policy, now = Date.now()) {
   for (const role of policy.roles) if (role.required && !present.has(role.name)) add('required_role_missing',role.name,role.name);
   if (!inventory.roles.some(role => roleMap.get(role.name)?.kind === 'runtime')) add('runtime_role_unconfigured',policy.scope);
   for (const role of inventory.roles) {
-    if (!roleMap.has(role.name) || roleMap.get(role.name)?.kind === 'exposure') continue;
+    // Exposure roles are especially sensitive: dangerous attributes on anon
+    // or authenticated must not be hidden by their policy classification.
+    if (!roleMap.has(role.name)) continue;
     const dangerous = ['superuser','bypass_rls','create_database','create_role','replication'].filter(key => role[key]);
     if (dangerous.length) add('privileged_role',role.name,role.name,dangerous);
     if (['owner','capability'].includes(roleMap.get(role.name)?.kind) && role.login) add('capability_owner_can_login',role.name,role.name);

@@ -18,7 +18,14 @@ process.env.JWT_AUDIENCE = 'mobile-app';
 process.env.AUTH_INTERNAL_BASE_URL = 'http://auth.test';
 process.env.AUTH_INTERNAL_SERVICE_SECRET = 'test-auth-internal-secret-which-is-over-32-bytes';
 
-const { verifyAccessToken, optionalAuth, requireAuth, requireValidJwt } = require('../src/auth');
+const {
+  verifyAccessToken,
+  optionalAuth,
+  requireAuth,
+  requireValidJwt,
+  fetchCurrentSession,
+  _sessionCache,
+} = require('../src/auth');
 
 function makeToken(secret, keyid, claims = {}) {
   return jwt.sign(
@@ -138,4 +145,51 @@ test('requireValidJwt rejects request with missing or malformed token', () => {
   assert.equal(statusCode, 401);
   assert.deepEqual(responseBody, { error: 'Missing or invalid access token' });
   assert.equal(nextCalls, 0);
+});
+
+test('session cache prunes an expired entry before evicting a live entry at capacity', async () => {
+  _sessionCache.clear();
+  let fetchCalls = 0;
+  const realNow = Date.now;
+  let now = 10_000;
+  Date.now = () => now;
+  const fetchImpl = async () => {
+    fetchCalls += 1;
+    return {
+      ok: true,
+      async json() {
+        return {
+          token_valid: true,
+          valid: true,
+          subject: 'user-123',
+          session: { active: true, revoked: false },
+        };
+      },
+    };
+  };
+
+  try {
+    for (let index = 0; index < 999; index += 1) {
+      await fetchCurrentSession(`synthetic-session-token-${index}`, fetchImpl);
+    }
+
+    // Simulate a backward wall-clock adjustment while adding a late entry.
+    // That entry is already expired when the clock returns to its prior time,
+    // while the older entries remain live.
+    now = -10_000;
+    await fetchCurrentSession('synthetic-expired-session-token', fetchImpl);
+    now = 10_000;
+    assert.equal(_sessionCache.size, 1_000);
+
+    await fetchCurrentSession('synthetic-overflow-session-token', fetchImpl);
+    assert.equal(_sessionCache.size, 1_000);
+    assert.equal(fetchCalls, 1_001);
+
+    // The expired entry was pruned; the oldest still-live entry remains a hit.
+    await fetchCurrentSession('synthetic-session-token-0', fetchImpl);
+    assert.equal(fetchCalls, 1_001);
+  } finally {
+    Date.now = realNow;
+    _sessionCache.clear();
+  }
 });

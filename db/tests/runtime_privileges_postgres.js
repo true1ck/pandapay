@@ -17,11 +17,12 @@ async function main(){
  try{
   const existing=await admin.query("SELECT count(*)::int AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname <> 'information_schema' AND n.nspname !~ '^pg_' AND c.relkind IN ('r','p','v','m','S','f')");
   assert.equal(existing.rows[0].count,0,'fixture refuses nonempty database');
-  const suffix=crypto.randomBytes(5).toString('hex'),schema='priv_fixture_'+suffix,runtime='priv_runtime_'+suffix,owner='priv_owner_'+suffix;
+  const suffix=crypto.randomBytes(5).toString('hex'),schema='priv_fixture_'+suffix,runtime='priv_runtime_'+suffix,owner='priv_owner_'+suffix,exposure='priv_exposure_'+suffix;
   const sentinel='Synthetic_customer_secret_'+crypto.randomBytes(8).toString('hex');
   const adminRole=(await admin.query('SELECT current_user AS name')).rows[0].name;
   const quotedAdmin='"'+adminRole.replaceAll('"','""')+'"';
   await admin.query(`CREATE ROLE ${runtime} LOGIN PASSWORD 'synthetic-no-secret' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION;
+   CREATE ROLE ${exposure} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION;
    CREATE ROLE ${owner} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION;
    GRANT ${owner} TO ${quotedAdmin} WITH INHERIT TRUE,SET TRUE GRANTED BY ${quotedAdmin};
    CREATE SCHEMA ${schema} AUTHORIZATION ${owner};REVOKE ALL ON SCHEMA ${schema} FROM PUBLIC;
@@ -41,7 +42,7 @@ async function main(){
    GRANT USAGE,CREATE ON SCHEMA ${schema} TO ${quotedAdmin} WITH GRANT OPTION;
    REVOKE ${owner} FROM ${quotedAdmin} GRANTED BY ${quotedAdmin};`);
   const policy={format:'pandapay-runtime-privilege-policy-v1',scope:'fixture',managedSchemas:[schema],
-   roles:[{name:runtime,kind:'runtime',required:true},{name:owner,kind:'owner',required:true}],
+   roles:[{name:runtime,kind:'runtime',required:true},{name:owner,kind:'owner',required:true},{name:exposure,kind:'exposure',required:true}],
    ledgers:[`${schema}.schema_migrations`],memberships:[],restrictedRoles:[],requiredRoutineAccess:[{role:runtime,identity:`${schema}.safe()`}],acceptedFindings:[]};
   const healthy=await auditRuntimePrivileges(admin,{policy});
   assert.equal(healthy.strict_pass,true,healthy.findings.map(value=>value.code).join(','));
@@ -57,6 +58,12 @@ async function main(){
   Object.assign(cliEnv,{NODE_ENV:'test',PRIVILEGE_AUDIT_DB_SSL:'false',PRIVILEGE_AUDIT_DATABASE_URL:loginUrl.toString()});
   const cliArgs=[path.join(__dirname,'../scripts/audit_runtime_privileges.js'),'--policy',policyFile];
   const cliHealthy=await execFile(process.execPath,[...cliArgs,'--strict'],{env:cliEnv,timeout:30000,maxBuffer:2*1024*1024});assert.equal(JSON.parse(cliHealthy.stdout).strict_pass,true);
+  await admin.query(`ALTER ROLE ${exposure} BYPASSRLS`);
+  const exposureAudit=await auditRuntimePrivileges(login,{policy});
+  assert.equal(exposureAudit.strict_pass,false,'public-facing role attributes must not bypass strict review');
+  assert.ok(exposureAudit.findings.some(value=>value.code==='privileged_role'&&value.role===exposure&&value.details.includes('bypass_rls')));
+  await admin.query(`ALTER ROLE ${exposure} NOBYPASSRLS`);
+  assert.equal((await auditRuntimePrivileges(login,{policy})).strict_pass,true,'clearing only the synthetic dangerous role flag restores the healthy audit');
   await admin.query(`GRANT SELECT ON ${schema}.vault TO PUBLIC;
    GRANT UPDATE(secret) ON ${schema}.vault TO PUBLIC;
    GRANT SELECT ON ${schema}.schema_migrations TO ${runtime};
@@ -84,7 +91,7 @@ async function main(){
    (SELECT relacl::text FROM pg_class WHERE oid='${schema}.vault'::regclass) AS acl`)).rows[0];
   assert.deepEqual(after,before,'audit must leave synthetic data and grants unchanged');
   await assert.rejects(auditRuntimePrivileges(login,{policy,limit:1}),/limit exceeded/);
-  console.log('PASS: catalog-only audit under independent non-owner LOGIN; PUBLIC/column/default grants, RLS, owner/SET/admin paths, views, ledger and unsafe definers detected; CLI advisory succeeds and opt-in strict gate exits 2 on drift; bounded truncation fails closed; no row/body values emitted and grants/data unchanged');
+  console.log('PASS: catalog-only audit under independent non-owner LOGIN; dangerous exposure-role flags, PUBLIC/column/default grants, RLS, owner/SET/admin paths, views, ledger and unsafe definers detected; CLI advisory succeeds and opt-in strict gate exits 2 on drift; bounded truncation fails closed; no row/body values emitted and grants/data unchanged');
  }finally{if(login)await login.end();await admin.end();if(policyDirectory)fs.rmSync(policyDirectory,{recursive:true});}
 }
 main().catch(error=>{console.error('Synthetic runtime privilege audit fixture failed',error.stack);process.exitCode=1;});

@@ -1,0 +1,147 @@
+# Launch implementation plan — 26 October 2026
+
+This plan turns the audit’s existing LP01–LP10 order into reviewable source batches and launch evidence. It is an implementation sequence, not a new finding ledger or launch approval. Current audit status remains **9 partial, 1 open, 0 accepted for launch**; keep the audit’s 76 findings, 14 packages and six gates unchanged until their existing evidence is re-audited.
+
+## Fixed requirements and execution rules
+
+- Target: **100,000 completed signups across day one**. This is a capacity target to prove, not an assumption about burst shape. Agree and test the arrival profile before claiming support.
+- Keep PostgreSQL as the database. Any future move is PostgreSQL-to-PostgreSQL and must preserve the complete history, every original account/row/transaction ID, identity mapping, deletion state, balances, original cryptographic keys and recovery metadata. Additive/replayable migration steps are preferred; do not silently merge, regenerate, drop, or truncate retained data.
+- Existing customer authentication remains email/phone OTP and supported Google sign-in. Do not add a customer password. Preserve generic errors, OTP lifetime, purpose binding, one-time use, rate limits, and account/device isolation.
+- The user reports that current hosting is free. Verify the actual current free-tier compute, memory, disk, egress, connection, request, and provider quotas. Any future provider, tier, or cost is a separate operator decision; do not silently purchase or assume an upgrade, quota exception, or extra capacity. If measured current capacity cannot meet the agreed workload, report the maximum supported cohort and keep unrestricted launch blocked until the operator decides.
+- Backups and temporary artifacts need explicit size, count, age, and cleanup bounds. Keep the existing bounded Mac schedule until a tested replacement exists. Do not delete retained databases, keys, logs, or backups without verified ownership, consumer review, preservation proof, and a separate approved cleanup change.
+- Automatic encrypted recovery is available only after the user enables recovery. Preserve consent, encryption, recovery-key continuity, deletion semantics, and current OTP sign-in; prove bounded storage and restore behavior before broadening its existing small quota.
+- Work source batches LP01 through LP10 in order. A later source batch may proceed once its source prerequisites and local checks pass, even while an earlier priority's external acceptance remains open. Each Luna implementation batch starts from a frozen reviewed baseline, makes one scoped change, records commands/results and touched-file hashes, then returns for parent review before the next batch. Delegated investigation may run independently. External acceptance remains explicit per priority; no affected launch is allowed until all required gates pass.
+- Source/local tests, synthetic PostgreSQL and clone rehearsals, provider acceptance, and production evidence are distinct. Never represent one as another. No provider send, live ACL/data mutation, production deployment, feature activation, new custody/storage purchase, or destructive cleanup is authorized by this plan.
+
+## Ordered implementation and acceptance batches
+
+### LP01 — Prove deployed identity and database isolation
+
+**First batch:** freeze the exact API/auth source, image/configuration references and migration set; inventory database logins, role membership/inheritance, grants, RLS, SECURITY DEFINER functions, function owners/search paths, and every runtime credential consumer. Compare the reviewed source to a protected, current-data clone and produce a hash-bound role/grant/schema/function inventory. Start with a read-only assessment; prepare only narrow, reviewed fixes for a demonstrated consumer need.
+
+- **Likely source areas:** `api/src/auth.js`, `api/src/index.js`, `api/src/*sync*`, `auth/src/middleware/`, `db/supabase/migrations/`, `db/scripts/`, deployment Compose/config files, and the existing sync-isolation / feedback evidence docs. Confirm exact consumers before editing.
+- **Already present:** legacy sync guards and restricted-role support/catalogue feedback checks have local evidence; V2 sync is prepared but absent from the queried DB; current queried DB observations include legacy PUBLIC-executable definer RPCs and advisor warnings. The reviewed clone and source are not proof of the deployed target.
+- **Still to implement:** any narrowly evidenced least-privilege source/migration repair, safe session/connection identity reset, and release-time identity checks. Avoid blanket PUBLIC revocation, broad owner/RLS rewrites, or advisor-warning-driven changes without routine-by-routine consumer proof.
+- **Local/clone verification:** anonymous, guest, wrong profile, wrong device, revoked/deleted account, pooled identity reset, admin boundary, expected ordinary API/auth/worker consumer, function ownership/search paths, upgrade/replay/dump/restore. Compare source, schema, roles, grants and key references before/after; confirm no IDs/data/keys changed.
+- **External acceptance:** actual image/config hash match; real effective roles and credentials reviewed by the database/security owner; MFA on hosting, database, DNS, CI and mail operator accounts; intended PostgreSQL target passes the same isolation matrix. This cannot be fabricated from a local test.
+- **Depends on / stop:** first gate. Stop if a role or owner cannot be attributed, current data differs from the candidate baseline, an ordinary consumer breaks, or preserving account/device isolation requires a broad unreviewed policy change. Do not mutate live ACLs. Roll back only a rehearsed compatible source/migration change; otherwise remain read-only and resolve on a clone.
+
+### LP02 — Independent recovery and acceptable data loss
+
+**First batch:** inventory all recoverable state and existing backup machinery. Define proposed server RPO/RTO for owner approval, then use disposable isolated PostgreSQL targets to rehearse paired product/auth recovery, original-key availability, lifecycle/deletion checkpoint repair, and post-write recovery. Specify independent encrypted copy and separate key/checkpoint custody requirements without purchasing or activating a destination.
+
+- **Likely source areas:** `db/backup/`, `db/scripts/`, `api/src/account_lifecycle_journal.js`, `api/src/automatic_account_recovery.js`, recovery migrations and progress/runbook/evidence docs.
+- **Already present:** encrypted local copies, paired restore rehearsals, lifecycle journals and bounded local retention exist. Current accepted setup has one Mac failure domain; independent off-host copies, separate custody and intended-provider recovery are missing.
+- **Still to implement:** recovery/repair code only for a demonstrated rehearsal gap; a bounded replacement backup design if the existing source cannot meet approved RPO/RTO. Define byte/count/age caps and a cleanup proof. Keep user-enabled automatic encrypted recovery opt-in and preserve the existing 50 MiB source quota unless a separately reviewed, measured replacement is ready.
+- **Local verification:** restore both logical DBs into disposable PostgreSQL; compare full row counts and identity/foreign-key maps, original IDs, balances, deletion state, key IDs and decryptability; inject interrupted writes/checkpoint lag; verify cleanup cannot remove the last valid copies; record backup sizes and retention bounds.
+- **External acceptance:** independent failure domains, separate key custody, actual target access, timed loss-of-primary exercise and owner-approved measured RPO/RTO. Current Mac-only copies cannot satisfy this gate.
+- **Depends on / stop:** LP01 identifies who may read/restore. Stop if any original key or historical row is unavailable, independent custody is not available, restore would rewrite IDs, or the proposed backup growth has no bounded disk budget. Preserve current bounded schedule; no live cutover or new storage purchase.
+
+### LP03 — Fund and measure hosting, connections and storage
+
+**First batch:** build one inventory of free-plan and physical-cluster limits covering API/auth replicas, all pools, workers, migrations, backups, object storage, compute/RAM, disk/WAL/temp/logs, egress, request limits and provider reserves. Reconcile logical DB sizes and the nine retained restore-drill databases; identify each owner, consumer and evidence before proposing cleanup. Convert the result to a versioned, hash-bound offline release budget.
+
+- **Likely source areas:** `api/src/service_pools.js`, `api/src/*pool*`, `auth/src/`, `docker-compose*.yml`, `db/scripts/` connection-budget tooling, backup scripts and the production metadata/evidence artifacts.
+- **Already present:** aggregate connection-budget release guard models pools, replica ceilings and reserves; observed snapshots show a 60-connection cluster setting and 211.06 MiB across nine drill DBs. Actual plan limits, compute/disk headroom, growth and costs are not accepted.
+- **Still to implement:** fix only inventory/runtime mismatches proven by measured evidence; add bounded rotation/cleanup for artifacts where ownership and recoverability are proved. Keep all connection pools within one physical-cluster budget. Do not add replicas or lift storage/recovery caps to make a budget pass.
+- **Local verification:** release guard rejects unknown/incomplete limits; test rollout overlap and every enabled dedicated pool; exercise bounded backup/log/temp/WAL growth using representative synthetic data; validate disk alerts and safe cleanup dry-run.
+- **External acceptance:** provider-confirmed free limits, measured workload headroom, actual physical-cluster inventory, approved cost ceiling of zero unless owner explicitly changes the constraint, and a supported workload envelope. Pricing pages and local simulation are not account-specific proof.
+- **Depends on / stop:** LP01–LP02 inventories and recovery sizing. Stop if limits remain unknown, current backups cannot fit within bounded disk, or measured workload exceeds free resources. Return a lower proven admission ceiling; no plan upgrade/purchase or destructive DB removal.
+
+### LP04 — Quota-approved OTP delivery and abuse/spend limits
+
+**First batch:** trace signup/sign-in/recovery/replacement from client through OTP issue, bcrypt, abuse-store admission and provider send. Confirm one shared bounded admission policy across legacy/V2 routes; document the actual provider daily and burst quota, sender readiness, per-message cost, delivery metrics, and retry/bounce behavior. Use a sink for load tests and reserve live delivery for a separately approved small canary.
+
+- **Likely source areas:** `auth/src/routes/authRoutes.js`, `auth/src/services/authAbuseStore.js`, OTP/provider services under `auth/src/services/`, `api/src/service_pools.js`, hosted Compose/config, and auth tests.
+- **Already present:** bounded OTP work and provider admission, shared abuse controls, generic retryable saturation responses and local regressions exist. Actual sender quotas, live delivery, shared-NAT false positives and approved burst capacity are unknown.
+- **Still to implement:** uncovered admission paths or operational instrumentation only; never weaken hashing, verification, recipient/device/IP/global limits, purpose/single-use markers or OTP expiry to raise throughput. Keep Google sign-in and OTP passwordless; no test-code bypass.
+- **Local verification:** concurrent saturation and recovery from failures; all OTP routes share the same limits; rejected pre-admission work does not increment attempts, claim markers or send; test shared-NAT legit cohorts, bot/resend floods, provider outage, auth DB pressure, generic responses and redacted logs. Use a delivery sink.
+- **External acceptance:** approved provider quota at daily and peak rate (modeled base is 120,000 OTPs/day at 1.2 messages/signup, before abuse/extra steps), sender-domain authentication, production OAuth allowlist and a small real canary proving delivery time inside the 120-second OTP lifetime.
+- **Depends on / stop:** LP03 pool/resource budget and LP01 identity safety. Stop if quota/identity of sender is unconfirmed, legitimate shared-NAT users are rejected below the agreed target, or delivery cannot finish inside OTP lifetime. No real mass send or quota override.
+
+### LP05 — Financial correctness, sync and complete-data migrations
+
+**First batch:** freeze a representative protected clone and capture a reconciliation manifest for every current product/auth table and retained identity/key. Rehearse current migration source/history reconciliation and opt-in V2 sync upgrade/replay against the intended PostgreSQL major version; map each existing finding to preserved IDs, balances, financial projections, private categories and histories.
+
+- **Likely source areas:** `db/scripts/migrate.sh`, `db/scripts/product_migrate.js`, `auth/scripts/migrate.js`, `db/supabase/migrations/`, sync routes/services in `api/src/`, financial projection/domain modules, and migration/sync evidence docs.
+- **Already present:** typed sync and financial/recovery checks pass locally; V2 remains off; migration orchestration and some clone rehearsals exist. Historical reconciliation, latest merged migration acceptance, concurrent clients and target-provider proof remain.
+- **Still to implement:** fix only reproduced contract/migration gaps; keep schema changes additive and replayable where possible. Preserve old identifiers and mappings. If advertised offline numeric edits are not safely supported, preserve pending drafts and explicitly gate that flow rather than silently dropping edits. No ID regeneration or balance merge as conflict resolution.
+- **Local verification:** before/after full-table counts and ID/key maps; migration from exact current baseline, replay, interruption and retry; split transactions, rewards/caps, private categories, duplicate/stale clocks, simultaneous edits, offline replay, deletion and financial totals; compare history and projections and require rejected writes remain recoverable.
+- **External acceptance:** exact protected current-data clone review and intended-provider PostgreSQL rehearsal with database/data owner sign-off. Synthetic same-major tests are necessary but not sufficient.
+- **Depends on / stop:** LP01 effective roles and LP02 recovery. Stop on any unexplained row/ID/key/count/balance difference, migration-history gap, non-idempotent retry, or unreviewed schema drift. Keep V2 off; restore the clone and repair forward before a later attempt.
+
+### LP06 — Bound onboarding fan-out and durable background work
+
+**First batch:** map synchronous signup dependencies and all post-signup work (imports, OCR, IMAP, AI, recovery, notifications and scoring). Make ordinary OTP signup independent from optional/history-heavy work; specify request, upload, per-account/global provider, queue, retry, memory and retained-artifact bounds before implementing uncovered durable continuation.
+
+- **Likely source areas:** `api/src/index.js`, worker/queue modules, `api/src/ai_queue_route.js`, IMAP poller, import/OCR routes, recovery modules, schema migrations and deployment feature flags/config.
+- **Already present:** selected request/import/worker bounds, feedback throttles, AI pilot gates, IMAP worker capability and idempotent jobs exist. Complete durable continuation, cross-replica budgets, backlog recovery proof and realistic import capacity remain; recovery copies share the DB and current global quota is intentionally small.
+- **Still to implement:** durable idempotent claims/outboxes and bounded continuation for any accepted work that can outlive a request; pagination, request/memory limits, retry jitter, queue-age caps and global/provider budgets. Keep recovery/AI/import work optional/off or tightly limited until its own data, throughput and disk budget passes. Do not increase the recovery quota by default.
+- **Local verification:** kill/restart workers at each state boundary; replay and retry accepted jobs; prove no lost accepted job or duplicate financial effect; stress one abusive account and many accounts; test shared-pool isolation and bounded queue growth; verify signin latency and backlog drain under synthetic burst.
+- **External acceptance:** actual shared budget across replicas, provider quotas, approved import/recovery scope, measured drain time and operator alerts. Local per-process bounds do not establish aggregate limits.
+- **Depends on / stop:** LP03 resource budget, LP04 auth admission, LP05 financial idempotency. Stop if accepted work can vanish, retries duplicate effects, queue or backup disk grows without bound, or optional work starves signin. Preserve pending work; pause optional admissions rather than deleting it.
+
+### LP07 — Signed mobile/client and supply-chain acceptance
+
+**First batch:** identify the exact supported signed Android/iOS/web artifacts and dependency lockfiles. Document each sensitive-data path (SQLite, receipts, exports, tokens, keys, backups) and verify the current release behavior before deciding whether an encryption transition is required. Keep untested conversion disabled.
+
+- **Likely source areas:** `app/`, `console/`, platform manifests/build files, secure-storage/SQLite and receipt modules, lockfiles, signing/release scripts, and mobile/security evidence docs.
+- **Already present:** component/dependency checks and isolated Android evidence exist; normal SQLite/receipt encryption is not integrated, and signed release acceptance is missing.
+- **Still to implement:** release-specific data protection, TLS/cleartext policy, secret/debug endpoint checks, secure key use, upgrade/backup/account-switch handling and permission-denied/manual flows. Preserve current recovery keys and OTP identity; do not add a customer password. Do not claim encrypted-at-rest behavior that the normal storage path does not provide.
+- **Local verification:** build and inspect actual candidate artifacts and dependency inventory; test permission denial, no SMS access beyond declared need, account switching, offline work, process death, update/rollback, key loss and recovery. If conversion is proposed, test a copy with crash/power-loss at every conversion step and retain original source until verified.
+- **External acceptance:** release signer and mobile/security owners accept actual signed artifacts and platform behavior; store upload review/approval is a later explicit platform gate.
+- **Depends on / stop:** LP05 data/key continuity and LP06 offline/background contract. Stop if an artifact contains secrets/debug access, old data becomes unreadable, user data is lost on update/key loss, or permission-denied flow blocks core use. Do not enable an untested conversion.
+
+### LP08 — Measured load, progressive admission and incident response
+
+**First batch:** turn the agreed 100,000/day arrival profile into a production-shaped, isolated load plan with explicit success targets and resource caps. Include baseline, agreed peak and overload cases; capture offered/admitted/rejected/abandoned/completed journeys separately. Do not send real OTPs at scale; use the approved sink and synthetic accounts.
+
+- **Likely source areas:** load/operations scripts and release tooling, `api/src/health*`, auth readiness, maintenance/alert adapter, deployment configs, dashboards/runbooks and the LP01–LP06 metrics/evidence.
+- **Already present:** maintenance notices and optional alert adapter have local proof. Actual receiver/on-call, external monitoring, production-shaped 100k/day load/failure/soak and canary evidence remain.
+- **Still to implement:** external monitoring of completed signup, OTP delivery latency, pool wait, database disk/locks, queue age, backup age and cost; pause-new-signup control; cohort-based admission and escalation procedure. Preserve existing-user signin and committed writes during pause.
+- **Local verification:** isolated open-arrival load for agreed daily/burst profile, overload above target, multi-hour/24-hour soak, node/process loss, DB/pool pressure, provider timeout, worker replay, disk pressure and restore. Define and report latency/error/headroom targets before the run; prove the monitor emits actionable alerts to the test receiver and operators can pause/resume safely.
+- **External acceptance:** production-like provider/host envelope, real on-call receiver and named responder, approved small live canary and staged cohorts only after LP01–LP07 pass. A health endpoint or average-rate arithmetic is not capacity evidence.
+- **Depends on / stop:** all previous capacity/security gates. Stop at first cross-account access, lost committed write, duplicate financial effect, unbounded disk/queue, or inability to meet agreed successful-signup target within verified host limits. Cap rollout to the measured pass; no production campaign above evidence.
+
+### LP09 — Privacy, platform and business-policy readiness
+
+**First batch:** create a current data-flow and disclosure inventory from shipped client behavior and backend/provider consumers. Assign responsible privacy/product/store/legal owners to review retention/deletion/export/support, third-party processing, age/market scope, incident duties, consent and permission needs. No legal or platform approval is implied by preparing the inventory.
+
+- **Likely source areas:** privacy/support documentation, `app/android/app/src/main/AndroidManifest.xml`, iOS permission strings/config, Google OAuth configuration docs, support/export/deletion/recovery flows, store metadata and release checklist.
+- **Already present:** support, deletion/export and some privacy/recovery behavior exist in code/docs. Required privacy review, store/permission and production OAuth approvals are not recorded. Android SMS and background-location declarations require specific review; unrelated personal SMS must not be uploaded.
+- **Still to implement:** correct inaccurate disclosures, remove unjustified permission/data collection only after consumer compatibility review, and make permission-denied/manual paths usable. Document automatic encrypted recovery as opt-in after user enablement, with actual retention and deletion behavior. Do not fabricate legal conclusions or platform approvals.
+- **Local verification:** compare every disclosure with observed data flows; exercise consent withdrawal, export/deletion, support, denied permissions, account removal and optional recovery off/on; confirm recovery encryption and bounded quotas, and verify no unrelated SMS payload leaves the device.
+- **External acceptance:** named privacy/product/legal owners confirm launch-date applicability and notices; Google Play/App Store reviewers accept declarations as required; Google production OAuth config and domains are approved. These approvals must be recorded by the responsible owners.
+- **Depends on / stop:** LP06 actual feature scope and LP07 signed-client behavior. Stop if disclosure omits a flow, consent/deletion does not match behavior, permission approval is absent, or launch market/app review is unresolved. Keep affected feature or market unavailable until accepted.
+
+### LP10 — Exact release, migration and edge rollback rehearsal
+
+**First batch:** assemble an immutable release candidate manifest binding source revision, API/auth images, config names/secret references, schema/migration checksums, client artifact hashes, edge/TLS/DNS/proxy/cache configuration, and feature flags. Rehearse deployment and recovery against an isolated target using the exact candidate; do not combine PostgreSQL rehosting with mobile storage-format activation.
+
+- **Likely source areas:** `docker-compose*.yml`, deployment/edge/DNS config, `db/scripts/`, `auth/scripts/`, migration and rollout runbooks, release manifests, client build outputs and operational evidence.
+- **Already present:** migration/deployment safeguards and local recovery rehearsals exist. Exact hosted release, intended-target cutover, post-write failback, operational readiness/draining and controlled rollout remain unaccepted.
+- **Still to implement:** only candidate-specific defects found by rehearsal; compatible schema-first/readers-writers ordering, private ports and public cache boundaries, readiness/draining, feature flag admission, key/config availability, rollback/forward-repair instructions and evidence capture.
+- **Local verification:** deploy exact immutable candidate to isolated PostgreSQL target; verify TLS/DNS/proxy trust/private endpoints/cache controls; migrate/replay/restart; perform pre-write rollback and post-write forward repair; confirm data/IDs/keys and supported clients remain intact; rehearse pause-new-signup while existing users remain served.
+- **External acceptance:** exact production image/config/schema/artifact hashes verified at intended provider, release owner sign-off, operator recovery rehearsal and the prior LP01–LP09 evidence attached. Any later build/config/migration change invalidates affected evidence.
+- **Depends on / stop:** all earlier LPs. Stop if hashes differ, deployment is not reproducible, migration state is ambiguous, rollback would lose committed writes, edge configuration exposes private services, or any launch acceptance record is missing. Do not deploy or activate from this document; obtain the separately required release authorization after the candidate is reviewable.
+
+## Review record for each batch
+
+The parent reviewer should accept a batch only when its source diff is scoped, existing contracts and retained records are preserved, focused verification is recorded with exact commands/results, and remaining external acceptance is named. Every batch record should include: baseline revision; changed files; migration identifiers/checksums if any; before/after row/ID/key evidence when data-related; tests/rehearsals and limitations; failure/stop outcome; and whether a later gate is still external. Keep evidence in the existing artifacts structure and update the audit only after re-review; do not change status/counts merely because implementation code or local tests were added.
+
+## Execution tracker — 26 October 2026
+
+This tracker reflects source work only. “Owner input” means evidence or an operator decision that the source team cannot create locally. It does not change audit priority status or launch acceptance.
+
+| Priority | Source batch status | Next artifact / owner input |
+| --- | --- | --- |
+| LP01 | **First source batch locally verified; overall priority remains Partial** — dangerous public-access role flags, migration-checksum acceptance and cache retention under clock changes. | [LP01 implementation and limits](security-launch-lp01-implementation-2026-10-26.md); exact protected-copy/deployed-role, history/baseline and provider acceptance remain. |
+| LP02 | Planned | Recovery inventory and isolated PostgreSQL restore manifest; operator decision on proposed RPO/RTO and independent custody destinations/keys. |
+| LP03 | Planned | Hash-bound free-tier resource and physical-cluster budget; hosting/provider owner to confirm current quotas and measured capacity. Any future tier/provider/cost needs a separate operator decision. |
+| LP04 | Planned | Unified OTP route/admission matrix and sink-based saturation evidence; auth/delivery owner to provide approved sender quotas and separately authorize any small live canary. |
+| LP05 | Planned | Current-clone migration/reconciliation manifest and replay report; data owner to provide protected current-data clone and accept PostgreSQL target/version. |
+| LP06 | Planned | Signup fan-out and durable-job state/replay map; backend/worker owner to confirm shared provider budgets, backlog targets, and enabled feature scope. |
+| LP07 | Planned | Supported artifact/data-path inventory with signed build inspection; mobile/release owner to provide actual signed candidate artifacts and approve storage baseline. |
+| LP08 | Planned | Isolated open-arrival load and incident-response runbook; operations owner to set arrival/burst envelope, success targets, alert receiver, and named responder. |
+| LP09 | Planned | Behavior-matched privacy/data-flow and permission review packet; privacy/product/legal/store owners to accept notices, market scope, permissions, and production OAuth approval. |
+| LP10 | Planned | Immutable candidate manifest and isolated cutover/rollback rehearsal record; release owner to supply exact target configuration and later authorize any deployment separately. |

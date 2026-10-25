@@ -1,0 +1,184 @@
+{
+  "review": "LP01 first source batch and ordered LP01\u2013LP10 implementation plan",
+  "date": "2026-10-26",
+  "base_commit": "75ab2c4e94e03a870ae73fbab5e50a98da2d743d",
+  "candidate_sha256": "ad99c63247a4834eb63098b21050433df6f93f1444907530e3246f7c9a68417e",
+  "source_files": 1404,
+  "changed_release_source_files": [
+    "api/src/auth.js",
+    "api/test/auth.test.js",
+    "db/scripts/audit_runtime_privileges.js",
+    "db/scripts/review_restored_privileges.js",
+    "db/tests/restored_privilege_review.test.js",
+    "db/tests/runtime_privileges.test.js",
+    "db/tests/runtime_privileges_postgres.js"
+  ],
+  "agents": {
+    "model": "gpt-6-luna",
+    "count": 3,
+    "work": [
+      "all-ten execution plan",
+      "auth cache review and scoped regression",
+      "database exposure-role evaluation"
+    ],
+    "parent_work": [
+      "independent diff review",
+      "checksum history gate",
+      "real PostgreSQL role fixture",
+      "integration and recorded verification"
+    ]
+  },
+  "checks": {
+    "service_and_tools_suites": {
+      "node": "v24.15.0",
+      "groups": {
+        "api": {
+          "exit_code": 0,
+          "tests": 1124,
+          "pass": 1122,
+          "fail": 0,
+          "skipped": 2,
+          "scope": "api/test/*.test.js"
+        },
+        "auth": {
+          "exit_code": 0,
+          "tests": 340,
+          "pass": 340,
+          "fail": 0,
+          "skipped": 0,
+          "scope": "auth/test/*.test.js"
+        },
+        "tools": {
+          "exit_code": 0,
+          "tests": 219,
+          "pass": 219,
+          "fail": 0,
+          "skipped": 0,
+          "scope": "db/tests/*.test.js"
+        }
+      }
+    },
+    "real_postgres": {
+      "result": "passed",
+      "postgres_version": "18.4 (Homebrew)",
+      "data_scope": "synthetic-owned-loopback-cluster",
+      "real_non_owner_login": true,
+      "dangerous_exposure_role_refused": true,
+      "catalog_only": true,
+      "data_and_grants_preserved_by_audit": true,
+      "live_credentials_or_customer_data_read": false,
+      "checks": "PASS: catalog-only audit under independent non-owner LOGIN; dangerous exposure-role flags, PUBLIC/column/default grants, RLS, owner/SET/admin paths, views, ledger and unsafe definers detected; CLI advisory succeeds and opt-in strict gate exits 2 on drift; bounded truncation fails closed; no row/body values emitted and grants/data unchanged",
+      "owned_cluster_removed": true
+    },
+    "before_after": {
+      "baseline": "75ab2c4",
+      "exposure_role": {
+        "old_strict_pass": true,
+        "new_strict_pass": false
+      },
+      "clock_adjusted_cache": {
+        "before": {
+          "size_after_insert": 999,
+          "oldest_live_entry_required_refetch": true
+        },
+        "after": {
+          "size_after_insert": 1000,
+          "oldest_live_entry_required_refetch": false
+        }
+      },
+      "live_network_calls": false,
+      "scope": "Synthetic in-memory regression; does not prove production capacity or revocation latency"
+    },
+    "report_and_plan": {
+      "date": "2026-10-26",
+      "priority_rows": 10,
+      "columns": 5,
+      "markdown_html_match": true,
+      "local_priority_evidence_links": 12,
+      "all_links_exist": true,
+      "plan_sections_in_order": 10,
+      "plan_execution_tracker_rows": 10,
+      "priority_statuses": {
+        "partial": 9,
+        "open": 1,
+        "accepted_for_launch": 0
+      },
+      "existing_script_blocks_unchanged": 2,
+      "visual_browser_verification": "not rerun; local file URLs were refused by the browser tool in the prior status update"
+    },
+    "changed_javascript_syntax": "passed",
+    "git_diff_check": "passed",
+    "strict_release_check": {
+      "exit_code": 2,
+      "release_ready": false,
+      "inputs": "Default unknown quotas/custody/provider acceptance; offline review only"
+    }
+  },
+  "current_acceptance": {
+    "launch_priorities": {
+      "partial": 9,
+      "open": 1,
+      "accepted_for_launch": 0
+    },
+    "tracked_findings": 76,
+    "implementation_packages": 14,
+    "release_gates": 6,
+    "findings_closed_by_this_batch": 0
+  },
+  "sha256": {
+    "api/src/auth.js": "c619323cf4cf67b27e398f0f2748a5432769dd8b6e0127c1cdbd139b0b050113",
+    "api/test/auth.test.js": "416ba1fcccd1f32fba81a761d3ce763ebef7950ea76aeca3e9cc3b2feecea88d",
+    "db/scripts/audit_runtime_privileges.js": "332add691c2f177f05e2d1daf1aa132dd5ab1d007c1083e04292eea5e9ad696d",
+    "db/scripts/review_restored_privileges.js": "bfabbe45f82c2a3e3ec2c4f4b8ea2a844a62654a4b9385c828296fa382f70a2c",
+    "db/tests/restored_privilege_review.test.js": "67b579d7bea1c49a73e66d91d5d033e83b2303fb6c9b6693d1c79bb9023fb9e2",
+    "db/tests/runtime_privileges.test.js": "1f3e96d39bcdf3ee0e18c866794452707c321028471d36f23cb4fd2b431aa853",
+    "db/tests/runtime_privileges_postgres.js": "fe6d40ec36be0e1b050a25eee393c629c70c2dedcb0e987307df149c51be1359",
+    "docs/security-launch-implementation-plan-2026-10-26.md": "5b83adc4c6bc0dc0b8adab6727db16bfa962b215b81e90335dfd810a95a661c2",
+    "docs/security-launch-lp01-implementation-2026-10-26.md": "2cf25534d521f26b5f6fb3109bba7089a2844ce8416bac94fb17746e48ae64b0",
+    "docs/security-and-backend-audit-2026-10-20.md": "6f44dd465b550456f0146c036a7ab28be800ac35302367e4e1180c6ea6323bb3",
+    "docs/security-and-backend-audit-2026-10-20.html": "10e442cb61e5a79b9b1dec12a286d35eb1a3494cbdc866462cf1b6b178456716",
+    "artifacts/security-launch-lp01-2026-10-26/candidate-source.json": "7941d1b5129bad5e20cb11ce10dc237f5ab7b2547d48b2f18d17ad6a7c5c642f",
+    "artifacts/security-launch-lp01-2026-10-26/test-summary.json": "3fc0d6cd2df7127e620b705b1870fde171a651a0648f14cf042558637fa9302e",
+    "artifacts/security-launch-lp01-2026-10-26/before-after-regressions.json": "713aa58ad381945c7aeab528127ade612477265c61d42191057de5d4afff952c",
+    "artifacts/security-launch-lp01-2026-10-26/postgres-results.json": "03ef93ce5ed1f4425c64f83ecb6d5786c2e31641c64ad11cb2ecdbb547dd42de",
+    "artifacts/security-launch-lp01-2026-10-26/release-check.json": "2f07f728cc4bee3acdd44aab85e4a314dd2c215f06ed996d46ed6edbdc061bac",
+    "artifacts/security-launch-lp01-2026-10-26/html-verification.json": "c7701cfbd407ab3819c4df12d508e2819a88db2092a35a377fa614eb86535bd3",
+    "artifacts/security-launch-lp01-2026-10-26/run_local_checks.py": "0d38139fa1ce87c4721d1eb5739a104bb2c11413078c296866ed8566b7a1fe7e",
+    "artifacts/security-launch-lp01-2026-10-26/run_synthetic_privileges.py": "311860ca80361ffb4aedbe26d0808bcdf7ede756ede3b14d92b7b4cd6d62f860",
+    "artifacts/security-launch-lp01-2026-10-26/compare_regressions.js": "4e19522a1e5c92b060c15f314c35f9288225dea6df9eac12a1b58f5a6099ad44"
+  },
+  "log_sha256": {
+    "artifacts/security-launch-lp01-2026-10-26/pg-start.log": "66afd0411ccc09366e99fdd99b85f21899c8d2d064f5835126859618802153ad",
+    "artifacts/security-launch-lp01-2026-10-26/tools-tests.log": "2ad1d413694475f6404576e992d9ee478747c9d1ed8e1fa506526241ff2a578f",
+    "artifacts/security-launch-lp01-2026-10-26/api-tests.log": "ede476983af69c5305c3ec5d2d2578d138fc834ccaef76a6a76ed2a55d3f37c4",
+    "artifacts/security-launch-lp01-2026-10-26/pg-create-fixture.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/security-launch-lp01-2026-10-26/pg-init.log": "8d949e5c2db47bc612161d5ba201e4c9ad59d81db6999992723abf49abf72eba",
+    "artifacts/security-launch-lp01-2026-10-26/pg-stop.log": "ca19178a35ab4153b75b494963b66ce8243e1b94c173107c87b44d09db23652d",
+    "artifacts/security-launch-lp01-2026-10-26/privilege-fixture.log": "2e419d760892f9bbe4026f05fe75cf04291c65f62178a50532bae63f2493dab9",
+    "artifacts/security-launch-lp01-2026-10-26/pg-version.log": "9f37d3232c3d9c760ab750e986131361f48d3a9ab5ded13c3e2b322b13c48aa2",
+    "artifacts/security-launch-lp01-2026-10-26/auth-tests.log": "eabb04d98a1e6baab8c97babfce23f84ed140fa46c1df3e075b1e1da22172b2f"
+  },
+  "limits": [
+    "Actual deployed roles and complete protected current-data migration/baseline remain unaccepted",
+    "No hosted PostgreSQL 17 or intended-provider acceptance",
+    "Session-cache regression is retention under clock adjustment; not measured throughput or revocation latency",
+    "PostgreSQL proof contains synthetic data only",
+    "Full Flutter/native/device/provider tests were not run; no Flutter runtime code changed",
+    "Off-host recovery/key custody, quotas, signed device and production capacity evidence remain required"
+  ],
+  "live_actions": {
+    "live_database_connections": false,
+    "saved_credentials_or_customer_backups_read": false,
+    "grants_or_schema_changed": false,
+    "production_deployed": false,
+    "migration_history_adopted": false,
+    "keys_or_feature_flags_changed": false,
+    "provider_sends": false,
+    "backup_schedule_changed": false
+  },
+  "peer_review": {
+    "auth_cache_source_and_claims": "Scoped read-only review approved; configured wall-clock TTL is explicit",
+    "product_history_and_role_fixtures": "Scoped read-only review approved; no checksum adoption or complete-upgrade claim"
+  },
+  "log_retention": "Full synthetic test/fixture logs retained in a local temporary directory; output hashes and concise test/PostgreSQL/before-after summaries are committed."
+}

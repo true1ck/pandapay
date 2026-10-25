@@ -1,0 +1,12 @@
+{
+  "result": "passed",
+  "postgres_version": "18.4 (Homebrew)",
+  "data_scope": "synthetic-owned-loopback-cluster",
+  "real_non_owner_login": true,
+  "dangerous_exposure_role_refused": true,
+  "catalog_only": true,
+  "data_and_grants_preserved_by_audit": true,
+  "live_credentials_or_customer_data_read": false,
+  "checks": "PASS: catalog-only audit under independent non-owner LOGIN; dangerous exposure-role flags, PUBLIC/column/default grants, RLS, owner/SET/admin paths, views, ledger and unsafe definers detected; CLI advisory succeeds and opt-in strict gate exits 2 on drift; bounded truncation fails closed; no row/body values emitted and grants/data unchanged",
+  "owned_cluster_removed": true
+}

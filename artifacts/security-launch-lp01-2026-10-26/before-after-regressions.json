@@ -1,0 +1,19 @@
+{
+  "baseline": "75ab2c4",
+  "exposure_role": {
+    "old_strict_pass": true,
+    "new_strict_pass": false
+  },
+  "clock_adjusted_cache": {
+    "before": {
+      "size_after_insert": 999,
+      "oldest_live_entry_required_refetch": true
+    },
+    "after": {
+      "size_after_insert": 1000,
+      "oldest_live_entry_required_refetch": false
+    }
+  },
+  "live_network_calls": false,
+  "scope": "Synthetic in-memory regression; does not prove production capacity or revocation latency"
+}
