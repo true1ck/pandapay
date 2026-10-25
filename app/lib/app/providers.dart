@@ -2758,19 +2758,15 @@ myCardsProvider = FutureProvider<List<UserCard>>((ref) async {
 /// Wallet refresh, and treating that as "no archived cards" would wrongly
 /// render an empty Deleted cards screen. The include-archived snapshot is
 /// still used when the device is offline.
+///
+/// This build has no guest sessions — Settings is behind the auth gate — so a
+/// missing repository means the user is signed out, and the screen renders its
+/// sign-in state instead of reading stale local card rows.
 final archivedCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   final markReady = _financialChanges(ref, 'cards');
   try {
     final repo = ref.watch(userCardsRepositoryProvider);
-    if (repo == null) {
-      final local = await ref.watch(localUserCardsRepositoryProvider.future);
-      final catalogue = await ref.watch(catalogueProvider.future);
-      final cards = await local.fetchUserCards(
-        includeArchived: true,
-        catalogue: catalogue,
-      );
-      return cards.where((card) => card.isArchived).toList();
-    }
+    if (repo == null) return const [];
     return await _loadUserCardsWithOfflineCache(
       ref,
       repo,

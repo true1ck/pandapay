@@ -53,7 +53,7 @@ UserCard _archivedCard({String id = 'uc1', String? nickname = 'Old card'}) =>
 Future<void> _pump(
   WidgetTester tester, {
   required List<UserCard> archived,
-  required UserCardsRepository repo,
+  required UserCardsRepository? repo,
   bool online = true,
 }) async {
   await tester.pumpWidget(
@@ -152,6 +152,20 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('signed out shows a sign-in state instead of local card rows', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      archived: [_archivedCard()],
+      repo: null,
+    );
+
+    expect(find.text('Sign in to manage deleted cards'), findsOneWidget);
+    expect(find.text('Old card'), findsNothing);
+    expect(find.widgetWithText(TextButton, 'Restore'), findsNothing);
   });
 
   testWidgets('restoring while signed in and offline asks for a connection', (

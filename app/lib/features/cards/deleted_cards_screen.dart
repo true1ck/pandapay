@@ -15,6 +15,10 @@ import 'card_summary.dart';
 /// delete), so this is the one place a removed card can be brought back. It
 /// reads [archivedCardsProvider] rather than [myCardsProvider] so Wallet stays
 /// active-only and archived cards never reach ranking or spend totals.
+///
+/// This build has no guest mode: the list is always the signed-in user's
+/// server-side archived cards, and a missing repository renders the sign-in
+/// state rather than falling back to local card rows.
 class DeletedCardsScreen extends ConsumerStatefulWidget {
   const DeletedCardsScreen({super.key});
 
@@ -34,7 +38,13 @@ class _DeletedCardsScreenState extends ConsumerState<DeletedCardsScreen> {
 
     final messenger = ScaffoldMessenger.of(context);
     final repo = ref.read(userCardsRepositoryProvider);
-    if (repo != null && ref.read(isOnlineProvider).valueOrNull == false) {
+    if (repo == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Sign in to restore a card.')),
+      );
+      return;
+    }
+    if (ref.read(isOnlineProvider).valueOrNull == false) {
       messenger.showSnackBar(
         const SnackBar(
           content: Text(
@@ -45,18 +55,10 @@ class _DeletedCardsScreenState extends ConsumerState<DeletedCardsScreen> {
       return;
     }
 
-    final local = repo == null
-        ? await ref.read(localUserCardsRepositoryProvider.future)
-        : null;
-    if (!mounted) return;
     setState(() => _restoring.add(card.id));
 
     try {
-      if (repo != null) {
-        await repo.unarchiveCard(card.id);
-      } else {
-        await local!.unarchiveCard(card.id);
-      }
+      await repo.unarchiveCard(card.id);
       if (!mounted) return;
 
       // Publish the restored state before refreshing so the next wallet read
@@ -94,9 +96,6 @@ class _DeletedCardsScreenState extends ConsumerState<DeletedCardsScreen> {
           ),
         ),
       );
-    } on CardAlreadyAddedException catch (error) {
-      if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(error.message)));
     } catch (error) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -109,6 +108,10 @@ class _DeletedCardsScreenState extends ConsumerState<DeletedCardsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Login is mandatory in this build: Settings sits behind the auth gate,
+    // so a null repository is only the brief signed-out frame and must never
+    // fall back to stale local card rows.
+    final signedIn = ref.watch(userCardsRepositoryProvider) != null;
     final archived = ref.watch(archivedCardsProvider);
     final catalogue =
         ref.watch(catalogueProvider).valueOrNull ?? const <CardProduct>[];
@@ -127,65 +130,74 @@ class _DeletedCardsScreenState extends ConsumerState<DeletedCardsScreen> {
         ),
       ),
       body: AppBackground(
-        child: archived.when(
-          skipLoadingOnRefresh: true,
-          loading: () => const Padding(
-            padding: EdgeInsets.fromLTRB(
-              AppSpace.lg,
-              AppSpace.md,
-              AppSpace.lg,
-              0,
-            ),
-            child: SkeletonList(count: 3),
-          ),
-          error: (error, _) => ErrorState(
-            message: userFacingErrorMessage(error),
-            onRetry: () => ref.invalidate(archivedCardsProvider),
-          ),
-          data: (cards) {
-            final visible = cards
-                .where((card) => !_restored.contains(card.id))
-                .toList();
-            if (visible.isEmpty) {
-              return RefreshableEmptyState(
-                icon: Icons.delete_outline_rounded,
-                title: 'No deleted cards',
-                message:
-                    'Cards you remove from your wallet show up here, ready to restore.',
-                onRefresh: () async {
-                  await ref.refresh(archivedCardsProvider.future);
-                },
-              );
-            }
-            return RefreshIndicator(
-              onRefresh: () async {
-                await ref.refresh(archivedCardsProvider.future);
-              },
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpace.lg,
-                  AppSpace.md,
-                  AppSpace.lg,
-                  AppSpace.xl,
+        child: !signedIn
+            ? const EmptyState(
+                icon: Icons.lock_outline_rounded,
+                title: 'Sign in to manage deleted cards',
+              )
+            : archived.when(
+                skipLoadingOnRefresh: true,
+                loading: () => const Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpace.lg,
+                    AppSpace.md,
+                    AppSpace.lg,
+                    0,
+                  ),
+                  child: SkeletonList(count: 3),
                 ),
-                children: [
-                  _DeletedCardsIntro(count: visible.length),
-                  const SizedBox(height: AppSpace.lg),
-                  for (final card in visible) ...[
-                    _DeletedCardTile(
-                      card: card,
-                      product: productsById[card.cardProductId],
-                      restoring: _restoring.contains(card.id),
-                      onRestore: () => _restore(card),
+                error: (error, _) => ErrorState(
+                  message: userFacingErrorMessage(error),
+                  onRetry: () => ref.invalidate(archivedCardsProvider),
+                ),
+                data: (cards) {
+                  final visible = cards
+                      .where((card) => !_restored.contains(card.id))
+                      .toList();
+                  if (visible.isEmpty) {
+                    return RefreshableEmptyState(
+                      icon: Icons.delete_outline_rounded,
+                      title: 'No deleted cards',
+                      message:
+                          'Cards you remove from your wallet show up here, ready to restore.',
+                      onRefresh: () async {
+                        final refreshed = ref.refresh(
+                          archivedCardsProvider.future,
+                        );
+                        await refreshed;
+                      },
+                    );
+                  }
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      final refreshed = ref.refresh(archivedCardsProvider.future);
+                      await refreshed;
+                    },
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpace.lg,
+                        AppSpace.md,
+                        AppSpace.lg,
+                        AppSpace.xl,
+                      ),
+                      children: [
+                        _DeletedCardsIntro(count: visible.length),
+                        const SizedBox(height: AppSpace.lg),
+                        for (final card in visible) ...[
+                          _DeletedCardTile(
+                            card: card,
+                            product: productsById[card.cardProductId],
+                            restoring: _restoring.contains(card.id),
+                            onRestore: () => _restore(card),
+                          ),
+                          const SizedBox(height: AppSpace.md),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: AppSpace.md),
-                  ],
-                ],
+                  );
+                },
               ),
-            );
-          },
-        ),
       ),
     );
   }
