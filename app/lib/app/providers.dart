@@ -1546,10 +1546,18 @@ final premiumRemindersProvider = Provider<List<PremiumReminder>>((ref) {
 /// api/'s GET /profile, proved end to end back in Chunk 1 but never called
 /// from the app itself until this chunk). Null when signed out or when a
 /// signed-in user hasn't completed onboarding yet (no profile row exists).
+///
+/// Cache-first, like `userCardsProvider`: this used to await the live request
+/// before returning anything, so the You tab held its whole first frame on
+/// GET /profile. A slow or unreachable API — or a backend busy with the
+/// launch-time refresh burst — showed a blank page with a spinner even though
+/// the last snapshot was already on disk. The cached row now paints
+/// immediately and [_warmDisplay] refreshes it behind the UI.
 final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final api = ref.watch(profileApiProvider);
   if (api == null) return null;
   const profileCacheKey = 'profile';
+  final namespace = ref.read(cacheNamespaceProvider);
   final cache = await _cacheOrNull(ref);
   final key = _scopedCacheKey(ref, profileCacheKey);
   final cached = await _readCacheOrNull(ref, cache, key);
@@ -1560,40 +1568,57 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
     return body['profile'] as Map<String, dynamic>?;
   }
 
-  try {
+  Future<Map<String, dynamic>?> fetch() async {
     final profile = await api.fetchProfile();
     if (profile != null) {
       cache?.financialStore.database.saveProfileDisplayName(
-        ref.read(cacheNamespaceProvider),
+        namespace,
         profile['display_name'] as String?,
       );
     }
+    return profile;
+  }
+
+  if (cached != null) {
+    try {
+      final profile = decodeCached();
+      _warmDisplay(
+        ref,
+        cache,
+        key,
+        cached.fetchedAt,
+        fetch,
+        (profile) => {'profile': profile},
+      );
+      return profile;
+    } catch (_) {
+      // A corrupt snapshot is not fatal; the request below repairs it.
+      await cache?.clear(key);
+    }
+  }
+
+  // Offline with nothing cached: a profile row is display metadata, not the
+  // session itself. Render the signed-in shell instead of waiting out a
+  // request that cannot succeed.
+  if (_isKnownOffline()) return null;
+
+  try {
+    final profile = await fetch();
     try {
       await cache?.put(key, jsonEncode({'profile': profile}));
     } catch (_) {}
     return profile;
   } catch (error) {
-    if (!_canUseReadCache(error) || cached == null) {
-      // Profile is display-only here. Account/settings screens can render
-      // their signed-in shell with a missing profile while the token refresh
-      // is retried, instead of showing "Missing or invalid access token".
-      if (_isAuthenticationFailure(error)) {
-        // A profile row is optional display metadata, not the account
-        // session itself. When the API rejects a stale access token and no
-        // profile snapshot exists yet, return null so You/settings can still
-        // render their local card and transaction data. Treating this as a
-        // page-fatal error made the whole tab look broken even though the
-        // account was still signed in locally and its cached data was safe.
-        return null;
-      }
-      rethrow;
+    if (_isAuthenticationFailure(error)) {
+      // A profile row is optional display metadata, not the account
+      // session itself. When the API rejects a stale access token and no
+      // profile snapshot exists yet, return null so You/settings can still
+      // render their local card and transaction data. Treating this as a
+      // page-fatal error made the whole tab look broken even though the
+      // account was still signed in locally and its cached data was safe.
+      return null;
     }
-    final cachedProfile = decodeCached();
-    cache?.financialStore.database.saveProfileDisplayName(
-      ref.read(cacheNamespaceProvider),
-      cachedProfile?['display_name'] as String?,
-    );
-    return cachedProfile;
+    rethrow;
   }
 });
 

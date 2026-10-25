@@ -40,12 +40,12 @@ class AccountScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionInit = ref.watch(sessionInitProvider);
     if (sessionInit.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const _AccountLoading();
     }
 
     final profile = ref.watch(profileProvider);
     return profile.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const _AccountLoading(),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),
         onRetry: () => ref.invalidate(profileProvider),
@@ -176,6 +176,38 @@ class AccountScreen extends ConsumerWidget {
             _WhatsNewTile(ref: ref),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// First-ever load. The tab used to be a bare white page with a centered
+/// spinner while GET /profile ran; show the shape of the screen instead so a
+/// slow first fetch reads as loading, not as an empty app. A cached profile
+/// now paints immediately (see profileProvider), so this only appears before
+/// the first successful fetch on this install.
+class _AccountLoading extends StatelessWidget {
+  const _AccountLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppBackground(
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          MediaQuery.paddingOf(context).top + AppSpace.lg,
+          AppSpace.lg,
+          AppShell.navClearance,
+        ),
+        children: const [
+          Skeleton(height: 186, radius: 30),
+          SizedBox(height: AppSpace.lg),
+          SkeletonRow(),
+          SkeletonRow(),
+          Skeleton(height: 56, radius: 16),
+          SizedBox(height: AppSpace.sm),
+          Skeleton(height: 56, radius: 16),
+        ],
       ),
     );
   }
