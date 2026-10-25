@@ -68,6 +68,55 @@ void main() {
     expect(native.limit, 1);
   });
 
+  test('native numeric SMS fields decode without a type error', () {
+    const columns = [
+      SmsColumn.ID,
+      SmsColumn.ADDRESS,
+      SmsColumn.BODY,
+      SmsColumn.DATE,
+      SmsColumn.DATE_SENT,
+      SmsColumn.READ,
+      SmsColumn.SEEN,
+      SmsColumn.STATUS,
+      SmsColumn.SUBSCRIPTION_ID,
+      SmsColumn.THREAD_ID,
+      SmsColumn.TYPE,
+    ];
+
+    final message = SmsMessage.fromMap({
+      '_id': 42,
+      'address': 'VM-ICICIB',
+      'body': 'INR 250 spent on ICICI Bank Card XX7788 at SWIGGY.',
+      'date': 1792281600000,
+      'date_sent': 1792281599000,
+      'read': 1,
+      'seen': 0,
+      'status': 0,
+      'sub_id': 2,
+      'thread_id': 7,
+      'type': 1,
+    }, columns);
+
+    expect(message.id, 42);
+    expect(message.address, 'VM-ICICIB');
+    expect(message.date, 1792281600000);
+    expect(message.dateSent, 1792281599000);
+    expect(message.read, isTrue);
+    expect(message.seen, isFalse);
+    expect(message.status, SmsStatus.STATUS_COMPLETE);
+    expect(message.subscriptionId, 2);
+    expect(message.threadId, 7);
+    expect(message.type, SmsType.MESSAGE_TYPE_INBOX);
+  });
+
+  test('unknown native SMS enum values do not crash decoding', () {
+    final message = SmsMessage.fromMap({
+      'type': 999,
+    }, const [SmsColumn.TYPE]);
+
+    expect(message.type, isNull);
+  });
+
   test('readInboxSms filters using capturesFinancialSms with sender', () async {
     final native = _Telephony();
     const columns = [
