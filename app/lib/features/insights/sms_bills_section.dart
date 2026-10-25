@@ -7,9 +7,12 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/pending_bills.dart';
+import 'bills_horizon.dart';
 
 class SmsBillsSection extends ConsumerStatefulWidget {
-  const SmsBillsSection({super.key});
+  final BillsHorizonFilter? filter;
+
+  const SmsBillsSection({this.filter, super.key});
 
   @override
   ConsumerState<SmsBillsSection> createState() => _SmsBillsSectionState();
@@ -19,6 +22,14 @@ class _SmsBillsSectionState extends ConsumerState<SmsBillsSection> {
   bool _showAll = false;
 
   @override
+  void didUpdateWidget(SmsBillsSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filter?.horizon != widget.filter?.horizon) {
+      _showAll = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ref = this.ref;
     final bills = ref.watch(smsBillRowsProvider);
@@ -26,7 +37,10 @@ class _SmsBillsSectionState extends ConsumerState<SmsBillsSection> {
       loading: () => const SizedBox.shrink(),
       error: (_, _) => const SizedBox.shrink(),
       data: (rows) {
-        if (rows.isEmpty) return const SizedBox.shrink();
+        final visible = widget.filter == null
+            ? rows
+            : rows.where(widget.filter!.matchesSmsBill).toList(growable: false);
+        if (visible.isEmpty) return const SizedBox.shrink();
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpace.xl),
           child: Column(
@@ -42,7 +56,7 @@ class _SmsBillsSectionState extends ConsumerState<SmsBillsSection> {
                 style: BambooFonts.ui(12, color: BambooInk.ink500),
               ),
               const SizedBox(height: AppSpace.md),
-              for (final bill in rows.take(_showAll ? rows.length : 3))
+              for (final bill in visible.take(_showAll ? visible.length : 3))
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpace.sm),
                   child: _BillRow(
@@ -50,7 +64,7 @@ class _SmsBillsSectionState extends ConsumerState<SmsBillsSection> {
                     onTap: () => _showBill(context, ref, bill),
                   ),
                 ),
-              if (rows.length > 3)
+              if (visible.length > 3)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
@@ -59,7 +73,7 @@ class _SmsBillsSectionState extends ConsumerState<SmsBillsSection> {
                       _showAll ? Icons.expand_less : Icons.expand_more,
                       size: 18,
                     ),
-                    label: Text(_showAll ? 'Show less' : 'Show all ${rows.length}'),
+                    label: Text(_showAll ? 'Show less' : 'Show all ${visible.length}'),
                   ),
                 ),
             ],

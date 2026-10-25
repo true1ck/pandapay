@@ -7,6 +7,7 @@ import '../../app/env.dart';
 import '../../app/providers.dart';
 import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
+import 'bills_horizon.dart';
 
 /// Fingerprint of a card row already rendered by the Bills & commitments tab.
 /// Central bill projections matching this evidence stay hidden from the
@@ -44,8 +45,9 @@ final centralBillsProjectionProvider =
 /// network outage never removes the existing local/offline commitments list.
 class CentralBillsSection extends ConsumerWidget {
   final List<CentralBillDedupKey> cardRows;
+  final BillsHorizonFilter? filter;
 
-  const CentralBillsSection({super.key, this.cardRows = const []});
+  const CentralBillsSection({super.key, this.cardRows = const [], this.filter});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -61,32 +63,40 @@ class CentralBillsSection extends ConsumerWidget {
     final localMandateKeys = <String>{};
     final uniqueLocalMandates = <Map<String, dynamic>>[];
     for (final row in localMandates) {
-      final key = _identity(row['biller_name'] as String?) +
+      final key = '${_identity(row['biller_name'] as String?)}'
           '|${row['card_last4'] ?? row['account_last4'] ?? ''}';
       if (localMandateKeys.add(key)) uniqueLocalMandates.add(row);
     }
     final snapshot = ref.watch(centralBillsProjectionProvider).valueOrNull;
     final localCommitments = ref.watch(commitmentsProvider).valueOrNull ?? const <Commitment>[];
-    final today = DateTime.now();
+    final today = filter?.today ?? DateTime.now();
     final startOfToday = DateTime(today.year, today.month, today.day);
     final rows = (snapshot?.available == true ? snapshot!.projections : const <BillProjection>[])
         .where((row) => row.projectionKind == 'bill_obligation' || row.projectionKind == 'mandate')
         .where((row) => row.projectionKind != 'mandate' ||
             !isSubscriptionAutoPay(row.billerName ?? row.serviceName))
         .where((row) => row.projectionKind == 'mandate' ||
-            (row.dueDate != null && !row.dueDate!.isBefore(startOfToday)))
+            (row.dueDate != null &&
+                (filter == null
+                    ? !row.dueDate!.isBefore(startOfToday)
+                    : filter!.matchesDue(row.dueDate!))))
         .where((row) => row.projectionKind == 'mandate' || !_duplicatesExistingBill(row, cardRows, localCommitments))
         .toList(growable: false);
 
+    final showMandates = filter == null || filter!.showsAutopay;
     final bills = rows.where((row) => row.projectionKind == 'bill_obligation').toList();
-    final mandates = rows.where((row) {
-      if (row.projectionKind != 'mandate') return false;
-      if (isSubscriptionAutoPay(row.billerName ?? row.serviceName)) return false;
-      final key = _identity(row.billerName ?? row.serviceName) +
-          '|${row.last4 ?? ''}';
-      return !localMandateKeys.contains(key);
-    }).toList();
-    if (bills.isEmpty && mandates.isEmpty && uniqueLocalMandates.isEmpty) return const SizedBox.shrink();
+    final mandates = showMandates
+        ? rows.where((row) {
+            if (row.projectionKind != 'mandate') return false;
+            if (isSubscriptionAutoPay(row.billerName ?? row.serviceName)) return false;
+            final key = '${_identity(row.billerName ?? row.serviceName)}'
+                '|${row.last4 ?? ''}';
+            return !localMandateKeys.contains(key);
+          }).toList()
+        : const <BillProjection>[];
+    final localMandateRows =
+        showMandates ? uniqueLocalMandates : const <Map<String, dynamic>>[];
+    if (bills.isEmpty && mandates.isEmpty && localMandateRows.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -94,13 +104,13 @@ class CentralBillsSection extends ConsumerWidget {
           const _CentralHeader(label: 'Bills from messages'),
           const SizedBox(height: AppSpace.md),
           for (final row in bills) CentralRow(row: row),
-          if (mandates.isNotEmpty || uniqueLocalMandates.isNotEmpty)
+          if (mandates.isNotEmpty || localMandateRows.isNotEmpty)
             const SizedBox(height: AppSpace.lg),
         ],
-        if (mandates.isNotEmpty || uniqueLocalMandates.isNotEmpty) ...[
+        if (mandates.isNotEmpty || localMandateRows.isNotEmpty) ...[
           const _CentralHeader(label: 'Autopay authorizations'),
           const SizedBox(height: AppSpace.md),
-          for (final row in uniqueLocalMandates) LocalMandateRow(row: row),
+          for (final row in localMandateRows) LocalMandateRow(row: row),
           for (final row in mandates) CentralRow(row: row),
           const SizedBox(height: AppSpace.lg),
         ],
@@ -147,6 +157,30 @@ class CentralBillsSection extends ConsumerWidget {
   String _identity(String? value) => (value ?? '')
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9]+'), '');
+}
+
+/// Whether any central row would render under [filter]. Dedup is skipped on
+/// purpose: a false positive here only suppresses an empty state.
+bool hasVisibleCentralBills(
+  BillProjectionSnapshot? snapshot,
+  BillsHorizonFilter? filter,
+) {
+  if (snapshot == null || !snapshot.available) return false;
+  final today = filter?.today ?? DateTime.now();
+  final startOfToday = DateTime(today.year, today.month, today.day);
+  return snapshot.projections.any((row) {
+    if (row.projectionKind != 'bill_obligation' &&
+        row.projectionKind != 'mandate') {
+      return false;
+    }
+    if (row.projectionKind == 'mandate') {
+      if (isSubscriptionAutoPay(row.billerName ?? row.serviceName)) return false;
+      return filter == null || filter.showsAutopay;
+    }
+    final due = row.dueDate;
+    if (due == null) return false;
+    return filter == null ? !due.isBefore(startOfToday) : filter.matchesDue(due);
+  });
 }
 
 class _CentralHeader extends StatelessWidget {

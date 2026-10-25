@@ -11,6 +11,7 @@ import '../../data/card_bill_ledger.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/past_bill_receipts.dart';
 import '../../data/user_cards_repository.dart';
+import 'bills_horizon.dart';
 import 'central_bills_section.dart';
 import 'sms_bills_section.dart';
 import 'past_bill_receipts_screen.dart';
@@ -170,6 +171,60 @@ DateTime _clampToMonth(int year, int month, int day) {
   return DateTime(year, month, day > lastDayOfMonth ? lastDayOfMonth : day);
 }
 
+bool _sameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+List<DuePayment> _cardRowsForHorizon(
+  List<DuePayment> rows,
+  BillsHorizonFilter filter,
+) {
+  if (filter.isUpcoming) {
+    return rows
+        .where((row) => filter.matchesOpenDue(row.dueOn))
+        .toList(growable: false);
+  }
+  final result = <DuePayment>[];
+  for (final row in rows) {
+    final day = row.card.dueDay;
+    DateTime? date = day == null ? null : filter.scheduledOccurrence(day);
+    final billDate = row.bill?.dueDate;
+    if (billDate != null &&
+        filter.matchesDue(billDate) &&
+        (date == null || billDate.isAfter(date))) {
+      date = billDate;
+    }
+    if (date == null || !filter.matchesDue(date)) continue;
+    // A past-month view only has the next due date on the row, so the saved
+    // due day's scheduled occurrence is the truthful answer for that month.
+    final billMatches =
+        row.bill?.dueDate != null && _sameDay(row.bill!.dueDate!, date);
+    result.add(
+      DuePayment(
+        card: row.card,
+        dueOn: date,
+        daysUntilDue: date.difference(filter.today).inDays,
+        loggedThisCycle: row.loggedThisCycle,
+        bill: billMatches ? row.bill : null,
+      ),
+    );
+  }
+  result.sort((a, b) => a.dueOn.compareTo(b.dueOn));
+  return result;
+}
+
+bool _matchesCommitment(Commitment c, BillsHorizonFilter filter) {
+  if (c.confidence < 0.85) return false;
+  if (c.status == CommitmentStatus.needsConfirmation ||
+      c.status == CommitmentStatus.dismissed) {
+    return false;
+  }
+  if (filter.isUpcoming) {
+    if (c.status == CommitmentStatus.paid) return false;
+    return filter.matchesOpenDue(c.dueOn);
+  }
+  return filter.matchesDue(c.dueOn);
+}
+
 /// Body of the "Bills & commitments" tab inside the Payments group. Renders
 /// only the list (or its loading/error state); the surrounding scaffold,
 /// app bar and tab strip belong to the parent route.
@@ -179,120 +234,184 @@ class BillsAndCommitmentsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final due = ref.watch(paymentsDueProvider);
+    final now = ref.watch(clockProvider).now();
+    final filter = BillsHorizonFilter(ref.watch(billsHorizonProvider), now);
 
-    return due.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
-        child: SkeletonList(count: 3),
-      ),
-      error: (err, _) => ErrorState(
-        message: userFacingErrorMessage(err),
-        onRetry: () => ref.invalidate(paymentsDueProvider),
-      ),
-      data: (rows) => _DueList(rows: rows),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.lg,
+            AppSpace.sm,
+            AppSpace.lg,
+            AppSpace.xs,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Flexible(
+                child: BillsHorizonFilterBar(),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Tooltip(
+                message: 'Add bill or policy',
+                child: TextButton.icon(
+                  onPressed: () => showAddCommitmentSheet(context, ref),
+                  icon: const Icon(
+                    Icons.add_rounded,
+                    size: 16,
+                    color: BambooInk.jade,
+                  ),
+                  label: Text(
+                    'Add bill',
+                    style: BambooFonts.ui(
+                      12.5,
+                      color: BambooInk.jade,
+                      weight: FontWeight.w600,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.sm,
+                      vertical: AppSpace.xs,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: due.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
+              child: SkeletonList(count: 3),
+            ),
+            error: (err, _) => ErrorState(
+              message: userFacingErrorMessage(err),
+              onRetry: () => ref.invalidate(paymentsDueProvider),
+            ),
+            data: (rows) => _DueList(rows: rows, filter: filter),
+          ),
+        ),
+      ],
     );
   }
 }
 
 class _DueList extends ConsumerWidget {
   final List<DuePayment> rows;
-  const _DueList({required this.rows});
+  final BillsHorizonFilter filter;
+
+  const _DueList({required this.rows, required this.filter});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final cardRows = _cardRowsForHorizon(rows, filter);
+    final commitmentsAsync = ref.watch(commitmentsProvider);
+    final smsAsync = ref.watch(smsBillRowsProvider);
+    final receiptsAsync = ref.watch(pastBillReceiptsProvider);
+    final centralAsync = ref.watch(centralBillsProjectionProvider);
+    final commitments = commitmentsAsync.valueOrNull ?? const <Commitment>[];
+    final settled = !commitmentsAsync.isLoading &&
+        !smsAsync.isLoading &&
+        !receiptsAsync.isLoading &&
+        !centralAsync.isLoading;
+    final visibleCommitments = commitments
+        .where((c) => _matchesCommitment(c, filter))
+        .toList(growable: false);
+    final hasSms =
+        (smsAsync.valueOrNull ?? const []).any(filter.matchesSmsBill);
+    final hasReceipts =
+        (receiptsAsync.valueOrNull ?? const []).any(filter.matchesReceipt);
+    final hasCentral = hasVisibleCentralBills(centralAsync.valueOrNull, filter);
+    final showEmptyState = settled &&
+        cardRows.isEmpty &&
+        visibleCommitments.isEmpty &&
+        !hasSms &&
+        !hasReceipts &&
+        !hasCentral;
+
+    DateTime? nextDue;
+    if (!filter.isUpcoming) {
+      for (final row in rows) {
+        if (row.dueOn.isBefore(filter.today)) continue;
+        if (nextDue == null || row.dueOn.isBefore(nextDue)) nextDue = row.dueOn;
+      }
+    }
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,
-        AppSpace.lg,
+        AppSpace.md,
         AppSpace.lg,
         AppSpace.xxl,
       ),
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Tooltip(
-              message: 'Add bill or policy',
-              child: TextButton.icon(
-                onPressed: () => showAddCommitmentSheet(context, ref),
-                icon: const Icon(
-                  Icons.add_rounded,
-                  size: 16,
-                  color: BambooInk.jade,
-                ),
-                label: Text(
-                  'Add bill',
-                  style: BambooFonts.ui(
-                    12.5,
-                    color: BambooInk.jade,
-                    weight: FontWeight.w600,
+        if (showEmptyState)
+          _EmptyHorizonState(filter: filter, nextDue: nextDue)
+        else ...[
+          CentralBillsSection(
+            cardRows: cardRows
+                .map(
+                  (row) => CentralBillDedupKey(
+                    last4: row.card.last4,
+                    dueOn: row.dueOn,
+                    amountInr: row.bill?.amountDue?.rupees,
                   ),
-                ),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpace.sm,
-                    vertical: AppSpace.xs,
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
+                )
+                .toList(growable: false),
+            filter: filter,
+          ),
+          SmsBillsSection(filter: filter),
+          if (cardRows.isNotEmpty) ...[
+            _SectionHeader(label: 'Credit cards', count: cardRows.length),
+            const SizedBox(height: AppSpace.xs),
+            Text(
+              'Dates are based on your saved card settings. Check the issuer for the amount and payment status.',
+              style: BambooFonts.ui(12, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: AppSpace.md),
+            for (final row in cardRows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                child: _ComingUpRow(row: row),
               ),
+            const SizedBox(height: AppSpace.lg),
+          ] else if (filter.isUpcoming && rows.isEmpty) ...[
+            Text(
+              'No due dates set for your cards. Add a due day in Cards to see reminders.',
+              style: BambooFonts.ui(13, color: BambooInk.ink500),
             ),
+            const SizedBox(height: AppSpace.lg),
           ],
-        ),
-        const SizedBox(height: AppSpace.xs),
-        CentralBillsSection(
-          cardRows: rows
-              .map(
-                (row) => CentralBillDedupKey(
-                  last4: row.card.last4,
-                  dueOn: row.dueOn,
-                  amountInr: row.bill?.amountDue?.rupees,
-                ),
-              )
-              .toList(growable: false),
-        ),
-        const SmsBillsSection(),
-        if (rows.isNotEmpty) ...[
-          _SectionHeader(label: 'Credit cards', count: rows.length),
-          const SizedBox(height: AppSpace.xs),
-          Text(
-            'Dates are based on your saved card settings. Check the issuer for the amount and payment status.',
-            style: BambooFonts.ui(12, color: BambooInk.ink500),
-          ),
-          const SizedBox(height: AppSpace.md),
-          for (final row in rows)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpace.sm),
-              child: _ComingUpRow(row: row),
-            ),
+          _CommitmentsSection(filter: filter),
           const SizedBox(height: AppSpace.lg),
-        ] else ...[
-          Text(
-            'No due dates set for your cards. Add a due day in Cards to see reminders.',
-            style: BambooFonts.ui(13, color: BambooInk.ink500),
-          ),
-          const SizedBox(height: AppSpace.lg),
+          _PastBillsPreview(filter: filter),
+          const SizedBox(height: AppSpace.xl),
         ],
-
-        // ── Section B: Upcoming bills & insurance commitments ─────────
-        const _CommitmentsSection(),
-        const SizedBox(height: AppSpace.lg),
-        const _PastBillsPreview(),
-        const SizedBox(height: AppSpace.xl),
       ],
     );
   }
 }
 
 class _PastBillsPreview extends ConsumerWidget {
-  const _PastBillsPreview();
+  final BillsHorizonFilter filter;
+
+  const _PastBillsPreview({required this.filter});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(pastBillReceiptsProvider).valueOrNull ?? const [];
-    if (history.isEmpty) return const SizedBox.shrink();
-    final visible = history.take(3).toList(growable: false);
+    final matching = filter.isUpcoming
+        ? history
+        : history.where(filter.matchesReceipt).toList(growable: false);
+    final visible = matching
+        .take(filter.isUpcoming ? 3 : 10)
+        .toList(growable: false);
+    if (visible.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -417,6 +536,14 @@ class _ComingUpRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final card = row.card;
     final bill = row.bill;
+    final dueLabel = 'Due ${DateFormat('d MMM').format(row.dueOn)}';
+    final dueDetail = row.daysUntilDue > 0
+        ? '$dueLabel · in ${row.daysUntilDue}d'
+        : row.daysUntilDue == 0
+        ? '$dueLabel · today'
+        : row.bill == null
+        ? '$dueLabel · payment status unknown'
+        : dueLabel;
 
     return Container(
       decoration: BoxDecoration(
@@ -459,7 +586,7 @@ class _ComingUpRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Due ${DateFormat('d MMM').format(row.dueOn)} · in ${row.daysUntilDue}d',
+                  dueDetail,
                   style: BambooFonts.ui(12, color: BambooInk.ink500),
                 ),
               ],
@@ -550,8 +677,9 @@ class _SectionHeader extends StatelessWidget {
 
 class _CommitmentRow extends ConsumerWidget {
   final Commitment commitment;
+  final BillsHorizonFilter filter;
 
-  const _CommitmentRow({required this.commitment});
+  const _CommitmentRow({required this.commitment, required this.filter});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -706,7 +834,7 @@ class _CommitmentRow extends ConsumerWidget {
   ) {
     if (isPaid) {
       return Text(
-        'Paid',
+        'Paid · due ${DateFormat('d MMM').format(commitment.dueOn)}',
         style: BambooFonts.ui(
           12,
           color: BambooInk.jade,
@@ -716,7 +844,9 @@ class _CommitmentRow extends ConsumerWidget {
     }
     if (daysUntil < 0) {
       return Text(
-        'Past due date · payment status unknown',
+        filter.isUpcoming
+            ? 'Past due date · payment status unknown'
+            : 'Due ${DateFormat('d MMM').format(commitment.dueOn)} · payment status unknown',
         style: BambooFonts.ui(12, color: BambooInk.clayInk),
       );
     }
@@ -748,7 +878,9 @@ class _CommitmentRow extends ConsumerWidget {
 // ---------------------------------------------------------------------------
 
 class _CommitmentsSection extends ConsumerWidget {
-  const _CommitmentsSection();
+  final BillsHorizonFilter filter;
+
+  const _CommitmentsSection({required this.filter});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -758,20 +890,17 @@ class _CommitmentsSection extends ConsumerWidget {
       loading: () => const SkeletonList(count: 2),
       error: (_, _) => const SizedBox.shrink(),
       data: (commitments) {
-        final today = ref.watch(clockProvider).now();
-        final startOfToday = DateTime(today.year, today.month, today.day);
         final active =
             commitments
-                .where(
-                  (c) =>
-                      c.confidence >= 0.85 &&
-                      c.status != CommitmentStatus.needsConfirmation &&
-                      c.status != CommitmentStatus.dismissed &&
-                      c.status != CommitmentStatus.paid &&
-                      !c.dueOn.isBefore(startOfToday),
-                )
+                .where((c) => _matchesCommitment(c, filter))
                 .toList()
-              ..sort((a, b) => a.dueOn.compareTo(b.dueOn));
+              ..sort(
+                (a, b) => filter.isUpcoming
+                    ? a.dueOn.compareTo(b.dueOn)
+                    : b.dueOn.compareTo(a.dueOn),
+              );
+
+        if (active.isEmpty) return const SizedBox.shrink();
 
         // 2. Hide empty categories (no placeholder zeroes).
         final utilities = active
@@ -795,51 +924,20 @@ class _CommitmentsSection extends ConsumerWidget {
             )
             .toList();
 
-        if (active.isEmpty) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _SectionHeader(label: 'Upcoming bills', count: null),
-              const SizedBox(height: AppSpace.md),
-              Container(
-                padding: const EdgeInsets.all(AppSpace.lg),
-                decoration: BoxDecoration(
-                  color: BambooInk.glassFillOnPaper,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: BambooInk.hairlineOnPaper),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle_outline_rounded,
-                      color: BambooInk.jade,
-                      size: 20,
-                    ),
-                    const SizedBox(width: AppSpace.sm),
-                    Expanded(
-                      child: Text(
-                        'No verified future bills found. Add a bill with + if a reminder is missing.',
-                        style: BambooFonts.ui(13, color: BambooInk.ink700),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        }
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Utilities & telecom group ─────────────────────────────
             if (utilities.isNotEmpty) ...[
-              _SectionHeader(label: 'Upcoming bills', count: utilities.length),
+              _SectionHeader(
+                label: filter.isUpcoming ? 'Upcoming bills' : 'Bills',
+                count: utilities.length,
+              ),
               const SizedBox(height: AppSpace.md),
               for (final item in utilities)
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                  child: _CommitmentRow(commitment: item),
+                  child: _CommitmentRow(commitment: item, filter: filter),
                 ),
               if (renewals.isNotEmpty || scheduled.isNotEmpty)
                 const SizedBox(height: AppSpace.xl),
@@ -855,7 +953,7 @@ class _CommitmentsSection extends ConsumerWidget {
               for (final item in renewals)
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                  child: _CommitmentRow(commitment: item),
+                  child: _CommitmentRow(commitment: item, filter: filter),
                 ),
               if (scheduled.isNotEmpty) const SizedBox(height: AppSpace.xl),
             ],
@@ -870,7 +968,7 @@ class _CommitmentsSection extends ConsumerWidget {
               for (final item in scheduled)
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                  child: _CommitmentRow(commitment: item),
+                  child: _CommitmentRow(commitment: item, filter: filter),
                 ),
             ],
           ],
@@ -1509,6 +1607,79 @@ class _AddCommitmentSheetState extends ConsumerState<_AddCommitmentSheet> {
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       onSelected: (_) => setState(() => _cadence = cadence),
+    );
+  }
+}
+
+class _EmptyHorizonState extends ConsumerWidget {
+  final BillsHorizonFilter filter;
+  final DateTime? nextDue;
+  const _EmptyHorizonState({required this.filter, this.nextDue});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final title = switch (filter.horizon) {
+      BillsHorizon.upcoming => 'No upcoming bills',
+      BillsHorizon.allHistory => 'No bills recorded yet',
+      _ => 'No bills in ${filter.label}',
+    };
+    final body = switch (filter.horizon) {
+      BillsHorizon.upcoming =>
+        'Add a bill with +, or add a due day in Cards to see reminders.',
+      BillsHorizon.allHistory =>
+        'Bills and receipts you record will be kept here.',
+      _ =>
+        'Nothing recorded for this period. Bills, card dues and receipts appear here after SMS import or a manual entry.',
+    };
+    return Container(
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.event_available_rounded,
+                color: BambooInk.jade,
+                size: 20,
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: Text(
+                  title,
+                  style: BambooFonts.ui(
+                    14,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.sm),
+          Text(body, style: BambooFonts.ui(13, color: BambooInk.ink700)),
+          if (!filter.isUpcoming) ...[
+            if (nextDue != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                'Next card due ${DateFormat('d MMM').format(nextDue!)}',
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
+            ],
+            const SizedBox(height: AppSpace.sm),
+            TextButton(
+              onPressed: () => ref.read(billsHorizonProvider.notifier).state =
+                  BillsHorizon.upcoming,
+              child: const Text('View upcoming'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
