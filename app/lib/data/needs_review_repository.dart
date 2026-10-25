@@ -125,6 +125,21 @@ const _needsReviewKey = 'pandapay_app.needs_review_queue_v1';
 
 bool _capturesReviewableFinancial(NeedsReviewItem item) {
   if (LocalSmsParser.isActionableInsuranceRenewal(item.body)) return true;
+
+  final bodyLower = item.body.toLowerCase();
+  final hasAmount = RegExp(
+    r'(?:₹|\brs\.?|\binr|\$|usd|eur|gbp)\s*[:.]?\s*[\d,]+|\b[\d,]+(?:\.\d{1,2})?\s*(?:₹|rs\.?|inr|\$|usd|eur|gbp)\b',
+  ).hasMatch(bodyLower);
+  final hasBalanceSnapshot = RegExp(
+    r'\b(?:available|current|closing|avl|avail)\s+(?:bal(?:ance)?|limit)\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?[\s\S]{0,40}\b(?:available|current|closing|avl|avail)\s+(?:bal(?:ance)?|limit)\b|\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?',
+  ).hasMatch(bodyLower);
+  final hasBillOrMandate = LocalSmsParser.isAutoPayNotice(item.body) ||
+      RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate|auto[-\s]?debit|sip\b|standing\s+instruction)\b').hasMatch(bodyLower) ||
+      RegExp(r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\bdue\s+(?:date|on|by)\b|\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\bbill\s+generated\b|\be-statement\s+generated\b').hasMatch(bodyLower);
+
+  if (!hasAmount && !hasBalanceSnapshot && !hasBillOrMandate) {
+    return false;
+  }
   if (capturesFinancialSms(item.body, sender: item.sender)) return true;
   return switch (NeedsReviewRepository.resolveItemKind(item).kind) {
     NeedsReviewKind.investmentSettlement ||

@@ -1538,3 +1538,53 @@ test('merchant name extraction extracts Merchant: <Name> and created towards <Na
   assert.equal(upiWithCreatedTowards.fields.transferParty || upiWithCreatedTowards.fields.merchant, 'AGIONE TEC');
   assert.equal(upiWithCreatedTowards.fields.amountInr, 450);
 });
+
+test('gambling and betting spam is identified as non-transaction noise', () => {
+  const gamblingAlerts = [
+    ['CP-DISHTV-S', 'GullyBET: Play online casino, slots & aviator with huge bonus up to 100%. Bet and win now: gbets.win'],
+    ['CP-DISHTV-S', 'Huge bonus on India\'s top betting app! Instant withdrawal of your winnings. Play casino and slots on GullyBET now.'],
+    ['CP-DISHTV-S', 'Teen patti & live casino on GullyBET! Rs. 500 bonus credited on first deposit. Bet now at gbets.win'],
+    ['CP-GAMBLE', 'Join top online gambling & betting site today! Play aviator, slots & cockfight with huge bonus.'],
+    ['CP-DISHTV-S', 'GullyBET: Fast withdrawal of Rs. 2,000 bonus. Win big on casino and fancy bet!'],
+  ];
+
+  for (const [sender, body] of gamblingAlerts) {
+    assert.equal(isNonTransactionNoise(sender, body), true, 'Expected noise for: ' + body);
+    const result = parseSmsAgainstPatterns([], { sender, body });
+    assert.equal(result.ok, false, 'Should not match transaction for: ' + body);
+    assert.equal(result.reason, 'non_transaction_message');
+  }
+});
+
+test('loan and credit limit marketing notices without currency amount are non-transaction noise', () => {
+  const limitMarketingAlerts = [
+    ['VK-BFDLPS-S', 'New credit alert! Your loan limit is revised. Visit Bajaj Markets to view your updated limit.'],
+    ['VK-BFDLPS-S', 'Dear customer, your loan limit is revised. Check your revised limit on Bajaj Markets app now.'],
+    ['VK-BFDLPS-S', 'New credit alert: loan limit has been increased. Check updated limit here.'],
+    ['AD-LOANS', 'Good news! Your credit limit is revised. Tap to view your updated limit.'],
+  ];
+
+  for (const [sender, body] of limitMarketingAlerts) {
+    assert.equal(isNonTransactionNoise(sender, body), true, 'Expected noise for: ' + body);
+    const result = parseSmsAgainstPatterns([], { sender, body });
+    assert.equal(result.ok, false, 'Should not match transaction for: ' + body);
+    assert.equal(result.reason, 'non_transaction_message');
+  }
+});
+
+test('real ATM cash withdrawals and real salary or UPI credits are not noise', () => {
+  // Counter-tests specifically required by specification
+  assert.equal(isNonTransactionNoise('VM-HDFCBK-S', 'Cash withdrawal of Rs. 2,000 from A/c XX1234'), false);
+  assert.equal(isNonTransactionNoise('VM-HDFCBK-S', 'Rs. 50,000 credited to A/c XX1234'), false);
+
+  const realMovements = [
+    ['VM-HDFCBK-S', 'Cash withdrawal of Rs. 2,000 from A/c XX1234 on 24-Oct-2026. Avl Bal Rs. 45,000.'],
+    ['VM-HDFCBK-S', 'Rs. 50,000 credited to A/c XX1234 on 24-Oct-2026 by Salary. Avl Bal Rs. 95,000.'],
+    ['AD-ICICIB', 'Rs. 2,000.00 credited to A/c XX5678 on 24-Oct-2026 via UPI.'],
+    ['VM-SBIINB-S', 'Dear Customer, Cash withdrawal of Rs. 2,000 from A/c XX1234 at ATM on 24-Oct-2026.'],
+  ];
+
+  for (const [sender, body] of realMovements) {
+    assert.equal(isNonTransactionNoise(sender, body), false, 'Should not be noise: ' + body);
+  }
+});

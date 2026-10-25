@@ -2394,4 +2394,104 @@ void main() {
       db.close();
     },
   );
+
+  test(
+    'startup purge and fetchAll remove gambling and no-amount loan limit spam from Needs Review',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('pandapay.needs_review_noise_version', 15);
+
+      final db = openInMemoryForTesting();
+      db.db.execute(
+        'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+      );
+
+      final loanLimitItem = NeedsReviewItem(
+        id: 'spam-loan-limit',
+        sender: 'VK-BFDLPS-S',
+        body:
+            'New Credit alert\nYour loan limit is revised. Click here to know more: 1kx.in/khOzn2\nBajaj Markets\nT&C',
+        receivedAt: DateTime(2026, 10, 24),
+        reason: 'no_transaction_match',
+      );
+
+      final bettingItem = NeedsReviewItem(
+        id: 'spam-betting',
+        sender: 'CP-DISHTV-S',
+        body:
+            'FRPendingDTIL IPL trusted betting site GullyBET, Instant withdrawal. Fancy bet All games, casino, slots, aviator, cockfight. Huge bonus gbets.win/1w1',
+        receivedAt: DateTime(2026, 10, 24),
+        reason: 'no_transaction_match',
+      );
+
+      final realAtmItem = NeedsReviewItem(
+        id: 'real-atm-withdrawal',
+        sender: 'HDFCBK',
+        body: 'Cash withdrawal of Rs. 2,000 from A/c XX1234',
+        receivedAt: DateTime(2026, 10, 25),
+        reason: 'no_transaction_match',
+      );
+
+      final realCreditItem = NeedsReviewItem(
+        id: 'real-bank-credit',
+        sender: 'HDFCBK',
+        body: 'Rs. 5,000 credited to A/c XX1234',
+        receivedAt: DateTime(2026, 10, 25),
+        reason: 'no_transaction_match',
+      );
+
+      const ns = 'user:gambling-purge-test';
+      for (final item in [loanLimitItem, bettingItem, realAtmItem, realCreditItem]) {
+        db.db.execute('INSERT INTO local_needs_review VALUES (?,?,?)', [
+          ns,
+          item.id,
+          jsonEncode(item.toJson()),
+        ]);
+      }
+
+      final repo = NeedsReviewRepository(
+        namespace: ns,
+        loadDatabase: () async => db,
+      );
+
+      // fetchAll triggers _database() where startup purge runs
+      await repo.fetchAll();
+
+      // Noise items (loan limit & betting) must be purged from DB
+      final remainingIds = db.db.select(
+        'SELECT id FROM local_needs_review WHERE namespace = ?',
+        [ns],
+      ).map((r) => r['id'] as String).toList();
+
+      expect(remainingIds, contains('real-atm-withdrawal'));
+      expect(remainingIds, isNot(contains('spam-loan-limit')));
+      expect(remainingIds, isNot(contains('spam-betting')));
+
+      // Real bank credit was parsed as a valid transaction and resolved to financial_entities
+      final resolvedTxns = db.db.select(
+        'SELECT id FROM financial_entities WHERE namespace = ? AND entity = ?',
+        [ns, 'transactions'],
+      );
+      expect(resolvedTxns, isNotEmpty);
+
+      // Also verify add and addNeedsReviewSync reject them
+      addNeedsReviewSync(db, ns, loanLimitItem);
+      addNeedsReviewSync(db, ns, bettingItem);
+      await repo.add(loanLimitItem);
+      await repo.add(bettingItem);
+
+      final remainingAfterSync = db.db.select(
+        'SELECT id FROM local_needs_review WHERE namespace = ?',
+        [ns],
+      ).map((r) => r['id'] as String).toList();
+
+      expect(remainingAfterSync, isNot(contains('spam-loan-limit')));
+      expect(remainingAfterSync, isNot(contains('spam-betting')));
+
+      // Version is updated to 16
+      expect(prefs.getInt('pandapay.needs_review_noise_version'), 16);
+
+      db.close();
+    },
+  );
 }

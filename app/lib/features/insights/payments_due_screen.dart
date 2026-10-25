@@ -10,6 +10,7 @@ import '../../data/api_exception.dart';
 import '../../data/card_bill_ledger.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/past_bill_receipts.dart';
+import '../../data/pending_bills.dart';
 import '../../data/user_cards_repository.dart';
 import 'bills_horizon.dart';
 import 'central_bills_section.dart';
@@ -302,6 +303,220 @@ class BillsAndCommitmentsTab extends ConsumerWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Bills Horizon Summary & Aggregate Decision Model
+// ---------------------------------------------------------------------------
+
+class BillsHorizonSummary {
+  final Money totalDue;
+  final Money totalPaid;
+  final int actionableCount;
+  final int autopayCount;
+  final DateTime? earliestDue;
+  final bool isUpcoming;
+  final String horizonLabel;
+
+  const BillsHorizonSummary({
+    required this.totalDue,
+    required this.totalPaid,
+    required this.actionableCount,
+    required this.autopayCount,
+    this.earliestDue,
+    required this.isUpcoming,
+    required this.horizonLabel,
+  });
+
+  Money get totalBilled => totalDue + totalPaid;
+  double get settledPct => totalBilled.paise == 0
+      ? 0.0
+      : (totalPaid.paise / totalBilled.paise).clamp(0.0, 1.0);
+  bool get hasDues => totalDue.paise > 0;
+  bool get hasPaid => totalPaid.paise > 0;
+  bool get isEmpty =>
+      totalBilled.paise == 0 && actionableCount == 0 && autopayCount == 0;
+}
+
+class _BillsSummaryHero extends StatelessWidget {
+  final BillsHorizonSummary summary;
+
+  const _BillsSummaryHero({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final isUpcoming = summary.isUpcoming;
+    final total = isUpcoming ? summary.totalDue : summary.totalBilled;
+    final headline = isUpcoming
+        ? 'TOTAL DUE THIS CYCLE'
+        : 'BILLED IN ${summary.horizonLabel.toUpperCase()}';
+
+    final earliest = summary.earliestDue;
+    final daysUntil = earliest == null
+        ? null
+        : DateTime(earliest.year, earliest.month, earliest.day)
+            .difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day))
+            .inDays;
+
+    final String statusPillText;
+    if (isUpcoming) {
+      if (summary.totalDue.paise == 0 && summary.actionableCount == 0) {
+        statusPillText = 'All settled';
+      } else if (daysUntil != null && daysUntil >= 0) {
+        statusPillText = daysUntil == 0
+            ? 'Due today'
+            : 'Next due in ${daysUntil}d';
+      } else if (daysUntil != null && daysUntil < 0) {
+        statusPillText = 'Overdue items';
+      } else {
+        statusPillText = '${summary.actionableCount} due';
+      }
+    } else {
+      statusPillText = '${(summary.settledPct * 100).round()}% settled';
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+        ),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  headline,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: BambooFonts.ui(
+                    11,
+                    weight: FontWeight.w700,
+                    color: BambooInk.onSlateMuted,
+                  ).copyWith(letterSpacing: 1.1),
+                ),
+              ),
+              const SizedBox(width: AppSpace.xs),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: BambooInk.slateLow,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(color: const Color(0x1FFFFFFF)),
+                ),
+                child: Text(
+                  statusPillText,
+                  style: BambooFonts.ui(
+                    11,
+                    weight: FontWeight.w600,
+                    color: isUpcoming && daysUntil != null && daysUntil <= 2
+                        ? BambooInk.clay
+                        : BambooInk.lime,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.sm),
+          Text(
+            total.format(hidePaise: true),
+            style: BambooFonts.money(
+              30,
+              color: isUpcoming ? BambooInk.lime : BambooInk.onSlate,
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            child: LinearProgressIndicator(
+              value: summary.settledPct,
+              minHeight: 6,
+              backgroundColor: BambooInk.slateLow,
+              valueColor: const AlwaysStoppedAnimation<Color>(BambooInk.lime),
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          Row(
+            children: [
+              _HeroStatChip(
+                icon: Icons.check_circle_outline_rounded,
+                iconColor: BambooInk.jade,
+                label: summary.totalPaid.paise > 0
+                    ? '${summary.totalPaid.format(hidePaise: true)} paid'
+                    : '₹0 paid',
+              ),
+              const SizedBox(width: AppSpace.xs),
+              _HeroStatChip(
+                icon: Icons.pending_actions_rounded,
+                iconColor: summary.actionableCount > 0
+                    ? BambooInk.clay
+                    : BambooInk.onSlateSubtle,
+                label: '${summary.actionableCount} to pay',
+              ),
+              const SizedBox(width: AppSpace.xs),
+              _HeroStatChip(
+                icon: Icons.autorenew_rounded,
+                iconColor: BambooInk.lime,
+                label: '${summary.autopayCount} AutoPay',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroStatChip extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+
+  const _HeroStatChip({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        decoration: BoxDecoration(
+          color: BambooInk.slateLow,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0x1FFFFFFF)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: iconColor),
+            const SizedBox(width: 3),
+            Flexible(
+              child: Text(
+                label,
+                style: BambooFonts.ui(
+                  10,
+                  weight: FontWeight.w600,
+                  color: BambooInk.onSlate,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _DueList extends ConsumerWidget {
   final List<DuePayment> rows;
   final BillsHorizonFilter filter;
@@ -310,7 +525,14 @@ class _DueList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cardRows = _cardRowsForHorizon(rows, filter);
+    final rawCardRows = _cardRowsForHorizon(rows, filter);
+    final cardRows = filter.isUpcoming
+        ? [
+            ...rawCardRows.where((r) => r.bill?.isPaid != true),
+            ...rawCardRows.where((r) => r.bill?.isPaid == true),
+          ]
+        : rawCardRows;
+
     final commitmentsAsync = ref.watch(commitmentsProvider);
     final smsAsync = ref.watch(smsBillRowsProvider);
     final receiptsAsync = ref.watch(pastBillReceiptsProvider);
@@ -366,6 +588,98 @@ class _DueList extends ConsumerWidget {
       }
     }
 
+    BillsHorizonSummary calculateSummary() {
+      var duePaise = 0;
+      var paidPaise = 0;
+      var actionable = 0;
+      var autopay = 0;
+      DateTime? earliest;
+
+      for (final row in cardRows) {
+        final card = row.card;
+        final bill = row.bill;
+        final isAutopay =
+            card.autopayMode != AutopayMode.off || bill?.isAutopay == true;
+
+        if (filter.isUpcoming) {
+          if (bill?.isPaid == true) {
+            paidPaise += bill?.amountDue?.paise ?? bill?.paidToward.paise ?? 0;
+          } else {
+            final due =
+                bill?.outstanding ?? bill?.amountDue ?? row.loggedThisCycle;
+            duePaise += due.paise;
+            paidPaise += (bill?.paidToward.paise ?? 0);
+            if (isAutopay) {
+              autopay++;
+            } else {
+              actionable++;
+            }
+            if (earliest == null || row.dueOn.isBefore(earliest)) {
+              earliest = row.dueOn;
+            }
+          }
+        } else {
+          if (bill?.isPaid == true) {
+            paidPaise += bill?.amountDue?.paise ?? bill?.paidToward.paise ?? 0;
+          } else {
+            final due =
+                bill?.outstanding ?? bill?.amountDue ?? row.loggedThisCycle;
+            duePaise += due.paise;
+            paidPaise += (bill?.paidToward.paise ?? 0);
+            actionable++;
+          }
+        }
+      }
+
+      for (final c in visibleCommitments) {
+        if (c.category == CommitmentCategory.subscription) {
+          autopay++;
+          if (c.amount != null) duePaise += c.amount!.paise;
+        } else if (c.status == CommitmentStatus.paid) {
+          if (c.amount != null) paidPaise += c.amount!.paise;
+        } else {
+          if (c.amount != null) duePaise += c.amount!.paise;
+          actionable++;
+          if (filter.isUpcoming &&
+              (earliest == null || c.dueOn.isBefore(earliest))) {
+            earliest = c.dueOn;
+          }
+        }
+      }
+
+      final visibleSms = (smsAsync.valueOrNull ?? const <SmsBillRow>[])
+          .where(filter.matchesSmsBill);
+      for (final b in visibleSms) {
+        if (b.state == SmsBillState.linked) {
+          paidPaise += b.amountDue.paise;
+        } else {
+          duePaise += b.amountDue.paise;
+          if (b.isAutopay) {
+            autopay++;
+          } else {
+            actionable++;
+          }
+          if (filter.isUpcoming &&
+              b.dueDate != null &&
+              (earliest == null || b.dueDate!.isBefore(earliest))) {
+            earliest = b.dueDate;
+          }
+        }
+      }
+
+      return BillsHorizonSummary(
+        totalDue: Money.fromPaise(duePaise),
+        totalPaid: Money.fromPaise(paidPaise),
+        actionableCount: actionable,
+        autopayCount: autopay,
+        earliestDue: earliest,
+        isUpcoming: filter.isUpcoming,
+        horizonLabel: filter.label,
+      );
+    }
+
+    final summary = calculateSummary();
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,
@@ -378,12 +692,9 @@ class _DueList extends ConsumerWidget {
         if (showEmptyState)
           _EmptyHorizonState(filter: filter, nextDue: nextDue)
         else ...[
-          CentralBillsSection(cardRows: centralDedupKeys, filter: filter),
-          SmsBillsSection(filter: filter),
-          InsurancePremiumsSection(
-            reminders: visiblePremiums,
-            upcoming: filter.isUpcoming,
-          ),
+          _BillsSummaryHero(summary: summary),
+          const SizedBox(height: AppSpace.lg),
+          _CommitmentsSection(filter: filter),
           if (cardRows.isNotEmpty) ...[
             _SectionHeader(label: 'Credit cards', count: cardRows.length),
             const SizedBox(height: AppSpace.xs),
@@ -405,7 +716,12 @@ class _DueList extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpace.lg),
           ],
-          _CommitmentsSection(filter: filter),
+          CentralBillsSection(cardRows: centralDedupKeys, filter: filter),
+          SmsBillsSection(filter: filter),
+          InsurancePremiumsSection(
+            reminders: visiblePremiums,
+            upcoming: filter.isUpcoming,
+          ),
           const SizedBox(height: AppSpace.lg),
           _PastBillsPreview(filter: filter),
           const SizedBox(height: AppSpace.xl),
@@ -594,6 +910,67 @@ String _pastBillStatusLabel(PastBillReceipt item) => switch (item.status) {
   PastBillReceiptStatus.userSavedPurchase => 'Saved purchase',
 };
 
+class _CalendarDateTile extends StatelessWidget {
+  final DateTime dueOn;
+  final bool isUrgent;
+  final bool isPaid;
+
+  const _CalendarDateTile({
+    required this.dueOn,
+    this.isUrgent = false,
+    this.isPaid = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final month = DateFormat('MMM').format(dueOn).toUpperCase();
+    final day = DateFormat('dd').format(dueOn);
+
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: isPaid
+            ? BambooInk.paperMuted
+            : isUrgent
+                ? BambooInk.warningBg
+                : BambooInk.paperMuted,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isUrgent && !isPaid
+              ? BambooInk.warningBorder
+              : BambooInk.hairlineOnPaper,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            month,
+            style: BambooFonts.ui(
+              9.5,
+              weight: FontWeight.w700,
+              color: isUrgent && !isPaid ? BambooInk.clayInk : BambooInk.ink500,
+            ),
+          ),
+          Text(
+            day,
+            style: BambooFonts.heading(
+              16,
+              weight: FontWeight.w800,
+              color: isPaid
+                  ? BambooInk.ink500
+                  : isUrgent
+                      ? BambooInk.clayInk
+                      : BambooInk.ink900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ComingUpRow extends StatelessWidget {
   final DuePayment row;
   const _ComingUpRow({required this.row});
@@ -602,6 +979,10 @@ class _ComingUpRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final card = row.card;
     final bill = row.bill;
+    final isPaid = bill?.isPaid ?? false;
+    final isAutopay =
+        card.autopayMode != AutopayMode.off || bill?.isAutopay == true;
+    final isUrgent = row.daysUntilDue <= 3 && !isPaid;
     final dueLabel = 'Due ${DateFormat('d MMM').format(row.dueOn)}';
     final dueDetail = row.daysUntilDue > 0
         ? '$dueLabel · in ${row.daysUntilDue}d'
@@ -615,26 +996,19 @@ class _ComingUpRow extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
+        color: isPaid
+            ? BambooInk.paperMuted.withValues(alpha: 0.5)
+            : BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.md),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: BambooInk.paperMuted,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: Text(
-                '${row.dueOn.day}',
-                style: BambooFonts.heading(18, color: BambooInk.ink900),
-              ),
-            ),
+          _CalendarDateTile(
+            dueOn: row.dueOn,
+            isUrgent: isUrgent,
+            isPaid: isPaid,
           ),
           const SizedBox(width: AppSpace.md),
           Expanded(
@@ -648,7 +1022,7 @@ class _ComingUpRow extends StatelessWidget {
                   style: BambooFonts.ui(
                     14,
                     weight: FontWeight.w600,
-                    color: BambooInk.ink900,
+                    color: isPaid ? BambooInk.ink500 : BambooInk.ink900,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -657,6 +1031,27 @@ class _ComingUpRow extends StatelessWidget {
                   dueDetail,
                   style: BambooFonts.ui(12, color: BambooInk.ink500),
                 ),
+                if (isAutopay && !isPaid) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.autorenew_rounded,
+                        size: 13,
+                        color: BambooInk.jade,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'AutoPay scheduled',
+                        style: BambooFonts.ui(
+                          11,
+                          color: BambooInk.jade,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -669,7 +1064,10 @@ class _ComingUpRow extends StatelessWidget {
                   bill.amountDue == null
                       ? 'Amount not seen'
                       : (bill.amountDue!.format(hidePaise: true)),
-                  style: BambooFonts.money(15, color: BambooInk.ink900),
+                  style: BambooFonts.money(
+                    15,
+                    color: isPaid ? BambooInk.ink500 : BambooInk.ink900,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 if (bill.isPaid)
@@ -911,6 +1309,12 @@ class _CommitmentRow extends ConsumerWidget {
       );
     }
     if (daysUntil < 0) {
+      if (commitment.category == CommitmentCategory.subscription) {
+        return Text(
+          'Active mandate · Auto-debited',
+          style: BambooFonts.ui(12, color: BambooInk.ink500),
+        );
+      }
       return Text(
         filter.isUpcoming
             ? 'Past due date · payment status unknown'

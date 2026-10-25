@@ -1618,4 +1618,44 @@ void main() {
       expect(LocalSmsParser.isNonTransactionNoise('VI-CARE', s4Vi), isFalse);
     });
   });
+
+  group('betting/gambling spam and no-amount loan limit marketing', () {
+    const loanLimitSpam =
+        'New Credit alert\nYour loan limit is revised. Click here to know more: 1kx.in/khOzn2\nBajaj Markets\nT&C';
+    const bettingSpam =
+        'FRPendingDTIL IPL trusted betting site GullyBET, Instant withdrawal. Fancy bet All games, casino, slots, aviator, cockfight. Huge bonus gbets.win/1w1';
+
+    test('VK-BFDLPS-S loan limit alert is noise and not captured as financial', () {
+      expect(
+        LocalSmsParser.isNonTransactionNoise('VK-BFDLPS-S', loanLimitSpam),
+        isTrue,
+      );
+      expect(
+        capturesFinancialSms(loanLimitSpam, sender: 'VK-BFDLPS-S'),
+        isFalse,
+      );
+    });
+
+    test('CP-DISHTV-S betting spam is noise and not captured as financial', () {
+      expect(
+        LocalSmsParser.isNonTransactionNoise('CP-DISHTV-S', bettingSpam),
+        isTrue,
+      );
+      expect(
+        capturesFinancialSms(bettingSpam, sender: 'CP-DISHTV-S'),
+        isFalse,
+      );
+    });
+
+    test('Counter-tests: Real ATM withdrawal and credit are captured and not noise', () {
+      const realAtm = 'Cash withdrawal of Rs. 2,000 from A/c XX1234';
+      const realCredit = 'Rs. 5,000 credited to A/c XX1234';
+
+      expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', realAtm), isFalse);
+      expect(capturesFinancialSms(realAtm, sender: 'HDFCBK'), isTrue);
+
+      expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', realCredit), isFalse);
+      expect(capturesFinancialSms(realCredit, sender: 'HDFCBK'), isTrue);
+    });
+  });
 }

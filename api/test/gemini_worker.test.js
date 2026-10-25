@@ -40,7 +40,7 @@ test('Gemini provider requests JSON and parses the model fact envelope', async (
   const facts = await provider.classify({ payload: { sender: 'BANK', body: 'Card XXXX1234 paid Rs 100' } });
   assert.deepEqual(facts, []);
   assert.equal(request.generationConfig.responseMimeType, 'application/json');
-  assert.equal(request.generationConfig.maxOutputTokens, 1024);
+  assert.equal(request.generationConfig.maxOutputTokens, 2048);
   assert.equal(Object.hasOwn(request.generationConfig, 'temperature'), false,
     'Gemini 3.8 Flash rejects deprecated sampling parameters');
   assert.equal(request.systemInstruction.parts[0].text, UNIVERSAL_SYSTEM_INSTRUCTION);
@@ -137,7 +137,7 @@ test('Gemini batch generation has a bounded output token limit', async () => {
     { id: 'b', payload: { body: 'synthetic fixture B' } },
   ]);
   assert.deepEqual(result, new Map());
-  assert.equal(request.generationConfig.maxOutputTokens, 1024);
+  assert.equal(request.generationConfig.maxOutputTokens, 2048);
   assert.equal(Object.hasOwn(request.generationConfig, 'temperature'), false);
   assert.equal(request.systemInstruction.parts[0].text, UNIVERSAL_SYSTEM_INSTRUCTION);
   const batchSchema = request.generationConfig.responseSchema;

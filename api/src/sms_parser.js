@@ -79,6 +79,12 @@ function isNonTransactionNoise(sender, body) {
     || /\bpersonal\s+loan\s+eligibility\s+here\b/i.test(text)
   ) && !hasCurrencyAmount;
   if (repaymentCourtesyOrLoanUpsell) return true;
+
+  const loanOrCreditPowerMarketing = /\b(?:new\s+credit\s+alert|your\s+loan\s+limit\s+is\s+revised|(?:loan|credit)\s+limit\b[\s\S]{0,30}\b(?:revised|increased|enhanced|updated)|digital\s+credit\s+power\s+is\s+(?:now\s+)?active|updated\s+limit\s+here\b|view\s+your\s+updated\s+limit)\b/i.test(text) && !hasCurrencyAmount;
+  if (loanOrCreditPowerMarketing) return true;
+
+  const bettingOrGamblingSpam = /\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling|huge\s+bonus\b[\s\S]{0,30}\b(?:bet|casino|slots|win)|gbets\.win)\b/i.test(text);
+  if (bettingOrGamblingSpam) return true;
   if (/\b(?:payment|amount|minimum|total)\s+due\b|\bdue\s+date\b|\b(?:statement|bill|premium)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b/i.test(text)) return false;
   if (/\b(?:eligible\s+for\s+(?:[\w\s]{0,20}\s+)?(?:conversion|flexipay|emis?)|convert(?:ed|ing)?\b[\s\S]{0,60}?\b(?:in)?to\b[\s\S]{0,20}?\b(?:smart\s+|flexipay\s+|easy\s+)?emis?|can\s+(?:now\s+)?be\s+converted\s+(?:in)?to\s+emis?|flexipay\s+emis?)\b/i.test(text)
       && !/\b(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)\b/i.test(text)
@@ -139,7 +145,8 @@ function isNonTransactionAlert(body) {
     // Card offers often say "Spend ₹15,000, get ₹250" and include the
     // masked card number. That is an offer condition, not a purchase alert.
     || /\bspend\s*(?:₹|rs\.?|inr)\s*[\d,]+[\s\S]{0,50}\b(?:get|earn|cashback|reward|voucher)\b/.test(text)
-    || /\b(?:cashback|reward|voucher|offer|eligible|campaign)\b[\s\S]{0,80}\b(?:spend|card)\b/.test(text);
+    || /\b(?:cashback|reward|voucher|offer|eligible|campaign)\b[\s\S]{0,80}\b(?:spend|card)\b/.test(text)
+    || /\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling|huge\s+bonus\b[\s\S]{0,30}\b(?:bet|casino|slots|win)|gbets\.win)\b/i.test(text);
 }
 
 // Bank-account UPI alerts often contain a four-digit account suffix. That
@@ -1196,7 +1203,8 @@ function parseConservativeBankSpend(sms) {
 
   // These are opposite/non-spend events or secrets. A generic fallback must
   // prefer a missed import over turning any of them into spend.
-  if (/\b(otp|one[ -]?time password|verification code|payment due|amount due|minimum due|credited|refund(?:ed)?|reversal|reversed|declined|failed|cancelled)\b/i.test(body)) {
+  if (isNonTransactionAlert(body)
+      || /\b(otp|one[ -]?time password|verification code|payment due|amount due|minimum due|credited|refund(?:ed)?|reversal|reversed|declined|failed|cancelled)\b/i.test(body)) {
     return { ok: false, reason: 'non_spend_or_sensitive_message' };
   }
   if (isCardBillNotice(body)) {

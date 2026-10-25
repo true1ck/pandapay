@@ -21,7 +21,7 @@ const DEFAULT_API_BASE_URL = process.env.AI_WORKER_API_BASE_URL || `http://127.0
 const PROVIDER_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_PROVIDER_TIMEOUT_MS || 20000));
 const DEFAULT_BATCH_MAX = Math.min(4, Math.max(1, Number(process.env.AI_WORKER_BATCH_MAX || 4)));
 const DEFAULT_BATCH_WINDOW_MS = Math.min(500, Math.max(0, Number(process.env.AI_WORKER_BATCH_WINDOW_MS || 300)));
-const MAX_OUTPUT_TOKENS = 1024;
+const MAX_OUTPUT_TOKENS = 2048;
 
 const SPEND_CATEGORIES = [
   'groceries', 'fuel', 'dining', 'online', 'travel', 'bills', 'rent',
@@ -614,6 +614,10 @@ class GeminiProvider {
       if (!parsed || !Array.isArray(parsed.facts)) {
         throw new GeminiProviderError('Gemini response has no facts array', { retryable: false });
       }
+      if (attempt === 0 && this.apiKeys.length > 1) {
+        this.currentKeyIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
+        this.apiKey = this.apiKeys[this.currentKeyIndex];
+      }
       return parsed.facts;
     }
   }
@@ -691,6 +695,10 @@ class GeminiProvider {
           throw new GeminiProviderError('Gemini batch has an invalid item');
         }
         output.set(item.id, item.facts);
+      }
+      if (attempt === 0 && this.apiKeys.length > 1) {
+        this.currentKeyIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
+        this.apiKey = this.apiKeys[this.currentKeyIndex];
       }
       return output;
     }

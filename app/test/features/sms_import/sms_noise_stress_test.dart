@@ -447,6 +447,18 @@ void main() {
           body: 'Your Swiggy order is arriving in 5 minutes! Delivery partner Ramesh is on his way.',
           receivedAt: DateTime(2026, 10, 22, 10, 9),
         ),
+        QueuedSms(
+          sender: 'VK-BFDLPS-S',
+          body:
+              'New Credit alert\nYour loan limit is revised. Click here to know more: 1kx.in/khOzn2\nBajaj Markets\nT&C',
+          receivedAt: DateTime(2026, 10, 22, 10, 10),
+        ),
+        QueuedSms(
+          sender: 'CP-DISHTV-S',
+          body:
+              'FRPendingDTIL IPL trusted betting site GullyBET, Instant withdrawal. Fancy bet All games, casino, slots, aviator, cockfight. Huge bonus gbets.win/1w1',
+          receivedAt: DateTime(2026, 10, 22, 10, 11),
+        ),
       ];
 
       importStore.captureBatch('user_test', noiseBatch);
@@ -459,6 +471,24 @@ void main() {
 
       final reviewItems = await reviewRepo.fetchAll();
       expect(reviewItems, isEmpty, reason: 'No noise message should be routed to Needs Review');
+    });
+
+    test('Verified real ATM withdrawal and bank credit are captured through ingestion', () async {
+      final realAtm = QueuedSms(
+        sender: 'HDFCBK',
+        body: 'Cash withdrawal of Rs. 2,000 from A/c XX1234',
+        receivedAt: DateTime(2026, 10, 25, 11, 0),
+      );
+      final realCredit = QueuedSms(
+        sender: 'HDFCBK',
+        body: 'Rs. 5,000 credited to A/c XX1234',
+        receivedAt: DateTime(2026, 10, 25, 11, 1),
+      );
+
+      importStore.captureBatch('user_test', [realAtm, realCredit]);
+
+      final pending = intake.pending('user_test');
+      expect(pending.length, 2, reason: 'Both real transactions should be captured in pending');
     });
   });
 }

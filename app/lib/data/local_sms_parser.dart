@@ -130,7 +130,9 @@ class LocalSmsParser {
   // straight after the instrument ("Credit Card 8708 bill"), so the open
   // review queue is re-examined once more and a card's due day can finally be
   // learned from its own AutoPay message.
-  static const version = 15;
+  // 15: Telecom carrier retention fees (Jio, Airtel airtime deductions) and loan cross-sells.
+  // 16: Betting/gambling promotions and digital credit power / loan limit marketing.
+  static const version = 16;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -406,6 +408,16 @@ class LocalSmsParser {
       r'\bpersonal\s+loan\s+eligibility\s+here\b',
     ).hasMatch(text) && !hasCurrencyAmount;
     if (repaymentCourtesyOrLoanUpsell) return true;
+
+    final loanOrCreditPowerMarketing = _re(
+      r'\b(?:new\s+credit\s+alert|your\s+loan\s+limit\s+is\s+revised|(?:loan|credit)\s+limit\b[\s\S]{0,30}\b(?:revised|increased|enhanced|updated)|digital\s+credit\s+power\s+is\s+(?:now\s+)?active|updated\s+limit\s+here\b|view\s+your\s+updated\s+limit)\b',
+    ).hasMatch(text) && !hasCurrencyAmount;
+    if (loanOrCreditPowerMarketing) return true;
+
+    final bettingOrGamblingSpam = _re(
+      r'\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling|huge\s+bonus\b[\s\S]{0,30}\b(?:bet|casino|slots|win))\b',
+    ).hasMatch(text);
+    if (bettingOrGamblingSpam) return true;
 
     // A real amount due or statement remains useful even when the issuer
     // appends an offer. Let the bill parser handle it.
