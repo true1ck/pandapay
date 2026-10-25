@@ -15,9 +15,6 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeRepo implements UserCardsRepository {
-  final List<TransactionEntry> transactions;
-  _FakeRepo({this.transactions = const []});
-
   @override
   Future<List<TransactionEntry>> fetchTransactions({
     DateTime? from,
@@ -27,7 +24,7 @@ class _FakeRepo implements UserCardsRepository {
     String? userCategoryId,
     String? source,
     String? query,
-  }) async => transactions;
+  }) async => const [];
 
   @override
   Future<List<TransactionSplit>> fetchSplits(String transactionId) async =>

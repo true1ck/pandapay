@@ -63,11 +63,12 @@ class BillsHorizonFilter {
 
   String get description => switch (horizon) {
     BillsHorizon.upcoming => 'Next due dates and unpaid bills',
-    BillsHorizon.currentMonth => 'Bills due in ${_longMonth(now.year, now.month)}',
+    BillsHorizon.currentMonth =>
+      'Bills and receipts in ${_longMonth(now.year, now.month)}',
     BillsHorizon.lastMonth =>
-      'Bills due in ${_longMonth(now.year, now.month - 1)}',
+      'Bills and receipts in ${_longMonth(now.year, now.month - 1)}',
     BillsHorizon.lastThreeMonths =>
-      'Bills due ${_monthRange(DateTime(now.year, now.month - 2), DateTime(now.year, now.month))}',
+      'Bills and receipts ${_monthRange(DateTime(now.year, now.month - 2), DateTime(now.year, now.month))}',
     BillsHorizon.allHistory => 'Everything recorded so far',
   };
 
