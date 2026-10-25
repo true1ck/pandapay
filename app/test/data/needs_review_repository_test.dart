@@ -1759,6 +1759,19 @@ void main() {
     expect(adjustmentData['net_amount_paise'], 55000);
     expect(adjustmentData['days_apart'], anyOf(2, 3));
 
+    // The unmatched refund must be preserved as money-in, not merely removed
+    // from review.
+    final standaloneRefundRows = db.db.select(
+      "SELECT payload FROM financial_entities WHERE namespace = ? AND entity = 'transactions' AND source_key = ?",
+      [ns, refundUnmatched.id],
+    );
+    expect(standaloneRefundRows, hasLength(1));
+    final standaloneRefund =
+        jsonDecode(standaloneRefundRows.single['payload'] as String)
+            as Map<String, dynamic>;
+    expect(standaloneRefund['amount_paise'], 80000);
+    expect(standaloneRefund['entry_kind'], 'transfer');
+
     // Verify add() and addNeedsReviewSync() also auto-link and do not queue when matching spend exists
     await repo.add(refundSwiggy);
     final afterAdd = db.db.select(

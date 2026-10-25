@@ -249,8 +249,8 @@ class SmsImportStore {
         final isPastDueBill =
             hasDueDate && observation.dueDate!.isBefore(startOfToday);
 
-        if (isMandate ||
-            (!isPastDueBill &&
+        if (!isPastDueBill &&
+            (isMandate ||
                 observation.disposition ==
                     LocalSmsDisposition.localCommitment)) {
           final title = (observation.billerName?.trim().isNotEmpty == true)
