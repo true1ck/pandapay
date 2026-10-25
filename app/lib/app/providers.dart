@@ -3777,6 +3777,13 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
   for (final obs
       in store?.entities(namespace, 'sms_observations') ?? const []) {
     if (obs['event_type'] != 'bill') continue;
+    // Only admit observations with positive credit-card evidence into the
+    // card-bill ledger. Bills delivered via aggregator senders (MYTNEU,
+    // TNBPAY) also carry utility bills; sender-family alone is not enough.
+    final hasCcEvidence =
+        obs['card_last4'] != null ||
+        _isCreditCardBillObs(obs);
+    if (!hasCcEvidence) continue;
     final parsedStatement = DateTime.tryParse(
       obs['statement_date'] as String? ?? '',
     );
@@ -3842,6 +3849,20 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
   );
 });
 
+/// Returns true when an sms_observations row carries positive evidence that
+/// it describes a credit-card bill (not a utility bill routed via an
+/// aggregator sender such as MYTNEU or TNBPAY).
+///
+/// A row qualifies when it has an explicit [card_last4], or when its
+/// [reason_codes] contain 'credit_card_bill' (emitted by the local parser
+/// whenever "credit card" or "card bill" language appears in the body), or
+/// when the stored [biller_name] contains those phrases.
+bool _isCreditCardBillObs(Map<String, dynamic> obs) {
+  final codes = obs['reason_codes'];
+  if (codes is List && codes.contains('credit_card_bill')) return true;
+  final biller = ((obs['biller_name'] as String?) ?? '').toLowerCase();
+  return biller.contains('credit card') || biller.contains('card bill');
+}
 Money? _moneyFromPaise(Object? value) {
   final paise = (value as num?)?.toInt();
   if (paise == null || paise <= 0) return null;

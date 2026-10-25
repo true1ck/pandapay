@@ -1051,7 +1051,7 @@ class LocalSmsParser {
                   r'(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
                 ).firstMatch(body)?.group(1) ??
                 _re(
-                  r'\b(?:payment|bill|premium|contribution|subscription)\s+of\s*(?:₹|rs\.?|inr)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+                  r'\b(?:payment|bill|premium|contribution|subscription)\s+of\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
                 ).firstMatch(body)?.group(1) ??
                 _re(
                   r'\b(?:contribution|subscription|mandate|installment|instalment)\s+(?:amount\b)?[\s\S]{0,80}?\b(?:is|of|for|:|-)?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
@@ -1665,7 +1665,7 @@ class LocalSmsParser {
             r'\btotal\s+(?:amt|amount)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
-            r'\b(?:payment|bill|premium|contribution|subscription)\s+of\s*(?:₹|rs\.?|inr)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+            r'\b(?:payment|bill|premium|contribution|subscription)\s+of\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
             r'\b(?:contribution|subscription|mandate|installment|instalment)\s+(?:amount\b)?[\s\S]{0,80}?\b(?:is|of|for|:|-)?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
@@ -1676,13 +1676,13 @@ class LocalSmsParser {
     );
     final billAmount = money(
       _re(
-            r'\b(?:bill|invoice|premium)\b[\s\S]{0,35}?\b(?:is|of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+            r'\b(?:bill|invoice|premium)\b[\s\S]{0,35}?\b(?:is|of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
             r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|standing\s+instruction|si\s+debit)\s*(?:of\s+|is\s+|:\s*|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
-            r'\b(?:payment|bill|premium|contribution|subscription)\s+of\s*(?:₹|rs\.?|inr)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+            r'\b(?:payment|bill|premium|contribution|subscription)\s+of\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
             r'\b(?:contribution|subscription|mandate|installment|instalment)\s+(?:amount\b)?[\s\S]{0,80}?\b(?:is|of|for|:|-)?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
@@ -1861,6 +1861,13 @@ class LocalSmsParser {
       // families or explicit cadence wording may create a commitment.
       final isUpcomingObligation =
           isInsuranceOrUtility || (cadenceHint != null && !isCardStatement);
+      // Emit credit_card_bill when the message explicitly says "credit card"
+      // or "card bill". This reason code gates the CardBillEvidence path so
+      // utility bills delivered by shared aggregator senders (MYTNEU/TNBPAY)
+      // are never admitted into the credit-card ledger.
+      final isCreditCardBill =
+          cardLast4 != null ||
+          _re(r'\b(?:credit\s+card|card\s+bill)\b').hasMatch(body);
       return observation(
         null,
         LocalSmsEventType.bill,
@@ -1875,6 +1882,7 @@ class LocalSmsParser {
             'next_premium_due_month_only',
           if (isInsuranceOrUtility || isUpcomingObligation)
             'commitment_detected',
+          if (isCreditCardBill) 'credit_card_bill',
         ],
       );
     }

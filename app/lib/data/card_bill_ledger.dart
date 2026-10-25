@@ -615,8 +615,9 @@ bool _hasHistoricalAttribution(
   UserCard candidate,
   String? orphanFamily,
   List<CardBillEvidence> evidence,
-  List<TransactionEntry> txns,
-) {
+  List<TransactionEntry> txns, {
+  String? orphanBillerName,
+}) {
   if (orphanFamily == null || orphanFamily.isEmpty) return false;
   final canonical = canonicalBankSender(orphanFamily);
   final isAggregator =
@@ -643,6 +644,18 @@ bool _hasHistoricalAttribution(
           e.amountDue != null,
     )) {
       if (orphan.amountDue == ex.amountDue) {
+        // For aggregator senders (MYTNEU/TNBPAY) that carry both credit-card
+        // and utility bills, require the biller identity to be absent or to
+        // indicate a credit-card bill. A Goa Electricity bill must not
+        // inherit a historical link established by an HDFC CC bill.
+        if (isAggregator && orphanBillerName != null) {
+          final billerLower = orphanBillerName.toLowerCase();
+          final isCcBiller =
+              billerLower.contains('credit card') ||
+              billerLower.contains('card bill') ||
+              billerLower.isEmpty;
+          if (!isCcBiller) continue;
+        }
         return true;
       }
     }
