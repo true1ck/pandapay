@@ -8,6 +8,7 @@ import 'past_bill_receipts.dart';
 import 'adjustment_matcher.dart';
 import 'local/app_database.dart';
 import 'local/financial_store.dart' show FinancialChange;
+import 'local/sms_learning_feedback.dart';
 import 'local_sms_parser.dart';
 import 'user_cards_repository.dart';
 import 'investment_classifier.dart';
@@ -37,7 +38,7 @@ enum AiReviewStatus { notChecked, queued, processing, checked, unavailable }
 /// to give one user back their own message text â€” the two are different
 /// features that happen to share a trigger event (a failed parse). The
 /// existing review item stays on-device. If the server parser cannot classify
-/// it, the AI fallback may send a redacted copy to the configured Gemini
+/// it, the AI fallback may send a redacted copy to the configured PandaPay AI
 /// provider; local review remains available when AI is disabled or fails.
 /// ui-spec D4 explicitly wants "raw text shown for context," which a
 /// digit-stripped admin record structurally cannot provide. Rather than
@@ -46,7 +47,7 @@ enum AiReviewStatus { notChecked, queued, processing, checked, unavailable }
 /// keeps the raw SMS exactly where it already lives today: the device that
 /// received it. The separate, explicit AI fallback uploads only after the
 /// normal financial-message filter and removes sensitive identifiers on the
-/// server before calling Gemini.
+/// server before calling PandaPay AI.
 class NeedsReviewItem {
   final String id;
   final String sender;
@@ -186,6 +187,12 @@ void addNeedsReviewSync(
     sender: item.sender,
     receivedAt: item.receivedAt,
     namespace: namespace,
+    // Learned user categories are a capture-level hint, not a new grammar:
+    // the same rule table SmsImportStore passes into every parse.
+    userCategoryRules: SmsLearningFeedback(
+      database,
+      namespace: namespace,
+    ).loadRulesSync(),
   );
   if (NeedsReviewRepository.isMonthOnlyPremiumNotice(parsed)) {
     if (NeedsReviewRepository.isPastMonthOnlyPremiumNotice(parsed, item.body)) {
@@ -1681,7 +1688,7 @@ class NeedsReviewRepository {
     ]);
   }
 
-  /// Persists owner-scoped, validated Gemini facts onto an existing local
+  /// Persists owner-scoped, validated PandaPay AI facts onto an existing local
   /// review row. It deliberately never recreates a row that the user already
   /// dismissed or resolved while the network request was in flight.
   Future<bool> updateAiSuggestions(

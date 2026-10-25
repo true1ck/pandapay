@@ -318,3 +318,52 @@ test('body hash mirrors legacy normalization (sender case-insensitive) and pins 
     '28dd854f5c943a06f19a390121698bbf9e62f563585fcb3c0382b166f44558d5',
   );
 });
+
+test('the 15 canonical spend categories are exported and validated', () => {
+  assert.deepEqual(smsFacts.SPEND_CATEGORIES, [
+    'groceries', 'fuel', 'dining', 'online', 'travel', 'bills', 'rent',
+    'insurance', 'education', 'government', 'wallet', 'entertainment',
+    'health', 'emi', 'other',
+  ]);
+  for (const category of smsFacts.SPEND_CATEGORIES) {
+    const result = smsFacts.validateFact({
+      ...spend(250, 'SWIGGY'),
+      payload: { ...spend().payload, category },
+    });
+    assert.equal(result.valid, true, `${category} must be a valid category`);
+  }
+});
+
+test('category, isComplete and confidence are part of the payload contract', () => {
+  const complete = smsFacts.validateFact({
+    ...spend(250, 'SWIGGY'),
+    payload: {
+      ...spend().payload,
+      category: 'dining',
+      isComplete: true,
+      confidence: 0.93,
+    },
+  });
+  assert.deepEqual(complete, { valid: true, errors: [] });
+
+  const badCategory = smsFacts.validateFact({
+    ...spend(250, 'SWIGGY'),
+    payload: { ...spend().payload, category: 'food' },
+  });
+  assert.equal(badCategory.valid, false);
+  assert.ok(badCategory.errors.some((error) => error.includes('category must be one of')));
+
+  const badComplete = smsFacts.validateFact({
+    ...spend(250, 'SWIGGY'),
+    payload: { ...spend().payload, isComplete: 'true' },
+  });
+  assert.equal(badComplete.valid, false);
+  assert.ok(badComplete.errors.some((error) => error.includes('isComplete must be a boolean')));
+
+  const badConfidence = smsFacts.validateFact({
+    ...spend(250, 'SWIGGY'),
+    payload: { ...spend().payload, confidence: '0.93' },
+  });
+  assert.equal(badConfidence.valid, false);
+  assert.ok(badConfidence.errors.some((error) => error.includes('confidence must be a number')));
+});

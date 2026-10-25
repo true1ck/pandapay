@@ -271,10 +271,18 @@ async function completeJobWithResult(client, {
   batchMetadata = {},
   applySpecialists = null,
   persistSubscriptionMandate = null,
-  reviewRequired = true,
+  reviewRequired = null,
 }) {
   const smsFacts = require('./sms_facts');
+  const aiFactScoring = require('./ai_fact_scoring');
   const payload = job.payload || {};
+  // Composite confidence gate: reviewRequired is derived from the model facts
+  // and the redacted body. An explicit boolean from the caller still wins
+  // (e.g. a replayed job that was already triaged).
+  const assessment = aiFactScoring.assessFacts(facts, payload.body || '');
+  const effectiveReviewRequired = typeof reviewRequired === 'boolean'
+    ? reviewRequired
+    : assessment.reviewRequired;
   const existing = await smsFacts.loadSmsSourceFacts(client, job.profile_id, job.source_key);
   const existingFacts = existing ? existing.facts : [];
   const semanticParts = (fact) => {
@@ -334,8 +342,14 @@ async function completeJobWithResult(client, {
         SET status = 'done', result = $2, payload = $3,
             lease_token = NULL, lease_expires_at = NULL, updated_at = now()
       WHERE id = $1`,
-    [job.id, JSON.stringify({ landed, specialists, reviewRequired,
-      factTypes: facts.map((fact) => fact.factType) }), JSON.stringify({ purged: true })],
+    [job.id, JSON.stringify({
+      landed,
+      specialists,
+      reviewRequired: effectiveReviewRequired,
+      confidenceScore: assessment.composite,
+      scores: assessment.perFact,
+      factTypes: facts.map((fact) => fact.factType),
+    }), JSON.stringify({ purged: true })],
   );
   await recordEvent(client, job.id, job.profile_id, 'result', {
     landed: landed.length,
@@ -343,7 +357,12 @@ async function completeJobWithResult(client, {
     ...(batchMetadata.batchId ? { batchId: batchMetadata.batchId } : {}),
     ...(Number.isInteger(batchMetadata.batchSize) ? { batchSize: batchMetadata.batchSize } : {}),
   });
-  return { landed, specialists };
+  return {
+    landed,
+    specialists,
+    reviewRequired: effectiveReviewRequired,
+    confidenceScore: assessment.composite,
+  };
 }
 
 /**

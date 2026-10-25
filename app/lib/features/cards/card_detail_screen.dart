@@ -13,7 +13,8 @@ import 'card_actions_screen.dart';
 import 'card_visual.dart';
 import '../insights/credit_utilization_ui.dart';
 import '../insights/spending_visuals.dart';
-import '../insights/spend_trends_screen.dart' show SpendingDonut;
+import '../insights/spend_trends_screen.dart'
+    show SpendPeriodSelector, SpendingMixCard, spendingMixCategoryKey;
 import 'autopay_issuer_links.dart';
 import 'benefit_detail_screen.dart';
 import 'card_summary.dart';
@@ -27,6 +28,13 @@ import '../../main.dart' show MoneyText;
 
 const _assumedGracePeriodDays =
     20; // matches billing_float_screen.dart's own assumption
+
+/// Period selection is shared by the mix and performance sections for one
+/// card, without changing the global Spending screen's selection.
+final cardDetailSpendQueryProvider =
+    StateProvider.family<SpendReportQuery, String>(
+      (ref, userCardId) => const SpendReportQuery.preset(SpendPeriod.month),
+    );
 
 String _normalizedSpendCategoryLabel(String rawLabel) {
   final normalized = rawLabel.trim().replaceAll(RegExp(r'\s+'), ' ');
@@ -597,7 +605,7 @@ class _CardSpendingMixSectionState
   String? _selectedCategoryKey;
   bool _showAllCategories = false;
 
-  String _categoryKey(SpendBreakdownRow row) => row.label.toLowerCase();
+  String _categoryKey(SpendBreakdownRow row) => spendingMixCategoryKey(row);
 
   String _categoryLabel(String rawLabel) =>
       _normalizedSpendCategoryLabel(rawLabel);
@@ -640,10 +648,23 @@ class _CardSpendingMixSectionState
     }).toList();
   }
 
+  List<TransactionEntry> _transactionsForReportPeriod(
+    List<TransactionEntry> transactions,
+    SpendReport report,
+  ) => transactions
+      .where(
+        (entry) =>
+            !entry.occurredAt.isBefore(report.periodStart) &&
+            entry.occurredAt.isBefore(report.periodEnd),
+      )
+      .toList();
+
   @override
   Widget build(BuildContext context) {
-    final monthQuery = const SpendReportQuery.preset(SpendPeriod.month);
-    final reportState = ref.watch(spendReportProvider(monthQuery));
+    final selectedQuery = ref.watch(
+      cardDetailSpendQueryProvider(widget.userCard.id),
+    );
+    final reportState = ref.watch(spendReportProvider(selectedQuery));
     final allTransactions =
         ref.watch(transactionsProvider).valueOrNull ??
         const <TransactionEntry>[];
@@ -651,7 +672,7 @@ class _CardSpendingMixSectionState
         .where((e) => e.userCardId == widget.userCard.id)
         .toList();
 
-    return reportState.when(
+    final content = reportState.when(
       loading: () => const CardSummaryPanel(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: AppSpace.md),
@@ -661,7 +682,7 @@ class _CardSpendingMixSectionState
       error: (err, _) => CardSummaryPanel(
         child: ErrorState(
           message: userFacingErrorMessage(err),
-          onRetry: () => ref.invalidate(spendReportProvider(monthQuery)),
+          onRetry: () => ref.invalidate(spendReportProvider(selectedQuery)),
         ),
       ),
       data: (data) {
@@ -669,6 +690,10 @@ class _CardSpendingMixSectionState
           return const SizedBox.shrink();
         }
 
+        final periodTransactions = _transactionsForReportPeriod(
+          cardTransactions,
+          data,
+        );
         final nonZeroRows = _aggregateCardCategories(
           data.byCardCategory,
           widget.userCard.id,
@@ -691,7 +716,7 @@ class _CardSpendingMixSectionState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Spending mix · This month',
+                        'Spending mix · ${data.displayLabel}',
                         style: BambooFonts.heading(
                           14.5,
                           color: BambooInk.ink900,
@@ -699,7 +724,7 @@ class _CardSpendingMixSectionState
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'No spending recorded on this card this month yet.',
+                        'No spending recorded on this card for ${data.displayLabel.toLowerCase()} yet.',
                         style: BambooFonts.ui(12, color: BambooInk.ink500),
                       ),
                     ],
@@ -730,110 +755,105 @@ class _CardSpendingMixSectionState
           nonZeroRows.length,
         );
 
-        return CardSummaryPanel(
+        return Column(
           key: const Key('card_spending_mix'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SpendingMixCard(
+              rows: nonZeroRows,
+              total: cardTotal,
+              selectedCategoryKey: _selectedCategoryKey,
+              onCategorySelected: (row) => setState(
+                () => _selectedCategoryKey = row == null
+                    ? null
+                    : _categoryKey(row),
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+            CardSummaryPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SpendingVisualBadge(
-                    visual: SpendingVisual(
-                      icon: Icons.pie_chart_rounded,
-                      accent: BambooChartColors.teal,
+                  Text(
+                    'CATEGORY BREAKDOWN & MERCHANTS',
+                    style: BambooFonts.ui(
+                      11.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink500,
+                    ).copyWith(letterSpacing: 0.8),
+                  ),
+                  const SizedBox(height: AppSpace.sm),
+                  for (final row in visibleRows)
+                    _CardExpandableCategoryRow(
+                      row: row,
+                      total: cardTotal,
+                      entries: _transactionsForCategory(
+                        row,
+                        periodTransactions,
+                      ),
+                      initiallyExpanded:
+                          selectedIndex != null &&
+                          nonZeroRows.indexOf(row) == selectedIndex,
+                      onExpansionChanged: (expanded) {
+                        final index = nonZeroRows.indexOf(row);
+                        if (expanded && selectedIndex != index) {
+                          _selectCategory(index, nonZeroRows);
+                        } else if (!expanded && selectedIndex == index) {
+                          _selectCategory(null, nonZeroRows);
+                        }
+                      },
                     ),
-                    size: 38,
-                  ),
-                  const SizedBox(width: AppSpace.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Spending mix',
-                          style: BambooFonts.heading(
-                            15,
-                            color: BambooInk.ink900,
-                          ),
+                  if (remaining > 0)
+                    Align(
+                      alignment: Alignment.center,
+                      child: TextButton.icon(
+                        key: const Key('card_spending_mix_show_more'),
+                        onPressed: () => setState(
+                          () => _showAllCategories = !_showAllCategories,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${nonZeroRows.length} ${nonZeroRows.length == 1 ? 'category' : 'categories'} · tap any category for details',
-                          style: BambooFonts.ui(12, color: BambooInk.ink500),
+                        icon: Icon(
+                          _showAllCategories
+                              ? Icons.expand_less_rounded
+                              : Icons.expand_more_rounded,
+                          size: 18,
                         ),
-                      ],
+                        label: Text(
+                          _showAllCategories
+                              ? 'Show fewer categories'
+                              : 'Show $remaining more ${remaining == 1 ? 'category' : 'categories'}',
+                        ),
+                      ),
                     ),
-                  ),
-                  MoneyText(
-                    cardTotal,
-                    confidence: Confidence.confirmed,
-                    style: BambooFonts.heading(15, color: BambooInk.ink900),
-                  ),
                 ],
               ),
-              const SizedBox(height: AppSpace.lg),
-              Center(
-                child: SpendingDonut(
-                  rows: nonZeroRows,
-                  total: cardTotal,
-                  selectedIndex: selectedIndex,
-                  onSelected: (idx) => _selectCategory(idx, nonZeroRows),
-                ),
-              ),
-              const SizedBox(height: AppSpace.lg),
-              const Divider(color: BambooInk.hairlineOnPaper, height: 1),
-              const SizedBox(height: AppSpace.md),
-              Text(
-                'CATEGORY BREAKDOWN & MERCHANTS',
-                style: BambooFonts.ui(
-                  11.5,
-                  weight: FontWeight.w700,
-                  color: BambooInk.ink500,
-                ).copyWith(letterSpacing: 0.8),
-              ),
-              const SizedBox(height: AppSpace.sm),
-              for (final row in visibleRows)
-                _CardExpandableCategoryRow(
-                  row: row,
-                  total: cardTotal,
-                  entries: _transactionsForCategory(row, cardTransactions),
-                  initiallyExpanded:
-                      selectedIndex != null &&
-                      nonZeroRows.indexOf(row) == selectedIndex,
-                  onExpansionChanged: (expanded) {
-                    final index = nonZeroRows.indexOf(row);
-                    if (expanded && selectedIndex != index) {
-                      _selectCategory(index, nonZeroRows);
-                    } else if (!expanded && selectedIndex == index) {
-                      _selectCategory(null, nonZeroRows);
-                    }
-                  },
-                ),
-              if (remaining > 0)
-                Align(
-                  alignment: Alignment.center,
-                  child: TextButton.icon(
-                    key: const Key('card_spending_mix_show_more'),
-                    onPressed: () => setState(
-                      () => _showAllCategories = !_showAllCategories,
-                    ),
-                    icon: Icon(
-                      _showAllCategories
-                          ? Icons.expand_less_rounded
-                          : Icons.expand_more_rounded,
-                      size: 18,
-                    ),
-                    label: Text(
-                      _showAllCategories
-                          ? 'Show fewer categories'
-                          : 'Show $remaining more ${remaining == 1 ? 'category' : 'categories'}',
-                    ),
-                  ),
-                ),
-            ],
-          ),
+            ),
+          ],
         );
       },
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SpendPeriodSelector(
+          selected: selectedQuery,
+          filtersActive: false,
+          showFilters: false,
+          onChanged: (query) {
+            ref
+                    .read(
+                      cardDetailSpendQueryProvider(widget.userCard.id).notifier,
+                    )
+                    .state =
+                query;
+            setState(() {
+              _selectedCategoryKey = null;
+              _showAllCategories = false;
+            });
+          },
+        ),
+        content,
+      ],
     );
   }
 }
@@ -1563,10 +1583,16 @@ class _SpendStatCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                Text(
+                  label,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
                 if (sub != null) ...[
                   const SizedBox(height: 3),
-                  Text(sub!, style: BambooFonts.ui(12, color: BambooInk.ink500)),
+                  Text(
+                    sub!,
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
                 ],
               ],
             ),

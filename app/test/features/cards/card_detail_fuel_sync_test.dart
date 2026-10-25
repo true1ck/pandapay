@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
@@ -69,6 +70,7 @@ Future<void> _pump(
   required List<UserCard> owned,
   String id = 'uc1',
   SpendReport? report,
+  SpendReport Function(SpendReportQuery query)? reportForQuery,
   bool categoriesAvailable = true,
 }) async {
   await tester.pumpWidget(
@@ -85,8 +87,10 @@ Future<void> _pump(
         ),
         userCardsProvider.overrideWith((ref) async => owned),
         myCardsProvider.overrideWith((ref) async => owned),
-        if (report != null)
-          spendReportProvider.overrideWith((ref, query) async => report),
+        if (report != null || reportForQuery != null)
+          spendReportProvider.overrideWith(
+            (ref, query) async => reportForQuery?.call(query) ?? report,
+          ),
       ],
       child: MaterialApp(home: CardDetailScreen(userCardId: id)),
     ),
@@ -279,11 +283,25 @@ void main() {
 
       expect(find.byKey(const Key('card_spending_mix')), findsOneWidget);
       expect(find.byKey(const Key('spending_donut_chart')), findsOneWidget);
+      expect(find.textContaining('tap a slice for details'), findsOneWidget);
       expect(find.text('Other'), findsOneWidget);
       expect(find.text('Zero category'), findsNothing);
       expect(find.text('Wrong card'), findsNothing);
       expect(find.text('Show 1 more category'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsNWidgets(4));
+
+      await tester.tap(find.textContaining('Fuel ·').first);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('spending_donut_selected_detail')),
+        findsOneWidget,
+      );
+      await tester.tap(find.textContaining('Fuel ·').first);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('spending_donut_selected_detail')),
+        findsNothing,
+      );
 
       final otherRow = find.descendant(
         of: find.byKey(const Key('card_spending_mix')),
@@ -313,6 +331,93 @@ void main() {
       expect(find.text('REWARDS'), findsOneWidget);
     },
   );
+
+  testWidgets('period selector updates the card-scoped spending mix', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    SpendReport report(int amount, DateTime start, DateTime end) => SpendReport(
+      period: SpendPeriod.custom,
+      periodStart: start,
+      periodEnd: end,
+      elapsedFraction: 1,
+      spend: EntryKindTotals.zero,
+      income: EntryKindTotals.zero,
+      investment: EntryKindTotals.zero,
+      previousSpend: EntryKindTotals.zero,
+      byCategory: const [],
+      byMerchant: const [],
+      byCard: const [],
+      byInstrument: const [],
+      byCardCategory: [
+        CardCategorySpendRow(
+          cardId: 'uc1',
+          cardName: 'My Fuel Card',
+          categoryId: 'cat-fuel',
+          categoryName: 'Fuel',
+          total: Money.fromRupees(amount),
+          txnCount: 1,
+        ),
+      ],
+      series: const [],
+    );
+
+    final current = report(
+      1200,
+      DateTime(now.year, now.month),
+      DateTime(now.year, now.month + 1),
+    );
+    final previous = report(
+      250,
+      DateTime(now.year, now.month - 1),
+      DateTime(now.year, now.month),
+    );
+
+    await _pump(
+      tester,
+      catalogue: [_cardWithFuelRule()],
+      owned: [_ownedCard()],
+      reportForQuery: (query) => query.isCustom ? previous : current,
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('card_spending_mix')),
+      500,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('cardDetailScroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+      expect(find.textContaining('₹1,200'), findsWidgets);
+
+    await tester.tap(find.byIcon(Icons.calendar_month_rounded).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Last month'));
+    await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const Key('card_spending_mix')));
+      const monthNames = <String>[
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      final previousLabel =
+          '${monthNames[(now.month + 10) % 12]} ${now.month == 1 ? now.year - 1 : now.year}';
+      expect(find.text(previousLabel), findsOneWidget);
+      expect(find.textContaining('₹250'), findsWidgets);
+    expect(find.textContaining('No spending recorded'), findsNothing);
+  });
 
   testWidgets(
     'Benefits section synthesizes and shows 1% fuel surcharge waiver',

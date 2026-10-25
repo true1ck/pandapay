@@ -61,7 +61,7 @@ class SmsConsentScreen extends StatelessWidget {
               const _Point(
                 icon: Icons.auto_awesome_outlined,
                 text:
-                    'If PandaPay cannot classify a financial alert, it may send a redacted copy to Gemini '
+                    'If PandaPay cannot classify a financial alert, it may send a redacted copy to PandaPay AI '
                     'for help. Account numbers, references and links are masked first. The AI result is '
                     'checked, and uncertain messages stay in Needs review for you.',
               ),

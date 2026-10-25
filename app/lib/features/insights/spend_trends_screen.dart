@@ -122,7 +122,7 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
           children: [
             KeyedSubtree(
               key: widget.periodSelectorKey,
-              child: _PeriodSelector(
+              child: SpendPeriodSelector(
                 selected: query,
                 filtersActive: _filtersActive,
                 onFilters: () => reportBodyKey.currentState?.openFilters(),
@@ -257,15 +257,19 @@ class _NoSpendingReportState extends StatelessWidget {
   }
 }
 
-class _PeriodSelector extends ConsumerWidget {
+class SpendPeriodSelector extends ConsumerWidget {
   final SpendReportQuery selected;
   final bool filtersActive;
-  final VoidCallback onFilters;
+  final VoidCallback? onFilters;
+  final bool showFilters;
+  final ValueChanged<SpendReportQuery>? onChanged;
 
-  const _PeriodSelector({
+  const SpendPeriodSelector({
     required this.selected,
     required this.filtersActive,
-    required this.onFilters,
+    this.onFilters,
+    this.showFilters = true,
+    this.onChanged,
   });
 
   @override
@@ -311,27 +315,29 @@ class _PeriodSelector extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: AppSpace.sm),
-              OutlinedButton.icon(
-                onPressed: onFilters,
-                icon: const Icon(Icons.tune_rounded, size: 18),
-                label: Text(filtersActive ? 'Filters ·' : 'Filters'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: filtersActive
-                      ? BambooInk.jade
-                      : BambooInk.ink900,
-                  side: BorderSide(
-                    color: filtersActive
+              if (showFilters) ...[
+                const SizedBox(width: AppSpace.sm),
+                OutlinedButton.icon(
+                  onPressed: onFilters,
+                  icon: const Icon(Icons.tune_rounded, size: 18),
+                  label: Text(filtersActive ? 'Filters ·' : 'Filters'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: filtersActive
                         ? BambooInk.jade
-                        : BambooInk.hairlineOnPaper,
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  minimumSize: const Size(0, 46),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                        : BambooInk.ink900,
+                    side: BorderSide(
+                      color: filtersActive
+                          ? BambooInk.jade
+                          : BambooInk.hairlineOnPaper,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    minimumSize: const Size(0, 46),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -390,7 +396,11 @@ class _PeriodSelector extends ConsumerWidget {
       builder: (_) => _SpendDateRangeSheet(selected: selected, now: now),
     );
     if (choice == null || !context.mounted) return;
-    ref.read(selectedSpendQueryProvider.notifier).state = choice.query;
+    if (onChanged != null) {
+      onChanged!(choice.query);
+    } else {
+      ref.read(selectedSpendQueryProvider.notifier).state = choice.query;
+    }
   }
 }
 
@@ -1554,7 +1564,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (categoryRows.isNotEmpty) ...[
-                _SpendingMixCard(
+                SpendingMixCard(
                   rows: categoryRows,
                   total: total,
                   compact: multiMonth,
@@ -3266,7 +3276,10 @@ class _MonthlyBarChartPainter extends CustomPainter {
 
 /// A visual summary of the same category totals shown in the expandable rows
 /// below it. Every slice and its selected detail use [SpendReport.byCategory].
-class _SpendingMixCard extends StatefulWidget {
+String spendingMixCategoryKey(SpendBreakdownRow row) =>
+    row.categoryId ?? row.label;
+
+class SpendingMixCard extends StatefulWidget {
   final List<SpendBreakdownRow> rows;
   final Money total;
   final bool compact;
@@ -3274,8 +3287,10 @@ class _SpendingMixCard extends StatefulWidget {
   final double? change;
   final String? comparisonLabel;
   final VoidCallback? onViewAll;
+  final ValueChanged<SpendBreakdownRow?>? onCategorySelected;
+  final String? selectedCategoryKey;
 
-  const _SpendingMixCard({
+  const SpendingMixCard({
     required this.rows,
     required this.total,
     this.compact = false,
@@ -3283,25 +3298,32 @@ class _SpendingMixCard extends StatefulWidget {
     this.change,
     this.comparisonLabel,
     this.onViewAll,
+    this.onCategorySelected,
+    this.selectedCategoryKey,
   });
 
   @override
-  State<_SpendingMixCard> createState() => _SpendingMixCardState();
+  State<SpendingMixCard> createState() => _SpendingMixCardState();
 }
 
-class _SpendingMixCardState extends State<_SpendingMixCard> {
+class _SpendingMixCardState extends State<SpendingMixCard> {
   String? _selectedCategoryKey;
   bool _showAllCategories = false;
 
-  String _categoryKey(SpendBreakdownRow row) => row.categoryId ?? row.label;
+  String _categoryKey(SpendBreakdownRow row) => spendingMixCategoryKey(row);
 
   void _selectCategory(int? index) {
     final rows = widget.rows.where((row) => !row.total.isZero).toList();
+    final selected = index == null || index >= rows.length ? null : rows[index];
+    final selectedKey = selected == null ? null : _categoryKey(selected);
+    final currentKey = widget.onCategorySelected != null
+        ? widget.selectedCategoryKey
+        : _selectedCategoryKey;
+    final nextKey = currentKey == selectedKey ? null : selectedKey;
     setState(() {
-      _selectedCategoryKey = index == null || index >= rows.length
-          ? null
-          : _categoryKey(rows[index]);
+      _selectedCategoryKey = nextKey;
     });
+    widget.onCategorySelected?.call(nextKey == null ? null : selected);
   }
 
   @override
@@ -3313,11 +3335,12 @@ class _SpendingMixCardState extends State<_SpendingMixCard> {
     final change = widget.change;
     final comparisonLabel = widget.comparisonLabel;
     final nonZeroRows = rows.where((row) => !row.total.isZero).toList();
-    final matchedIndex = _selectedCategoryKey == null
+    final activeSelection = widget.onCategorySelected != null
+        ? widget.selectedCategoryKey
+        : _selectedCategoryKey;
+    final matchedIndex = activeSelection == null
         ? -1
-        : nonZeroRows.indexWhere(
-            (row) => _categoryKey(row) == _selectedCategoryKey,
-          );
+        : nonZeroRows.indexWhere((row) => _categoryKey(row) == activeSelection);
     final selectedIndex = matchedIndex < 0 ? null : matchedIndex;
     final initialVisibleCount = compact ? 5 : 4;
     final visibleRows = nonZeroRows

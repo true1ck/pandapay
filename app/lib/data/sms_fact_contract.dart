@@ -52,6 +52,27 @@ const List<String> smsAmountRoles = [
   'proposed',
 ];
 
+/// The 15 canonical spend categories, mirrored from api/src/sms_facts.js.
+/// A spend fact that names any other slug is invalid rather than silently
+/// uncategorised: one taxonomy keeps device and server projections equal.
+const List<String> smsSpendCategories = [
+  'groceries',
+  'fuel',
+  'dining',
+  'online',
+  'travel',
+  'bills',
+  'rent',
+  'insurance',
+  'education',
+  'government',
+  'wallet',
+  'entertainment',
+  'health',
+  'emi',
+  'other',
+];
+
 const Map<String, String> smsAmountFieldByRole = {
   'posted': 'amountInr',
   'due_total': 'amountDueInr',
@@ -181,6 +202,9 @@ const Map<String, Map<String, Object>> smsPayloadFieldShapes = {
     'in': ['credit', 'debit'],
   },
   'cardName': {'shortText': true},
+  'category': {'in': smsSpendCategories},
+  'isComplete': {'boolean': true},
+  'confidence': {'number': true},
 };
 
 /// Numeric keep-lists mirrored from the server so the check matrix matches.
@@ -202,6 +226,7 @@ const List<String> smsBooleanFields = [
   'explicitSubscription',
   'userAsserted',
   'cardBill',
+  'isComplete',
 ];
 const List<String> smsIntegerFields = ['cadenceDays'];
 const List<String> smsDateFields = [
@@ -222,6 +247,10 @@ const List<String> smsShortTextFields = [
 const List<String> smsFourDigitFields = ['last4', 'accountLast4'];
 const List<String> smsEnumFields = ['amountRole', 'instrument'];
 const List<String> smsPlainStringFields = ['transferKind'];
+
+/// Unit-interval fields. A model that reports a confidence outside [0,1] is
+/// rejected rather than clamped: the number would otherwise decide routing.
+const List<String> smsUnitIntervalFields = ['confidence'];
 
 class SmsFactValidationResult {
   final bool valid;
@@ -292,13 +321,29 @@ SmsFactValidationResult validateSmsFactPayload(
       }
       continue;
     }
+    if (smsUnitIntervalFields.contains(field)) {
+      if (value is! num || !value.isFinite) {
+        errors.add('$field must be a number');
+        continue;
+      }
+      if (value < 0 || value > 1) {
+        errors.add('$field must be between 0 and 1 inclusive');
+      }
+      continue;
+    }
     // Remaining enum-only shapes (mandateStatus, attemptStatus,
-    // statementStatus, alertKind, cardType, entryKind).
+    // statementStatus, alertKind, cardType, entryKind, category).
     final shape = smsPayloadFieldShapes[field]!;
     if (shape.containsKey('in')) {
       final allowed = shape['in'] as List<String>;
       if (value is! String || !allowed.contains(value)) {
         errors.add('$field must be one of ${allowed.join(', ')}');
+      }
+      continue;
+    }
+    if (shape.containsKey('number')) {
+      if (value is! num || !value.isFinite) {
+        errors.add('$field must be a number');
       }
       continue;
     }

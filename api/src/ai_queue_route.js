@@ -213,17 +213,23 @@ function registerAiQueueRoutes(app, {
           });
           return { status: 422, error: 'result lacks SMS evidence', details: evidence.errors };
         }
-        await geminiQueue.completeJobWithResult(client, {
+        const completion = await geminiQueue.completeJobWithResult(client, {
           job,
           facts,
           batchMetadata: {
             ...(typeof batchId === 'string' && /^[0-9a-f-]{36}$/i.test(batchId) ? { batchId } : {}),
             ...(Number.isInteger(batchSize) && batchSize >= 1 && batchSize <= 4 ? { batchSize } : {}),
           },
-          // AI output remains a review suggestion. Only device facts and
-          // explicit user corrections may invoke the domain specialists.
+          // AI output remains a review suggestion unless the composite score
+          // gate is fully satisfied. Only device facts and explicit user
+          // corrections may invoke the domain specialists.
         });
-        return { status: 200, jobStatus: 'done' };
+        return {
+          status: 200,
+          jobStatus: 'done',
+          reviewRequired: completion.reviewRequired,
+          confidenceScore: completion.confidenceScore,
+        };
       });
       res.status(outcome.status).json(outcome);
     } catch (error) {

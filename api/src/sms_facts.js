@@ -39,6 +39,25 @@ const INSTRUMENTS = [
   'other',
 ];
 
+/** The 15 canonical spend categories shared by the AI prompt, scoring and UI. */
+const SPEND_CATEGORIES = [
+  'groceries',
+  'fuel',
+  'dining',
+  'online',
+  'travel',
+  'bills',
+  'rent',
+  'insurance',
+  'education',
+  'government',
+  'wallet',
+  'entertainment',
+  'health',
+  'emi',
+  'other',
+];
+
 /** Amount roles keep "money mentioned" apart from "money moved". */
 const AMOUNT_ROLES = ['posted', 'due_total', 'due_minimum', 'outstanding', 'ceiling', 'proposed'];
 
@@ -110,6 +129,9 @@ const PAYLOAD_FIELD_SHAPES = {
   reference: { shortText: true },
   cardType: { in: ['credit', 'debit'] },
   cardName: { shortText: true },
+  category: { in: SPEND_CATEGORIES },
+  isComplete: { boolean: true },
+  confidence: { number: true },
 };
 
 /** Which payload fields are mandatory per fact type. */
@@ -520,6 +542,7 @@ module.exports = {
   FACT_STATUSES,
   ENTRY_KINDS,
   INSTRUMENTS,
+  SPEND_CATEGORIES,
   AMOUNT_ROLES,
   AMOUNT_FIELD_BY_ROLE,
   PROVISION_BY_ROLE,

@@ -23,6 +23,373 @@ const DEFAULT_BATCH_MAX = Math.min(4, Math.max(1, Number(process.env.AI_WORKER_B
 const DEFAULT_BATCH_WINDOW_MS = Math.min(500, Math.max(0, Number(process.env.AI_WORKER_BATCH_WINDOW_MS || 300)));
 const MAX_OUTPUT_TOKENS = 1024;
 
+const SPEND_CATEGORIES = [
+  'groceries', 'fuel', 'dining', 'online', 'travel', 'bills', 'rent',
+  'insurance', 'education', 'government', 'wallet', 'entertainment',
+  'health', 'emi', 'other',
+];
+
+const UNIVERSAL_SYSTEM_INSTRUCTION = [
+  "You are PandaPay's Financial SMS Extraction & Categorization Engine.",
+  'Your mission is to parse redacted Indian financial SMS messages into strictly typed, structured financial facts.',
+  '',
+  'CORE OPERATING INSTRUCTIONS:',
+  '1. ZERO HALLUCINATION: Never invent or extrapolate missing digits, dates, or merchants. The message has already been redacted.',
+  '2. DISTINGUISH MONEY MOVED FROM MONEY MENTIONED:',
+  "   - A debit, card swipe, or purchase is 'posted_movement' with amountRole='posted' and entryKind='spend'.",
+  "   - A salary credit or dividend is 'posted_movement' with amountRole='posted' and entryKind='income'.",
+  "   - A broker funds payout (e.g., Kotak Neo, Zerodha quarterly settlement) or own-account transfer is 'posted_movement' with amountRole='posted' and entryKind='transfer'.",
+  "   - A mutual fund SIP debit or stock purchase is 'posted_movement' with amountRole='posted' and entryKind='investment'.",
+  "   - A utility bill, credit card statement, or due notification is 'bill_obligation' with amountRole='due_total' (and 'due_minimum' if present). It is NEVER a posted movement.",
+  "   - An AutoPay registration or standing instruction is 'mandate_lifecycle' with amountRole='ceiling' and limitInr. It is NEVER a spend.",
+  "   - An ATM withdrawal is 'posted_movement' with instrument='cash' and entryKind='transfer'.",
+  '3. CATEGORIZATION:',
+  "   For every spend transaction, extract a clean merchant name (stripping noise words such as 'INFO/', 'VPA', 'IMPS-', 'POS', 'ECOM') and assign exactly ONE of the 15 canonical categories:",
+  "   ['groceries', 'fuel', 'dining', 'online', 'travel', 'bills', 'rent', 'insurance', 'education', 'government', 'wallet', 'entertainment', 'health', 'emi', 'other'].",
+  '4. SCORING & COMPLETENESS:',
+  "   - Set 'isComplete': true when the message has all necessary fields (for spend: amount, instrument, merchant, category; for bill: amountDue, dueDate, billerName).",
+  "   - Set 'confidence': a float from 0.0 to 1.0 reflecting your extraction certainty.",
+  '5. NOISE HANDLING:',
+  '   If the message is an OTP, service validity alert, or promotional advertisement without completed financial movement, return {"facts": []}.',
+].join('\n');
+
+const FACT_TYPE_ENUM = [
+  'posted_movement',
+  'pending_or_failed_attempt',
+  'balance_snapshot',
+  'bill_obligation',
+  'bill_payment',
+  'mandate_lifecycle',
+  'card_identity_hint',
+  'security_or_service_alert',
+  'promotion',
+];
+
+const UNIVERSAL_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    facts: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          factType: { type: 'STRING', enum: FACT_TYPE_ENUM },
+          payload: {
+            type: 'OBJECT',
+            properties: {
+              amountRole: {
+                type: 'STRING',
+                enum: ['posted', 'due_total', 'due_minimum', 'outstanding', 'ceiling', 'proposed'],
+              },
+              entryKind: { type: 'STRING', enum: ['spend', 'income', 'transfer', 'investment'] },
+              amountInr: { type: 'NUMBER' },
+              amountDueInr: { type: 'NUMBER' },
+              minimumDueInr: { type: 'NUMBER' },
+              outstandingInr: { type: 'NUMBER' },
+              limitInr: { type: 'NUMBER' },
+              proposedAmountInr: { type: 'NUMBER' },
+              availableBalanceInr: { type: 'NUMBER' },
+              occurredAt: { type: 'STRING' },
+              dueDate: { type: 'STRING' },
+              statementDate: { type: 'STRING' },
+              proposedAt: { type: 'STRING' },
+              asOfAt: { type: 'STRING' },
+              instrument: {
+                type: 'STRING',
+                enum: ['upi_bank', 'credit_card', 'debit_card', 'cash', 'wallet', 'other'],
+              },
+              last4: { type: 'STRING' },
+              accountLast4: { type: 'STRING' },
+              merchant: { type: 'STRING' },
+              billerName: { type: 'STRING' },
+              serviceName: { type: 'STRING' },
+              transferParty: { type: 'STRING' },
+              issuerName: { type: 'STRING' },
+              category: { type: 'STRING', enum: SPEND_CATEGORIES },
+              reference: { type: 'STRING' },
+              mandateStatus: {
+                type: 'STRING',
+                enum: ['registered', 'scheduled', 'paused', 'cancelled', 'failed'],
+              },
+              targetKind: {
+                type: 'STRING',
+                enum: ['card_bill', 'utility_or_other_bill', 'service_merchant', 'unknown'],
+              },
+              isComplete: { type: 'BOOLEAN' },
+              confidence: { type: 'NUMBER' },
+            },
+            // amountRole is required only for money-bearing fact types; the
+            // prompt states that per type. A blanket schema requirement would
+            // force balance snapshots to carry a role whose matching amount
+            // field the payload validator then demands.
+          },
+        },
+        required: ['factType', 'payload'],
+      },
+    },
+  },
+  required: ['facts'],
+};
+
+const UNIVERSAL_BATCH_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    items: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          id: { type: 'STRING' },
+          facts: UNIVERSAL_RESPONSE_SCHEMA.properties.facts,
+        },
+        required: ['id', 'facts'],
+      },
+    },
+  },
+  required: ['items'],
+};
+
+/** Spec §5.3: twelve Indian financial scenarios, compact JSON outputs. */
+const FEW_SHOT_EXAMPLES = [
+  {
+    label: 'UPI food delivery debit (Swiggy)',
+    sms: 'Sent Rs.420.00 from HDFC Bank A/C **1797 to SWIGGY UPI on 24-10-26. UPI Ref 429812345678. Avail Bal: Rs.45,120.50',
+    output: {
+      facts: [
+        {
+          factType: 'posted_movement',
+          payload: {
+            amountRole: 'posted', entryKind: 'spend', amountInr: 420.0,
+            occurredAt: '2026-10-24T00:00:00.000Z', instrument: 'upi_bank',
+            accountLast4: '1797', issuerName: 'HDFC Bank', merchant: 'Swiggy',
+            category: 'dining', reference: '429812345678', isComplete: true, confidence: 0.98,
+          },
+        },
+        {
+          factType: 'balance_snapshot',
+          payload: {
+            availableBalanceInr: 45120.5,
+            asOfAt: '2026-10-24T00:00:00.000Z', instrument: 'upi_bank', accountLast4: '1797',
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'Credit card purchase (Flipkart)',
+    sms: 'Alert: INR 2,499.00 spent on ICICI Bank Credit Card ending XX4002 at FLIPKART on 25-Oct-26. Available limit: INR 1,45,000.00.',
+    output: {
+      facts: [
+        {
+          factType: 'posted_movement',
+          payload: {
+            amountRole: 'posted', entryKind: 'spend', amountInr: 2499.0,
+            occurredAt: '2026-10-25T00:00:00.000Z', instrument: 'credit_card',
+            last4: '4002', issuerName: 'ICICI Bank', merchant: 'Flipkart',
+            category: 'online', isComplete: true, confidence: 0.99,
+          },
+        },
+        {
+          factType: 'balance_snapshot',
+          payload: {
+            availableBalanceInr: 145000.0,
+            asOfAt: '2026-10-25T00:00:00.000Z', instrument: 'credit_card', last4: '4002',
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'Credit card monthly statement bill (Axis)',
+    sms: 'Your Axis Bank Credit Card XX8891 statement generated. Total Due: Rs 14,850.00, Min Due: Rs 750.00, Due Date: 12-Nov-2026.',
+    output: {
+      facts: [
+        {
+          factType: 'bill_obligation',
+          payload: {
+            amountRole: 'due_total', amountDueInr: 14850.0,
+            dueDate: '2026-11-12T00:00:00.000Z', instrument: 'credit_card',
+            last4: '8891', issuerName: 'Axis Bank', billerName: 'Axis Bank Credit Card',
+            targetKind: 'card_bill', isComplete: true, confidence: 0.99,
+          },
+        },
+        {
+          factType: 'bill_obligation',
+          payload: {
+            amountRole: 'due_minimum', minimumDueInr: 750.0,
+            dueDate: '2026-11-12T00:00:00.000Z', instrument: 'credit_card',
+            last4: '8891', issuerName: 'Axis Bank', billerName: 'Axis Bank Credit Card',
+            targetKind: 'card_bill', isComplete: true, confidence: 0.99,
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'Utility bill (BESCOM electricity)',
+    sms: 'Dear Consumer, Electricity bill for CA 102938475 is Rs 1,840.00. Due date is 05-Nov-2026. Pay via BESCOM portal to avoid disconnect.',
+    output: {
+      facts: [
+        {
+          factType: 'bill_obligation',
+          payload: {
+            amountRole: 'due_total', amountDueInr: 1840.0,
+            dueDate: '2026-11-05T00:00:00.000Z', billerName: 'BESCOM',
+            category: 'bills', targetKind: 'utility_or_other_bill',
+            isComplete: true, confidence: 0.96,
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'Bill payment receipt (credit card bill paid)',
+    sms: 'Thank you! Payment of Rs.14,850.00 received towards your Axis Bank Credit Card XX8891 on 25-Oct-26 via CRED.',
+    output: {
+      facts: [
+        {
+          factType: 'bill_payment',
+          payload: {
+            amountRole: 'posted', entryKind: 'transfer', amountInr: 14850.0,
+            occurredAt: '2026-10-25T00:00:00.000Z', instrument: 'credit_card',
+            last4: '8891', billerName: 'Axis Bank Credit Card', issuerName: 'Axis Bank',
+            targetKind: 'card_bill', isComplete: true, confidence: 0.98,
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'Broker settlement payout (Kotak Neo / Zerodha return to bank)',
+    sms: 'Dear Investor, payout of Rs 1,944.38 has been processed towards your Bank A/c XX1797 on 24-Oct-26 on account of quarterly settlement of funds. - Kotak Neo',
+    output: {
+      facts: [
+        {
+          factType: 'posted_movement',
+          payload: {
+            amountRole: 'posted', entryKind: 'transfer', amountInr: 1944.38,
+            occurredAt: '2026-10-24T00:00:00.000Z', instrument: 'upi_bank',
+            accountLast4: '1797', merchant: 'Kotak Neo',
+            transferParty: 'Kotak Neo Settlement', category: 'other',
+            isComplete: true, confidence: 0.97,
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'Broker funding top-up (Zerodha funds added)',
+    sms: 'Rs. 25,000.00 debited from HDFC Bank A/c XX1797 on 23-Oct-26 towards ZERODHA BROKING LTD via NetBanking. Ref 429712398.',
+    output: {
+      facts: [
+        {
+          factType: 'posted_movement',
+          payload: {
+            amountRole: 'posted', entryKind: 'transfer', amountInr: 25000.0,
+            occurredAt: '2026-10-23T00:00:00.000Z', instrument: 'upi_bank',
+            accountLast4: '1797', merchant: 'Zerodha', reference: '429712398',
+            category: 'other', isComplete: true, confidence: 0.98,
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'Earned income (monthly salary credit)',
+    sms: 'Your Salary of Rs. 1,25,000.00 has been credited to your HDFC Bank A/c XX1797 on 30-Oct-2026 by ACME TECH CORP PVT LTD.',
+    output: {
+      facts: [
+        {
+          factType: 'posted_movement',
+          payload: {
+            amountRole: 'posted', entryKind: 'income', amountInr: 125000.0,
+            occurredAt: '2026-10-30T00:00:00.000Z', instrument: 'upi_bank',
+            accountLast4: '1797', merchant: 'ACME TECH CORP PVT LTD',
+            transferParty: 'Salary Credit', isComplete: true, confidence: 0.99,
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'Loan EMI debit (home loan auto-debit)',
+    sms: 'EMI Rs 32,450.00 for Home Loan A/c HL-998822 debited from SBI Bank A/c XX4321 on 10-Oct-2026.',
+    output: {
+      facts: [
+        {
+          factType: 'posted_movement',
+          payload: {
+            amountRole: 'posted', entryKind: 'spend', amountInr: 32450.0,
+            occurredAt: '2026-10-10T00:00:00.000Z', instrument: 'upi_bank',
+            accountLast4: '4321', merchant: 'SBI Home Loan', category: 'emi',
+            reference: 'HL-998822', isComplete: true, confidence: 0.97,
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'AutoPay e-mandate registration (Netflix)',
+    sms: 'AutoPay e-mandate successfully registered for NETFLIX Entertainment with max limit INR 1,500.00 on HDFC Bank Card ending 1234. UMN: HDFC998877.',
+    output: {
+      facts: [
+        {
+          factType: 'mandate_lifecycle',
+          payload: {
+            amountRole: 'ceiling', limitInr: 1500.0,
+            asOfAt: '2026-10-25T00:00:00.000Z', mandateStatus: 'registered',
+            targetKind: 'service_merchant', serviceName: 'Netflix', merchant: 'Netflix',
+            instrument: 'credit_card', last4: '1234', reference: 'HDFC998877',
+            isComplete: true, confidence: 0.99,
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'ATM cash withdrawal',
+    sms: 'Rs 5,000.00 withdrawn from ATM using Debit Card XX9912 on 24-Oct-26 at SBI ATM KORAMANGALA BLR.',
+    output: {
+      facts: [
+        {
+          factType: 'posted_movement',
+          payload: {
+            amountRole: 'posted', entryKind: 'transfer', amountInr: 5000.0,
+            occurredAt: '2026-10-24T00:00:00.000Z', instrument: 'cash',
+            last4: '9912', merchant: 'ATM Cash Withdrawal', isComplete: true, confidence: 0.98,
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'Partial / ambiguous spend (needs review)',
+    sms: 'A/c XX1797 debited for INR 750.00 on 24-10-26. Info: POS-AMAZON PAY BLR. Avail Bal: 21,400.00.',
+    output: {
+      facts: [
+        {
+          factType: 'posted_movement',
+          payload: {
+            amountRole: 'posted', entryKind: 'spend', amountInr: 750.0,
+            occurredAt: '2026-10-24T00:00:00.000Z', instrument: 'upi_bank',
+            accountLast4: '1797', merchant: 'Amazon Pay', category: 'online',
+            isComplete: false, confidence: 0.65,
+          },
+        },
+      ],
+    },
+  },
+];
+
+function renderFewShots() {
+  return [
+    'Few-shot examples (redacted SMS -> expected facts JSON):',
+    ...FEW_SHOT_EXAMPLES.map(
+      (example, index) => `Example ${index + 1} (${example.label}):\nSMS: ${example.sms}\nOutput: ${JSON.stringify(example.output)}`,
+    ),
+  ].join('\n');
+}
+
 class GeminiProviderError extends Error {
   constructor(message, { retryable = false, retryAfterMs = undefined, status = undefined } = {}) {
     super(message);
@@ -80,7 +447,7 @@ function parseModelJson(text) {
   }
 }
 
-function buildGeminiPrompt(job, { batch = false } = {}) {
+function buildGeminiPrompt(job, { batch = false, includeExamples = true } = {}) {
   const payload = job?.payload || {};
   return [
     'Classify this bank SMS into typed financial facts for a personal finance app.',
@@ -92,11 +459,14 @@ function buildGeminiPrompt(job, { batch = false } = {}) {
     'Allowed factType values: posted_movement, pending_or_failed_attempt, balance_snapshot, bill_obligation, bill_payment, mandate_lifecycle, card_identity_hint, security_or_service_alert, promotion.',
     'Allowed entryKind values for posted_movement: spend, income, transfer, investment (use "spend" for debited/purchases).',
     'Allowed instruments if present: upi_bank, credit_card, debit_card, cash, wallet, other.',
+    `Allowed category values for spend facts: ${SPEND_CATEGORIES.join(', ')}.`,
     'Amounts must use the correct role: posted, due_total, due_minimum, outstanding, ceiling, or proposed.',
     'Required payload fields: posted_movement = amountRole, entryKind, occurredAt; pending_or_failed_attempt = attemptStatus, occurredAt; balance_snapshot = availableBalanceInr, asOfAt; bill_obligation = amountRole, dueDate and its evidenced amount/date fields; bill_payment = amountRole, occurredAt and its evidenced amount field; mandate_lifecycle = mandateStatus, asOfAt; card_identity_hint = asOfAt; security_or_service_alert = alertKind, occurredAt; promotion may be empty.',
     'For amountRole, include its matching amount and date: posted=amountInr/occurredAt, due_total=amountDueInr/dueDate, due_minimum=minimumDueInr/dueDate, outstanding=outstandingInr/asOfAt, ceiling=limitInr/asOfAt, proposed=proposedAmountInr/proposedAt.',
     'A posted spend also requires merchant. A mandate limit is valid only for registered status. Never omit required fields or invent values; if any required value is absent or uncertain, leave this SMS\'s facts array empty.',
+    'Set isComplete=true only when every essential attribute for the fact type is present, and confidence to your extraction certainty from 0.0 to 1.0.',
     'Do not treat a bill total, credit limit, or mandate ceiling as a posted movement.',
+    ...(includeExamples ? [renderFewShots()] : []),
     `Sender: ${String(payload.sender || '')}`,
     `Occurred at: ${String(payload.occurredAt || '')}`,
     `SMS: ${String(payload.body || '')}`,
@@ -108,7 +478,8 @@ function buildGeminiBatchPrompt(jobs) {
     'Classify each SMS independently. Return JSON only: {"items":[{"id":"<id>","facts":[...]}]}.',
     'Return exactly one item per supplied id, even when its facts array is empty.',
     'Never mix an amount, account or date from one item into another item.',
-    ...jobs.map((job) => `ITEM ${job.id}\n${buildGeminiPrompt(job, { batch: true })}`),
+    renderFewShots(),
+    ...jobs.map((job) => `ITEM ${job.id}\n${buildGeminiPrompt(job, { batch: true, includeExamples: false })}`),
   ].join('\n\n');
 }
 
@@ -190,9 +561,13 @@ class GeminiProvider {
             signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
             headers: { 'content-type': 'application/json', 'x-goog-api-key': activeKey },
             body: JSON.stringify({
+              systemInstruction: {
+                parts: [{ text: UNIVERSAL_SYSTEM_INSTRUCTION }],
+              },
               contents: [{ role: 'user', parts: [{ text: buildGeminiPrompt(job) }] }],
               generationConfig: {
                 responseMimeType: 'application/json',
+                responseSchema: UNIVERSAL_RESPONSE_SCHEMA,
                 maxOutputTokens: MAX_OUTPUT_TOKENS,
               },
             }),
@@ -260,9 +635,13 @@ class GeminiProvider {
             signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
             headers: { 'content-type': 'application/json', 'x-goog-api-key': activeKey },
             body: JSON.stringify({
+              systemInstruction: {
+                parts: [{ text: UNIVERSAL_SYSTEM_INSTRUCTION }],
+              },
               contents: [{ role: 'user', parts: [{ text: buildGeminiBatchPrompt(jobs) }] }],
               generationConfig: {
                 responseMimeType: 'application/json',
+                responseSchema: UNIVERSAL_BATCH_RESPONSE_SCHEMA,
                 maxOutputTokens: MAX_OUTPUT_TOKENS,
               },
             }),
@@ -480,6 +859,11 @@ if (require.main === module) {
 module.exports = {
   GeminiProvider,
   GeminiProviderError,
+  UNIVERSAL_SYSTEM_INSTRUCTION,
+  UNIVERSAL_RESPONSE_SCHEMA,
+  UNIVERSAL_BATCH_RESPONSE_SCHEMA,
+  FEW_SHOT_EXAMPLES,
+  SPEND_CATEGORIES,
   buildGeminiPrompt,
   buildGeminiBatchPrompt,
   parseModelJson,

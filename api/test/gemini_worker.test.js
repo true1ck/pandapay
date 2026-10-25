@@ -3,11 +3,15 @@ const assert = require('node:assert');
 const {
   GeminiProvider,
   GeminiProviderError,
+  UNIVERSAL_SYSTEM_INSTRUCTION,
+  UNIVERSAL_RESPONSE_SCHEMA,
+  FEW_SHOT_EXAMPLES,
   buildGeminiPrompt,
   buildGeminiBatchPrompt,
   nextAdaptiveBatchSize,
   runWorkerOnce,
 } = require('../src/gemini_worker');
+const smsFacts = require('../src/sms_facts');
 
 function response(body, status = 200, headers = {}) {
   return {
@@ -39,6 +43,8 @@ test('Gemini provider requests JSON and parses the model fact envelope', async (
   assert.equal(request.generationConfig.maxOutputTokens, 1024);
   assert.equal(Object.hasOwn(request.generationConfig, 'temperature'), false,
     'Gemini 3.8 Flash rejects deprecated sampling parameters');
+  assert.equal(request.systemInstruction.parts[0].text, UNIVERSAL_SYSTEM_INSTRUCTION);
+  assert.deepEqual(request.generationConfig.responseSchema, UNIVERSAL_RESPONSE_SCHEMA);
   assert.match(request.contents[0].parts[0].text, /Card XXXX1234/);
   assert.equal(requestUrl, 'https://example.test/models/test-model:generateContent');
   assert.equal(requestHeaders['x-goog-api-key'], 'test-key');
@@ -48,6 +54,73 @@ test('Gemini provider requests JSON and parses the model fact envelope', async (
 test('Gemini worker defaults to the supported Flash model unless configured', () => {
   const provider = new GeminiProvider({ apiKey: 'test-key', fetchImpl: async () => response({}) });
   assert.equal(provider.model, process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite');
+});
+
+test('universal system instruction and schema cover movements, categories and completeness', () => {
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /ZERO HALLUCINATION/);
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /PandaPay's Financial SMS Extraction/);
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /broker funds payout/i);
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /mandate_lifecycle/);
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /isComplete/);
+
+  const item = UNIVERSAL_RESPONSE_SCHEMA.properties.facts.items;
+  assert.ok(item.required.includes('factType'));
+  assert.ok(item.required.includes('payload'));
+  assert.deepEqual(item.properties.payload.properties.amountRole.enum, [
+    'posted', 'due_total', 'due_minimum', 'outstanding', 'ceiling', 'proposed',
+  ]);
+  assert.equal(item.properties.payload.required, undefined,
+    'amountRole is per fact type; a blanket requirement forces invalid balance snapshots');
+  assert.deepEqual(item.properties.payload.properties.category.enum, [
+    'groceries', 'fuel', 'dining', 'online', 'travel', 'bills', 'rent',
+    'insurance', 'education', 'government', 'wallet', 'entertainment',
+    'health', 'emi', 'other',
+  ]);
+  assert.equal(item.properties.payload.properties.isComplete.type, 'BOOLEAN');
+  assert.equal(item.properties.payload.properties.confidence.type, 'NUMBER');
+});
+
+test('twelve few-shot scenarios are exported and rendered into the prompt', () => {
+  assert.equal(FEW_SHOT_EXAMPLES.length, 12);
+  const labels = FEW_SHOT_EXAMPLES.map((example) => example.label).join(' | ');
+  for (const scenario of [
+    'Swiggy', 'Flipkart', 'Axis', 'BESCOM', 'credit card bill paid',
+    'Kotak Neo', 'Zerodha', 'salary credit', 'Loan EMI', 'Netflix',
+    'ATM cash withdrawal', 'Partial',
+  ]) {
+    assert.match(labels, new RegExp(scenario, 'i'));
+  }
+  const prompt = buildGeminiPrompt({ payload: { body: 'synthetic fixture' } });
+  assert.match(prompt, /Example 12 \(Partial/);
+  assert.match(prompt, /"category":"dining"/);
+  assert.match(prompt, /"isComplete":false/);
+  assert.match(prompt, /groceries, fuel, dining, online, travel, bills, rent/);
+  // Keep the prompt bounded even with every example rendered.
+  assert.ok(prompt.length < 30000, `prompt length ${prompt.length}`);
+});
+
+test('every few-shot output satisfies the fact contract the result route enforces', () => {
+  for (const example of FEW_SHOT_EXAMPLES) {
+    const validation = smsFacts.validateFactSet(example.output.facts);
+    assert.equal(
+      validation.valid,
+      true,
+      `${example.label}: ${validation.errors.join('; ')}`,
+    );
+    for (const fact of example.output.facts) {
+      for (const field of ['instrument', 'category']) {
+        const allowed = field === 'instrument'
+          ? smsFacts.INSTRUMENTS
+          : smsFacts.SPEND_CATEGORIES;
+        if (fact.payload[field] !== undefined) {
+          assert.ok(
+            allowed.includes(fact.payload[field]),
+            `${example.label}: ${field} '${fact.payload[field]}' is outside the contract`,
+          );
+        }
+      }
+    }
+  }
 });
 
 test('Gemini batch generation has a bounded output token limit', async () => {
@@ -65,6 +138,17 @@ test('Gemini batch generation has a bounded output token limit', async () => {
   ]);
   assert.deepEqual(result, new Map());
   assert.equal(request.generationConfig.maxOutputTokens, 1024);
+  assert.equal(Object.hasOwn(request.generationConfig, 'temperature'), false);
+  assert.equal(request.systemInstruction.parts[0].text, UNIVERSAL_SYSTEM_INSTRUCTION);
+  const batchSchema = request.generationConfig.responseSchema;
+  assert.equal(batchSchema.type, 'OBJECT');
+  assert.ok(batchSchema.properties.items.items.required.includes('id'));
+  assert.ok(batchSchema.properties.items.items.required.includes('facts'));
+  assert.equal(
+    batchSchema.properties.items.items.properties.facts.items.properties.payload
+      .properties.category.enum.length,
+    15,
+  );
 });
 
 test('Gemini prompt states required fact fields and fail-closed abstention rules', () => {

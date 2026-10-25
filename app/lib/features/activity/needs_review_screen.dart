@@ -10,9 +10,11 @@ import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/commitments_repository.dart';
-import '../../data/local_sms_parser.dart';
+import '../../data/local/auto_resolved_history_repository.dart';
 import '../../data/local/sms_facts_outbox.dart';
+import '../../data/local_sms_parser.dart';
 import '../../data/needs_review_repository.dart';
+import '../../data/sms_fact_contract.dart';
 import '../../data/user_cards_repository.dart'
     show TxnEntryKind, TxnInstrument, UserCard;
 
@@ -156,6 +158,21 @@ String _reviewActionLabel(NeedsReviewItem item) {
   }
   return 'Review transaction';
 }
+
+/// The category the AI proposed for the first extracted fact, shown as a
+/// visible badge so a medium-confidence item can be resolved in one tap.
+String _suggestedCategoryName(NeedsReviewItem item) {
+  final first = item.aiSuggestions?.isNotEmpty == true
+      ? item.aiSuggestions!.first
+      : null;
+  final payload = first?['payload'];
+  final raw = payload is Map ? payload['category'] : null;
+  return LocalSmsParser.categoryDisplayName(raw is String ? raw : null) ??
+      'Review';
+}
+
+String _aiSuggestedSummary(NeedsReviewItem item) =>
+    '✦ AI suggested · ${_suggestedCategoryName(item)}';
 
 Future<void> _persistCommitmentDismissal(
   WidgetRef ref,
@@ -351,6 +368,99 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
   String? _selectedMonthLabel;
   DateTimeRange? _customDateRange;
   _ReviewFilterCategory _selectedCategory = _ReviewFilterCategory.all;
+  int _selectedTab = 0;
+
+  Widget _buildTabSelector(int pendingCount, int autoCount) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.lg,
+        vertical: AppSpace.sm,
+      ),
+      child: SegmentedButton<int>(
+        segments: [
+          ButtonSegment(value: 0, label: Text('Needs Review ($pendingCount)')),
+          ButtonSegment(value: 1, label: Text('Auto-Resolved ($autoCount)')),
+        ],
+        selected: {_selectedTab},
+        showSelectedIcon: false,
+        onSelectionChanged: (selection) =>
+            setState(() => _selectedTab = selection.first),
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle: WidgetStatePropertyAll(
+            BambooFonts.ui(12.5, weight: FontWeight.w600),
+          ),
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: AppSpace.sm),
+          ),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? BambooInk.slate
+                : BambooInk.paperMuted,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? BambooInk.onSlate
+                : BambooInk.ink700,
+          ),
+          side: const WidgetStatePropertyAll(
+            BorderSide(color: BambooInk.hairlineOnPaper),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAutoResolvedTab() {
+    final history = ref.watch(autoResolvedHistoryProvider);
+    return history.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => ErrorState(
+        message: userFacingErrorMessage(err),
+        onRetry: () {
+          ref.invalidate(autoResolvedHistoryProvider);
+          ref.invalidate(autoResolvedCountProvider);
+        },
+      ),
+      data: (entries) {
+        if (entries.isEmpty) {
+          return const EmptyState(
+            icon: Icons.auto_awesome_outlined,
+            title: 'No auto-resolved items yet',
+            message:
+                'Confidently categorized alerts appear here so you can review or change them.',
+          );
+        }
+        final sorted = List<AutoResolvedHistoryEntry>.from(entries)
+          ..sort((a, b) {
+            final byTime = b.autoResolvedAt.compareTo(a.autoResolvedAt);
+            return byTime != 0 ? byTime : a.id.compareTo(b.id);
+          });
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(autoResolvedHistoryProvider);
+            ref.invalidate(autoResolvedCountProvider);
+            try {
+              await ref.read(autoResolvedHistoryProvider.future);
+            } catch (_) {
+              // The error state renders on the next build.
+            }
+          },
+          child: ListView.builder(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            itemCount: sorted.length,
+            itemBuilder: (context, index) => Padding(
+              key: ValueKey(sorted[index].id),
+              padding: const EdgeInsets.only(bottom: AppSpace.md),
+              child: _AutoResolvedCard(sorted[index]),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _chooseCustomDateRange() async {
     final now = DateTime.now();
@@ -419,6 +529,8 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(needsReviewItemsProvider);
+    final pendingItems = items.valueOrNull ?? const <NeedsReviewItem>[];
+    final autoCount = ref.watch(autoResolvedCountProvider).valueOrNull ?? 0;
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -431,218 +543,441 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
           style: BambooFonts.heading(18, color: BambooInk.ink900),
         ),
         actions: [
-          if ((items.valueOrNull ?? const []).isNotEmpty)
+          if (_selectedTab == 0 && pendingItems.isNotEmpty)
             TextButton(
               style: TextButton.styleFrom(foregroundColor: BambooInk.ink900),
-              onPressed: () =>
-                  _dismissAll(items.valueOrNull ?? const <NeedsReviewItem>[]),
+              onPressed: () => _dismissAll(pendingItems),
               child: const Text('Dismiss all'),
             ),
         ],
       ),
       body: AppBackground(
-        child: items.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
-          data: (list) {
-            if (list.isEmpty) {
-              return const EmptyState(
-                icon: Icons.mark_email_read_outlined,
-                title: 'Nothing needs review',
-                message:
-                    'Messages we couldn\'t automatically parse show up here — nothing is ever dropped silently.',
-              );
-            }
+        child: Column(
+          children: [
+            _buildTabSelector(pendingItems.length, autoCount),
+            Expanded(
+              child: _selectedTab == 1
+                  ? _buildAutoResolvedTab()
+                  : items.when(
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (err, _) =>
+                          ErrorState(message: userFacingErrorMessage(err)),
+                      data: (list) {
+                        if (list.isEmpty) {
+                          return const EmptyState(
+                            icon: Icons.mark_email_read_outlined,
+                            title: 'Nothing needs review',
+                            message:
+                                'Messages we couldn\'t automatically parse show up here — nothing is ever dropped silently.',
+                          );
+                        }
 
-            final sortedList = List<NeedsReviewItem>.from(list)
-              ..sort((a, b) {
-                final byDate = b.receivedAt.compareTo(a.receivedAt);
-                return byDate != 0 ? byDate : a.id.compareTo(b.id);
-              });
+                        final sortedList = List<NeedsReviewItem>.from(list)
+                          ..sort((a, b) {
+                            final byDate = b.receivedAt.compareTo(a.receivedAt);
+                            return byDate != 0 ? byDate : a.id.compareTo(b.id);
+                          });
 
-            final monthMap =
-                <String, ({String label, int count, DateTime date})>{};
-            for (final item in sortedList) {
-              final key =
-                  '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
-              final current = monthMap[key];
-              if (current == null) {
-                monthMap[key] = (
-                  label: DateFormat('MMM yyyy').format(item.receivedAt),
-                  count: 1,
-                  date: DateTime(item.receivedAt.year, item.receivedAt.month),
-                );
-              } else {
-                monthMap[key] = (
-                  label: current.label,
-                  count: current.count + 1,
-                  date: current.date,
-                );
-              }
-            }
+                        final monthMap =
+                            <String, ({String label, int count, DateTime date})>{};
+                        for (final item in sortedList) {
+                          final key =
+                              '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
+                          final current = monthMap[key];
+                          if (current == null) {
+                            monthMap[key] = (
+                              label: DateFormat('MMM yyyy').format(item.receivedAt),
+                              count: 1,
+                              date: DateTime(item.receivedAt.year, item.receivedAt.month),
+                            );
+                          } else {
+                            monthMap[key] = (
+                              label: current.label,
+                              count: current.count + 1,
+                              date: current.date,
+                            );
+                          }
+                        }
 
-            final availableMonths =
-                monthMap.entries
-                    .map(
-                      (e) => _MonthEntry(
-                        key: e.key,
-                        label: e.value.label,
-                        count: e.value.count,
-                        date: e.value.date,
-                      ),
-                    )
-                    .toList()
-                  ..sort((a, b) => b.date.compareTo(a.date));
+                        final availableMonths =
+                            monthMap.entries
+                                .map(
+                                  (e) => _MonthEntry(
+                                    key: e.key,
+                                    label: e.value.label,
+                                    count: e.value.count,
+                                    date: e.value.date,
+                                  ),
+                                )
+                                .toList()
+                              ..sort((a, b) => b.date.compareTo(a.date));
 
-            final filteredList = sortedList.where((item) {
-              if (_customDateRange != null) {
-                final date = item.receivedAt;
-                final start = _customDateRange!.start;
-                final end = _customDateRange!.end;
-                final rangeStart = DateTime(start.year, start.month, start.day);
-                final rangeEndExclusive = DateTime(
-                  end.year,
-                  end.month,
-                  end.day + 1,
-                );
-                if (date.isBefore(rangeStart) ||
-                    !date.isBefore(rangeEndExclusive)) {
-                  return false;
-                }
-              }
-              if (_selectedMonth != null) {
-                final itemMonthKey =
-                    '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
-                if (itemMonthKey != _selectedMonth) return false;
-              }
-              if (_selectedCategory != _ReviewFilterCategory.all) {
-                if (_categorizeItem(item) != _selectedCategory) return false;
-              }
-              return true;
-            }).toList();
+                        final filteredList = sortedList.where((item) {
+                          if (_customDateRange != null) {
+                            final date = item.receivedAt;
+                            final start = _customDateRange!.start;
+                            final end = _customDateRange!.end;
+                            final rangeStart = DateTime(start.year, start.month, start.day);
+                            final rangeEndExclusive = DateTime(
+                              end.year,
+                              end.month,
+                              end.day + 1,
+                            );
+                            if (date.isBefore(rangeStart) ||
+                                !date.isBefore(rangeEndExclusive)) {
+                              return false;
+                            }
+                          }
+                          if (_selectedMonth != null) {
+                            final itemMonthKey =
+                                '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
+                            if (itemMonthKey != _selectedMonth) return false;
+                          }
+                          if (_selectedCategory != _ReviewFilterCategory.all) {
+                            if (_categorizeItem(item) != _selectedCategory) return false;
+                          }
+                          return true;
+                        }).toList();
 
-            return Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: BambooInk.hairlineOnPaper),
+                        return Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+                              decoration: const BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(color: BambooInk.hairlineOnPaper),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpace.lg,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        _FilterChip(
+                                          label: 'All time',
+                                          selected:
+                                              _selectedMonth == null &&
+                                              _customDateRange == null,
+                                          onTap: () => setState(() {
+                                            _selectedMonth = null;
+                                            _selectedMonthLabel = null;
+                                            _customDateRange = null;
+                                          }),
+                                        ),
+                                        const SizedBox(width: AppSpace.xs),
+                                        _FilterChip(
+                                          label: _customDateRange == null
+                                              ? 'Custom'
+                                              : '${DateFormat(_customDateRange!.start.year == _customDateRange!.end.year ? 'd MMM' : 'd MMM yy').format(_customDateRange!.start)}–${DateFormat('d MMM yy').format(_customDateRange!.end)}',
+                                          selected: _customDateRange != null,
+                                          onTap: _chooseCustomDateRange,
+                                        ),
+                                        for (final m in availableMonths) ...[
+                                          const SizedBox(width: AppSpace.xs),
+                                          _FilterChip(
+                                            label: '${m.label} (${m.count})',
+                                            selected: _selectedMonth == m.key,
+                                            onTap: () => setState(() {
+                                              _selectedMonth = m.key;
+                                              _selectedMonthLabel = m.label;
+                                              _customDateRange = null;
+                                            }),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpace.xs),
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpace.lg,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        for (
+                                          int i = 0;
+                                          i < _ReviewFilterCategory.values.length;
+                                          i++
+                                        ) ...[
+                                          if (i > 0) const SizedBox(width: AppSpace.xs),
+                                          _FilterChip(
+                                            label: _ReviewFilterCategory.values[i].label,
+                                            selected:
+                                                _selectedCategory ==
+                                                _ReviewFilterCategory.values[i],
+                                            onTap: () => setState(() {
+                                              _selectedCategory =
+                                                  _ReviewFilterCategory.values[i];
+                                            }),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: filteredList.isEmpty
+                                  ? EmptyState(
+                                      icon: Icons.filter_alt_off_outlined,
+                                      title: _selectedMonthLabel != null
+                                          ? 'No review items in $_selectedMonthLabel'
+                                          : _customDateRange != null
+                                          ? 'No review items in selected dates'
+                                          : 'No review items in ${_selectedCategory.label}',
+                                      message: 'Try changing your date or type filter.',
+                                    )
+                                  : RefreshIndicator(
+                                      onRefresh: () async {
+                                        ref.read(smsFlushTriggerProvider.notifier).state++;
+                                        ref.invalidate(needsReviewItemsProvider);
+                                        await Future.delayed(const Duration(milliseconds: 600));
+                                      },
+                                      child: ListView.builder(
+                                        padding: const EdgeInsets.all(AppSpace.lg),
+                                      itemCount: filteredList.length,
+                                      itemBuilder: (context, index) => Padding(
+                                        key: ValueKey(filteredList[index].id),
+                                        padding: const EdgeInsets.only(bottom: AppSpace.md),
+                                        child:
+                                            filteredList[index].kind ==
+                                                NeedsReviewKind.commitment
+                                            ? _CommitmentNeedsReviewTile(
+                                                filteredList[index],
+                                              )
+                                            : _NeedsReviewTile(filteredList[index]),
+                                      ),
+                                    ),
+                                  ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AutoResolvedCard extends ConsumerStatefulWidget {
+  final AutoResolvedHistoryEntry entry;
+  const _AutoResolvedCard(this.entry);
+
+  @override
+  ConsumerState<_AutoResolvedCard> createState() => _AutoResolvedCardState();
+}
+
+class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
+  bool _busy = false;
+
+  String _dateLabel(AutoResolvedHistoryEntry entry) {
+    final showDue =
+        entry.resolvedKind == 'bill' &&
+        entry.dueDate != null &&
+        entry.dueDate!.isNotEmpty;
+    final raw = showDue ? entry.dueDate! : entry.occurredAt;
+    final parsed = DateTime.tryParse(raw)?.toLocal();
+    if (parsed == null) return showDue ? 'Due $raw' : raw;
+    final formatted = DateFormat('MMM d, yyyy').format(parsed);
+    return showDue ? 'Due $formatted' : 'On $formatted';
+  }
+
+  Future<void> _changeCategory() async {
+    final categories = smsSpendCategories.toList(growable: false);
+    final slug = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: BambooInk.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.72,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.lg,
+                AppSpace.sm,
+                AppSpace.sm,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Change category',
+                      style: BambooFonts.heading(17, color: BambooInk.ink900),
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpace.lg,
-                        ),
-                        child: Row(
-                          children: [
-                            _FilterChip(
-                              label: 'All time',
-                              selected:
-                                  _selectedMonth == null &&
-                                  _customDateRange == null,
-                              onTap: () => setState(() {
-                                _selectedMonth = null;
-                                _selectedMonthLabel = null;
-                                _customDateRange = null;
-                              }),
-                            ),
-                            const SizedBox(width: AppSpace.xs),
-                            _FilterChip(
-                              label: _customDateRange == null
-                                  ? 'Custom'
-                                  : '${DateFormat(_customDateRange!.start.year == _customDateRange!.end.year ? 'd MMM' : 'd MMM yy').format(_customDateRange!.start)}–${DateFormat('d MMM yy').format(_customDateRange!.end)}',
-                              selected: _customDateRange != null,
-                              onTap: _chooseCustomDateRange,
-                            ),
-                            for (final m in availableMonths) ...[
-                              const SizedBox(width: AppSpace.xs),
-                              _FilterChip(
-                                label: '${m.label} (${m.count})',
-                                selected: _selectedMonth == m.key,
-                                onTap: () => setState(() {
-                                  _selectedMonth = m.key;
-                                  _selectedMonthLabel = m.label;
-                                  _customDateRange = null;
-                                }),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpace.xs),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpace.lg,
-                        ),
-                        child: Row(
-                          children: [
-                            for (
-                              int i = 0;
-                              i < _ReviewFilterCategory.values.length;
-                              i++
-                            ) ...[
-                              if (i > 0) const SizedBox(width: AppSpace.xs),
-                              _FilterChip(
-                                label: _ReviewFilterCategory.values[i].label,
-                                selected:
-                                    _selectedCategory ==
-                                    _ReviewFilterCategory.values[i],
-                                onTap: () => setState(() {
-                                  _selectedCategory =
-                                      _ReviewFilterCategory.values[i];
-                                }),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
                   ),
-                ),
-                Expanded(
-                  child: filteredList.isEmpty
-                      ? EmptyState(
-                          icon: Icons.filter_alt_off_outlined,
-                          title: _selectedMonthLabel != null
-                              ? 'No review items in $_selectedMonthLabel'
-                              : _customDateRange != null
-                              ? 'No review items in selected dates'
-                              : 'No review items in ${_selectedCategory.label}',
-                          message: 'Try changing your date or type filter.',
-                        )
-                      : RefreshIndicator(
-                          onRefresh: () async {
-                            ref.read(smsFlushTriggerProvider.notifier).state++;
-                            ref.invalidate(needsReviewItemsProvider);
-                            await Future.delayed(const Duration(milliseconds: 600));
-                          },
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(AppSpace.lg),
-                          itemCount: filteredList.length,
-                          itemBuilder: (context, index) => Padding(
-                            key: ValueKey(filteredList[index].id),
-                            padding: const EdgeInsets.only(bottom: AppSpace.md),
-                            child:
-                                filteredList[index].kind ==
-                                    NeedsReviewKind.commitment
-                                ? _CommitmentNeedsReviewTile(
-                                    filteredList[index],
-                                  )
-                                : _NeedsReviewTile(filteredList[index]),
-                          ),
-                        ),
-                      ),
-                ),
-              ],
-            );
-          },
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.only(bottom: AppSpace.lg),
+                itemCount: categories.length,
+                itemBuilder: (context, index) {
+                  final categorySlug = categories[index];
+                  return ListTile(
+                    title: Text(
+                      LocalSmsParser.categoryDisplayName(categorySlug) ??
+                          categorySlug,
+                      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                    ),
+                    trailing: widget.entry.categorySlug == categorySlug
+                        ? const Icon(Icons.check_rounded, color: BambooInk.jade)
+                        : null,
+                    onTap: () => Navigator.of(context).pop(categorySlug),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+    if (slug == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(smsAutoResolutionControllerProvider)
+          .changeCategory(widget.entry, slug);
+      ref.invalidate(autoResolvedHistoryProvider);
+      ref.invalidate(autoResolvedCountProvider);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _moveToReview() async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(smsAutoResolutionControllerProvider)
+          .moveToReview(widget.entry);
+      ref.invalidate(autoResolvedHistoryProvider);
+      ref.invalidate(autoResolvedCountProvider);
+      ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
+      ref.invalidate(commitmentsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Moved to Needs Review')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = widget.entry;
+    return Container(
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.auto_awesome_rounded, color: BambooInk.jade),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.title,
+                      style: BambooFonts.heading(
+                        14.5,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '✦ Auto-Categorized by AI · ${entry.categoryName}',
+                      style: BambooFonts.ui(
+                        12.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.jade,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _dateLabel(entry),
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Text(
+                entry.amount.format(),
+                style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.xs),
+          Wrap(
+            spacing: AppSpace.sm,
+            runSpacing: AppSpace.xs,
+            children: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
+                ),
+                onPressed: _busy ? null : _changeCategory,
+                child: const Text('Change Category'),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
+                ),
+                onPressed: _busy ? null : _moveToReview,
+                child: const Text('Move to Review'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -866,6 +1201,10 @@ class _CommitmentNeedsReviewTileState
             ).format(item.receivedAt.toLocal()),
             style: BambooFonts.ui(12, color: BambooInk.ink500),
           ),
+          if (item.aiSuggestions?.isNotEmpty == true) ...[
+            const SizedBox(height: AppSpace.xs),
+            _AiBadge(summary: _aiSuggestedSummary(item)),
+          ],
           const SizedBox(height: AppSpace.sm),
           Container(
             padding: const EdgeInsets.all(AppSpace.sm),
@@ -1734,26 +2073,7 @@ class _NeedsReviewTile extends ConsumerStatefulWidget {
 class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   bool _busy = false;
 
-  String get _aiSummary {
-    final types =
-        widget.item.aiSuggestions
-            ?.map((suggestion) => suggestion['factType'])
-            .whereType<String>()
-            .toSet() ??
-        const <String>{};
-    final labels = types.map(
-      (type) => switch (type) {
-        'posted_movement' => 'transaction',
-        'balance_snapshot' => 'bank balance',
-        'bill_obligation' => 'card bill',
-        'bill_payment' => 'bill payment',
-        'mandate_lifecycle' => 'mandate',
-        'card_identity_hint' => 'card detail',
-        _ => 'financial detail',
-      },
-    );
-    return 'AI suggested · ${labels.join(', ')}';
-  }
+  String get _aiSummary => _aiSuggestedSummary(widget.item);
 
   Future<void> _dismissNotATransaction() async {
     setState(() => _busy = true);

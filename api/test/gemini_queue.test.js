@@ -683,6 +683,102 @@ test('a valid result lands, purges the body, and marks the job done', async () =
   assert.equal(job.result.specialists, null, 'AI result cannot mutate legacy projections');
 });
 
+const SWIGGY_BODY =
+  'Sent Rs.420.00 from HDFC Bank A/C **1797 to SWIGGY UPI on 24-10-26. UPI Ref 429812345678. Avail Bal: Rs.45,120.50';
+
+const SWIGGY_FACT = {
+  factType: 'posted_movement',
+  payload: {
+    amountRole: 'posted',
+    entryKind: 'spend',
+    amountInr: 420.0,
+    occurredAt: '2026-10-24T00:00:00.000Z',
+    instrument: 'upi_bank',
+    accountLast4: '1797',
+    issuerName: 'HDFC Bank',
+    merchant: 'Swiggy',
+    category: 'dining',
+    isComplete: true,
+    confidence: 0.98,
+  },
+};
+
+const PARTIAL_BODY =
+  'A/c XX1797 debited for INR 750.00 on 24-10-26. Info: POS-TXN. Avail Bal: 21,400.00.';
+
+const PARTIAL_FACT = {
+  factType: 'posted_movement',
+  payload: {
+    amountRole: 'posted',
+    entryKind: 'spend',
+    amountInr: 750.0,
+    occurredAt: '2026-10-24T00:00:00.000Z',
+    instrument: 'upi_bank',
+    accountLast4: '1797',
+    merchant: null,
+    category: 'other',
+    isComplete: false,
+    confidence: 0.65,
+  },
+};
+
+test('a high-confidence complete posted movement auto-resolves with a composite score', async () => {
+  const client = makeUserClient();
+  const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: SWIGGY_BODY,
+  });
+  await geminiQueue.leaseNextJob(client, 'worker:tok1', client.state.now);
+  const job = client.state.jobs.get(accepted.jobId);
+  const outcome = await geminiQueue.completeJobWithResult(client, {
+    job,
+    facts: [SWIGGY_FACT],
+  });
+  assert.equal(job.status, 'done');
+  assert.equal(job.result.reviewRequired, false);
+  assert.ok(job.result.confidenceScore >= 0.85, `score ${job.result.confidenceScore}`);
+  assert.equal(job.result.scores.length, 1);
+  assert.equal(job.result.scores[0].factType, 'posted_movement');
+  assert.equal(job.result.scores[0].isComplete, true);
+  assert.deepEqual(job.result.factTypes, ['posted_movement']);
+  assert.equal(outcome.reviewRequired, false);
+  assert.equal(outcome.confidenceScore, job.result.confidenceScore);
+});
+
+test('a partial or incomplete movement stays in Needs Review', async () => {
+  const client = makeUserClient();
+  const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: PARTIAL_BODY,
+  });
+  await geminiQueue.leaseNextJob(client, 'worker:tok1', client.state.now);
+  const job = client.state.jobs.get(accepted.jobId);
+  await geminiQueue.completeJobWithResult(client, { job, facts: [PARTIAL_FACT] });
+  assert.equal(job.result.reviewRequired, true);
+  assert.ok(job.result.confidenceScore < 0.85);
+  assert.equal(job.result.scores[0].isComplete, false);
+});
+
+test('an explicit reviewRequired override wins over the computed score', async () => {
+  const client = makeUserClient();
+  const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: SWIGGY_BODY,
+  });
+  await geminiQueue.leaseNextJob(client, 'worker:tok1', client.state.now);
+  const job = client.state.jobs.get(accepted.jobId);
+  await geminiQueue.completeJobWithResult(client, {
+    job,
+    facts: [SWIGGY_FACT],
+    reviewRequired: true,
+  });
+  assert.equal(job.result.reviewRequired, true);
+  assert.ok(job.result.confidenceScore >= 0.85, 'the score is still reported');
+});
+
 test('AI results only fill empty slots: device facts and overrides outrank the model', async () => {
   const client = makeUserClient();
   // Device got there first with its own fact for index 0.
@@ -1105,6 +1201,27 @@ test('valid AI result endpoint completes review-only without invoking projection
     assert.deepEqual(job.payload, { purged: true });
     assert.equal(h.state.events.filter((event) => event.event_type === 'result').length, 1);
   }
+});
+
+test('result endpoint carries the computed auto-resolution decision and score', async () => {
+  const h = harness({});
+  const accepted = await h.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: SWIGGY_BODY },
+  });
+  const lease = await h.call('/ai/jobs/lease', { body: {} });
+  const job = h.state.jobs.get(accepted.body.jobId);
+  job.lease_expires_at = new Date(Date.now() + 600000);
+  const result = await h.call('/ai/jobs/:id/result', {
+    params: { id: job.id },
+    body: { profileId: PROFILE_A, leaseToken: lease.body.job.leaseToken, facts: [SWIGGY_FACT] },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.jobStatus, 'done');
+  assert.equal(result.body.reviewRequired, false);
+  assert.ok(result.body.confidenceScore >= 0.85);
+  assert.equal(job.result.reviewRequired, false);
+  assert.equal(job.result.specialists, null);
 });
 
 test('source status omits AI facts the user already confirmed or corrected', async () => {

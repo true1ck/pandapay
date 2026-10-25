@@ -136,6 +136,16 @@ void main() {
       expect(find.text('My Test Card'), findsOneWidget);
       expect(find.byType(TabBar), findsNothing);
       expect(find.text('REWARDS'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Spend'),
+        300,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('cardDetailScroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       expect(find.text('Spend'), findsOneWidget);
       expect(find.text('Spent this month'), findsNothing);
     },

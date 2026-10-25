@@ -7,10 +7,66 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/auto_resolved_history_repository.dart';
+import 'package:pandapay/data/local/sms_auto_resolution_controller.dart';
 import 'package:pandapay/data/commitments_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/needs_review_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+AutoResolvedHistoryEntry _historyEntry({
+  required String id,
+  required String title,
+  String resolvedKind = 'transaction',
+  String? categorySlug = 'dining',
+  int amountPaise = 49900,
+  String? dueDate,
+  int autoResolvedAt = 1000,
+}) => AutoResolvedHistoryEntry(
+  id: id,
+  namespace: 'user:test',
+  sourceKey: 'source-$id',
+  sender: 'VM-HDFCBK',
+  resolvedKind: resolvedKind,
+  title: title,
+  amountPaise: amountPaise,
+  categorySlug: categorySlug,
+  dueDate: dueDate,
+  occurredAt: '2026-10-20T10:00:00.000Z',
+  instrument: 'credit_card',
+  accountLast4: '1234',
+  confidence: 0.95,
+  autoResolvedAt: autoResolvedAt,
+);
+
+class _FakeSmsAutoResolutionController
+    implements SmsAutoResolutionController {
+  AutoResolvedHistoryEntry? changedEntry;
+  String? changedCategory;
+  AutoResolvedHistoryEntry? movedEntry;
+  Future<void> Function(AutoResolvedHistoryEntry entry, String categorySlug)?
+  onChangeCategory;
+  Future<void> Function(AutoResolvedHistoryEntry entry)? onMoveToReview;
+
+  @override
+  Future<void> changeCategory(
+    AutoResolvedHistoryEntry entry,
+    String categorySlug,
+  ) async {
+    changedEntry = entry;
+    changedCategory = categorySlug;
+    await onChangeCategory?.call(entry, categorySlug);
+  }
+
+  @override
+  Future<void> moveToReview(AutoResolvedHistoryEntry entry) async {
+    movedEntry = entry;
+    await onMoveToReview?.call(entry);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class _FakeUserCardsRepository implements UserCardsRepository {
   Map<String, dynamic>? lastLogArgs;
@@ -95,8 +151,11 @@ Future<void> _pump(
   required _FakeUserCardsRepository repo,
   required NeedsReviewRepository reviews,
   CommitmentsRepository? commitments,
+  List<AutoResolvedHistoryEntry> autoResolved = const [],
+  SmsAutoResolutionController? autoResolutionController,
+  Size surfaceSize = const Size(1000, 1000),
 }) async {
-  await tester.binding.setSurfaceSize(const Size(1000, 1000));
+  await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     ProviderScope(
@@ -105,6 +164,13 @@ Future<void> _pump(
         userCardsProvider.overrideWith((ref) async => const []),
         categoriesProvider.overrideWith((ref) async => const []),
         needsReviewRepositoryProvider.overrideWithValue(reviews),
+        autoResolvedHistoryProvider.overrideWith((ref) async => autoResolved),
+        autoResolvedCountProvider.overrideWith(
+          (ref) async => autoResolved.length,
+        ),
+        smsAutoResolutionControllerProvider.overrideWithValue(
+          autoResolutionController ?? _FakeSmsAutoResolutionController(),
+        ),
         if (commitments != null)
           commitmentsRepositoryProvider.overrideWithValue(commitments),
       ],
@@ -151,7 +217,7 @@ void main() {
     expect(find.text('AI review not started'), findsOneWidget);
   });
 
-  testWidgets('shows completed Gemini check status beside its suggestions', (
+  testWidgets('shows completed AI check status beside its suggestions', (
     tester,
   ) async {
     await reviews.add(
@@ -943,6 +1009,238 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('AD-HDFCBK'), findsOneWidget);
       expect(find.text('VA-CANBNK'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'renders dual segmented tabs with pending and auto-resolved counts',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'pending-1',
+          sender: 'VM-HDFCBK',
+          body: 'Rs.499 spent on HDFC Bank Card ending 1234 at SHOP.',
+          receivedAt: DateTime.now(),
+        ),
+      );
+      final entries = [
+        _historyEntry(
+          id: 'auto-1',
+          title: 'SWIGGY',
+          autoResolvedAt: 2000,
+        ),
+        _historyEntry(
+          id: 'auto-2',
+          title: 'Airtel Broadband',
+          resolvedKind: 'bill',
+          categorySlug: 'bills',
+          amountPaise: 149900,
+          dueDate: '2026-11-05T12:00:00.000Z',
+          autoResolvedAt: 1000,
+        ),
+      ];
+
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(),
+        reviews: reviews,
+        autoResolved: entries,
+      );
+
+      expect(find.text('Needs Review (1)'), findsOneWidget);
+      expect(find.text('Auto-Resolved (2)'), findsOneWidget);
+      expect(find.text('Dismiss all'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'renders both tabs without overflow at a small phone width',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'small-1',
+          sender: 'VM-HDFCBK',
+          body: 'Rs.499 spent on HDFC Bank Card ending 1234 at SHOP.',
+          receivedAt: DateTime.now(),
+        ),
+      );
+      final entries = [
+        _historyEntry(id: 'small-auto', title: 'SWIGGY'),
+      ];
+
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(),
+        reviews: reviews,
+        autoResolved: entries,
+        surfaceSize: const Size(360, 800),
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('Needs Review (1)'), findsOneWidget);
+      expect(find.text('Auto-Resolved (1)'), findsOneWidget);
+
+      await tester.tap(find.text('Auto-Resolved (1)'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Change Category'), findsOneWidget);
+      expect(find.text('Move to Review'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'auto-resolved tab shows newest-first feed with AI badge, category and due date',
+    (tester) async {
+      final entries = [
+        _historyEntry(
+          id: 'auto-new',
+          title: 'SWIGGY',
+          autoResolvedAt: 2000,
+        ),
+        _historyEntry(
+          id: 'auto-old',
+          title: 'Airtel Broadband',
+          resolvedKind: 'bill',
+          categorySlug: 'bills',
+          amountPaise: 149900,
+          dueDate: '2026-11-05T12:00:00.000Z',
+          autoResolvedAt: 1000,
+        ),
+      ];
+
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(),
+        reviews: reviews,
+        autoResolved: entries,
+      );
+
+      await tester.tap(find.text('Auto-Resolved (2)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('✦ Auto-Categorized by AI · Dining'), findsOneWidget);
+      expect(
+        find.text('✦ Auto-Categorized by AI · Bills & Utilities'),
+        findsOneWidget,
+      );
+      expect(find.text('₹499.00'), findsOneWidget);
+      expect(find.text('₹1,499.00'), findsOneWidget);
+      expect(find.text('Due Nov 5, 2026'), findsOneWidget);
+      expect(find.text('Change Category'), findsNWidgets(2));
+      expect(find.text('Move to Review'), findsNWidgets(2));
+      expect(find.textContaining('Gemini'), findsNothing);
+      expect(find.text('Dismiss all'), findsNothing);
+
+      final newest = tester.getTopLeft(find.text('SWIGGY')).dy;
+      final oldest = tester.getTopLeft(find.text('Airtel Broadband')).dy;
+      expect(newest, lessThan(oldest));
+    },
+  );
+
+  testWidgets(
+    'pending item with AI suggestions shows the suggested category badge',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'ai-cat-1',
+          sender: 'VM-HDFCBK',
+          body: 'INR 499 spent at SWIGGY on card ending 1234.',
+          receivedAt: DateTime.now(),
+          aiSuggestions: const [
+            {
+              'factIndex': 0,
+              'factType': 'posted_movement',
+              'payload': {
+                'amountInr': 499,
+                'merchant': 'SWIGGY',
+                'category': 'dining',
+              },
+            },
+          ],
+        ),
+      );
+
+      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+      expect(find.text('✦ AI suggested · Dining'), findsOneWidget);
+      expect(find.text('AI review not started'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Change Category calls the controller for the chosen category', (
+    tester,
+  ) async {
+    final controller = _FakeSmsAutoResolutionController();
+    final entries = [_historyEntry(id: 'auto-cat', title: 'SWIGGY')];
+
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(),
+      reviews: reviews,
+      autoResolved: entries,
+      autoResolutionController: controller,
+    );
+
+    await tester.tap(find.text('Auto-Resolved (1)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Change Category'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Change category'), findsOneWidget);
+    expect(find.text('Groceries'), findsOneWidget);
+
+    await tester.tap(find.text('Fuel'));
+    await tester.pumpAndSettle();
+
+    expect(controller.changedEntry?.id, 'auto-cat');
+    expect(controller.changedCategory, 'fuel');
+    expect(find.text('Change category'), findsNothing);
+  });
+
+  testWidgets(
+    'Move to Review removes the history item and adds a pending review item',
+    (tester) async {
+      final entries = [_historyEntry(id: 'auto-move', title: 'SWIGGY')];
+      final controller = _FakeSmsAutoResolutionController()
+        ..onMoveToReview = (entry) async {
+          entries.removeWhere((item) => item.id == entry.id);
+          await reviews.add(
+            NeedsReviewItem(
+              id: 'review-${entry.id}',
+              sender: 'VM-HDFCBK',
+              body: 'Rs.499 spent on HDFC Bank Card ending 1234 at SWIGGY.',
+              receivedAt: DateTime.now(),
+            ),
+          );
+        };
+
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(),
+        reviews: reviews,
+        autoResolved: entries,
+        autoResolutionController: controller,
+      );
+
+      await tester.tap(find.text('Auto-Resolved (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('SWIGGY'), findsOneWidget);
+
+      await tester.tap(find.text('Move to Review'));
+      await tester.pumpAndSettle();
+
+      expect(controller.movedEntry?.id, 'auto-move');
+      expect(find.text('Moved to Needs Review'), findsOneWidget);
+      expect(find.text('No auto-resolved items yet'), findsOneWidget);
+      expect(find.text('Needs Review (1)'), findsOneWidget);
+      expect(await reviews.fetchAll(), hasLength(1));
+
+      await tester.tap(find.text('Needs Review (1)'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Rs.499 spent on HDFC Bank Card ending 1234 at SWIGGY.'),
+        findsOneWidget,
+      );
     },
   );
 }

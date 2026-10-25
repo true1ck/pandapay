@@ -254,8 +254,9 @@ class PandaIllustration extends StatelessWidget {
   );
 }
 
-/// The approved Gemini footage exported as compact, cropped image sequences.
-/// The source MP4 and its marked outer margins are not included in the app.
+/// The approved AI-generated footage exported as compact, cropped image
+/// sequences. The source MP4 and its marked outer margins are not included in
+/// the app.
 class PandaStoryIllustration extends StatefulWidget {
   final bool spending;
   final bool playing;

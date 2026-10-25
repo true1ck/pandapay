@@ -132,6 +132,35 @@ class LocalSmsParser {
   // learned from its own AutoPay message.
   static const version = 13;
 
+  /// User-learned merchant rules run before FlashText/grammar category
+  /// inference. Deterministic and longest-pattern-first so two overlapping
+  /// rules cannot produce different categories across captures.
+  static String? _userCategoryRuleSlug(
+    Map<String, String>? rules,
+    String? merchant,
+    String sender,
+  ) {
+    if (rules == null || rules.isEmpty) return null;
+    String normalize(String value) =>
+        value.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+    final merchantText = normalize(merchant ?? '');
+    final senderText = normalize(sender);
+    String? matchedSlug;
+    var matchedLength = -1;
+    for (final entry in rules.entries) {
+      final pattern = normalize(entry.key);
+      if (pattern.isEmpty) continue;
+      final matched =
+          (merchantText.isNotEmpty && merchantText.contains(pattern)) ||
+          (senderText.isNotEmpty && senderText.contains(pattern));
+      if (matched && pattern.length > matchedLength) {
+        matchedSlug = entry.value;
+        matchedLength = pattern.length;
+      }
+    }
+    return matchedSlug;
+  }
+
   static String? categoryDisplayName(String? slug) {
     if (slug == null || slug.isEmpty) return null;
     return switch (slug.toLowerCase()) {
@@ -405,7 +434,6 @@ class LocalSmsParser {
       r'\b(?:claim\s+your\s+[\w\s]+(?:insta\s+)?emi\s+card|avail\s+(?:credit\s+)?card\s+with\s+limit|eligible\s+for\s+(?:a\s+)?(?:[\w\s]{0,20}\s+)?loan\b|use\s+card\s+loan\s+limit\s+of\b|complete\s+your\s+[\w\s]+emi\s+card\s+application|pre[-\s]?approved\s+loan)\b|'
       r'\b(?:is\s+still\s+not\s+renewed|renew\s+to\s+avoid\s+unexpected\s+expenses|renew\s+before\s+expiry\s+on|registration\s+for\s+(?:fingerprint|face\s+id|biometric)|your\s+request\s+for\s+renewal\s+has\s+been\s+received\s+&\s+processed)\b',
     ).hasMatch(text);
-    if (isActionableInsuranceRenewal(body)) return false;
     // Informational card/account controls carry no money movement, amount,
     // due date, balance or mandate. They are matched last so a completed
     // debit, bill, balance snapshot or limit-with-amount already returned
@@ -421,6 +449,7 @@ class LocalSmsParser {
       r'|\bas\s+per\s+sebi\b[\s\S]{0,120}\bsettlement\b'
       r'|\bday\s+of\s+settlement\b',
     ).hasMatch(text);
+    if (isActionableInsuranceRenewal(body)) return false;
     return offer ||
         serviceNotice ||
         operationalNotice ||
@@ -887,6 +916,7 @@ class LocalSmsParser {
     required DateTime receivedAt,
     List<UserCard> cards = const [],
     String? ownUserName,
+    Map<String, String>? userCategoryRules,
   }) {
     final parsed = parse(
       namespace: namespace,
@@ -895,6 +925,7 @@ class LocalSmsParser {
       receivedAt: receivedAt,
       cards: cards,
       ownUserName: ownUserName,
+      userCategoryRules: userCategoryRules,
     );
     final transaction = parsed?.transaction;
     if (transaction != null) {
@@ -1207,6 +1238,11 @@ class LocalSmsParser {
     List<UserCard> cards = const [],
     String? ownUserName,
     SmsRuleBundle? downloadedRules,
+    // Closed-loop learning: a user correction recorded by SmsLearningFeedback
+    // runs BEFORE the built-in grammar's category inference (never before the
+    // safety gates). Normalised pattern -> category slug. Null keeps every
+    // existing behaviour byte-for-byte.
+    Map<String, String>? userCategoryRules,
   }) {
     if (body.length > 20000 || sensitive(body)) return null;
 
@@ -1278,6 +1314,7 @@ class LocalSmsParser {
           body: body,
           receivedAt: receivedAt,
           cards: cards,
+          userCategoryRules: userCategoryRules,
         );
         if (obs != null) return obs;
       }
@@ -2144,7 +2181,16 @@ class LocalSmsParser {
     final ftMatch = FlashTextMerchantExtractor.defaultExtractor.extractFirst(
       textForMatching,
     );
+    // A user correction is authoritative: it outranks both the brand catalog
+    // and the layout-specific fallbacks below. Confidence for a transaction
+    // observation is already 1.0, so the learned field is fully trusted.
+    final userRuleSlug = _userCategoryRuleSlug(
+      userCategoryRules,
+      merchant,
+      sender,
+    );
     final categorySlug =
+        userRuleSlug ??
         ftMatch?.category ??
         (billPayment
             ? 'bills'
@@ -2189,6 +2235,7 @@ class LocalSmsParser {
     required String body,
     required DateTime receivedAt,
     required List<UserCard> cards,
+    Map<String, String>? userCategoryRules,
   }) {
     if (rule.family == SmsRuleFamily.ignoreNoise) {
       // Safety safeguard: an ignore rule cannot silence an SMS containing real
@@ -2328,7 +2375,9 @@ class LocalSmsParser {
       final ftMatch = FlashTextMerchantExtractor.defaultExtractor.extractFirst(
         textForMatching,
       );
-      final categorySlug = ftMatch?.category;
+      final categorySlug =
+          _userCategoryRuleSlug(userCategoryRules, merchant, sender) ??
+          ftMatch?.category;
       final categoryName = categoryDisplayName(categorySlug);
       final txn = TransactionEntry(
         id: 'local-sms:$key',

@@ -33,6 +33,8 @@ import '../data/import_repository.dart';
 import '../data/local/app_database.dart';
 import '../data/local/response_cache.dart';
 import '../data/local/financial_store.dart';
+import '../data/local/auto_resolved_history_repository.dart';
+import '../data/local/sms_auto_resolution_controller.dart';
 import '../data/local/sms_rule_bundle.dart';
 import '../data/local/sms_rule_bundle_store.dart';
 import '../data/local/sms_facts_outbox.dart';
@@ -1106,6 +1108,54 @@ final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((
   markObservationsReady();
   return items;
 });
+
+/// Tier-1 auto-resolution receipts, newest first. A resolution is a normal
+/// financial-store change (entity 'auto_resolved_history'), so the same
+/// revision stream that refreshes transactions also refreshes this list.
+final autoResolvedHistoryProvider =
+    FutureProvider<List<AutoResolvedHistoryEntry>>((ref) async {
+      final markReady = _financialChanges(ref, 'auto_resolved_history');
+      final markTransactionsReady = _financialChanges(ref, 'transactions');
+      final store = (await ref.watch(responseCacheProvider.future)).financialStore;
+      final rows = AutoResolvedHistoryRepository(
+        store.database,
+        namespace: ref.watch(cacheNamespaceProvider),
+      ).fetchAll();
+      markReady();
+      markTransactionsReady();
+      return rows;
+    });
+
+final autoResolvedCountProvider = FutureProvider<int>((ref) async {
+  final markReady = _financialChanges(ref, 'auto_resolved_history');
+  final store = (await ref.watch(responseCacheProvider.future)).financialStore;
+  final count = AutoResolvedHistoryRepository(
+    store.database,
+    namespace: ref.watch(cacheNamespaceProvider),
+  ).count();
+  markReady();
+  return count;
+});
+
+/// Undo/correct actions for the Auto-Resolved tab. Synchronous by contract:
+/// the Needs Review flow always initializes [responseCacheProvider] first, so
+/// a missing cache is a programming error rather than a loading state.
+final smsAutoResolutionControllerProvider =
+    Provider<SmsAutoResolutionController>((ref) {
+      final cache = ref.watch(responseCacheProvider).valueOrNull;
+      if (cache == null) {
+        throw StateError(
+          'smsAutoResolutionControllerProvider requires responseCacheProvider '
+          'to be initialized before it is read',
+        );
+      }
+      return SmsAutoResolutionController(
+        database: cache.financialStore.database,
+        store: cache.financialStore,
+        reviewRepository: ref.watch(needsReviewRepositoryProvider),
+        namespace: ref.watch(cacheNamespaceProvider),
+      );
+    });
 
 /// The shared SMS rule bundle the server publishes: a versioned set of
 /// sender/word patterns the device applies locally, so a parser improvement
@@ -6080,33 +6130,56 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         changed =
             await reviewRepo.updateAiStatus(item.id, statusValue) || changed;
         final rawSuggestions = status['suggestions'];
+        final result = status['result'];
         if (status['status'] == 'done' && rawSuggestions is List) {
-          // The classifier's structured suggestions belong to the review item
-          // so the user sees what the model proposed before deciding.
           final suggestions = rawSuggestions
               .whereType<Map>()
               .map((value) => Map<String, dynamic>.from(value))
               .toList();
-          changed =
-              await reviewRepo.updateAiSuggestions(item.id, suggestions) ||
-              changed;
-        }
-        final result = status['result'];
-        if (status['status'] == 'done' &&
-            result is Map &&
-            result['reviewRequired'] == false) {
-          await reviewRepo.remove(item.id);
-          changed = true;
+          // Tier 1 auto-files the movement/bill and removes the row; Tier 2
+          // keeps it with a prefilled draft; Tier 3 drops it silently. The
+          // decision is made locally from the same composite score the server
+          // computed, so a stale/failed poll can never bypass the threshold.
+          final cache = await ref.read(responseCacheProvider.future);
+          final resolution = SmsImportStore(
+            cache.financialStore,
+          ).resolveAiSuggestions(
+            namespace,
+            item,
+            suggestions,
+            reviewRequired: result is Map
+                ? result['reviewRequired'] as bool?
+                : null,
+            serverScore: result is Map && result['confidenceScore'] is num
+                ? (result['confidenceScore'] as num).toDouble()
+                : null,
+          );
+          if (resolution.outcome == SmsAiResolutionOutcome.needsReview) {
+            changed =
+                await reviewRepo.updateAiSuggestions(item.id, suggestions) ||
+                changed;
+            changed =
+                await reviewRepo.updateAiStatus(
+                  item.id,
+                  AiReviewStatus.checked,
+                ) ||
+                changed;
+          } else {
+            // The row is already gone: never recreate it by updating.
+            changed = true;
+          }
         }
       } catch (_) {
-        // AI Gemini fallback: network or quota failure must never break
-        // the background worker; item remains safely reviewable manually.
+        // AI fallback: network or quota failure must never break the
+        // background worker; item remains safely reviewable manually.
         continue;
       }
     }
     if (changed) {
       ref.invalidate(needsReviewItemsProvider);
       ref.invalidate(needsReviewCountProvider);
+      ref.invalidate(autoResolvedHistoryProvider);
+      ref.invalidate(autoResolvedCountProvider);
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       ref.invalidate(homeSummaryProvider);

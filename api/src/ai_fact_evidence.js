@@ -6,6 +6,24 @@ const MONEY_FIELDS = [
   'limitInr', 'proposedAmountInr', 'availableBalanceInr',
 ];
 
+/**
+ * Verbs that prove money actually moved. Expanded beyond the original card /
+ * UPI set to cover loan disbursements, mutual-fund SIPs, deposits, payouts and
+ * settlements — the Indian message families the universal engine must accept.
+ */
+const MOVEMENT_VERBS = /\b(debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred|transfer|processed|payout|settled|disbursed|invested|deposited|sent)\b/i;
+
+/**
+ * Marketing / operational footers appended to genuine bank alerts. Everything
+ * from the first marker onwards is not part of the transaction clause, so a
+ * footer word like "eligible" or "scheduled maintenance" must not invalidate a
+ * real movement.
+ */
+const FOOTER_MARKERS = /\b(?:you are eligible|avail loan|get flat|apply for|offer valid|terms and conditions|t&c|scheduled maintenance|maintenance window)\b/i;
+
+/** Failure / tentative language that only disqualifies the core clause. */
+const FAILURE_OR_TENTATIVE = /\b(?:failed|declined|unsuccessful|reversed|cancelled|will be|to be|is scheduled|scheduled for)\b/i;
+
 function moneyInMessage(body) {
   const values = [];
   const pattern = /(?:₹|\b(?:rs\.?|inr)\s*)[:\s]*([\d,]+(?:\.\d{1,2})?)/gi;
@@ -14,6 +32,28 @@ function moneyInMessage(body) {
     if (Number.isFinite(amount)) values.push(amount);
   }
   return values;
+}
+
+/**
+ * Returns the transaction-bearing part of a message, before any promotional or
+ * maintenance footer that frequently trails Indian bank SMS.
+ */
+function coreTransactionClause(body) {
+  const text = String(body || '');
+  const match = FOOTER_MARKERS.exec(text);
+  return (match ? text.slice(0, match.index) : text).trim();
+}
+
+/**
+ * True when the core clause contains a completion verb and no failure or
+ * tentative wording. Shared by evidence verification and composite scoring.
+ */
+function hasCompletionEvidence(body) {
+  const core = coreTransactionClause(body);
+  if (!core) return false;
+  if (!MOVEMENT_VERBS.test(core)) return false;
+  if (FAILURE_OR_TENTATIVE.test(core)) return false;
+  return true;
 }
 
 function verifyModelFacts(facts, payload) {
@@ -37,9 +77,7 @@ function verifyModelFacts(facts, payload) {
     if (value.reference && !lower.includes(String(value.reference).toLowerCase())) {
       errors.push(`facts[${index}].reference: reference absent from SMS`);
     }
-    if (fact.factType === 'posted_movement' &&
-        (!/\b(debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred|transfer|processed|payout|settled)\b/i.test(body) ||
-         /\b(failed|declined|unsuccessful|will be|to be|scheduled|offer|eligible)\b/i.test(body))) {
+    if (fact.factType === 'posted_movement' && !hasCompletionEvidence(body)) {
       errors.push(`facts[${index}]: posted movement lacks unambiguous completion`);
     }
     if (fact.factType === 'balance_snapshot' && !/\b(balance|available|bal|avail)\b/i.test(body)) {
@@ -63,4 +101,10 @@ function verifyModelFacts(facts, payload) {
   return { valid: errors.length === 0, errors };
 }
 
-module.exports = { verifyModelFacts, moneyInMessage };
+module.exports = {
+  verifyModelFacts,
+  moneyInMessage,
+  MOVEMENT_VERBS,
+  coreTransactionClause,
+  hasCompletionEvidence,
+};
