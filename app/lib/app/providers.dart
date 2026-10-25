@@ -56,6 +56,7 @@ import '../data/override_resolver.dart';
 import '../data/partner_apply_repository.dart';
 import '../data/pending_bills.dart';
 import '../data/past_bill_receipts.dart';
+import '../data/premium_reminders.dart';
 import '../data/recovery_api.dart';
 import '../data/referral_repository.dart';
 import '../data/spend_by_category_repository.dart';
@@ -1292,7 +1293,12 @@ final pastBillReceiptsProvider = FutureProvider<List<PastBillReceipt>>((
   final repository = PastBillReceiptRepository(db, namespace: namespace);
   final allArchived = repository.fetchAll(limit: null);
   final archived = allArchived.take(1000).toList(growable: false);
-  final knownSources = allArchived.map((item) => item.sourceKey).toSet();
+  final knownSources = <String>{
+    for (final item in allArchived) item.sourceKey,
+    for (final item in allArchived)
+      if (item.sourceKey.startsWith('commitment:'))
+        item.sourceKey.substring('commitment:'.length),
+  };
   String cycleKey(
     String merchant,
     String? cardLast4,
@@ -1319,6 +1325,7 @@ final pastBillReceiptsProvider = FutureProvider<List<PastBillReceipt>>((
   };
   final cache = await ref.watch(responseCacheProvider.future);
   final today = DateTime.now();
+  final currentMonth = DateTime(today.year, today.month);
   final archiveCutoff = today.subtract(const Duration(days: 90));
   final observedBillsByCycle = <String, PastBillReceipt>{};
   for (final observation in cache.financialStore.entities(
@@ -1331,13 +1338,35 @@ final pastBillReceiptsProvider = FutureProvider<List<PastBillReceipt>>((
     final received = DateTime.tryParse(
       observation['received_at'] as String? ?? '',
     );
-    final due = DateTime.tryParse(observation['due_date'] as String? ?? '');
-    if (id == null ||
-        knownSources.contains(id) ||
-        received == null ||
-        due == null) {
+    if (id == null || knownSources.contains(id) || received == null) continue;
+    final premium = parseMonthOnlyPremium(observation);
+    if (premium != null) {
+      if (!premium.month.isBefore(currentMonth)) continue;
+      final premiumCycle = [
+        'premium',
+        smsBillSlug(premium.title),
+        premium.accountLast4 ?? '',
+        premium.month.toIso8601String(),
+      ].join('|');
+      final previous = observedBillsByCycle[premiumCycle];
+      if (previous != null && !received.isAfter(previous.receivedAt)) continue;
+      observedBillsByCycle[premiumCycle] = PastBillReceipt(
+        id: 'historical-sms-bill-$id',
+        sourceKey: id,
+        merchant: premium.title,
+        kind: PastBillReceiptKind.bill,
+        amount: null,
+        occurredAt: received,
+        receivedAt: received,
+        status: PastBillReceiptStatus.needsConfirmation,
+        accountLast4: premium.accountLast4,
+        sender: (observation['sender_bank'] as String?)?.trim(),
+        body: premium.body,
+      );
       continue;
     }
+    final due = DateTime.tryParse(observation['due_date'] as String? ?? '');
+    if (due == null) continue;
     final dueDay = DateTime(due.year, due.month, due.day);
     final todayDay = DateTime(today.year, today.month, today.day);
     if (!dueDay.isBefore(todayDay) || !received.isBefore(archiveCutoff)) {
@@ -1423,6 +1452,21 @@ final smsBillRowsProvider = FutureProvider<List<SmsBillRow>>((ref) async {
     cardsLast4ById: cardsLast4ById,
     takenIdentities: taken,
     now: clockNow,
+  );
+});
+
+/// Insurance renewals whose SMS named only a month. Past months belong to
+/// archived history, and rows with an amount already appear in the SMS bill
+/// list, so this feed is the only Bills surface for the remaining reminders.
+final premiumRemindersProvider = Provider<List<PremiumReminder>>((ref) {
+  ref.watch(financialStoreRevisionProvider('observations'));
+  final cache = ref.watch(responseCacheProvider).valueOrNull;
+  if (cache == null) return const [];
+  final namespace = ref.watch(cacheNamespaceProvider);
+  return derivePremiumReminders(
+    observations: cache.financialStore.entities(namespace, 'sms_observations'),
+    commitments: ref.watch(commitmentsProvider).valueOrNull ?? const [],
+    now: ref.watch(clockProvider).now(),
   );
 });
 

@@ -13,6 +13,7 @@ import '../../data/past_bill_receipts.dart';
 import '../../data/user_cards_repository.dart';
 import 'bills_horizon.dart';
 import 'central_bills_section.dart';
+import 'insurance_premiums_section.dart';
 import 'sms_bills_section.dart';
 import 'past_bill_receipts_screen.dart';
 
@@ -338,6 +339,15 @@ class _DueList extends ConsumerWidget {
     final hasLocalMandates = filter.showsAutopay &&
         localAutopayMandates(ref.watch(responseCacheProvider).valueOrNull,
             ref.watch(cacheNamespaceProvider)).isNotEmpty;
+    final visiblePremiums = ref
+        .watch(premiumRemindersProvider)
+        .where((reminder) {
+          if (filter.isUpcoming) return true;
+          if (filter.horizon != BillsHorizon.currentMonth) return false;
+          return reminder.premiumMonth.year == filter.now.year &&
+              reminder.premiumMonth.month == filter.now.month;
+        })
+        .toList(growable: false);
     final showEmptyState = settled &&
         !localFailed &&
         cardRows.isEmpty &&
@@ -345,7 +355,8 @@ class _DueList extends ConsumerWidget {
         !hasSms &&
         !hasReceipts &&
         !hasCentral &&
-        !hasLocalMandates;
+        !hasLocalMandates &&
+        visiblePremiums.isEmpty;
 
     DateTime? nextDue;
     if (!filter.isUpcoming) {
@@ -369,6 +380,10 @@ class _DueList extends ConsumerWidget {
         else ...[
           CentralBillsSection(cardRows: centralDedupKeys, filter: filter),
           SmsBillsSection(filter: filter),
+          InsurancePremiumsSection(
+            reminders: visiblePremiums,
+            upcoming: filter.isUpcoming,
+          ),
           if (cardRows.isNotEmpty) ...[
             _SectionHeader(label: 'Credit cards', count: cardRows.length),
             const SizedBox(height: AppSpace.xs),

@@ -102,7 +102,7 @@ void main() {
   });
 
   test(
-    'month-only LIC renewal stays reviewable and archives as unconfirmed history',
+    'past month-only LIC renewal archives as unconfirmed history automatically',
     () async {
       final db = openInMemoryForTesting();
       final repo = NeedsReviewRepository(
@@ -123,16 +123,121 @@ void main() {
       );
       await repo.add(item);
 
-      expect((await repo.fetchAll()).single.id, item.id);
-      await repo.archivePastPremiumNotice(item);
-
       expect(await repo.fetchAll(), isEmpty);
       final archive = PastBillReceiptRepository(
         db,
         namespace: 'user-lic-review',
       ).fetchAll(limit: null).single;
       expect(archive.status, PastBillReceiptStatus.needsConfirmation);
+      expect(archive.kind, PastBillReceiptKind.bill);
       expect(archive.amount, isNull);
+      expect(archive.body, body);
+      db.close();
+    },
+  );
+
+  test(
+    'current-month LIC renewal is handled by Bills, not the review queue',
+    () async {
+      final db = openInMemoryForTesting();
+      final repo = NeedsReviewRepository(
+        namespace: 'user-lic-current',
+        loadDatabase: () async => db,
+      );
+      final now = DateTime.now();
+      final monthYear = '${now.month}/${now.year}';
+      final body =
+          'Dear Customer, premium due from 04/2026 to 04/2026 under policy no. 931670879 is adjusted on 16/04/2026. Next Premium falls due on $monthYear. -LIC of India';
+      final item = NeedsReviewItem(
+        id: 'lic-current',
+        sender: 'VA-LICIND-S',
+        body: body,
+        receivedAt: now.subtract(const Duration(days: 10)),
+        kind: NeedsReviewKind.commitment,
+      );
+      await repo.add(item);
+
+      expect(await repo.fetchAll(), isEmpty);
+      expect(
+        PastBillReceiptRepository(
+          db,
+          namespace: 'user-lic-current',
+        ).fetchAll(limit: null),
+        isEmpty,
+      );
+      db.close();
+    },
+  );
+
+  test(
+    'fetchAll drops a legacy current-month LIC review row without archiving it',
+    () async {
+      final db = openInMemoryForTesting();
+      final repo = NeedsReviewRepository(
+        namespace: 'user-lic-legacy-current',
+        loadDatabase: () async => db,
+      );
+      await repo.count();
+      final now = DateTime.now();
+      final monthYear = '${now.month}/${now.year}';
+      final body =
+          'Dear Customer, premium due from 04/2026 to 04/2026 under policy no. 931670879 is adjusted on 16/04/2026. Next Premium falls due on $monthYear. -LIC of India';
+      final item = NeedsReviewItem(
+        id: 'lic-legacy-current',
+        sender: 'VA-LICIND-S',
+        body: body,
+        receivedAt: now,
+        kind: NeedsReviewKind.commitment,
+      );
+      db.db.execute(
+        'INSERT INTO local_needs_review(namespace,id,payload) VALUES(?,?,?)',
+        ['user-lic-legacy-current', item.id, jsonEncode(item.toJson())],
+      );
+
+      expect(await repo.fetchAll(), isEmpty);
+      expect(
+        PastBillReceiptRepository(
+          db,
+          namespace: 'user-lic-legacy-current',
+        ).fetchAll(limit: null),
+        isEmpty,
+      );
+      db.close();
+    },
+  );
+
+  test(
+    'fetchAll migrates a legacy past month-only LIC review row into history',
+    () async {
+      final db = openInMemoryForTesting();
+      final repo = NeedsReviewRepository(
+        namespace: 'user-lic-legacy',
+        loadDatabase: () async => db,
+      );
+      await repo.count();
+      final pastMonth = DateTime.now().subtract(const Duration(days: 60));
+      final monthYear =
+          '${pastMonth.month.toString().padLeft(2, '0')}/${pastMonth.year}';
+      final body =
+          'Dear Customer, premium due from 04/2026 to 04/2026 under policy no. 931670879 is adjusted on 16/04/2026. Next Premium falls due on $monthYear. -LIC of India';
+      final item = NeedsReviewItem(
+        id: 'lic-legacy',
+        sender: 'VA-LICIND-S',
+        body: body,
+        receivedAt: DateTime(2026, 4, 17),
+        kind: NeedsReviewKind.commitment,
+      );
+      db.db.execute(
+        'INSERT INTO local_needs_review(namespace,id,payload) VALUES(?,?,?)',
+        ['user-lic-legacy', item.id, jsonEncode(item.toJson())],
+      );
+
+      expect(await repo.fetchAll(), isEmpty);
+      final archive = PastBillReceiptRepository(
+        db,
+        namespace: 'user-lic-legacy',
+      ).fetchAll(limit: null).single;
+      expect(archive.status, PastBillReceiptStatus.needsConfirmation);
       expect(archive.body, body);
       db.close();
     },

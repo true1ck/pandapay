@@ -187,6 +187,17 @@ void addNeedsReviewSync(
     receivedAt: item.receivedAt,
     namespace: namespace,
   );
+  if (NeedsReviewRepository.isMonthOnlyPremiumNotice(parsed)) {
+    if (NeedsReviewRepository.isPastMonthOnlyPremiumNotice(parsed, item.body)) {
+      NeedsReviewRepository._archiveMonthOnlyPremiumSync(
+        database,
+        namespace,
+        parsed!,
+        item,
+      );
+    }
+    return;
+  }
   if (parsed != null &&
       parsed.eventType == LocalSmsEventType.bill &&
       parsed.cardLast4 == null &&
@@ -542,6 +553,13 @@ class NeedsReviewRepository {
         }
 
         if (parsed != null) {
+          if (isMonthOnlyPremiumNotice(parsed)) {
+            if (isPastMonthOnlyPremiumNotice(parsed, item.body, now: now)) {
+              _archiveMonthOnlyPremiumSync(db, namespace, parsed, item);
+            }
+            toRemove.add(item.id);
+            continue;
+          }
           final isCardBill =
               parsed.eventType == LocalSmsEventType.bill &&
               parsed.cardLast4 != null &&
@@ -1542,6 +1560,14 @@ class NeedsReviewRepository {
       receivedAt: item.receivedAt,
       namespace: namespace,
     );
+    if (isMonthOnlyPremiumNotice(parsed)) {
+      if (loadDatabase != null &&
+          isPastMonthOnlyPremiumNotice(parsed, item.body)) {
+        final db = await _database();
+        _archiveMonthOnlyPremiumSync(db, namespace, parsed!, item);
+      }
+      return;
+    }
     if (parsed != null &&
         parsed.eventType == LocalSmsEventType.bill &&
         parsed.cardLast4 == null &&
@@ -1719,6 +1745,55 @@ class NeedsReviewRepository {
         .where((s) => (jsonDecode(s) as Map<String, dynamic>)['id'] != id)
         .toList();
     await prefs.setStringList(_needsReviewKey, kept);
+  }
+
+  /// A month-only insurance reminder ("next premium falls due on 12/2024")
+  /// carries no day and no amount. Past months are archived as history, and
+  /// current or future months are shown on the Bills page, so neither belongs
+  /// in the open review queue.
+  static bool isMonthOnlyPremiumNotice(LocalSmsObservation? parsed) {
+    return parsed != null &&
+        parsed.eventType == LocalSmsEventType.bill &&
+        parsed.reasonCodes.contains('next_premium_due_month_only');
+  }
+
+  /// Once the month named by a month-only reminder has passed it is history,
+  /// not an open review task; no payment can ever be linked to it.
+  static bool isPastMonthOnlyPremiumNotice(
+    LocalSmsObservation? parsed,
+    String body, {
+    DateTime? now,
+  }) {
+    if (!isMonthOnlyPremiumNotice(parsed)) return false;
+    final month = LocalSmsParser.nextPremiumDueMonth(body);
+    if (month == null) return false;
+    final at = now ?? DateTime.now();
+    return DateTime(
+      month.year,
+      month.month,
+    ).isBefore(DateTime(at.year, at.month));
+  }
+
+  static void _archiveMonthOnlyPremiumSync(
+    AppDatabase database,
+    String namespace,
+    LocalSmsObservation parsed,
+    NeedsReviewItem item,
+  ) {
+    PastBillReceiptRepository(database, namespace: namespace).archiveBill(
+      // Archive under the source key so the observation-derived history and
+      // this archived row never show the same notice twice.
+      id: item.id.startsWith('commitment:')
+          ? item.id.substring('commitment:'.length)
+          : item.id,
+      sender: item.sender,
+      merchant: parsed.billerName ?? item.sender,
+      amount: null,
+      receivedAt: item.receivedAt,
+      dueDate: null,
+      status: PastBillReceiptStatus.needsConfirmation,
+      body: item.body,
+    );
   }
 
   Future<void> archivePastPremiumNotice(NeedsReviewItem item) async {

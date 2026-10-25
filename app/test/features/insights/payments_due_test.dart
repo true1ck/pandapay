@@ -7,6 +7,7 @@ import 'package:pandapay/data/local/sms_import_store.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/data/past_bill_receipts.dart';
+import 'package:pandapay/data/premium_reminders.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/features/insights/payments_due_screen.dart';
@@ -662,6 +663,87 @@ void main() {
         // Verify Needs Review remains completely clean!
         final reviewItems = await needsReviewRepo.fetchAll();
         expect(reviewItems, isEmpty);
+      },
+    );
+
+    test(
+      'a past month-only LIC premium notice archives to history instead of Needs Review',
+      () async {
+        final now = DateTime.now();
+        final premiumMonth = DateTime(now.year, now.month - 1);
+        final monthText =
+            '${premiumMonth.month.toString().padLeft(2, '0')}/${premiumMonth.year}';
+        final receivedAt = DateTime(premiumMonth.year, premiumMonth.month, 12);
+
+        smsImportStore.capture(
+          ns,
+          QueuedSms(
+            sender: 'VM-LICIND',
+            body:
+                'Dear Customer, premium due from $monthText to $monthText '
+                'under policy no. 931670879 is adjusted on 12/$monthText. '
+                'Next Premium falls due on $monthText. -LIC of India',
+            receivedAt: receivedAt,
+          ),
+        );
+
+        final archived = PastBillReceiptRepository(
+          db,
+          namespace: ns,
+        ).fetchAll();
+        expect(archived, hasLength(1));
+        final receipt = archived.single;
+        expect(receipt.kind, PastBillReceiptKind.bill);
+        expect(receipt.status, PastBillReceiptStatus.needsConfirmation);
+        expect(receipt.amount, isNull);
+        expect(receipt.dueDate, isNull);
+        expect(receipt.body, contains('LIC of India'));
+
+        final reviewItems = await needsReviewRepo.fetchAll();
+        expect(reviewItems, isEmpty);
+      },
+    );
+
+    test(
+      'a current-month month-only LIC notice feeds Bills without entering Needs Review',
+      () async {
+        final now = DateTime.now();
+        final monthText =
+            '${now.month.toString().padLeft(2, '0')}/${now.year}';
+
+        smsImportStore.capture(
+          ns,
+          QueuedSms(
+            sender: 'VM-LICIND',
+            body:
+                'Dear Customer, premium due from $monthText to $monthText '
+                'under policy no. 931670879 is adjusted on 12/$monthText. '
+                'Next Premium falls due on $monthText. -LIC of India',
+            receivedAt: now,
+          ),
+        );
+
+        expect(await needsReviewRepo.fetchAll(), isEmpty);
+        expect(
+          PastBillReceiptRepository(db, namespace: ns).fetchAll(limit: null),
+          isEmpty,
+        );
+
+        final observations = financialStore.entities(ns, 'sms_observations');
+        expect(observations, hasLength(1));
+        expect(
+          observations.single['reason_codes'],
+          contains('next_premium_due_month_only'),
+        );
+        final reminders = derivePremiumReminders(
+          observations: observations,
+          now: now,
+        );
+        expect(reminders, hasLength(1));
+        expect(reminders.single.premiumMonth.month, now.month);
+        expect(reminders.single.premiumMonth.year, now.year);
+        expect(reminders.single.accountLast4, '0879');
+        expect(reminders.single.category, CommitmentCategory.insurance);
       },
     );
 
