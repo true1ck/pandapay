@@ -17,7 +17,9 @@ import '../../data/user_cards_repository.dart'
     show TxnEntryKind, TxnInstrument, UserCard;
 
 String _feedbackSourceKey(String reviewId) {
-  final commitment = RegExp(r'^commitment:([a-fA-F0-9]{64})$').firstMatch(reviewId);
+  final commitment = RegExp(
+    r'^commitment:([a-fA-F0-9]{64})$',
+  ).firstMatch(reviewId);
   return commitment?.group(1) ?? reviewId;
 }
 
@@ -81,7 +83,10 @@ String _reviewTypeLabel(NeedsReviewItem item) {
   }
   if (item.kind == NeedsReviewKind.investmentSettlement ||
       _isInvestmentSettlement(item.body)) {
-    if (RegExp(r'\b(?:asba|ipo|lien)\b', caseSensitive: false).hasMatch(item.body)) {
+    if (RegExp(
+      r'\b(?:asba|ipo|lien)\b',
+      caseSensitive: false,
+    ).hasMatch(item.body)) {
       return 'ASBA / IPO lien block';
     }
     return 'Investment settlement payout';
@@ -109,7 +114,8 @@ String _reviewReasonLabel(String? reason, String body) {
     return 'Mandate authorization or notification.';
   }
   return switch (reason) {
-    'no_transaction_match' => 'We could not match this message to a transaction.',
+    'no_transaction_match' =>
+      'We could not match this message to a transaction.',
     'unparseable_amount' => 'The amount in this message is unclear.',
     'ambiguous_account_debit' =>
       'We could not tell which account or payment method was used.',
@@ -212,7 +218,9 @@ Future<void> _persistSmsFactCorrection(
   );
 
   final repository = ref.read(userCardsRepositoryProvider);
-  if (repository == null || ref.read(isOnlineProvider).valueOrNull == false) return;
+  if (repository == null || ref.read(isOnlineProvider).valueOrNull == false) {
+    return;
+  }
   try {
     final accepted = await repository.overrideSmsFact(
       sourceKey: sourceKey,
@@ -263,17 +271,18 @@ _ReviewFilterCategory _categorizeItem(NeedsReviewItem item) {
     return _ReviewFilterCategory.bills;
   }
   if (item.aiSuggestions?.isNotEmpty == true) {
-    final type = item.aiSuggestions!.first['factType'];
-    if (type == 'bill_obligation' || type == 'mandate_lifecycle') {
+    final types = item.aiSuggestions!.map((fact) => fact['factType']).toSet();
+    if (types.contains('posted_movement')) {
+      return _ReviewFilterCategory.spends;
+    }
+    if (types.contains('bill_obligation') ||
+        types.contains('mandate_lifecycle')) {
       return _ReviewFilterCategory.bills;
     }
-    if (type == 'balance_snapshot' ||
-        type == 'security_or_service_alert' ||
-        type == 'promotion') {
+    if (types.contains('balance_snapshot') ||
+        types.contains('security_or_service_alert') ||
+        types.contains('promotion')) {
       return _ReviewFilterCategory.alerts;
-    }
-    if (type == 'posted_movement') {
-      return _ReviewFilterCategory.spends;
     }
   }
   if (item.kind == NeedsReviewKind.securityOrServiceAlert ||
@@ -361,6 +370,52 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
     });
   }
 
+  Future<void> _dismissAll(List<NeedsReviewItem> reviewItems) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Dismiss all ${reviewItems.length} review items?'),
+        content: const Text(
+          'This removes every item from Needs Review, even when a date or type filter is active.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Dismiss all'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final repo = ref.read(userCardsRepositoryProvider);
+    for (final item in reviewItems) {
+      if (item.kind == NeedsReviewKind.commitment) {
+        await _persistCommitmentDismissal(ref, item);
+      }
+      if (repo != null) {
+        repo
+            .dismissSms(
+              sourceKey: _feedbackSourceKey(item.id),
+              sender: item.sender,
+              sampleBody: item.body,
+              reason: 'user_dismissed',
+              family: 'ignore_noise',
+            )
+            .ignore();
+      }
+    }
+    final ids = [for (final item in reviewItems) item.id];
+    await ref.read(needsReviewRepositoryProvider).removeAll(ids);
+    ref.invalidate(commitmentsProvider);
+    ref.invalidate(needsReviewItemsProvider);
+    ref.invalidate(needsReviewCountProvider);
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(needsReviewItemsProvider);
@@ -379,30 +434,8 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
           if ((items.valueOrNull ?? const []).isNotEmpty)
             TextButton(
               style: TextButton.styleFrom(foregroundColor: BambooInk.ink900),
-              onPressed: () async {
-                final reviewItems =
-                    items.valueOrNull ?? const <NeedsReviewItem>[];
-                final repo = ref.read(userCardsRepositoryProvider);
-                for (final item in reviewItems) {
-                  if (item.kind == NeedsReviewKind.commitment) {
-                    await _persistCommitmentDismissal(ref, item);
-                  }
-                  if (repo != null) {
-                    repo.dismissSms(
-                      sourceKey: _feedbackSourceKey(item.id),
-                      sender: item.sender,
-                      sampleBody: item.body,
-                      reason: 'user_dismissed',
-                      family: 'ignore_noise',
-                    ).ignore();
-                  }
-                }
-                final ids = [for (final item in reviewItems) item.id];
-                await ref.read(needsReviewRepositoryProvider).removeAll(ids);
-                ref.invalidate(commitmentsProvider);
-                ref.invalidate(needsReviewItemsProvider);
-                ref.invalidate(needsReviewCountProvider);
-              },
+              onPressed: () =>
+                  _dismissAll(items.valueOrNull ?? const <NeedsReviewItem>[]),
               child: const Text('Dismiss all'),
             ),
         ],
@@ -422,11 +455,16 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
             }
 
             final sortedList = List<NeedsReviewItem>.from(list)
-              ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+              ..sort((a, b) {
+                final byDate = b.receivedAt.compareTo(a.receivedAt);
+                return byDate != 0 ? byDate : a.id.compareTo(b.id);
+              });
 
-            final monthMap = <String, ({String label, int count, DateTime date})>{};
+            final monthMap =
+                <String, ({String label, int count, DateTime date})>{};
             for (final item in sortedList) {
-              final key = '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
+              final key =
+                  '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
               final current = monthMap[key];
               if (current == null) {
                 monthMap[key] = (
@@ -443,12 +481,18 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
               }
             }
 
-            final availableMonths = monthMap.entries.map((e) => _MonthEntry(
-              key: e.key,
-              label: e.value.label,
-              count: e.value.count,
-              date: e.value.date,
-            )).toList()..sort((a, b) => b.date.compareTo(a.date));
+            final availableMonths =
+                monthMap.entries
+                    .map(
+                      (e) => _MonthEntry(
+                        key: e.key,
+                        label: e.value.label,
+                        count: e.value.count,
+                        date: e.value.date,
+                      ),
+                    )
+                    .toList()
+                  ..sort((a, b) => b.date.compareTo(a.date));
 
             final filteredList = sortedList.where((item) {
               if (_customDateRange != null) {
@@ -467,7 +511,8 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                 }
               }
               if (_selectedMonth != null) {
-                final itemMonthKey = '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
+                final itemMonthKey =
+                    '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
                 if (itemMonthKey != _selectedMonth) return false;
               }
               if (_selectedCategory != _ReviewFilterCategory.all) {
@@ -490,12 +535,16 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                     children: [
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpace.lg,
+                        ),
                         child: Row(
                           children: [
                             _FilterChip(
                               label: 'All time',
-                              selected: _selectedMonth == null && _customDateRange == null,
+                              selected:
+                                  _selectedMonth == null &&
+                                  _customDateRange == null,
                               onTap: () => setState(() {
                                 _selectedMonth = null;
                                 _selectedMonthLabel = null;
@@ -528,16 +577,25 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                       const SizedBox(height: AppSpace.xs),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpace.lg,
+                        ),
                         child: Row(
                           children: [
-                            for (int i = 0; i < _ReviewFilterCategory.values.length; i++) ...[
+                            for (
+                              int i = 0;
+                              i < _ReviewFilterCategory.values.length;
+                              i++
+                            ) ...[
                               if (i > 0) const SizedBox(width: AppSpace.xs),
                               _FilterChip(
                                 label: _ReviewFilterCategory.values[i].label,
-                                selected: _selectedCategory == _ReviewFilterCategory.values[i],
+                                selected:
+                                    _selectedCategory ==
+                                    _ReviewFilterCategory.values[i],
                                 onTap: () => setState(() {
-                                  _selectedCategory = _ReviewFilterCategory.values[i];
+                                  _selectedCategory =
+                                      _ReviewFilterCategory.values[i];
                                 }),
                               ),
                             ],
@@ -561,11 +619,15 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                       : ListView.builder(
                           padding: const EdgeInsets.all(AppSpace.lg),
                           itemCount: filteredList.length,
-                           itemBuilder: (context, index) => Padding(
-                             key: ValueKey(filteredList[index].id),
+                          itemBuilder: (context, index) => Padding(
+                            key: ValueKey(filteredList[index].id),
                             padding: const EdgeInsets.only(bottom: AppSpace.md),
-                            child: filteredList[index].kind == NeedsReviewKind.commitment
-                                ? _CommitmentNeedsReviewTile(filteredList[index])
+                            child:
+                                filteredList[index].kind ==
+                                    NeedsReviewKind.commitment
+                                ? _CommitmentNeedsReviewTile(
+                                    filteredList[index],
+                                  )
                                 : _NeedsReviewTile(filteredList[index]),
                           ),
                         ),
@@ -610,13 +672,15 @@ class _CommitmentNeedsReviewTileState
       ref.invalidate(needsReviewCountProvider);
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo != null) {
-        repo.dismissSms(
-          sourceKey: _feedbackSourceKey(widget.item.id),
-          sender: widget.item.sender,
-          sampleBody: widget.item.body,
-          reason: 'user_dismissed',
-          family: 'ignore_noise',
-        ).ignore();
+        repo
+            .dismissSms(
+              sourceKey: _feedbackSourceKey(widget.item.id),
+              sender: widget.item.sender,
+              sampleBody: widget.item.body,
+              reason: 'user_dismissed',
+              family: 'ignore_noise',
+            )
+            .ignore();
       }
     } catch (error) {
       if (mounted) {
@@ -745,11 +809,10 @@ class _CommitmentNeedsReviewTileState
     final item = widget.item;
     final parsed = _parse();
     final nextPremiumMonth = LocalSmsParser.nextPremiumDueMonth(item.body);
-    final monthOnlyPremium = parsed?.reasonCodes.contains(
-          'next_premium_due_month_only',
-        ) ==
-        true;
-    final pastPremiumNotice = monthOnlyPremium &&
+    final monthOnlyPremium =
+        parsed?.reasonCodes.contains('next_premium_due_month_only') == true;
+    final pastPremiumNotice =
+        monthOnlyPremium &&
         nextPremiumMonth != null &&
         DateTime(
           nextPremiumMonth.year,
@@ -791,7 +854,9 @@ class _CommitmentNeedsReviewTileState
           ),
           const SizedBox(height: 2),
           Text(
-            DateFormat('MMM d, yyyy • h:mm a').format(item.receivedAt.toLocal()),
+            DateFormat(
+              'MMM d, yyyy • h:mm a',
+            ).format(item.receivedAt.toLocal()),
             style: BambooFonts.ui(12, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.sm),
@@ -912,20 +977,29 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
     super.initState();
     final parsed = widget.parsed;
     final payload = widget.suggestionFact?['payload'] as Map<String, dynamic>?;
-    final suggestedTitle = parsed?.billerName?.trim() ??
+    final suggestedTitle =
+        parsed?.billerName?.trim() ??
         (payload?['billerName'] as String?)?.trim();
     _titleController = TextEditingController(
       text: suggestedTitle?.isNotEmpty == true
           ? suggestedTitle!
           : widget.item.sender,
     );
-    final amtPaise = parsed?.amountDue?.paise ??
-        (payload?['amountDueInr'] is num ? ((payload!['amountDueInr'] as num) * 100).round() : null) ??
-        (payload?['minimumDueInr'] is num ? ((payload!['minimumDueInr'] as num) * 100).round() : null);
+    final amtPaise =
+        parsed?.amountDue?.paise ??
+        (payload?['amountDueInr'] is num
+            ? ((payload!['amountDueInr'] as num) * 100).round()
+            : null) ??
+        (payload?['minimumDueInr'] is num
+            ? ((payload!['minimumDueInr'] as num) * 100).round()
+            : null);
     _amountController = TextEditingController(
       text: amtPaise == null ? '' : (amtPaise / 100).toStringAsFixed(2),
     );
-    final last4 = parsed?.accountLast4 ?? parsed?.cardLast4 ?? (payload?['last4'] as String?);
+    final last4 =
+        parsed?.accountLast4 ??
+        parsed?.cardLast4 ??
+        (payload?['last4'] as String?);
     _identifierController = TextEditingController(
       text: last4 == null || last4.isEmpty ? '' : '••••$last4',
     );
@@ -942,13 +1016,12 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
             : CommitmentCadence.monthly,
     };
     final dueStr = payload?['dueDate'] as String?;
-    final monthOnlyPremium = parsed?.reasonCodes.contains(
-          'next_premium_due_month_only',
-        ) ==
-        true;
+    final monthOnlyPremium =
+        parsed?.reasonCodes.contains('next_premium_due_month_only') == true;
     _dueOn = monthOnlyPremium
         ? null
-        : parsed?.dueDate ?? (dueStr != null ? DateTime.tryParse(dueStr) : null);
+        : parsed?.dueDate ??
+              (dueStr != null ? DateTime.tryParse(dueStr) : null);
   }
 
   @override
@@ -1002,8 +1075,10 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
     if (title.isEmpty ||
         dueOn == null ||
         (amountText.isNotEmpty &&
-            (amountValue == null || !amountValue.isFinite ||
-                amountValue <= 0 || amountValue > 9999999999.99))) {
+            (amountValue == null ||
+                !amountValue.isFinite ||
+                amountValue <= 0 ||
+                amountValue > 9999999999.99))) {
       return;
     }
     final identifier = _identifierController.text.trim();
@@ -1028,8 +1103,10 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
         _titleController.text.trim().isNotEmpty &&
         _dueOn != null &&
         (amountText.isEmpty ||
-            (amountValue != null && amountValue.isFinite &&
-                amountValue > 0 && amountValue <= 9999999999.99));
+            (amountValue != null &&
+                amountValue.isFinite &&
+                amountValue > 0 &&
+                amountValue <= 9999999999.99));
     return Container(
       decoration: const BoxDecoration(
         color: BambooInk.paper,
@@ -1200,13 +1277,11 @@ class _ReviewBalanceSheet extends ConsumerStatefulWidget {
   final NeedsReviewItem item;
   final Map<String, dynamic>? fact;
 
-  const _ReviewBalanceSheet({
-    required this.item,
-    this.fact,
-  });
+  const _ReviewBalanceSheet({required this.item, this.fact});
 
   @override
-  ConsumerState<_ReviewBalanceSheet> createState() => _ReviewBalanceSheetState();
+  ConsumerState<_ReviewBalanceSheet> createState() =>
+      _ReviewBalanceSheetState();
 }
 
 class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
@@ -1220,14 +1295,18 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
     final payload = widget.fact?['payload'] as Map<String, dynamic>?;
     final balance = payload?['availableBalanceInr'];
     _balanceController = TextEditingController(
-      text: balance is num && balance.isFinite ? balance.toStringAsFixed(2) : '',
+      text: balance is num && balance.isFinite
+          ? balance.toStringAsFixed(2)
+          : '',
     );
     final account = payload?['accountLast4'] as String?;
     _accountController = TextEditingController(
       text: account != null && account.isNotEmpty ? account : '',
     );
     final asOfStr = payload?['asOfAt'] as String?;
-    _asOfAt = (asOfStr != null ? DateTime.tryParse(asOfStr) : null) ?? widget.item.receivedAt;
+    _asOfAt =
+        (asOfStr != null ? DateTime.tryParse(asOfStr) : null) ??
+        widget.item.receivedAt;
   }
 
   @override
@@ -1250,14 +1329,21 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
   void _confirm() {
     final balText = _balanceController.text.trim().replaceAll(',', '');
     final balValue = double.tryParse(balText);
-    if (balValue == null || !balValue.isFinite || balValue < 0 ||
+    if (balValue == null ||
+        !balValue.isFinite ||
+        balValue < 0 ||
         balValue > 9999999999.99) {
       return;
     }
-    final acct = _accountController.text.trim().replaceAll(RegExp(r'[^\d]'), '');
+    final acct = _accountController.text.trim().replaceAll(
+      RegExp(r'[^\d]'),
+      '',
+    );
     Navigator.of(context).pop((
       balance: balValue,
-      accountLast4: acct.length >= 4 ? acct.substring(acct.length - 4) : (acct.isEmpty ? null : acct),
+      accountLast4: acct.length >= 4
+          ? acct.substring(acct.length - 4)
+          : (acct.isEmpty ? null : acct),
       asOfAt: _asOfAt,
     ));
   }
@@ -1266,8 +1352,11 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
   Widget build(BuildContext context) {
     final balText = _balanceController.text.trim().replaceAll(',', '');
     final balValue = double.tryParse(balText);
-    final canConfirm = balValue != null && balValue.isFinite &&
-        balValue >= 0 && balValue <= 9999999999.99;
+    final canConfirm =
+        balValue != null &&
+        balValue.isFinite &&
+        balValue >= 0 &&
+        balValue <= 9999999999.99;
 
     return Container(
       decoration: const BoxDecoration(
@@ -1287,7 +1376,10 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
           children: [
             Row(
               children: [
-                const Icon(Icons.account_balance_outlined, color: BambooInk.jade),
+                const Icon(
+                  Icons.account_balance_outlined,
+                  color: BambooInk.jade,
+                ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: Text(
@@ -1323,7 +1415,9 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
             const SizedBox(height: AppSpace.lg),
             TextField(
               controller: _balanceController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               onChanged: (_) => setState(() {}),
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
               decoration: InputDecoration(
@@ -1331,7 +1425,9 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
                 prefixText: '₹ ',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -1346,7 +1442,9 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
                 counterText: '',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -1358,7 +1456,9 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
                   labelText: 'As of date',
                   filled: true,
                   fillColor: BambooInk.glassFillOnPaper,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -1379,7 +1479,9 @@ class _ReviewBalanceSheetState extends ConsumerState<_ReviewBalanceSheet> {
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.lime,
                 minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
               onPressed: canConfirm ? _confirm : null,
@@ -1396,13 +1498,11 @@ class _ReviewMandateSheet extends ConsumerStatefulWidget {
   final NeedsReviewItem item;
   final Map<String, dynamic>? fact;
 
-  const _ReviewMandateSheet({
-    required this.item,
-    this.fact,
-  });
+  const _ReviewMandateSheet({required this.item, this.fact});
 
   @override
-  ConsumerState<_ReviewMandateSheet> createState() => _ReviewMandateSheetState();
+  ConsumerState<_ReviewMandateSheet> createState() =>
+      _ReviewMandateSheetState();
 }
 
 class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
@@ -1418,7 +1518,9 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
     final payload = widget.fact?['payload'] as Map<String, dynamic>?;
     final name = payload?['mandateName'] as String?;
     _titleController = TextEditingController(
-      text: name != null && name.trim().isNotEmpty ? name.trim() : widget.item.sender,
+      text: name != null && name.trim().isNotEmpty
+          ? name.trim()
+          : widget.item.sender,
     );
     final limit = payload?['limitInr'] ?? payload?['amountLimitInr'];
     _amountController = TextEditingController(
@@ -1435,8 +1537,11 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
       'annual' => CommitmentCadence.annual,
       _ => CommitmentCadence.monthly,
     };
-    final asOfStr = payload?['asOfAt'] as String? ?? payload?['startDate'] as String?;
-    _dueOn = (asOfStr != null ? DateTime.tryParse(asOfStr) : null) ?? widget.item.receivedAt;
+    final asOfStr =
+        payload?['asOfAt'] as String? ?? payload?['startDate'] as String?;
+    _dueOn =
+        (asOfStr != null ? DateTime.tryParse(asOfStr) : null) ??
+        widget.item.receivedAt;
   }
 
   @override
@@ -1453,7 +1558,9 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
     final amtText = _amountController.text.trim().replaceAll(',', '');
     final amtValue = amtText.isEmpty ? null : double.tryParse(amtText);
     if (amtText.isNotEmpty &&
-        (amtValue == null || !amtValue.isFinite || amtValue < 0 ||
+        (amtValue == null ||
+            !amtValue.isFinite ||
+            amtValue < 0 ||
             amtValue > 9999999999.99)) {
       return;
     }
@@ -1532,13 +1639,17 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
                 labelText: 'Mandate or service name',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.lg),
             TextField(
               controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               onChanged: (_) => setState(() {}),
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
               decoration: InputDecoration(
@@ -1546,7 +1657,9 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
                 prefixText: '₹ ',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -1557,7 +1670,9 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
                 labelText: 'Repeats',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
               items: [
                 for (final cadence in CommitmentCadence.values)
@@ -1575,7 +1690,9 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
                 labelText: 'Account or card (optional)',
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.xl),
@@ -1584,7 +1701,9 @@ class _ReviewMandateSheetState extends ConsumerState<_ReviewMandateSheet> {
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.lime,
                 minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
               onPressed: title.isNotEmpty ? _confirm : null,
@@ -1638,13 +1757,15 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       ref.invalidate(needsReviewCountProvider);
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo != null) {
-        repo.dismissSms(
-          sourceKey: _feedbackSourceKey(widget.item.id),
-          sender: widget.item.sender,
-          sampleBody: widget.item.body,
-          reason: 'user_dismissed',
-          family: 'ignore_noise',
-        ).ignore();
+        repo
+            .dismissSms(
+              sourceKey: _feedbackSourceKey(widget.item.id),
+              sender: widget.item.sender,
+              sampleBody: widget.item.body,
+              reason: 'user_dismissed',
+              family: 'ignore_noise',
+            )
+            .ignore();
       }
     } catch (error) {
       if (mounted) {
@@ -1659,20 +1780,26 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
 
   Future<void> _resolveFactSuggestion(int factIndex) async {
     final current = widget.item.aiSuggestions ?? const [];
-    final remaining = current.where((s) => s['factIndex'] != factIndex).toList();
+    final remaining = current
+        .where((s) => s['factIndex'] != factIndex)
+        .toList();
     if (remaining.isEmpty) {
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
     } else {
-      await ref.read(needsReviewRepositoryProvider).updateAiSuggestions(widget.item.id, remaining);
+      await ref
+          .read(needsReviewRepositoryProvider)
+          .updateAiSuggestions(widget.item.id, remaining);
     }
     ref.invalidate(needsReviewItemsProvider);
     ref.invalidate(needsReviewCountProvider);
   }
 
   Future<void> _reviewMovement([Map<String, dynamic>? movementFact]) async {
-    final fact = movementFact ?? widget.item.aiSuggestions
-        ?.where((suggestion) => suggestion['factType'] == 'posted_movement')
-        .firstOrNull;
+    final fact =
+        movementFact ??
+        widget.item.aiSuggestions
+            ?.where((suggestion) => suggestion['factType'] == 'posted_movement')
+            .firstOrNull;
     final result =
         await showModalBottomSheet<
           ({
@@ -1687,7 +1814,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
         >(
           context: context,
           isScrollControlled: true,
-          builder: (context) => _FillFieldsSheet(item: widget.item, suggestionFact: fact),
+          builder: (context) =>
+              _FillFieldsSheet(item: widget.item, suggestionFact: fact),
         );
     if (result == null || !mounted) return;
     setState(() => _busy = true);
@@ -1739,20 +1867,20 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   }
 
   Future<void> _reviewBalance([Map<String, dynamic>? balanceFact]) async {
-    final fact = balanceFact ?? widget.item.aiSuggestions
-        ?.where((s) => s['factType'] == 'balance_snapshot')
-        .firstOrNull;
-    final result = await showModalBottomSheet<
-      ({
-        double balance,
-        String? accountLast4,
-        DateTime asOfAt,
-      })
-    >(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => _ReviewBalanceSheet(item: widget.item, fact: fact),
-    );
+    final fact =
+        balanceFact ??
+        widget.item.aiSuggestions
+            ?.where((s) => s['factType'] == 'balance_snapshot')
+            .firstOrNull;
+    final result =
+        await showModalBottomSheet<
+          ({double balance, String? accountLast4, DateTime asOfAt})
+        >(
+          context: context,
+          isScrollControlled: true,
+          builder: (context) =>
+              _ReviewBalanceSheet(item: widget.item, fact: fact),
+        );
     if (result == null || !mounted) return;
     setState(() => _busy = true);
     try {
@@ -1762,7 +1890,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           .toUpperCase()
           .replaceFirst(RegExp(r'^[A-Z0-9]{2}-'), '')
           .replaceFirst(RegExp(r'-[A-Z]$'), '');
-      final factIdx = (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
+      final factIdx =
+          (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
           ? fact['factIndex'] as int
           : 0;
       final obsId = widget.item.id.length == 64
@@ -1787,7 +1916,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           factIndex: factIdx,
           patch: {
             'availableBalanceInr': result.balance,
-            if (result.accountLast4 != null) 'accountLast4': result.accountLast4,
+            if (result.accountLast4 != null)
+              'accountLast4': result.accountLast4,
             'asOfAt': result.asOfAt.toUtc().toIso8601String(),
           },
           reason: 'confirmed in needs review',
@@ -1807,10 +1937,13 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   }
 
   Future<void> _reviewBill([Map<String, dynamic>? billFact]) async {
-    final fact = billFact ?? widget.item.aiSuggestions
-        ?.where((s) => s['factType'] == 'bill_obligation')
-        .firstOrNull;
-    final factIdx = (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
+    final fact =
+        billFact ??
+        widget.item.aiSuggestions
+            ?.where((s) => s['factType'] == 'bill_obligation')
+            .firstOrNull;
+    final factIdx =
+        (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
         ? fact['factIndex'] as int
         : 0;
     final result = await showModalBottomSheet<_BillReviewResult>(
@@ -1870,19 +2003,19 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   }
 
   Future<void> _reviewMandate([Map<String, dynamic>? mandateFact]) async {
-    final fact = mandateFact ?? widget.item.aiSuggestions
-        ?.where((s) => s['factType'] == 'mandate_lifecycle')
-        .firstOrNull;
-    final factIdx = (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
+    final fact =
+        mandateFact ??
+        widget.item.aiSuggestions
+            ?.where((s) => s['factType'] == 'mandate_lifecycle')
+            .firstOrNull;
+    final factIdx =
+        (fact?['factIndex'] is int && (fact!['factIndex'] as int) >= 0)
         ? fact['factIndex'] as int
         : 0;
     final result = await showModalBottomSheet<_BillReviewResult>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _ReviewMandateSheet(
-        item: widget.item,
-        fact: fact,
-      ),
+      builder: (context) => _ReviewMandateSheet(item: widget.item, fact: fact),
     );
     if (result == null || !mounted) return;
     setState(() => _busy = true);
@@ -1951,9 +2084,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           return;
         case 'security_or_service_alert':
         case 'promotion':
-          await _resolveFactSuggestion(
-            (first['factIndex'] as int?) ?? 0,
-          );
+          await _resolveFactSuggestion((first['factIndex'] as int?) ?? 0);
           return;
         case 'posted_movement':
         default:
@@ -1961,7 +2092,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           return;
       }
     }
-    if (widget.item.kind == NeedsReviewKind.mandate || _isMandateReview(widget.item.body)) {
+    if (widget.item.kind == NeedsReviewKind.mandate ||
+        _isMandateReview(widget.item.body)) {
       await _reviewMandate();
       return;
     }
@@ -1981,7 +2113,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       'balance_snapshot' => (
         Icons.account_balance_outlined,
         'Balance: ₹${((payload['availableBalanceInr'] as num?) ?? 0).toStringAsFixed(2)}',
-        payload['accountLast4'] != null ? 'A/c ••••${payload['accountLast4']}' : 'Bank balance',
+        payload['accountLast4'] != null
+            ? 'A/c ••••${payload['accountLast4']}'
+            : 'Bank balance',
         'Confirm',
       ),
       'bill_obligation' => (
@@ -1993,7 +2127,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       'mandate_lifecycle' => (
         Icons.autorenew_rounded,
         'Mandate: ${(payload['mandateName'] as String?) ?? 'AutoPay'}',
-        payload['limitInr'] != null ? 'Limit ₹${(payload['limitInr'] as num).toStringAsFixed(2)}' : 'Recurring mandate',
+        payload['limitInr'] != null
+            ? 'Limit ₹${(payload['limitInr'] as num).toStringAsFixed(2)}'
+            : 'Recurring mandate',
         'Confirm',
       ),
       'security_or_service_alert' => (
@@ -2008,16 +2144,14 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
         'Not a transaction',
         'Dismiss',
       ),
-      _ => (
-        Icons.info_outline,
-        'Financial detail',
-        type,
-        'Review',
-      ),
+      _ => (Icons.info_outline, 'Financial detail', type, 'Review'),
     };
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.xs),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.sm,
+        vertical: AppSpace.xs,
+      ),
       decoration: BoxDecoration(
         color: BambooInk.paper,
         borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -2031,8 +2165,18 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink900)),
-                Text(subtitle, style: BambooFonts.ui(11, color: BambooInk.ink500)),
+                Text(
+                  title,
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: BambooFonts.ui(11, color: BambooInk.ink500),
+                ),
               ],
             ),
           ),
@@ -2066,7 +2210,10 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                         break;
                     }
                   },
-            child: Text(actionLabel, style: BambooFonts.ui(12, weight: FontWeight.w700)),
+            child: Text(
+              actionLabel,
+              style: BambooFonts.ui(12, weight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -2098,7 +2245,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      DateFormat('MMM d, yyyy • h:mm a').format(item.receivedAt.toLocal()),
+                      DateFormat(
+                        'MMM d, yyyy • h:mm a',
+                      ).format(item.receivedAt.toLocal()),
                       style: BambooFonts.ui(12, color: BambooInk.ink500),
                     ),
                   ],
@@ -2141,6 +2290,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             const SizedBox(height: AppSpace.xs),
             _AiBadge(summary: _aiSummary),
           ],
+          const SizedBox(height: AppSpace.xs),
+          _AiStatusBadge(status: item.aiStatus),
           if (item.aiSuggestions != null && item.aiSuggestions!.length > 1) ...[
             const SizedBox(height: AppSpace.sm),
             for (final suggestion in item.aiSuggestions!)
@@ -2245,9 +2396,11 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
       _amountController.text = _draft.amount!.rupees.toStringAsFixed(2);
     }
     _merchantController.text = _draft.merchantName ?? '';
-    final movement = widget.suggestionFact ?? widget.item.aiSuggestions
-        ?.where((suggestion) => suggestion['factType'] == 'posted_movement')
-        .firstOrNull;
+    final movement =
+        widget.suggestionFact ??
+        widget.item.aiSuggestions
+            ?.where((suggestion) => suggestion['factType'] == 'posted_movement')
+            .firstOrNull;
     final payload = movement?['payload'];
     if (payload is Map) {
       final amount = payload['amountInr'];
@@ -2589,13 +2742,86 @@ class _AiBadge extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.auto_awesome_rounded, size: 11, color: Color(0xFF8064C7)),
+            Icon(
+              Icons.auto_awesome_rounded,
+              size: 11,
+              color: Color(0xFF8064C7),
+            ),
             const SizedBox(width: 4),
             Text(
               summary,
-              style: BambooFonts.ui(11.5, weight: FontWeight.w600, color: Color(0xFF8064C7)),
+              style: BambooFonts.ui(
+                11.5,
+                weight: FontWeight.w600,
+                color: Color(0xFF8064C7),
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AiStatusBadge extends StatelessWidget {
+  final AiReviewStatus status;
+  const _AiStatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, icon, color) = switch (status) {
+      AiReviewStatus.notChecked => (
+        'AI review not started',
+        Icons.hourglass_empty,
+        BambooInk.ink500,
+      ),
+      AiReviewStatus.queued => (
+        'AI review queued',
+        Icons.schedule,
+        BambooInk.ink500,
+      ),
+      AiReviewStatus.processing => (
+        'AI review in progress',
+        Icons.autorenew_rounded,
+        BambooInk.jade,
+      ),
+      AiReviewStatus.checked => (
+        'AI review completed',
+        Icons.auto_awesome_rounded,
+        BambooInk.jade,
+      ),
+      AiReviewStatus.unavailable => (
+        'AI review unavailable',
+        Icons.cloud_off_outlined,
+        BambooInk.ink500,
+      ),
+    };
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Semantics(
+        label: label,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(color: color.withValues(alpha: 0.24)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 12, color: color),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: BambooFonts.ui(
+                  11.5,
+                  weight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

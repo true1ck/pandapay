@@ -1,12 +1,18 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/device_permissions.dart';
 import '../../app/providers.dart';
 import '../../data/import_repository.dart';
 import '../sms_import/sms_backup_import_screen.dart';
+import 'auto_sms_sync_screen.dart';
 import 'statement_pdf_import_screen.dart';
 import 'screenshot_spending_import_screen.dart';
 
@@ -16,13 +22,59 @@ import 'screenshot_spending_import_screen.dart';
 ///
 /// The hub keeps the visible import choices focused while retaining the
 /// existing import routes and showing completed-import history below them.
-class ImportHubScreen extends ConsumerWidget {
+class ImportHubScreen extends ConsumerStatefulWidget {
   final bool embedded;
 
   const ImportHubScreen({super.key, this.embedded = false});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ImportHubScreen> createState() => _ImportHubScreenState();
+}
+
+class _ImportHubScreenState extends ConsumerState<ImportHubScreen>
+    with WidgetsBindingObserver {
+  bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+  bool _smsPermissionGranted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkPermission();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPermission();
+    }
+  }
+
+  Future<void> _checkPermission() async {
+    if (!_isAndroid) {
+      if (mounted) setState(() => _smsPermissionGranted = false);
+      return;
+    }
+    try {
+      final status = await readDevicePermissionStatus(Permission.sms);
+      if (mounted) {
+        setState(() => _smsPermissionGranted = status.isGranted);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _smsPermissionGranted = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final statementImports = ref.watch(statementImportsProvider);
     final smsBatches = ref.watch(smsImportBatchesProvider);
     // Fails open: an unreachable app-status endpoint must not withdraw a
@@ -43,6 +95,55 @@ class ImportHubScreen extends ConsumerWidget {
             style: BambooFonts.ui(13.5, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.lg),
+          _ChannelCard(
+            icon: Icons.sms_outlined,
+            title: 'Auto SMS detection',
+            status: _smsPermissionGranted
+                ? const _Status(
+                    'Active · Reading bank alerts',
+                    BambooInk.jade,
+                  )
+                : _Status(
+                    _isAndroid
+                        ? 'Not enabled · Tap to set up'
+                        : 'Available on Android',
+                    BambooInk.ink500,
+                  ),
+            trailing: _smsPermissionGranted
+                ? Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(
+                      color: BambooInk.jade,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  )
+                : null,
+            onTap: () async {
+              if (!_isAndroid) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Automatic SMS detection is supported on Android devices.',
+                    ),
+                  ),
+                );
+                return;
+              }
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AutoSmsSyncScreen(),
+                ),
+              );
+              if (mounted) _checkPermission();
+            },
+          ),
+          const SizedBox(height: AppSpace.md),
           _ChannelCard(
             icon: Icons.picture_as_pdf_outlined,
             title: 'Import spending file',
@@ -111,7 +212,7 @@ class ImportHubScreen extends ConsumerWidget {
       ),
     );
 
-    if (embedded) return body;
+    if (widget.embedded) return body;
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -311,12 +412,14 @@ class _ChannelCard extends StatelessWidget {
   final String title;
   final _Status status;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   const _ChannelCard({
     required this.icon,
     required this.title,
     required this.status,
     required this.onTap,
+    this.trailing,
   });
 
   @override
@@ -363,11 +466,12 @@ class _ChannelCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                size: 20,
-                color: BambooInk.ink300,
-              ),
+              trailing ??
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: BambooInk.ink300,
+                  ),
             ],
           ),
         ),

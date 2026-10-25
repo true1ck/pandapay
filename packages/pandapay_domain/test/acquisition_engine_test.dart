@@ -203,4 +203,179 @@ void main() {
       expect(results.first.annualFeeNet, Money.fromRupees(999));
     });
   });
+
+  group('starter spend profile', () {
+    test('SpendProfile.starter creates baseline annual spend profile', () {
+      final starter = SpendProfile.starter();
+      expect(starter.isStarterProfile, isTrue);
+      expect(starter.isEmptyOrZero, isFalse);
+      expect(starter.annualSpendByCategory['dining'], Money.fromRupees(60000));
+      expect(starter.annualSpendByCategory['groceries'], Money.fromRupees(96000));
+      expect(starter.annualSpendByCategory['bills'], Money.fromRupees(36000));
+      expect(starter.annualSpendByCategory['online'], Money.fromRupees(60000));
+      expect(starter.annualSpendByCategory['fuel'], Money.fromRupees(36000));
+      expect(starter.totalAnnualSpend, Money.fromRupees(288000));
+    });
+
+    test('SpendProfile.starter maps category slugs to IDs when provided', () {
+      final starter = SpendProfile.starter(categorySlugToIdMap: {
+        'dining': 'uuid-dining',
+        'groceries': 'uuid-groceries',
+        'bills': 'uuid-bills',
+        'online': 'uuid-online',
+        'fuel': 'uuid-fuel',
+      });
+      expect(starter.annualSpendByCategory['uuid-dining'], Money.fromRupees(60000));
+      expect(starter.annualSpendByCategory['uuid-groceries'], Money.fromRupees(96000));
+      expect(starter.annualSpendByCategory['uuid-bills'], Money.fromRupees(36000));
+      expect(starter.annualSpendByCategory['uuid-online'], Money.fromRupees(60000));
+      expect(starter.annualSpendByCategory['uuid-fuel'], Money.fromRupees(36000));
+    });
+
+    test('starter profile yields positive uplift for cards with fee waivers and accelerators', () {
+      final waiver = FeeWaiverRule(
+        id: 'w-1L',
+        thresholdSpend: Money.fromRupees(100000),
+        period: CapPeriod.annual,
+        waivesFee: Money.fromRupees(1000),
+      );
+      // Millennia-like card: 5% online, 1% base, ₹1,000 annual fee with ₹1L waiver
+      final millennia = CardProduct(
+        id: 'millennia',
+        name: 'HDFC Millennia',
+        network: CardNetwork.visa,
+        annualFeeInr: Money.fromRupees(1000),
+        rewardRules: const [
+          RewardRule(id: 'm-online', categoryId: 'online', unit: RewardUnit.cashbackPercent, rate: 5.0),
+          RewardRule(id: 'm-base', unit: RewardUnit.cashbackPercent, rate: 1.0, priority: 200),
+        ],
+        feeWaiverRules: [waiver],
+      );
+      // Swiggy-like card: 10% dining, 1% base, ₹500 annual fee
+      final swiggy = CardProduct(
+        id: 'swiggy',
+        name: 'HDFC Swiggy Card',
+        network: CardNetwork.rupay,
+        annualFeeInr: Money.fromRupees(500),
+        rewardRules: const [
+          RewardRule(id: 's-dining', categoryId: 'dining', unit: RewardUnit.cashbackPercent, rate: 10.0),
+          RewardRule(id: 's-base', unit: RewardUnit.cashbackPercent, rate: 1.0, priority: 200),
+        ],
+      );
+
+      final starter = SpendProfile.starter();
+      final results = recommender.rank(
+        candidates: [millennia, swiggy],
+        ownedCards: const [],
+        spendProfile: starter,
+      );
+
+      expect(results, hasLength(2));
+      for (final r in results) {
+        expect(r.isStarterProfile, isTrue);
+        expect(r.isWorthwhile, isTrue);
+        expect(r.uplift.paise, greaterThan(0));
+      }
+
+      // Swiggy card should have positive uplift: 10% on 60k dining = 6,000 - 500 fee = 5,500
+      final swiggyCandidate = results.firstWhere((r) => r.card.id == 'swiggy');
+      expect(swiggyCandidate.uplift.rupees, greaterThanOrEqualTo(5500));
+
+      // Millennia fee should be waived by 288k starter spend (>= 100k threshold)
+      final millenniaCandidate = results.firstWhere((r) => r.card.id == 'millennia');
+      expect(millenniaCandidate.annualFeeNet, const Money.zero());
+      expect(millenniaCandidate.uplift.rupees, greaterThanOrEqualTo(3000));
+    });
+
+    test('fallbackToStarterProfile = true kicks in when spend is empty or zero', () {
+      final card = _card(id: 'c', rate: 5, categoryId: 'dining', annualFee: Money.fromRupees(500));
+      final emptyProfile = const SpendProfile(annualSpendByCategory: {});
+
+      final results = recommender.rank(
+        candidates: [card],
+        ownedCards: const [],
+        spendProfile: emptyProfile,
+        fallbackToStarterProfile: true,
+      );
+
+      expect(results.first.isStarterProfile, isTrue);
+      expect(results.first.isWorthwhile, isTrue);
+      expect(results.first.uplift.paise, greaterThan(0));
+    });
+
+    test('fallbackToStarterProfile = false preserves zero uplift on zero spend', () {
+      final card = _card(id: 'c', rate: 5, annualFee: const Money.zero());
+      final emptyProfile = const SpendProfile(annualSpendByCategory: {});
+
+      final results = recommender.rank(
+        candidates: [card],
+        ownedCards: const [],
+        spendProfile: emptyProfile,
+        fallbackToStarterProfile: false,
+      );
+
+      expect(results.first.isStarterProfile, isFalse);
+      expect(results.first.uplift, const Money.zero());
+    });
+  });
+
+  group('BestCardForWidget with merchantName', () {
+    test('merchantName triggers brand accelerator rules in pickBestCard', () {
+      final picker = const BestCardForWidget();
+      final amazonCard = CardProduct(
+        id: 'icici-amazon',
+        name: 'Amazon Pay ICICI',
+        network: CardNetwork.visa,
+        rewardRules: const [
+          RewardRule(
+            id: 'amazon-brand-rule',
+            merchantPattern: 'amazon',
+            unit: RewardUnit.cashbackPercent,
+            rate: 5.0,
+            priority: 10,
+          ),
+          RewardRule(
+            id: 'amazon-base-rule',
+            unit: RewardUnit.cashbackPercent,
+            rate: 1.0,
+            priority: 200,
+          ),
+        ],
+      );
+      final genericCard = CardProduct(
+        id: 'generic',
+        name: 'Generic Card',
+        network: CardNetwork.visa,
+        rewardRules: const [
+          RewardRule(
+            id: 'generic-rule',
+            unit: RewardUnit.cashbackPercent,
+            rate: 2.0,
+            priority: 10,
+          ),
+        ],
+      );
+
+      final snapshots = [
+        CardSnapshot(product: amazonCard),
+        CardSnapshot(product: genericCard),
+      ];
+
+      // At Amazon: Amazon Pay ICICI should win with 5% (beating generic's 2%)
+      final amazonBest = picker.pickBestCard(
+        cards: snapshots,
+        merchantName: 'Amazon Pay',
+      );
+      expect(amazonBest?.card.id, 'icici-amazon');
+      expect(amazonBest?.effectiveRatePerRupee, 0.05);
+
+      // Without merchant name: generic card wins with 2% (beating amazon base 1%)
+      final nonAmazonBest = picker.pickBestCard(
+        cards: snapshots,
+        merchantName: null,
+      );
+      expect(nonAmazonBest?.card.id, 'generic');
+      expect(nonAmazonBest?.effectiveRatePerRupee, 0.02);
+    });
+  });
 }

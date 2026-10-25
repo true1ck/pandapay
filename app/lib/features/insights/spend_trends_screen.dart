@@ -1162,10 +1162,8 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       ? entry.merchantName!.trim()
       : 'Unknown merchant';
 
-  String _cardName(TransactionEntry entry) => SpendingSelection.sourceName(
-    entry,
-    bankAccounts: _bankAccounts,
-  );
+  String _cardName(TransactionEntry entry) =>
+      SpendingSelection.sourceName(entry, bankAccounts: _bankAccounts);
 
   List<TransactionEntry> _transactionsForCard(CardSpendRow row) {
     return _visibleEntries.where((entry) {
@@ -3923,24 +3921,7 @@ class _BreakdownPanel extends StatelessWidget {
   }
 }
 
-class _SpendingVisualBadge extends StatelessWidget {
-  final SpendingVisual visual;
-  final double size;
-
-  const _SpendingVisualBadge({required this.visual, required this.size});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      color: visual.surface,
-      borderRadius: BorderRadius.circular(size * 0.32),
-    ),
-    alignment: Alignment.center,
-    child: Icon(visual.icon, size: size * 0.46, color: visual.accent),
-  );
-}
+typedef _SpendingVisualBadge = SpendingVisualBadge;
 
 class _SectionHeader extends StatelessWidget {
   final String label;
@@ -4454,6 +4435,8 @@ class _MerchantGroup extends StatelessWidget {
         .map((entry) => entry.cardDisplayName ?? _paymentLabel(entry))
         .toSet()
         .join(', ');
+    final groupStorageKey =
+        'spending-merchant-group-$merchant-${entries.map((entry) => entry.id).join('-')}';
     final sorted = [...entries]
       ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
 
@@ -4492,8 +4475,7 @@ class _MerchantGroup extends StatelessWidget {
                 color: BambooInk.ink900,
               ),
             ),
-            onTap: () =>
-                context.push('/activity/${entry.id}', extra: entry),
+            onTap: () => context.push('/activity/${entry.id}', extra: entry),
           ),
         ),
     ];
@@ -4565,65 +4547,14 @@ class _MerchantGroup extends StatelessWidget {
       padding: EdgeInsets.zero,
       elevated: false,
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
-      child: ExpansionTile(
-        key: PageStorageKey<String>('spending-merchant-group-$merchant'),
+      child: _MerchantExpansionTile(
+        storageKey: groupStorageKey,
         initiallyExpanded: initiallyExpanded,
-        tilePadding: const EdgeInsets.fromLTRB(
-          AppSpace.sm,
-          AppSpace.xs,
-          AppSpace.xs,
-          AppSpace.xs,
-        ),
-        childrenPadding: const EdgeInsets.fromLTRB(
-          AppSpace.sm,
-          0,
-          AppSpace.sm,
-          AppSpace.sm,
-        ),
-        shape: const Border(),
-        collapsedShape: const Border(),
-        leading: const _SpendingVisualBadge(
-          visual: SpendingVisual(
-            icon: Icons.storefront_rounded,
-            accent: BambooChartColors.coral,
-          ),
-          size: 30,
-        ),
-        title: Column(
+        merchant: merchant,
+        amount: amount,
+        subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    merchant,
-                    style: BambooFonts.ui(
-                      12.5,
-                      weight: FontWeight.w700,
-                      color: BambooInk.ink900,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: AppSpace.xs),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerRight,
-                    child: MoneyText(
-                      amount,
-                      confidence: Confidence.estimated,
-                      style: BambooFonts.ui(
-                        12.5,
-                        weight: FontWeight.w700,
-                        color: BambooInk.ink900,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
             Text(
               '${entries.length} ${entries.length == 1 ? 'transaction' : 'transactions'} · $cards',
               style: BambooFonts.ui(11, color: BambooInk.ink500),
@@ -4659,6 +4590,118 @@ class _MerchantGroup extends StatelessWidget {
     }
     return entry.instrumentKnown ? instrument.label : 'Unknown payment method';
   }
+}
+
+/// Keeps the money and expansion affordance in a stable right-hand rail.
+/// Long merchant or card names can then use (and ellipsize within) the text
+/// column without pushing the amount toward the middle of the card.
+class _MerchantExpansionTile extends StatefulWidget {
+  final String storageKey;
+  final bool initiallyExpanded;
+  final String merchant;
+  final Money amount;
+  final Widget subtitle;
+  final List<Widget> children;
+
+  const _MerchantExpansionTile({
+    required this.storageKey,
+    required this.initiallyExpanded,
+    required this.merchant,
+    required this.amount,
+    required this.subtitle,
+    required this.children,
+  });
+
+  @override
+  State<_MerchantExpansionTile> createState() => _MerchantExpansionTileState();
+}
+
+class _MerchantExpansionTileState extends State<_MerchantExpansionTile> {
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+  }
+
+  @override
+  Widget build(BuildContext context) => ExpansionTile(
+    key: PageStorageKey<String>(widget.storageKey),
+    initiallyExpanded: widget.initiallyExpanded,
+    onExpansionChanged: (expanded) => setState(() => _expanded = expanded),
+    tilePadding: const EdgeInsets.fromLTRB(
+      AppSpace.sm,
+      AppSpace.xs,
+      AppSpace.sm,
+      AppSpace.xs,
+    ),
+    childrenPadding: const EdgeInsets.fromLTRB(
+      AppSpace.sm,
+      0,
+      AppSpace.sm,
+      AppSpace.sm,
+    ),
+    shape: const Border(),
+    collapsedShape: const Border(),
+    leading: const _SpendingVisualBadge(
+      visual: SpendingVisual(
+        icon: Icons.storefront_rounded,
+        accent: BambooChartColors.coral,
+      ),
+      size: 30,
+    ),
+    title: Text(
+      widget.merchant,
+      key: ValueKey<String>('spending-merchant-name-${widget.storageKey}'),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: BambooFonts.ui(
+        12.5,
+        weight: FontWeight.w700,
+        color: BambooInk.ink900,
+      ),
+    ),
+    subtitle: widget.subtitle,
+    trailing: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 112),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: MoneyText(
+              widget.amount,
+              key: ValueKey<String>(
+                'spending-merchant-amount-${widget.storageKey}',
+              ),
+              confidence: Confidence.estimated,
+              style: BambooFonts.ui(
+                12.5,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpace.sm),
+        ExcludeSemantics(
+          child: AnimatedRotation(
+            turns: _expanded ? 0.5 : 0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            child: Icon(
+              Icons.expand_more_rounded,
+              size: 22,
+              color: _expanded ? BambooInk.jade : BambooInk.ink700,
+            ),
+          ),
+        ),
+      ],
+    ),
+    children: widget.children,
+  );
 }
 
 /// One card's row: spend, and the rate it ACTUALLY paid on that spend.

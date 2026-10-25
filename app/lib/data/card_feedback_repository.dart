@@ -14,14 +14,14 @@ import 'api_exception.dart';
 /// therefore always null from this client today.
 class CardFeedbackRepository {
   final String apiBaseUrl;
-  final String accessToken;
+  final String? accessToken;
   final http.Client _client;
 
-  CardFeedbackRepository({required this.apiBaseUrl, required this.accessToken, http.Client? client})
+  CardFeedbackRepository({required this.apiBaseUrl, this.accessToken, http.Client? client})
     : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-    'Authorization': 'Bearer $accessToken',
+    if (accessToken != null) 'Authorization': 'Bearer $accessToken',
     'Content-Type': 'application/json',
   };
 

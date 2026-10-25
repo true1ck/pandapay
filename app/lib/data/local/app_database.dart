@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS local_needs_review (
   namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL,
   PRIMARY KEY(namespace,id)
 );
+CREATE TABLE IF NOT EXISTS local_commitments (
+  namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL,
+  PRIMARY KEY(namespace, id)
+);
 CREATE TABLE IF NOT EXISTS local_past_bill_receipts (
   namespace TEXT NOT NULL,
   id TEXT NOT NULL,

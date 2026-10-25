@@ -41,11 +41,7 @@ CardProduct _cardWithFuelRule({
           rate: 0,
         ),
       if (includeBaseReward)
-        const RewardRule(
-          id: 'base',
-          unit: RewardUnit.cashbackPercent,
-          rate: 1,
-        ),
+        const RewardRule(id: 'base', unit: RewardUnit.cashbackPercent, rate: 1),
     ],
     capRules: const [],
     fuelRule: FuelSurchargeRule(
@@ -148,68 +144,141 @@ void main() {
   });
 
   for (final categoriesAvailable in [true, false]) {
-    testWidgets(
-      'reward rows split actual card spend from all other categories '
-      '(categories available: $categoriesAvailable)',
-      (tester) async {
-        final now = DateTime.now();
-        final report = SpendReport(
-          period: SpendPeriod.month,
-          periodStart: DateTime(now.year, now.month),
-          periodEnd: DateTime(now.year, now.month + 1),
-          elapsedFraction: 0.5,
-          spend: EntryKindTotals.zero,
-          income: EntryKindTotals.zero,
-          investment: EntryKindTotals.zero,
-          previousSpend: EntryKindTotals.zero,
-          byCategory: const [],
-          byMerchant: const [],
-          byCard: const [],
-          byInstrument: const [],
-          byCardCategory: [
-            CardCategorySpendRow(
-              cardId: 'uc1',
-              cardName: 'My Fuel Card',
-              categoryId: 'cat-fuel',
-              categoryName: 'Fuel',
-              total: Money.fromRupees(1200),
-              txnCount: 2,
-            ),
-            CardCategorySpendRow(
-              cardId: 'uc1',
-              cardName: 'My Fuel Card',
-              categoryId: 'cat-food',
-              categoryName: 'Food',
-              total: Money.fromRupees(500),
-              txnCount: 1,
-            ),
-            CardCategorySpendRow(
-              cardId: 'other-card',
-              cardName: 'Other Card',
-              categoryId: 'cat-fuel',
-              categoryName: 'Fuel',
-              total: Money.fromRupees(9000),
-              txnCount: 1,
-            ),
-          ],
-          series: const [],
-        );
-        await _pump(
-          tester,
-          catalogue: [_cardWithFuelRule(includeBaseReward: true)],
-          owned: [_ownedCard()],
-          report: report,
-          categoriesAvailable: categoriesAvailable,
-        );
+    testWidgets('reward rows split actual card spend from all other categories '
+        '(categories available: $categoriesAvailable)', (tester) async {
+      final now = DateTime.now();
+      final report = SpendReport(
+        period: SpendPeriod.month,
+        periodStart: DateTime(now.year, now.month),
+        periodEnd: DateTime(now.year, now.month + 1),
+        elapsedFraction: 0.5,
+        spend: EntryKindTotals.zero,
+        income: EntryKindTotals.zero,
+        investment: EntryKindTotals.zero,
+        previousSpend: EntryKindTotals.zero,
+        byCategory: const [],
+        byMerchant: const [],
+        byCard: const [],
+        byInstrument: const [],
+        byCardCategory: [
+          CardCategorySpendRow(
+            cardId: 'uc1',
+            cardName: 'My Fuel Card',
+            categoryId: 'cat-fuel',
+            categoryName: 'Fuel',
+            total: Money.fromRupees(1200),
+            txnCount: 2,
+          ),
+          CardCategorySpendRow(
+            cardId: 'uc1',
+            cardName: 'My Fuel Card',
+            categoryId: 'cat-food',
+            categoryName: 'Food',
+            total: Money.fromRupees(500),
+            txnCount: 1,
+          ),
+          CardCategorySpendRow(
+            cardId: 'other-card',
+            cardName: 'Other Card',
+            categoryId: 'cat-fuel',
+            categoryName: 'Fuel',
+            total: Money.fromRupees(9000),
+            txnCount: 1,
+          ),
+        ],
+        series: const [],
+      );
+      await _pump(
+        tester,
+        catalogue: [_cardWithFuelRule(includeBaseReward: true)],
+        owned: [_ownedCard()],
+        report: report,
+        categoriesAvailable: categoriesAvailable,
+      );
 
-        expect(find.text('₹1.2K'), findsOneWidget);
-        expect(find.textContaining('Spent this month ₹1.2K'), findsOneWidget);
-        expect(find.text('All other spends'), findsOneWidget);
-        expect(find.textContaining('Spent this month ₹500'), findsOneWidget);
-        expect(find.textContaining('1% waiver'), findsOneWidget);
-      },
-    );
+      expect(find.text('₹1.2K'), findsOneWidget);
+      expect(find.textContaining('Spent this month ₹1.2K'), findsOneWidget);
+      expect(find.text('All other spends'), findsOneWidget);
+      expect(find.textContaining('Spent this month ₹500'), findsOneWidget);
+      expect(find.textContaining('1% waiver'), findsOneWidget);
+    });
   }
+
+  testWidgets(
+    'shows one card-scoped pie after the card with deduplicated expandable categories',
+    (tester) async {
+      final now = DateTime.now();
+      CardCategorySpendRow row(
+        String cardId,
+        String? categoryId,
+        String name,
+        int rupees,
+      ) => CardCategorySpendRow(
+        cardId: cardId,
+        cardName: 'My Fuel Card',
+        categoryId: categoryId,
+        categoryName: name,
+        total: Money.fromRupees(rupees),
+        txnCount: 1,
+      );
+
+      final report = SpendReport(
+        period: SpendPeriod.month,
+        periodStart: DateTime(now.year, now.month),
+        periodEnd: DateTime(now.year, now.month + 1),
+        elapsedFraction: 0.5,
+        spend: EntryKindTotals.zero,
+        income: EntryKindTotals.zero,
+        investment: EntryKindTotals.zero,
+        previousSpend: EntryKindTotals.zero,
+        byCategory: const [],
+        byMerchant: const [],
+        byCard: const [],
+        byInstrument: const [],
+        byCardCategory: [
+          row('uc1', 'cat-fuel', 'Fuel', 1200),
+          row('uc1', 'cat-food', 'Food', 800),
+          row('uc1', 'legacy-other', 'Uncategorized', 300),
+          row('uc1', null, 'Other', 200),
+          row('uc1', 'cat-travel', 'Travel', 400),
+          row('uc1', 'cat-shopping', 'Shopping', 300),
+          row('uc1', 'cat-zero', 'Zero category', 0),
+          row('other-card', 'cat-large', 'Wrong card', 9000),
+        ],
+        series: const [],
+      );
+
+      await _pump(
+        tester,
+        catalogue: [_cardWithFuelRule()],
+        owned: [_ownedCard()],
+        report: report,
+      );
+
+      expect(find.byKey(const Key('card_spending_mix')), findsOneWidget);
+      expect(find.byKey(const Key('spending_donut_chart')), findsOneWidget);
+      expect(find.text('Other'), findsOneWidget);
+      expect(find.text('Zero category'), findsNothing);
+      expect(find.text('Wrong card'), findsNothing);
+      expect(find.text('Show 1 more category'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNWidgets(4));
+
+      final mixTop = tester.getTopLeft(
+        find.byKey(const Key('card_spending_mix')),
+      );
+      final rewardsTop = tester.getTopLeft(find.text('REWARDS'));
+      expect(mixTop.dy, lessThan(rewardsTop.dy));
+
+      await tester.tap(find.text('Other'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'No individual transaction records available for this period.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'Benefits section synthesizes and shows 1% fuel surcharge waiver',

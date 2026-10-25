@@ -401,35 +401,50 @@ final acquisitionCandidatesProvider =
       final userCards = ref.watch(userCardsProvider);
       final categorySpend = ref.watch(categorySpendProvider);
       final recommender = ref.watch(acquisitionRecommenderProvider);
+      final categories = ref.watch(categoriesProvider);
 
       if (catalogue.isLoading ||
           userCards.isLoading ||
-          categorySpend.isLoading) {
+          categorySpend.isLoading ||
+          categories.isLoading) {
         return const AsyncValue.loading();
       }
       final combinedError =
-          catalogue.error ?? userCards.error ?? categorySpend.error;
+          catalogue.error ??
+          userCards.error ??
+          categorySpend.error ??
+          categories.error;
       if (combinedError != null) {
         return AsyncValue.error(
           combinedError,
           catalogue.stackTrace ??
               userCards.stackTrace ??
-              categorySpend.stackTrace!,
+              categorySpend.stackTrace ??
+              categories.stackTrace!,
         );
       }
 
       final allCards = catalogue.requireValue;
       final wallet = userCards.requireValue;
       final spend = categorySpend.requireValue;
+      final categoryList = categories.requireValue;
 
       final ownedProducts = allCards
           .where((c) => wallet.any((w) => w.cardProductId == c.id))
           .toList();
-      final profile = SpendProfile(
-        annualSpendByCategory: {
-          for (final s in spend) s.categoryId: s.totalSpend,
-        },
-      );
+
+      final hasRealSpend = spend.any((s) => s.totalSpend > const Money.zero());
+      final SpendProfile profile;
+      if (hasRealSpend) {
+        profile = SpendProfile(
+          annualSpendByCategory: {
+            for (final s in spend) s.categoryId: s.totalSpend,
+          },
+        );
+      } else {
+        final slugToId = {for (final c in categoryList) c.slug: c.id};
+        profile = SpendProfile.starter(categorySlugToIdMap: slugToId);
+      }
 
       final results = recommender.rank(
         candidates: allCards,
@@ -919,7 +934,33 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
     // The local routing flag must never claim completion until the server has
     // persisted it. A failed request leaves the local flag false and safely
     // permits the user to retry from the final setup screen.
-    await api.completeOnboarding();
+    try {
+      await api.completeOnboarding();
+    } catch (error) {
+      if (error is ApiException &&
+          (error.errorCode == 'required_terms_missing' ||
+              error.userMessage.contains('required_terms_missing') ||
+              error.debugMessage.contains('required_terms_missing'))) {
+        final consents = _ref.read(consentsApiProvider);
+        if (consents != null) {
+          try {
+            await consents.submit(
+              purpose: 'terms',
+              granted: true,
+              policyVersion: appProductTermsVersion,
+              sourceScreen: 'onboarding_complete',
+            );
+            await api.completeOnboarding();
+          } catch (_) {
+            Error.throwWithStackTrace(error, StackTrace.current);
+          }
+        } else {
+          rethrow;
+        }
+      } else {
+        rethrow;
+      }
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_onboardingCompleteKey, true);
     state = const AsyncValue.data(true);
@@ -1445,9 +1486,8 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
 /// data-error-reports are owner-scoped writes (RLS `for all to public
 /// using (profile_id = pandapay.uid())`), so there's no meaningful
 /// signed-out path to support.
-final cardFeedbackRepositoryProvider = Provider<CardFeedbackRepository?>((ref) {
+final cardFeedbackRepositoryProvider = Provider<CardFeedbackRepository>((ref) {
   final token = _stableSessionToken(ref);
-  if (token == null) return null;
   return CardFeedbackRepository(
     apiBaseUrl: _apiBaseUrl,
     accessToken: token,
@@ -1621,6 +1661,8 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
         if (matched.isNotEmpty ||
             negative ||
             inactive ||
+            outcome == 'imported' ||
+            outcome == 'duplicate' ||
             store.hasReceipt(namespace, key)) {
           acknowledgements.add(() {
             store.discardProvisional(
@@ -1629,6 +1671,8 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
               confirmedId: matched.isNotEmpty
                   ? matched.first.id
                   : inactive
+                  ? serverId
+                  : outcome == 'imported'
                   ? serverId
                   : null,
             );
@@ -3293,6 +3337,9 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   ref.listen(financialStoreRevisionProvider('observations'), (_, next) {
     if (ready) ref.invalidateSelf();
   });
+  ref.listen(financialStoreRevisionProvider('manual_bank_balances'), (_, next) {
+    if (ready) ref.invalidateSelf();
+  });
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   const cacheKey = 'bank_account_summaries';
@@ -3300,6 +3347,11 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   final localAccounts = cache?.financialStore.bankAccounts(
     ref.read(cacheNamespaceProvider),
   );
+  final manualBalances =
+      cache?.financialStore.manualBankBalances(
+        ref.read(cacheNamespaceProvider),
+      ) ??
+      const {};
   final key = _scopedCacheKey(ref, cacheKey);
   final cached = await _readCacheOrNull(ref, cache, key);
   // UPI-platform families (SBIUPI & friends) quote the counterparty's masked
@@ -3396,14 +3448,64 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
         issuerName: primary.issuerName ?? secondary.issuerName,
         issuerShortName: primary.issuerShortName ?? secondary.issuerShortName,
         issuerLogoUrl: primary.issuerLogoUrl ?? secondary.issuerLogoUrl,
+        isBalanceManuallySet: primary.isBalanceManuallySet,
+        manualBalanceUpdatedAt: primary.manualBalanceUpdatedAt,
       );
     }
     return merged;
   }
 
+  List<BankAccountSummary> applyManualBalances(
+    List<BankAccountSummary> accounts,
+  ) => accounts.map((account) {
+    final issuer = canonicalBankSender(
+      account.issuerSlug ?? account.issuerShortName ?? account.issuerName,
+    );
+    final manual = manualBalances['$issuer:${account.accountLast4}'];
+    if (manual == null) return account;
+    return BankAccountSummary(
+      accountLast4: account.accountLast4,
+      availableBalance: manual.balance,
+      latestBalanceSmsAt: account.latestBalanceSmsAt,
+      latestSmsAt: account.latestSmsAt,
+      smsCount: account.smsCount,
+      issuerSlug: account.issuerSlug,
+      issuerName: account.issuerName,
+      issuerShortName: account.issuerShortName,
+      issuerLogoUrl: account.issuerLogoUrl,
+      isBalanceManuallySet: true,
+      manualBalanceUpdatedAt: manual.updatedAt,
+    );
+  }).toList();
+
   if (_isKnownOffline()) {
-    if (localAccounts != null && localAccounts.isNotEmpty) return localAccounts;
-    if (cached != null) return decode(cached);
+    final offlineAccounts = localAccounts != null && localAccounts.isNotEmpty
+        ? localAccounts
+        : cached != null
+        ? decode(cached)
+        : null;
+    if (offlineAccounts != null) {
+      final known = {
+        for (final account in offlineAccounts)
+          '${canonicalBankSender(account.issuerSlug ?? account.issuerShortName ?? account.issuerName)}:${account.accountLast4}',
+      };
+      return applyManualBalances([
+        ...offlineAccounts,
+        for (final manual in manualBalances.entries)
+          if (!known.contains(manual.key))
+            BankAccountSummary(
+              accountLast4: manual.key.split(':').last,
+              availableBalance: manual.value.balance,
+              latestBalanceSmsAt: null,
+              latestSmsAt: null,
+              smsCount: 0,
+              issuerSlug: manual.key.split(':').first,
+              issuerShortName: bankDisplayLabel(manual.key.split(':').first),
+              isBalanceManuallySet: true,
+              manualBalanceUpdatedAt: manual.value.updatedAt,
+            ),
+      ]);
+    }
   }
   try {
     final accounts = await repo.fetchBankAccountSummaries().timeout(
@@ -3434,11 +3536,30 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
       );
     } catch (_) {}
     ready = true;
-    return combined;
+    final known = {
+      for (final account in combined)
+        '${canonicalBankSender(account.issuerSlug ?? account.issuerShortName ?? account.issuerName)}:${account.accountLast4}',
+    };
+    return applyManualBalances([
+      ...combined,
+      for (final manual in manualBalances.entries)
+        if (!known.contains(manual.key))
+          BankAccountSummary(
+            accountLast4: manual.key.split(':').last,
+            availableBalance: manual.value.balance,
+            latestBalanceSmsAt: null,
+            latestSmsAt: null,
+            smsCount: 0,
+            issuerSlug: manual.key.split(':').first,
+            issuerShortName: bankDisplayLabel(manual.key.split(':').first),
+            isBalanceManuallySet: true,
+            manualBalanceUpdatedAt: manual.value.updatedAt,
+          ),
+    ]);
   } catch (error) {
     if (localAccounts != null && localAccounts.isNotEmpty) {
       ready = true;
-      return localAccounts;
+      return applyManualBalances(localAccounts);
     }
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
@@ -3447,7 +3568,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
       rethrow;
     }
     try {
-      return decode(cached);
+      return applyManualBalances(decode(cached));
     } catch (_) {
       await cache?.clear(key);
       rethrow;
@@ -4393,7 +4514,9 @@ String? _namedServiceAutoPayName(String? raw) {
   if (normalized.contains('creditcard') || normalized.contains('utility')) {
     return null;
   }
-  if (normalized.contains('openai') || normalized.contains('openaillc')) return 'OpenAI';
+  if (normalized.contains('openai') || normalized.contains('openaillc')) {
+    return 'OpenAI';
+  }
   if (normalized.contains('chatgpt')) return 'ChatGPT';
   if (normalized.contains('googleplay')) return 'Google Play';
   if (normalized.contains('googleone')) return 'Google One';
@@ -5385,11 +5508,36 @@ final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
 /// every card is evaluated as if its caps/milestones are fully fresh.
 final rankedRecommendationsProvider =
     Provider<AsyncValue<List<Recommendation>>>(
-      (ref) => _rankRecommendations(
-        ref,
-        amount: ref.watch(enteredAmountProvider),
-        categorySlug: ref.watch(selectedCategoryProvider),
-      ),
+      (ref) {
+        final selectedSlug = ref.watch(selectedCategoryProvider);
+        final nearby = ref.watch(homeNearbyContextProvider);
+        final match = nearby?.match;
+        String? merchantName;
+        String? nearbyCategoryId;
+
+        if (match != null) {
+          final candidate = match.candidate;
+          final categories =
+              ref.watch(categoriesProvider).valueOrNull ?? const [];
+          final cat = categories.firstWhereOrNull(
+            (c) =>
+                c.id == candidate.categoryId || c.slug == candidate.categoryId,
+          );
+          final merchantCategorySlug = cat?.slug ?? candidate.categoryId;
+          if (selectedSlug == null || selectedSlug == merchantCategorySlug) {
+            merchantName = candidate.displayName;
+            nearbyCategoryId = candidate.categoryId ?? cat?.id;
+          }
+        }
+
+        return _rankRecommendations(
+          ref,
+          amount: ref.watch(enteredAmountProvider),
+          categoryId: nearbyCategoryId,
+          categorySlug: selectedSlug,
+          merchantName: merchantName,
+        );
+      },
     );
 
 /// Context passed by Quick Add as the user fills in a transaction. Keeping
@@ -5458,7 +5606,10 @@ AsyncValue<List<Recommendation>> _rankRecommendations(
       ? categoryList.firstWhereOrNull(
           (category) => category.slug == categorySlug,
         )
-      : categoryList.firstWhereOrNull((category) => category.id == categoryId);
+      : categoryList.firstWhereOrNull(
+          (category) =>
+              category.id == categoryId || category.slug == categoryId,
+        );
   final requestedCategoryId = categoryId ?? resolvedCategory?.id;
   // Private subcategories are transaction labels, not published reward-rule
   // categories. Rank against their built-in parent while retaining the child
@@ -5643,7 +5794,14 @@ final geofenceMonitorServiceProvider = Provider<GeofenceMonitorService>((ref) {
     gate: ref.watch(notificationGateProvider),
     recommendationTextBuilder: (match) {
       final recommendation = ref
-          .read(bestCardForMerchantProvider(match.candidate.categoryId))
+          .read(
+            bestCardForMerchantProvider(
+              MerchantRecommendationQuery(
+                categoryId: match.candidate.categoryId,
+                merchantName: match.candidate.displayName,
+              ),
+            ),
+          )
           .valueOrNull;
       if (recommendation == null || recommendation.isExcluded) return null;
       final rate = recommendation.effectiveRatePerRupee;
@@ -5806,22 +5964,42 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       // A completed job returns its original fact list; do not restore facts
       // the user already resolved from a still-open multi-fact review item.
       if (item.aiSuggestions?.isNotEmpty == true) continue;
-      if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(item.id) ||
+      final cleanId = item.id.startsWith('commitment:')
+          ? item.id.substring('commitment:'.length)
+          : item.id;
+      if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(cleanId) ||
           LocalSmsParser.sensitive(item.body) ||
           !capturesFinancialSms(item.body, sender: item.sender)) {
         continue;
       }
       try {
-        final status = await repo.fetchAiJobStatus(item.id);
+        final status = await repo.fetchAiJobStatus(cleanId);
         if (status == null) {
-          await repo.submitAiJob(
-            sourceKey: item.id,
+          final jobId = await repo.submitAiJob(
+            sourceKey: cleanId,
             sender: item.sender,
             body: item.body,
             occurredAt: item.receivedAt,
           );
+          changed =
+              await reviewRepo.updateAiStatus(
+                item.id,
+                jobId == null
+                    ? AiReviewStatus.unavailable
+                    : AiReviewStatus.queued,
+              ) ||
+              changed;
           continue;
         }
+        final statusValue = switch (status['status']) {
+          'queued' => AiReviewStatus.queued,
+          'leased' => AiReviewStatus.processing,
+          'done' => AiReviewStatus.checked,
+          'failed' => AiReviewStatus.unavailable,
+          _ => AiReviewStatus.unavailable,
+        };
+        changed =
+            await reviewRepo.updateAiStatus(item.id, statusValue) || changed;
         final rawSuggestions = status['suggestions'];
         if (status['status'] == 'done' && rawSuggestions is List) {
           // The classifier's structured suggestions belong to the review item
@@ -5917,7 +6095,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         var changed = false;
         try {
           changed = await reconcileInbox();
-        } catch (_) {
+        } catch (e, st) {
+          debugPrint('reconcileInbox error: $e\n$st');
           // A provider/permission/network failure must not abort the remaining
           // queue retry and must not surface as an unhandled lifecycle error.
         }
@@ -6392,7 +6571,8 @@ class SmsAutoImportController {
           dueDatesUpdated += result.dueDatesUpdated;
           statementDaysUpdated += result.statementDaysUpdated;
         }
-      } catch (_) {
+      } catch (e, st) {
+        debugPrint('_syncPendingMessages batch error: $e\n$st');
         // Local capture/progress is already durable. Retry only this outbox.
         for (final entry in pending) {
           intake.failed(namespace, entry.id);
@@ -6578,8 +6758,41 @@ final _bestCardForWidgetProvider = Provider<BestCardForWidget>((ref) {
 /// recommendation on Home. Same resolveActiveOverrideCardProductId call
 /// rankedRecommendationsProvider makes, so the two never disagree about
 /// which override is active for a given category.
+class MerchantRecommendationQuery {
+  final String? categoryId;
+  final String? merchantName;
+
+  const MerchantRecommendationQuery({this.categoryId, this.merchantName});
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MerchantRecommendationQuery &&
+          other.categoryId == categoryId &&
+          other.merchantName == merchantName;
+
+  @override
+  int get hashCode => Object.hash(categoryId, merchantName);
+}
+
 final bestCardForMerchantProvider =
-    Provider.family<AsyncValue<Recommendation?>, String?>((ref, categoryId) {
+    Provider.family<AsyncValue<Recommendation?>, Object?>((ref, arg) {
+      final String? categoryId;
+      final String? merchantName;
+      if (arg is MerchantRecommendationQuery) {
+        categoryId = arg.categoryId;
+        merchantName = arg.merchantName;
+      } else if (arg is ({String? categoryId, String? merchantName})) {
+        categoryId = arg.categoryId;
+        merchantName = arg.merchantName;
+      } else if (arg is String?) {
+        categoryId = arg;
+        merchantName = null;
+      } else {
+        categoryId = null;
+        merchantName = null;
+      }
+
       final catalogue = ref.watch(catalogueProvider);
       final userCards = ref.watch(userCardsProvider);
       final overrides = ref.watch(cardOverridesProvider);
@@ -6605,10 +6818,18 @@ final bestCardForMerchantProvider =
                 .where((c) => wallet.any((w) => w.cardProductId == c.id))
                 .toList();
 
+      final categories = ref.watch(categoriesProvider);
+      final categoryList = categories.valueOrNull ?? const <SpendCategory>[];
+      final matchedCategory = categoryList.firstWhereOrNull(
+        (c) => c.id == categoryId || c.slug == categoryId,
+      );
+      final resolvedCategoryId = matchedCategory?.id ?? categoryId;
+      final categorySlug = matchedCategory?.slug;
+
       final overrideProductId = resolveActiveOverrideCardProductId(
         overrides: overrides.requireValue,
         wallet: wallet,
-        categoryId: categoryId,
+        categoryId: resolvedCategoryId,
       );
 
       final snapshots = _userCardSnapshots(
@@ -6617,16 +6838,12 @@ final bestCardForMerchantProvider =
         forcedOverrideCardId: overrideProductId,
       );
 
-      final categories = ref.watch(categoriesProvider);
-      final categorySlug = categories.valueOrNull
-          ?.firstWhereOrNull((c) => c.id == categoryId)
-          ?.slug;
-
       return AsyncValue.data(
         picker.pickBestCard(
           cards: snapshots,
-          categoryId: categoryId,
+          categoryId: resolvedCategoryId,
           categorySlug: categorySlug,
+          merchantName: merchantName,
           now: ref.watch(clockProvider).now(),
         ),
       );

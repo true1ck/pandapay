@@ -6,7 +6,9 @@ import 'app_database.dart';
 /// still be verified after a candidate advances to another stage.
 class SmsRuleExposureOutbox {
   final AppDatabase database;
+  static final _initialized = <Object>{};
   SmsRuleExposureOutbox(this.database) {
+    if (_initialized.add(database.db)) {
     database.db.execute('''
       CREATE TABLE IF NOT EXISTS sms_rule_exposure_outbox (
         namespace TEXT NOT NULL, candidate_id TEXT NOT NULL,
@@ -39,6 +41,7 @@ class SmsRuleExposureOutbox {
       try {
         database.db.execute(statement);
       } catch (_) {}
+    }
     }
   }
 

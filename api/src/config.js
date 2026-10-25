@@ -13,7 +13,11 @@
  * or a real secrets store fronting the container later.
  */
 
+const path = require('path');
 require('dotenv').config();
+if (!process.env.JWT_ACCESS_SECRET && !process.env.DATABASE_URL) {
+  require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+}
 
 const isProduction = process.env.NODE_ENV === 'production';
 

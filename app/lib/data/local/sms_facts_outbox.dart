@@ -23,8 +23,10 @@ import 'sms_learning_privacy.dart';
 class SmsFactsOutbox {
   final AppDatabase database;
   final DateTime Function() now;
+  static final _initialized = <Object>{};
   SmsFactsOutbox(this.database, {DateTime Function()? now})
     : now = now ?? DateTime.now {
+    if (_initialized.add(database.db)) {
     database.db.execute('''
       CREATE TABLE IF NOT EXISTS sms_facts_outbox (
         namespace TEXT NOT NULL, id TEXT NOT NULL,
@@ -50,6 +52,7 @@ class SmsFactsOutbox {
       try {
         database.db.execute(statement);
       } catch (_) {}
+    }
     }
   }
 

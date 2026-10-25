@@ -586,7 +586,8 @@ class _HomeSpendHeadlineState extends ConsumerState<_HomeSpendHeadline> {
                             totalLabel: 'spent',
                             selectedIndex: selectedCategoryIndex,
                             onSelected: _selectCategory,
-                            onCenterTap: () => context.push(AppRoute.spendTrends),
+                            onCenterTap: () =>
+                                context.push(AppRoute.spendTrends),
                           ),
                           if (projected != null &&
                               report.elapsedFraction < .95) ...[
@@ -1111,8 +1112,11 @@ class _UtilizationWarningBanner extends ConsumerWidget {
     final now = ref.watch(clockProvider).now();
     final duePayments =
         ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
-    final cardDue = duePayments.where((d) => d.card.id == userCard.id).firstOrNull;
-    final due = cardDue?.dueOn ??
+    final cardDue = duePayments
+        .where((d) => d.card.id == userCard.id)
+        .firstOrNull;
+    final due =
+        cardDue?.dueOn ??
         (userCard.dueDay == null
             ? null
             : _nextOccurrence(userCard.dueDay!, now));
@@ -2755,6 +2759,9 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
     }
 
     final hasBalances = balancesFound > 0;
+    final hasManualBalances = visibleAccounts.any(
+      (a) => a.isBalanceManuallySet,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         HomeScreen._gutter,
@@ -2797,6 +2804,16 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
                           ),
                         ),
                       ),
+                      IconButton(
+                        tooltip: 'View and edit balances',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => context.push(AppRoute.bankAccounts),
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          size: 19,
+                          color: BambooInk.lime,
+                        ),
+                      ),
                       Text(
                         accountCount == 0
                             ? 'No accounts yet'
@@ -2834,7 +2851,7 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
                     children: [
                       Text(
                         hasBalances
-                            ? 'Total detected balance'
+                            ? 'Total ${hasManualBalances ? 'account' : 'detected'} balance'
                             : 'Balance from SMS',
                         style: BambooFonts.ui(
                           11.5,
@@ -2899,13 +2916,18 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
             ),
             const SizedBox(height: AppSpace.xs),
             Text(
-              'Detected from bank SMS only. Balances come from the latest SMS that reported one.',
+              'Balances come from the latest bank SMS unless you updated them manually.',
+              style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              'Edit them anytime. Live bank balances are coming soon.',
               style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
             ),
             if (hasBalances) ...[
               const SizedBox(height: 3),
               Text(
-                'Shown amounts are SMS snapshots, not live bank balances.',
+                'SMS amounts are snapshots, not live bank balances.',
                 style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
               ),
             ],
@@ -3022,7 +3044,14 @@ class _HomeBankAccountRow extends StatelessWidget {
                     hidePaise: true,
                     showConfidenceIcon: false,
                   ),
-                if (balanceAt != null)
+                if (summary?.isBalanceManuallySet == true &&
+                    summary?.manualBalanceUpdatedAt != null)
+                  Text(
+                    'Manually updated ${DateFormat('dd MMM, h:mm a').format(summary!.manualBalanceUpdatedAt!.toLocal())}',
+                    style: BambooFonts.ui(9.5, color: BambooInk.onSlateMuted),
+                    textAlign: TextAlign.end,
+                  )
+                else if (balanceAt != null)
                   Text(
                     'As of ${DateFormat('dd MMM, h:mm a').format(balanceAt.toLocal())}',
                     style: BambooFonts.ui(9.5, color: BambooInk.onSlateMuted),
@@ -3060,7 +3089,7 @@ class _HomeBankLogo extends StatelessWidget {
           width: 36,
           height: 36,
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => _fallback(),
+          errorBuilder: (_, _, _) => _fallback(),
         ),
       );
     }

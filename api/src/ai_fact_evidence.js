@@ -42,7 +42,7 @@ function verifyModelFacts(facts, payload) {
          /\b(failed|declined|unsuccessful|will be|to be|scheduled|offer|eligible)\b/i.test(body))) {
       errors.push(`facts[${index}]: posted movement lacks unambiguous completion`);
     }
-    if (fact.factType === 'balance_snapshot' && !/\b(balance|available)\b/i.test(body)) {
+    if (fact.factType === 'balance_snapshot' && !/\b(balance|available|bal|avail)\b/i.test(body)) {
       errors.push(`facts[${index}]: no balance evidence`);
     }
     if (fact.factType === 'balance_snapshot' && value.instrument === 'upi_bank' &&

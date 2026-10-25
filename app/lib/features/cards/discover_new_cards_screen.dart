@@ -77,7 +77,12 @@ class _DiscoverNewCardsScreenState extends ConsumerState<DiscoverNewCardsScreen>
     // surface focused on the three best unowned options rather than making a
     // user sift through every catalogue row.
     final worthwhile = candidates.requireValue.where((c) => c.isWorthwhile).take(3).toList();
-    final categoryNames = {for (final c in categories.requireValue) c.id: c.name};
+    final categoryNames = {
+      for (final c in categories.requireValue) ...{
+        c.id: c.name,
+        c.slug: c.name,
+      },
+    };
 
     if (worthwhile.isEmpty) {
       return const EmptyState(
@@ -90,12 +95,40 @@ class _DiscoverNewCardsScreenState extends ConsumerState<DiscoverNewCardsScreen>
       );
     }
 
+    final isStarterProfile = worthwhile.any((c) => c.isStarterProfile);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 30),
       children: [
+        if (isStarterProfile) ...[
+          Container(
+            padding: const EdgeInsets.all(AppSpace.md),
+            margin: const EdgeInsets.only(bottom: AppSpace.md),
+            decoration: BoxDecoration(
+              color: BambooInk.paperMuted,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: BambooInk.hairlineOnPaper),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline_rounded, size: 18, color: BambooInk.slate),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    'Based on a starter spend profile until you build your own transaction history. Recommendations will automatically adapt to your real spending habits.',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         Text(
-          'Ranked by how much better off your whole wallet would be over a year, based on your '
-          'own spending — not just this card\'s advertised rate.',
+          isStarterProfile
+              ? 'Ranked by projected annual portfolio uplift based on a baseline annual spend profile (dining, groceries, utilities, online, fuel).'
+              : 'Ranked by how much better off your whole wallet would be over a year, based on your '
+                  'own spending — not just this card\'s advertised rate.',
           style: BambooFonts.ui(13, color: BambooInk.ink500, height: 1.5),
         ),
         const SizedBox(height: AppSpace.lg),

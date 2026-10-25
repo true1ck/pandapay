@@ -1,4 +1,5 @@
 <resources>
     <item type="drawable" name="pandapay_notification_small_icon">@drawable/ic_notification</item>
     <item type="drawable" name="pandapay_notification_large_icon">@drawable/ic_notification_large</item>
+    <color name="pandapay_notification_accent_color">#121316</color>
 </resources>

@@ -7,10 +7,15 @@
  * it never creates a second job or writes a second transaction.
  */
 
+const path = require('path');
 require('dotenv').config();
+if (!process.env.GEMINI_API_KEY) {
+  require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+}
 
 const crypto = require('crypto');
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+const DEFAULT_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-flash-lite-latest';
 const DEFAULT_INTERVAL_MS = Number(process.env.AI_WORKER_INTERVAL_MS || 2000);
 const DEFAULT_API_BASE_URL = process.env.AI_WORKER_API_BASE_URL || `http://127.0.0.1:${process.env.PORT || 4000}`;
 const PROVIDER_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_PROVIDER_TIMEOUT_MS || 20000));
@@ -85,6 +90,8 @@ function buildGeminiPrompt(job, { batch = false } = {}) {
       : 'Return JSON only in the form {"facts":[...]}; return an empty facts array when uncertain.',
     'Each fact must use the app contract: factType, payload, provenance.',
     'Allowed factType values: posted_movement, pending_or_failed_attempt, balance_snapshot, bill_obligation, bill_payment, mandate_lifecycle, card_identity_hint, security_or_service_alert, promotion.',
+    'Allowed entryKind values for posted_movement: spend, income, transfer, investment (use "spend" for debited/purchases).',
+    'Allowed instruments if present: upi_bank, credit_card, debit_card, cash, wallet, other.',
     'Amounts must use the correct role: posted, due_total, due_minimum, outstanding, ceiling, or proposed.',
     'Required payload fields: posted_movement = amountRole, entryKind, occurredAt; pending_or_failed_attempt = attemptStatus, occurredAt; balance_snapshot = availableBalanceInr, asOfAt; bill_obligation = amountRole, dueDate and its evidenced amount/date fields; bill_payment = amountRole, occurredAt and its evidenced amount field; mandate_lifecycle = mandateStatus, asOfAt; card_identity_hint = asOfAt; security_or_service_alert = alertKind, occurredAt; promotion may be empty.',
     'For amountRole, include its matching amount and date: posted=amountInr/occurredAt, due_total=amountDueInr/dueDate, due_minimum=minimumDueInr/dueDate, outstanding=outstandingInr/asOfAt, ceiling=limitInr/asOfAt, proposed=proposedAmountInr/proposedAt.',
@@ -118,6 +125,12 @@ async function reserveProviderCapacity({ jobs, apiBaseUrl, workerToken, fetchImp
   for (;;) {
     const permit = await jsonRequest(fetchImpl, `${apiBaseUrl}/ai/provider/reserve`, workerToken, { estimatedTokens });
     if (permit.allowed === true) return permit;
+    if (permit.dailyLimitReached === true) {
+      throw new GeminiProviderError('Gemini daily Free-tier request limit reached', {
+        retryable: true,
+        retryAfterMs: Math.max(1000, Number(permit.retryAfterMs) || 60000),
+      });
+    }
     if (permit.permanentlyBlocked === true) {
       throw new GeminiProviderError('Provider token window is smaller than this request', { retryable: false });
     }
@@ -127,115 +140,181 @@ async function reserveProviderCapacity({ jobs, apiBaseUrl, workerToken, fetchImp
   }
 }
 
+function parseConfiguredApiKeys(primary, fallback) {
+  const keys = [
+    primary,
+    fallback,
+    ...(process.env.GEMINI_API_KEYS ? process.env.GEMINI_API_KEYS.split(',') : []),
+  ];
+  return [...new Set(keys.map((k) => String(k || '').trim()).filter(Boolean))];
+}
+
 class GeminiProvider {
   constructor({
-    apiKey = process.env.GEMINI_API_KEY,
+    apiKey,
+    fallbackApiKey,
+    apiKeys = null,
     model = DEFAULT_MODEL,
+    fallbackModel = DEFAULT_FALLBACK_MODEL,
     fetchImpl = globalThis.fetch,
     endpointBase = 'https://generativelanguage.googleapis.com/v1beta/models',
   } = {}) {
     if (typeof fetchImpl !== 'function') throw new Error('global fetch is required');
-    this.apiKey = apiKey;
+    const primaryKey = apiKey !== undefined ? apiKey : process.env.GEMINI_API_KEY;
+    const fallbackKey = fallbackApiKey !== undefined ? fallbackApiKey : (apiKey === '' ? '' : process.env.GEMINI_FALLBACK_API_KEY);
+    const keys = Array.isArray(apiKeys) && apiKeys.length > 0
+      ? apiKeys.map((k) => String(k || '').trim()).filter(Boolean)
+      : (apiKey === '' && !fallbackApiKey ? [] : parseConfiguredApiKeys(primaryKey, fallbackKey));
+    this.apiKeys = keys;
+    this.currentKeyIndex = 0;
+    this.apiKey = this.apiKeys[0] || (primaryKey ? String(primaryKey).trim() : null);
     this.model = model;
+    this.fallbackModel = fallbackModel && fallbackModel !== model ? fallbackModel : null;
     this.fetchImpl = fetchImpl;
     this.endpointBase = endpointBase.replace(/\/$/, '');
   }
 
   async classify(job) {
-    if (!this.apiKey) {
+    if (!this.apiKey && (!this.apiKeys || this.apiKeys.length === 0)) {
       throw new GeminiProviderError('GEMINI_API_KEY is not configured', { retryable: false });
     }
-    let response;
-    try {
-      response = await this.fetchImpl(
-      `${this.endpointBase}/${encodeURIComponent(this.model)}:generateContent`,
-      {
-        method: 'POST',
-        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': this.apiKey },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: buildGeminiPrompt(job) }] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            maxOutputTokens: MAX_OUTPUT_TOKENS,
+    const maxAttempts = Math.max(1, this.apiKeys.length);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const activeKey = this.apiKeys[this.currentKeyIndex] || this.apiKey;
+      let response;
+      try {
+        response = await this.fetchImpl(
+          `${this.endpointBase}/${encodeURIComponent(this.model)}:generateContent`,
+          {
+            method: 'POST',
+            signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+            headers: { 'content-type': 'application/json', 'x-goog-api-key': activeKey },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: buildGeminiPrompt(job) }] }],
+              generationConfig: {
+                responseMimeType: 'application/json',
+                maxOutputTokens: MAX_OUTPUT_TOKENS,
+              },
+            }),
           },
-        }),
-      },
-      );
-    } catch (_) {
-      throw new GeminiProviderError('Gemini request failed or timed out', { retryable: true });
+        );
+      } catch (_) {
+        throw new GeminiProviderError('Gemini request failed or timed out', { retryable: true });
+      }
+      if (!response.ok) {
+        let providerError = '';
+        try { providerError = JSON.stringify(await response.json()); } catch (_) { /* no body */ }
+        const quotaError = (response.status === 403 || response.status === 429) &&
+          /quota|resource[_ -]?exhausted|rate.?limit/i.test(providerError);
+        const is429 = response.status === 429 || quotaError;
+
+        if (response.status === 404 && this.fallbackModel && this.model !== this.fallbackModel) {
+          console.warn(`[GeminiProvider] Model ${this.model} hit HTTP 404, switching to fallback model ${this.fallbackModel}`);
+          this.model = this.fallbackModel;
+          this.fallbackModel = null;
+          attempt--;
+          continue;
+        }
+
+        if ((is429 || response.status === 403) && this.apiKeys.length > 1 && attempt < maxAttempts - 1) {
+          const nextIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
+          console.warn(`[GeminiProvider] Key index ${this.currentKeyIndex} hit HTTP ${response.status}, rotating to fallback key index ${nextIndex}`);
+          this.currentKeyIndex = nextIndex;
+          this.apiKey = this.apiKeys[nextIndex];
+          continue;
+        }
+
+        const retryable = response.status === 408 || response.status === 409 || is429 || response.status >= 500;
+        const parsedDelay = retryAfterMsFromHeaders(response.headers, providerError);
+        const retryAfterMs = parsedDelay ?? (is429 ? (30000 + Math.floor(Math.random() * 5000)) : undefined);
+        throw new GeminiProviderError(`Gemini HTTP ${response.status}`, {
+          retryable,
+          retryAfterMs,
+          status: response.status,
+        });
+      }
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('');
+      const parsed = parseModelJson(text);
+      if (!parsed || !Array.isArray(parsed.facts)) {
+        throw new GeminiProviderError('Gemini response has no facts array', { retryable: false });
+      }
+      return parsed.facts;
     }
-    if (!response.ok) {
-      let providerError = '';
-      try { providerError = JSON.stringify(await response.json()); } catch (_) { /* no body */ }
-      const quotaError = response.status === 403 && /quota|resource[_ -]?exhausted|rate.?limit/i.test(providerError);
-      const is429 = response.status === 429 || quotaError;
-      const retryable = response.status === 408 || response.status === 409 || is429 || response.status >= 500;
-      const parsedDelay = retryAfterMsFromHeaders(response.headers, providerError);
-      const retryAfterMs = parsedDelay ?? (is429 ? (30000 + Math.floor(Math.random() * 5000)) : undefined);
-      throw new GeminiProviderError(`Gemini HTTP ${response.status}`, {
-        retryable,
-        retryAfterMs,
-        status: response.status,
-      });
-    }
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('');
-    const parsed = parseModelJson(text);
-    if (!parsed || !Array.isArray(parsed.facts)) {
-      throw new GeminiProviderError('Gemini response has no facts array', { retryable: false });
-    }
-    return parsed.facts;
   }
 
   async classifyBatch(jobs) {
     if (jobs.length === 1) return new Map([[jobs[0].id, await this.classify(jobs[0])]]);
-    if (!this.apiKey) throw new GeminiProviderError('GEMINI_API_KEY is not configured');
-    let response;
-    try {
-      response = await this.fetchImpl(
-        `${this.endpointBase}/${encodeURIComponent(this.model)}:generateContent`,
-        {
-          method: 'POST',
-          signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-          headers: { 'content-type': 'application/json', 'x-goog-api-key': this.apiKey },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: buildGeminiBatchPrompt(jobs) }] }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              maxOutputTokens: MAX_OUTPUT_TOKENS,
-            },
-          }),
-        },
-      );
-    } catch (_) {
-      throw new GeminiProviderError('Gemini batch request failed or timed out', { retryable: true });
+    if (!this.apiKey && (!this.apiKeys || this.apiKeys.length === 0)) {
+      throw new GeminiProviderError('GEMINI_API_KEY is not configured');
     }
-    if (!response.ok) {
-      let providerError = '';
-      try { providerError = JSON.stringify(await response.json()); } catch (_) { /* no body */ }
-      const quotaError = response.status === 403 && /quota|resource[_ -]?exhausted|rate.?limit/i.test(providerError);
-      const is429 = response.status === 429 || quotaError;
-      const parsedDelay = retryAfterMsFromHeaders(response.headers, providerError);
-      const retryAfterMs = parsedDelay ?? (is429 ? (30000 + Math.floor(Math.random() * 5000)) : undefined);
-      throw new GeminiProviderError(`Gemini HTTP ${response.status}`, {
-        retryable: response.status === 408 || response.status === 409 || is429 || response.status >= 500,
-        retryAfterMs,
-        status: response.status,
-      });
-    }
-    const data = await response.json();
-    const parsed = parseModelJson(data?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join(''));
-    if (!Array.isArray(parsed?.items)) throw new GeminiProviderError('Gemini batch has no items array');
-    const expected = new Set(jobs.map((job) => job.id));
-    const output = new Map();
-    for (const item of parsed.items) {
-      if (!expected.has(item?.id) || output.has(item.id) || !Array.isArray(item.facts)) {
-        throw new GeminiProviderError('Gemini batch has an invalid item');
+    const maxAttempts = Math.max(1, this.apiKeys.length);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const activeKey = this.apiKeys[this.currentKeyIndex] || this.apiKey;
+      let response;
+      try {
+        response = await this.fetchImpl(
+          `${this.endpointBase}/${encodeURIComponent(this.model)}:generateContent`,
+          {
+            method: 'POST',
+            signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+            headers: { 'content-type': 'application/json', 'x-goog-api-key': activeKey },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: buildGeminiBatchPrompt(jobs) }] }],
+              generationConfig: {
+                responseMimeType: 'application/json',
+                maxOutputTokens: MAX_OUTPUT_TOKENS,
+              },
+            }),
+          },
+        );
+      } catch (_) {
+        throw new GeminiProviderError('Gemini batch request failed or timed out', { retryable: true });
       }
-      output.set(item.id, item.facts);
+      if (!response.ok) {
+        let providerError = '';
+        try { providerError = JSON.stringify(await response.json()); } catch (_) { /* no body */ }
+        const quotaError = (response.status === 403 || response.status === 429) &&
+          /quota|resource[_ -]?exhausted|rate.?limit/i.test(providerError);
+        const is429 = response.status === 429 || quotaError;
+
+        if (response.status === 404 && this.fallbackModel && this.model !== this.fallbackModel) {
+          console.warn(`[GeminiProvider] Model ${this.model} hit HTTP 404, switching to fallback model ${this.fallbackModel}`);
+          this.model = this.fallbackModel;
+          this.fallbackModel = null;
+          attempt--;
+          continue;
+        }
+
+        if ((is429 || response.status === 403) && this.apiKeys.length > 1 && attempt < maxAttempts - 1) {
+          const nextIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
+          console.warn(`[GeminiProvider] Key index ${this.currentKeyIndex} hit HTTP ${response.status}, rotating to fallback key index ${nextIndex}`);
+          this.currentKeyIndex = nextIndex;
+          this.apiKey = this.apiKeys[nextIndex];
+          continue;
+        }
+
+        const parsedDelay = retryAfterMsFromHeaders(response.headers, providerError);
+        const retryAfterMs = parsedDelay ?? (is429 ? (30000 + Math.floor(Math.random() * 5000)) : undefined);
+        throw new GeminiProviderError(`Gemini HTTP ${response.status}`, {
+          retryable: response.status === 408 || response.status === 409 || is429 || response.status >= 500,
+          retryAfterMs,
+          status: response.status,
+        });
+      }
+      const data = await response.json();
+      const parsed = parseModelJson(data?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join(''));
+      if (!Array.isArray(parsed?.items)) throw new GeminiProviderError('Gemini batch has no items array');
+      const expected = new Set(jobs.map((job) => job.id));
+      const output = new Map();
+      for (const item of parsed.items) {
+        if (!expected.has(item?.id) || output.has(item.id) || !Array.isArray(item.facts)) {
+          throw new GeminiProviderError('Gemini batch has an invalid item');
+        }
+        output.set(item.id, item.facts);
+      }
+      return output;
     }
-    return output;
   }
 }
 

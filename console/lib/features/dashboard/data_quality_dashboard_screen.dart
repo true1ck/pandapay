@@ -58,6 +58,7 @@ class DataQualityDashboardScreen extends ConsumerWidget {
                   _StatCard('Open policy alerts', d['alerts_open'], Icons.notifications_active, warnIfNonzero: true),
                   _StatCard('Pending error reports', d['error_reports_pending'], Icons.report_gmailerrorred, warnIfNonzero: true),
                   _StatCard('Pending card requests', d['card_requests_pending'], Icons.playlist_add_check),
+                  _StatCard('Pending support tickets', d['support_tickets_pending'], Icons.support_agent, warnIfNonzero: true),
                   _StatCard('Pending conflicts', d['conflicts_pending'], Icons.gavel, warnIfNonzero: true),
                   _StatCard('Scrape failures (7d)', d['scrape_failures_7d'], Icons.error_outline, warnIfNonzero: true),
                 ],

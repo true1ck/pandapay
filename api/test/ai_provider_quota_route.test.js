@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { registerProviderQuotaRoute, boundedEnvInt } = require('../src/ai_provider_quota_route');
+const { registerProviderQuotaRoute, providerLimits } = require('../src/ai_provider_quota_route');
 
 function responseRecorder() {
   return {
@@ -22,12 +22,12 @@ function routeHarness(withUserClient) {
   };
 }
 
-test('provider reservation validates token estimates and uses the shared SQL gate', async () => {
+test('provider reservation validates token estimates and applies the Free RPM, TPM, and RPD caps', async () => {
   let args;
   const call = routeHarness(async (userId, fn) => {
     assert.equal(userId, null);
     return fn({ query: async (sql, params) => {
-      assert.match(sql, /ai_reserve_provider_capacity/);
+      assert.match(sql, /ai_reserve_provider_capacity\(\$1, \$2, \$3, \$4\)/);
       args = params;
       return { rows: [{ reservation: { allowed: false, waitMs: 900 } }] };
     } });
@@ -35,7 +35,7 @@ test('provider reservation validates token estimates and uses the shared SQL gat
   const bad = await call({ estimatedTokens: 0 });
   assert.equal(bad.statusCode, 400);
   const ok = await call({ estimatedTokens: 450 });
-  assert.deepEqual(args, [10, 12000, 450]);
+  assert.deepEqual(args, [5, 12000, 20, 450]);
   assert.deepEqual(ok.body, { allowed: false, waitMs: 900 });
 });
 
@@ -46,10 +46,45 @@ test('provider reservation returns a safe unavailable response on database error
   assert.deepEqual(res.body, { error: 'provider capacity reservation unavailable' });
 });
 
-test('Gemini quota environment limits are bounded and fall back safely', () => {
+test('Free-tier daily exhaustion releases capacity once with the next reset delay', async () => {
+  const { reserveProviderCapacity } = require('../src/gemini_worker');
+  let calls = 0;
+  await assert.rejects(
+    reserveProviderCapacity({
+      jobs: [{ id: 'job', payload: { body: 'synthetic fixture' } }],
+      apiBaseUrl: 'http://api.test',
+      workerToken: 'worker-token',
+      fetchImpl: async () => {
+        calls++;
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => ({ allowed: false, dailyLimitReached: true, retryAfterMs: 60000 }),
+        };
+      },
+      waitImpl: async () => assert.fail('daily exhaustion must not poll in a tight loop'),
+    }),
+    (error) => error.retryable === true && error.retryAfterMs === 60000,
+  );
+  assert.equal(calls, 1);
+});
+
+test('Gemini Free-tier limits hard-cap configured settings at 5 RPM and 20 RPD', () => {
+  const { providerLimits } = require('../src/ai_provider_quota_route');
   process.env.GEMINI_REQUESTS_PER_MINUTE = '12';
-  assert.equal(boundedEnvInt('GEMINI_REQUESTS_PER_MINUTE', 10, 1, 1000), 12);
+  process.env.GEMINI_TOKENS_PER_MINUTE = '500000';
+  process.env.GEMINI_REQUESTS_PER_DAY = '200';
+  assert.deepEqual(providerLimits(), {
+    requestsPerMinute: 5,
+    tokensPerMinute: 250000,
+    requestsPerDay: 20,
+  });
   process.env.GEMINI_REQUESTS_PER_MINUTE = '0';
-  assert.equal(boundedEnvInt('GEMINI_REQUESTS_PER_MINUTE', 10, 1, 1000), 10);
+  assert.equal(providerLimits().requestsPerMinute, 5);
+  process.env.GEMINI_REQUESTS_PER_DAY = '0';
+  assert.equal(providerLimits().requestsPerDay, 20);
   delete process.env.GEMINI_REQUESTS_PER_MINUTE;
+  delete process.env.GEMINI_TOKENS_PER_MINUTE;
+  delete process.env.GEMINI_REQUESTS_PER_DAY;
 });

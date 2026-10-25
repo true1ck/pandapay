@@ -194,7 +194,7 @@ class SmsListenerService {
     for (final row in rows) {
       final id = row.id;
       if (id == null || id <= afterId || id > throughId) {
-        throw const FormatException('Invalid SMS provider progress');
+        continue;
       }
       if (id > lastId) lastId = id;
       final sender = row.address;
@@ -215,6 +215,17 @@ class SmsListenerService {
           receivedAt: DateTime.fromMillisecondsSinceEpoch(date),
         ),
       );
+    }
+    if (lastId <= afterId && rows.isNotEmpty) {
+      final maxSeen = rows
+          .map((r) => r.id)
+          .whereType<int>()
+          .fold<int>(afterId, (max, id) => id > max ? id : max);
+      lastId = maxSeen > afterId
+          ? (maxSeen <= throughId ? maxSeen : throughId)
+          : (afterId + rows.length <= throughId
+              ? afterId + rows.length
+              : throughId);
     }
     return SmsInboxPage(messages, lastId, rows.length);
   }

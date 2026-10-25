@@ -8,11 +8,11 @@ void main() {
         .readAsBytesSync())!;
 
   // Simulate how Android tint paints the small icon with the notification
-  // accent color (AppColors.teal500), keeping the alpha mask.
+  // accent color (#121316), keeping the alpha mask.
   final tinted = glyph.clone();
   for (final p in tinted) {
     if (p.a == 0) continue;
-    p.setRgba(0x14, 0xB8, 0xA6, p.a);
+    p.setRgba(0x12, 0x13, 0x16, p.a);
   }
 
   final big = img.copyResize(tinted, width: 96, height: 96);

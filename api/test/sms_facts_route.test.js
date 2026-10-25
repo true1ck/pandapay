@@ -760,6 +760,25 @@ test('POST /sms/dismiss preserves owned-source lineage and ignores forged sender
   }
 });
 
+test('POST /sms/dismiss acknowledges credential-bearing samples without learning or retrying them', async () => {
+  const client = fakeClient();
+  const route = harness();
+  const result = await route.dismissCall(client, {
+    userId: 'user-1',
+    body: {
+      sourceKey: '4'.repeat(64),
+      sender: 'HDFCBK',
+      sampleBody: 'Your verification code is 123456. Do not share your OTP.',
+    },
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.dismissed, true);
+  assert.equal(result.body.learningRecorded, false);
+  assert.equal(result.body.learningReason, 'sensitive_sms');
+  assert.deepEqual(client.learningFeedback, []);
+});
+
 test('POST /sms/dismiss accepts an unsynced authenticated source as redacted positive-only feedback', async () => {
   const client = fakeClient();
   const route = harness();

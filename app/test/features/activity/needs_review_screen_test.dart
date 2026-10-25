@@ -148,6 +148,33 @@ void main() {
 
     expect(find.text('VM-HDFCBK'), findsOneWidget);
     expect(find.text('Rs.499 spent at AMAZON'), findsOneWidget);
+    expect(find.text('AI review not started'), findsOneWidget);
+  });
+
+  testWidgets('shows completed Gemini check status beside its suggestions', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'f' * 64,
+        sender: 'VM-HDFCBK',
+        body: 'INR 499 spent at AMAZON on card ending 1234.',
+        receivedAt: DateTime.now(),
+        aiStatus: AiReviewStatus.checked,
+        aiSuggestions: const [
+          {
+            'factIndex': 0,
+            'factType': 'posted_movement',
+            'payload': {'amountInr': 499, 'merchant': 'AMAZON'},
+          },
+        ],
+      ),
+    );
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+    expect(find.text('AI review completed'), findsOneWidget);
+    expect(find.textContaining('AI suggested'), findsOneWidget);
+    expect(find.text('Review transaction'), findsOneWidget);
   });
 
   testWidgets('Ignore message removes the item from the queue', (tester) async {
@@ -195,38 +222,62 @@ void main() {
     expect(find.text('Merchant or sender'), findsOneWidget);
   });
 
-  testWidgets('Dismiss all clears every queued item at once', (tester) async {
-    await reviews.add(
-      NeedsReviewItem(
-        id: '1',
-        sender: 'VM-HDFCBK',
-        body: 'Rs.100 spent on HDFC Bank Card ending 1234 at FIRST SHOP.',
-        receivedAt: DateTime.now(),
-      ),
-    );
-    await reviews.add(
-      NeedsReviewItem(
-        id: '2',
-        sender: 'VM-HDFCBK',
-        body: 'Rs.200 spent on HDFC Bank Card ending 5678 at SECOND SHOP.',
-        receivedAt: DateTime.now(),
-      ),
-    );
-    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+  testWidgets(
+    'Dismiss all confirms the full queue even while a date filter is active',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: '1',
+          sender: 'VM-OCT',
+          body: 'Rs.100 spent on HDFC Bank Card ending 1234 at FIRST SHOP.',
+          receivedAt: DateTime(2026, 10, 4),
+        ),
+      );
+      await reviews.add(
+        NeedsReviewItem(
+          id: '2',
+          sender: 'VM-SEP',
+          body: 'Rs.200 spent on HDFC Bank Card ending 5678 at SECOND SHOP.',
+          receivedAt: DateTime(2026, 9, 4),
+        ),
+      );
+      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
-    await tester.tap(find.text('Dismiss all'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Oct 2026 (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('VM-SEP'), findsNothing);
 
-    expect(find.text('Nothing needs review'), findsOneWidget);
-    expect(await reviews.fetchAll(), isEmpty);
-  });
+      await tester.tap(find.text('Dismiss all'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dismiss all 2 review items?'), findsOneWidget);
+      expect(
+        find.textContaining('even when a date or type filter is active'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(await reviews.fetchAll(), hasLength(2));
+      expect(find.text('VM-OCT'), findsOneWidget);
+      expect(find.text('VM-SEP'), findsNothing);
+
+      await tester.tap(find.text('Dismiss all'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Dismiss all'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nothing needs review'), findsOneWidget);
+      expect(await reviews.fetchAll(), isEmpty);
+    },
+  );
 
   testWidgets('Save bill opens a review sheet and only then persists it', (
     tester,
   ) async {
     final future = DateTime.now().add(const Duration(days: 10));
     final dueOn = DateTime(future.year, future.month, future.day);
-    final dueDateText = '${dueOn.year}-${dueOn.month.toString().padLeft(2, '0')}-${dueOn.day.toString().padLeft(2, '0')}';
+    final dueDateText =
+        '${dueOn.year}-${dueOn.month.toString().padLeft(2, '0')}-${dueOn.day.toString().padLeft(2, '0')}';
     await reviews.add(
       NeedsReviewItem(
         id: 'bill-1',
@@ -442,13 +493,18 @@ void main() {
       expect(find.text('Confirm bank balance'), findsOneWidget);
       expect(find.text('12500.50'), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Confirm balance').last);
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirm balance').last,
+      );
       await tester.pumpAndSettle();
 
       expect(repo.lastOverrideArgs, isNotNull);
       expect(repo.lastOverrideArgs!['sourceKey'], key);
       expect(repo.lastOverrideArgs!['factIndex'], 0);
-      expect((repo.lastOverrideArgs!['patch'] as Map)['availableBalanceInr'], 12500.50);
+      expect(
+        (repo.lastOverrideArgs!['patch'] as Map)['availableBalanceInr'],
+        12500.50,
+      );
       expect(await reviews.fetchAll(), isEmpty);
     },
   );
@@ -479,7 +535,12 @@ void main() {
       );
       final repo = _FakeUserCardsRepository();
       final commitments = CommitmentsRepository(namespace: 'user:test');
-      await _pump(tester, repo: repo, reviews: reviews, commitments: commitments);
+      await _pump(
+        tester,
+        repo: repo,
+        reviews: reviews,
+        commitments: commitments,
+      );
 
       expect(find.text('Review bill'), findsOneWidget);
       await tester.tap(find.text('Review bill'));
@@ -559,7 +620,10 @@ void main() {
       final remainingItems = await reviews.fetchAll();
       expect(remainingItems, hasLength(1));
       expect(remainingItems.single.aiSuggestions, hasLength(1));
-      expect(remainingItems.single.aiSuggestions!.single['factType'], 'balance_snapshot');
+      expect(
+        remainingItems.single.aiSuggestions!.single['factType'],
+        'balance_snapshot',
+      );
 
       // The button now says Confirm balance
       expect(find.text('Confirm balance'), findsOneWidget);
@@ -569,7 +633,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Confirm bank balance'), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, 'Confirm balance').last);
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirm balance').last,
+      );
       await tester.pumpAndSettle();
 
       // Balance override recorded for fact 1
@@ -593,7 +659,11 @@ void main() {
           body: 'INR 499 spent at STORE. Get cashback on your next purchase.',
           receivedAt: DateTime(2026, 10, 10),
           aiSuggestions: [
-            {'factIndex': 0, 'factType': 'promotion', 'payload': <String, dynamic>{}},
+            {
+              'factIndex': 0,
+              'factType': 'promotion',
+              'payload': <String, dynamic>{},
+            },
             {
               'factIndex': 1,
               'factType': 'posted_movement',
@@ -617,264 +687,278 @@ void main() {
       final remaining = await reviews.fetchAll();
       expect(remaining, hasLength(1));
       expect(remaining.single.aiSuggestions, hasLength(1));
-      expect(remaining.single.aiSuggestions!.single['factType'], 'posted_movement');
+      expect(
+        remaining.single.aiSuggestions!.single['factType'],
+        'posted_movement',
+      );
     },
   );
 
-    testWidgets(
-      'dismissing not-a-transaction preserves immediate optimistic UI dismissal and calls dismissSms',
-      (tester) async {
-        final repo = _FakeUserCardsRepository();
-        await reviews.add(
-          NeedsReviewItem(
-            id: 'txn-item-123',
-            sender: 'VM-HDFCBK',
-            body: 'Debited Rs. 500 at Store',
-            receivedAt: DateTime(2026, 10, 22),
-          ),
-        );
-        await _pump(tester, repo: repo, reviews: reviews);
+  testWidgets(
+    'dismissing not-a-transaction preserves immediate optimistic UI dismissal and calls dismissSms',
+    (tester) async {
+      final repo = _FakeUserCardsRepository();
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'txn-item-123',
+          sender: 'VM-HDFCBK',
+          body: 'Debited Rs. 500 at Store',
+          receivedAt: DateTime(2026, 10, 22),
+        ),
+      );
+      await _pump(tester, repo: repo, reviews: reviews);
 
-        expect(find.text('Debited Rs. 500 at Store'), findsOneWidget);
+      expect(find.text('Debited Rs. 500 at Store'), findsOneWidget);
 
-        // Tap Ignore message (_dismissNotATransaction)
-        await tester.tap(find.text('Ignore message'));
-        await tester.pumpAndSettle();
+      // Tap Ignore message (_dismissNotATransaction)
+      await tester.tap(find.text('Ignore message'));
+      await tester.pumpAndSettle();
 
-        // 1. Immediate optimistic UI dismissal: item is gone immediately
-        expect(find.text('Debited Rs. 500 at Store'), findsNothing);
-        expect(find.text('Nothing needs review'), findsOneWidget);
-        expect(await reviews.fetchAll(), isEmpty);
+      // 1. Immediate optimistic UI dismissal: item is gone immediately
+      expect(find.text('Debited Rs. 500 at Store'), findsNothing);
+      expect(find.text('Nothing needs review'), findsOneWidget);
+      expect(await reviews.fetchAll(), isEmpty);
 
-        // 2. repository.dismissSms was invoked with expected parameters
-        expect(repo.lastDismissArgs, isNotNull);
-        expect(repo.lastDismissArgs!['sourceKey'], 'txn-item-123');
-        expect(repo.lastDismissArgs!['sender'], 'VM-HDFCBK');
-        expect(repo.lastDismissArgs!['reason'], 'user_dismissed');
-        expect(repo.lastDismissArgs!['family'], 'ignore_noise');
-      },
-    );
+      // 2. repository.dismissSms was invoked with expected parameters
+      expect(repo.lastDismissArgs, isNotNull);
+      expect(repo.lastDismissArgs!['sourceKey'], 'txn-item-123');
+      expect(repo.lastDismissArgs!['sender'], 'VM-HDFCBK');
+      expect(repo.lastDismissArgs!['reason'], 'user_dismissed');
+      expect(repo.lastDismissArgs!['family'], 'ignore_noise');
+    },
+  );
 
-    testWidgets(
-      'dismissing commitment item preserves immediate optimistic dismissal and calls dismissSms',
-      (tester) async {
-        final repo = _FakeUserCardsRepository();
-        final commitments = CommitmentsRepository(namespace: 'user:test');
-        await reviews.add(
-          NeedsReviewItem(
-            id: 'bill-item-456',
-            sender: 'HDFCBK',
-            body: 'Your bill of Rs. 2000 is generated. Due date 28-10-2026',
-            receivedAt: DateTime(2026, 10, 22),
-            kind: NeedsReviewKind.commitment,
-          ),
-        );
-        await _pump(
-          tester,
-          repo: repo,
-          reviews: reviews,
-          commitments: commitments,
-        );
+  testWidgets(
+    'dismissing commitment item preserves immediate optimistic dismissal and calls dismissSms',
+    (tester) async {
+      final repo = _FakeUserCardsRepository();
+      final commitments = CommitmentsRepository(namespace: 'user:test');
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'bill-item-456',
+          sender: 'HDFCBK',
+          body: 'Your bill of Rs. 2000 is generated. Due date 28-10-2026',
+          receivedAt: DateTime(2026, 10, 22),
+          kind: NeedsReviewKind.commitment,
+        ),
+      );
+      await _pump(
+        tester,
+        repo: repo,
+        reviews: reviews,
+        commitments: commitments,
+      );
 
-        expect(find.byTooltip('Dismiss message'), findsOneWidget);
+      expect(find.byTooltip('Dismiss message'), findsOneWidget);
 
-        // Tap dismiss button (_dismiss)
-        await tester.tap(find.byTooltip('Dismiss message'));
-        await tester.pumpAndSettle();
+      // Tap dismiss button (_dismiss)
+      await tester.tap(find.byTooltip('Dismiss message'));
+      await tester.pumpAndSettle();
 
-        // 1. Immediate optimistic UI dismissal
-        expect(await reviews.fetchAll(), isEmpty);
-        expect(find.text('Nothing needs review'), findsOneWidget);
+      // 1. Immediate optimistic UI dismissal
+      expect(await reviews.fetchAll(), isEmpty);
+      expect(find.text('Nothing needs review'), findsOneWidget);
 
-        // 2. repository.dismissSms was invoked
-        expect(repo.lastDismissArgs, isNotNull);
-        expect(repo.lastDismissArgs!['sourceKey'], 'bill-item-456');
-        expect(repo.lastDismissArgs!['sender'], 'HDFCBK');
-        expect(repo.lastDismissArgs!['reason'], 'user_dismissed');
-        expect(repo.lastDismissArgs!['family'], 'ignore_noise');
-      },
-    );
+      // 2. repository.dismissSms was invoked
+      expect(repo.lastDismissArgs, isNotNull);
+      expect(repo.lastDismissArgs!['sourceKey'], 'bill-item-456');
+      expect(repo.lastDismissArgs!['sender'], 'HDFCBK');
+      expect(repo.lastDismissArgs!['reason'], 'user_dismissed');
+      expect(repo.lastDismissArgs!['family'], 'ignore_noise');
+    },
+  );
 
-    testWidgets(
-      'Dismiss all calls dismissSms for all queued items and immediately clears screen',
-      (tester) async {
-        final repo = _FakeUserCardsRepository();
-        await reviews.add(
-          NeedsReviewItem(
-            id: 'item-1',
-            sender: 'VM-HDFCBK',
-            body: 'Rs.100 spent on HDFC Bank Card ending 1234 at FIRST SHOP.',
-            receivedAt: DateTime.now(),
-          ),
-        );
-        await reviews.add(
-          NeedsReviewItem(
-            id: 'item-2',
-            sender: 'VM-HDFCBK',
-            body: 'Rs.200 spent on HDFC Bank Card ending 5678 at SECOND SHOP.',
-            receivedAt: DateTime.now(),
-          ),
-        );
-        await _pump(tester, repo: repo, reviews: reviews);
+  testWidgets(
+    'Dismiss all calls dismissSms for all queued items and immediately clears screen',
+    (tester) async {
+      final repo = _FakeUserCardsRepository();
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'item-1',
+          sender: 'VM-HDFCBK',
+          body: 'Rs.100 spent on HDFC Bank Card ending 1234 at FIRST SHOP.',
+          receivedAt: DateTime.now(),
+        ),
+      );
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'item-2',
+          sender: 'VM-HDFCBK',
+          body: 'Rs.200 spent on HDFC Bank Card ending 5678 at SECOND SHOP.',
+          receivedAt: DateTime.now(),
+        ),
+      );
+      await _pump(tester, repo: repo, reviews: reviews);
 
-        await tester.tap(find.text('Dismiss all'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Dismiss all'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Dismiss all'));
+      await tester.pumpAndSettle();
 
-        expect(find.text('Nothing needs review'), findsOneWidget);
-        expect(await reviews.fetchAll(), isEmpty);
-        expect(repo.allDismissArgs, hasLength(2));
-        expect(repo.allDismissArgs.map((a) => a['sourceKey']).toSet(), {'item-1', 'item-2'});
-      },
-    );
+      expect(find.text('Nothing needs review'), findsOneWidget);
+      expect(await reviews.fetchAll(), isEmpty);
+      expect(repo.allDismissArgs, hasLength(2));
+      expect(repo.allDismissArgs.map((a) => a['sourceKey']).toSet(), {
+        'item-1',
+        'item-2',
+      });
+    },
+  );
 
-    test(
-      'UserCardsRepository.dismissSms handles offline network error gracefully by recording to retry queue',
-      () async {
-        final failingClient = MockClient((request) async {
-          throw http.ClientException('Network is unreachable / device offline');
-        });
+  test(
+    'UserCardsRepository.dismissSms handles offline network error gracefully by recording to retry queue',
+    () async {
+      final failingClient = MockClient((request) async {
+        throw http.ClientException('Network is unreachable / device offline');
+      });
 
-        final repo = UserCardsRepository(
-          apiBaseUrl: 'https://api.pandapay.test',
-          accessToken: 'test-token',
-          client: failingClient,
-        );
+      final repo = UserCardsRepository(
+        apiBaseUrl: 'https://api.pandapay.test',
+        accessToken: 'test-token',
+        client: failingClient,
+      );
 
-        expect(repo.dismissalRetryQueue, isEmpty);
+      expect(repo.dismissalRetryQueue, isEmpty);
 
-        // Calling dismissSms when offline must return false gracefully and record into local retry queue
-        final result = await repo.dismissSms(
-          sourceKey: 'abc' * 21 + 'd',
-          sender: 'AD-HDFCBK',
-          sampleBody: 'Sample SMS text',
-          reason: 'user_dismissed',
-          family: 'ignore_noise',
-        );
-
-        expect(result, isFalse);
-        expect(repo.dismissalRetryQueue, hasLength(1));
-        final entry = repo.dismissalRetryQueue.first;
-        expect(entry.sourceKey, 'abc' * 21 + 'd');
-        expect(entry.sender, 'AD-HDFCBK');
-        expect(entry.reason, 'user_dismissed');
-        expect(entry.family, 'ignore_noise');
-      },
-    );
-
-    test(
-      'UserCardsRepository.flushDismissalQueue retries offline queued dismissals upon reconnection',
-      () async {
-        var isOnline = false;
-
-        final mockClient = MockClient((request) async {
-          if (!isOnline) {
-            throw http.ClientException('Connection reset');
-          }
-          return http.Response(jsonEncode({'ok': true}), 200);
-        });
-
-        final repo = UserCardsRepository(
-          apiBaseUrl: 'https://api.pandapay.test',
-          accessToken: 'test-token',
-          client: mockClient,
-        );
-
-        // Initially offline
-        await repo.dismissSms(
-          sourceKey: 'key-offline-1',
-          sender: 'AD-HDFCBK',
-          reason: 'user_dismissed',
-        );
-        expect(repo.dismissalRetryQueue, hasLength(1));
-
-        // Still offline: flush fails, entries remain
-        final flushedOffline = await repo.flushDismissalQueue();
-        expect(flushedOffline, 0);
-        expect(repo.dismissalRetryQueue, hasLength(1));
-
-        // Device reconnects
-        isOnline = true;
-        final flushedOnline = await repo.flushDismissalQueue();
-        expect(flushedOnline, 1);
-        expect(repo.dismissalRetryQueue, isEmpty);
-      },
-    );
-
-  testWidgets('displays formatted timestamps and orders latest-first by default', (tester) async {
-    final olderDate = DateTime(2026, 8, 15, 10, 30);
-    final newerDate = DateTime(2026, 10, 4, 9, 53);
-
-    await reviews.add(
-      NeedsReviewItem(
-        id: 'old-1',
-        sender: 'VM-WELFOR',
-        body: 'Rs.200 spent on card',
-        receivedAt: olderDate,
-      ),
-    );
-    await reviews.add(
-      NeedsReviewItem(
-        id: 'new-1',
+      // Calling dismissSms when offline must return false gracefully and record into local retry queue
+      final result = await repo.dismissSms(
+        sourceKey: 'abc' * 21 + 'd',
         sender: 'AD-HDFCBK',
-        body: 'Rs.500 spent on card',
-        receivedAt: newerDate,
-      ),
-    );
+        sampleBody: 'Sample SMS text',
+        reason: 'user_dismissed',
+        family: 'ignore_noise',
+      );
 
-    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+      expect(result, isFalse);
+      expect(repo.dismissalRetryQueue, hasLength(1));
+      final entry = repo.dismissalRetryQueue.first;
+      expect(entry.sourceKey, 'abc' * 21 + 'd');
+      expect(entry.sender, 'AD-HDFCBK');
+      expect(entry.reason, 'user_dismissed');
+      expect(entry.family, 'ignore_noise');
+    },
+  );
 
-    expect(find.text('Oct 4, 2026 • 9:53 AM'), findsOneWidget);
-    expect(find.text('Aug 15, 2026 • 10:30 AM'), findsOneWidget);
+  test(
+    'UserCardsRepository.flushDismissalQueue retries offline queued dismissals upon reconnection',
+    () async {
+      var isOnline = false;
 
-    final newPos = tester.getTopLeft(find.text('AD-HDFCBK')).dy;
-    final oldPos = tester.getTopLeft(find.text('VM-WELFOR')).dy;
-    expect(newPos, lessThan(oldPos));
-  });
+      final mockClient = MockClient((request) async {
+        if (!isOnline) {
+          throw http.ClientException('Connection reset');
+        }
+        return http.Response(jsonEncode({'ok': true}), 200);
+      });
 
-  testWidgets('filter chips filter by month and show clean empty state when no items in month', (tester) async {
-    await reviews.add(
-      NeedsReviewItem(
-        id: 'oct-1',
+      final repo = UserCardsRepository(
+        apiBaseUrl: 'https://api.pandapay.test',
+        accessToken: 'test-token',
+        client: mockClient,
+      );
+
+      // Initially offline
+      await repo.dismissSms(
+        sourceKey: 'key-offline-1',
         sender: 'AD-HDFCBK',
-        body: 'Rs.500 spent on card',
-        reason: 'unparseable_amount',
-        receivedAt: DateTime(2026, 10, 4, 9, 53),
-      ),
-    );
-    await reviews.add(
-      NeedsReviewItem(
-        id: 'sep-1',
-        sender: 'VA-CANBNK',
-        body: 'Rs.300 spent on card',
-        reason: 'unparseable_amount',
-        receivedAt: DateTime(2026, 9, 10, 14, 0),
-      ),
-    );
+        reason: 'user_dismissed',
+      );
+      expect(repo.dismissalRetryQueue, hasLength(1));
 
-    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+      // Still offline: flush fails, entries remain
+      final flushedOffline = await repo.flushDismissalQueue();
+      expect(flushedOffline, 0);
+      expect(repo.dismissalRetryQueue, hasLength(1));
 
-    expect(find.text('All time'), findsOneWidget);
-    expect(find.text('Oct 2026 (1)'), findsOneWidget);
-    expect(find.text('Sep 2026 (1)'), findsOneWidget);
+      // Device reconnects
+      isOnline = true;
+      final flushedOnline = await repo.flushDismissalQueue();
+      expect(flushedOnline, 1);
+      expect(repo.dismissalRetryQueue, isEmpty);
+    },
+  );
 
-    await tester.tap(find.text('Oct 2026 (1)'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'displays formatted timestamps and orders latest-first by default',
+    (tester) async {
+      final olderDate = DateTime(2026, 8, 15, 10, 30);
+      final newerDate = DateTime(2026, 10, 4, 9, 53);
 
-    expect(find.text('AD-HDFCBK'), findsOneWidget);
-    expect(find.text('VA-CANBNK'), findsNothing);
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'old-1',
+          sender: 'VM-WELFOR',
+          body: 'Rs.200 spent on card',
+          receivedAt: olderDate,
+        ),
+      );
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'new-1',
+          sender: 'AD-HDFCBK',
+          body: 'Rs.500 spent on card',
+          receivedAt: newerDate,
+        ),
+      );
 
-    await tester.tap(find.text('Bills & Mandates'));
-    await tester.pumpAndSettle();
+      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
-    expect(find.text('No review items in Oct 2026'), findsOneWidget);
+      expect(find.text('Oct 4, 2026 • 9:53 AM'), findsOneWidget);
+      expect(find.text('Aug 15, 2026 • 10:30 AM'), findsOneWidget);
 
-    await tester.tap(find.text('All types'));
-    await tester.pumpAndSettle();
-    expect(find.text('AD-HDFCBK'), findsOneWidget);
+      final newPos = tester.getTopLeft(find.text('AD-HDFCBK')).dy;
+      final oldPos = tester.getTopLeft(find.text('VM-WELFOR')).dy;
+      expect(newPos, lessThan(oldPos));
+    },
+  );
 
-    await tester.tap(find.text('All time'));
-    await tester.pumpAndSettle();
-    expect(find.text('AD-HDFCBK'), findsOneWidget);
-    expect(find.text('VA-CANBNK'), findsOneWidget);
-  });
+  testWidgets(
+    'filter chips filter by month and show clean empty state when no items in month',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'oct-1',
+          sender: 'AD-HDFCBK',
+          body: 'Rs.500 spent on card',
+          reason: 'unparseable_amount',
+          receivedAt: DateTime(2026, 10, 4, 9, 53),
+        ),
+      );
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'sep-1',
+          sender: 'VA-CANBNK',
+          body: 'Rs.300 spent on card',
+          reason: 'unparseable_amount',
+          receivedAt: DateTime(2026, 9, 10, 14, 0),
+        ),
+      );
+
+      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+      expect(find.text('All time'), findsOneWidget);
+      expect(find.text('Oct 2026 (1)'), findsOneWidget);
+      expect(find.text('Sep 2026 (1)'), findsOneWidget);
+
+      await tester.tap(find.text('Oct 2026 (1)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('AD-HDFCBK'), findsOneWidget);
+      expect(find.text('VA-CANBNK'), findsNothing);
+
+      await tester.tap(find.text('Bills & Mandates'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No review items in Oct 2026'), findsOneWidget);
+
+      await tester.tap(find.text('All types'));
+      await tester.pumpAndSettle();
+      expect(find.text('AD-HDFCBK'), findsOneWidget);
+
+      await tester.tap(find.text('All time'));
+      await tester.pumpAndSettle();
+      expect(find.text('AD-HDFCBK'), findsOneWidget);
+      expect(find.text('VA-CANBNK'), findsOneWidget);
+    },
+  );
 }

@@ -35,6 +35,7 @@ const smsRuleBundle = require('./sms_rule_bundle');
 const HEX64 = /^[0-9a-f]{64}$/;
 const CANDIDATE_ID = /^[A-Za-z0-9._:-]{3,128}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SENSITIVE_SMS_EVIDENCE = /\b(?:otp|one[ .-]?time password|verification (?:code|number)|security code|access code|passcode|pin|cvv)\b/i;
 // Kept in lockstep with the on-device baseline/candidate comparison contract.
 // The worker also understands the historical aggregate labels used by older
 // clients, so those remain accepted during the migration window.
@@ -476,6 +477,19 @@ function registerSmsFactsRoutes(app, {
     }
     if (reason !== undefined && (typeof reason !== 'string' || reason.length > 200)) {
       return res.status(400).json({ error: 'reason must be a short optional string' });
+    }
+    // Older clients may still submit a credential-bearing message. A local
+    // dismissal is valid, but this content must not enter shared learning or
+    // an offline retry loop. Acknowledge it without persisting any evidence.
+    if ([sampleBody, templateText].some(
+      (value) => typeof value === 'string' && SENSITIVE_SMS_EVIDENCE.test(value),
+    )) {
+      return res.status(200).json({
+        dismissed: true,
+        sourceVerified: false,
+        learningRecorded: false,
+        learningReason: 'sensitive_sms',
+      });
     }
 
     try {

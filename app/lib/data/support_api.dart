@@ -15,14 +15,14 @@ import 'api_exception.dart';
 /// empty/whitespace-only `message`.
 class SupportApi {
   final String apiBaseUrl;
-  final String accessToken;
+  final String? accessToken;
   final http.Client _client;
 
-  SupportApi({required this.apiBaseUrl, required this.accessToken, http.Client? client})
+  SupportApi({required this.apiBaseUrl, this.accessToken, http.Client? client})
     : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-    'Authorization': 'Bearer $accessToken',
+    if (accessToken != null) 'Authorization': 'Bearer $accessToken',
     'Content-Type': 'application/json',
   };
 

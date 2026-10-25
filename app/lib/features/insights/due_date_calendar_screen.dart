@@ -10,6 +10,7 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../domain/cycle_engine.dart';
 import '../cards/card_visual.dart';
+import 'central_bills_section.dart';
 import 'payments_due_screen.dart';
 
 /// ui-spec.md E8 Due Date Calendar. Statement/due days come from Task E-0's
@@ -26,6 +27,15 @@ class DueDateCalendarScreen extends ConsumerWidget {
     final pairs = ref.watch(ownedCardsWithProductProvider);
     final reminders = ref.watch(dueDateRemindersProvider);
     final duePayments = ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
+    final centralBillKeys = duePayments
+        .map(
+          (row) => CentralBillDedupKey(
+            last4: row.card.last4,
+            dueOn: row.dueOn,
+            amountInr: row.bill?.amountDue?.rupees,
+          ),
+        )
+        .toList(growable: false);
 
     return pairs.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -34,15 +44,58 @@ class DueDateCalendarScreen extends ConsumerWidget {
         onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
       ),
       data: (owned) {
+        final now = DateTime.now();
+
         if (owned.isEmpty) {
-          return const EmptyState(
-            icon: Icons.calendar_month_outlined,
-            title: 'No cards yet',
-            message: 'Add a card to see its statement and due dates here.',
+          return ListView(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            children: [
+              Text(
+                '${_monthName(now.month)} ${now.year}',
+                style: BambooFonts.heading(16, color: BambooInk.ink900),
+              ),
+              const SizedBox(height: AppSpace.md),
+              Container(
+                padding: const EdgeInsets.all(AppSpace.md),
+                decoration: BoxDecoration(
+                  color: BambooInk.paperMuted,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(color: BambooInk.hairlineOnPaper),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_month_outlined,
+                      size: 20,
+                      color: BambooInk.ink500,
+                    ),
+                    const SizedBox(width: AppSpace.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'No cards yet',
+                            style: BambooFonts.heading(13.5, color: BambooInk.ink900),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Add a card to see its statement and due dates here.',
+                            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpace.xl),
+              BillsAndCommitmentsSection(cardRows: centralBillKeys),
+              const SizedBox(height: AppSpace.xxl),
+            ],
           );
         }
 
-        final now = DateTime.now();
         return ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
@@ -66,6 +119,9 @@ class DueDateCalendarScreen extends ConsumerWidget {
                       .toggle(userCard.id),
                 ),
               ),
+            const SizedBox(height: AppSpace.xl),
+            BillsAndCommitmentsSection(cardRows: centralBillKeys),
+            const SizedBox(height: AppSpace.xxl),
           ],
         );
       },

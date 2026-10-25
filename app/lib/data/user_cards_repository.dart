@@ -648,6 +648,8 @@ class BankAccountSummary {
   final String? issuerName;
   final String? issuerShortName;
   final String? issuerLogoUrl;
+  final bool isBalanceManuallySet;
+  final DateTime? manualBalanceUpdatedAt;
 
   const BankAccountSummary({
     required this.accountLast4,
@@ -659,6 +661,8 @@ class BankAccountSummary {
     this.issuerName,
     this.issuerShortName,
     this.issuerLogoUrl,
+    this.isBalanceManuallySet = false,
+    this.manualBalanceUpdatedAt,
   });
 
   factory BankAccountSummary.fromJson(Map<String, dynamic> json) {
@@ -678,6 +682,10 @@ class BankAccountSummary {
       issuerName: json['issuerName'] as String?,
       issuerShortName: json['issuerShortName'] as String?,
       issuerLogoUrl: json['issuerLogoUrl'] as String?,
+      isBalanceManuallySet: json['isBalanceManuallySet'] == true,
+      manualBalanceUpdatedAt: json['manualBalanceUpdatedAt'] == null
+          ? null
+          : DateTime.parse(json['manualBalanceUpdatedAt'] as String),
     );
   }
 }
@@ -1952,6 +1960,12 @@ class UserCardsRepository {
   }) async {
     final safeTemplate = redactSmsLearningText(templateText);
     final safeSample = redactSmsLearningText(sampleBody);
+    // A credential-bearing message has no safe learning evidence. The user's
+    // local dismissal is already complete, so don't enqueue or transmit it.
+    final hadEvidence =
+        (templateText?.trim().isNotEmpty ?? false) ||
+        (sampleBody?.trim().isNotEmpty ?? false);
+    if (hadEvidence && safeTemplate == null && safeSample == null) return true;
     final entry = DismissalQueueEntry(
       sourceKey: sourceKey,
       sender: sender,

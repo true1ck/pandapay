@@ -18,7 +18,7 @@ const smsFacts = require('./sms_facts');
 const smsObservationMigration = require('./sms_observation_migration');
 const crypto = require('crypto');
 const { verifyModelFacts } = require('./ai_fact_evidence');
-const { boundedEnvInt: boundedLimit } = require('./ai_provider_quota_route');
+const { providerLimits } = require('./ai_provider_quota_route');
 
 function leaseTokenMatches(expected, supplied) {
   if (typeof expected !== 'string' || typeof supplied !== 'string') return false;
@@ -54,6 +54,9 @@ function registerAiQueueRoutes(app, {
   withUserClient,
 }) {
   async function aiQueueEnabled(client, profileId) {
+    if (process.env.ENABLE_SMS_AI_QUEUE === 'true' || process.env.ENABLE_SMS_AI_QUEUE === '1') {
+      return true;
+    }
     const rows = await client.query(
       `SELECT key, is_enabled, rollout_percent
          FROM feature_flags
@@ -294,13 +297,12 @@ function registerAiQueueRoutes(app, {
   app.get('/admin/sms-ai/summary', requireAdmin, async (req, res) => {
     try {
       const summary = await withUserClient(req.userId, async (client) => {
-        const requestsPerMinute = boundedLimit('GEMINI_REQUESTS_PER_MINUTE', 10, 1, 1000);
-        const tokensPerMinute = boundedLimit('GEMINI_TOKENS_PER_MINUTE', 12000, 100, 1000000);
+        const { requestsPerMinute, tokensPerMinute, requestsPerDay } = providerLimits();
         const [result, capacity] = await Promise.all([
           client.query('SELECT pandapay.ai_admin_summary() AS summary'),
           client.query(
-            'SELECT pandapay.ai_provider_admin_summary($1, $2) AS provider_capacity',
-            [requestsPerMinute, tokensPerMinute],
+            'SELECT pandapay.ai_provider_admin_summary($1, $2, $3) AS provider_capacity',
+            [requestsPerMinute, tokensPerMinute, requestsPerDay],
           ),
         ]);
         return { ...result.rows[0].summary, providerCapacity: capacity.rows[0].provider_capacity };

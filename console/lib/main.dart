@@ -14,6 +14,7 @@ import 'features/dashboard/sms_ai_operations_screen.dart';
 import 'features/parser_patterns/parser_patterns_screen.dart';
 import 'features/queues/card_requests_screen.dart';
 import 'features/queues/error_reports_screen.dart';
+import 'features/queues/support_tickets_screen.dart';
 import 'features/referrals/referral_operations_screen.dart';
 import 'features/scraper/scrape_diff_review_screen.dart';
 import 'features/scraper/sources_screen.dart';
@@ -98,6 +99,7 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
     (label: 'Catalogue', screen: CatalogueScreen()),
     (label: 'Card Requests', screen: CardRequestsScreen()),
     (label: 'Error Reports', screen: ErrorReportsScreen()),
+    (label: 'Support Tickets', screen: SupportTicketsScreen()),
     (label: 'Policy Alerts', screen: AlertsScreen()),
     (label: 'Merchants', screen: MerchantsScreen()),
     (label: 'Conflicts', screen: ConflictsScreen()),

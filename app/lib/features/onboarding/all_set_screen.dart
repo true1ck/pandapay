@@ -18,11 +18,20 @@ import 'entry_brand.dart';
 /// need to fight the preOnboarding redirect guard (which would otherwise
 /// bounce it straight back to Home the instant onboarding.complete flips
 /// true, before the user ever sees it).
-class AllSetScreen extends ConsumerWidget {
+class AllSetScreen extends ConsumerStatefulWidget {
   const AllSetScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AllSetScreen> createState() => _AllSetScreenState();
+}
+
+class _AllSetScreenState extends ConsumerState<AllSetScreen> {
+  String? _completionError;
+  bool _finishing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final owned =
         ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
     final cardNames = [
@@ -77,6 +86,20 @@ class AllSetScreen extends ConsumerWidget {
                             textAlign: TextAlign.center,
                             style: BambooFonts.ui(14, color: BambooInk.ink700),
                           ),
+                          if (_completionError != null) ...[
+                            const SizedBox(height: AppSpace.md),
+                            Text(
+                              _completionError!,
+                              key: const ValueKey(
+                                'onboarding-completion-error',
+                              ),
+                              textAlign: TextAlign.center,
+                              style: BambooFonts.ui(
+                                13,
+                                color: Colors.red.shade800,
+                              ),
+                            ),
+                          ],
                           if (cardNames.isNotEmpty) ...[
                             const SizedBox(height: AppSpace.xl),
                             const _TryItNowPreview(),
@@ -96,27 +119,51 @@ class AllSetScreen extends ConsumerWidget {
                     ),
                     textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
                   ),
-                  onPressed: () async {
-                    // Onboarding completes HERE, not before this screen —
-                    // see TrackingSetupScreen._finish()'s doc comment for
-                    // the redirect-guard race this ordering avoids.
-                    try {
-                      await ref
-                          .read(onboardingCompleteProvider.notifier)
-                          .complete();
-                    } catch (error) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(userFacingErrorMessage(error))),
-                        );
-                      }
-                      return;
-                    }
-                    if (!context.mounted) return;
-                    Navigator.of(context).popUntil((r) => r.isFirst);
-                    context.go(AppRoute.home);
-                  },
-                  child: const Text('Take me Home'),
+                  onPressed: _finishing
+                      ? null
+                      : () async {
+                          if (_finishing) return;
+                          final router = GoRouter.of(context);
+                          setState(() {
+                            _finishing = true;
+                            _completionError = null;
+                          });
+                          // Onboarding completes HERE, not before this screen —
+                          // see TrackingSetupScreen._finish()'s doc comment for
+                          // the redirect-guard race this ordering avoids.
+                          try {
+                            await ref
+                                .read(onboardingCompleteProvider.notifier)
+                                .complete();
+                          } catch (error) {
+                            if (context.mounted) {
+                              setState(() {
+                                _finishing = false;
+                                _completionError = userFacingErrorMessage(
+                                  error,
+                                );
+                              });
+                            }
+                            return;
+                          }
+                          if (!context.mounted) return;
+                          Navigator.of(context).popUntil((r) => r.isFirst);
+                          router.go(AppRoute.home);
+                        },
+                  child: _finishing
+                      ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: AppSpace.sm),
+                            Text('Finishing setup…'),
+                          ],
+                        )
+                      : const Text('Take me Home'),
                 ),
                 const SizedBox(height: AppSpace.sm),
                 Center(

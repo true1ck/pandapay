@@ -1,3 +1,4 @@
+import 'dart:ui' show Color;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../app/design/app_theme.dart' show AppColors;
@@ -9,7 +10,7 @@ import '../../app/design/app_theme.dart' show AppColors;
 abstract final class NotificationBranding {
   static const smallIcon = 'pandapay_notification_small_icon';
   static const largeIcon = 'pandapay_notification_large_icon';
-  static const accentColor = AppColors.teal500;
+  static const accentColor = Color(0xFF121316);
 
   static const initializationSettings = InitializationSettings(
     android: AndroidInitializationSettings(smallIcon),

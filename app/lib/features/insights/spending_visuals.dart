@@ -117,3 +117,26 @@ SpendingVisual spendingInstrumentVisual(String instrument) {
     ),
   };
 }
+
+class SpendingVisualBadge extends StatelessWidget {
+  final SpendingVisual visual;
+  final double size;
+
+  const SpendingVisualBadge({
+    super.key,
+    required this.visual,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: visual.surface,
+          borderRadius: BorderRadius.circular(size * 0.32),
+        ),
+        alignment: Alignment.center,
+        child: Icon(visual.icon, size: size * 0.46, color: visual.accent),
+      );
+}

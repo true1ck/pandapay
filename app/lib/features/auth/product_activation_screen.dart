@@ -86,6 +86,23 @@ class _ProductActivationScreenState
           // invite against an already-active account.
           await _finishActivation(invitationApplied: pendingCode != null);
         } else {
+          final consents = ref.read(consentsApiProvider);
+          if (consents != null) {
+            try {
+              final latest = await consents.fetchLatest();
+              final hasTerms = latest.any(
+                (c) => c.purpose == 'terms' && c.granted && c.revokedAt == null,
+              );
+              if (!hasTerms) {
+                await consents.submit(
+                  purpose: 'terms',
+                  granted: true,
+                  policyVersion: appProductTermsVersion,
+                  sourceScreen: 'product_activation',
+                );
+              }
+            } catch (_) {}
+          }
           _markGateAndContinue();
         }
         return;

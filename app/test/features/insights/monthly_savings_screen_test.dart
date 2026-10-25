@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/features/insights/monthly_savings_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -12,5 +14,20 @@ void main() {
       nonNegativeRewardValue(Money.fromRupees(12.34)),
       Money.fromRupees(12.34),
     );
+  });
+
+  testWidgets('RewardCategoryBreakdown scales earned text safely inside donut', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: MonthlySavingsScreen(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
   });
 }

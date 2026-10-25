@@ -832,8 +832,9 @@ class _CategoryPieState extends State<_CategoryPie> {
                                 child: MoneyText(
                                   widget.earnedTotal,
                                   confidence: Confidence.confirmed,
-                                  style: BambooFonts.money(
-                                    17,
+                                  style: BambooFonts.ui(
+                                    16,
+                                    weight: FontWeight.w800,
                                     color: BambooInk.ink900,
                                   ),
                                   hidePaise: true,

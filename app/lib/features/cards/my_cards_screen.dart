@@ -1,3 +1,4 @@
+import '../settings/feedback_support_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -138,6 +139,18 @@ class MyCardsScreen extends ConsumerWidget {
                         color: BambooInk.ink500,
                       ),
                       onPressed: () => context.push(AppRoute.pointsExpiry),
+                    ),
+                    IconButton(
+                      tooltip: 'Feedback & support',
+                      icon: const Icon(
+                        Icons.help_outline_rounded,
+                        color: BambooInk.ink500,
+                      ),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const FeedbackSupportScreen(),
+                        ),
+                      ),
                     ),
                   ],
                 ),

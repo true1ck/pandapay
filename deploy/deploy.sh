@@ -134,6 +134,9 @@ if [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${AI_WORKER_TOKEN:-}" ]; then
   }
   upsert_env_value AI_WORKER_TOKEN "$AI_WORKER_TOKEN"
   upsert_env_value GEMINI_API_KEY "$GEMINI_API_KEY"
+  [ -n "${GEMINI_FALLBACK_API_KEY:-}" ] && upsert_env_value GEMINI_FALLBACK_API_KEY "$GEMINI_FALLBACK_API_KEY"
+  [ -n "${GEMINI_MODEL:-}" ] && upsert_env_value GEMINI_MODEL "$GEMINI_MODEL"
+  [ -n "${GEMINI_FALLBACK_MODEL:-}" ] && upsert_env_value GEMINI_FALLBACK_MODEL "$GEMINI_FALLBACK_MODEL"
   echo "    Gemini worker configuration updated"
 fi
 
@@ -154,6 +157,9 @@ ensure_optional_env_key() {
 }
 ensure_optional_env_key AI_WORKER_TOKEN
 ensure_optional_env_key GEMINI_API_KEY
+ensure_optional_env_key GEMINI_FALLBACK_API_KEY
+ensure_optional_env_key GEMINI_MODEL
+ensure_optional_env_key GEMINI_FALLBACK_MODEL
 ensure_optional_env_key SMS_LEARNING_DATABASE_URL
 ensure_optional_env_key SMS_LEARNING_HMAC_KEY
 ensure_optional_env_key SMS_LEARNING_WORKER_DB_PASSWORD

@@ -768,6 +768,67 @@ void main() {
     },
   );
 
+  testWidgets('merchant amount stays in the right rail on a phone width', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pump(
+      tester,
+      _report(
+        spend: 1000,
+        byCategory: [
+          SpendBreakdownRow(
+            label: 'Online Shopping',
+            total: Money.fromRupees(1000),
+            txnCount: 1,
+            categoryId: 'online',
+          ),
+        ],
+      ),
+      transactions: [
+        _detailEntry(
+          id: 'unnamed-layout',
+          merchant: null,
+          amount: 1000,
+          categoryId: 'online',
+          categoryName: 'Online Shopping',
+          occurredAt: DateTime(2026, 10, 14),
+          reward: 50,
+          cardDisplayName: 'Tata Neu Plus HDFC Bank Credit Card',
+        ),
+      ],
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('Online Shopping'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Online Shopping'));
+    await tester.pumpAndSettle();
+
+    const storageKey =
+        'spending-merchant-group-Merchant not captured-unnamed-layout';
+    final tile = tester.getRect(
+      find.byKey(const PageStorageKey<String>(storageKey)),
+    );
+    final merchant = tester.getRect(
+      find.byKey(const ValueKey<String>('spending-merchant-name-$storageKey')),
+    );
+    final amount = tester.getRect(
+      find.byKey(
+        const ValueKey<String>('spending-merchant-amount-$storageKey'),
+      ),
+    );
+
+    expect(merchant.right, lessThanOrEqualTo(amount.left));
+    expect(tile.right - amount.right, lessThan(48));
+  });
+
   testWidgets('clubs repeated payments to the same merchant as one row', (
     tester,
   ) async {
@@ -1147,8 +1208,14 @@ void main() {
       // Both merchants are shown collapsed inside Credit cards
       expect(find.text('FLIPKART IN'), findsOneWidget);
       expect(find.text('AMAZON INDIA'), findsOneWidget);
-      expect(find.text('2 transactions · Flipkart Axis Bank Credit Card'), findsOneWidget);
-      expect(find.text('1 transaction · ICICI Amazon Pay Credit Card'), findsOneWidget);
+      expect(
+        find.text('2 transactions · Flipkart Axis Bank Credit Card'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('1 transaction · ICICI Amazon Pay Credit Card'),
+        findsOneWidget,
+      );
 
       // Transactions are hidden while merchants are collapsed
       expect(find.textContaining('16/10/2026'), findsNothing);

@@ -23,9 +23,8 @@ test('real database: app_user RLS, worker separation, advisory locks, and deleti
     // Always run inside a transaction that is rolled back at the end
     await client.query('BEGIN');
     try {
-      await client.query('SET LOCAL ROLE app_user');
       const role = await client.query('SELECT current_user AS role');
-      assert.equal(role.rows[0].role, 'app_user');
+      assert.equal(role.rows[0].role, 'postgres');
       const user1 = crypto.randomUUID();
       const user2 = crypto.randomUUID();
       const hmacKey = 'test_learning_secret_key_32_characters_long';
@@ -43,6 +42,9 @@ test('real database: app_user RLS, worker separation, advisory locks, and deleti
       await client.query("SELECT set_config('app.user_id', $1, true)", [user1]);
       await client.query("SELECT set_config('app.sms_learning_hmac_key', $1, true)", [hmacKey]);
       await client.query('INSERT INTO profiles(id, contributions_opt_in) VALUES ($1, true)', [user1]);
+      await client.query('SET LOCAL ROLE app_user');
+      const appRole = await client.query('SELECT current_user AS role');
+      assert.equal(appRole.rows[0].role, 'app_user');
 
       // 3. User 1 inserts a valid learning example
       const insertRes = await client.query(

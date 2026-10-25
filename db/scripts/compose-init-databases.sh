@@ -1,4 +1,5 @@
 #!/bin/bash
+# Docker runs this from Linux; .gitattributes keeps the shebang LF-terminated.
 # Creates the SECOND database the stack needs, then loads the auth schema into
 # it. Runs once, from Postgres' docker-entrypoint-initdb.d, before anything
 # connects.

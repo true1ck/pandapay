@@ -47,7 +47,7 @@ test('Gemini provider requests JSON and parses the model fact envelope', async (
 
 test('Gemini worker defaults to the supported Flash model unless configured', () => {
   const provider = new GeminiProvider({ apiKey: 'test-key', fetchImpl: async () => response({}) });
-  assert.equal(provider.model, process.env.GEMINI_MODEL || 'gemini-3.8-flash');
+  assert.equal(provider.model, process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite');
 });
 
 test('Gemini batch generation has a bounded output token limit', async () => {
@@ -429,4 +429,49 @@ test('batch omission fails only the omitted job while preserving the valid resul
   assert.equal(calls.filter((call) => call.url.endsWith('/fail')).length, 1);
   assert.equal(calls.find((call) => call.url.endsWith('/result')).body.profileId, 'profile-a');
   assert.equal(calls.find((call) => call.url.endsWith('/fail')).body.profileId, 'profile-b');
+});
+
+test('Gemini provider automatically rotates to fallback API key on HTTP 429 quota exhaustion', async () => {
+  const attempts = [];
+  const provider = new GeminiProvider({
+    apiKey: 'primary-key',
+    fallbackApiKey: 'fallback-lab-key',
+    endpointBase: 'https://example.test/models',
+    fetchImpl: async (url, options) => {
+      const key = options.headers['x-goog-api-key'];
+      attempts.push(key);
+      if (key === 'primary-key') {
+        return response({ error: { message: 'Resource has been exhausted (e.g. check quota).' } }, 429);
+      }
+      return response({ candidates: [{ content: { parts: [{ text: '{"facts":[]}' }] } }] }, 200);
+    },
+  });
+
+  const facts = await provider.classify({ payload: { sender: 'BANK', body: 'Card XXXX1234 spent Rs 100' } });
+  assert.deepEqual(facts, []);
+  assert.deepEqual(attempts, ['primary-key', 'fallback-lab-key']);
+  assert.equal(provider.apiKey, 'fallback-lab-key');
+});
+
+test('Gemini provider automatically switches to fallback model on HTTP 404 model retirement', async () => {
+  const modelsRequested = [];
+  const provider = new GeminiProvider({
+    apiKey: 'test-key',
+    model: 'deprecated-model',
+    fallbackModel: 'gemini-flash-lite-latest',
+    endpointBase: 'https://example.test/models',
+    fetchImpl: async (url) => {
+      const modelName = url.split('/models/')[1].split(':')[0];
+      modelsRequested.push(modelName);
+      if (modelName === 'deprecated-model') {
+        return response({ error: { message: 'Model no longer available' } }, 404);
+      }
+      return response({ candidates: [{ content: { parts: [{ text: '{"facts":[]}' }] } }] }, 200);
+    },
+  });
+
+  const facts = await provider.classify({ payload: { sender: 'BANK', body: 'Spent Rs 100' } });
+  assert.deepEqual(facts, []);
+  assert.deepEqual(modelsRequested, ['deprecated-model', 'gemini-flash-lite-latest']);
+  assert.equal(provider.model, 'gemini-flash-lite-latest');
 });

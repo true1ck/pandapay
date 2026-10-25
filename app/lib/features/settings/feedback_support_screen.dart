@@ -44,17 +44,11 @@ class FeedbackSupportScreen extends ConsumerWidget {
         title: Text('Feedback & Support', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
       body: AppBackground(
-        child: token == null
-            ? const EmptyState(
-                icon: Icons.support_agent_outlined,
-                title: 'Sign in to send feedback',
-                message: 'Support tickets are tied to your account so we can follow up with you.',
-              )
-            : _FeedbackForm(
-                accessToken: token,
-                prefilledKind: prefilledKind,
-                prefilledMessage: prefilledMessage,
-              ),
+        child: _FeedbackForm(
+          accessToken: token,
+          prefilledKind: prefilledKind,
+          prefilledMessage: prefilledMessage,
+        ),
       ),
     );
   }
@@ -68,11 +62,11 @@ const _kKinds = <String, String>{
 };
 
 class _FeedbackForm extends ConsumerStatefulWidget {
-  final String accessToken;
+  final String? accessToken;
   final String? prefilledKind;
   final String? prefilledMessage;
 
-  const _FeedbackForm({required this.accessToken, this.prefilledKind, this.prefilledMessage});
+  const _FeedbackForm({this.accessToken, this.prefilledKind, this.prefilledMessage});
 
   @override
   ConsumerState<_FeedbackForm> createState() => _FeedbackFormState();

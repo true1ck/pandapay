@@ -73,6 +73,15 @@ class ApiException implements Exception {
         if (decoded is Map) {
           final msg = decoded['message'] ?? decoded['error'];
           if (msg is String && msg.trim().isNotEmpty && msg.length < 160) {
+            if (msg == 'required_terms_missing') {
+              return 'Please accept the terms to complete setup.';
+            }
+            if (msg == 'membership_required') {
+              return 'An active membership is required to complete setup.';
+            }
+            if (RegExp(r'^[a-z]+(_[a-z0-9]+)+$').hasMatch(msg)) {
+              return 'Something went wrong. Please try again.';
+            }
             return msg;
           }
         }

@@ -23,6 +23,8 @@ enum NeedsReviewKind {
   receipt,
 }
 
+enum AiReviewStatus { notChecked, queued, processing, checked, unavailable }
+
 /// Task D-4 (ui-spec D4 Needs Review Queue) â€” one raw SMS the parser
 /// couldn't match, kept entirely ON-DEVICE.
 ///
@@ -53,6 +55,7 @@ class NeedsReviewItem {
   final DateTime receivedAt;
   final NeedsReviewKind kind;
   final List<Map<String, dynamic>>? aiSuggestions;
+  final AiReviewStatus aiStatus;
 
   const NeedsReviewItem({
     required this.id,
@@ -62,11 +65,13 @@ class NeedsReviewItem {
     required this.receivedAt,
     this.kind = NeedsReviewKind.transaction,
     this.aiSuggestions,
+    this.aiStatus = AiReviewStatus.notChecked,
   });
 
   NeedsReviewItem copyWith({
     NeedsReviewKind? kind,
     List<Map<String, dynamic>>? aiSuggestions,
+    AiReviewStatus? aiStatus,
   }) => NeedsReviewItem(
     id: id,
     sender: sender,
@@ -75,6 +80,7 @@ class NeedsReviewItem {
     receivedAt: receivedAt,
     kind: kind ?? this.kind,
     aiSuggestions: aiSuggestions ?? this.aiSuggestions,
+    aiStatus: aiStatus ?? this.aiStatus,
   );
 
   Map<String, dynamic> toJson() => {
@@ -85,6 +91,7 @@ class NeedsReviewItem {
     'receivedAt': receivedAt.toIso8601String(),
     'kind': kind.name,
     if (aiSuggestions != null) 'aiSuggestions': aiSuggestions,
+    'aiStatus': aiStatus.name,
   };
 
   factory NeedsReviewItem.fromJson(Map<String, dynamic> json) {
@@ -105,6 +112,10 @@ class NeedsReviewItem {
                 .map((item) => Map<String, dynamic>.from(item))
                 .toList()
           : null,
+      aiStatus: AiReviewStatus.values.firstWhere(
+        (status) => status.name == json['aiStatus'],
+        orElse: () => AiReviewStatus.notChecked,
+      ),
     );
   }
 }
@@ -216,7 +227,8 @@ class NeedsReviewRepository {
   static final _changes = Expando<StreamController<FinancialChange>>();
 
   static Stream<FinancialChange> changesFor(AppDatabase database) =>
-      (_changes[database] ??= StreamController<FinancialChange>.broadcast()).stream;
+      (_changes[database] ??= StreamController<FinancialChange>.broadcast())
+          .stream;
 
   static void _notify(AppDatabase database, String namespace, String entity) {
     _changes[database]?.add(FinancialChange(namespace, entity));
@@ -392,13 +404,16 @@ class NeedsReviewRepository {
             continue;
           }
         }
-        final needsTransactions = isInvestmentFolioAllotment(item.body) ||
+        final needsTransactions =
+            isInvestmentFolioAllotment(item.body) ||
             isMerchantReceiptOrEbill(item.body) ||
             isRefundOrReversal(item.body) ||
             (parsed?.eventType == LocalSmsEventType.bill &&
-                parsed?.dueDate != null && parsed!.dueDate!.isBefore(now));
+                parsed?.dueDate != null &&
+                parsed!.dueDate!.isBefore(now));
         final matchTransactions = needsTransactions
-            ? await allTransactions() : const <TransactionEntry>[];
+            ? await allTransactions()
+            : const <TransactionEntry>[];
         // Snapshot loading yields. Do not resolve a message dismissed or edited
         // while that snapshot was being read.
         final live = db.db.select(
@@ -406,9 +421,13 @@ class NeedsReviewRepository {
           [namespace, item.id],
         );
         if (live.isEmpty ||
-            jsonEncode(NeedsReviewItem.fromJson(
-              jsonDecode(live.single['payload'] as String) as Map<String, dynamic>,
-            ).toJson()) != jsonEncode(item.toJson())) {
+            jsonEncode(
+                  NeedsReviewItem.fromJson(
+                    jsonDecode(live.single['payload'] as String)
+                        as Map<String, dynamic>,
+                  ).toJson(),
+                ) !=
+                jsonEncode(item.toJson())) {
           continue;
         }
         if (isInvestmentFolioAllotment(item.body)) {
@@ -1217,8 +1236,9 @@ class NeedsReviewRepository {
     final candidateDebits = <TransactionEntry>[];
     if (transactions != null) {
       candidateDebits.addAll(
-        transactions.where((t) =>
-            t.status == 'active' && t.entryKind == TxnEntryKind.spend),
+        transactions.where(
+          (t) => t.status == 'active' && t.entryKind == TxnEntryKind.spend,
+        ),
       );
     }
 
@@ -1243,7 +1263,8 @@ class NeedsReviewRepository {
           try {
             final data = jsonDecode(payloadJson) as Map<String, dynamic>;
             final entry = TransactionEntry.fromJson(data);
-            if (entry.status == 'active' && entry.entryKind == TxnEntryKind.spend) {
+            if (entry.status == 'active' &&
+                entry.entryKind == TxnEntryKind.spend) {
               candidateDebits.add(entry);
             }
           } catch (_) {}
@@ -1318,8 +1339,9 @@ class NeedsReviewRepository {
     final candidateDebits = <TransactionEntry>[];
     if (txns != null && txns.isNotEmpty) {
       candidateDebits.addAll(
-        txns.where((t) =>
-            t.status == 'active' && t.entryKind == TxnEntryKind.spend),
+        txns.where(
+          (t) => t.status == 'active' && t.entryKind == TxnEntryKind.spend,
+        ),
       );
     }
 
@@ -1689,6 +1711,34 @@ class NeedsReviewRepository {
     }
   }
 
+  Future<bool> updateAiStatus(String id, AiReviewStatus status) async {
+    final items = await fetchAll();
+    final current = items.where((item) => item.id == id).firstOrNull;
+    if (current == null || current.aiStatus == status) return false;
+    final updated = jsonEncode(current.copyWith(aiStatus: status).toJson());
+    if (loadDatabase != null) {
+      final db = await _database();
+      db.db.execute(
+        'UPDATE local_needs_review SET payload=? WHERE namespace=? AND id=?',
+        [updated, namespace, id],
+      );
+      final changed = db.db.updatedRows > 0;
+      if (changed) _notify(db, namespace, 'needs_review');
+      return changed;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_needsReviewKey) ?? const [];
+    var changed = false;
+    final patched = raw.map((entry) {
+      final value = jsonDecode(entry) as Map<String, dynamic>;
+      if (value['id'] != id) return entry;
+      changed = true;
+      return updated;
+    }).toList();
+    if (changed) await prefs.setStringList(_needsReviewKey, patched);
+    return changed;
+  }
+
   static void _persistResolvedBillObservationSync(
     AppDatabase database,
     String namespace,
@@ -1782,10 +1832,7 @@ class NeedsReviewRepository {
       } else if (parsed.amountDue != null && !parsed.amountDue!.isZero) {
         amount = parsed.amountDue!;
       } else {
-        amount =
-            parsed.amount ??
-            parsed.autopayLimit ??
-            parsed.amountDue;
+        amount = parsed.amount ?? parsed.autopayLimit ?? parsed.amountDue;
       }
 
       try {
@@ -1849,11 +1896,13 @@ class NeedsReviewRepository {
         amount: amount,
         dueOn: parsed.dueDate ?? item.receivedAt,
         identifier: parsed.accountLast4 == null
-            ? null : '••••${parsed.accountLast4}',
+            ? null
+            : '••••${parsed.accountLast4}',
         cadence: CommitmentCadence.values.firstWhere(
           (value) => value.name == parsed.cadenceHint,
           orElse: () => LocalSmsParser.isActionableInsuranceRenewal(item.body)
-              ? CommitmentCadence.oneTime : CommitmentCadence.monthly,
+              ? CommitmentCadence.oneTime
+              : CommitmentCadence.monthly,
         ),
         anchorDay: (parsed.dueDate ?? item.receivedAt).day,
         status: CommitmentStatus.due,

@@ -314,6 +314,8 @@ function makeFakeClient() {
         tokensLastMinute: 0,
         requestsPerMinuteLimit: params[0],
         tokensPerMinuteLimit: params[1],
+        requestsToday: 0,
+        requestsPerDayLimit: params[2],
         waitingLastMinute: 0,
         permanentlyBlockedLastMinute: 0,
       } }], rowCount: 1 };
@@ -1145,7 +1147,8 @@ test('admin monitoring endpoints return redacted metrics and timeline without ra
   assert.equal(summaryRes.body.statusCounts.queued, 1);
   assert.equal(typeof summaryRes.body.oldestAgeSeconds, 'number');
   assert.equal(summaryRes.body.totalJobsToday, 1);
-  assert.equal(summaryRes.body.providerCapacity.requestsPerMinuteLimit, 10);
+  assert.equal(summaryRes.body.providerCapacity.requestsPerMinuteLimit, 5);
+  assert.equal(summaryRes.body.providerCapacity.requestsPerDayLimit, 20);
 
   // 2. Jobs list (no raw payload)
   const jobsRes = await h.call('/admin/sms-ai/jobs', { query: {} });

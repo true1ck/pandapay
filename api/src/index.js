@@ -1544,7 +1544,7 @@ app.post('/card-requests', requireAuth, async (req, res) => {
  * `attachmentPath` is a pre-uploaded storage path, same division of
  * responsibility as card_requests.image_path above.
  */
-app.post('/data-error-reports', requireAuth, async (req, res) => {
+app.post('/data-error-reports', optionalAuth, async (req, res) => {
   const { cardProductId, fieldPath, shownValue, claimedValue, sourceUrl, attachmentPath } = req.body || {};
   if (!cardProductId || typeof cardProductId !== 'string') {
     return res.status(400).json({ error: 'cardProductId is required' });
@@ -1563,7 +1563,7 @@ app.post('/data-error-reports', requireAuth, async (req, res) => {
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, card_product_id, field_path, state, created_at`,
         [
-          req.userId,
+          req.userId || null,
           cardProductId,
           fieldPath.trim(),
           shownValue ?? null,
@@ -2503,10 +2503,19 @@ app.post('/admin/error-reports/:id/approve', requireAdmin, async (req, res) => {
 
       const fieldMatch = /^reward_rules\.([0-9a-f-]{36})\.rate$/.exec(report.field_path);
       if (!fieldMatch) {
-        return {
-          status: 422,
-          error: `field_path '${report.field_path}' has no typed writer yet — only reward_rules.<id>.rate is supported`,
-        };
+        await client.query(`UPDATE data_error_reports SET state = 'resolved' WHERE id = $1`, [report.id]);
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+           VALUES ($1, 'resolve_error_report', 'data_error_reports', $2, $3, $4, $5)`,
+          [
+            req.userId,
+            report.id,
+            JSON.stringify({ shown: report.shown_value }),
+            JSON.stringify({ claimed: report.claimed_value }),
+            req.body?.reason || `Resolved data error report for field '${report.field_path}'`,
+          ]
+        );
+        return { ok: true, resolved: true };
       }
       const ruleId = fieldMatch[1];
       const newRate = Number(report.claimed_value);
@@ -9623,7 +9632,7 @@ const SUPPORT_TICKET_KINDS = ['bug', 'wrong_card_data', 'card_request', 'general
  * CHECK constraint; validating here first turns a bad value into a clean
  * 400 instead of a raw constraint-violation 500.
  */
-app.post('/support-tickets', requireAuth, async (req, res) => {
+app.post('/support-tickets', optionalAuth, async (req, res) => {
   const { kind, message, diagnostics, appVersion } = req.body || {};
   if (!SUPPORT_TICKET_KINDS.includes(kind)) {
     return res.status(400).json({ error: `kind must be one of ${SUPPORT_TICKET_KINDS.join(', ')}` });
@@ -9637,7 +9646,7 @@ app.post('/support-tickets', requireAuth, async (req, res) => {
         `INSERT INTO support_tickets (profile_id, kind, message, diagnostics, app_version)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING id, kind, state, created_at`,
-        [req.userId, kind, message.trim(), diagnostics ? JSON.stringify(diagnostics) : null, appVersion || null]
+        [req.userId || null, kind, message.trim(), diagnostics ? JSON.stringify(diagnostics) : null, appVersion || null]
       )
     );
     res.status(201).json({ ticket: result.rows[0] });
@@ -9652,6 +9661,106 @@ app.post('/support-tickets', requireAuth, async (req, res) => {
  * aren't PII, and H10 must be reachable from a fresh install before any
  * sign-in happens.
  */
+
+/**
+ * GET /admin/support-tickets — Admin queue for user feedback & support tickets.
+ */
+app.get('/admin/support-tickets', requireAdmin, async (req, res) => {
+  const { state, kind } = req.query || {};
+  try {
+    const result = await withUserClient(req.userId, (client) => {
+      const conditions = [];
+      const params = [];
+      if (state && ['pending', 'resolved', 'dismissed'].includes(state)) {
+        params.push(state);
+        conditions.push(`st.state = ${params.length}`);
+      }
+      if (kind && SUPPORT_TICKET_KINDS.includes(kind)) {
+        params.push(kind);
+        conditions.push(`st.kind = ${params.length}`);
+      }
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+      return client.query(
+        `SELECT st.id, st.profile_id, st.kind, st.message, st.diagnostics, st.app_version,
+                st.state, st.response, st.created_at,
+                p.email AS user_email, p.display_name AS user_name,
+                extract(day FROM now() - st.created_at) AS age_days,
+                (st.state = 'pending' AND st.created_at < now() - interval '7 days') AS is_stale
+           FROM support_tickets st
+           LEFT JOIN profiles p ON p.id = st.profile_id
+           ${whereClause}
+          ORDER BY is_stale DESC, st.state = 'pending' DESC, st.created_at DESC`,
+        params
+      );
+    });
+    res.json({ supportTickets: result.rows });
+  } catch (err) {
+    console.error('GET /admin/support-tickets error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /admin/support-tickets/:id/resolve — Mark a support ticket resolved with an optional operator response.
+ */
+app.post('/admin/support-tickets/:id/resolve', requireAdmin, async (req, res) => {
+  const { response, reason } = req.body || {};
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const updated = await client.query(
+        `UPDATE support_tickets
+            SET state = 'resolved',
+                response = COALESCE($1, response)
+          WHERE id = $2 AND state = 'pending'
+          RETURNING id, state, response`,
+        [response?.trim() || null, req.params.id]
+      );
+      if (updated.rows.length === 0) return null;
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, reason)
+         VALUES ($1, 'resolve_support_ticket', 'support_tickets', $2, $3)`,
+        [req.userId, req.params.id, reason || response?.trim() || 'Resolved by admin']
+      );
+      return updated.rows[0];
+    });
+    if (!result) return res.status(404).json({ error: 'not found or already decided' });
+    res.json({ ok: true, ticket: result });
+  } catch (err) {
+    console.error('POST /admin/support-tickets/:id/resolve error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /admin/support-tickets/:id/dismiss — Dismiss a support ticket without publishing a change.
+ */
+app.post('/admin/support-tickets/:id/dismiss', requireAdmin, async (req, res) => {
+  const { reason } = req.body || {};
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const updated = await client.query(
+        `UPDATE support_tickets
+            SET state = 'dismissed'
+          WHERE id = $1 AND state = 'pending'
+          RETURNING id, state`,
+        [req.params.id]
+      );
+      if (updated.rows.length === 0) return null;
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, reason)
+         VALUES ($1, 'dismiss_support_ticket', 'support_tickets', $2, $3)`,
+        [req.userId, req.params.id, reason || 'Dismissed by admin']
+      );
+      return updated.rows[0];
+    });
+    if (!result) return res.status(404).json({ error: 'not found or already decided' });
+    res.json({ ok: true, ticket: result });
+  } catch (err) {
+    console.error('POST /admin/support-tickets/:id/dismiss error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 app.get('/changelog', async (req, res) => {
   try {
     const result = await withUserClient(null, (client) =>
