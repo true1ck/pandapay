@@ -550,9 +550,18 @@ class SmsImportStore {
     String namespace,
     NeedsReviewItem item,
     List<Map<String, dynamic>> suggestions, {
+    Map<String, dynamic>? decision,
     bool? reviewRequired,
     double? serverScore,
   }) {
+    if (decision != null && decision['shouldConsider'] == false) {
+      _deleteReviewRow(namespace, item.id);
+      return const SmsAiResolutionResult(
+        outcome: SmsAiResolutionOutcome.discarded,
+        score: 0.0,
+      );
+    }
+
     final assessment = assessSmsFacts(suggestions, item.body);
     final effectiveScore = serverScore != null && serverScore.isFinite
         ? serverScore

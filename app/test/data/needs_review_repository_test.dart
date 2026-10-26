@@ -568,6 +568,54 @@ void main() {
     expect(await repo.fetchAll(), isEmpty);
   });
 
+  test('AI suggestions update preserves aiTopic and aiSummary', () async {
+    final repo = NeedsReviewRepository();
+    const id = 'source-topic-1';
+    final suggestions = <Map<String, dynamic>>[
+      {
+        'factIndex': 0,
+        'factType': 'posted_movement',
+        'payload': {'amountInr': 125.0, 'entryKind': 'spend'},
+      },
+    ];
+    await repo.add(
+      NeedsReviewItem(
+        id: id,
+        sender: 'VM-BANK',
+        body: 'Rs.125 spent',
+        receivedAt: DateTime(2026, 1, 1),
+      ),
+    );
+    expect(
+      await repo.updateAiSuggestions(
+        id,
+        suggestions,
+        aiTopic: 'Food & Dining',
+        aiSummary: 'Swiggy order payment',
+      ),
+      isTrue,
+    );
+    final fetched = (await repo.fetchAll()).single;
+    expect(fetched.aiSuggestions, suggestions);
+    expect(fetched.aiTopic, 'Food & Dining');
+    expect(fetched.aiSummary, 'Swiggy order payment');
+
+    final json = fetched.toJson();
+    final deserialized = NeedsReviewItem.fromJson(json);
+    expect(deserialized.aiTopic, 'Food & Dining');
+    expect(deserialized.aiSummary, 'Swiggy order payment');
+
+    expect(
+      await repo.updateAiSuggestions(
+        id,
+        suggestions,
+        aiTopic: 'Food & Dining',
+        aiSummary: 'Swiggy order payment',
+      ),
+      isFalse,
+    );
+  });
+
   test('removeAll drops every id in the set', () async {
     final repo = NeedsReviewRepository();
     await repo.add(

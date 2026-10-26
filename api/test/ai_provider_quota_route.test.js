@@ -35,7 +35,7 @@ test('provider reservation validates token estimates and applies the Free RPM, T
   const bad = await call({ estimatedTokens: 0 });
   assert.equal(bad.statusCode, 400);
   const ok = await call({ estimatedTokens: 450 });
-  assert.deepEqual(args, [5, 12000, 20, 450]);
+  assert.deepEqual(args, [30, 24000, 3000, 450]);
   assert.deepEqual(ok.body, { allowed: false, waitMs: 900 });
 });
 
@@ -70,7 +70,7 @@ test('Free-tier daily exhaustion releases capacity once with the next reset dela
   assert.equal(calls, 1);
 });
 
-test('Gemini Free-tier limits cap configured settings at 15 RPM and 1500 RPD', () => {
+test('Gemini Free-tier limits cap configured settings at 30 RPM and 3000 RPD across dual-key pool', () => {
   const { providerLimits } = require('../src/ai_provider_quota_route');
   process.env.GEMINI_REQUESTS_PER_MINUTE = '12';
   process.env.GEMINI_TOKENS_PER_MINUTE = '500000';
@@ -80,14 +80,14 @@ test('Gemini Free-tier limits cap configured settings at 15 RPM and 1500 RPD', (
     tokensPerMinute: 500000,
     requestsPerDay: 200,
   });
-  process.env.GEMINI_REQUESTS_PER_MINUTE = '20';
-  process.env.GEMINI_REQUESTS_PER_DAY = '2000';
-  assert.equal(providerLimits().requestsPerMinute, 15);
-  assert.equal(providerLimits().requestsPerDay, 1500);
+  process.env.GEMINI_REQUESTS_PER_MINUTE = '40';
+  process.env.GEMINI_REQUESTS_PER_DAY = '4000';
+  assert.equal(providerLimits().requestsPerMinute, 30);
+  assert.equal(providerLimits().requestsPerDay, 3000);
   process.env.GEMINI_REQUESTS_PER_MINUTE = '0';
-  assert.equal(providerLimits().requestsPerMinute, 5);
+  assert.equal(providerLimits().requestsPerMinute, 30);
   process.env.GEMINI_REQUESTS_PER_DAY = '0';
-  assert.equal(providerLimits().requestsPerDay, 20);
+  assert.equal(providerLimits().requestsPerDay, 3000);
   delete process.env.GEMINI_REQUESTS_PER_MINUTE;
   delete process.env.GEMINI_TOKENS_PER_MINUTE;
   delete process.env.GEMINI_REQUESTS_PER_DAY;

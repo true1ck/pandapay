@@ -29,13 +29,48 @@ const SPEND_CATEGORIES = [
   'health', 'emi', 'other',
 ];
 
+const DECISION_TOPICS = [
+  'card_spend', 'card_refund', 'upi_debit', 'upi_credit',
+  'atm_withdrawal', 'bank_transfer', 'bill_due_notice',
+  'bill_payment_success', 'mandate_autopay', 'investment_purchase',
+  'salary_or_income', 'telecom_carrier_deduction', 'loan_upsell_or_offer',
+  'credit_card_limit_upsell', 'otp_or_security_code',
+  'generic_promotional_spam', 'informational_balance_notice', 'other_non_financial',
+];
+
+const REJECTION_REASONS = [
+  'none', 'telecom_carrier_deduction', 'loan_upsell',
+  'promotional_spam', 'security_otp', 'credit_limit_upsell', 'non_financial',
+];
+
+const DECISION_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    topic: { type: 'STRING', enum: DECISION_TOPICS },
+    summary: { type: 'STRING' },
+    shouldConsider: { type: 'BOOLEAN' },
+    rejectionReason: { type: 'STRING', enum: REJECTION_REASONS },
+  },
+  required: ['topic', 'summary', 'shouldConsider', 'rejectionReason'],
+};
+
 const UNIVERSAL_SYSTEM_INSTRUCTION = [
-  "You are PandaPay's Financial SMS Extraction & Categorization Engine.",
-  'Your mission is to parse redacted Indian financial SMS messages into strictly typed, structured financial facts.',
+  "You are PandaPay's Cognitive Financial SMS Intelligence & Extraction Engine.",
+  'Your mission is to evaluate redacted Indian SMS messages, make an intent-based tracking decision, and extract strictly typed financial facts.',
   '',
-  'CORE OPERATING INSTRUCTIONS:',
-  '1. ZERO HALLUCINATION: Never invent or extrapolate missing digits, dates, or merchants. The message has already been redacted.',
-  '2. DISTINGUISH MONEY MOVED FROM MONEY MENTIONED:',
+  'TWO-STAGE COGNITIVE EVALUATION:',
+  'STAGE 1: INTENT & TRACKING DECISION (decision object)',
+  '- What is this SMS about? Assign the most specific topic from DECISION_TOPICS and write a concise 1-sentence summary.',
+  '- Should PandaPay track this? (shouldConsider: boolean):',
+  '  * SET shouldConsider=true ONLY for completed or scheduled money movements, bill obligations, salary/income, investments, or active mandates.',
+  '  * SET shouldConsider=false for telecom carrier deductions (Jio/Airtel/Vi retention fees, talktime/validity debits), personal loan/pay-later offers (Axio, KreditBee), credit limit upsells, bank OTPs, gambling/promotional spam, or general service alerts.',
+  '- Rejection Reason: If shouldConsider=false, choose the matching reason from REJECTION_REASONS. If shouldConsider=true, set rejectionReason="none".',
+  '',
+  'STAGE 2: FACT EXTRACTION (facts array)',
+  '- When shouldConsider=false, facts MUST be an empty array []. Do NOT extract balance snapshots, service alerts, or partial movements for rejected messages.',
+  '- When shouldConsider=true, extract strictly typed facts following these rules:',
+  '  1. ZERO HALLUCINATION: Never invent or extrapolate missing digits, dates, or merchants. The message has already been redacted.',
+  '  2. DISTINGUISH MONEY MOVED FROM MONEY MENTIONED:',
   "   - A debit, card swipe, or purchase is 'posted_movement' with amountRole='posted' and entryKind='spend'.",
   "   - A salary credit or dividend is 'posted_movement' with amountRole='posted' and entryKind='income'.",
   "   - A broker funds payout (e.g., Kotak Neo, Zerodha quarterly settlement) or own-account transfer is 'posted_movement' with amountRole='posted' and entryKind='transfer'.",
@@ -43,14 +78,12 @@ const UNIVERSAL_SYSTEM_INSTRUCTION = [
   "   - A utility bill, credit card statement, or due notification is 'bill_obligation' with amountRole='due_total' (and 'due_minimum' if present). It is NEVER a posted movement.",
   "   - An AutoPay registration or standing instruction is 'mandate_lifecycle' with amountRole='ceiling' and limitInr. It is NEVER a spend.",
   "   - An ATM withdrawal is 'posted_movement' with instrument='cash' and entryKind='transfer'.",
-  '3. CATEGORIZATION:',
+  '  3. CATEGORIZATION:',
   "   For every spend transaction, extract a clean merchant name (stripping noise words such as 'INFO/', 'VPA', 'IMPS-', 'POS', 'ECOM') and assign exactly ONE of the 15 canonical categories:",
   "   ['groceries', 'fuel', 'dining', 'online', 'travel', 'bills', 'rent', 'insurance', 'education', 'government', 'wallet', 'entertainment', 'health', 'emi', 'other'].",
-  '4. SCORING & COMPLETENESS:',
+  '  4. SCORING & COMPLETENESS:',
   "   - Set 'isComplete': true when the message has all necessary fields (for spend: amount, instrument, merchant, category; for bill: amountDue, dueDate, billerName).",
   "   - Set 'confidence': a float from 0.0 to 1.0 reflecting your extraction certainty.",
-  '5. NOISE HANDLING:',
-  '   If the message is an OTP, service validity alert, or promotional advertisement without completed financial movement, return {"facts": []}.',
 ].join('\n');
 
 const FACT_TYPE_ENUM = [
@@ -68,6 +101,7 @@ const FACT_TYPE_ENUM = [
 const UNIVERSAL_RESPONSE_SCHEMA = {
   type: 'OBJECT',
   properties: {
+    decision: DECISION_SCHEMA,
     facts: {
       type: 'ARRAY',
       items: {
@@ -128,7 +162,7 @@ const UNIVERSAL_RESPONSE_SCHEMA = {
       },
     },
   },
-  required: ['facts'],
+  required: ['decision', 'facts'],
 };
 
 const UNIVERSAL_BATCH_RESPONSE_SCHEMA = {
@@ -140,9 +174,10 @@ const UNIVERSAL_BATCH_RESPONSE_SCHEMA = {
         type: 'OBJECT',
         properties: {
           id: { type: 'STRING' },
+          decision: DECISION_SCHEMA,
           facts: UNIVERSAL_RESPONSE_SCHEMA.properties.facts,
         },
-        required: ['id', 'facts'],
+        required: ['id', 'decision', 'facts'],
       },
     },
   },
@@ -155,6 +190,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'UPI food delivery debit (Swiggy)',
     sms: 'Sent Rs.420.00 from HDFC Bank A/C **1797 to SWIGGY UPI on 24-10-26. UPI Ref 429812345678. Avail Bal: Rs.45,120.50',
     output: {
+      decision: {
+        topic: 'upi_debit',
+        summary: 'Paid Rs. 420 to Swiggy via HDFC Bank UPI',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -179,6 +220,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Credit card purchase (Flipkart)',
     sms: 'Alert: INR 2,499.00 spent on ICICI Bank Credit Card ending XX4002 at FLIPKART on 25-Oct-26. Available limit: INR 1,45,000.00.',
     output: {
+      decision: {
+        topic: 'card_spend',
+        summary: 'Spent Rs. 2,499 on Flipkart with ICICI Bank Credit Card ending 4002',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -203,6 +250,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Credit card monthly statement bill (Axis)',
     sms: 'Your Axis Bank Credit Card XX8891 statement generated. Total Due: Rs 14,850.00, Min Due: Rs 750.00, Due Date: 12-Nov-2026.',
     output: {
+      decision: {
+        topic: 'bill_due_notice',
+        summary: 'Axis Bank Credit Card XX8891 bill due of Rs. 14,850 on 12-Nov-2026',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'bill_obligation',
@@ -229,6 +282,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Utility bill (BESCOM electricity)',
     sms: 'Dear Consumer, Electricity bill for CA 102938475 is Rs 1,840.00. Due date is 05-Nov-2026. Pay via BESCOM portal to avoid disconnect.',
     output: {
+      decision: {
+        topic: 'bill_due_notice',
+        summary: 'BESCOM electricity bill of Rs. 1,840 due on 05-Nov-2026',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'bill_obligation',
@@ -246,6 +305,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Bill payment receipt (credit card bill paid)',
     sms: 'Thank you! Payment of Rs.14,850.00 received towards your Axis Bank Credit Card XX8891 on 25-Oct-26 via CRED.',
     output: {
+      decision: {
+        topic: 'bill_payment_success',
+        summary: 'Paid Rs. 14,850 towards Axis Bank Credit Card XX8891 via CRED',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'bill_payment',
@@ -263,6 +328,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Broker settlement payout (Kotak Neo / Zerodha return to bank)',
     sms: 'Dear Investor, payout of Rs 1,944.38 has been processed towards your Bank A/c XX1797 on 24-Oct-26 on account of quarterly settlement of funds. - Kotak Neo',
     output: {
+      decision: {
+        topic: 'bank_transfer',
+        summary: 'Kotak Neo quarterly funds settlement payout of Rs. 1,944.38 to Bank A/c XX1797',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -281,6 +352,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Broker funding top-up (Zerodha funds added)',
     sms: 'Rs. 25,000.00 debited from HDFC Bank A/c XX1797 on 23-Oct-26 towards ZERODHA BROKING LTD via NetBanking. Ref 429712398.',
     output: {
+      decision: {
+        topic: 'investment_purchase',
+        summary: 'Transferred Rs. 25,000 from HDFC Bank to Zerodha for investment',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -298,6 +375,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Earned income (monthly salary credit)',
     sms: 'Your Salary of Rs. 1,25,000.00 has been credited to your HDFC Bank A/c XX1797 on 30-Oct-2026 by ACME TECH CORP PVT LTD.',
     output: {
+      decision: {
+        topic: 'salary_or_income',
+        summary: 'Salary credit of Rs. 1,25,000 from ACME TECH CORP to HDFC Bank A/c XX1797',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -315,6 +398,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Loan EMI debit (home loan auto-debit)',
     sms: 'EMI Rs 32,450.00 for Home Loan A/c HL-998822 debited from SBI Bank A/c XX4321 on 10-Oct-2026.',
     output: {
+      decision: {
+        topic: 'bank_transfer',
+        summary: 'Home loan EMI debit of Rs. 32,450 from SBI Bank A/c XX4321',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -332,6 +421,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'AutoPay e-mandate registration (Netflix)',
     sms: 'AutoPay e-mandate successfully registered for NETFLIX Entertainment with max limit INR 1,500.00 on HDFC Bank Card ending 1234. UMN: HDFC998877.',
     output: {
+      decision: {
+        topic: 'mandate_autopay',
+        summary: 'Netflix AutoPay e-mandate registered on HDFC Card ending 1234 up to Rs. 1,500',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'mandate_lifecycle',
@@ -350,6 +445,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'ATM cash withdrawal',
     sms: 'Rs 5,000.00 withdrawn from ATM using Debit Card XX9912 on 24-Oct-26 at SBI ATM KORAMANGALA BLR.',
     output: {
+      decision: {
+        topic: 'atm_withdrawal',
+        summary: 'ATM cash withdrawal of Rs. 5,000 using Debit Card XX9912',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -366,6 +467,12 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Partial / ambiguous spend (needs review)',
     sms: 'A/c XX1797 debited for INR 750.00 on 24-10-26. Info: POS-AMAZON PAY BLR. Avail Bal: 21,400.00.',
     output: {
+      decision: {
+        topic: 'upi_debit',
+        summary: 'Partial debit of Rs. 750 at Amazon Pay from A/c XX1797',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -377,6 +484,58 @@ const FEW_SHOT_EXAMPLES = [
           },
         },
       ],
+    },
+  },
+  {
+    label: 'Telecom carrier retention deduction (Jio ₹9.88 noise)',
+    sms: 'Paid Rs. 9.88 for Jio number retention charges via UPI on 20-Oct-2026. Avail Bal: Rs 12.00',
+    output: {
+      decision: {
+        topic: 'telecom_carrier_deduction',
+        summary: 'Jio number retention airtime deduction of Rs 9.88',
+        shouldConsider: false,
+        rejectionReason: 'telecom_carrier_deduction',
+      },
+      facts: [],
+    },
+  },
+  {
+    label: 'Personal loan promotional upsell (Axio / KreditBee noise)',
+    sms: 'Congratulations! You are pre-approved for an instant personal loan of up to Rs 2,50,000 from Axio with zero paperwork. Apply now at https://axio.in/loan',
+    output: {
+      decision: {
+        topic: 'loan_upsell_or_offer',
+        summary: 'Pre-approved personal loan marketing offer from Axio',
+        shouldConsider: false,
+        rejectionReason: 'loan_upsell',
+      },
+      facts: [],
+    },
+  },
+  {
+    label: 'Bank security OTP verification',
+    sms: '482910 is your OTP for NetBanking login at HDFC Bank. Valid for 10 mins. Do not share OTP with anyone.',
+    output: {
+      decision: {
+        topic: 'otp_or_security_code',
+        summary: 'HDFC Bank NetBanking login verification OTP',
+        shouldConsider: false,
+        rejectionReason: 'security_otp',
+      },
+      facts: [],
+    },
+  },
+  {
+    label: 'Gambling / spam marketing offer',
+    sms: 'Deposit Rs 500 & get Rs 1000 free bonus instantly on gbets.win! Play and win real cash now.',
+    output: {
+      decision: {
+        topic: 'generic_promotional_spam',
+        summary: 'Gbets gambling deposit bonus promotional spam',
+        shouldConsider: false,
+        rejectionReason: 'promotional_spam',
+      },
+      facts: [],
     },
   },
 ];
@@ -450,11 +609,11 @@ function parseModelJson(text) {
 function buildGeminiPrompt(job, { batch = false, includeExamples = true } = {}) {
   const payload = job?.payload || {};
   return [
-    'Classify this bank SMS into typed financial facts for a personal finance app.',
+    'Evaluate this Indian SMS for a personal finance app. First make a cognitive tracking decision, then extract facts if trackable.',
     'The message has already been redacted. Never infer or invent missing digits.',
     batch
-      ? 'Supply this item\'s facts array in the batch items envelope; keep this item with facts: [] when uncertain.'
-      : 'Return JSON only in the form {"facts":[...]}; return an empty facts array when uncertain.',
+      ? 'Supply this item\'s decision and facts array in the batch items envelope. If shouldConsider=false, set facts: [].'
+      : 'Return JSON only in the form {"decision":{...},"facts":[...]}. If shouldConsider=false, set facts: [].',
     'Each fact must use the app contract: factType, payload, provenance.',
     'Allowed factType values: posted_movement, pending_or_failed_attempt, balance_snapshot, bill_obligation, bill_payment, mandate_lifecycle, card_identity_hint, security_or_service_alert, promotion.',
     'Allowed entryKind values for posted_movement: spend, income, transfer, investment (use "spend" for debited/purchases).',
@@ -475,7 +634,7 @@ function buildGeminiPrompt(job, { batch = false, includeExamples = true } = {}) 
 
 function buildGeminiBatchPrompt(jobs) {
   return [
-    'Classify each SMS independently. Return JSON only: {"items":[{"id":"<id>","facts":[...]}]}.',
+    'Classify each SMS independently. Return JSON only: {"items":[{"id":"<id>","decision":{...},"facts":[...]}]}.',
     'Return exactly one item per supplied id, even when its facts array is empty.',
     'Never mix an amount, account or date from one item into another item.',
     renderFewShots(),
@@ -618,7 +777,15 @@ class GeminiProvider {
         this.currentKeyIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
         this.apiKey = this.apiKeys[this.currentKeyIndex];
       }
-      return parsed.facts;
+      return {
+        decision: parsed.decision || {
+          topic: parsed.facts.length > 0 ? 'card_spend' : 'other_non_financial',
+          summary: parsed.facts.length > 0 ? 'Financial transaction detected' : 'Non-financial or unrecognized message',
+          shouldConsider: parsed.facts.length > 0,
+          rejectionReason: parsed.facts.length > 0 ? 'none' : 'non_financial',
+        },
+        facts: parsed.facts,
+      };
     }
   }
 
@@ -694,7 +861,15 @@ class GeminiProvider {
         if (!expected.has(item?.id) || output.has(item.id) || !Array.isArray(item.facts)) {
           throw new GeminiProviderError('Gemini batch has an invalid item');
         }
-        output.set(item.id, item.facts);
+        output.set(item.id, {
+          decision: item.decision || {
+            topic: item.facts.length > 0 ? 'card_spend' : 'other_non_financial',
+            summary: item.facts.length > 0 ? 'Financial transaction detected' : 'Non-financial or unrecognized message',
+            shouldConsider: item.facts.length > 0,
+            rejectionReason: item.facts.length > 0 ? 'none' : 'non_financial',
+          },
+          facts: item.facts,
+        });
       }
       if (attempt === 0 && this.apiKeys.length > 1) {
         this.currentKeyIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
@@ -799,9 +974,16 @@ async function runWorkerOnce({
         continue;
       }
       try {
+        const itemResult = byId.get(job.id);
+        const facts = Array.isArray(itemResult) ? itemResult : (itemResult?.facts || []);
+        const decision = Array.isArray(itemResult) ? null : (itemResult?.decision || null);
         const result = await jsonRequest(fetchImpl, `${base}/ai/jobs/${encodeURIComponent(job.id)}/result`, workerToken, {
-          facts: byId.get(job.id), profileId: job.profileId, leaseToken: job.leaseToken,
-          batchId, batchSize: jobs.length,
+          decision,
+          facts,
+          profileId: job.profileId,
+          leaseToken: job.leaseToken,
+          batchId,
+          batchSize: jobs.length,
         });
         outcomes.push({ jobId: job.id, completed: true, result });
       } catch (error) {
@@ -867,6 +1049,9 @@ if (require.main === module) {
 module.exports = {
   GeminiProvider,
   GeminiProviderError,
+  DECISION_TOPICS,
+  REJECTION_REASONS,
+  DECISION_SCHEMA,
   UNIVERSAL_SYSTEM_INSTRUCTION,
   UNIVERSAL_RESPONSE_SCHEMA,
   UNIVERSAL_BATCH_RESPONSE_SCHEMA,

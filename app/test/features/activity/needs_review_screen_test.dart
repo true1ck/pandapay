@@ -154,6 +154,7 @@ Future<void> _pump(
   List<AutoResolvedHistoryEntry> autoResolved = const [],
   SmsAutoResolutionController? autoResolutionController,
   Size surfaceSize = const Size(1000, 1000),
+  bool settle = true,
 }) async {
   await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -173,11 +174,17 @@ Future<void> _pump(
         ),
         if (commitments != null)
           commitmentsRepositoryProvider.overrideWithValue(commitments),
+        smsBackgroundFlushProvider.overrideWith((ref) {}),
       ],
       child: const MaterialApp(home: NeedsReviewScreen()),
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 void main() {
@@ -241,6 +248,63 @@ void main() {
     expect(find.text('AI review completed'), findsOneWidget);
     expect(find.textContaining('AI suggested'), findsOneWidget);
     expect(find.text('Review transaction'), findsOneWidget);
+  });
+
+  testWidgets('surfaces Gemini AI summary explanation on review tile', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'f' * 64,
+        sender: 'VM-HDFCBK',
+        body: 'Paid Rs. 420 to Swiggy via HDFC Bank UPI',
+        receivedAt: DateTime.now(),
+        aiStatus: AiReviewStatus.checked,
+        aiSummary: 'Paid Rs. 420 to Swiggy via HDFC Bank UPI',
+      ),
+    );
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+expect(find.text('✦ AI · Paid Rs. 420 to Swiggy via HDFC Bank UPI'), findsOneWidget);
+  });
+
+  testWidgets('shows queued AI check status with spinner and allows tap to retry', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: '1',
+        sender: 'VM-HDFCBK',
+        body: 'Rs.499 spent at AMAZON',
+        receivedAt: DateTime.now(),
+        aiStatus: AiReviewStatus.queued,
+      ),
+    );
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews, settle: false);
+
+    expect(find.text('AI review queued · Checking...'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    await tester.tap(find.text('AI review queued · Checking...'));
+    await tester.pump();
+  });
+
+  testWidgets('shows in-progress AI check status with spinner', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: '1',
+        sender: 'VM-HDFCBK',
+        body: 'Rs.499 spent at AMAZON',
+        receivedAt: DateTime.now(),
+        aiStatus: AiReviewStatus.processing,
+      ),
+    );
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews, settle: false);
+
+    expect(find.text('AI review in progress'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
   testWidgets('Ignore message removes the item from the queue', (tester) async {

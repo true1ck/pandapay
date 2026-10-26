@@ -267,6 +267,7 @@ async function getAttemptCount(client, jobId) {
  */
 async function completeJobWithResult(client, {
   job,
+  decision = null,
   facts,
   batchMetadata = {},
   applySpecialists = null,
@@ -280,9 +281,12 @@ async function completeJobWithResult(client, {
   // and the redacted body. An explicit boolean from the caller still wins
   // (e.g. a replayed job that was already triaged).
   const assessment = aiFactScoring.assessFacts(facts, payload.body || '');
-  const effectiveReviewRequired = typeof reviewRequired === 'boolean'
+  let effectiveReviewRequired = typeof reviewRequired === 'boolean'
     ? reviewRequired
     : assessment.reviewRequired;
+  if (decision?.shouldConsider === false) {
+    effectiveReviewRequired = false;
+  }
   const existing = await smsFacts.loadSmsSourceFacts(client, job.profile_id, job.source_key);
   const existingFacts = existing ? existing.facts : [];
   const semanticParts = (fact) => {
@@ -343,6 +347,7 @@ async function completeJobWithResult(client, {
             lease_token = NULL, lease_expires_at = NULL, updated_at = now()
       WHERE id = $1`,
     [job.id, JSON.stringify({
+      decision: decision || null,
       landed,
       specialists,
       reviewRequired: effectiveReviewRequired,
@@ -358,6 +363,7 @@ async function completeJobWithResult(client, {
     ...(Number.isInteger(batchMetadata.batchSize) ? { batchSize: batchMetadata.batchSize } : {}),
   });
   return {
+    decision: decision || null,
     landed,
     specialists,
     reviewRequired: effectiveReviewRequired,

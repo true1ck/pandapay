@@ -1,4 +1,4 @@
--- Expand Gemini provider daily capacity to support up to 1,500 requests/day
+-- Expand Gemini provider daily capacity to support up to 3,000 requests/day across dual-key pool
 begin;
 
 create or replace function pandapay.ai_reserve_provider_capacity(
@@ -21,9 +21,9 @@ declare
   v_oldest timestamptz;
   v_wait_ms integer;
 begin
-  if p_requests_per_minute < 1 or p_requests_per_minute > 15
-     or p_tokens_per_minute < 100 or p_tokens_per_minute > 1000000
-     or p_requests_per_day < 1 or p_requests_per_day > 1500
+  if p_requests_per_minute < 1 or p_requests_per_minute > 30
+     or p_tokens_per_minute < 100 or p_tokens_per_minute > 2000000
+     or p_requests_per_day < 1 or p_requests_per_day > 3000
      or p_estimated_tokens < 1 or p_estimated_tokens > 20000 then
     raise exception 'invalid free-tier provider capacity request';
   end if;
@@ -105,9 +105,9 @@ declare v_summary jsonb;
         v_day_start timestamptz;
 begin
   if not pandapay.is_admin() then raise exception 'admin required' using errcode = '42501'; end if;
-  if p_requests_per_minute < 1 or p_requests_per_minute > 15
-     or p_tokens_per_minute < 100 or p_tokens_per_minute > 1000000
-     or p_requests_per_day < 1 or p_requests_per_day > 1500 then
+  if p_requests_per_minute < 1 or p_requests_per_minute > 30
+     or p_tokens_per_minute < 100 or p_tokens_per_minute > 2000000
+     or p_requests_per_day < 1 or p_requests_per_day > 3000 then
     raise exception 'invalid free-tier provider limits';
   end if;
   v_day_start := date_trunc('day', clock_timestamp() at time zone 'America/Los_Angeles')
@@ -130,5 +130,11 @@ $$;
 
 revoke all on function pandapay.ai_provider_admin_summary(integer, integer, integer) from public;
 grant execute on function pandapay.ai_provider_admin_summary(integer, integer, integer) to app_user;
+
+-- Unstick any queued jobs that were deferred until midnight due to the old daily cap
+update public.ai_jobs
+   set next_attempt_at = now()
+ where status = 'queued'
+   and next_attempt_at > now();
 
 commit;

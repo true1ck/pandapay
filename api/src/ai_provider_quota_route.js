@@ -6,12 +6,12 @@ function boundedEnvInt(name, fallback, minimum, maximum) {
 }
 
 function providerLimits() {
-  // Free tier / default cap is 20 RPD, configurable via GEMINI_REQUESTS_PER_DAY
-  // up to 1500 RPD to match Google AI Studio Free-tier limits.
+  // Free tier / default cap is configurable via GEMINI_REQUESTS_PER_DAY
+  // up to 3000 RPD and 30 RPM to support dual-key active round-robin pools (2 x 1500).
   return {
-    requestsPerMinute: Math.min(15, boundedEnvInt('GEMINI_REQUESTS_PER_MINUTE', 5, 1, 1000)),
-    tokensPerMinute: Math.min(1000000, boundedEnvInt('GEMINI_TOKENS_PER_MINUTE', 12000, 100, 1000000)),
-    requestsPerDay: Math.min(1500, boundedEnvInt('GEMINI_REQUESTS_PER_DAY', 20, 1, 100000)),
+    requestsPerMinute: Math.min(30, boundedEnvInt('GEMINI_REQUESTS_PER_MINUTE', 30, 1, 1000)),
+    tokensPerMinute: Math.min(2000000, boundedEnvInt('GEMINI_TOKENS_PER_MINUTE', 24000, 100, 2000000)),
+    requestsPerDay: Math.min(3000, boundedEnvInt('GEMINI_REQUESTS_PER_DAY', 3000, 1, 100000)),
   };
 }
 

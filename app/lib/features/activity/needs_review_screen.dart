@@ -192,8 +192,12 @@ String _suggestedCategoryName(NeedsReviewItem item) {
       'Review';
 }
 
-String _aiSuggestedSummary(NeedsReviewItem item) =>
-    '✦ AI suggested · ${_suggestedCategoryName(item)}';
+String _aiSuggestedSummary(NeedsReviewItem item) {
+  if (item.aiSummary?.trim().isNotEmpty == true) {
+    return '✦ AI · ${item.aiSummary!.trim()}';
+  }
+  return '✦ AI suggested · ${_suggestedCategoryName(item)}';
+}
 
 Future<void> _persistCommitmentDismissal(
   WidgetRef ref,
@@ -366,6 +370,9 @@ class _FilterChip extends StatelessWidget {
       selectedColor: BambooInk.slate,
       onSelected: (_) => onTap(),
       label: Text(label),
+      // The tick pushed the label sideways and read as a second selection
+      // marker next to the slate fill that already shows the state.
+      showCheckmark: false,
       labelStyle: BambooFonts.ui(
         12.5,
         weight: selected ? FontWeight.w600 : FontWeight.w500,
@@ -396,9 +403,17 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
   _ReviewFilterCategory _selectedCategory = _ReviewFilterCategory.all;
   int _selectedTab = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(smsFlushTriggerProvider.notifier).state++;
+    });
+  }
+
   Widget _buildTabSelector(int pendingCount, int autoCount) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+    return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpace.lg,
         vertical: AppSpace.sm,
@@ -410,6 +425,9 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
         ],
         selected: {_selectedTab},
         showSelectedIcon: false,
+        // Split the width evenly: the shrink-wrapped control floated in the
+        // middle of the header while every chip row below is edge-aligned.
+        expandedInsets: EdgeInsets.zero,
         onSelectionChanged: (selection) =>
             setState(() => _selectedTab = selection.first),
         style: ButtonStyle(
@@ -564,6 +582,24 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<List<NeedsReviewItem>>>(needsReviewItemsProvider, (previous, next) {
+      final items = next.valueOrNull;
+      if (items == null) return;
+      final hadActive = previous?.valueOrNull?.any(
+        (item) =>
+            item.aiStatus == AiReviewStatus.queued ||
+            item.aiStatus == AiReviewStatus.processing,
+      ) ?? false;
+      final hasActive = items.any(
+        (item) =>
+            item.aiStatus == AiReviewStatus.queued ||
+            item.aiStatus == AiReviewStatus.processing,
+      );
+      if (hasActive && !hadActive) {
+        ref.read(smsFlushTriggerProvider.notifier).state++;
+      }
+    });
+
     final items = ref.watch(needsReviewItemsProvider);
     final pendingItems = items.valueOrNull ?? const <NeedsReviewItem>[];
     final autoCount = ref.watch(autoResolvedCountProvider).valueOrNull ?? 0;
@@ -1261,7 +1297,8 @@ class _CommitmentNeedsReviewTileState
             ).format(item.receivedAt.toLocal()),
             style: BambooFonts.ui(12, color: BambooInk.ink500),
           ),
-          if (item.aiSuggestions?.isNotEmpty == true) ...[
+          if (item.aiSuggestions?.isNotEmpty == true ||
+              item.aiSummary?.trim().isNotEmpty == true) ...[
             const SizedBox(height: AppSpace.xs),
             _AiBadge(summary: _aiSuggestedSummary(item)),
           ],
@@ -1295,20 +1332,20 @@ class _CommitmentNeedsReviewTileState
           const SizedBox(height: AppSpace.md),
           Row(
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: BambooInk.ink900,
-                    side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                    minimumSize: const Size.fromHeight(44),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
+              // Intrinsic width, so the longer primary label keeps one line.
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: BambooInk.ink900,
+                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  minimumSize: const Size(0, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  onPressed: _busy ? null : _dismiss,
-                  child: const Text('Not a bill'),
+                  textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
                 ),
+                onPressed: _busy ? null : _dismiss,
+                child: const Text('Not a bill'),
               ),
               const SizedBox(width: AppSpace.sm),
               Expanded(
@@ -1317,6 +1354,7 @@ class _CommitmentNeedsReviewTileState
                     backgroundColor: BambooInk.slate,
                     foregroundColor: BambooInk.lime,
                     minimumSize: const Size.fromHeight(44),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -2133,7 +2171,12 @@ class _NeedsReviewTile extends ConsumerStatefulWidget {
 class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   bool _busy = false;
 
-  String get _aiSummary => _aiSuggestedSummary(widget.item);
+  String get _aiSummary {
+    if (widget.item.aiSummary?.trim().isNotEmpty == true) {
+      return '✦ AI · ${widget.item.aiSummary!.trim()}';
+    }
+    return _aiSuggestedSummary(widget.item);
+  }
 
   Future<void> _dismissNotATransaction() async {
     setState(() => _busy = true);
@@ -2673,7 +2716,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                   : BambooInk.ink500,
             ),
           ),
-          if (item.aiSuggestions?.isNotEmpty == true) ...[
+          if (item.aiSuggestions?.isNotEmpty == true ||
+              item.aiSummary?.trim().isNotEmpty == true) ...[
             const SizedBox(height: AppSpace.xs),
             _AiBadge(summary: _aiSummary),
           ],
@@ -2700,20 +2744,22 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           const SizedBox(height: AppSpace.md),
           Row(
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: BambooInk.ink900,
-                    side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                    minimumSize: const Size.fromHeight(44),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
+              // Let the secondary keep its intrinsic width so the descriptive
+              // primary label ("Review drawdown", "Choose card/account") isn't
+              // squeezed into a half-width button and wrapped onto two lines.
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: BambooInk.ink900,
+                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  minimumSize: const Size(0, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  onPressed: _busy ? null : _dismissNotATransaction,
-                  child: const Text('Ignore message'),
+                  textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
                 ),
+                onPressed: _busy ? null : _dismissNotATransaction,
+                child: const Text('Ignore message'),
               ),
               const SizedBox(width: AppSpace.sm),
               Expanded(
@@ -2722,6 +2768,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                     backgroundColor: BambooInk.slate,
                     foregroundColor: BambooInk.lime,
                     minimumSize: const Size.fromHeight(44),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -2878,46 +2925,49 @@ class _ReviewBundleCardState extends ConsumerState<_ReviewBundleCard> {
             ],
           ),
           const SizedBox(height: AppSpace.md),
-          Wrap(
-            spacing: AppSpace.sm,
-            runSpacing: AppSpace.xs,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // A Wrap stretched each outlined button to the full card width, so
+          // the two actions stacked as two oversized rows. The collapsed
+          // builder keeps its intrinsic width and shares the line instead.
+          Row(
             children: [
-              OutlinedButton(
-                onPressed: _busy ? null : _dismissBundle,
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                  foregroundColor: BambooInk.ink900,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpace.md,
-                    vertical: AppSpace.xs,
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy ? null : _dismissBundle,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                    foregroundColor: BambooInk.ink900,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.sm,
+                      vertical: AppSpace.xs,
+                    ),
                   ),
-                ),
-                child: _busy
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: BambooInk.ink700,
+                  child: _busy
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: BambooInk.ink700,
+                          ),
+                        )
+                      : Text(
+                          group.isPayLater
+                              ? 'Dismiss all ${group.items.length} (Billed in AutoPay)'
+                              : 'Dismiss all ${group.items.length}',
+                          style: BambooFonts.ui(12, weight: FontWeight.w600),
                         ),
-                      )
-                    : Text(
-                        group.isPayLater
-                            ? 'Dismiss all ${group.items.length} (Billed in AutoPay)'
-                            : 'Dismiss all ${group.items.length}',
-                        style: BambooFonts.ui(12, weight: FontWeight.w600),
-                      ),
+                ),
               ),
-              OutlinedButton.icon(
+              const SizedBox(width: AppSpace.sm),
+              TextButton.icon(
                 onPressed: () => setState(() => _expanded = !_expanded),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                style: TextButton.styleFrom(
                   foregroundColor: BambooInk.ink700,
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpace.sm,
                     vertical: AppSpace.xs,
                   ),
+                  textStyle: BambooFonts.ui(12, weight: FontWeight.w600),
                 ),
                 icon: Icon(
                   _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
@@ -2925,7 +2975,6 @@ class _ReviewBundleCardState extends ConsumerState<_ReviewBundleCard> {
                 ),
                 label: Text(
                   _expanded ? 'Hide messages' : 'Show all ${group.items.length}',
-                  style: BambooFonts.ui(12, weight: FontWeight.w500),
                 ),
               ),
             ],
@@ -3371,9 +3420,9 @@ class _AiStatusBadge extends ConsumerWidget {
         BambooInk.ink500,
       ),
       AiReviewStatus.queued => (
-        'AI review queued',
+        'AI review queued · Checking...',
         Icons.schedule,
-        BambooInk.ink500,
+        BambooInk.jade,
       ),
       AiReviewStatus.processing => (
         'AI review in progress',
@@ -3391,15 +3440,18 @@ class _AiStatusBadge extends ConsumerWidget {
         BambooInk.ink500,
       ),
     };
-    final isRetryable = status == AiReviewStatus.unavailable;
+    final isTappable =
+        status == AiReviewStatus.queued || status == AiReviewStatus.unavailable;
+    final showSpinner =
+        status == AiReviewStatus.queued || status == AiReviewStatus.processing;
     return Align(
       alignment: Alignment.centerLeft,
       child: Semantics(
         label: label,
-        button: isRetryable,
+        button: isTappable,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: isRetryable
+          onTap: isTappable
               ? () {
                   ref.read(smsFlushTriggerProvider.notifier).state++;
                   ref.invalidate(needsReviewItemsProvider);
@@ -3415,8 +3467,20 @@ class _AiStatusBadge extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 12, color: color),
-                const SizedBox(width: 4),
+                if (showSpinner) ...[
+                  SizedBox(
+                    width: 11,
+                    height: 11,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: color,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ] else ...[
+                  Icon(icon, size: 12, color: color),
+                  const SizedBox(width: 4),
+                ],
                 Text(
                   label,
                   style: BambooFonts.ui(

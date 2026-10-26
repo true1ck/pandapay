@@ -6078,6 +6078,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   var rerunRequested = false;
   var disposed = false;
   ref.onDispose(() => disposed = true);
+  Timer? inFlightPollTimer;
+  ref.onDispose(() => inFlightPollTimer?.cancel());
+  late final void Function(List<NeedsReviewItem> items) scheduleInFlightAiPoll;
 
   Future<int> flush() async {
     final summary = await ref.read(smsAutoImportProvider).syncPendingMessages();
@@ -6150,6 +6153,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   // Reconcile by the existing source key; a crash between local capture and
   // POST /ai/jobs can then safely retry without rereading the inbox.
   Future<void> reconcileAiNeedsReview() async {
+    inFlightPollTimer?.cancel();
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null || ref.read(isOnlineProvider).valueOrNull == false) return;
     final namespace = ref.read(cacheNamespaceProvider);
@@ -6202,11 +6206,18 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
             await reviewRepo.updateAiStatus(item.id, statusValue) || changed;
         final rawSuggestions = status['suggestions'];
         final result = status['result'];
-        if (status['status'] == 'done' && rawSuggestions is List) {
-          final suggestions = rawSuggestions
-              .whereType<Map>()
-              .map((value) => Map<String, dynamic>.from(value))
-              .toList();
+        final decision = (status['decision'] is Map
+            ? Map<String, dynamic>.from(status['decision'] as Map)
+            : (result is Map && result['decision'] is Map)
+                ? Map<String, dynamic>.from(result['decision'] as Map)
+                : null);
+        if (status['status'] == 'done') {
+          final suggestions = (rawSuggestions is List)
+              ? rawSuggestions
+                  .whereType<Map>()
+                  .map((v) => Map<String, dynamic>.from(v))
+                  .toList()
+              : <Map<String, dynamic>>[];
           // Tier 1 auto-files the movement/bill and removes the row; Tier 2
           // keeps it with a prefilled draft; Tier 3 drops it silently. The
           // decision is made locally from the same composite score the server
@@ -6218,6 +6229,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
             namespace,
             item,
             suggestions,
+            decision: decision,
             reviewRequired: result is Map
                 ? result['reviewRequired'] as bool?
                 : null,
@@ -6227,7 +6239,12 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           );
           if (resolution.outcome == SmsAiResolutionOutcome.needsReview) {
             changed =
-                await reviewRepo.updateAiSuggestions(item.id, suggestions) ||
+                await reviewRepo.updateAiSuggestions(
+                  item.id,
+                  suggestions,
+                  aiTopic: decision?['topic'] as String?,
+                  aiSummary: decision?['summary'] as String?,
+                ) ||
                 changed;
             changed =
                 await reviewRepo.updateAiStatus(
@@ -6265,7 +6282,26 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       ref.invalidate(homeSummaryProvider);
       ref.invalidate(bankAccountSummariesProvider);
     }
+    final remainingItems = await reviewRepo.fetchAll();
+    scheduleInFlightAiPoll(remainingItems);
   }
+
+  scheduleInFlightAiPoll = (List<NeedsReviewItem> items) {
+    if (disposed) return;
+    final hasInFlight = items.any(
+      (item) =>
+          item.aiStatus == AiReviewStatus.queued ||
+          item.aiStatus == AiReviewStatus.processing,
+    );
+    if (!hasInFlight) return;
+    inFlightPollTimer?.cancel();
+    inFlightPollTimer = Timer(const Duration(seconds: 4), () async {
+      if (disposed) return;
+      try {
+        await reconcileAiNeedsReview();
+      } catch (_) {}
+    });
+  };
 
   // Local scanning has no API dependency. Progress advances only after each
   // page has been captured, and later passes read strictly newer provider IDs.
@@ -6384,6 +6420,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         } catch (_) {
           // Review rows remain local and retry on the next lifecycle pass.
         }
+        final reviewRepo = ref.read(needsReviewRepositoryProvider);
+        scheduleInFlightAiPoll(await reviewRepo.fetchAll());
         if (changed) {
           ref.invalidate(userCardsProvider);
           ref.invalidate(transactionsProvider);

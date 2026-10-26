@@ -310,6 +310,23 @@ void main() {
     expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
   });
 
+  test('AI decision shouldConsider=false immediately discards and deletes review row', () {
+    final item = reviewItem();
+    insertReviewRow(item);
+
+    final result = importStore.resolveAiSuggestions(
+      ns,
+      item,
+      [swiggySuggestion()],
+      decision: {'shouldConsider': false, 'reason': 'not_financial'},
+    );
+
+    expect(result.outcome, SmsAiResolutionOutcome.discarded);
+    expect(result.score, 0.0);
+    expect(reviewCount(), 0);
+    expect(transactions(), isEmpty);
+  });
+
   test('a movement fact without an amount stays in review', () {
     final item = reviewItem();
     insertReviewRow(item);

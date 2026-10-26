@@ -37,8 +37,9 @@ test('Gemini provider requests JSON and parses the model fact envelope', async (
       return response({ candidates: [{ content: { parts: [{ text: '{"facts":[]}' }] } }] });
     },
   });
-  const facts = await provider.classify({ payload: { sender: 'BANK', body: 'Card XXXX1234 paid Rs 100' } });
-  assert.deepEqual(facts, []);
+  const result = await provider.classify({ payload: { sender: 'BANK', body: 'Card XXXX1234 paid Rs 100' } });
+  assert.deepEqual(result.facts, []);
+  assert.equal(typeof result.decision, 'object');
   assert.equal(request.generationConfig.responseMimeType, 'application/json');
   assert.equal(request.generationConfig.maxOutputTokens, 2048);
   assert.equal(Object.hasOwn(request.generationConfig, 'temperature'), false,
@@ -58,7 +59,7 @@ test('Gemini worker defaults to the supported Flash model unless configured', ()
 
 test('universal system instruction and schema cover movements, categories and completeness', () => {
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /ZERO HALLUCINATION/);
-  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /PandaPay's Financial SMS Extraction/);
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /PandaPay's Cognitive Financial SMS Intelligence & Extraction Engine/);
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /broker funds payout/i);
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /mandate_lifecycle/);
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /isComplete/);
@@ -80,8 +81,8 @@ test('universal system instruction and schema cover movements, categories and co
   assert.equal(item.properties.payload.properties.confidence.type, 'NUMBER');
 });
 
-test('twelve few-shot scenarios are exported and rendered into the prompt', () => {
-  assert.equal(FEW_SHOT_EXAMPLES.length, 12);
+test('few-shot scenarios are exported and rendered into the prompt', () => {
+  assert.equal(FEW_SHOT_EXAMPLES.length, 16);
   const labels = FEW_SHOT_EXAMPLES.map((example) => example.label).join(' | ');
   for (const scenario of [
     'Swiggy', 'Flipkart', 'Axis', 'BESCOM', 'credit card bill paid',
@@ -159,7 +160,7 @@ test('Gemini prompt states required fact fields and fail-closed abstention rules
   assert.match(prompt, /leave this SMS's facts array empty/);
   const batch = buildGeminiBatchPrompt([{ id: 'one' }, { id: 'two' }]);
   assert.match(batch, /"items":\[/);
-  assert.match(batch, /keep this item with facts: \[\] when uncertain/);
+  assert.match(batch, /If shouldConsider=false, set facts: \[\]/);
   assert.doesNotMatch(batch, /Return JSON only in the form \{"facts"/);
 });
 
@@ -187,6 +188,7 @@ test('worker posts the leased result with the profile and lease token', async ()
   });
   assert.equal(result.completed, true);
   assert.deepEqual(calls[1].body, {
+    decision: null,
     facts: [], profileId: 'profile-1', leaseToken: 'a'.repeat(64),
     batchId: calls[1].body.batchId, batchSize: 1,
   });
@@ -531,8 +533,9 @@ test('Gemini provider automatically rotates to fallback API key on HTTP 429 quot
     },
   });
 
-  const facts = await provider.classify({ payload: { sender: 'BANK', body: 'Card XXXX1234 spent Rs 100' } });
-  assert.deepEqual(facts, []);
+  const result = await provider.classify({ payload: { sender: 'BANK', body: 'Card XXXX1234 spent Rs 100' } });
+  assert.deepEqual(result.facts, []);
+  assert.equal(typeof result.decision, 'object');
   assert.deepEqual(attempts, ['primary-key', 'fallback-lab-key']);
   assert.equal(provider.apiKey, 'fallback-lab-key');
 });
@@ -554,8 +557,122 @@ test('Gemini provider automatically switches to fallback model on HTTP 404 model
     },
   });
 
-  const facts = await provider.classify({ payload: { sender: 'BANK', body: 'Spent Rs 100' } });
-  assert.deepEqual(facts, []);
+  const result = await provider.classify({ payload: { sender: 'BANK', body: 'Spent Rs 100' } });
+  assert.deepEqual(result.facts, []);
+  assert.equal(typeof result.decision, 'object');
   assert.deepEqual(modelsRequested, ['deprecated-model', 'gemini-flash-lite-latest']);
   assert.equal(provider.model, 'gemini-flash-lite-latest');
+});
+
+test('UNIVERSAL_RESPONSE_SCHEMA requires decision and facts', () => {
+  assert.deepEqual(UNIVERSAL_RESPONSE_SCHEMA.required, ['decision', 'facts']);
+  assert.equal(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.type, 'OBJECT');
+  assert.deepEqual(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.required, [
+    'topic', 'summary', 'shouldConsider', 'rejectionReason',
+  ]);
+  assert.equal(UNIVERSAL_RESPONSE_SCHEMA.properties.facts.type, 'ARRAY');
+  assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('telecom_carrier_deduction'));
+  assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('loan_upsell_or_offer'));
+  assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('otp_or_security_code'));
+});
+
+test('telecom carrier deduction, loan offer, and OTP noise return shouldConsider: false and empty facts', async () => {
+  const noiseScenarios = [
+    {
+      topic: 'telecom_carrier_deduction',
+      summary: 'Jio number retention airtime deduction of Rs 9.88',
+      shouldConsider: false,
+      rejectionReason: 'telecom_carrier_deduction',
+    },
+    {
+      topic: 'loan_upsell_or_offer',
+      summary: 'Pre-approved personal loan marketing offer from Axio',
+      shouldConsider: false,
+      rejectionReason: 'loan_upsell',
+    },
+    {
+      topic: 'otp_or_security_code',
+      summary: 'HDFC Bank NetBanking login verification OTP',
+      shouldConsider: false,
+      rejectionReason: 'security_otp',
+    },
+  ];
+
+  for (const scenario of noiseScenarios) {
+    const provider = new GeminiProvider({
+      apiKey: 'test-key',
+      fetchImpl: async () => response({
+        candidates: [{
+          content: {
+            parts: [{
+              text: JSON.stringify({
+                decision: scenario,
+                facts: [],
+              }),
+            }],
+          },
+        }],
+      }),
+    });
+    const result = await provider.classify({ payload: { sender: 'TEST', body: scenario.summary } });
+    assert.equal(result.decision.shouldConsider, false, `${scenario.topic} must have shouldConsider: false`);
+    assert.equal(result.decision.topic, scenario.topic);
+    assert.equal(result.decision.rejectionReason, scenario.rejectionReason);
+    assert.deepEqual(result.facts, [], `${scenario.topic} must have empty facts array`);
+  }
+});
+
+test('valid spend returns shouldConsider: true and populated facts', async () => {
+  const spendDecision = {
+    topic: 'card_spend',
+    summary: 'Spent Rs. 2,499 on Flipkart with ICICI Bank Credit Card ending 4002',
+    shouldConsider: true,
+    rejectionReason: 'none',
+  };
+  const spendFacts = [
+    {
+      factType: 'posted_movement',
+      payload: {
+        amountRole: 'posted',
+        entryKind: 'spend',
+        amountInr: 2499.0,
+        occurredAt: '2026-10-25T00:00:00.000Z',
+        instrument: 'credit_card',
+        last4: '4002',
+        issuerName: 'ICICI Bank',
+        merchant: 'Flipkart',
+        category: 'online',
+        isComplete: true,
+        confidence: 0.99,
+      },
+    },
+  ];
+
+  const provider = new GeminiProvider({
+    apiKey: 'test-key',
+    fetchImpl: async () => response({
+      candidates: [{
+        content: {
+          parts: [{
+            text: JSON.stringify({
+              decision: spendDecision,
+              facts: spendFacts,
+            }),
+          }],
+        },
+      }],
+    }),
+  });
+  const result = await provider.classify({
+    payload: { sender: 'ICICIB', body: 'INR 2,499.00 spent on ICICI Bank Credit Card ending XX4002 at FLIPKART' },
+  });
+
+  assert.equal(result.decision.shouldConsider, true);
+  assert.equal(result.decision.topic, 'card_spend');
+  assert.equal(result.decision.rejectionReason, 'none');
+  assert.equal(result.facts.length, 1);
+  assert.equal(result.facts[0].factType, 'posted_movement');
+  assert.equal(result.facts[0].payload.amountInr, 2499.0);
+  assert.equal(result.facts[0].payload.merchant, 'Flipkart');
+  assert.equal(result.facts[0].payload.category, 'online');
 });

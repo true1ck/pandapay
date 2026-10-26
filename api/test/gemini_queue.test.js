@@ -1198,6 +1198,8 @@ test('valid AI result endpoint completes review-only without invoking projection
     assert.equal(job.status, 'done');
     assert.equal(job.result.reviewRequired, true);
     assert.equal(job.result.specialists, null);
+  assert.equal(result.body.decision, null);
+  assert.equal(job.result.decision, null);
     assert.deepEqual(job.payload, { purged: true });
     assert.equal(h.state.events.filter((event) => event.event_type === 'result').length, 1);
   }
@@ -1222,6 +1224,35 @@ test('result endpoint carries the computed auto-resolution decision and score', 
   assert.ok(result.body.confidenceScore >= 0.85);
   assert.equal(job.result.reviewRequired, false);
   assert.equal(job.result.specialists, null);
+  assert.equal(result.body.decision, null);
+  assert.equal(job.result.decision, null);
+});
+
+test('noise rejection: shouldConsider=false forces reviewRequired=false and persists decision', async () => {
+  const h = harness({});
+  const accepted = await h.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: SWIGGY_BODY },
+  });
+  const lease = await h.call('/ai/jobs/lease', { body: {} });
+  const job = h.state.jobs.get(accepted.body.jobId);
+  job.lease_expires_at = new Date(Date.now() + 600000);
+  const decision = {
+    topic: 'telecom_carrier_deduction',
+    summary: 'Jio number retention airtime deduction',
+    shouldConsider: false,
+    rejectionReason: 'telecom_carrier_deduction',
+  };
+  const result = await h.call('/ai/jobs/:id/result', {
+    params: { id: job.id },
+    body: { profileId: PROFILE_A, leaseToken: lease.body.job.leaseToken, facts: [], decision },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.jobStatus, 'done');
+  assert.equal(result.body.reviewRequired, false);
+  assert.deepEqual(result.body.decision, decision);
+  assert.deepEqual(job.result.decision, decision);
+  assert.equal(job.result.reviewRequired, false);
 });
 
 test('source status omits AI facts the user already confirmed or corrected', async () => {
@@ -1296,8 +1327,8 @@ test('admin monitoring endpoints return redacted metrics and timeline without ra
   assert.equal(summaryRes.body.statusCounts.queued, 1);
   assert.equal(typeof summaryRes.body.oldestAgeSeconds, 'number');
   assert.equal(summaryRes.body.totalJobsToday, 1);
-  assert.equal(summaryRes.body.providerCapacity.requestsPerMinuteLimit, 5);
-  assert.equal(summaryRes.body.providerCapacity.requestsPerDayLimit, 20);
+  assert.equal(summaryRes.body.providerCapacity.requestsPerMinuteLimit, 30);
+  assert.equal(summaryRes.body.providerCapacity.requestsPerDayLimit, 3000);
 
   // 2. Jobs list (no raw payload)
   const jobsRes = await h.call('/admin/sms-ai/jobs', { query: {} });

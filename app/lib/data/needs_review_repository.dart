@@ -58,6 +58,8 @@ class NeedsReviewItem {
   final NeedsReviewKind kind;
   final List<Map<String, dynamic>>? aiSuggestions;
   final AiReviewStatus aiStatus;
+  final String? aiTopic;
+  final String? aiSummary;
 
   const NeedsReviewItem({
     required this.id,
@@ -68,12 +70,16 @@ class NeedsReviewItem {
     this.kind = NeedsReviewKind.transaction,
     this.aiSuggestions,
     this.aiStatus = AiReviewStatus.notChecked,
+    this.aiTopic,
+    this.aiSummary,
   });
 
   NeedsReviewItem copyWith({
     NeedsReviewKind? kind,
     List<Map<String, dynamic>>? aiSuggestions,
     AiReviewStatus? aiStatus,
+    String? aiTopic,
+    String? aiSummary,
   }) => NeedsReviewItem(
     id: id,
     sender: sender,
@@ -83,6 +89,8 @@ class NeedsReviewItem {
     kind: kind ?? this.kind,
     aiSuggestions: aiSuggestions ?? this.aiSuggestions,
     aiStatus: aiStatus ?? this.aiStatus,
+    aiTopic: aiTopic ?? this.aiTopic,
+    aiSummary: aiSummary ?? this.aiSummary,
   );
 
   Map<String, dynamic> toJson() => {
@@ -94,6 +102,8 @@ class NeedsReviewItem {
     'kind': kind.name,
     if (aiSuggestions != null) 'aiSuggestions': aiSuggestions,
     'aiStatus': aiStatus.name,
+    if (aiTopic != null) 'aiTopic': aiTopic,
+    if (aiSummary != null) 'aiSummary': aiSummary,
   };
 
   factory NeedsReviewItem.fromJson(Map<String, dynamic> json) {
@@ -118,6 +128,8 @@ class NeedsReviewItem {
         (status) => status.name == json['aiStatus'],
         orElse: () => AiReviewStatus.notChecked,
       ),
+      aiTopic: json['aiTopic'] as String?,
+      aiSummary: json['aiSummary'] as String?,
     );
   }
 }
@@ -511,7 +523,8 @@ class NeedsReviewRepository {
         if (++processed % 8 == 0) {
           await Future<void>.delayed(Duration.zero);
         }
-        if (item.aiSuggestions != null && item.aiSuggestions!.isNotEmpty) {
+        if ((item.aiSuggestions != null && item.aiSuggestions!.isNotEmpty) ||
+            (item.aiSummary != null && item.aiSummary!.trim().isNotEmpty)) {
           kept.add(item);
           continue;
         }
@@ -776,7 +789,8 @@ class NeedsReviewRepository {
     final toRemove = <String>[];
     final now = DateTime.now();
     for (final item in nonNoise) {
-      if (item.aiSuggestions != null && item.aiSuggestions!.isNotEmpty) {
+      if ((item.aiSuggestions != null && item.aiSuggestions!.isNotEmpty) ||
+          (item.aiSummary != null && item.aiSummary!.trim().isNotEmpty)) {
         kept.add(item);
         continue;
       }
@@ -1807,17 +1821,27 @@ class NeedsReviewRepository {
   /// dismissed or resolved while the network request was in flight.
   Future<bool> updateAiSuggestions(
     String id,
-    List<Map<String, dynamic>> suggestions,
-  ) async {
+    List<Map<String, dynamic>> suggestions, {
+    String? aiTopic,
+    String? aiSummary,
+  }) async {
     final items = await fetchAll();
     final current = items.where((item) => item.id == id).firstOrNull;
-    if (current == null ||
-        jsonEncode(current.aiSuggestions ?? const []) ==
-            jsonEncode(suggestions)) {
+    if (current == null) return false;
+    final nextTopic = aiTopic ?? current.aiTopic;
+    final nextSummary = aiSummary ?? current.aiSummary;
+    if (jsonEncode(current.aiSuggestions ?? const []) ==
+            jsonEncode(suggestions) &&
+        current.aiTopic == nextTopic &&
+        current.aiSummary == nextSummary) {
       return false;
     }
     final updated = jsonEncode(
-      current.copyWith(aiSuggestions: suggestions).toJson(),
+      current.copyWith(
+        aiSuggestions: suggestions,
+        aiTopic: nextTopic,
+        aiSummary: nextSummary,
+      ).toJson(),
     );
     if (loadDatabase != null) {
       final db = await _database();

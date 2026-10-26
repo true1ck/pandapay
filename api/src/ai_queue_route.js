@@ -127,12 +127,13 @@ function registerAiQueueRoutes(app, {
             factType: fact.factType,
             payload: fact.payload,
           }));
-        return { ...found, suggestions };
+        return { ...found, decision: found.result?.decision || null, suggestions };
       });
       if (!job) return res.status(404).json({ error: 'unknown source' });
       res.status(200).json({
         jobId: job.id,
         status: job.status,
+        decision: job.decision || null,
         result: job.result || null,
         // Only validated structured facts, scoped to the authenticated owner.
         // The raw SMS and model prompt have already been purged from the job.
@@ -182,7 +183,7 @@ function registerAiQueueRoutes(app, {
   });
 
   app.post('/ai/jobs/:id/result', requireWorkerAuth, async (req, res) => {
-    const { facts, leaseToken, profileId, batchId, batchSize } = req.body || {};
+    const { decision, facts, leaseToken, profileId, batchId, batchSize } = req.body || {};
     if (!Array.isArray(facts) || facts.length > 20) {
       return res.status(400).json({ error: 'facts must be an array (max 20)' });
     }
@@ -215,6 +216,7 @@ function registerAiQueueRoutes(app, {
         }
         const completion = await geminiQueue.completeJobWithResult(client, {
           job,
+          decision: decision || null,
           facts,
           batchMetadata: {
             ...(typeof batchId === 'string' && /^[0-9a-f-]{36}$/i.test(batchId) ? { batchId } : {}),
@@ -227,6 +229,7 @@ function registerAiQueueRoutes(app, {
         return {
           status: 200,
           jobStatus: 'done',
+          decision: completion.decision || null,
           reviewRequired: completion.reviewRequired,
           confidenceScore: completion.confidenceScore,
         };
