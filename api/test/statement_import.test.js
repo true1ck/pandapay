@@ -260,6 +260,7 @@ test('enabled receipt returns its original response summary on exact replay and 
   input.transactions.push({ ...input.transactions[0], importRowKey: hash('second'), merchantName: 'Possible duplicate' });
   const first = await run.call(input);
   assert.equal(first.status, 201);
+  assert.equal(first.result.receiptVersion,1);
   assert.deepEqual(first.result.summary, { imported: 1, pendingDuplicates: 1, exactRetries: 0 });
   const row = [...run.batches.values()][0];
   assert.match(row.import_request_hash, /^[a-f0-9]{64}$/);
@@ -269,6 +270,7 @@ test('enabled receipt returns its original response summary on exact replay and 
   const replay = await run.call(JSON.parse(JSON.stringify(input)));
   assert.equal(replay.status, 200);
   assert.deepEqual(replay.result.summary, first.result.summary);
+  assert.equal(replay.result.receiptVersion,1);
   assert.equal(run.written.length, writtenCount);
 
   const changed = JSON.parse(JSON.stringify(input));
@@ -286,12 +288,14 @@ test('receipt mode preserves legacy replays without receipts and unkeyed summari
   const replay = await run.call(input);
   assert.equal(replay.status, 200);
   assert.deepEqual(replay.result.summary, { imported: 0, pendingDuplicates: 0, exactRetries: 1 });
+  assert.equal(replay.result.receiptVersion, undefined);
   assert.equal(run.written.length, 0);
 
   const summaryOnly = harness({ receiptsEnabled: true });
   const legacy = await summaryOnly.call({ userCardId: cardId, statementFrom: '2026-10-01',
     statementTo: '2026-10-31', txnCount: 3 });
   assert.equal(legacy.status, 201);
+  assert.equal(legacy.result.receiptVersion, undefined);
   assert.equal(summaryOnly.queries.some(({ sql }) => sql.includes('import_request_hash')), false);
 
   const keyedSummary = harness({ receiptsEnabled: true });
@@ -310,6 +314,6 @@ test('receipt is written only after all financial writes succeed and default-off
   assert.equal((await failed.call(body())).status, 500);
   assert.equal(failed.queries.some(({ sql }) => sql.includes('SET txn_count = $1, reconciled_count = $2, import_response_summary')), false);
   const disabled = harness();
-  await disabled.call(body());
+  assert.equal((await disabled.call(body())).result.receiptVersion, undefined);
   assert.equal(disabled.queries.some(({ sql }) => sql.includes('import_request_hash') || sql.includes('import_response_summary')), false);
 });

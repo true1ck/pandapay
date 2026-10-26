@@ -15,6 +15,7 @@ import '../sms_import/sms_backup_import_screen.dart';
 import 'auto_sms_sync_screen.dart';
 import 'statement_pdf_import_screen.dart';
 import 'screenshot_spending_import_screen.dart';
+import 'pending_statement_imports_card.dart';
 
 /// ui-spec.md F1 Import Hub — implementation-plan-group-e-f-g.md §3, "build
 /// this LAST among the F screens, once F2/F3/F4/F7 exist enough to have a
@@ -200,6 +201,7 @@ class _ImportHubScreenState extends ConsumerState<ImportHubScreen>
             ),
           if (smsBackupEnabled) const SizedBox(height: AppSpace.md),
           const SizedBox(height: AppSpace.xxl),
+          const PendingStatementImportsCard(),
           _ImportHistorySection(
             statementImports: statementImports,
             smsBatches: smsBatches,

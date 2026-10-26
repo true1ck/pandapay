@@ -155,3 +155,8 @@ The [14-package completion plan](security-source-completion-plan-2026-10-26.md) 
 ## Versioned phone/import/health continuation — 26 October 2026
 
 The [next source batch](security-encryption-import-implementation-2026-10-26.md) adds a default-off v2 phone writer without replacing the legacy key, repairs token/admin encrypted-phone consumers, adds default-off replay-result receipts, and exposes bounded worker heartbeats/count-only health with failure-aware readiness. Local API/auth/tool/deployment and synthetic PostgreSQL preservation/replay/restore checks pass. All ten priority statuses retain their acceptance gaps; the 14 packages and six gates remain. Next: the actual mobile import continuation, remaining encryption/conversion/financial/admin/monitoring slices and the separately required current-data/provider/device/custody/operator approvals. [Evidence](../artifacts/security-encryption-import-2026-10-26/verification.json).
+
+
+## Encrypted mobile-import continuation — 26 October 2026
+
+The [next I12 source slice](security-mobile-import-continuation-implementation-2026-10-26.md) adds a default-off bounded encrypted exact-batch queue, same-account explicit resume/discard, receipt-version acknowledgement and pending-import backup/restore guards. Local tests cover cipher/SQLite restart, key loss, account/lease fencing and UI. Signed-device/transport and provider/load acceptance remain open; no launch priority is accepted or feature enabled. Existing historical PostgreSQL/deployment proof retains its original source. [Current verification](../artifacts/security-mobile-import-2026-10-26/verification.json).

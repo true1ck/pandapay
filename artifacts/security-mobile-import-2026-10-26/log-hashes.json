@@ -1,0 +1,11 @@
+{
+  "logs_retained_in_git": false,
+  "log_sha256": {
+    "analysis.log": "c1bc40a6894b77ef5ec3d7f2f3f751806578782330953823357fd3ae11d9dcb2",
+    "tools-tests.log": "89c3509c20bbe8e3526cfe878905b981329d6c6c2df8bca61591166b243898eb",
+    "api-tests.log": "fd16c4f289038ceca45b1f1a34c25b28f1243b0b38dcee8b8006a15b4d429a60",
+    "flutter-enabled-ui.log": "9541b9042e0a54791df897ed5de2de56b9e3796c6849272fe9a0bc26de6f509a",
+    "flutter-default.log": "164140facd2faeecbc279472d67d4961f5aaa003eaced2751325be5e970cd0ee",
+    "auth-tests.log": "c8f7b9e288506de3cd2342eab52338ac5deb86b514ed46fd6f158edff028fcf8"
+  }
+}

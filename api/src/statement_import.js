@@ -315,6 +315,7 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
         );
         const existingRow = existing.rows[0];
         let replaySummary = { imported: 0, pendingDuplicates: 0, exactRetries: structuredTransactions?.length ?? 0 };
+        let receiptVersion;
         if (receiptHash && existingRow?.import_request_hash) {
           if (existingRow.import_request_hash !== receiptHash) {
             return { status: 409, error: 'statement_import_key_reused' };
@@ -323,12 +324,14 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
             throw new Error('statement_import_receipt_incomplete');
           }
           replaySummary = existingRow.import_response_summary;
+          receiptVersion = 1;
         }
         return {
           status: 200,
           statementImport: statementImportResponseRow(existingRow),
           duplicate: true,
           summary: replaySummary,
+          ...(receiptVersion ? { receiptVersion } : {}),
         };
       }
 
@@ -428,6 +431,7 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
         status: 201,
         statementImport: statementImportResponseRow(updatedImport.rows[0]),
         summary,
+        ...(receiptHash ? { receiptVersion: 1 } : {}),
       };
     });
     res.status(result.status).json(result);

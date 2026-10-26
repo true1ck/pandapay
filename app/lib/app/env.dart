@@ -33,6 +33,13 @@ enum AppEnvironment { dev, staging, prod }
 class Env {
   const Env._();
 
+  /// Requires accepted server receipts and device storage/restart tests.
+  /// This flag never enables account recovery or background uploads.
+  static const bool statementImportContinuationEnabled = bool.fromEnvironment(
+    'PANDAPAY_STATEMENT_IMPORT_CONTINUATION_ENABLED',
+    defaultValue: false,
+  );
+
   /// Manual account-bound recovery remains off until signed-device acceptance.
   static const bool accountDataRecoveryEnabled = bool.fromEnvironment(
     'PANDAPAY_ACCOUNT_RECOVERY_ENABLED',

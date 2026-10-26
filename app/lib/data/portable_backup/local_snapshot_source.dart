@@ -86,6 +86,10 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
       'sms_fact_override_outbox': namespaced('sms_fact_override_outbox'),
       'sms_rule_exposure_outbox': namespaced('sms_rule_exposure_outbox'),
       'sms_dismissal_outbox': namespaced('sms_dismissal_outbox'),
+      'statement_import_batches': [
+        'SELECT COUNT(*) FROM statement_import_batches WHERE namespace=? AND ciphertext IS NOT NULL',
+        <Object?>[namespace],
+      ],
       'financial_pending': [
         'SELECT COUNT(*) FROM financial_entities WHERE namespace = ? AND pending = 1',
         <Object?>[namespace],

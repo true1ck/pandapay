@@ -5,6 +5,7 @@ import 'package:sqlite3/sqlite3.dart' show Database, SqliteException;
 
 import 'portable_backup.dart';
 import '../local/app_database.dart';
+import '../local/statement_import_pending.dart';
 
 /// Fresh-target gate for the raw-sqlite3 database: the namespace must hold
 /// no portable rows and no attachment metadata before a restore may wipe it.
@@ -42,6 +43,7 @@ class LocalPortableRestoreTargetInspector implements PortableRestoreTargetInspec
     for (final sql in _portableRowCounts) {
       portableRows += _rowCount(sql, args);
     }
+    portableRows += pendingStatementImportBatches(appDb.db, namespace);
     final attachments = _attachmentCount();
     return PortableFreshNamespaceState(hasPortableRows: portableRows > 0, hasAttachments: attachments > 0);
   }
@@ -84,6 +86,7 @@ class LocalPortableRestoreWriter implements PortableLocalRestoreWriter {
     _db.execute('BEGIN IMMEDIATE');
     final args = _wipeNamespaces;
     try {
+      requireNoPendingStatementImports(_db, namespace);
       for (final statement in <String>[
       'DELETE FROM financial_entities WHERE namespace IN (?, ?)',
       'DELETE FROM sync_pending_changes WHERE namespace IN (?, ?)',

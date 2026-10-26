@@ -1,0 +1,253 @@
+{
+  "format": "pandapay-scoped-security-source-verification-v1",
+  "date": "2026-10-26",
+  "scope": "default-off encrypted mobile statement-import continuation and receipt-version acknowledgement; pending-import recovery admission",
+  "base_commit": "fe16bb2fad863bccc24111724ad37ff300f01cf3",
+  "candidate_sha256": "0b35f1c59d2fa9e41d52d1db049762c38b73ca592733a2b4dc9276b2d7f468c6",
+  "source_file_count": 1446,
+  "counts": {
+    "launch_priorities": {
+      "partial": 9,
+      "open": 1,
+      "accepted_for_launch": 0
+    },
+    "findings": 76,
+    "implementation_packages": 14,
+    "release_gates": 6,
+    "findings_closed_by_this_batch": 0
+  },
+  "checks": {
+    "node": {
+      "node": "v24.15.0",
+      "groups": {
+        "api": {
+          "exit_code": 0,
+          "tests": 1174,
+          "pass": 1172,
+          "fail": 0,
+          "skipped": 2,
+          "scope": "api/test/*.test.js"
+        },
+        "auth": {
+          "exit_code": 0,
+          "tests": 356,
+          "pass": 356,
+          "fail": 0,
+          "skipped": 0,
+          "scope": "auth/test/*.test.js"
+        },
+        "tools": {
+          "exit_code": 0,
+          "tests": 229,
+          "pass": 229,
+          "fail": 0,
+          "skipped": 0,
+          "scope": "db/tests/*.test.js"
+        }
+      }
+    },
+    "flutter": {
+      "flutter-default": {
+        "exit_code": 0,
+        "command": [
+          "/Users/chandresh_kerkar/Documents/SetupFiles/flutter/bin/flutter",
+          "test",
+          "--no-pub",
+          "--reporter",
+          "expanded",
+          "test/data/secure_storage/statement_import_batch_cipher_test.dart",
+          "test/data/local/statement_import_outbox_test.dart",
+          "test/data/local/statement_import_pending_test.dart",
+          "test/data/statement_import_continuation_test.dart",
+          "test/data/statement_import_prepared_repository_test.dart",
+          "test/data/transaction_import_pipeline_test.dart",
+          "test/data/import_formats_test.dart",
+          "test/data/portable_backup/statement_import_recovery_gate_test.dart",
+          "test/data/portable_backup/account_recovery_completeness_test.dart",
+          "test/data/portable_backup/account_recovery_gate_test.dart",
+          "test/data/portable_backup/portable_backup_roundtrip_test.dart",
+          "test/features/import/pending_statement_imports_card_test.dart"
+        ],
+        "log_sha256": "164140facd2faeecbc279472d67d4961f5aaa003eaced2751325be5e970cd0ee",
+        "passed": 71,
+        "tail": [
+          "00:01 +64: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/account_recovery_completeness_test.dart: rejects an archive that disclaims unsynced recovery before writes",
+          "00:01 +65: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/account_recovery_completeness_test.dart: accepts a legacy v1 archive when the destination has a newer table",
+          "00:01 +66: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/account_recovery_completeness_test.dart: capture declares tables, columns, queues, and receipt bytes",
+          "00:01 +67: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/portable_backup_roundtrip_test.dart: real writer -> real envelope -> independent verification",
+          "00:01 +68: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/portable_backup_roundtrip_test.dart: real writer -> real envelope -> independent verification",
+          "00:01 +69: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/portable_backup_roundtrip_test.dart: real writer -> real envelope -> independent verification",
+          "00:02 +70: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/features/import/pending_statement_imports_card_test.dart: disabled card never constructs a queue or sends a request",
+          "00:02 +71: All tests passed!"
+        ]
+      },
+      "flutter-enabled-ui": {
+        "exit_code": 0,
+        "command": [
+          "/Users/chandresh_kerkar/Documents/SetupFiles/flutter/bin/flutter",
+          "test",
+          "--no-pub",
+          "--reporter",
+          "expanded",
+          "--dart-define=PANDAPAY_STATEMENT_IMPORT_CONTINUATION_ENABLED=true",
+          "test/features/import/pending_statement_imports_card_test.dart"
+        ],
+        "log_sha256": "9541b9042e0a54791df897ed5de2de56b9e3796c6849272fe9a0bc26de6f509a",
+        "passed": 3,
+        "tail": [
+          "00:00 +0: loading /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/features/import/pending_statement_imports_card_test.dart",
+          "00:00 +0: opening saved imports is read-only; resume sends only on an explicit tap",
+          "00:00 +1: discard requires confirmation and never calls the server",
+          "00:00 +2: expired work requires a retained-import action without a failed send first",
+          "00:00 +3: All tests passed!"
+        ]
+      },
+      "analysis": {
+        "exit_code": 0,
+        "command": [
+          "/Users/chandresh_kerkar/Documents/SetupFiles/flutter/bin/cache/dart-sdk/bin/dart",
+          "analyze",
+          "lib/data/secure_storage/statement_import_batch_cipher.dart",
+          "lib/data/local/statement_import_outbox.dart",
+          "lib/data/local/statement_import_pending.dart",
+          "lib/data/statement_import_continuation.dart",
+          "lib/data/import_repository.dart",
+          "lib/data/transaction_import_pipeline.dart",
+          "lib/features/import/statement_import_continuation_provider.dart",
+          "lib/features/import/pending_statement_imports_card.dart",
+          "lib/features/import/import_review_panel.dart",
+          "lib/features/import/import_hub_screen.dart",
+          "lib/data/portable_backup/account_recovery_local_snapshot.dart",
+          "lib/data/portable_backup/local_restore_writer.dart",
+          "lib/data/portable_backup/local_snapshot_source.dart",
+          "lib/app/env.dart",
+          "test/data/secure_storage/statement_import_batch_cipher_test.dart",
+          "test/data/local/statement_import_outbox_test.dart",
+          "test/data/local/statement_import_pending_test.dart",
+          "test/data/statement_import_continuation_test.dart",
+          "test/data/statement_import_prepared_repository_test.dart",
+          "test/data/transaction_import_pipeline_test.dart",
+          "test/data/import_formats_test.dart",
+          "test/data/portable_backup/statement_import_recovery_gate_test.dart",
+          "test/data/portable_backup/account_recovery_completeness_test.dart",
+          "test/data/portable_backup/account_recovery_gate_test.dart",
+          "test/data/portable_backup/portable_backup_roundtrip_test.dart",
+          "test/features/import/pending_statement_imports_card_test.dart"
+        ],
+        "log_sha256": "c1bc40a6894b77ef5ec3d7f2f3f751806578782330953823357fd3ae11d9dcb2",
+        "tail": [
+          "Analyzing statement_import_batch_cipher.dart, statement_import_outbox.dart, statement_import_pending.dart, statement_import_continuation.dart, import_repository.dart, transaction_import_pipeline.dart, statement_import_continuation_provider.dart, pending_statement_imports_card.dart, import_review_panel.dart, import_hub_screen.dart, account_recovery_local_snapshot.dart, local_restore_writer.dart, local_snapshot_source.dart, env.dart, statement_import_batch_cipher_test.dart, statement_import_outbox_test.dart, statement_import_pending_test.dart, statement_import_continuation_test.dart, statement_import_prepared_repository_test.dart, transaction_import_pipeline_test.dart, import_formats_test.dart, statement_import_recovery_gate_test.dart, account_recovery_completeness_test.dart, account_recovery_gate_test.dart, portable_backup_roundtrip_test.dart, pending_statement_imports_card_test.dart...",
+          "",
+          "   info - test/data/transaction_import_pipeline_test.dart:454:13 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures",
+          "",
+          "1 issue found."
+        ]
+      }
+    },
+    "strict_release": {
+      "exit_code": 2,
+      "release_ready": false
+    },
+    "postgres": {
+      "rerun_for_this_candidate": false,
+      "new_migrations_in_this_batch": false,
+      "historical_evidence": "../security-encryption-import-2026-10-26/verification.json",
+      "historical_candidate_sha256": "d28eef51778f13a3406198af7e68ac222ff7420a4679966f40df194fef85eae4",
+      "not_current_candidate_acceptance": true
+    },
+    "deployment": {
+      "performed": false,
+      "feature_activation": false
+    },
+    "html": {
+      "priorities": 10,
+      "partial": 9,
+      "open": 1,
+      "accepted_for_launch": 0,
+      "markdown_table_parity": true,
+      "new_links_resolve": true,
+      "historical_database_panel_unchanged": true,
+      "script_blocks_unchanged": 2,
+      "visual_browser_acceptance": false
+    },
+    "secret_scan": {
+      "scope": "changed and new files only; no Git history or saved .env",
+      "files_scanned": 43,
+      "raw_findings": 143,
+      "verified_content_hash_false_positives": 143,
+      "unresolved_findings": [],
+      "raw_exit_code": 1,
+      "false_positive_files": {
+        "artifacts/security-mobile-import-2026-10-26/verification.json": 2,
+        "artifacts/security-mobile-import-2026-10-26/log-hashes.json": 2,
+        "artifacts/security-mobile-import-2026-10-26/release-check.json": 70,
+        "artifacts/security-mobile-import-2026-10-26/candidate-source.json": 69
+      },
+      "result": "passed_with_verified_hash_false_positives"
+    }
+  },
+  "review": {
+    "luna_source_contributions": [
+      "batch cipher",
+      "SQLite outbox",
+      "partial continuation integration"
+    ],
+    "parent_review_fixes_and_integration": true,
+    "signed_device_or_real_provider_acceptance": false
+  },
+  "activation": {
+    "PANDAPAY_STATEMENT_IMPORT_CONTINUATION_ENABLED": "default false; compiler define unchanged",
+    "STATEMENT_IMPORT_RECEIPTS_ENABLED": "default false; no activation",
+    "normal_mobile_database_and_receipt_encryption": "not integrated"
+  },
+  "preservation": {
+    "saved_credentials_or_customer_data_used": false,
+    "live_database_changed": false,
+    "phone_pending_payloads_lost_on_expiry": false,
+    "pending_imports_excluded_without_guard": false,
+    "no_extra_customer_password": true
+  },
+  "sha256": {
+    "api/src/statement_import.js": "d98a0c1d5994cd868b7094f6165747d8697676ec4ffeeb536a5fa6947402a24a",
+    "api/test/statement_import.test.js": "55f9469ab1ed6b304d2cfd069829c2eb70dc08c2fbad8f1f8f506cbb7837ebf2",
+    "app/lib/app/env.dart": "446e0bb16abda7f311ddf42bbffe18acd1c76e3fb2ad7caabeda2ae477560d2b",
+    "app/lib/data/import_repository.dart": "2f65a2e295ea07abbb8b4ef4ad973f3ca58f5472954d872ef13c6b97e4491a07",
+    "app/lib/data/local/statement_import_outbox.dart": "5321642adf2142ea2cdbf4846b8b7bec32c05b6015d17b5bf4a7120a6405484d",
+    "app/lib/data/local/statement_import_pending.dart": "bc08ce511af9059d327ccdd642542417e0cbc038a3cb5d675e21bfde514205f8",
+    "app/lib/data/portable_backup/account_recovery_local_snapshot.dart": "9c27688d6a26c1f51f6ac3ff277db28b19f75fd10d713acfb922fb0e3ebb5b0c",
+    "app/lib/data/portable_backup/local_restore_writer.dart": "c20be258afd6e08fd33f18ea5537c4ffc3d84f3c5ca55db488e5adfe16781162",
+    "app/lib/data/portable_backup/local_snapshot_source.dart": "f276d204cc9a0230cbd87768b7fc65b252320b0f55e85bb8d33a3e9f9457c897",
+    "app/lib/data/secure_storage/statement_import_batch_cipher.dart": "02529e201c7c3246de72e27595e5ad36884de9e859bacacdb50bd76bde154513",
+    "app/lib/data/statement_import_continuation.dart": "76fc0f67f325a1dde49fe28bbc629962a5840e6e4ddd599e54565da58bce6259",
+    "app/lib/data/transaction_import_pipeline.dart": "d36b7397e2bda1a2a3b1030740b786fe228d18e23574dd9f8c614b38048de72c",
+    "app/lib/features/import/import_hub_screen.dart": "00e5562a796b9d4bf0f520adfbf6db7cded590e9fdf5c5a5891085bee1223700",
+    "app/lib/features/import/import_review_panel.dart": "f8513fd5a4ca5e897e4df61844c073aea01374e2b1a69e681c74351ab6dd89a1",
+    "app/lib/features/import/pending_statement_imports_card.dart": "4de58797cca340eab5b4269cb92b033007df972fe7cbffce04e93cf64af7fb35",
+    "app/lib/features/import/statement_import_continuation_provider.dart": "72245c71a21771fb5b67e06524b23617418685a83d0f814d166b300c6403474d",
+    "app/test/data/local/statement_import_outbox_test.dart": "7fecd64b4859b924556c7809d45b8885fecd9aa9ea575c1d1f38e1b1bd6c524e",
+    "app/test/data/local/statement_import_pending_test.dart": "75f48c435cdea18b4855ebea9aab11a3498c8fd7db904529cdb5698ac44c7b00",
+    "app/test/data/portable_backup/statement_import_recovery_gate_test.dart": "9de6bfb72e9bdac32f61a977cfc5176f4c4618d57863b90699e642acc0f329d6",
+    "app/test/data/secure_storage/statement_import_batch_cipher_test.dart": "7ffcfde2d7eaf4f45097c13c54fc5f2d3dda8247cc217d1d4fdbcc826297d4f8",
+    "app/test/data/statement_import_continuation_test.dart": "e5e5db63c1e52ce0fce4d7ddfe3f235cc255928ade6b5589db3a6471efd54ff5",
+    "app/test/data/statement_import_prepared_repository_test.dart": "dcc92bbb6f4c406398e63ee34ec42174ec793a00a77a0b363df557fda09bfee7",
+    "app/test/features/import/pending_statement_imports_card_test.dart": "ab8ad1ea68b10bb99f46111bc833bfb8bdd8b178e2b2747b379acfb7889b8981",
+    "db/scripts/release_security_check.js": "56f9133722f1d75e9001d1c7525ac04f4437f78660a016189aadc3a108db2996",
+    "db/tests/release_security_check.test.js": "95ee98e38a7d06ba51f717ca2402c331c7a6398eb4e52c2f98abec00f134f4ea",
+    "docs/security-and-backend-audit-2026-10-20.html": "147f92eaa5d9eef0b69da9cafc3b688eceeb3f185b66a256a94e09c272729879",
+    "docs/security-and-backend-audit-2026-10-20.md": "723566657f840a29fd5e16019190ccbfa7b3c5bc34e108873d0d48953d2d9de4",
+    "docs/security-launch-implementation-plan-2026-10-26.md": "94bf0727e5b4e5d172628539a570cd216e23665f4056331b5d1b00bbfef10213",
+    "docs/security-mobile-import-continuation-implementation-2026-10-26.md": "f6ab830ffbd448a7c0bc073d1aa082ec9773bb2772e75573b235ae71058ca990",
+    "docs/security-remaining-work-2026-10-25.html": "98f2260fa84c15cd1a0e455115f90618f255bab8e5d0e29f356841e0009b7287",
+    "docs/security-remaining-work-2026-10-25.md": "b8ac399dcc662f0d026fcc059791ab7152fed542d3d754d4182137fb32de13ca",
+    "docs/security-source-completion-plan-2026-10-26.md": "a137f0101fa32f5356a9503562b766e516d48c90a6675269e1e2a1a546371c61",
+    "docs/security-statement-import-continuation-plan-2026-10-26.md": "93ec1672a11170622195fd7f0f0dfd6843eea2ecf828fe8d087c6f76e0f64267"
+  },
+  "log_sha256": {
+    "analysis.log": "c1bc40a6894b77ef5ec3d7f2f3f751806578782330953823357fd3ae11d9dcb2",
+    "tools-tests.log": "89c3509c20bbe8e3526cfe878905b981329d6c6c2df8bca61591166b243898eb",
+    "api-tests.log": "fd16c4f289038ceca45b1f1a34c25b28f1243b0b38dcee8b8006a15b4d429a60",
+    "flutter-enabled-ui.log": "9541b9042e0a54791df897ed5de2de56b9e3796c6849272fe9a0bc26de6f509a",
+    "flutter-default.log": "164140facd2faeecbc279472d67d4961f5aaa003eaced2751325be5e970cd0ee",
+    "auth-tests.log": "c8f7b9e288506de3cd2342eab52338ac5deb86b514ed46fd6f158edff028fcf8"
+  }
+}

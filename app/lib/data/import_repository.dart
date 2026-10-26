@@ -223,27 +223,25 @@ class ImportRepository {
     required String importKey,
     required List<StatementTransactionInput> transactions,
   }) async {
+    final payload = prepareStatementImportPayload(
+      userCardId: userCardId,
+      instrument: instrument,
+      statementFrom: statementFrom,
+      statementTo: statementTo,
+      closingBalance: closingBalance,
+      pointsPosted: pointsPosted,
+      txnCount: txnCount,
+      reconciledCount: reconciledCount,
+      issuerFormatId: issuerFormatId,
+      importSource: importSource,
+      importKey: importKey,
+      transactions: transactions,
+    );
     final response = await _client
         .post(
           Uri.parse('$apiBaseUrl/statement-imports'),
           headers: _headers,
-          body: jsonEncode({
-            'userCardId': userCardId,
-            'instrument': instrument.wireValue,
-            'statementFrom': _dateOnly(statementFrom),
-            'statementTo': _dateOnly(statementTo),
-            if (closingBalance != null)
-              'closingBalanceInr': closingBalance.rupees,
-            'pointsPosted': ?pointsPosted,
-            'txnCount': txnCount,
-            'reconciledCount': reconciledCount,
-            'issuerFormatId': ?issuerFormatId,
-            'importSource': importSource,
-            'importKey': importKey,
-            'transactions': [
-              for (final transaction in transactions) transaction.toJson(),
-            ],
-          }),
+          body: jsonEncode(payload),
         )
         .timeout(
           const Duration(seconds: 60),
@@ -258,7 +256,88 @@ class ImportRepository {
         'POST /statement-imports failed: ${response.statusCode} ${response.body}',
       );
     }
+    return _statementImportFromResponse(response.body);
+  }
+
+  /// Builds the canonical POST body used by both the legacy submit path and
+  /// the encrypted continuation outbox. Keep its keys and omission rules in
+  /// one place so a replay cannot silently change the accepted batch.
+  static Map<String, dynamic> prepareStatementImportPayload({
+    required String? userCardId,
+    TxnInstrument instrument = TxnInstrument.other,
+    required DateTime statementFrom,
+    required DateTime statementTo,
+    Money? closingBalance,
+    double? pointsPosted,
+    required int txnCount,
+    required int reconciledCount,
+    String? issuerFormatId,
+    String importSource = 'statement',
+    required String importKey,
+    required List<StatementTransactionInput> transactions,
+  }) => {
+    'userCardId': userCardId,
+    'instrument': instrument.wireValue,
+    'statementFrom': _dateOnly(statementFrom),
+    'statementTo': _dateOnly(statementTo),
+    if (closingBalance != null) 'closingBalanceInr': closingBalance.rupees,
+    'pointsPosted': ?pointsPosted,
+    'txnCount': txnCount,
+    'reconciledCount': reconciledCount,
+    'issuerFormatId': ?issuerFormatId,
+    'importSource': importSource,
+    'importKey': importKey,
+    'transactions': [
+      for (final transaction in transactions) transaction.toJson(),
+    ],
+  };
+
+  /// Sends an already-prepared immutable body and waits for the actual client
+  /// future to settle. The injected account-bound client owns its deadline.
+  /// A versioned server receipt is required before a caller may acknowledge
+  /// and erase its encrypted local copy.
+  Future<StatementImport> confirmPreparedStatementImport(
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/statement-imports'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw ApiException(
+        'POST /statement-imports failed: ${response.statusCode}',
+      );
+    }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (body['receiptVersion'] != 1) {
+      throw ApiException('POST /statement-imports receipt unavailable');
+    }
+    final summary = body['summary'];
+    final row = body['statementImport'];
+    final transactions = payload['transactions'];
+    const counters = {'imported', 'pendingDuplicates', 'exactRetries'};
+    if (summary is! Map<String, dynamic> ||
+        summary.length != 3 ||
+        !counters.every(
+          (key) =>
+              summary[key] is int &&
+              (summary[key] as int) >= 0 &&
+              (summary[key] as int) <= 5000,
+        ) ||
+        row is! Map<String, dynamic> ||
+        row['id'] is! String ||
+        (row['id'] as String).isEmpty ||
+        transactions is! List ||
+        summary.values.cast<int>().fold<int>(0, (sum, count) => sum + count) !=
+            transactions.length) {
+      throw ApiException('POST /statement-imports receipt is incomplete');
+    }
+    return _statementImportFromResponse(response.body);
+  }
+
+  static StatementImport _statementImportFromResponse(String responseBody) {
+    final body = jsonDecode(responseBody) as Map<String, dynamic>;
     return StatementImport.fromJson({
       ...body['statementImport'] as Map<String, dynamic>,
       'summary': body['summary'],

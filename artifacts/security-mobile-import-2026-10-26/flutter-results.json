@@ -1,0 +1,98 @@
+{
+  "flutter-default": {
+    "exit_code": 0,
+    "command": [
+      "/Users/chandresh_kerkar/Documents/SetupFiles/flutter/bin/flutter",
+      "test",
+      "--no-pub",
+      "--reporter",
+      "expanded",
+      "test/data/secure_storage/statement_import_batch_cipher_test.dart",
+      "test/data/local/statement_import_outbox_test.dart",
+      "test/data/local/statement_import_pending_test.dart",
+      "test/data/statement_import_continuation_test.dart",
+      "test/data/statement_import_prepared_repository_test.dart",
+      "test/data/transaction_import_pipeline_test.dart",
+      "test/data/import_formats_test.dart",
+      "test/data/portable_backup/statement_import_recovery_gate_test.dart",
+      "test/data/portable_backup/account_recovery_completeness_test.dart",
+      "test/data/portable_backup/account_recovery_gate_test.dart",
+      "test/data/portable_backup/portable_backup_roundtrip_test.dart",
+      "test/features/import/pending_statement_imports_card_test.dart"
+    ],
+    "log_sha256": "164140facd2faeecbc279472d67d4961f5aaa003eaced2751325be5e970cd0ee",
+    "passed": 71,
+    "tail": [
+      "00:01 +64: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/account_recovery_completeness_test.dart: rejects an archive that disclaims unsynced recovery before writes",
+      "00:01 +65: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/account_recovery_completeness_test.dart: accepts a legacy v1 archive when the destination has a newer table",
+      "00:01 +66: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/account_recovery_completeness_test.dart: capture declares tables, columns, queues, and receipt bytes",
+      "00:01 +67: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/portable_backup_roundtrip_test.dart: real writer -> real envelope -> independent verification",
+      "00:01 +68: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/portable_backup_roundtrip_test.dart: real writer -> real envelope -> independent verification",
+      "00:01 +69: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/data/portable_backup/portable_backup_roundtrip_test.dart: real writer -> real envelope -> independent verification",
+      "00:02 +70: /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/features/import/pending_statement_imports_card_test.dart: disabled card never constructs a queue or sends a request",
+      "00:02 +71: All tests passed!"
+    ]
+  },
+  "flutter-enabled-ui": {
+    "exit_code": 0,
+    "command": [
+      "/Users/chandresh_kerkar/Documents/SetupFiles/flutter/bin/flutter",
+      "test",
+      "--no-pub",
+      "--reporter",
+      "expanded",
+      "--dart-define=PANDAPAY_STATEMENT_IMPORT_CONTINUATION_ENABLED=true",
+      "test/features/import/pending_statement_imports_card_test.dart"
+    ],
+    "log_sha256": "9541b9042e0a54791df897ed5de2de56b9e3796c6849272fe9a0bc26de6f509a",
+    "passed": 3,
+    "tail": [
+      "00:00 +0: loading /Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/test/features/import/pending_statement_imports_card_test.dart",
+      "00:00 +0: opening saved imports is read-only; resume sends only on an explicit tap",
+      "00:00 +1: discard requires confirmation and never calls the server",
+      "00:00 +2: expired work requires a retained-import action without a failed send first",
+      "00:00 +3: All tests passed!"
+    ]
+  },
+  "analysis": {
+    "exit_code": 0,
+    "command": [
+      "/Users/chandresh_kerkar/Documents/SetupFiles/flutter/bin/cache/dart-sdk/bin/dart",
+      "analyze",
+      "lib/data/secure_storage/statement_import_batch_cipher.dart",
+      "lib/data/local/statement_import_outbox.dart",
+      "lib/data/local/statement_import_pending.dart",
+      "lib/data/statement_import_continuation.dart",
+      "lib/data/import_repository.dart",
+      "lib/data/transaction_import_pipeline.dart",
+      "lib/features/import/statement_import_continuation_provider.dart",
+      "lib/features/import/pending_statement_imports_card.dart",
+      "lib/features/import/import_review_panel.dart",
+      "lib/features/import/import_hub_screen.dart",
+      "lib/data/portable_backup/account_recovery_local_snapshot.dart",
+      "lib/data/portable_backup/local_restore_writer.dart",
+      "lib/data/portable_backup/local_snapshot_source.dart",
+      "lib/app/env.dart",
+      "test/data/secure_storage/statement_import_batch_cipher_test.dart",
+      "test/data/local/statement_import_outbox_test.dart",
+      "test/data/local/statement_import_pending_test.dart",
+      "test/data/statement_import_continuation_test.dart",
+      "test/data/statement_import_prepared_repository_test.dart",
+      "test/data/transaction_import_pipeline_test.dart",
+      "test/data/import_formats_test.dart",
+      "test/data/portable_backup/statement_import_recovery_gate_test.dart",
+      "test/data/portable_backup/account_recovery_completeness_test.dart",
+      "test/data/portable_backup/account_recovery_gate_test.dart",
+      "test/data/portable_backup/portable_backup_roundtrip_test.dart",
+      "test/features/import/pending_statement_imports_card_test.dart"
+    ],
+    "log_sha256": "c1bc40a6894b77ef5ec3d7f2f3f751806578782330953823357fd3ae11d9dcb2",
+    "tail": [
+      "Analyzing statement_import_batch_cipher.dart, statement_import_outbox.dart, statement_import_pending.dart, statement_import_continuation.dart, import_repository.dart, transaction_import_pipeline.dart, statement_import_continuation_provider.dart, pending_statement_imports_card.dart, import_review_panel.dart, import_hub_screen.dart, account_recovery_local_snapshot.dart, local_restore_writer.dart, local_snapshot_source.dart, env.dart, statement_import_batch_cipher_test.dart, statement_import_outbox_test.dart, statement_import_pending_test.dart, statement_import_continuation_test.dart, statement_import_prepared_repository_test.dart, transaction_import_pipeline_test.dart, import_formats_test.dart, statement_import_recovery_gate_test.dart, account_recovery_completeness_test.dart, account_recovery_gate_test.dart, portable_backup_roundtrip_test.dart, pending_statement_imports_card_test.dart...",
+      "",
+      "   info - test/data/transaction_import_pipeline_test.dart:454:13 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures",
+      "",
+      "1 issue found."
+    ]
+  }
+}

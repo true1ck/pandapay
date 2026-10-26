@@ -1,5 +1,7 @@
 # Statement import continuation: receipt prerequisite
 
+**Progress — 26 October 2026:** the [encrypted mobile continuation source slice](security-mobile-import-continuation-implementation-2026-10-26.md) now implements the bounded exact-batch queue, same-account foreground resume, receipt handshake and backup/restore admission described below. It remains default off. The following prerequisite/follow-up plan is retained for context; signed-device/transport acceptance and distributed/provider budgets remain open.
+
 ## Implemented prerequisite
 
 The optional receipt path is enabled by the parent through

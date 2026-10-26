@@ -54,3 +54,10 @@ Local source work can prepare reports, code paths, synthetic fixtures and dispos
 ## Latest source continuation — 26 October 2026
 
 The [versioned phone/import/health batch](security-encryption-import-implementation-2026-10-26.md) implements a disabled v2 phone writer using the existing reader keyring, consistent token/admin consumers, disabled atomic import-result receipts, persisted notification heartbeats and a restricted count-only health probe. Original legacy keys and HMAC identities remain; no backfill or normal phone encryption conversion was enabled. Local source proof advances I01/I11/I12/I14 but does not close those packages. Restart-safe mobile import progress, broader fields/monitoring and actual-data/provider/device/owner gates remain explicit. [Verification](../artifacts/security-encryption-import-2026-10-26/verification.json).
+
+
+## Encrypted mobile-import source continuation — 26 October 2026
+
+The [I12 mobile slice](security-mobile-import-continuation-implementation-2026-10-26.md) now encrypts and atomically persists complete bounded statement plans before the first POST, preserves original keys/bodies across restart, and resumes only through explicit same-account foreground actions. Versioned server receipts and validated counters fence payload deletion. Per-account leases, global space bounds, retained expiry review, confirmed discard and backup/restore admission protect pending data. No extra password, background upload or whole SQLite conversion is introduced. The client compiler flag remains false; release activation requires accepted server receipts and separate signed-device continuation proof. [Verification](../artifacts/security-mobile-import-2026-10-26/verification.json).
+
+Next I12 slice: real signed-device/secure-store/process-death/transport tests, followed by shared/provider admission and broader import coverage; do not mark I12 complete from the local queue tests. The I02 whole-database/receipt conversion and all current-data/provider/custody/operator gates remain. Counts stay 14 packages, six gates, nine Partial priorities and LP09 Open.

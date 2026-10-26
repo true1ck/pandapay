@@ -3,6 +3,19 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {execFileSync,spawnSync}=require('node:child_process');
 const {template,validateInputs,evaluateRelease,sourcePathAllowed,sourceSnapshot,safeRelative,readBounded,readImports,hash,stableJson,EVIDENCE_FORMAT,LOCKFILES,KEY_NAMES,RETAINED_READ_KEY_CONFIGS,PROOF_CHECKS,configurationDigest}=require('../scripts/release_security_check');
 const NOW=Date.parse('2026-10-24T12:00:00.000Z');
+test('mobile import continuation requires signed continuation evidence and accepted server receipts', () => {
+ const value=fixture(); delete value.inputs.features.mobileImportContinuation;
+ value.evidence.configuration_sha256=configurationDigest(value.inputs);
+ assert.equal(evaluateRelease(value).missing_gates.includes('feature_manifest_mobileImportContinuation'),false);
+ value.env.PANDAPAY_STATEMENT_IMPORT_CONTINUATION_ENABLED='true';
+ assert.ok(evaluateRelease(value).missing_gates.includes('feature_manifest_mobileImportContinuation'));
+ value.inputs.features.mobileImportContinuation=true;
+ assert.ok(evaluateRelease(value).missing_gates.includes('mobile_import_receipt_dependency'));
+ assert.ok(evaluateRelease(value).missing_gates.includes('feature_acceptance_mobileImportContinuation'));
+ value.env.STATEMENT_IMPORT_RECEIPTS_ENABLED='true';value.inputs.features.statementImportReceipts=true;
+ assert.equal(evaluateRelease(value).missing_gates.includes('mobile_import_receipt_dependency'),false);
+ assert.ok(evaluateRelease(value).missing_gates.includes('feature_acceptance_statementImportReceipts'));
+});
 test('statement receipt activation preserves old off manifests and needs exact continuation proof', () => {
  const value=fixture(); delete value.inputs.features.statementImportReceipts;
  value.evidence.configuration_sha256=configurationDigest(value.inputs);

@@ -7,6 +7,8 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../../app/env.dart';
+import 'statement_import_continuation_provider.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart'
     show SpendCategory, categoryIdForServer, userCategoryIdForServer;
@@ -36,6 +38,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
         : jsonEncode(widget.session.defaultTagNames),
   );
   bool _done = false;
+  bool _preparingContinuation = false;
   String _filter = 'All';
   List<TransactionEntry> _saved = [];
   bool _checking = false;
@@ -128,11 +131,23 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
 
   Future<void> _submit() async {
     final repository = ref.read(importRepositoryProvider);
-    if (repository == null || session.submitting) return;
-    setState(() => _error = null);
+    if (repository == null || session.submitting || _preparingContinuation) {
+      return;
+    }
+    setState(() {
+      _error = null;
+      _preparingContinuation = true;
+    });
     try {
+      final continuation = Env.statementImportContinuationEnabled
+          ? await ref.read(statementImportContinuationProvider.future)
+          : null;
+      if (Env.statementImportContinuationEnabled && continuation == null) {
+        throw StateError('Sign in to save this import for continuation.');
+      }
       final future = session.submit(
         repository,
+        continuation: continuation,
         onProgress: (_) {
           ref.invalidate(statementImportsProvider);
           ref.invalidate(duplicateCandidatesProvider);
@@ -163,7 +178,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
         );
       }
     } finally {
-      if (mounted) setState(() {});
+      if (mounted) setState(() => _preparingContinuation = false);
     }
   }
 
@@ -194,6 +209,9 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
 
   @override
   Widget build(BuildContext context) {
+    if (Env.statementImportContinuationEnabled) {
+      ref.watch(statementImportContinuationProvider);
+    }
     final recognizedLocations = session.rows
         .map((row) => row.sourceRowId)
         .toSet();
@@ -299,7 +317,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
         ? rejected
         : <ImportRejectedRow>[];
     return PopScope(
-      canPop: !session.submitting,
+      canPop: !session.submitting && !_preparingContinuation,
       child: Column(
         children: [
           Expanded(
@@ -687,6 +705,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                 onPressed:
                     _checking ||
                         session.submitting ||
+                        _preparingContinuation ||
                         !session.ready ||
                         ref.watch(importRepositoryProvider) == null
                     ? null

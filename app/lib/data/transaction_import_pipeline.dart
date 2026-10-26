@@ -2,11 +2,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:uuid/uuid.dart';
 
 import 'api_exception.dart';
 import 'csv_statement_parser.dart';
 import 'import_models.dart';
 import 'import_repository.dart';
+import 'statement_import_continuation.dart';
 import 'user_cards_repository.dart';
 import 'pdf_statement_parser.dart'
     show parseStatementText, StatementParseException;
@@ -178,8 +180,14 @@ List<List<String>> _jsonRows(String input) {
           row[key] == null
               ? ''
               : row[key] is Map || row[key] is List
-              ? const ['tags', 'tagNames', 'tag_names', 'labels', 'tag', 'label']
-                        .contains(key)
+              ? const [
+                      'tags',
+                      'tagNames',
+                      'tag_names',
+                      'labels',
+                      'tag',
+                      'label',
+                    ].contains(key)
                     ? jsonEncode(row[key])
                     : ''
               : row[key].toString(),
@@ -221,7 +229,8 @@ class TransactionImportSession {
 
   List<String> get defaultTagNames => _defaultTagNames;
   String? get defaultTagsError =>
-      (_defaultTagNames.length > 30 || _defaultTagNames.any((name) => name.length > 60))
+      (_defaultTagNames.length > 30 ||
+          _defaultTagNames.any((name) => name.length > 60))
       ? 'Use up to 30 tags, each with 1–60 characters.'
       : null;
 
@@ -238,7 +247,10 @@ class TransactionImportSession {
     }
     for (final index in selected) {
       rows[index] = rows[index].reviewed(
-        tagNames: normalizeImportedTagNames([...rows[index].tagNames, ...names]),
+        tagNames: normalizeImportedTagNames([
+          ...rows[index].tagNames,
+          ...names,
+        ]),
       );
     }
   }
@@ -305,6 +317,10 @@ class TransactionImportSession {
   final Map<String, String> destinationNotes = {};
   final Map<String, TxnInstrument> instruments = {};
   final Map<String, StatementImport> _completed = {};
+
+  /// Stable for this in-memory review preview; restored sessions use their
+  /// already-persisted id and encrypted plan instead.
+  final String continuationSessionId = const Uuid().v4();
   bool submitting = false;
   bool _submissionStarted = false;
   bool get reviewLocked => _submissionStarted;
@@ -581,6 +597,7 @@ class TransactionImportSession {
   Future<ImportProgress> submit(
     ImportRepository repository, {
     void Function(ImportProgress)? onProgress,
+    StatementImportContinuation? continuation,
   }) async {
     if (submitting) throw StateError('An import is already in progress.');
     if (!ready) {
@@ -619,6 +636,54 @@ class TransactionImportSession {
         if (pending.isNotEmpty) {
           batches.add((account: entry.key, indices: pending));
         }
+      }
+
+      if (continuation != null) {
+        final preparedPayloads = <Map<String, dynamic>>[];
+        for (final batch in batches) {
+          final destination = destinations[batch.account]!;
+          final key = sha256
+              .convert(
+                utf8.encode(
+                  jsonEncode([
+                    fileDigest,
+                    destination,
+                    batch.indices.map(rowKey).toList(),
+                  ]),
+                ),
+              )
+              .toString();
+          final dates = batch.indices.map((i) => rows[i].date).toList()..sort();
+          preparedPayloads.add(
+            ImportRepository.prepareStatementImportPayload(
+              userCardId:
+                  destination.isEmpty || destination.startsWith('instrument:')
+                  ? null
+                  : destination,
+              instrument: instruments[batch.account] ?? TxnInstrument.other,
+              statementFrom: dates.first,
+              statementTo: dates.last,
+              closingBalance: batches.length == 1
+                  ? statement.closingBalance
+                  : null,
+              txnCount: batch.indices.length,
+              reconciledCount: 0,
+              importSource: importSource,
+              importKey: key,
+              transactions: [for (final i in batch.indices) inputFor(i)],
+            ),
+          );
+        }
+
+        progress = await continuation.prepareAndRun(
+          sessionId: continuationSessionId,
+          payloads: preparedPayloads,
+          onProgress: (value) {
+            progress = value;
+            onProgress?.call(value);
+          },
+        );
+        return progress;
       }
       void report() {
         progress = ImportProgress(
@@ -681,7 +746,8 @@ class TransactionImportSession {
       // user correct the preview instead of leaving every edit control locked.
       // Keep the lock for transport failures/timeouts (the server may have
       // committed without the response reaching the device) and partial imports.
-      if (_completed.isEmpty &&
+      if (continuation == null &&
+          _completed.isEmpty &&
           error is ApiException &&
           error.statusCode != null) {
         _submissionStarted = false;

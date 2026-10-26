@@ -8,6 +8,7 @@ import 'package:path/path.dart' as path;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../local/app_database.dart';
+import '../local/statement_import_pending.dart';
 import 'account_recovery_crypto.dart';
 
 /// A bounded account-only SQLite recovery format, distinct from the portable
@@ -31,6 +32,11 @@ class AccountRecoveryLocalSnapshot {
     // Device registration and pull cursors must never be replayed on a new
     // device. Pending mutation rows above retain their original UUIDs.
     'sync_state',
+    // Ciphertext requires this phone's independent import key; do not call
+    // an archive complete while pending work cannot be restored elsewhere.
+    'statement_import_sessions',
+    'statement_import_batches',
+    'statement_import_leases',
   };
   static final _name = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
   static String _quote(String value) {
@@ -479,6 +485,7 @@ class AccountRecoveryLocalSnapshot {
   }) async {
     _requireAccountNamespace(accountId, namespace);
     final db = lease.database;
+    requireNoPendingStatementImports(db, namespace);
     final tables = _tables(db),
         captured = <String, Object?>{},
         receipts = <Map<String, Object?>>[];
@@ -695,6 +702,7 @@ class AccountRecoveryLocalSnapshot {
   }) async {
     _requireAccountNamespace(accountId, namespace);
     final db = lease.database;
+    requireNoPendingStatementImports(db, namespace);
     if (payload.length > accountRecoveryMaxBytes) {
       throw const FormatException('Local recovery snapshot exceeds limit');
     }
