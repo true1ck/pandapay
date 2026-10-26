@@ -158,8 +158,10 @@ function registerAiQueueRoutes(app, {
         // The raw SMS and model prompt have already been purged from the job.
         suggestions: job.suggestions,
         attempts: job.attempts,
-        ...((job.last_retry_reason || job.fail_reason)
-          ? { failureReason: job.last_retry_reason || job.fail_reason }
+        ...((job.status === 'failed' ? job.fail_reason : job.last_retry_reason || job.fail_reason)
+          ? { failureReason: job.status === 'failed'
+            ? job.fail_reason
+            : (job.last_retry_reason || job.fail_reason) }
           : {}),
         createdAt: job.created_at,
         updatedAt: job.updated_at,

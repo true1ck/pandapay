@@ -1384,6 +1384,33 @@ test('source status omits AI facts the user already confirmed or corrected', asy
   assert.equal(response.body.suggestions[0].factIndex === confirmedIndex, false);
 });
 
+test('terminal source status shows the terminal failure instead of a stale retry reason', async () => {
+  const h = harness({});
+  await h.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
+  });
+  const query = h.client.query;
+  h.client.query = async (sql, params) => {
+    if (sql.includes("payload->>'failReason' AS fail_reason") && sql.includes('last_retry_reason')) {
+      return { rows: [{
+        id: 'failed-job', status: 'failed', result: null, attempts: 1,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        fail_reason: 'invalid_provider_output', last_retry_reason: 'provider_retry',
+      }] };
+    }
+    return query(sql, params);
+  };
+
+  const response = await h.call('/ai/jobs/source/:sourceKey', {
+    userId: PROFILE_A,
+    params: { sourceKey: SOURCE_KEY },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.status, 'failed');
+  assert.equal(response.body.failureReason, 'invalid_provider_output');
+});
+
 // Phase 6: Admin monitoring & Learning loop
 
 test('admin monitoring endpoints return redacted metrics and timeline without raw body', async () => {
