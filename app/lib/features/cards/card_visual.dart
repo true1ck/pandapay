@@ -959,3 +959,229 @@ class _ChipPainter extends CustomPainter {
   bool shouldRepaint(covariant _ChipPainter oldDelegate) =>
       oldDelegate.color != color;
 }
+
+/// A miniature credit card visual intended for compact lists, table rows,
+/// and due bill tiles (e.g. 50x32px), rendering the card's distinctive
+/// skin, palette, mini chip, contactless mark, and last4 / network mark.
+class MiniCardVisual extends StatelessWidget {
+  final CardProduct? product;
+  final UserCard? userCard;
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  const MiniCardVisual({
+    super.key,
+    this.product,
+    this.userCard,
+    this.width = 50,
+    this.height = 32,
+    this.borderRadius = 6,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final (skin, palette, seed, network, last4) = _resolveVisualProps();
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [palette.primary, palette.secondary],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: palette.primary.withValues(alpha: 0.28),
+                blurRadius: 4,
+                offset: const Offset(0, 1.5),
+              ),
+            ],
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CustomPaint(
+                painter: _CardSkinPainter(
+                  color: palette.foreground.withValues(alpha: 0.16),
+                  seed: seed,
+                  skin: skin,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3.5),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Top row: mini chip + issuer/network mark
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 5.5,
+                          decoration: BoxDecoration(
+                            color: palette.chip,
+                            borderRadius: BorderRadius.circular(1),
+                            border: Border.all(
+                              color: palette.chipInk.withValues(alpha: 0.35),
+                              width: 0.5,
+                            ),
+                          ),
+                        ),
+                        _buildNetworkOrIssuerMark(network, palette.foreground),
+                      ],
+                    ),
+                    // Bottom row: last4 + contactless
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            last4 != null && last4.isNotEmpty
+                                ? '•• $last4'
+                                : '••••',
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: BambooFonts.ui(
+                              6.5,
+                              weight: FontWeight.w700,
+                              color: palette.foreground.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.contactless_rounded,
+                          size: 7.5,
+                          color: palette.foreground.withValues(alpha: 0.85),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNetworkOrIssuerMark(CardNetwork network, Color color) {
+    if (network == CardNetwork.mastercard) {
+      return SizedBox(
+        width: 14,
+        height: 8,
+        child: Stack(
+          children: [
+            Positioned(
+              left: 0,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFE44D45),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 0,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFF3C548),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final label = switch (network) {
+      CardNetwork.visa => 'VISA',
+      CardNetwork.rupay => 'RuPay',
+      CardNetwork.amex => 'AMEX',
+      CardNetwork.diners => 'DINERS',
+      _ => null,
+    };
+    if (label != null) {
+      return Text(
+        label,
+        style: BambooFonts.ui(
+          6,
+          weight: FontWeight.w800,
+          color: color,
+        ),
+      );
+    }
+    final isHdfc = (userCard?.cardName.toLowerCase().contains('hdfc') == true) ||
+        (product?.issuerName?.toLowerCase().contains('hdfc') == true);
+    if (isHdfc) {
+      return Text(
+        'HDFC',
+        style: BambooFonts.ui(
+          6,
+          weight: FontWeight.w800,
+          color: color,
+        ),
+      );
+    }
+    return Icon(
+      Icons.credit_card_rounded,
+      size: 7.5,
+      color: color.withValues(alpha: 0.8),
+    );
+  }
+
+  (_CardSkin, _CardPalette, int, CardNetwork, String?) _resolveVisualProps() {
+    if (product != null) {
+      final p = product!;
+      final skin = _skinFor(p);
+      final palette = _paletteFor(p, skin);
+      final seed = _stableSeed('${p.id}:${p.name}');
+      return (skin, palette, seed, p.network, userCard?.last4);
+    }
+    final name = (userCard?.nickname?.trim().isNotEmpty == true
+            ? userCard!.nickname
+            : userCard?.cardName) ??
+        'Card';
+    final text = name.toLowerCase();
+    final seed = _stableSeed('${userCard?.id ?? name}:$name');
+    final base = _issuerBaseColor(text);
+    final skin = _CardSkin.values[seed % _CardSkin.values.length];
+    final secondary = _secondaryColor(base, seed, skin);
+    final backgroundTone = Color.lerp(base, secondary, 0.42)!;
+    final foreground = backgroundTone.computeLuminance() > 0.58
+        ? BambooInk.ink900
+        : Colors.white;
+    final palette = _CardPalette(
+      primary: base,
+      secondary: secondary,
+      chip: base.computeLuminance() > 0.58
+          ? const Color(0xFFD8A83E)
+          : const Color(0xFFE6C46A),
+      chipInk: const Color(0xFF6D4E16),
+      foreground: foreground,
+      foregroundMuted: foreground.withValues(alpha: 0.72),
+    );
+    final network = text.contains('visa')
+        ? CardNetwork.visa
+        : text.contains('master')
+        ? CardNetwork.mastercard
+        : text.contains('rupay')
+        ? CardNetwork.rupay
+        : text.contains('amex')
+        ? CardNetwork.amex
+        : CardNetwork.unknown;
+    return (skin, palette, seed, network, userCard?.last4);
+  }
+}

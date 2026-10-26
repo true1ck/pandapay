@@ -296,7 +296,7 @@ void main() {
   );
 
   test(
-    'investment redemption proceeds are not treated as a new contribution',
+    'investment redemption proceeds are classified as income with investments category',
     () {
       final result = LocalSmsParser.parse(
         namespace: 'user:test',
@@ -305,13 +305,15 @@ void main() {
             'Mutual fund redemption proceeds of Rs.5000 credited to your account ending 2626.',
         receivedAt: DateTime(2026, 10, 18),
       );
-      expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
-      expect(result?.transaction?.merchantName, 'Investment proceeds');
+      expect(result?.transaction?.entryKind, TxnEntryKind.income);
+      expect(result?.transaction?.merchantName, 'Investment return');
+      expect(result?.transaction?.categoryId, 'investments');
+      expect(result?.transaction?.categoryName, 'Investments');
     },
   );
 
   test(
-    'broker settlement payout to the bank is an investment-proceeds transfer',
+    'broker settlement payout to the bank is an investment return income',
     () {
       final result = LocalSmsParser.parse(
         namespace: 'user:test',
@@ -320,8 +322,10 @@ void main() {
             'Dear Sujay We have transferred Rs 93.82 to your bank account ending with XXXXXXX2626 as a part of running account settlement vide Ref No PO26101713812965. To continue trading and investing, add funds back to your Dhan account.',
         receivedAt: DateTime(2026, 10, 18),
       );
-      expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
-      expect(result?.transaction?.merchantName, 'Investment proceeds');
+      expect(result?.transaction?.entryKind, TxnEntryKind.income);
+      expect(result?.transaction?.merchantName, 'Investment return · Dhan');
+      expect(result?.transaction?.categoryId, 'investments');
+      expect(result?.transaction?.categoryName, 'Investments');
       expect(result?.transaction?.accountLast4, '2626');
     },
   );
@@ -338,7 +342,7 @@ void main() {
     expect(result?.transaction?.merchantName, 'Wallet load');
   });
 
-  test('broker refill instruction is not a wallet load of this transaction', () {
+  test('broker refill instruction is an investment return and not a wallet load', () {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'VM-ZERODHA',
@@ -346,8 +350,10 @@ void main() {
           'Rs 2500 payout credited to your bank a/c XX9123. To continue investing, add funds back to your Zerodha account.',
       receivedAt: DateTime(2026, 10, 18),
     );
-    expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
-    expect(result?.transaction?.merchantName, isNot('Wallet load'));
+    expect(result?.transaction?.entryKind, TxnEntryKind.income);
+    expect(result?.transaction?.merchantName, 'Investment return · Zerodha');
+    expect(result?.transaction?.categoryId, 'investments');
+    expect(result?.transaction?.categoryName, 'Investments');
   });
 
   test(
@@ -1398,7 +1404,7 @@ void main() {
   );
   test('mutual fund folio unit allotment does not create a cash spend transaction', () {
     const amcMessages = [
-      'Folio 12345/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',
+      'Folio 1235/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',
       'Dear Investor, 45.123 units allotted under Folio 9876543/21 in Nippon India Small Cap Fund - Reg (G) for your investment of Rs 5,000 at NAV 110.8123 on 05-Oct-2026.',
       'Units: 25.432, NAV: 196.50 allotted for your investment of Rs. 5000 in Parag Parikh Flexi Cap Fund, Folio: 123456789.',
       'Units allotted under folio 11223344 for Rs 10000 in ICICI Prudential Bluechip Fund. NAV: 85.25.',
@@ -1429,6 +1435,50 @@ void main() {
       expect(obs.amountDue, obs.amount);
       expect(obs.merchantName, isNotNull);
     }
+  });
+
+  test('mutual fund SIP allotment with under scheme pattern extracts cleanly', () {
+    const body = 'Units allotted under HDFC Gold ETF Fund of Fund-DP Growth for Rs. 100.00 in Folio 1235/67. NAV: 24.50 on 24-Oct-2026.';
+    expect(LocalSmsParser.isInvestmentFolioAllotment(body), isTrue);
+    expect(LocalSmsParser.isNonTransactionNoise('HDFCMF', body), isFalse);
+
+    final obs = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'HDFCMF',
+      body: body,
+      receivedAt: DateTime(2026, 10, 24, 11, 0),
+    );
+
+    expect(obs, isNotNull);
+    expect(obs!.transaction, isNull);
+    expect(obs.eventType, LocalSmsEventType.investment);
+    expect(obs.disposition, LocalSmsDisposition.localObservation);
+    expect(obs.merchantName, contains('HDFC Gold ETF Fund of Fund'));
+    expect(obs.amount, Money.fromRupees(100.00));
+    expect(obs.accountLast4, '5/67');
+  });
+
+  test('SEBI quarterly settlement with amount transferred is not noise', () {
+    const body = 'As per SEBI regulations, unused funds of Rs. 15,400.00 have been transferred to your bank account A/C **1234 towards quarterly settlement.';
+    expect(LocalSmsParser.isNonTransactionNoise('VK-ZERODHA', body), isFalse);
+
+    final obs = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VK-ZERODHA',
+      body: body,
+      receivedAt: DateTime(2026, 10, 24),
+    );
+    expect(obs?.transaction, isNotNull);
+    expect(obs?.transaction?.entryKind, TxnEntryKind.income);
+    expect(obs?.transaction?.merchantName, 'Investment return · Zerodha');
+  });
+
+  test('SEBI settlement advisory without amount or future tense is noise', () {
+    const advisory1 = 'As per SEBI guidelines, quarterly settlement of accounts will be processed today. Unused funds will be transferred to your bank account.';
+    expect(LocalSmsParser.isNonTransactionNoise('VK-ZERODHA', advisory1), isTrue);
+
+    const advisory2 = 'As per SEBI regulations, quarterly settlement is scheduled for Friday. Please ensure your bank details are updated.';
+    expect(LocalSmsParser.isNonTransactionNoise('VK-ZERODHA', advisory2), isTrue);
   });
   test('bank account balance and account discovery extracts balance and accounts', () {
     // 1. Canara Bank interest credit 1

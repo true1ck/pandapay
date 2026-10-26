@@ -206,7 +206,7 @@ void main() {
         'Rs 10,000 debited from A/c XX1234 and transferred to Zerodha trading a/c',
       );
       expect(funding.eventType, equals(BrokerEventType.brokerFunding));
-      expect(funding.suggestedKind, equals(TxnEntryKind.transfer));
+      expect(funding.suggestedKind, equals(TxnEntryKind.investment));
 
       // 2. Broker settlement payout
       final settlement = SpecializedDomainClassifiers.classifyBrokerMessage(
@@ -214,7 +214,7 @@ void main() {
         'Quarterly settlement payout of INR 14,500 credited to your bank account',
       );
       expect(settlement.eventType, equals(BrokerEventType.brokerSettlement));
-      expect(settlement.suggestedKind, equals(TxnEntryKind.transfer));
+      expect(settlement.suggestedKind, equals(TxnEntryKind.income));
 
       // 3. Dividend income
       final dividend = SpecializedDomainClassifiers.classifyBrokerMessage(

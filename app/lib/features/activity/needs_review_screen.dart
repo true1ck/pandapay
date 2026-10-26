@@ -3063,8 +3063,37 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
       if (entryKind is String) {
         _entryKind = TxnEntryKind.fromJson(entryKind);
       }
+      final category = payload['category'];
+      if (category is String && category.trim().isNotEmpty) {
+        _categoryId = category.trim();
+      }
       final occurredAt = DateTime.tryParse('${payload['occurredAt'] ?? ''}');
       if (occurredAt != null) _occurredAt = occurredAt;
+    }
+
+    final senderUpper = widget.item.sender.toUpperCase();
+    final isInvestmentSender = senderUpper.contains('HDFCMF') ||
+        senderUpper.contains('CAMSSM') ||
+        senderUpper.contains('KFINTE');
+    final isFolioOrSip = RegExp(
+      r'\b(?:folio|sip)\b',
+      caseSensitive: false,
+    ).hasMatch(widget.item.body);
+    final isInvestment = isInvestmentSender ||
+        isFolioOrSip ||
+        widget.item.kind == NeedsReviewKind.investmentSettlement ||
+        _isInvestmentSettlement(widget.item.body) ||
+        LocalSmsParser.isInvestmentFolioAllotment(widget.item.body);
+
+    if (isInvestment) {
+      _categoryId ??= 'investments';
+      _entryKind = TxnEntryKind.investment;
+      if (_amountController.text.isEmpty) {
+        final amt = LocalSmsParser.extractReceiptAmount(widget.item.body);
+        if (amt != null && amt.paise > 0) {
+          _amountController.text = amt.rupees.toStringAsFixed(2);
+        }
+      }
     }
   }
 

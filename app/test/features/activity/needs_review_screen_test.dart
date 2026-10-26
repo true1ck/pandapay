@@ -93,6 +93,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
       'userCardId': userCardId,
       'amount': amount,
       'categoryId': categoryId,
+      'entryKind': entryKind,
     };
     return 'fake-txn-id';
   }
@@ -1408,6 +1409,37 @@ expect(find.text('✦ AI · Paid Rs. 420 to Swiggy via HDFC Bank UPI'), findsOne
         find.text('Rs.499 spent on HDFC Bank Card ending 1234 at SWIGGY.'),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'reviewing investment or folio allotment defaults category to investments and entryKind to investment',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'mf-allotment-1',
+          sender: 'CAMSSM',
+          body:
+              'Folio 99887766: Purchase of Rs 12000 in Parag Parikh Flexi Cap Fund processed. 45.67 units allotted at NAV 262.75 on 05-Oct-2026.',
+          kind: NeedsReviewKind.investmentSettlement,
+          receivedAt: DateTime(2026, 10, 16),
+        ),
+      );
+      final repo = _FakeUserCardsRepository();
+      await _pump(tester, repo: repo, reviews: reviews);
+
+      expect(find.text('Review transfer'), findsOneWidget);
+      await tester.tap(find.text('Review transfer'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review this transaction'), findsOneWidget);
+      expect(find.text('Investment'), findsOneWidget);
+
+      await tester.tap(find.text('Save transaction'));
+      await tester.pumpAndSettle();
+
+      expect(repo.lastLogArgs?['categoryId'], 'investments');
+      expect(repo.lastLogArgs?['entryKind'], TxnEntryKind.investment);
     },
   );
 }

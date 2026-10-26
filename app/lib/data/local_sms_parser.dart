@@ -189,11 +189,11 @@ class LocalSmsParser {
   static bool isInvestmentFolioAllotment(String body) {
     final text = body.toLowerCase();
     final hasAllotment = RegExp(
-      r'\b(?:units?\s+allotted|allotted\s+at\s+nav|units?\s*:\s*[\d.]+\s*,\s*nav|nav\s*:\s*[\d.]+|units?\s+(?:credited|allotted)\s+under\s+folio|allotted\s+for\s+your\s+investment)\b',
+      r'\b(?:units?\s+allotted|allotted\s+at\s+nav|units?\s*:\s*[\d.]+\s*,\s*nav|nav\s*:\s*[\d.]+|units?\s+(?:credited|allotted)\s+under\s+folio|allotted\s+for\s+your\s+investment|processed\s+at\s+(?:the\s+)?nav\s+of\s+[\d.]+|for\s+[\d.]+\s+units)\b',
       caseSensitive: false,
     ).hasMatch(text);
     final hasFolioOrFund = RegExp(
-      r'\b(?:folio|fund|mutual\s+fund|amc)\b',
+      r'\b(?:folio|fund|mutual\s+fund|amc|etf)\b',
       caseSensitive: false,
     ).hasMatch(text);
     return hasAllotment && hasFolioOrFund;
@@ -448,7 +448,8 @@ class LocalSmsParser {
 
     final completed = _re(
       r'\b(?:your\s+(?:txn|transaction)\s+of|(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[\d,.]+|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)(?:\s+(?:by|with|for|towards|of|amounting\s+to))?\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[*xX]*\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:sent|cash\s+withdrawal|withdrawal|auto[-\s]?debit)\s*(?:of|by)?\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase|settlement|payout)\b[\s\S]{0,45}\b(?:successful|completed|initiated|processed))',
-    ).hasMatch(text);
+    ).hasMatch(text) &&
+    !(_re(r'\b(?:will|shall)\s+be\b').hasMatch(text) && !hasCurrencyAmount);
     final asbaIpo = _re(
       r'\b(?:asba\s+application|asba\s+(?:req(?:uest)?|bid|block|lien)|towards\s+asba|for\s+asba|asba\b[\s\S]{0,50}\b(?:accepted|blocked|lien|created)|(?:blocked|lien\s+marked)\b[\s\S]{0,50}\b(?:for|towards)?\s*(?:ipo|asba|rights\s+issue)|(?:ipo\s+(?:application|bid|mandate|block|lien)))\b',
     ).hasMatch(text);
@@ -514,15 +515,24 @@ class LocalSmsParser {
     // due date, balance or mandate. They are matched last so a completed
     // debit, bill, balance snapshot or limit-with-amount already returned
     // false above and remains useful.
-    final controlNotice = _re(
+    final sebiSettlementPattern = _re(
+      r'\b(?:unused|unutilised)\s+funds\b[\s\S]{0,100}\b(?:transferred|settled|settlement)\b'
+      r'|\bas\s+per\s+sebi\b[\s\S]{0,120}\bsettlement\b',
+    ).hasMatch(text);
+
+    final hasCompletedSettlement = hasCurrencyAmount &&
+        (hasMovement || _re(r'\b(?:transferred|settled|credited|payout|released)\b').hasMatch(text)) &&
+        !_re(r'\b(?:will|shall)\s+be\s+(?:transferred|settled|credited|paid|released)\b').hasMatch(text);
+
+    final sebiSettlementNoise = sebiSettlementPattern && !hasCompletedSettlement;
+
+    final controlNotice = sebiSettlementNoise || _re(
       r'\btransaction\s+limits?\b[\s\S]{0,60}\b(?:has|have|is|are)\s+been\s+(?:updated|changed|modified|set)\b'
       r'|\bsecurity\s+tip\b[\s\S]{0,80}\b(?:enable|set|disable|protect|never\s+share|keep\s+your)\b'
       r'|\benable\s+online\s+(?:use|usage|transactions?)\b'
       r'|\bset\s+limit\s+on\b[\s\S]{0,40}\b(?:credit\s+card|card)\b'
       r'|\b(?:credit\s+card|card|account)\b[\s\S]{0,50}\bhas\s+been\s+linked\b'
       r'|\blinked\s+for\s+(?:net\s*banking|internet\s+banking|mobile\s+banking)\b'
-      r'|\bunused\s+funds\b[\s\S]{0,100}\b(?:transferred|settled|settlement)\b'
-      r'|\bas\s+per\s+sebi\b[\s\S]{0,120}\bsettlement\b'
       r'|\bday\s+of\s+settlement\b',
     ).hasMatch(text);
     if (isActionableInsuranceRenewal(body)) return false;
@@ -602,7 +612,40 @@ class LocalSmsParser {
     r'\b(?:wallet\s+load|load(?:ed|ing)?\s+(?:the\s+)?(?:paytm|phonepe|amazon\s*pay|mobikwik|wallet)|money\s+added\s+to\s+(?:the\s+)?wallet|add\s+(?:money|funds?)|top[ -]?up|money\s+added)\b[\s\S]{0,40}\b(?:paytm|phonepe|amazon\s*pay|mobikwik|wallet)\b|\b(?:paytm|phonepe|amazon\s*pay|mobikwik)\b[\s\S]{0,40}\b(?:add\s+(?:money|funds?)|top[ -]?up|wallet\s+load|added)\b|\b(?:added|loaded|credited)\s+to\s+(?:the\s+)?(?:paytm|phonepe|amazon\s*pay|mobikwik)\s+wallet\b|\b(?:paytm|phonepe|amazon\s*pay|mobikwik)\s+wallet\b[\s\S]{0,30}\b(?:added|loaded|credited)\b',
   ).hasMatch(body);
 
-  static bool _brokerSettlement(String body) => isBrokerSettlementMessage(body);
+  static String? _detectBrokerName(String body, [String? sender]) {
+    final text = '$sender $body'.toLowerCase();
+    if (RegExp(r'\b(?:zerodha)\b').hasMatch(text)) return 'Zerodha';
+    if (RegExp(r'\b(?:dhan(?:hq)?)\b').hasMatch(text)) return 'Dhan';
+    if (RegExp(r'\b(?:groww)\b').hasMatch(text)) return 'Groww';
+    if (RegExp(r'\b(?:upstox)\b').hasMatch(text)) return 'Upstox';
+    if (RegExp(r'\b(?:angel\s+one|angel\s+broking|angel)\b').hasMatch(text)) return 'Angel One';
+    if (RegExp(r'\b(?:5paisa)\b').hasMatch(text)) return '5paisa';
+    if (RegExp(r'\b(?:kotak\s+neo|kotakn|neo)\b').hasMatch(text)) return 'Kotak Neo';
+    if (RegExp(r'\b(?:kotak\s+securities|kotaks)\b').hasMatch(text)) return 'Kotak Securities';
+    if (RegExp(r'\b(?:hdfc\s+sky|hdfcsky)\b').hasMatch(text)) return 'HDFC Sky';
+    if (RegExp(r'\b(?:hdfc\s+securities|hdfcsec)\b').hasMatch(text)) return 'HDFC Securities';
+    if (RegExp(r'\b(?:icici\s+direct|icicid|icicis)\b').hasMatch(text)) return 'ICICI Direct';
+    if (RegExp(r'\b(?:paytm\s+money|pytmmn|paytmm)\b').hasMatch(text)) return 'Paytm Money';
+    if (RegExp(r'\b(?:motilal\s+oswal|moswal|motlal)\b').hasMatch(text)) return 'Motilal Oswal';
+    if (RegExp(r'\b(?:sharekhan|shrkhn)\b').hasMatch(text)) return 'Sharekhan';
+    if (RegExp(r'\b(?:espresso|esprso)\b').hasMatch(text)) return 'Espresso';
+    if (RegExp(r'\b(?:lemonn)\b').hasMatch(text)) return 'Lemonn';
+    if (RegExp(r'\b(?:shoonya|shoony)\b').hasMatch(text)) return 'Shoonya';
+    if (RegExp(r'\b(?:finvasia|fnvasia)\b').hasMatch(text)) return 'Finvasia';
+    if (RegExp(r'\b(?:blinkx)\b').hasMatch(text)) return 'BlinkX';
+    if (RegExp(r'\b(?:jm\s+financial|jmfin)\b').hasMatch(text)) return 'JM Financial';
+    if (RegExp(r'\b(?:geojit)\b').hasMatch(text)) return 'Geojit';
+    if (RegExp(r'\b(?:axis\s+direct|axisdir|axisd)').hasMatch(text)) return 'Axis Direct';
+    if (RegExp(r'\b(?:m\.?stock)\b').hasMatch(text)) return 'm.Stock';
+    if (RegExp(r'\b(?:mirae\s+asset|miraea|mirae)\b').hasMatch(text)) return 'Mirae Asset';
+    if (RegExp(r'\b(?:iifl\s+securities|iiflsec|iiflsc|iifl)\b').hasMatch(text)) return 'IIFL Securities';
+    if (RegExp(r'\b(?:sbi\s+securities|sbisec|sbicap)\b').hasMatch(text)) return 'SBI Securities';
+    if (RegExp(r'\b(?:fyers)\b').hasMatch(text)) return 'Fyers';
+    return null;
+  }
+
+  static bool _brokerSettlement(String body, [String? sender]) =>
+      isBrokerSettlementMessage(body, sender);
 
   static const _ownNameNoise = {'mr', 'mrs', 'ms', 'shri', 'smt', 'dr', 'prof'};
 
@@ -1141,9 +1184,10 @@ class LocalSmsParser {
         : TxnInstrument.other;
     final entryKind = asbaOrIpoBlock
         ? TxnEntryKind.investment
+        : _brokerSettlement(body, sender)
+        ? TxnEntryKind.income
         : _ownAccountTransfer(body) ||
               _accountToAccountTransfer(body) ||
-              _brokerSettlement(body) ||
               _walletLoad(body) ||
               _cardCredit(body) ||
               (merchant != null &&
@@ -1328,13 +1372,17 @@ class LocalSmsParser {
       final schemeMatch = _re(
         r"\b(?:scheme|fund(?:\s+name)?)\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 .&'/()]{2,60})",
       ).firstMatch(body);
+      final underMatch = _re(
+        r"\bunder\s+(?!folio\b)([A-Za-z0-9][-A-Za-z0-9 .&'/()]{2,60}?)(?=(?:\s+(?:for\s+(?:rs\.?|inr|₹)|processed|successful|completed|allotted|folio)|[.,;]|$))",
+      ).firstMatch(body);
       final inFundMatch = _re(
-        r"\bin\s+([A-Za-z0-9][-A-Za-z0-9 .&'/()]{2,60}?)(?=(?:\s+(?:processed|successful|completed|allotted|for\b|at\s+nav|with\s+nav|nav|on\s+\d|folio)|[.,;]|$))",
+        r"\bin\s+(?!folio\b)([A-Za-z0-9][-A-Za-z0-9 .&'/()]{2,60}?)(?=(?:\s+(?:processed|successful|completed|allotted|for\b|at\s+nav|with\s+nav|nav|on\s+\d|folio)|[.,;]|$))",
       ).firstMatch(body);
       final towardsMatch = _re(
         r"\btowards?\s+([A-Za-z0-9][-A-Za-z0-9 .&'/()]{2,60}?)(?=(?:\s+(?:processed|successful|completed|allotted|folio)|[.,;]|$))",
       ).firstMatch(body);
       var merchant =
+          underMatch?.group(1)?.trim() ??
           schemeMatch?.group(1)?.trim() ??
           inFundMatch?.group(1)?.trim() ??
           towardsMatch?.group(1)?.trim();
@@ -1966,7 +2014,7 @@ class LocalSmsParser {
     ).hasMatch(body);
     final loanRepayment = !cashWithdrawal && _loanRepayment(body);
     final feeCharge = !cashWithdrawal && !loanRepayment && _feeCharge(body);
-    final brokerSettlement = _brokerSettlement(body);
+    final brokerSettlement = _brokerSettlement(body, sender);
     final investmentDebit =
         asbaOrIpoBlock ||
         (!cashWithdrawal &&
@@ -2001,6 +2049,7 @@ class LocalSmsParser {
         !loanRepayment &&
         !feeCharge &&
         !asbaOrIpoBlock &&
+        !brokerSettlement &&
         !_re(
           r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred|txn|transaction|deducted|deduct)\b',
         ).hasMatch(body)) {
@@ -2009,6 +2058,7 @@ class LocalSmsParser {
     if (!credit &&
         !cardCredit &&
         !billPayment &&
+        !brokerSettlement &&
         _re(
           r'\b(?:credited|refund(?:ed)?|reversed|reversal)\b',
         ).hasMatch(body)) {
@@ -2035,6 +2085,7 @@ class LocalSmsParser {
               (bankDebit ||
                       credit ||
                       asbaOrIpoBlock ||
+                      brokerSettlement ||
                       _re(r'\bupi\b').hasMatch(body)
                   ? TxnInstrument.upiBank
                   : cardLast4 != null
@@ -2089,16 +2140,15 @@ class LocalSmsParser {
     }
     var transfer =
         !isWalletDebit &&
-        !isWalletDebit &&
         (billPayment ||
             cardCredit ||
             cashWithdrawal ||
             walletLoad ||
-            brokerSettlement ||
             loanRepayment ||
-            investmentProceeds ||
             _accountToAccountTransfer(body));
-    var kind = transfer
+    var kind = brokerSettlement || investmentProceeds
+        ? TxnEntryKind.income
+        : transfer
         ? TxnEntryKind.transfer
         : feeCharge
         ? TxnEntryKind.spend
@@ -2180,7 +2230,12 @@ class LocalSmsParser {
     } else if (ownNameTransfer) {
       merchant = 'Transfer between own accounts';
     } else if (brokerSettlement) {
-      merchant = 'Investment proceeds';
+      final detectedBroker = _detectBrokerName(body, sender);
+      merchant = detectedBroker != null
+          ? 'Investment return · $detectedBroker'
+          : 'Investment return';
+    } else if (investmentProceeds) {
+      merchant = 'Investment return';
     } else if (cardCredit) {
       merchant =
           _re(
@@ -2200,14 +2255,12 @@ class LocalSmsParser {
       merchant = 'Cash withdrawal';
     } else if (loanRepayment) {
       merchant = 'Loan or EMI repayment';
-    } else if (investmentProceeds) {
-      merchant = 'Investment proceeds';
     } else if (feeCharge) {
       merchant = 'Bank or service fee';
     } else if (investmentDebit) {
       merchant = (asbaOrIpoBlock && merchant != null && merchant.isNotEmpty)
           ? merchant
-          : 'Investment contribution';
+          : (merchant ?? 'Investment');
     } else if (credit && refundCredit) {
       merchant = 'Refund';
     } else if (credit && reversalCredit) {
@@ -2276,18 +2329,18 @@ class LocalSmsParser {
     );
     final categorySlug =
         userRuleSlug ??
-        ftMatch?.category ??
-        (billPayment
-            ? 'bills'
-            : loanRepayment
-            ? 'emi'
-            : feeCharge
-            ? 'bills'
-            : credit && _re(r'\bsalary\b').hasMatch(body)
-            ? 'income'
-            : investmentDebit
+        (brokerSettlement || investmentProceeds || investmentDebit
             ? 'investments'
-            : null);
+            : ftMatch?.category ??
+                (billPayment
+                    ? 'bills'
+                    : loanRepayment
+                    ? 'emi'
+                    : feeCharge
+                    ? 'bills'
+                    : credit && _re(r'\bsalary\b').hasMatch(body)
+                    ? 'income'
+                    : null));
     final categoryName = categoryDisplayName(categorySlug);
     return observation(
       TransactionEntry(

@@ -17,6 +17,7 @@ import 'central_bills_section.dart';
 import 'insurance_premiums_section.dart';
 import 'sms_bills_section.dart';
 import 'past_bill_receipts_screen.dart';
+import '../cards/card_visual.dart';
 
 // ---------------------------------------------------------------------------
 // Backward-compatible type aliases for existing test harnesses
@@ -919,77 +920,12 @@ String _pastBillStatusLabel(PastBillReceipt item) => switch (item.status) {
   PastBillReceiptStatus.userSavedPurchase => 'Saved purchase',
 };
 
-class _CalendarDateTile extends StatelessWidget {
-  final DateTime dueOn;
-  final bool isUrgent;
-  final bool isPaid;
-
-  const _CalendarDateTile({
-    required this.dueOn,
-    this.isUrgent = false,
-    this.isPaid = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final month = DateFormat('MMM').format(dueOn).toUpperCase();
-    final day = DateFormat('dd').format(dueOn);
-
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: isPaid
-            ? BambooInk.paperMuted
-            : isUrgent
-                ? BambooInk.warningBg
-                : BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isUrgent && !isPaid
-              ? BambooInk.warningBorder
-              : BambooInk.hairlineOnPaper,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            month,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: BambooFonts.ui(
-              9.5,
-              weight: FontWeight.w700,
-              color: isUrgent && !isPaid ? BambooInk.clayInk : BambooInk.ink500,
-            ),
-          ),
-          Text(
-            day,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: BambooFonts.heading(
-              16,
-              weight: FontWeight.w800,
-              color: isPaid
-                  ? BambooInk.ink500
-                  : isUrgent
-                      ? BambooInk.clayInk
-                      : BambooInk.ink900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ComingUpRow extends StatelessWidget {
+class _ComingUpRow extends ConsumerWidget {
   final DuePayment row;
   const _ComingUpRow({required this.row});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final card = row.card;
     final bill = row.bill;
     final isPaid = bill?.isPaid ?? false;
@@ -1007,21 +943,33 @@ class _ComingUpRow extends StatelessWidget {
         ? '$dueLabel · paid'
         : '$dueLabel · past due';
 
+    final pairs = ref.watch(myCardsWithProductProvider).valueOrNull ?? const [];
+    final product = pairs
+        .where((p) => p.$1.id == card.id)
+        .map((p) => p.$2)
+        .firstOrNull ??
+        ref.watch(catalogueProvider).valueOrNull?.where((p) => p.id == card.cardProductId).firstOrNull;
+
     return Container(
       decoration: BoxDecoration(
         color: isPaid
             ? BambooInk.paperMuted.withValues(alpha: 0.5)
             : BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
+        border: Border.all(
+          color: isUrgent && !isPaid
+              ? BambooInk.warningBorder
+              : BambooInk.hairlineOnPaper,
+        ),
       ),
       padding: const EdgeInsets.all(AppSpace.md),
       child: Row(
         children: [
-          _CalendarDateTile(
-            dueOn: row.dueOn,
-            isUrgent: isUrgent,
-            isPaid: isPaid,
+          MiniCardVisual(
+            product: product,
+            userCard: card,
+            width: 50,
+            height: 32,
           ),
           const SizedBox(width: AppSpace.md),
           Expanded(
@@ -1043,7 +991,11 @@ class _ComingUpRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   dueDetail,
-                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  style: BambooFonts.ui(
+                    12,
+                    color: isUrgent ? BambooInk.clayInk : BambooInk.ink500,
+                    weight: isUrgent ? FontWeight.w600 : FontWeight.w400,
+                  ),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
