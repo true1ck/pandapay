@@ -231,7 +231,7 @@ function makeFakeClient() {
       const job = state.jobs.get(params[0]);
       if (!job) return { rows: [], rowCount: 0 };
       job.status = 'queued';
-      job.payload = JSON.parse(params[1]);
+      job.payload = typeof params[1] === 'string' ? JSON.parse(params[1]) : params[1];
       job.attempts = 0;
       job.lease_token = null;
       job.lease_expires_at = null;
@@ -471,7 +471,7 @@ test('acceptance is replay-safe: same source twice, one job, one event, one quot
   assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 1);
 });
 
-test('failed job can be re-queued with fresh payload', async () => {
+test('ordinary device replay cannot reopen a terminal failed job', async () => {
   const client = makeUserClient();
   const first = await geminiQueue.acceptOneJob(client, PROFILE_A, {
     sourceKey: SOURCE_KEY,
@@ -487,10 +487,41 @@ test('failed job can be re-queued with fresh payload', async () => {
     sender: 'HDFCBK',
     body: BILL_BODY,
   });
+  assert.equal(retry.accepted, false);
+  assert.equal(retry.reused, true);
+  assert.equal(retry.terminal, true);
+  assert.equal(retry.reason, 'job_terminal');
+  assert.equal(retry.jobId, first.jobId);
+  assert.equal(client.state.jobs.get(first.jobId).status, 'failed');
+  assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 1);
+});
+
+test('explicit device retry reopens one failed job under the quota and same identity', async () => {
+  const client = makeUserClient();
+  const first = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+  });
+  await geminiQueue.failJob(client, first.jobId, PROFILE_A, 'test_failure');
+
+  const retry = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+    retryFailed: true,
+  });
+
   assert.equal(retry.accepted, true);
   assert.equal(retry.reused, false);
   assert.equal(retry.jobId, first.jobId);
-  assert.equal(client.state.jobs.get(first.jobId).status, 'queued');
+  const job = client.state.jobs.get(first.jobId);
+  assert.equal(job.status, 'queued');
+  assert.equal(job.attempts, 0);
+  assert.equal(job.payload.body, BILL_BODY);
+  assert.equal(client.state.jobs.size, 1);
+  assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 2);
+  assert.equal(client.state.events.filter((event) => event.event_type === 'requeued').length, 1);
 });
 
 test('sensitive payloads are refused before any job or quota write', async () => {
@@ -506,17 +537,28 @@ test('sensitive payloads are refused before any job or quota write', async () =>
   assert.equal(client.state.quota.size, 0);
 });
 
-test('promotional and non-financial messages are refused before storage and quota', async () => {
+test('the API queues phone-approved candidates without repeating triage', async () => {
   const client = makeUserClient();
   const outcome = await geminiQueue.acceptOneJob(client, PROFILE_A, {
     sourceKey: SOURCE_KEY,
     sender: 'VM-HDFCBK-P',
     body: 'Exclusive offer: apply now for a pre-approved card and earn cashback on spend.',
   });
-  assert.deepEqual(outcome, { accepted: false, reason: 'payload_refused_nonfinancial' });
-  assert.equal(client.state.jobs.size, 0);
-  assert.equal(client.state.events.length, 0);
-  assert.equal(client.state.quota.size, 0);
+  assert.equal(outcome.accepted, true);
+  assert.equal(client.state.jobs.size, 1);
+  assert.equal(client.state.events.length, 1);
+  assert.equal(client.state.quota.size, 1);
+
+  const unrelatedClient = makeUserClient();
+  const unrelated = await geminiQueue.acceptOneJob(unrelatedClient, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'FRIEND',
+    body: 'Are we still meeting for lunch tomorrow?',
+  });
+  assert.equal(unrelated.accepted, true);
+  assert.equal(unrelatedClient.state.jobs.size, 1);
+  assert.equal(unrelatedClient.state.events.length, 1);
+  assert.equal(unrelatedClient.state.quota.size, 1);
 });
 
 test('legitimate financial alerts remain eligible for AI fallback', async () => {
@@ -1002,7 +1044,7 @@ test('worker auth: routes disabled without AI_WORKER_TOKEN, token-checked with i
   delete process.env.AI_WORKER_TOKEN;
 });
 
-test('POST /ai/jobs maps refusal reasons to quota (429) and validation (400) statuses', async () => {
+test('POST /ai/jobs maps queue refusals and accepts promotional decision candidates', async () => {
   const quota = harness({});
   quota.state.quota.set(`${PROFILE_A}:${todayKey()}`, geminiQueue.DAILY_QUOTA);
   const resQuota = await quota.call('/ai/jobs', {
@@ -1029,9 +1071,57 @@ test('POST /ai/jobs maps refusal reasons to quota (429) and validation (400) sta
       body: 'Exclusive offer: apply now for a pre-approved card and earn cashback on spend.',
     },
   });
-  assert.equal(resPromotion.status, 400);
-  assert.equal(resPromotion.body.error, 'payload_refused_nonfinancial');
-  assert.equal(promotion.state.jobs.size, 0);
+  assert.equal(resPromotion.status, 200);
+  assert.equal(promotion.state.jobs.size, 1);
+
+  const unrelated = harness({});
+  const resUnrelated = await unrelated.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: {
+      sourceKey: SOURCE_KEY,
+      sender: 'FRIEND',
+      body: 'Are we still meeting for lunch tomorrow?',
+    },
+  });
+  assert.equal(resUnrelated.status, 200);
+  assert.equal(unrelated.state.jobs.size, 1);
+
+  const longCandidate = harness({});
+  const resLongCandidate = await longCandidate.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: {
+      sourceKey: 'b'.repeat(64),
+      sender: 'VM-HDFCBK',
+      body: `INR 250.00 spent at a merchant. ${'context '.repeat(130)}`,
+    },
+  });
+  assert.equal(resLongCandidate.status, 200);
+  assert.equal(longCandidate.state.jobs.size, 1);
+
+  const explicitRetry = harness({});
+  const retryBody = {
+    sourceKey: 'c'.repeat(64),
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+  };
+  const firstAttempt = await explicitRetry.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: retryBody,
+  });
+  assert.equal(firstAttempt.status, 200);
+  await geminiQueue.failJob(
+    explicitRetry.client,
+    firstAttempt.body.jobId,
+    PROFILE_A,
+    'test_failure',
+  );
+  const retryAttempt = await explicitRetry.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: {...retryBody, retryFailed: true},
+  });
+  assert.equal(retryAttempt.status, 200);
+  assert.equal(retryAttempt.body.jobId, firstAttempt.body.jobId);
+  assert.equal(retryAttempt.body.reused, false);
 
   const ok = harness({});
   const resOk = await ok.call('/ai/jobs', {
@@ -1286,7 +1376,7 @@ test('source status omits AI facts the user already confirmed or corrected', asy
   const query = h.client.query;
   h.client.query = async (sql, params) => {
     if (sql.replace(/\s+/g, ' ').trim().startsWith(
-      'SELECT id, status, result, attempts, created_at, updated_at FROM ai_jobs',
+      "SELECT id, status, result, attempts, created_at, updated_at, payload->>'failReason' AS fail_reason FROM ai_jobs",
     )) {
       return { rows: [{
         id: job.id,
@@ -1295,6 +1385,7 @@ test('source status omits AI facts the user already confirmed or corrected', asy
         attempts: job.attempts,
         created_at: job.created_at,
         updated_at: job.created_at,
+        fail_reason: null,
       }] };
     }
     return query(sql, params);

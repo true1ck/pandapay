@@ -59,8 +59,10 @@ test('Gemini worker defaults to the supported Flash model unless configured', ()
 
 test('universal system instruction and schema cover movements, categories and completeness', () => {
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /ZERO HALLUCINATION/);
-  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /PandaPay's Cognitive Financial SMS Intelligence & Extraction Engine/);
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /PandaPay's SMS classification and structured-decision engine/);
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /broker funds payout/i);
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /Pay Later repayment/i);
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /Do not write a summary/i);
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /mandate_lifecycle/);
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /isComplete/);
 
@@ -82,17 +84,17 @@ test('universal system instruction and schema cover movements, categories and co
 });
 
 test('few-shot scenarios are exported and rendered into the prompt', () => {
-  assert.equal(FEW_SHOT_EXAMPLES.length, 16);
+  assert.equal(FEW_SHOT_EXAMPLES.length, 18);
   const labels = FEW_SHOT_EXAMPLES.map((example) => example.label).join(' | ');
   for (const scenario of [
-    'Swiggy', 'Flipkart', 'Axis', 'BESCOM', 'credit card bill paid',
+    'Swiggy', 'Flipkart', 'Axis', 'BESCOM', 'Pay Later', 'credit card bill paid',
     'Kotak Neo', 'Zerodha', 'salary credit', 'Loan EMI', 'Netflix',
     'ATM cash withdrawal', 'Partial',
   ]) {
     assert.match(labels, new RegExp(scenario, 'i'));
   }
   const prompt = buildGeminiPrompt({ payload: { body: 'synthetic fixture' } });
-  assert.match(prompt, /Example 12 \(Partial/);
+  assert.match(prompt, /Example \d+ \(Partial/);
   assert.match(prompt, /"category":"dining"/);
   assert.match(prompt, /"isComplete":false/);
   assert.match(prompt, /groceries, fuel, dining, online, travel, bills, rent/);
@@ -568,31 +570,31 @@ test('UNIVERSAL_RESPONSE_SCHEMA requires decision and facts', () => {
   assert.deepEqual(UNIVERSAL_RESPONSE_SCHEMA.required, ['decision', 'facts']);
   assert.equal(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.type, 'OBJECT');
   assert.deepEqual(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.required, [
-    'topic', 'summary', 'shouldConsider', 'rejectionReason',
+    'topic', 'shouldConsider', 'rejectionReason',
   ]);
   assert.equal(UNIVERSAL_RESPONSE_SCHEMA.properties.facts.type, 'ARRAY');
   assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('telecom_carrier_deduction'));
   assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('loan_upsell_or_offer'));
   assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('otp_or_security_code'));
+  assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('pay_later_due_notice'));
+  assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('pay_later_drawdown'));
+  assert.equal('summary' in UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties, false);
 });
 
 test('telecom carrier deduction, loan offer, and OTP noise return shouldConsider: false and empty facts', async () => {
   const noiseScenarios = [
     {
       topic: 'telecom_carrier_deduction',
-      summary: 'Jio number retention airtime deduction of Rs 9.88',
       shouldConsider: false,
       rejectionReason: 'telecom_carrier_deduction',
     },
     {
       topic: 'loan_upsell_or_offer',
-      summary: 'Pre-approved personal loan marketing offer from Axio',
       shouldConsider: false,
       rejectionReason: 'loan_upsell',
     },
     {
       topic: 'otp_or_security_code',
-      summary: 'HDFC Bank NetBanking login verification OTP',
       shouldConsider: false,
       rejectionReason: 'security_otp',
     },
@@ -614,7 +616,7 @@ test('telecom carrier deduction, loan offer, and OTP noise return shouldConsider
         }],
       }),
     });
-    const result = await provider.classify({ payload: { sender: 'TEST', body: scenario.summary } });
+    const result = await provider.classify({ payload: { sender: 'TEST', body: scenario.topic } });
     assert.equal(result.decision.shouldConsider, false, `${scenario.topic} must have shouldConsider: false`);
     assert.equal(result.decision.topic, scenario.topic);
     assert.equal(result.decision.rejectionReason, scenario.rejectionReason);
@@ -625,7 +627,6 @@ test('telecom carrier deduction, loan offer, and OTP noise return shouldConsider
 test('valid spend returns shouldConsider: true and populated facts', async () => {
   const spendDecision = {
     topic: 'card_spend',
-    summary: 'Spent Rs. 2,499 on Flipkart with ICICI Bank Credit Card ending 4002',
     shouldConsider: true,
     rejectionReason: 'none',
   };
@@ -675,4 +676,43 @@ test('valid spend returns shouldConsider: true and populated facts', async () =>
   assert.equal(result.facts[0].payload.amountInr, 2499.0);
   assert.equal(result.facts[0].payload.merchant, 'Flipkart');
   assert.equal(result.facts[0].payload.category, 'online');
+});
+
+test('Pay Later due is a trackable obligation decision, not a loan offer', async () => {
+  const decision = {
+    topic: 'pay_later_due_notice',
+    shouldConsider: true,
+    rejectionReason: 'none',
+  };
+  const facts = [{
+    factType: 'bill_obligation',
+    payload: {
+      amountRole: 'due_total',
+      amountDueInr: 5300,
+      dueDate: '2026-11-05T00:00:00.000Z',
+      billerName: 'Axio Pay Later',
+      category: 'emi',
+      targetKind: 'utility_or_other_bill',
+      isComplete: true,
+      confidence: 0.98,
+    },
+  }];
+  const provider = new GeminiProvider({
+    apiKey: 'test-key',
+    fetchImpl: async () => response({
+      candidates: [{ content: { parts: [{ text: JSON.stringify({ decision, facts }) }] } }],
+    }),
+  });
+  const result = await provider.classify({
+    payload: {
+      sender: 'AXIO',
+      body: 'Axio Pay Later: Your bill amount of INR 5,300.00 is due on 05-Nov-2026. Auto debit will be processed on the due date.',
+    },
+  });
+  assert.equal(result.decision.topic, 'pay_later_due_notice');
+  assert.equal(result.decision.shouldConsider, true);
+  assert.equal(result.facts[0].factType, 'bill_obligation');
+  assert.equal(result.facts[0].payload.amountDueInr, 5300);
+  assert.equal(result.facts[0].payload.billerName, 'Axio Pay Later');
+  assert.equal('summary' in result.decision, false);
 });

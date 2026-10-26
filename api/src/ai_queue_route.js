@@ -72,27 +72,38 @@ function registerAiQueueRoutes(app, {
     if (!workerAuthEnabled()) {
       return res.status(503).json({ error: 'ai_queue_disabled' });
     }
-    const { sourceKey, sender, body, occurredAt } = req.body || {};
+    const { sourceKey, sender, body, occurredAt, retryFailed } = req.body || {};
     if (typeof sourceKey !== 'string' || !/^[0-9a-f]{64}$/.test(sourceKey)) {
       return res.status(400).json({ error: 'sourceKey must be a hex sha256' });
     }
     if (typeof sender !== 'string' || sender.length < 2 || sender.length > 40) {
       return res.status(400).json({ error: 'sender must be 2-40 chars' });
     }
-    if (typeof body !== 'string' || body.length === 0 || body.length > 900) {
-      return res.status(400).json({ error: 'body must be a non-empty message under 900 chars' });
+    if (typeof body !== 'string' || body.length === 0) {
+      return res.status(400).json({ error: 'body must be a non-empty message' });
     }
     try {
       const outcome = await withUserClient(req.userId, async (client) => {
         if (!(await aiQueueEnabled(client, req.userId))) {
           return { accepted: false, reason: 'ai_queue_disabled' };
         }
-        return geminiQueue.acceptOneJob(client, req.userId, { sourceKey, sender, body, occurredAt });
+        return geminiQueue.acceptOneJob(client, req.userId, {
+          sourceKey,
+          sender,
+          body,
+          occurredAt,
+          retryFailed: retryFailed === true,
+        });
       });
       if (!outcome.accepted) {
         const status = outcome.reason === 'daily_quota_exhausted' ? 429
-          : outcome.reason === 'ai_queue_disabled' ? 503 : 400;
-        return res.status(status).json({ error: outcome.reason });
+          : outcome.reason === 'ai_queue_disabled' ? 503
+            : outcome.reason === 'job_terminal' ? 409 : 400;
+        return res.status(status).json({
+          error: outcome.reason,
+          ...(outcome.jobId ? { jobId: outcome.jobId } : {}),
+          ...(outcome.terminal ? { terminal: true } : {}),
+        });
       }
       res.status(200).json({ jobId: outcome.jobId, reused: outcome.reused === true });
     } catch (error) {
@@ -111,7 +122,8 @@ function registerAiQueueRoutes(app, {
     try {
       const job = await withUserClient(req.userId, async (client) => {
         const rows = await client.query(
-          `SELECT id, status, result, attempts, created_at, updated_at
+          `SELECT id, status, result, attempts, created_at, updated_at,
+                  payload->>'failReason' AS fail_reason
              FROM ai_jobs WHERE profile_id = $1 AND source_key = $2`,
           [req.userId, req.params.sourceKey],
         );
@@ -127,7 +139,11 @@ function registerAiQueueRoutes(app, {
             factType: fact.factType,
             payload: fact.payload,
           }));
-        return { ...found, decision: found.result?.decision || null, suggestions };
+        return {
+          ...found,
+          decision: found.result?.decision || null,
+          suggestions,
+        };
       });
       if (!job) return res.status(404).json({ error: 'unknown source' });
       res.status(200).json({
@@ -139,6 +155,7 @@ function registerAiQueueRoutes(app, {
         // The raw SMS and model prompt have already been purged from the job.
         suggestions: job.suggestions,
         attempts: job.attempts,
+        ...(job.fail_reason ? { failureReason: job.fail_reason } : {}),
         createdAt: job.created_at,
         updatedAt: job.updated_at,
       });

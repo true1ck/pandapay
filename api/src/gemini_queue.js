@@ -10,7 +10,6 @@
  */
 
 const crypto = require('crypto');
-const { isSecurityOrOtpMessage, isNonTransactionNoise } = require('./sms_parser');
 
 const MAX_LEASE_ATTEMPTS = 6;
 const LEASE_MINUTES = 10;
@@ -26,17 +25,6 @@ function payloadLooksSensitive(body) {
     /\bcvv\b/.test(lower) ||
     /\bm[pn]\b/.test(lower)
   );
-}
-
-/** Defense in depth: old local review rows must pass the same message-family
- * boundary as newly captured inbox SMS before any body is stored or sent to
- * Gemini. The handset is the first filter; the server is the authority. */
-function aiMessageEligible(sender, body) {
-  const text = String(body || '').trim();
-  if (!text || isSecurityOrOtpMessage(text) || isNonTransactionNoise(sender, text)) {
-    return false;
-  }
-  return /\b(?:transaction|txn|spent|spend|debited|debit|credited|credit|paid|payment|purchase|refund|reversal|failed|declined|bill|statement|due|balance|account|a\/c|upi|transfer|autopay|e-mandate|mandate|insurance|premium)\b|₹|\b(?:inr|rs\.?)\b/i.test(text);
 }
 
 /** Keep useful amounts/dates while removing high-risk numeric identifiers. */
@@ -60,47 +48,60 @@ function redactBodyForAi(body) {
  * `reused` before quota or inserts happen, so app retries, 429 retries and
  * double pushes never create a second job or burn a second quota unit.
  */
-async function acceptOneJob(client, profileId, { sourceKey, sender, body, occurredAt }) {
+async function acceptOneJob(client, profileId, {
+  sourceKey, sender, body, occurredAt, retryFailed = false,
+}) {
   if (payloadLooksSensitive(body)) {
     return { accepted: false, reason: 'payload_refused_sensitive' };
   }
-  if (!aiMessageEligible(sender, body)) {
-    return { accepted: false, reason: 'payload_refused_nonfinancial' };
-  }
-
-  const existing = await findJobBySourceKey(client, profileId, sourceKey);
+  const existing = await findJobBySourceKey(
+    client,
+    profileId,
+    sourceKey,
+    retryFailed,
+  );
   if (existing) {
-    if (existing.status !== 'failed') {
-      return { accepted: true, jobId: existing.id, reused: true };
+    if (existing.status === 'failed' && retryFailed) {
+      if (!(await withinDailyQuota(client, profileId))) {
+        return { accepted: false, reason: 'daily_quota_exhausted' };
+      }
+      if (!(await bumpDailyQuota(client, profileId))) {
+        return { accepted: false, reason: 'daily_quota_exhausted' };
+      }
+      const smsFacts = require('./sms_facts');
+      await client.query(
+        `UPDATE ai_jobs
+            SET status = 'queued', payload = $2, attempts = 0,
+                lease_token = NULL, lease_expires_at = NULL,
+                next_attempt_at = now(), updated_at = now()
+          WHERE id = $1 AND status = 'failed'`,
+        [
+          existing.id,
+          JSON.stringify({
+            sender,
+            body: redactBodyForAi(body),
+            bodyHash: smsFacts.bodyHashOf(sender, body),
+            occurredAt,
+            kind: 'classify_sms',
+          }),
+        ],
+      );
+      await recordEvent(client, existing.id, profileId, 'requeued', {
+        reason: 'explicit_device_retry',
+      });
+      return { accepted: true, jobId: existing.id, reused: false };
     }
-    // Failed jobs can be re-queued when resubmitted by the device with fresh payload.
-    if (!(await withinDailyQuota(client, profileId))) {
-      return { accepted: false, reason: 'daily_quota_exhausted' };
-    }
-    const smsFacts = require('./sms_facts');
-    await client.query(
-      `UPDATE ai_jobs
-          SET status = 'queued',
-              payload = $2,
-              attempts = 0,
-              lease_token = NULL,
-              lease_expires_at = NULL,
-              updated_at = now()
-        WHERE id = $1`,
-      [
-        existing.id,
-        JSON.stringify({
-          sender,
-          body: redactBodyForAi(body),
-          bodyHash: smsFacts.bodyHashOf(sender, body),
-          occurredAt,
-          kind: 'classify_sms',
-        }),
-      ],
-    );
-    await bumpDailyQuota(client, profileId);
-    await recordEvent(client, existing.id, profileId, 'requeued', {});
-    return { accepted: true, jobId: existing.id, reused: false };
+    // A failed row is terminal for this pipeline revision. Silently reopening
+    // it resets the worker attempt budget every time the app reconciles and
+    // creates an unbounded failed -> queued -> failed loop. Explicit/versioned
+    // replay is a separate operator or user action.
+    return {
+      accepted: existing.status !== 'failed',
+      jobId: existing.id,
+      reused: true,
+      terminal: existing.status === 'failed',
+      ...(existing.status === 'failed' ? { reason: 'job_terminal' } : {}),
+    };
   }
 
   if (!(await withinDailyQuota(client, profileId))) {
@@ -140,9 +141,9 @@ async function acceptOneJob(client, profileId, { sourceKey, sender, body, occurr
   return { accepted: true, jobId: inserted.rows[0].id, reused: false };
 }
 
-async function findJobBySourceKey(client, profileId, sourceKey) {
+async function findJobBySourceKey(client, profileId, sourceKey, lock = false) {
   const rows = await client.query(
-    `SELECT id, status FROM ai_jobs WHERE profile_id = $1 AND source_key = $2`,
+    `SELECT id, status FROM ai_jobs WHERE profile_id = $1 AND source_key = $2${lock ? ' FOR UPDATE' : ''}`,
     [profileId, sourceKey],
   );
   return rows.rows[0] || null;
@@ -392,7 +393,6 @@ module.exports = {
   LEASE_MINUTES,
   DAILY_QUOTA,
   payloadLooksSensitive,
-  aiMessageEligible,
   redactBodyForAi,
   acceptOneJob,
   withinDailyQuota,
