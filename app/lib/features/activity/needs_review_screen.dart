@@ -1046,29 +1046,10 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
         ).showSnackBar(const SnackBar(content: Text('Moved to Needs Review')));
       }
     } catch (error) {
-      if (error is ApiException && error.statusCode != null) {
-        await ref
-            .read(needsReviewRepositoryProvider)
-            .updateAiStatus(
-              widget.item.id,
-              AiReviewStatus.unavailable,
-              failureReason: error.errorCode ?? 'http_${error.statusCode}',
-            );
-        ref.invalidate(needsReviewItemsProvider);
-      }
       if (mounted) {
-        final message =
-            error is ApiException && error.errorCode == 'daily_quota_exhausted'
-            ? 'Gemini review limit reached. Try again later.'
-            : error is ApiException && error.errorCode == 'ai_queue_disabled'
-            ? 'Gemini review is temporarily disabled.'
-            : error is ApiException &&
-                  error.errorCode == 'payload_refused_sensitive'
-            ? 'This message cannot be sent for AI review.'
-            : userFacingErrorMessage(error);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -2296,10 +2277,29 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       ref.read(smsFlushTriggerProvider.notifier).state++;
       ref.invalidate(needsReviewItemsProvider);
     } catch (error) {
+      if (error is ApiException && error.statusCode != null) {
+        await ref
+            .read(needsReviewRepositoryProvider)
+            .updateAiStatus(
+              widget.item.id,
+              AiReviewStatus.unavailable,
+              failureReason: error.errorCode ?? 'http_${error.statusCode}',
+            );
+        ref.invalidate(needsReviewItemsProvider);
+      }
       if (mounted) {
+        final message =
+            error is ApiException && error.errorCode == 'daily_quota_exhausted'
+            ? 'Gemini review limit reached. Try again later.'
+            : error is ApiException && error.errorCode == 'ai_queue_disabled'
+            ? 'Gemini review is temporarily disabled.'
+            : error is ApiException &&
+                  error.errorCode == 'payload_refused_sensitive'
+            ? 'This message cannot be sent for AI review.'
+            : userFacingErrorMessage(error);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
