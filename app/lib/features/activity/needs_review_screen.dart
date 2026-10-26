@@ -704,6 +704,15 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
         .where((item) => item.aiStatus == AiReviewStatus.processing)
         .length;
     final activeAiCount = queuedAiCount + processingAiCount;
+    final failedAiCount = pendingItems
+        .where((item) => item.aiStatus == AiReviewStatus.unavailable)
+        .length;
+    final completedAiCount = pendingItems
+        .where((item) => item.aiStatus == AiReviewStatus.checked)
+        .length;
+    final notQueuedAiCount = pendingItems
+        .where((item) => item.aiStatus == AiReviewStatus.notChecked)
+        .length;
     final autoCount = ref.watch(autoResolvedCountProvider).valueOrNull ?? 0;
 
     final sortedList = List<NeedsReviewItem>.from(pendingItems)
@@ -800,7 +809,8 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
         child: Column(
           children: [
             _buildTabSelector(pendingItems.length, autoCount),
-            if (_selectedTab == 0 && (_retryingAiReviews || activeAiCount > 0))
+            if (_selectedTab == 0 &&
+                (_retryingAiReviews || activeAiCount > 0 || failedAiCount > 0))
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpace.lg,
@@ -822,26 +832,28 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                       Text(
                         _retryingAiReviews
                             ? 'Sending $retryableAiCount failed message${retryableAiCount == 1 ? '' : 's'} for AI review…'
-                            : queuedAiCount > 0 && processingAiCount == 0
-                            ? 'Waiting for AI review · $queuedAiCount message${queuedAiCount == 1 ? '' : 's'} queued'
-                            : 'AI is reviewing $activeAiCount message${activeAiCount == 1 ? '' : 's'}',
+                            : 'AI review · $activeAiCount of ${pendingItems.length} messages active',
                         style: BambooFonts.ui(
                           12.5,
                           weight: FontWeight.w700,
                           color: BambooInk.ink900,
                         ),
                       ),
-                      if (!_retryingAiReviews &&
-                          queuedAiCount > 0 &&
-                          processingAiCount > 0) ...[
+                      if (!_retryingAiReviews) ...[
                         const SizedBox(height: 2),
                         Text(
-                          '$queuedAiCount queued · $processingAiCount in progress',
+                          '$queuedAiCount queued · $processingAiCount in progress · $failedAiCount failed',
+                          style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                        ),
+                        Text(
+                          '$completedAiCount completed · $notQueuedAiCount not queued',
                           style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                         ),
                       ],
-                      const SizedBox(height: AppSpace.xs),
-                      const LinearProgressIndicator(minHeight: 3),
+                      if (_retryingAiReviews || activeAiCount > 0) ...[
+                        const SizedBox(height: AppSpace.xs),
+                        const LinearProgressIndicator(minHeight: 3),
+                      ],
                     ],
                   ),
                 ),

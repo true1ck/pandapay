@@ -349,10 +349,9 @@ void main() {
       settle: false,
     );
 
-    expect(
-      find.text('Waiting for AI review · 1 message queued'),
-      findsOneWidget,
-    );
+    expect(find.text('AI review · 1 of 1 messages active'), findsOneWidget);
+    expect(find.text('1 queued · 0 in progress · 0 failed'), findsOneWidget);
+    expect(find.text('0 completed · 0 not queued'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
@@ -387,6 +386,9 @@ void main() {
     final repo = _FakeUserCardsRepository();
     await _pump(tester, repo: repo, reviews: reviews, settle: false);
 
+    expect(find.text('AI review · 0 of 2 messages active'), findsOneWidget);
+    expect(find.text('0 queued · 0 in progress · 1 failed'), findsOneWidget);
+    expect(find.text('1 completed · 0 not queued'), findsOneWidget);
     expect(find.text('Retry failed AI reviews (1)'), findsOneWidget);
     expect(find.textContaining('AI review failed'), findsNothing);
     await tester.tap(find.text('Retry failed AI reviews (1)'));
@@ -421,7 +423,8 @@ void main() {
       settle: false,
     );
 
-    expect(find.textContaining('AI review'), findsNothing);
+    expect(find.text('AI review · 1 of 1 messages active'), findsOneWidget);
+    expect(find.text('0 queued · 1 in progress · 0 failed'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
