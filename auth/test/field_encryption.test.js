@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { phoneLookupHash } = require('../src/utils/encryptedPhoneSearch');
 function load(env) {
   const context = { module: { exports: {} }, require, Buffer, process: { env } };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/utils/fieldEncryption.js'), 'utf8'), context);
@@ -24,6 +25,8 @@ const readKey = crypto.randomBytes(32);
 const readKeyConfig = JSON.stringify([['primary_reader', readKey.toString('base64')]]);
 test('existing authenticated ciphertext survives a provider move using the same key', () => {
   const original = load(encryptedEnv);
+  assert.equal(original.getWriteFormat(), 'legacy');
+  assert.equal(original.getWriteKeyId(), null);
   const ciphertext = original.encryptPhoneNumber('+919876543210');
   assert.equal(ciphertext.split(':').length, 3);
   assert.equal(load({ ...encryptedEnv, NODE_ENV: 'production' }).decryptPhoneNumber(ciphertext), '+919876543210');
@@ -67,6 +70,88 @@ test('v2 reader opens independently manufactured AAD-bound envelopes without cha
   const written = reader.encryptPhoneNumber('+919876543210');
   assert.equal(written.split(':').length, 3);
   assert.equal(reader.decryptPhoneNumber(written), '+919876543210');
+});
+
+test('v2 writer is explicit opt-in and legacy format remains the default with configured read keys', () => {
+  const readerOnly = load({ ...encryptedEnv, ENCRYPTION_READ_KEYS_JSON: readKeyConfig });
+  assert.equal(readerOnly.getWriteFormat(), 'legacy');
+  assert.equal(readerOnly.getWriteKeyId(), null);
+  assert.equal(readerOnly.encryptPhoneNumber('+919876543210').split(':').length, 3);
+
+  const explicitlyLegacy = load({ ...encryptedEnv, ENCRYPTION_V2_WRITES_ENABLED: 'false',
+    ENCRYPTION_WRITE_KEY_ID: 'unused-preprovisioned-id', ENCRYPTION_READ_KEYS_JSON: readKeyConfig });
+  assert.equal(explicitlyLegacy.getWriteFormat(), 'legacy');
+  assert.equal(explicitlyLegacy.encryptPhoneNumber('+919876543210').split(':').length, 3);
+});
+
+test('v2 writer requires strict flag, legacy key retention, and an already configured read key ID', () => {
+  const valid = { ...encryptedEnv, ENCRYPTION_READ_KEYS_JSON: readKeyConfig,
+    ENCRYPTION_V2_WRITES_ENABLED: 'true', ENCRYPTION_WRITE_KEY_ID: 'primary_reader' };
+  const writer = load(valid);
+  assert.equal(writer.getWriteFormat(), 'v2');
+  assert.equal(writer.getWriteKeyId(), 'primary_reader');
+  for (const flag of ['', '1', 'yes', 'TRUE']) {
+    assert.throws(() => load({ ...encryptedEnv, ENCRYPTION_V2_WRITES_ENABLED: flag }),
+      error => error.code === 'FIELD_ENCRYPTION_ERROR');
+  }
+  for (const env of [
+    { ...encryptedEnv, ENCRYPTION_V2_WRITES_ENABLED: 'true', ENCRYPTION_READ_KEYS_JSON: readKeyConfig },
+    { ENCRYPTION_ENABLED: 'false', ENCRYPTION_V2_WRITES_ENABLED: 'true', ENCRYPTION_WRITE_KEY_ID: 'primary_reader', ENCRYPTION_READ_KEYS_JSON: readKeyConfig },
+    { ...encryptedEnv, ENCRYPTION_V2_WRITES_ENABLED: 'true', ENCRYPTION_WRITE_KEY_ID: 'missing', ENCRYPTION_READ_KEYS_JSON: readKeyConfig },
+    { ...encryptedEnv, ENCRYPTION_V2_WRITES_ENABLED: 'true', ENCRYPTION_WRITE_KEY_ID: 'bad id', ENCRYPTION_READ_KEYS_JSON: readKeyConfig },
+  ]) {
+    assert.throws(() => load(env), error => error.code === 'FIELD_ENCRYPTION_ERROR');
+  }
+});
+
+test('v2 writer emits reader-compatible canonical envelopes with fresh random IVs', () => {
+  const writer = load({ ...encryptedEnv, ENCRYPTION_V2_WRITES_ENABLED: 'true',
+    ENCRYPTION_WRITE_KEY_ID: 'primary_reader', ENCRYPTION_READ_KEYS_JSON: readKeyConfig });
+  const first = writer.encryptPhoneNumber('+919876543210');
+  const second = writer.encryptPhoneNumber('+919876543210');
+  assert.match(first, /^v2:primary_reader:/);
+  assert.notEqual(first, second);
+  assert.notEqual(first.split(':')[2], second.split(':')[2]);
+  assert.ok(Buffer.byteLength(first, 'utf8') <= 4096);
+  assert.equal(writer.decryptPhoneNumber(first), '+919876543210');
+  assert.equal(load({ ...encryptedEnv, ENCRYPTION_READ_KEYS_JSON: readKeyConfig }).decryptPhoneNumber(first), '+919876543210');
+  assert.throws(() => writer.encryptField('x'.repeat(4000)), error => error.code === 'FIELD_ENCRYPTION_ERROR');
+});
+
+test('v2 writer preserves mixed legacy, v2 and plaintext phone reads plus the original legacy restore key', () => {
+  const legacyKey = crypto.randomBytes(32);
+  const legacy = load({ ENCRYPTION_ENABLED: 'true', ENCRYPTION_KEY: legacyKey.toString('base64') });
+  const legacyCiphertext = legacy.encryptPhoneNumber('+919876543210');
+  const writer = load({ ...encryptedEnv, ENCRYPTION_KEY: legacyKey.toString('base64'),
+    ENCRYPTION_V2_WRITES_ENABLED: 'true', ENCRYPTION_WRITE_KEY_ID: 'primary_reader',
+    ENCRYPTION_READ_KEYS_JSON: readKeyConfig });
+  const v2 = writer.encryptPhoneNumber('+918765432109');
+  assert.equal(writer.decryptPhoneNumber(legacyCiphertext), '+919876543210');
+  assert.equal(writer.decryptPhoneNumber(v2), '+918765432109');
+  assert.equal(writer.decryptPhoneNumber('9876543210'), '9876543210');
+  const restoreWithOriginal = load({ ENCRYPTION_ENABLED: 'true', ENCRYPTION_KEY: legacyKey.toString('base64') });
+  assert.equal(restoreWithOriginal.decryptPhoneNumber(legacyCiphertext), '+919876543210');
+});
+
+test('v2 phone writes leave stable HMAC lookup identity unchanged', () => {
+  const previous = process.env.PHONE_LOOKUP_HMAC_KEY;
+  const hmacKey = 'synthetic-phone-lookup-key-for-v2-writer';
+  process.env.PHONE_LOOKUP_HMAC_KEY = hmacKey;
+  try {
+    const expected = crypto.createHmac('sha256', hmacKey)
+      .update('pandapay-phone-lookup:v1:+919876543210').digest('hex');
+    const legacy = load(encryptedEnv);
+    const versioned = load({ ...encryptedEnv, ENCRYPTION_V2_WRITES_ENABLED: 'true',
+      ENCRYPTION_WRITE_KEY_ID: 'primary_reader', ENCRYPTION_READ_KEYS_JSON: readKeyConfig });
+    assert.equal(phoneLookupHash('+919876543210'), expected);
+    assert.equal(phoneLookupHash('+91 98765 43210'), expected);
+    assert.equal(legacy.getWriteFormat(), 'legacy');
+    assert.equal(versioned.getWriteFormat(), 'v2');
+    assert.equal(phoneLookupHash('+919876543210'), expected);
+  } finally {
+    if (previous === undefined) delete process.env.PHONE_LOOKUP_HMAC_KEY;
+    else process.env.PHONE_LOOKUP_HMAC_KEY = previous;
+  }
 });
 
 test('read key config accepts empty forms, enforces limits and keeps IDs prototype safe', () => {

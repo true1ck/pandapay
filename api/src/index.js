@@ -1,4 +1,4 @@
-const { createStatementImportHandler } = require('./statement_import');
+const { createStatementImportHandler, statementImportResponseRow } = require('./statement_import');
 const { safeErrorCode } = require('./safeErrorCode');
 require('dotenv').config();
 const crypto = require('crypto');
@@ -333,6 +333,12 @@ app.get('/ready', createReadinessHandler({
   checkDependencies: async () => {
     await pool.query('SELECT 1');
     if (notificationOutboxStartupFailed || notificationOutboxWorker?.isBlocked()) throw new Error('Notification worker unavailable');
+    if (notificationOutboxWorker) {
+      const status = notificationOutboxWorker.getStatus();
+      if (!status.running || !status.available || status.lastPollAt === null || Math.abs(Date.now() - status.lastPollAt) > 60000) {
+        throw new Error('Notification worker heartbeat unavailable');
+      }
+    }
     await checkPartnerWebhookReadiness(partnerWebhookPool);
     await checkImapWorkerReadiness(imapWorkerPool);
     await require('./service_pools').checkNotificationCapabilityReadiness(sharedFeedbackPool, 'feedback');
@@ -10820,6 +10826,7 @@ app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res)
  * feeds from.
  */
 app.post('/statement-imports', requireAuth, createStatementImportHandler({
+  receiptsEnabled: config.statementImportReceiptsEnabled,
   withUserClient, importResolvers, clientMutationSourceKey, insertTransactionAndUpdateState,
 }));
 
@@ -10832,7 +10839,7 @@ app.get('/statement-imports', requireAuth, async (req, res) => {
         [req.userId]
       )
     );
-    res.json({ statementImports: result.rows });
+    res.json({ statementImports: result.rows.map(statementImportResponseRow) });
   } catch (err) {
     console.error('GET /statement-imports error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
@@ -11241,9 +11248,18 @@ if(config.accountLifecycleEnabled&&lifecycleInterval>0){
 
 if (config.notificationOutboxEnabled) {
   if (!notificationService.isConfigured()) throw new Error('Notification provider configuration invalid');
+  const workerId = `api-notifications-${crypto.randomUUID()}`;
   notificationOutboxWorker = require('./notification_outbox_worker').createNotificationOutboxWorker({
     databasePool: notificationOutboxPool, send: notificationService.send,
-    workerId: `api-notifications-${crypto.randomUUID()}`, batchSize: 1,
+    workerId, batchSize: 1,
+    reportStatus: async result => {
+      const response = await notificationOutboxPool.query({
+        text: 'SELECT notification_delivery.report_worker_status($1,$2,$3,$4,$5,$6,$7) AS recorded',
+        values: [workerId, result.available, result.blocked, result.claimed, result.completed, result.failed, result.errorCode || null],
+        query_timeout: 2500,
+      });
+      if (response.rows?.[0]?.recorded !== true) throw new Error('Notification worker status not recorded');
+    },
   });
   require('./service_pools').checkNotificationCapabilityReadiness(notificationOutboxPool, 'outbox')
     .then(() => { if (!shuttingDown) notificationOutboxWorker.start(); })

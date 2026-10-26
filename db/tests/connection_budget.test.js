@@ -57,7 +57,8 @@ test('maintenance holds both auth-retention clients; HTTP-only Gemini adds no lo
   const value = fixture();
   for (const process of value.processes) if (!['api', 'auth', 'rewards-worker'].includes(process.kind)) process.replicas = 1;
   const report = evaluateBudget(value, { now: NOW });
-  assert.equal(report.clusters[0].steady_connections, 37);
+  assert.equal(report.clusters[0].steady_connections, 38);
+  assert.equal(report.processes.find(process => process.kind === 'notification-health-monitor').contributions[0].steady_connections, 1);
   assert.deepEqual(report.processes.find(process => process.kind === 'gemini-worker').contributions, []);
   assert.equal(report.processes.find(process => process.kind === 'auth-retention-maintenance').contributions.length, 2);
 });
@@ -71,7 +72,7 @@ test('stale reviews, future reviews, unknown reserves and missing operational/sa
 });
 test('omitted workers, duplicated IDs, unknown aliases, unexpected secrets and malformed/huge counts are rejected', () => {
   for (const mutate of [
-    value => value.processes.pop(), value => value.processes.push(value.processes[0]), value => value.clusters.push(value.clusters[0]),
+    value => { value.processes = value.processes.filter(p => p.kind !== 'maintenance-alert-delivery'); }, value => value.processes.push(value.processes[0]), value => value.clusters.push(value.clusters[0]),
     value => processOf(value, 'api').pools.main = 'absent', value => delete processOf(value, 'api').pools.imapWorker,
     value => processOf(value, 'api').pools.main = null, value => value.password = 'never-output',
     value => value.clusters[0].url = 'postgresql://never-output', value => processOf(value, 'api').dbPoolMax = 2.5,

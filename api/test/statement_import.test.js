@@ -1,8 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { validateStatementImport, createStatementImportHandler, createStatementImportAdmission, maskAccount, inferStatementEntryKind } = require('../src/statement_import');
+const { validateStatementImport, createStatementImportHandler, createStatementImportAdmission, maskAccount, inferStatementEntryKind, statementImportRequestHash } = require('../src/statement_import');
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
+test('receipt-only semantic inputs reject nested objects before hashing or database access', async () => {
+  for (const extra of [{ merchantVpa: { nested: true } }, { vpa: [] }, { mcc: { nested: true } }]) {
+    const run = harness({ receiptsEnabled: true }); const input = body();
+    Object.assign(input.transactions[0], extra);
+    assert.equal((await run.call(input)).status, 400); assert.equal(run.databaseCalls, 0);
+  }
+});
 const cardId = '11111111-1111-4111-8111-111111111111';
 const categoryId = '22222222-2222-4222-8222-222222222222';
 const userCategoryId = '33333333-3333-4333-8333-333333333333';
@@ -72,25 +79,34 @@ test('rejects invalid calendar dates, ranges, decimal precision, nonfinite value
   assert.ok(validateStatementImport(repeated));
 });
 
-function harness({ cardType = 'credit', owned = true, automatic = false, failOnInsert = false } = {}) {
+function harness({ cardType = 'credit', owned = true, automatic = false, failOnInsert = false, receiptsEnabled = false } = {}) {
   const batches = new Map(); const rows = new Map(); const written = []; const updates = [];
+  const queries = [];
   let databaseCalls = 0;
   const client = { query: async (sql, params) => {
     databaseCalls++;
+    queries.push({ sql, params });
     if (sql.includes('SELECT cp.card_type')) return { rows: owned ? [{ card_type: cardType }] : [] };
     if (sql.includes('FROM user_categories')) return { rows: [{ id: userCategoryId, parent_category_id: categoryId }] };
     if (sql.includes('FROM spend_categories')) return { rows: [{ id: categoryId }] };
     if (sql.includes('INSERT INTO statement_imports')) {
       if (batches.has(params[9])) return { rowCount: 0, rows: [] };
-      const row = { id: `batch-${batches.size}`, txn_count: params[6], reconciled_count: params[7] };
+      const row = { id: `batch-${batches.size}`, txn_count: params[6], reconciled_count: params[7],
+        ...(sql.includes('import_request_hash') ? { import_request_hash: params[10], import_response_summary: null } : {}) };
       batches.set(params[9], row); return { rowCount: 1, rows: [row] };
     }
     if (sql.includes('SELECT * FROM statement_imports')) return { rows: [batches.get(params[1])] };
-    if (sql.includes('UPDATE statement_imports')) return { rows: [{ id: params[2], txn_count: params[0], reconciled_count: params[1] }] };
+    if (sql.includes('UPDATE statement_imports')) {
+      const row = [...batches.values()].find((candidate) => candidate.id === params[2]);
+      row.txn_count = params[0]; row.reconciled_count = params[1];
+      if (sql.includes('import_response_summary')) row.import_response_summary = JSON.parse(params[3]);
+      return { rows: [row] };
+    }
     if (sql.includes('UPDATE transactions')) { updates.push(sql); return { rows: [] }; }
     throw new Error(`Unexpected SQL ${sql}`);
   } };
   const handler = createStatementImportHandler({ withUserClient: async (_, fn) => fn(client),
+    receiptsEnabled,
     importResolvers: { resolveCategoryForImport: async () => 'category' },
     clientMutationSourceKey: (user, source, key) => hash(`${user}:${source}:${key}`),
     insertTransactionAndUpdateState: async (_, user, input) => {
@@ -102,7 +118,10 @@ function harness({ cardType = 'credit', owned = true, automatic = false, failOnI
       return { status: 201, transaction, duplicatePending: input.merchantName === 'Possible duplicate' };
     }, logger: { error() {} },
   });
-  return { written, updates, get databaseCalls() { return databaseCalls; }, call: async (input) => {
+  return { written, updates, queries, batches, get databaseCalls() { return databaseCalls; }, seedLegacy(importKey) {
+    const key = hash(`profile:statement:${importKey}`);
+    batches.set(key, { id: `legacy-${batches.size}`, txn_count: 1, reconciled_count: 1 });
+  }, call: async (input) => {
     let status; let result;
     await handler({ userId: 'profile', body: input, requestId: 'import-test-123' }, { status(value) { status = value; return this; }, json(value) { result = value; return this; } });
     return { status, result };
@@ -218,4 +237,79 @@ test('reviewed private category must belong to the importing account and match i
   });
   assert.equal((await mismatched.call(wrongParent)).status, 400);
   assert.equal(mismatched.written.length, 0);
+});
+
+test('receipt request digest sorts object keys, preserves row order, and includes reviewed semantics', () => {
+  const original = body();
+  const reordered = {
+    ...original,
+    transactions: [Object.fromEntries(Object.entries(original.transactions[0]).reverse())],
+    ignoredFutureField: { irrelevant: true },
+  };
+  assert.equal(statementImportRequestHash(original), statementImportRequestHash(reordered));
+  const changed = body();
+  changed.transactions[0].tagNames = ['rewards'];
+  assert.notEqual(statementImportRequestHash(original), statementImportRequestHash(changed));
+  assert.equal(statementImportRequestHash({ userCardId: cardId, statementFrom: '2026-10-01',
+    statementTo: '2026-10-31', txnCount: 1 }), null);
+});
+
+test('enabled receipt returns its original response summary on exact replay and rejects changed semantics before writes', async () => {
+  const run = harness({ receiptsEnabled: true });
+  const input = body();
+  input.transactions.push({ ...input.transactions[0], importRowKey: hash('second'), merchantName: 'Possible duplicate' });
+  const first = await run.call(input);
+  assert.equal(first.status, 201);
+  assert.deepEqual(first.result.summary, { imported: 1, pendingDuplicates: 1, exactRetries: 0 });
+  const row = [...run.batches.values()][0];
+  assert.match(row.import_request_hash, /^[a-f0-9]{64}$/);
+  assert.deepEqual(row.import_response_summary, first.result.summary);
+  assert.equal(Object.hasOwn(first.result.statementImport, 'import_request_hash'), false);
+  const writtenCount = run.written.length;
+  const replay = await run.call(JSON.parse(JSON.stringify(input)));
+  assert.equal(replay.status, 200);
+  assert.deepEqual(replay.result.summary, first.result.summary);
+  assert.equal(run.written.length, writtenCount);
+
+  const changed = JSON.parse(JSON.stringify(input));
+  changed.transactions[0].note = 'edited after submit';
+  const conflict = await run.call(changed);
+  assert.equal(conflict.status, 409);
+  assert.equal(conflict.result.error, 'statement_import_key_reused');
+  assert.equal(run.written.length, writtenCount, 'key conflict must not reach financial writer');
+});
+
+test('receipt mode preserves legacy replays without receipts and unkeyed summaries', async () => {
+  const run = harness({ receiptsEnabled: true });
+  const input = body();
+  run.seedLegacy(input.importKey);
+  const replay = await run.call(input);
+  assert.equal(replay.status, 200);
+  assert.deepEqual(replay.result.summary, { imported: 0, pendingDuplicates: 0, exactRetries: 1 });
+  assert.equal(run.written.length, 0);
+
+  const summaryOnly = harness({ receiptsEnabled: true });
+  const legacy = await summaryOnly.call({ userCardId: cardId, statementFrom: '2026-10-01',
+    statementTo: '2026-10-31', txnCount: 3 });
+  assert.equal(legacy.status, 201);
+  assert.equal(summaryOnly.queries.some(({ sql }) => sql.includes('import_request_hash')), false);
+
+  const keyedSummary = harness({ receiptsEnabled: true });
+  const keyed = { userCardId: cardId, statementFrom: '2026-10-01', statementTo: '2026-10-31',
+    txnCount: 3, reconciledCount: 2, importKey: hash('legacy summary receipt') };
+  const keyedFirst = await keyedSummary.call(keyed);
+  assert.equal(keyedFirst.status, 201);
+  assert.match([...keyedSummary.batches.values()][0].import_request_hash, /^[a-f0-9]{64}$/);
+  const keyedReplay = await keyedSummary.call(keyed);
+  assert.equal(keyedReplay.status, 200);
+  assert.deepEqual(keyedReplay.result.summary, keyedFirst.result.summary);
+});
+
+test('receipt is written only after all financial writes succeed and default-off uses legacy SQL', async () => {
+  const failed = harness({ receiptsEnabled: true, failOnInsert: true });
+  assert.equal((await failed.call(body())).status, 500);
+  assert.equal(failed.queries.some(({ sql }) => sql.includes('SET txn_count = $1, reconciled_count = $2, import_response_summary')), false);
+  const disabled = harness();
+  await disabled.call(body());
+  assert.equal(disabled.queries.some(({ sql }) => sql.includes('import_request_hash') || sql.includes('import_response_summary')), false);
 });

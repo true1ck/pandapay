@@ -6,7 +6,7 @@ function safeErrorCode(error) {
 }
 
 function createNotificationOutboxWorker({ databasePool, workerId = 'notification-worker', batchSize = 1,
-  leaseSeconds = 90, pollIntervalMs = 5000, deliveryTimeoutMs = 30000, abortGraceMs = 3000, send, logger = console } = {}) {
+  leaseSeconds = 90, pollIntervalMs = 5000, deliveryTimeoutMs = 30000, abortGraceMs = 3000, send, reportStatus = null, logger = console } = {}) {
   if (!databasePool?.connect) throw new TypeError('databasePool.connect is required');
   if (!/^[A-Za-z0-9._:-]{1,120}$/.test(workerId)) throw new TypeError('workerId must be 1-120 safe characters');
   if (!Number.isInteger(batchSize) || batchSize !== 1) throw new RangeError('batchSize must be 1 to keep each claimed lease bounded');
@@ -21,6 +21,7 @@ function createNotificationOutboxWorker({ databasePool, workerId = 'notification
   }
   if (!send) send = require('./notification_service').send;
   if (typeof send !== 'function') throw new TypeError('send is required');
+  if (reportStatus !== null && typeof reportStatus !== 'function') throw new TypeError('reportStatus must be a function');
   const withWorkerRole = async (fn) => {
     const c = await databasePool.connect();
     let discardConnection;
@@ -33,6 +34,7 @@ function createNotificationOutboxWorker({ databasePool, workerId = 'notification
   };
   let cycle = null; let timer = null; let wakeDelay = null; let stopRequested = false; let loop = null;
   let activeController = null; let cancelActiveSend = null; let senderBlocked = false;
+  let latestStatus = { available: false, lastPollAt: null, errorCode: 'notification_worker_not_started' };
 
   async function sendWithDeadline(payload) {
     const controller = new AbortController();
@@ -105,6 +107,16 @@ function createNotificationOutboxWorker({ databasePool, workerId = 'notification
       }
       return { available: true, claimed: rows.rowCount, completed, failed: rows.rowCount - completed };
     })().catch((e) => { const code = safeErrorCode(e); logger.error('notification outbox cycle unavailable', { code }); return { available: false, errorCode: code, claimed: 0, completed: 0, failed: 0 }; })
+      .then(async result => {
+        try {
+          if (reportStatus) await reportStatus({ ...result, blocked: senderBlocked });
+        } catch (error) {
+          result = { ...result, available: false, errorCode: 'notification_worker_status_unavailable' };
+          logger.error('notification worker status unavailable', { code: safeErrorCode(error) });
+        }
+        latestStatus = { available: result.available === true, lastPollAt: Date.now(), errorCode: result.errorCode || null };
+        return result;
+      })
       .finally(() => { cycle = null; });
     return cycle;
   }
@@ -115,8 +127,18 @@ function createNotificationOutboxWorker({ databasePool, workerId = 'notification
       wakeDelay = r; timer = setTimeout(() => { timer = null; wakeDelay = null; r(); }, pollIntervalMs);
     }); } })().finally(() => { loop = null; });
   }
-  async function stop() { stopRequested = true; activeController?.abort(); cancelActiveSend?.(); if (timer) clearTimeout(timer); timer = null; wakeDelay?.(); wakeDelay = null; if (loop) await loop; }
-  return { pollOnce, start, stop, isBlocked: () => senderBlocked };
+  async function stop() {
+    stopRequested = true; activeController?.abort(); cancelActiveSend?.();
+    if (timer) clearTimeout(timer); timer = null; wakeDelay?.(); wakeDelay = null;
+    if (loop) await loop;
+    latestStatus = { available: false, lastPollAt: Date.now(), errorCode: 'notification_worker_stopped' };
+    if (reportStatus) {
+      try { await reportStatus({ available: false, blocked: senderBlocked, claimed: 0, completed: 0, failed: 0, errorCode: 'notification_worker_stopped' }); }
+      catch (error) { logger.error('Notification worker stop status unavailable', { code: safeErrorCode(error) }); }
+    }
+  }
+  return { pollOnce, start, stop, isBlocked: () => senderBlocked,
+    getStatus: () => ({ ...latestStatus, blocked: senderBlocked, running: Boolean(loop) }) };
 }
 
 module.exports = { createNotificationOutboxWorker, safeErrorCode };

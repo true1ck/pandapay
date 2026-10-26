@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const SOURCES = new Set(['statement', 'screenshot', 'csv', 'xlsx', 'json']);
 const RAILS = new Set(['upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown']);
 const ENTRY_KINDS = new Set(['spend', 'income', 'investment', 'transfer']);
@@ -73,7 +74,7 @@ function money(value, { signed = false } = {}) {
     && /^-?\d+(?:\.\d{1,2})?$/.test(String(value));
 }
 
-function validateStatementImport(body) {
+function validateStatementImport(body, { receiptsEnabled = false } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return 'An import object is required';
   if (body.userCardId != null && (typeof body.userCardId !== 'string' || !UUID.test(body.userCardId))) return 'userCardId must be a card id or null';
   if (body.instrument != null && !INSTRUMENTS.has(body.instrument)) return 'instrument is invalid';
@@ -81,6 +82,9 @@ function validateStatementImport(body) {
       || !calendarDate(body.statementTo) || !/^\d{4}-\d{2}-\d{2}$/.test(body.statementTo)
       || body.statementFrom > body.statementTo) return 'Choose a valid statement date range';
   if (!SOURCES.has(body.importSource ?? 'statement')) return 'Unsupported import source';
+  if (receiptsEnabled && body.importKey != null && (typeof body.importKey !== 'string' || !HASH.test(body.importKey))) {
+    return 'A SHA-256 importKey is required';
+  }
   if (body.closingBalanceInr != null && !money(body.closingBalanceInr, { signed: true })) return 'closingBalanceInr is invalid';
   if (body.pointsPosted != null && (typeof body.pointsPosted !== 'number' || !Number.isFinite(body.pointsPosted))) return 'pointsPosted is invalid';
   if (body.issuerFormatId != null && (typeof body.issuerFormatId !== 'string' || body.issuerFormatId.length > 100)) return 'issuerFormatId is invalid';
@@ -97,6 +101,13 @@ function validateStatementImport(body) {
   for (const [index, row] of body.transactions.entries()) {
     const prefix = `transactions[${index}]`;
     if (!row || typeof row !== 'object' || Array.isArray(row)) return `${prefix} must be an object`;
+    if (receiptsEnabled) {
+      for (const name of ['merchantVpa', 'vpa']) {
+        if (row[name] != null && (typeof row[name] !== 'string' || row[name].length > 256)) return `${prefix}.${name} is invalid`;
+      }
+      if (row.mcc != null && !((typeof row.mcc === 'string' && row.mcc.length <= 16)
+        || (Number.isSafeInteger(row.mcc) && row.mcc >= 0 && row.mcc <= 9999))) return `${prefix}.mcc is invalid`;
+    }
     if (row.tagNames != null && (!Array.isArray(row.tagNames) || row.tagNames.length > 30 || row.tagNames.some((name) => typeof name !== 'string' || !name.trim() || name.trim().length > 60))) return `${prefix}.tagNames is invalid`;
     if (row.entryKind != null && !ENTRY_KINDS.has(row.entryKind)) return `${prefix}.entryKind is invalid`;
     if (row.instrument != null && !INSTRUMENTS.has(row.instrument)) return `${prefix}.instrument is invalid`;
@@ -126,7 +137,70 @@ function validateStatementImport(body) {
   return null;
 }
 
-function createStatementImportHandler({ withUserClient, importResolvers, clientMutationSourceKey, insertTransactionAndUpdateState, logger = console, admission = createStatementImportAdmission() }) {
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** Hash only fields the handler uses. Unknown request properties remain
+ * ignored, matching the route's existing input contract. Array order matters. */
+function statementImportRequestHash(body) {
+  if (!body || typeof body.importKey !== 'string' || !HASH.test(body.importKey)) return null;
+  const userCardId = body.userCardId ?? null;
+  const transactions = Array.isArray(body.transactions) ? body.transactions.map((row, index) => ({
+    amountInr: row.amountInr,
+    occurredAt: new Date(row.occurredAt).toISOString(),
+    merchantName: row.merchantName?.trim() || null,
+    merchantVpa: row.merchantVpa || row.vpa || null,
+    mcc: row.mcc || null,
+    entryKind: inferStatementEntryKind(row),
+    instrument: userCardId ? null : (row.instrument || body.instrument || 'other'),
+    importRowKey: row.importRowKey || `${body.importKey}:${index}`,
+    sourceAccount: maskAccount(row.sourceAccount || null),
+    bankReference: row.bankReference || null,
+    categoryHint: row.categoryHint ?? null,
+    subcategoryHint: row.subcategoryHint ?? null,
+    tagNames: row.tagNames ?? [],
+    categoryId: row.categoryId ?? null,
+    userCategoryId: row.userCategoryId ?? null,
+    rail: row.rail || 'unknown',
+    note: row.note || null,
+  })) : null;
+  const canonical = {
+    importKey: body.importKey,
+    userCardId,
+    instrument: userCardId ? null : (body.instrument ?? 'other'),
+    statementFrom: body.statementFrom,
+    statementTo: body.statementTo,
+    closingBalanceInr: body.closingBalanceInr ?? null,
+    pointsPosted: body.pointsPosted ?? null,
+    txnCount: transactions === null ? (body.txnCount ?? null) : null,
+    reconciledCount: transactions === null ? (body.reconciledCount ?? null) : null,
+    issuerFormatId: body.issuerFormatId ?? null,
+    importSource: body.importSource ?? 'statement',
+    transactions,
+  };
+  return crypto.createHash('sha256').update(stableJson(canonical)).digest('hex');
+}
+
+function validStoredSummary(summary) {
+  return Boolean(summary && typeof summary === 'object' && !Array.isArray(summary) &&
+    ['imported', 'pendingDuplicates', 'exactRetries'].every((key) =>
+      Number.isSafeInteger(summary[key]) && summary[key] >= 0 && summary[key] <= 5000) &&
+    Object.keys(summary).length === 3 &&
+    summary.imported + summary.pendingDuplicates + summary.exactRetries <= 5000);
+}
+
+function statementImportResponseRow(row) {
+  if (!row) return row;
+  const { import_request_hash: _requestHash, import_response_summary: _responseSummary, ...publicRow } = row;
+  return publicRow;
+}
+
+function createStatementImportHandler({ withUserClient, importResolvers, clientMutationSourceKey, insertTransactionAndUpdateState, logger = console, admission = createStatementImportAdmission(), receiptsEnabled = false }) {
   return async (req, res) => {
   const {
     userCardId,
@@ -142,8 +216,9 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
     importKey,
     transactions: structuredTransactions,
   } = req.body || {};
-  const validationError = validateStatementImport(req.body);
+  const validationError = validateStatementImport(req.body, { receiptsEnabled: receiptsEnabled === true });
   if (validationError) return res.status(400).json({ error: validationError });
+  const receiptHash = receiptsEnabled === true ? statementImportRequestHash(req.body) : null;
   const release = admission.acquire(req.userId);
   if (!release) {
     res.set?.('Retry-After', '5');
@@ -205,14 +280,20 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
       const statementSourceKey = importKey
         ? clientMutationSourceKey(req.userId, 'statement', importKey)
         : null;
-      const insertedImport = await client.query(
-        `INSERT INTO statement_imports
-           (profile_id, user_card_id, statement_from, statement_to, closing_balance_inr,
-            points_posted, txn_count, reconciled_count, issuer_format_id, source_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
-         RETURNING *`,
-        [
+      const insertSql = receiptHash
+        ? `INSERT INTO statement_imports
+             (profile_id, user_card_id, statement_from, statement_to, closing_balance_inr,
+              points_posted, txn_count, reconciled_count, issuer_format_id, source_key, import_request_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
+           RETURNING *`
+        : `INSERT INTO statement_imports
+             (profile_id, user_card_id, statement_from, statement_to, closing_balance_inr,
+              points_posted, txn_count, reconciled_count, issuer_format_id, source_key)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
+           RETURNING *`;
+      const insertParams = [
           req.userId,
           userCardId,
           statementFrom,
@@ -223,19 +304,31 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
           structuredTransactions ? 0 : (reconciledCount ?? 0),
           issuerFormatId ?? null,
           statementSourceKey,
-        ]
-      );
+        ];
+      if (receiptHash) insertParams.push(receiptHash);
+      const insertedImport = await client.query(insertSql, insertParams);
 
       if (insertedImport.rowCount === 0) {
         const existing = await client.query(
           `SELECT * FROM statement_imports WHERE profile_id = $1 AND source_key = $2`,
           [req.userId, statementSourceKey]
         );
+        const existingRow = existing.rows[0];
+        let replaySummary = { imported: 0, pendingDuplicates: 0, exactRetries: structuredTransactions?.length ?? 0 };
+        if (receiptHash && existingRow?.import_request_hash) {
+          if (existingRow.import_request_hash !== receiptHash) {
+            return { status: 409, error: 'statement_import_key_reused' };
+          }
+          if (!validStoredSummary(existingRow.import_response_summary)) {
+            throw new Error('statement_import_receipt_incomplete');
+          }
+          replaySummary = existingRow.import_response_summary;
+        }
         return {
           status: 200,
-          statementImport: existing.rows[0],
+          statementImport: statementImportResponseRow(existingRow),
           duplicate: true,
-          summary: { imported: 0, pendingDuplicates: 0, exactRetries: structuredTransactions?.length ?? 0 },
+          summary: replaySummary,
         };
       }
 
@@ -316,17 +409,25 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
         }
       }
 
+      const summary = { imported, pendingDuplicates, exactRetries };
       const updatedImport = await client.query(
-        `UPDATE statement_imports
-            SET txn_count = $1, reconciled_count = $2
-          WHERE id = $3
-          RETURNING *`,
-        [structuredTransactions?.length ?? (txnCount ?? 0), structuredTransactions ? reconciled : (reconciledCount ?? 0), statementImport.id]
+        receiptHash
+          ? `UPDATE statement_imports
+                SET txn_count = $1, reconciled_count = $2, import_response_summary = $4::jsonb
+              WHERE id = $3
+              RETURNING *`
+          : `UPDATE statement_imports
+                SET txn_count = $1, reconciled_count = $2
+              WHERE id = $3
+              RETURNING *`,
+        receiptHash
+          ? [structuredTransactions?.length ?? (txnCount ?? 0), structuredTransactions ? reconciled : (reconciledCount ?? 0), statementImport.id, JSON.stringify(summary)]
+          : [structuredTransactions?.length ?? (txnCount ?? 0), structuredTransactions ? reconciled : (reconciledCount ?? 0), statementImport.id]
       );
       return {
         status: 201,
-        statementImport: updatedImport.rows[0],
-        summary: { imported, pendingDuplicates, exactRetries },
+        statementImport: statementImportResponseRow(updatedImport.rows[0]),
+        summary,
       };
     });
     res.status(result.status).json(result);
@@ -343,4 +444,4 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
   };
 }
 
-module.exports = { validateStatementImport, createStatementImportHandler, createStatementImportAdmission, maskAccount, inferStatementEntryKind };
+module.exports = { validateStatementImport, createStatementImportHandler, createStatementImportAdmission, maskAccount, inferStatementEntryKind, statementImportRequestHash, statementImportResponseRow };

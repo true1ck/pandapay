@@ -584,6 +584,10 @@
     "notification_delivery.outbox": {
       "disposition": "excluded_with_intent",
       "reason": "Private accepted notification intent and immutable payload revisions are preserved by full PostgreSQL backups. Account portable restore must not replay prior external sends; per-account portable notification history remains an explicit coverage gap. Full disaster recovery requires delivery replay/provider deduplication review before worker restart."
+    },
+    "notification_delivery.worker_status": {
+      "disposition": "platform_ops",
+      "reason": "Bounded worker heartbeat and aggregate delivery counters migrate in full PostgreSQL recovery. They contain no customer identifiers/payload and are not account portable-export data. Recovered heartbeats are stale until a real worker reports again."
     }
   }
 }

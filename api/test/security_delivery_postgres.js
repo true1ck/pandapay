@@ -14,7 +14,7 @@ async function main() {
   const login = async name => { const u = new URL(value);u.username=name;const c=new Client({connectionString:u.toString(),ssl:false,statement_timeout:1500});await c.connect();clients.push(c);return c; };
   const deny = async (client, sql, args = []) => { await assert.rejects(client.query(sql,args),error=>error.code==='42501'); };
   try {
-    for (const [name,cap] of [['delivery_feedback_login','pandapay_feedback_admission'],['delivery_worker_login','notification_worker'],['delivery_app_login','app_user']]) {
+    for (const [name,cap] of [['delivery_feedback_login','pandapay_feedback_admission'],['delivery_worker_login','notification_worker'],['delivery_app_login','app_user'],['delivery_monitor_login','notification_monitor']]) {
       await admin.query(`CREATE ROLE ${name} LOGIN INHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`);
       await admin.query(`GRANT ${cap} TO ${name}`);
     }
@@ -44,6 +44,23 @@ async function main() {
     await app.query('SELECT notification_delivery.enqueue($1)',[n1]);
     assert.equal((await admin.query('SELECT count(*)::integer AS n FROM notification_delivery.outbox')).rows[0].n,1);
     const worker1=await login('delivery_worker_login'),worker2=await login('delivery_worker_login');
+    await worker1.query("SELECT notification_delivery.report_worker_status('integration-worker',true,false,0,0,0,null)");
+    const monitor=await login('delivery_monitor_login');
+    await deny(monitor,'SELECT * FROM notification_delivery.revisions');
+    const health=(await monitor.query('SELECT notification_delivery.health() AS h')).rows[0].h;
+    assert.equal(health.queued,1);assert.equal(health.retained,1);assert.equal(health.missing_worker,false);
+    assert.equal(Object.keys(health).length,14);
+    const {probe}=require('../../db/scripts/notification_delivery_health');
+    const monitorUrl=new URL(value);monitorUrl.username='delivery_monitor_login';
+    const output=[];const probeEnv={NOTIFICATION_MONITOR_DATABASE_URL:monitorUrl.toString(),DB_SSL:'false',NODE_ENV:'test'};
+    assert.equal(await probe({env:probeEnv,write:v=>output.push(v)}),0);assert.equal(JSON.parse(output[0]).health.queued,1);
+    await admin.query('GRANT SELECT ON notification_delivery.profile_queue_counts TO delivery_monitor_login');
+    await assert.rejects(probe({env:probeEnv,write:()=>assert.fail('unsafe monitor cannot emit')}),/Unsafe/);
+    await admin.query('REVOKE SELECT ON notification_delivery.profile_queue_counts FROM delivery_monitor_login');
+    await worker1.query("SELECT notification_delivery.report_worker_status('integration-worker',false,false,0,0,0,'notification_worker_stopped')");
+    assert.equal((await monitor.query('SELECT notification_delivery.health() AS h')).rows[0].h.missing_worker,true);
+
+
     await deny(worker1,'SELECT * FROM notification_delivery.revisions');
     await worker1.query('BEGIN');const claimed=(await worker1.query("SELECT * FROM notification_delivery.claim('first',1,90)")).rows[0];assert.ok(claimed);
     const other=(await worker2.query("SELECT * FROM notification_delivery.claim('second',1,90)")).rows;assert.equal(other.length,0);

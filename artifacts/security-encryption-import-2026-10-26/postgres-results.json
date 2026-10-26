@@ -1,0 +1,125 @@
+{
+  "source": {
+    "candidate_sha256": "d28eef51778f13a3406198af7e68ac222ff7420a4679966f40df194fef85eae4",
+    "file_count": 1433
+  },
+  "scope": "owned-synthetic-loopback-only",
+  "saved_credentials_or_customer_data": false,
+  "checks": {
+    "init": {
+      "exit_code": 0,
+      "log_sha256": "34582a76682420f190c7715214e61b671faa51f8110542a1f52c3449267c7dae"
+    },
+    "start": {
+      "exit_code": 0,
+      "log_sha256": "66afd0411ccc09366e99fdd99b85f21899c8d2d064f5835126859618802153ad"
+    },
+    "create": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "version": {
+      "exit_code": 0,
+      "log_sha256": "9f37d3232c3d9c760ab750e986131361f48d3a9ab5ded13c3e2b322b13c48aa2"
+    },
+    "baseline-migrate": {
+      "exit_code": 0,
+      "log_sha256": "58dee5daa1643e5c93fc59bf2a36e9c17f3d4f38282ad3a6d96e513fbe3aa88f"
+    },
+    "seed": {
+      "exit_code": 0,
+      "log_sha256": "b6b585bc7c4bf7ebbc968057dafe84f698740755037d79df6bc052be4c591905"
+    },
+    "before-data": {
+      "exit_code": 0,
+      "log_sha256": "8f45e084499a354cef714e541f23fabd60a0a29444897a952031899d366ba630"
+    },
+    "upgrade": {
+      "exit_code": 0,
+      "log_sha256": "a17bedbe16dc40c02cf6103481c3df7595d5a9af88012b2fef9e3a182b28345a"
+    },
+    "after-data": {
+      "exit_code": 0,
+      "log_sha256": "8f45e084499a354cef714e541f23fabd60a0a29444897a952031899d366ba630"
+    },
+    "repeat-ledger": {
+      "exit_code": 0,
+      "log_sha256": "a513ada1fc71a826a4de3937fc0175343485fc237e023135c05a3d72fef182a6"
+    },
+    "replay-20261026130000_notification_delivery_health.sql": {
+      "exit_code": 0,
+      "log_sha256": "9051c8d5668315e2431e0e541a5da8f5dc2a0bb0d66c539b503b7d978d9133a4"
+    },
+    "fixture-20261026130000_notification_delivery_health.sql": {
+      "exit_code": 0,
+      "log_sha256": "f41c8b97ea90b378a7654b072d0113c46e7278b9b9a2e499f7a6e9dc32381791"
+    },
+    "replay-20261026140000_statement_import_receipts.sql": {
+      "exit_code": 0,
+      "log_sha256": "438017f3f49c1d75e4c578ccf2d9ee5424873542ec015ae9a237020682f9e0df"
+    },
+    "fixture-20261026140000_statement_import_receipts.sql": {
+      "exit_code": 0,
+      "log_sha256": "36828ac7b7a3fdc35e5e8b136fb768953565e708e900f275abc579d6159b1183"
+    },
+    "post-fixtures-data": {
+      "exit_code": 0,
+      "log_sha256": "8f45e084499a354cef714e541f23fabd60a0a29444897a952031899d366ba630"
+    },
+    "concurrency-and-login": {
+      "exit_code": 0,
+      "log_sha256": "82231c398e38285ea19ef21eea76362b6a67b791a7880184d73c0c3e87f48089"
+    },
+    "dump": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "restore-create": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "restore": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "restored-data": {
+      "exit_code": 0,
+      "log_sha256": "8f45e084499a354cef714e541f23fabd60a0a29444897a952031899d366ba630"
+    },
+    "phone-create": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "phone-seed-read": {
+      "exit_code": 0,
+      "log_sha256": "0a87cfa9f88d4d9c4bb6425ddc66afac78cd3f051bee5088946fbe005c7d8d25"
+    },
+    "phone-dump": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "phone-restore-create": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "phone-restore": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "phone-restored-read": {
+      "exit_code": 0,
+      "log_sha256": "0a87cfa9f88d4d9c4bb6425ddc66afac78cd3f051bee5088946fbe005c7d8d25"
+    },
+    "stop": {
+      "exit_code": 0,
+      "log_sha256": "ca19178a35ab4153b75b494963b66ce8243e1b94c173107c87b44d09db23652d"
+    }
+  },
+  "postgres_version": "18.4 (Homebrew)",
+  "original_tables_preserved": 159,
+  "full_dump_restore_preservation": true,
+  "synthetic_phone_formats_varchar255_and_dump_restore": true,
+  "source_unchanged": true,
+  "result": "passed",
+  "logs_retained_in_git": false
+}

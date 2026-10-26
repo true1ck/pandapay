@@ -7,6 +7,8 @@ const { safeErrorCode } = require('../utils/safeErrorCode');
 const express = require('express');
 const db = require('../db');
 const { logAuthEvent, RISK_LEVELS } = require('../services/auditLogger');
+const { decryptPhoneNumber } = require('../utils/fieldEncryption');
+const { canonicalizePhone, phoneLookupHash } = require('../utils/encryptedPhoneSearch');
 
 const router = express.Router();
 
@@ -45,6 +47,45 @@ function sanitizeNumber(value, defaultValue, min = 1, max = 1000) {
   return num;
 }
 
+function createSecurityEventSearchFilter(search, startIndex) {
+  let canonicalPhone = null;
+  try { canonicalPhone = canonicalizePhone(search); } catch (_) {}
+  if (canonicalPhone) {
+    return {
+      sql: ` AND u.phone_lookup_hash = $${startIndex}`,
+      values: [phoneLookupHash(canonicalPhone)],
+    };
+  }
+
+  const terms = [
+    `aa.user_id::text ILIKE $${startIndex}`,
+    `aa.ip_address ILIKE $${startIndex}`,
+    `u.email ILIKE $${startIndex}`,
+    `u.name ILIKE $${startIndex}`,
+  ];
+  // Numeric/punctuation-only fragments are treated as incomplete phone input:
+  // do not scan arbitrary audit metadata or encrypted rows for a substring.
+  if (!/^[+\d\s().-]+$/.test(search)) terms.push(`aa.meta::text ILIKE $${startIndex}`);
+  return { sql: ` AND (${terms.join('\n        OR ')})`, values: [`%${search}%`] };
+}
+
+function maskStoredPhone(value) {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    const phone = canonicalizePhone(decryptPhoneNumber(value));
+    return phone.replace(/\d(?=\d{4})/g, '*');
+  } catch (_) {
+    // Never return or log an opaque/damaged ciphertext as a masked phone.
+    return null;
+  }
+}
+
+function maskAuditPhoneText(value) {
+  if (typeof value !== 'string' || !value) return null;
+  try { return canonicalizePhone(value).replace(/\d(?=\d{4})/g, '*'); }
+  catch (_) { return null; }
+}
+
 /**
  * GET /admin/security-events
  * Retrieve security audit events with filtering and pagination
@@ -53,7 +94,7 @@ function sanitizeNumber(value, defaultValue, min = 1, max = 1000) {
  * - risk_level: Filter by risk level (INFO, SUSPICIOUS, HIGH_RISK) - optional
  * - limit: Number of results (1-1000, default: 200)
  * - offset: Pagination offset (default: 0)
- * - search: Search in user_id, phone (from meta), or ip_address - optional
+ * - search: Partial user id, email, name, IP or audit metadata; phone queries are exact keyed lookups
  */
 router.get('/security-events', async (req, res) => {
   try {
@@ -107,14 +148,10 @@ router.get('/security-events', async (req, res) => {
 
     // Add search filter (safe parameterized query)
     if (search) {
-      query += ` AND (
-        aa.user_id::text ILIKE $${paramIndex}
-        OR aa.ip_address ILIKE $${paramIndex}
-        OR u.phone_number ILIKE $${paramIndex}
-        OR aa.meta::text ILIKE $${paramIndex}
-      )`;
-      queryParams.push(`%${search}%`);
-      paramIndex++;
+      const filter = createSecurityEventSearchFilter(search, paramIndex);
+      query += filter.sql;
+      queryParams.push(...filter.values);
+      paramIndex += filter.values.length;
     }
 
     // Order by created_at descending (most recent first)
@@ -131,15 +168,8 @@ router.get('/security-events', async (req, res) => {
     // Sanitize all fields before returning
     const events = result.rows.map(row => {
       // Extract phone from meta if not in users table
-      let phone = row.phone_number;
-      if (!phone && row.meta && typeof row.meta === 'object') {
-        phone = row.meta.phone || null;
-      }
-      
-      // Mask phone number for security (keep last 4 digits)
-      const maskedPhone = phone 
-        ? phone.replace(/\d(?=\d{4})/g, '*')
-        : null;
+      const maskedPhone = maskStoredPhone(row.phone_number)
+        || maskAuditPhoneText(row.meta && typeof row.meta === 'object' ? row.meta.phone : null);
 
       return {
         id: String(row.id || ''),
@@ -173,13 +203,9 @@ router.get('/security-events', async (req, res) => {
     }
 
     if (search) {
-      countQuery += ` AND (
-        aa.user_id::text ILIKE $${countParamIndex}
-        OR aa.ip_address ILIKE $${countParamIndex}
-        OR u.phone_number ILIKE $${countParamIndex}
-        OR aa.meta::text ILIKE $${countParamIndex}
-      )`;
-      countParams.push(`%${search}%`);
+      const filter = createSecurityEventSearchFilter(search, countParamIndex);
+      countQuery += filter.sql;
+      countParams.push(...filter.values);
     }
 
     const countResult = await db.query(countQuery, countParams);
@@ -213,7 +239,7 @@ router.get('/security-events', async (req, res) => {
       ipAddress: req.ip || req.connection.remoteAddress,
       userAgent: req.headers['user-agent'],
       meta: {
-        filters: { risk_level: riskLevel, search, limit, offset },
+        filters: { risk_level: riskLevel, search_present: Boolean(search), limit, offset },
       },
     }).catch(err => {
       // Don't break the response if logging fails
@@ -250,7 +276,7 @@ router.get('/security-events', async (req, res) => {
       ipAddress: req.ip || req.connection.remoteAddress,
       userAgent: req.headers['user-agent'],
       meta: {
-        error: err.message,
+        error: safeErrorCode(err),
       },
     }).catch(() => {
       // Ignore logging errors
@@ -261,4 +287,7 @@ router.get('/security-events', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.createSecurityEventSearchFilter = createSecurityEventSearchFilter;
+module.exports.maskStoredPhone = maskStoredPhone;
+module.exports.maskAuditPhoneText = maskAuditPhoneText;
 

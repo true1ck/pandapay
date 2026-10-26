@@ -189,6 +189,16 @@
       "name": "shared_feedback_runtime",
       "kind": "runtime",
       "required": false
+    },
+    {
+      "name": "notification_monitor",
+      "kind": "capability",
+      "required": false
+    },
+    {
+      "name": "notification_monitor_runtime",
+      "kind": "runtime",
+      "required": false
     }
   ],
   "ledgers": [
@@ -238,6 +248,10 @@
     {
       "member": "shared_feedback_runtime",
       "role": "pandapay_feedback_admission"
+    },
+    {
+      "member": "notification_monitor_runtime",
+      "role": "notification_monitor"
     }
   ],
   "restrictedRoles": [
@@ -386,7 +400,8 @@
       "routines": [
         "notification_delivery.claim(text,integer,integer)",
         "notification_delivery.allowed(uuid,uuid)",
-        "notification_delivery.finish(uuid,uuid,boolean,text,boolean)"
+        "notification_delivery.finish(uuid,uuid,boolean,text,boolean)",
+        "notification_delivery.report_worker_status(text,boolean,boolean,integer,integer,integer,text)"
       ]
     },
     {
@@ -395,7 +410,8 @@
       "routines": [
         "notification_delivery.claim(text,integer,integer)",
         "notification_delivery.allowed(uuid,uuid)",
-        "notification_delivery.finish(uuid,uuid,boolean,text,boolean)"
+        "notification_delivery.finish(uuid,uuid,boolean,text,boolean)",
+        "notification_delivery.report_worker_status(text,boolean,boolean,integer,integer,integer,text)"
       ]
     },
     {
@@ -410,6 +426,20 @@
       "relations": [],
       "routines": [
         "feedback_admission.consume(text,text,boolean)"
+      ]
+    },
+    {
+      "role": "notification_monitor",
+      "relations": [],
+      "routines": [
+        "notification_delivery.health()"
+      ]
+    },
+    {
+      "role": "notification_monitor_runtime",
+      "relations": [],
+      "routines": [
+        "notification_delivery.health()"
       ]
     }
   ],
@@ -605,6 +635,22 @@
     {
       "role": "app_user",
       "identity": "notification_delivery.enqueue(uuid)"
+    },
+    {
+      "role": "notification_worker",
+      "identity": "notification_delivery.report_worker_status(text,boolean,boolean,integer,integer,integer,text)"
+    },
+    {
+      "role": "notification_worker_runtime",
+      "identity": "notification_delivery.report_worker_status(text,boolean,boolean,integer,integer,integer,text)"
+    },
+    {
+      "role": "notification_monitor",
+      "identity": "notification_delivery.health()"
+    },
+    {
+      "role": "notification_monitor_runtime",
+      "identity": "notification_delivery.health()"
     }
   ],
   "acceptedFindings": [],
@@ -728,6 +774,30 @@
     {
       "role": "app_user",
       "identity": "feedback_admission.consume(text,text,boolean)"
+    },
+    {
+      "role": "anon",
+      "identity": "notification_delivery.report_worker_status(text,boolean,boolean,integer,integer,integer,text)"
+    },
+    {
+      "role": "anon",
+      "identity": "notification_delivery.health()"
+    },
+    {
+      "role": "authenticated",
+      "identity": "notification_delivery.report_worker_status(text,boolean,boolean,integer,integer,integer,text)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "notification_delivery.health()"
+    },
+    {
+      "role": "app_user",
+      "identity": "notification_delivery.report_worker_status(text,boolean,boolean,integer,integer,integer,text)"
+    },
+    {
+      "role": "app_user",
+      "identity": "notification_delivery.health()"
     }
   ]
 }

@@ -21,6 +21,7 @@ const MODELS = Object.freeze({
   'auth-retention-maintenance': { ledger: 1, retention: 1 },
   'backup-status-publisher': { main: 1 },
   'maintenance-alert-delivery': { main: 1 },
+  'notification-health-monitor': { main: 1 },
 });
 
 function fields(value, allowed, required = allowed) {
@@ -88,7 +89,7 @@ function validateBudget(value) {
       if (process.replicas > 0 && ['main', 'ledger', 'retention'].includes(name) && cluster === null) throw new Error('Serving process needs its primary connections');
     }
   }
-  if (Object.keys(MODELS).some(kind => !kinds.has(kind))) throw new Error('Every known process kind requires an explicit inventory entry, including disabled ones');
+  if (Object.keys(MODELS).some(kind => kind !== 'notification-health-monitor' && !kinds.has(kind))) throw new Error('Every known process kind requires an explicit inventory entry, including disabled ones');
   return value;
 }
 

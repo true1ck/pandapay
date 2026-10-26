@@ -69,12 +69,38 @@ function initializeReadKeys() {
     throw failure('ENCRYPTION_READ_KEYS_JSON must contain up to 8 unique IDs and canonical base64 32-byte keys');
   }
 }
+function initializeV2Writer(keys) {
+  const setting = process.env.ENCRYPTION_V2_WRITES_ENABLED;
+  if (setting === undefined) return { enabled: false, keyId: null, key: null };
+  if (setting !== 'true' && setting !== 'false') {
+    throw failure('ENCRYPTION_V2_WRITES_ENABLED must be true or false');
+  }
+  if (setting === 'false') return { enabled: false, keyId: null, key: null };
+  if (!key) throw failure('ENCRYPTION_V2_WRITES_ENABLED requires ENCRYPTION_ENABLED and a valid ENCRYPTION_KEY');
+  const keyId = process.env.ENCRYPTION_WRITE_KEY_ID;
+  if (typeof keyId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(keyId)) {
+    throw failure('ENCRYPTION_WRITE_KEY_ID must select a configured read key ID');
+  }
+  const writeKey = keys.get(keyId);
+  if (!writeKey) throw failure('ENCRYPTION_WRITE_KEY_ID must select a configured read key ID');
+  return { enabled: true, keyId, key: writeKey };
+}
 const key = initializeKey();
 const readKeys = initializeReadKeys();
+const v2Writer = initializeV2Writer(readKeys);
 function encryptField(value) {
   if (!value || typeof value !== 'string') return value;
   if (!key) return value;
   const iv = crypto.randomBytes(12);
+  if (v2Writer.enabled) {
+    const cipher = crypto.createCipheriv('aes-256-gcm', v2Writer.key, iv);
+    cipher.setAAD(Buffer.concat([V2_AAD_PREFIX, Buffer.from(v2Writer.keyId, 'utf8')]));
+    const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+    const envelope = ['v2', v2Writer.keyId, iv, cipher.getAuthTag(), ciphertext]
+      .map((part, index) => index < 2 ? part : part.toString('base64')).join(':');
+    if (Buffer.byteLength(envelope, 'utf8') > 4096) throw failure('Encrypted field exceeds the supported envelope size');
+    return envelope;
+  }
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
   const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
   return [iv, cipher.getAuthTag(), ciphertext].map(bytes => bytes.toString('base64')).join(':');
@@ -128,4 +154,6 @@ module.exports = {
   encryptPhoneNumber: encryptField,
   decryptPhoneNumber: decryptField,
   isEncryptionEnabled: () => key !== null,
+  getWriteFormat: () => v2Writer.enabled ? 'v2' : 'legacy',
+  getWriteKeyId: () => v2Writer.enabled ? v2Writer.keyId : null,
 };

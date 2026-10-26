@@ -15,6 +15,7 @@ function readSecurityFeatureConfig(env = process.env) {
   };
   const sharedFeedbackAdmissionEnabled = flag('SHARED_FEEDBACK_ADMISSION_ENABLED');
   const notificationOutboxEnabled = flag('NOTIFICATION_OUTBOX_ENABLED');
+  const statementImportReceiptsEnabled = flag('STATEMENT_IMPORT_RECEIPTS_ENABLED');
   const sharedFeedbackDatabaseUrl = sharedFeedbackAdmissionEnabled ? required('SHARED_FEEDBACK_DATABASE_URL') : null;
   const sharedFeedbackHmacKey = sharedFeedbackAdmissionEnabled ? required('SHARED_FEEDBACK_HMAC_KEY') : null;
   if (sharedFeedbackHmacKey && Buffer.byteLength(sharedFeedbackHmacKey) < 32) {
@@ -35,7 +36,7 @@ function readSecurityFeatureConfig(env = process.env) {
     }
   }
   return { sharedFeedbackAdmissionEnabled, sharedFeedbackDatabaseUrl, sharedFeedbackHmacKey,
-    notificationOutboxEnabled, notificationOutboxDatabaseUrl };
+    notificationOutboxEnabled, notificationOutboxDatabaseUrl, statementImportReceiptsEnabled };
 }
 
 module.exports = { readSecurityFeatureConfig };

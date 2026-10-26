@@ -3,6 +3,43 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {execFileSync,spawnSync}=require('node:child_process');
 const {template,validateInputs,evaluateRelease,sourcePathAllowed,sourceSnapshot,safeRelative,readBounded,readImports,hash,stableJson,EVIDENCE_FORMAT,LOCKFILES,KEY_NAMES,RETAINED_READ_KEY_CONFIGS,PROOF_CHECKS,configurationDigest}=require('../scripts/release_security_check');
 const NOW=Date.parse('2026-10-24T12:00:00.000Z');
+test('statement receipt activation preserves old off manifests and needs exact continuation proof', () => {
+ const value=fixture(); delete value.inputs.features.statementImportReceipts;
+ value.evidence.configuration_sha256=configurationDigest(value.inputs);
+ assert.equal(evaluateRelease(value).missing_gates.includes('feature_manifest_statementImportReceipts'),false);
+ value.env.STATEMENT_IMPORT_RECEIPTS_ENABLED='true';
+ assert.ok(evaluateRelease(value).missing_gates.includes('feature_manifest_statementImportReceipts'));
+ value.inputs.features.statementImportReceipts=true;
+ assert.ok(evaluateRelease(value).missing_gates.includes('feature_acceptance_statementImportReceipts'));
+ value.env.STATEMENT_IMPORT_RECEIPTS_ENABLED='1';
+ assert.ok(evaluateRelease(value).missing_gates.includes('feature_configuration_statementImportReceipts'));
+});
+test('versioned phone writers remain off for older manifests and cannot enable without retained-reader selection proof', () => {
+ const value=fixture(); delete value.inputs.features.versionedPhoneWrites;
+ value.evidence.configuration_sha256=configurationDigest(value.inputs);
+ assert.equal(evaluateRelease(value).missing_gates.includes('feature_manifest_versionedPhoneWrites'),false);
+ value.env.ENCRYPTION_V2_WRITES_ENABLED='true';
+ assert.ok(evaluateRelease(value).missing_gates.includes('feature_manifest_versionedPhoneWrites'));
+ value.inputs.features.versionedPhoneWrites=true;
+ assert.ok(evaluateRelease(value).missing_gates.includes('feature_acceptance_versionedPhoneWrites'));
+ assert.ok(evaluateRelease(value).missing_gates.includes('versioned_phone_key_selection'));
+ value.env.ENCRYPTION_ENABLED='true'; value.env.ENCRYPTION_WRITE_KEY_ID='next';
+ const key=Buffer.alloc(32,7).toString('base64');
+ value.env.ENCRYPTION_READ_KEYS_JSON=JSON.stringify([['next',key]]);
+ value.inputs.retainedReadKeyIds={ENCRYPTION_READ_KEYS_JSON:{next:'phone-key-next'}};
+ value.inputs.phoneEncryptionWriteKeyId='next';
+ value.evidence.configuration_sha256=configurationDigest(value.inputs);
+ let report=evaluateRelease(value);
+ assert.equal(report.missing_gates.includes('versioned_phone_key_selection'),false);
+ assert.ok(report.missing_gates.includes('feature_acceptance_versionedPhoneWrites'));
+ assert.equal(JSON.stringify(report).includes(key),false);
+ value.inputs.phoneEncryptionWriteKeyId='other';
+ report=evaluateRelease(value);assert.ok(report.missing_gates.includes('versioned_phone_key_selection'));
+ assert.notEqual(configurationDigest(value.inputs),value.evidence.configuration_sha256);
+ value.env.ENCRYPTION_V2_WRITES_ENABLED='1';
+ assert.ok(evaluateRelease(value).missing_gates.includes('feature_configuration_versionedPhoneWrites'));
+ assert.throws(()=>validateInputs({...value.inputs,phoneEncryptionWriteKeyId:'invalid key id'}),/write key ID/);
+});
 test('durable notification and shared feedback activation require explicit manifest, scoped configuration and exact proof', () => {
  for (const [name, flag] of [['notificationOutbox','NOTIFICATION_OUTBOX_ENABLED'],['sharedFeedbackAdmission','SHARED_FEEDBACK_ADMISSION_ENABLED']]) {
   const value=fixture(); delete value.inputs.features[name];

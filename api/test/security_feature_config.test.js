@@ -7,11 +7,12 @@ test('new security capabilities remain off without URLs or keys being read', () 
   assert.deepEqual(readSecurityFeatureConfig({}), {
     sharedFeedbackAdmissionEnabled: false, sharedFeedbackDatabaseUrl: null, sharedFeedbackHmacKey: null,
     notificationOutboxEnabled: false, notificationOutboxDatabaseUrl: null,
+    statementImportReceiptsEnabled: false,
   });
   assert.equal(readSecurityFeatureConfig({ SHARED_FEEDBACK_DATABASE_URL: 'unused', NOTIFICATION_OUTBOX_DATABASE_URL: 'unused' }).sharedFeedbackDatabaseUrl, null);
 });
 test('optional security flags reject ambiguous values without printing them', () => {
-  for (const name of ['SHARED_FEEDBACK_ADMISSION_ENABLED', 'NOTIFICATION_OUTBOX_ENABLED']) {
+  for (const name of ['SHARED_FEEDBACK_ADMISSION_ENABLED', 'NOTIFICATION_OUTBOX_ENABLED', 'STATEMENT_IMPORT_RECEIPTS_ENABLED']) {
     for (const value of ['1', 'TRUE', ' false ', 'sensitive-invalid-value']) {
       assert.throws(() => readSecurityFeatureConfig({ [name]: value }), error => error.message.includes(name) && !error.message.includes(value));
     }

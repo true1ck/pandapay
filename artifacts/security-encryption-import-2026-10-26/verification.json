@@ -1,0 +1,289 @@
+{
+  "format": "pandapay-scoped-security-source-verification-v1",
+  "date": "2026-10-26",
+  "scope": "gated phone-v2 writer and consumer compatibility, atomic import replay receipts, bounded notification health/readiness",
+  "base_commit": "fff922d",
+  "candidate_sha256": "d28eef51778f13a3406198af7e68ac222ff7420a4679966f40df194fef85eae4",
+  "source_file_count": 1433,
+  "counts": {
+    "launch_priorities": {
+      "partial": 9,
+      "open": 1,
+      "accepted_for_launch": 0
+    },
+    "findings": 76,
+    "implementation_packages": 14,
+    "release_gates": 6,
+    "findings_closed_by_this_batch": 0
+  },
+  "checks": {
+    "node": {
+      "node": "v24.15.0",
+      "groups": {
+        "api": {
+          "exit_code": 0,
+          "tests": 1174,
+          "pass": 1172,
+          "fail": 0,
+          "skipped": 2,
+          "scope": "api/test/*.test.js"
+        },
+        "auth": {
+          "exit_code": 0,
+          "tests": 356,
+          "pass": 356,
+          "fail": 0,
+          "skipped": 0,
+          "scope": "auth/test/*.test.js"
+        },
+        "tools": {
+          "exit_code": 0,
+          "tests": 228,
+          "pass": 228,
+          "fail": 0,
+          "skipped": 0,
+          "scope": "db/tests/*.test.js"
+        }
+      }
+    },
+    "postgres": {
+      "source": {
+        "candidate_sha256": "d28eef51778f13a3406198af7e68ac222ff7420a4679966f40df194fef85eae4",
+        "file_count": 1433
+      },
+      "scope": "owned-synthetic-loopback-only",
+      "saved_credentials_or_customer_data": false,
+      "checks": {
+        "init": {
+          "exit_code": 0,
+          "log_sha256": "34582a76682420f190c7715214e61b671faa51f8110542a1f52c3449267c7dae"
+        },
+        "start": {
+          "exit_code": 0,
+          "log_sha256": "66afd0411ccc09366e99fdd99b85f21899c8d2d064f5835126859618802153ad"
+        },
+        "create": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "version": {
+          "exit_code": 0,
+          "log_sha256": "9f37d3232c3d9c760ab750e986131361f48d3a9ab5ded13c3e2b322b13c48aa2"
+        },
+        "baseline-migrate": {
+          "exit_code": 0,
+          "log_sha256": "58dee5daa1643e5c93fc59bf2a36e9c17f3d4f38282ad3a6d96e513fbe3aa88f"
+        },
+        "seed": {
+          "exit_code": 0,
+          "log_sha256": "b6b585bc7c4bf7ebbc968057dafe84f698740755037d79df6bc052be4c591905"
+        },
+        "before-data": {
+          "exit_code": 0,
+          "log_sha256": "8f45e084499a354cef714e541f23fabd60a0a29444897a952031899d366ba630"
+        },
+        "upgrade": {
+          "exit_code": 0,
+          "log_sha256": "a17bedbe16dc40c02cf6103481c3df7595d5a9af88012b2fef9e3a182b28345a"
+        },
+        "after-data": {
+          "exit_code": 0,
+          "log_sha256": "8f45e084499a354cef714e541f23fabd60a0a29444897a952031899d366ba630"
+        },
+        "repeat-ledger": {
+          "exit_code": 0,
+          "log_sha256": "a513ada1fc71a826a4de3937fc0175343485fc237e023135c05a3d72fef182a6"
+        },
+        "replay-20261026130000_notification_delivery_health.sql": {
+          "exit_code": 0,
+          "log_sha256": "9051c8d5668315e2431e0e541a5da8f5dc2a0bb0d66c539b503b7d978d9133a4"
+        },
+        "fixture-20261026130000_notification_delivery_health.sql": {
+          "exit_code": 0,
+          "log_sha256": "f41c8b97ea90b378a7654b072d0113c46e7278b9b9a2e499f7a6e9dc32381791"
+        },
+        "replay-20261026140000_statement_import_receipts.sql": {
+          "exit_code": 0,
+          "log_sha256": "438017f3f49c1d75e4c578ccf2d9ee5424873542ec015ae9a237020682f9e0df"
+        },
+        "fixture-20261026140000_statement_import_receipts.sql": {
+          "exit_code": 0,
+          "log_sha256": "36828ac7b7a3fdc35e5e8b136fb768953565e708e900f275abc579d6159b1183"
+        },
+        "post-fixtures-data": {
+          "exit_code": 0,
+          "log_sha256": "8f45e084499a354cef714e541f23fabd60a0a29444897a952031899d366ba630"
+        },
+        "concurrency-and-login": {
+          "exit_code": 0,
+          "log_sha256": "82231c398e38285ea19ef21eea76362b6a67b791a7880184d73c0c3e87f48089"
+        },
+        "dump": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "restore-create": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "restore": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "restored-data": {
+          "exit_code": 0,
+          "log_sha256": "8f45e084499a354cef714e541f23fabd60a0a29444897a952031899d366ba630"
+        },
+        "phone-create": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "phone-seed-read": {
+          "exit_code": 0,
+          "log_sha256": "0a87cfa9f88d4d9c4bb6425ddc66afac78cd3f051bee5088946fbe005c7d8d25"
+        },
+        "phone-dump": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "phone-restore-create": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "phone-restore": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "phone-restored-read": {
+          "exit_code": 0,
+          "log_sha256": "0a87cfa9f88d4d9c4bb6425ddc66afac78cd3f051bee5088946fbe005c7d8d25"
+        },
+        "stop": {
+          "exit_code": 0,
+          "log_sha256": "ca19178a35ab4153b75b494963b66ce8243e1b94c173107c87b44d09db23652d"
+        }
+      },
+      "postgres_version": "18.4 (Homebrew)",
+      "original_tables_preserved": 159,
+      "full_dump_restore_preservation": true,
+      "synthetic_phone_formats_varchar255_and_dump_restore": true,
+      "source_unchanged": true,
+      "result": "passed",
+      "logs_retained_in_git": false
+    },
+    "deployment": {
+      "deploy": {
+        "exit_code": 0,
+        "summary": ".......................\n----------------------------------------------------------------------\nRan 23 tests in 19.554s\n\nOK\n"
+      },
+      "prod-compose": {
+        "exit_code": 0,
+        "summary": ""
+      },
+      "staging-compose": {
+        "exit_code": 0,
+        "summary": ""
+      }
+    },
+    "strict_release": {
+      "exit_code": 2,
+      "release_ready": false
+    },
+    "html": {
+      "priorities": 10,
+      "partial": 9,
+      "open": 1,
+      "accepted_for_launch": 0,
+      "markdown_table_parity": true,
+      "new_links_resolve": true,
+      "script_blocks_unchanged": 2,
+      "historical_database_panel_unchanged": true,
+      "visual_browser_acceptance": false
+    }
+  },
+  "review": {
+    "luna_slices": [
+      "versioned phone writer and consumer inventory/fixes",
+      "import receipts",
+      "notification health"
+    ],
+    "parent_review_and_integration": true,
+    "independent_review_fixes": [
+      "expanded monitor privilege guard across private tables",
+      "explicit stopped heartbeat excluded from freshness",
+      "rollback connection discard retained"
+    ]
+  },
+  "live_actions": {
+    "saved_keys_credentials_customer_backups_read": false,
+    "live_database_connections": false,
+    "real_provider_sends": false,
+    "production_deployed": false,
+    "feature_activation": false,
+    "application_keys_rotated": false,
+    "backup_schedule_changed": false,
+    "purchases": false
+  },
+  "limits": [
+    "No actual customer-data or intended-provider PostgreSQL17 acceptance",
+    "Synthetic phone format/VARCHAR255 is not full auth migration or real key custody",
+    "Versioned phone and receipt flags default off; no backfill",
+    "No new Flutter/native/signed-device acceptance",
+    "Mobile restart-safe pending import queue remains unfinished",
+    "CLI health readability does not establish queue SLO/provider acceptance or independent monitoring"
+  ],
+  "log_sha256": {
+    "tools-tests.log": "f1b86ad143edf6cb2995b29e0db4b56fbd59da488b68d4947087ae525cb8188f",
+    "api-tests.log": "8881fc8d93677b0230bc543172661043c4d0b614d679d0eacbd8d55ebebad628",
+    "staging-compose.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "prod-compose.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "deploy.log": "daff6165be3fb1ecce45638fa4a372455bbf6ea5d85fadefe786222410143e36",
+    "auth-tests.log": "10b49a975fa0307c59bca1ef3b0264fef26a9b10af4c69b6788bec9d6323fee6"
+  },
+  "sha256": {
+    ".env.prod.example": "4e0341f96494d06c35a012b1530f551bfd64262d7cc003ef31ae9384f2f38255",
+    ".env.staging.example": "5a228002af1d3a95249d5d71762286efde10ce2cf5c28afe763adf079e34c3b3",
+    "api/package.json": "fb4906c4e950109c8e0d18227e28dc7e14fb09d6cd674b9d7efef730e0cc2ed2",
+    "api/src/index.js": "3fa0d5977326d961dc1b1d943a44e6d757e9e6e09ec1a15088bbc2b73057e645",
+    "api/src/notification_outbox_health.js": "f9bdd6de479cded0ed0feae1cbe99ad8bcd407a4c101c04b732abdf9c956fddc",
+    "api/src/notification_outbox_worker.js": "75704007b86ff1c173634bdfdd21c7ef5f4f31fbe4adac9ec36297d0bbbf3799",
+    "api/src/portable_backup/coverage.json": "06d88ed3fc0e691d651102db7be54fd2dc1702f6a67f78394c054ef7f79dd521",
+    "api/src/security_feature_config.js": "17c308b8bd2ff484b94cb7dee83a43758f28fd3d75a54dcdd9d30b073d1dba83",
+    "api/src/service_pools.js": "6e72e377dbe4e7a33e2bca5068cbd665250025f6e416ecdc5c93890dc2784ad1",
+    "api/src/statement_import.js": "bb846520273775174fe66650628e34a605b07ad4e610905b75a4382a965628b6",
+    "api/test/notification_outbox.test.js": "1b9c502577e53934299d83b93ec628325e05c7372582d1ff6b7d989c4de9bfc7",
+    "api/test/notification_outbox_health.test.js": "eb8fc3cffa1287537f08abb26b996397dc19db104bf52fd740e69e5cff2c24f0",
+    "api/test/security_delivery_postgres.js": "ac3536d87beb32c79f581b329572c018bd0520604f312b15b6a836d5080f13dd",
+    "api/test/security_feature_config.test.js": "6b63929f67c691595cf62743f7d32822eb6973b4db2628da0b164f1b520288af",
+    "api/test/statement_import.test.js": "d91053c311577ef192d811425c1dad567c3ca9e96f833e22ca1ef1dd773c8772",
+    "auth/src/routes/adminRoutes.js": "95199ed296cee92e8947e06105ae6b9bd6f9b7cff593941a5bcbc74b8765921a",
+    "auth/src/services/tokenService.js": "677e908c3fe8ae25540f24af3486492d609ce51934bb4cd3928ad024539f27bd",
+    "auth/src/utils/fieldEncryption.js": "77d3b1b556ee7af40c86f7eb2e9c93a5ecd253bdfa63c5c2c782d21095751f55",
+    "auth/test/admin_security_events_search.test.js": "33be780c944af9622e771fa7bfc6e350cf8eab128838fa0d9c5b5050861def13",
+    "auth/test/field_encryption.test.js": "1e28b4b9c042f3527ec553689c34fab3534e39a156a5ff2ead6657979dc2c2de",
+    "auth/test/phone_format_postgres.js": "bf2ebe0014180ba3ba4d591c08cc866681ca6b167d0894ef497d0bfa79305d95",
+    "auth/test/token_service.test.js": "4eda0f90627fe3afafab6c8898acf66295a492ebddb250b38ef60b35501632ad",
+    "db/scripts/connection_budget.js": "c8d528a48e1eee608f7e71fefad2a9bebd0527eacfa8d697b28bef379ed94810",
+    "db/scripts/notification_delivery_health.js": "14a82da94e6dd5b8354898baaaf46138b26255779296460c7ee4a90168e75de7",
+    "db/scripts/release_security_check.js": "1dcc2109358db30ef039394fc335f1e7d46a6e42d883d610662b2837f72cfd44",
+    "db/security/product-runtime-privileges.json": "bbfe5db58fa82697b848c8203229bceb691eef176857168be94a16a27c29ef2b",
+    "db/supabase/migrations/20261026130000_notification_delivery_health.sql": "0f58ae746b3518f29952347936908e648dfeea1827c090b8495b20c8ad480b56",
+    "db/supabase/migrations/20261026140000_statement_import_receipts.sql": "35a88c19b3bb570669ce7440e53e5419fd8931bf8235a1f16310feec7ad32102",
+    "db/tests/20261026130000_notification_delivery_health_test.sql": "e0af29ba2e918d797f587bd644bb1c52cfdbac0d73dc07e9f5b595ca3b0492a7",
+    "db/tests/20261026140000_statement_import_receipts_test.sql": "2f6b0856efe3d230dcd245e55f93d24e99b2e8009127b6c9e7dbb3ff1a2b5904",
+    "db/tests/connection_budget.test.js": "692c7ce5642be12ca624c9fed5494c2fcbce26e138e8971995618582937bb6f2",
+    "db/tests/notification_delivery_health.test.js": "401d2f1892bbf2b93e18f7d9ee29ac44c33929fabbce30bde0b5cee9ae29d4ac",
+    "db/tests/release_security_check.test.js": "6ac4f63228cd509763ae235c231264a00d8480b1f1dd3400a6baa4aeec4dfa19",
+    "docker-compose.prod.yml": "c1c39f9b62af88fb0aba6e3fe5f197fedfffa1e9c0599ef846410a7b9c17eda4",
+    "docker-compose.staging.yml": "4559b13161d78a560bcf640aa66c541fa892e45e8cdc840b64eb611285cce82b",
+    "docs/security-and-backend-audit-2026-10-20.html": "44be22bfd39342efb1ef7c8e045c0ae0a47ad1796531926a00f8aab84be0fa61",
+    "docs/security-and-backend-audit-2026-10-20.md": "8dcb8be93d773c1b9f7d317a10dbf1457376aecbc52478eccaa25950d574171f",
+    "docs/security-encryption-import-implementation-2026-10-26.md": "0472b70221d1d2d020ff30a4a1061c9e8d9fcc0cc6cb9bdb8ee0e391f160d6cf",
+    "docs/security-launch-implementation-plan-2026-10-26.md": "f921af1ffd4c12a1e716d0eb1aba9f78a8d0d1c6cb3908d5694214920de51ec3",
+    "docs/security-phone-encryption-consumers-2026-10-26.md": "327e228357286ded727f2a1e2dbaa24252900f7aa75641f7a1f77a679f12a6f5",
+    "docs/security-remaining-work-2026-10-25.html": "c39a15e1943e3acd7955c2c3e3c4d3cfa4a27065a3e7ce1e4d7b6459d0ab2918",
+    "docs/security-remaining-work-2026-10-25.md": "2801136cd3b58236042745fa46f4b52c46eec4d1c76baf291bb1f0f5483a8bd0",
+    "docs/security-source-completion-plan-2026-10-26.md": "af20757bfd5b35b4b1526f2517628882e7d38ddc814954846e92f24e00422632",
+    "docs/security-statement-import-continuation-plan-2026-10-26.md": "9e646fd641b48c942a402567a7d3ab16f1436bea6d3932c8f7a396a98be425c8"
+  }
+}

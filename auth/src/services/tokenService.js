@@ -4,6 +4,8 @@ const bcrypt = require('bcrypt');
 const { randomUUID, createHmac } = require('crypto');
 const db = require('../db');
 const config = require('../config');
+const { decryptPhoneNumber } = require('../utils/fieldEncryption');
+const { canonicalizePhone } = require('../utils/encryptedPhoneSearch');
 const {
   getActiveKey,
   getIssuer,
@@ -15,10 +17,17 @@ const ACCESS_TTL = config.jwtAccessTtl;
 const REFRESH_TTL = config.jwtRefreshTtl;
 const REFRESH_MAX_IDLE_MS = config.refreshMaxIdleMinutes * 60 * 1000;
 
+function canonicalPhoneClaim(storedPhone) {
+  if (storedPhone === null || storedPhone === undefined) return null;
+  return canonicalizePhone(decryptPhoneNumber(storedPhone));
+}
+
 function signAccessToken(user, options = {}) {
   const payload = {
     sub: user.id,
-    phone_number: user.phone_number,
+    // Keep the stable plaintext E.164/null claim contract while phone storage
+    // formats evolve. Damaged/unknown ciphertext must stop token issuance.
+    phone_number: canonicalPhoneClaim(user.phone_number),
     // authMiddleware verifies these claims on protected auth-service routes.
     // Hard-coding `authenticated` here contradicted its `mobile-app` default.
     role: 'authenticated',

@@ -44,18 +44,19 @@ async function checkNotificationCapabilityReadiness(pool, kind) {
   if (cached?.kind === kind && (cached.promise || cached.until > Date.now())) return cached.promise;
   const role = kind === 'feedback' ? 'pandapay_feedback_admission' : 'notification_worker';
   const schema = kind === 'feedback' ? 'feedback_admission' : 'notification_delivery';
-  const table = kind === 'feedback' ? 'buckets' : 'outbox';
+  const tables = kind === 'feedback' ? ['buckets', 'capacity']
+    : ['outbox', 'revisions', 'profile_queue_counts', 'global_queue_count', 'worker_status'];
   const functions = kind === 'feedback' ? ['feedback_admission.consume(text,text,boolean)']
-    : ['notification_delivery.claim(text,integer,integer)', 'notification_delivery.finish(uuid,uuid,boolean,text,boolean)', 'notification_delivery.allowed(uuid,uuid)'];
+    : ['notification_delivery.claim(text,integer,integer)', 'notification_delivery.finish(uuid,uuid,boolean,text,boolean)', 'notification_delivery.allowed(uuid,uuid)', 'notification_delivery.report_worker_status(text,boolean,boolean,integer,integer,integer,text)'];
   const promise = (async () => {
     const result = await pool.query(`SELECT
       NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication AS bounded,
       (SELECT bool_and(has_function_privilege(current_user, f, 'EXECUTE')) FROM unnest($1::text[]) f) AS can_execute,
-      has_any_column_privilege(current_user, $2, 'SELECT,INSERT,UPDATE') OR has_table_privilege(current_user, $2, 'DELETE,TRUNCATE,TRIGGER') AS direct_table,
+      EXISTS(SELECT 1 FROM unnest($2::text[]) t WHERE has_any_column_privilege(current_user, t, 'SELECT,INSERT,UPDATE') OR has_table_privilege(current_user, t, 'DELETE,TRUNCATE,TRIGGER')) AS direct_table,
       has_schema_privilege(current_user, $3, 'CREATE') AS can_create,
       EXISTS(SELECT 1 FROM pg_roles c WHERE c.rolname=$4 AND (c.rolcanlogin OR c.rolsuper OR c.rolbypassrls OR c.rolcreatedb OR c.rolcreaterole OR c.rolreplication)) AS unsafe_capability,
       EXISTS(SELECT 1 FROM pg_auth_members m WHERE (m.member=current_user::regrole AND m.roleid<>$4::regrole) OR m.member=$4::regrole) AS unsafe_membership
-      FROM pg_roles r WHERE r.rolname=current_user`, [functions, `${schema}.${table}`, schema, role]);
+      FROM pg_roles r WHERE r.rolname=current_user`, [functions, tables.map(table => `${schema}.${table}`), schema, role]);
     const row = result.rows?.[0];
     if (!row || row.bounded !== true || row.can_execute !== true || row.direct_table !== false
         || row.can_create !== false || row.unsafe_capability !== false || row.unsafe_membership !== false) {

@@ -12,6 +12,33 @@ function mockPool(handler) {
   }) };
 }
 const row = (token) => ({ id: 'o1', notification_id: 'n1', revision_id: 'r1', profile_id: 'p1', lease_token: token, title: 'Title', body: 'Body' });
+test('graceful stop reports an explicit stopped lifecycle state and clears local availability', async () => {
+  const reports = []; const databasePool = mockPool(() => ({ rows: [], rowCount: 0 }));
+  const worker = createNotificationOutboxWorker({ databasePool, send: async () => {}, reportStatus: async value => reports.push(value) });
+  await worker.pollOnce(); assert.equal(worker.getStatus().available, true);
+  await worker.stop(); assert.equal(worker.getStatus().available, false);
+  assert.equal(reports.at(-1).errorCode, 'notification_worker_stopped');
+  assert.equal(reports.at(-1).claimed, 0); assert.equal(reports.at(-1).available, false);
+});
+test('worker readiness state reflects failed polls and cannot treat failed heartbeat persistence as success', async () => {
+  let failQuery = false; let failReport = false; const reports = [];
+  const databasePool = mockPool(statement => {
+    if (statement.includes('notification_delivery.claim')) {
+      if (failQuery) throw new Error('synthetic store offline');
+      return { rows: [], rowCount: 0 };
+    }
+    return { rows: [] };
+  });
+  const worker = createNotificationOutboxWorker({ databasePool, send: async () => {}, logger: { error() {} },
+    reportStatus: async result => { reports.push(result); if (failReport) throw new Error('synthetic heartbeat unavailable'); } });
+  assert.equal(worker.getStatus().available, false); assert.equal(worker.getStatus().lastPollAt, null);
+  await worker.pollOnce(); assert.equal(worker.getStatus().available, true); assert.ok(worker.getStatus().lastPollAt);
+  failQuery = true; await worker.pollOnce(); assert.equal(worker.getStatus().available, false);
+  assert.equal(reports.at(-1).available, false);
+  failQuery = false; failReport = true;
+  assert.equal((await worker.pollOnce()).available, false);
+  assert.equal(worker.getStatus().errorCode, 'notification_worker_status_unavailable');
+});
 test('failed rollback discards a connection instead of returning an unknown role/transaction state', async () => {
   let discarded;
   const rollbackError = new Error('synthetic rollback failure');
