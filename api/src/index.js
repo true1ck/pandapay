@@ -8,7 +8,7 @@ const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
 const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail } = require('./sync_request_validation');
 const { createLoungeUsagePostHandler } = require('./lounge_usage_route');
 const config = require('./config');
-const { withUserClient, pool, partnerWebhookPool, imapWorkerPool,accountLifecyclePool,lifecycleJournalRuntime } = require('./db');
+const { withUserClient, pool, partnerWebhookPool, imapWorkerPool,accountLifecyclePool,lifecycleJournalRuntime,sharedFeedbackPool,notificationOutboxPool } = require('./db');
 const { createPartnerConversionPostHandler } = require('./partner_conversion_route');
 const { createBackupStatusHandlers } = require('./backup_status_routes');
 const { checkPartnerWebhookReadiness, checkImapWorkerReadiness } = require('./service_pools');
@@ -29,6 +29,8 @@ const { registerPortableBackupRestoreRoutes } = require('./portable_backup/resto
 const { registerSupportTicketRoute } = require('./support_tickets');
 const { registerDataErrorReportRoute } = require('./data_error_reports');
 const { createReadinessHandler } = require('./readiness');
+const { createNotificationPostHandler } = require('./notification_routes');
+const { createPostgresFeedbackRateLimiter } = require('./feedback_rate_limit');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
 const { replayCurrentCapConsumption } = require('./card_state_reconciliation');
 const {
@@ -306,6 +308,8 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
 
 const app = express();
 let shuttingDown = false;
+let notificationOutboxWorker = null;
+let notificationOutboxStartupFailed = false;
 // Trust only the explicitly configured proxy-hop count. Local development
 // defaults to no forwarded-header trust; staging/production set one hop for
 // their loopback-bound Nginx ingress.
@@ -328,8 +332,11 @@ app.get('/ready', createReadinessHandler({
   isDraining: () => shuttingDown,
   checkDependencies: async () => {
     await pool.query('SELECT 1');
+    if (notificationOutboxStartupFailed || notificationOutboxWorker?.isBlocked()) throw new Error('Notification worker unavailable');
     await checkPartnerWebhookReadiness(partnerWebhookPool);
     await checkImapWorkerReadiness(imapWorkerPool);
+    await require('./service_pools').checkNotificationCapabilityReadiness(sharedFeedbackPool, 'feedback');
+    await require('./service_pools').checkNotificationCapabilityReadiness(notificationOutboxPool, 'outbox');
     await require('./service_pools').checkAccountLifecycleReadiness(accountLifecyclePool);
     if(lifecycleJournalRuntime)await lifecycleJournalRuntime.readiness();
   },
@@ -1568,7 +1575,9 @@ app.post('/card-requests', requireAuth, async (req, res) => {
 
 // Public catalogue feedback is reviewed before publication. The handler keeps
 // anonymous reporting compatible with owner-only read policies and bounds input.
-registerDataErrorReportRoute(app, { optionalAuth, withUserClient });
+const sharedFeedbackLimiter = config.sharedFeedbackAdmissionEnabled
+  ? createPostgresFeedbackRateLimiter({ pool: sharedFeedbackPool, digestSecret: config.sharedFeedbackHmacKey }) : undefined;
+registerDataErrorReportRoute(app, { optionalAuth, withUserClient, limiter: sharedFeedbackLimiter });
 
 /**
  * GET /merchants/search — B5: typed search over published merchants, by
@@ -8834,86 +8843,9 @@ app.post('/notifications/read', requireAuth, async (req, res) => {
  * the first place, and filtering on read would leave rows that silently
  * reappear if the preference is turned back on later.
  */
-app.post('/notifications', requireAuth, async (req, res) => {
-  const { category, severity, title, body, deepLink, dedupeKey, sendRemote = false } = req.body || {};
-  if (!category || !title) {
-    return res.status(400).json({ error: 'category and title are required' });
-  }
-  if (typeof sendRemote !== 'boolean') {
-    return res.status(400).json({ error: 'sendRemote must be boolean' });
-  }
-  // 'streak' and 'card_added' have no preference column — they're in-app
-  // consequences of the user's own action, not push-style interruptions.
-  const PREFERENCE_COLUMN = {
-    location: 'category_location',
-    caps: 'category_caps',
-    milestones: 'category_milestones',
-    fee_waivers: 'category_fee_waivers',
-    bills: 'category_bills',
-    expiry: 'category_expiry',
-    monthly_report: 'category_monthly_report',
-    needs_review: 'category_needs_review',
-    transactions: 'category_transactions',
-    // Two categories, not one: "over budget" is a post-mortem and
-    // "running ahead of pace" is still actionable, so someone who wants
-    // the early warning shouldn't be forced to take the late one too.
-    budget_warning: 'category_budget_warning',
-    budget_exceeded: 'category_budget_exceeded',
-  };
-  try {
-    const inserted = await withUserClient(req.userId, async (client) => {
-      const column = PREFERENCE_COLUMN[category];
-      if (column) {
-        const pref = await client.query(
-          `SELECT ${column} AS enabled FROM notification_preferences WHERE profile_id = $1`,
-          [req.userId]
-        );
-        // No preferences row yet means the user has never opted out of
-        // anything; 0019's own column defaults are the intent, so deliver.
-        if (pref.rowCount > 0 && pref.rows[0].enabled === false) return null;
-      }
-      const result = await client.query(
-        `INSERT INTO notifications (profile_id, category, severity, title, body, deep_link, dedupe_key)
-         VALUES ($1, $2, COALESCE($3, 'info'), $4, $5, $6, $7)
-         ON CONFLICT (profile_id, dedupe_key) WHERE dedupe_key IS NOT NULL
-         DO UPDATE SET title = EXCLUDED.title,
-                       body = EXCLUDED.body,
-                       severity = EXCLUDED.severity,
-                       deep_link = EXCLUDED.deep_link,
-                       created_at = now(),
-                       read_at = NULL
-         RETURNING *`,
-        [req.userId, category, severity, title, body || null, deepLink || null, dedupeKey || null]
-      );
-      return result.rows[0];
-    });
-    // 204 (not an error) when the user has that category muted — the caller
-    // asked for a delivery and got a definitive "not delivered, by choice".
-    if (!inserted) return res.status(204).end();
-
-    // The inbox is the source of truth and has already committed. Remote FCM
-    // delivery is best-effort: a temporary notification-service outage must
-    // never turn a successful PandaPay notification into a failed product
-    // action or make the app retry and duplicate the inbox row.
-    if (sendRemote && notificationService.isConfigured()) {
-      notificationService
-        .send({
-          subscriberId: req.userId,
-          title: inserted.title,
-          body: inserted.body,
-          category: inserted.category,
-          severity: inserted.severity,
-          deepLink: inserted.deep_link,
-          dedupeKey: inserted.dedupe_key,
-        })
-        .catch((err) => console.error('remote notification delivery failed', safeErrorCode(err)));
-    }
-    res.status(201).json({ notification: inserted });
-  } catch (err) {
-    console.error('POST /notifications error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.post('/notifications', requireAuth, createNotificationPostHandler({
+  withUserClient, notificationService, outboxEnabled: config.notificationOutboxEnabled,
+}));
 
 /**
  * POST /admin/notifications/broadcast — queues one push announcement for all
@@ -9508,7 +9440,7 @@ app.delete('/account/delete-request',requireAuth,accountLifecycleHandlers.cancel
 
 // Keep the deliberately public signed-out feedback flow (used for OTP help),
 // while bounding user-controlled text/diagnostics before any database write.
-registerSupportTicketRoute(app, { optionalAuth, withUserClient });
+registerSupportTicketRoute(app, { optionalAuth, withUserClient, limiter: sharedFeedbackLimiter });
 
 /**
  * GET /changelog — Task H-0e / H10. No auth required — release notes
@@ -11307,6 +11239,17 @@ if(config.accountLifecycleEnabled&&lifecycleInterval>0){
   lifecycleTimer.unref();
 }
 
+if (config.notificationOutboxEnabled) {
+  if (!notificationService.isConfigured()) throw new Error('Notification provider configuration invalid');
+  notificationOutboxWorker = require('./notification_outbox_worker').createNotificationOutboxWorker({
+    databasePool: notificationOutboxPool, send: notificationService.send,
+    workerId: `api-notifications-${crypto.randomUUID()}`, batchSize: 1,
+  });
+  require('./service_pools').checkNotificationCapabilityReadiness(notificationOutboxPool, 'outbox')
+    .then(() => { if (!shuttingDown) notificationOutboxWorker.start(); })
+    .catch(() => { notificationOutboxStartupFailed = true; console.error('Notification worker capability unavailable'); });
+}
+
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -11317,6 +11260,7 @@ async function shutdown(signal) {
   const forceExit = setTimeout(() => process.exit(1), 10000);
   forceExit.unref();
   try {
+    if (notificationOutboxWorker) await notificationOutboxWorker.stop();
     await new Promise((resolve, reject) => {
       server.close((err) => (err ? reject(err) : resolve()));
     });
@@ -11324,6 +11268,8 @@ async function shutdown(signal) {
     if (partnerWebhookPool) await partnerWebhookPool.end();
     if (imapWorkerPool) await imapWorkerPool.end();
     if(accountLifecyclePool)await accountLifecyclePool.end();
+    if(sharedFeedbackPool)await sharedFeedbackPool.end();
+    if(notificationOutboxPool)await notificationOutboxPool.end();
     clearTimeout(forceExit);
     process.exit(0);
   } catch (err) {

@@ -45,7 +45,17 @@ function createDataErrorReportHandler({ withUserClient, limiter = createFeedback
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     const authenticated = Boolean(req.userId);
     const identity = authenticated ? req.userId : (req.ip || req.socket?.remoteAddress || '');
-    const rate = limiter.consume(identity, authenticated);
+    let rate;
+    try { rate = await limiter.consume(identity, authenticated, 'data_error_reports'); }
+    catch (error) {
+      logger.error('POST /data-error-reports admission unavailable', safeErrorCode(error));
+      res.set?.('Retry-After', '5');
+      return res.status(503).json({ error: 'feedback_admission_unavailable' });
+    }
+    if (rate.unavailable) {
+      res.set?.('Retry-After', '5');
+      return res.status(503).json({ error: 'feedback_admission_unavailable' });
+    }
     if (!rate.allowed) {
       res.set?.('Retry-After', String(rate.retryAfterSeconds));
       return res.status(429).json({ error: 'data_error_report_rate_limited' });

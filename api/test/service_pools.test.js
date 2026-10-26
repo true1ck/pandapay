@@ -3,6 +3,38 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createPartnerWebhookPool, createImapWorkerPool, checkPartnerWebhookReadiness, checkImapWorkerReadiness } = require('../src/service_pools');
 const {createAccountLifecyclePool,checkAccountLifecycleReadiness}=require('../src/service_pools');
+const {createSharedFeedbackPool,createNotificationOutboxPool,checkNotificationCapabilityReadiness}=require('../src/service_pools');
+test('new capability pools are optional, separate and small with bounded database work', () => {
+  for (const create of [createSharedFeedbackPool, createNotificationOutboxPool]) {
+    assert.equal(create(null), null);
+    let options;
+    create('synthetic', { tlsResolver: () => ({ connectionString: 'scoped', ssl: { rejectUnauthorized: true } }),
+      PoolClass: class { constructor(value) { options = value; } on() {} } });
+    assert.equal(options.max, 1); assert.equal(options.ssl.rejectUnauthorized, true);
+    assert.ok(options.connectionTimeoutMillis <= 5000); assert.ok(options.statement_timeout <= 15000);
+    if (create === createSharedFeedbackPool) assert.equal(options.statement_timeout, 1000);
+  }
+});
+test('new capability readiness rejects elevated, broad and missing privileges', async () => {
+  const valid = { bounded: true, can_execute: true, direct_table: false, can_create: false, unsafe_capability: false, unsafe_membership: false };
+  for (const kind of ['feedback', 'outbox']) {
+    await checkNotificationCapabilityReadiness(null, kind);
+    await checkNotificationCapabilityReadiness({ query: async () => ({ rows: [valid] }) }, kind);
+    for (const key of Object.keys(valid)) await assert.rejects(checkNotificationCapabilityReadiness({ query: async () => ({ rows: [{ ...valid, [key]: !valid[key] }] }) }, kind), /Unsafe/);
+  }
+});
+test('concurrent readiness probes share one permission query and failed probes retry', async () => {
+  let queries = 0; let release;
+  const valid = { bounded: true, can_execute: true, direct_table: false, can_create: false, unsafe_capability: false, unsafe_membership: false };
+  const pool = { query: async () => { queries++; await new Promise(r => { release = r; }); return { rows: [valid] }; } };
+  const a = checkNotificationCapabilityReadiness(pool, 'feedback');
+  const b = checkNotificationCapabilityReadiness(pool, 'feedback');
+  assert.equal(queries, 1); release(); await Promise.all([a, b]);
+  await checkNotificationCapabilityReadiness(pool, 'feedback'); assert.equal(queries, 1);
+  let failures = 0; const broken = { query: async () => { failures++; throw new Error('offline'); } };
+  await assert.rejects(checkNotificationCapabilityReadiness(broken, 'feedback'));
+  await assert.rejects(checkNotificationCapabilityReadiness(broken, 'feedback')); assert.equal(failures, 2);
+});
 test('lifecycle pool is opt-in and reserves one separate bounded connection',()=>{
   assert.equal(createAccountLifecyclePool(null),null);
   let config;

@@ -3,6 +3,35 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {execFileSync,spawnSync}=require('node:child_process');
 const {template,validateInputs,evaluateRelease,sourcePathAllowed,sourceSnapshot,safeRelative,readBounded,readImports,hash,stableJson,EVIDENCE_FORMAT,LOCKFILES,KEY_NAMES,RETAINED_READ_KEY_CONFIGS,PROOF_CHECKS,configurationDigest}=require('../scripts/release_security_check');
 const NOW=Date.parse('2026-10-24T12:00:00.000Z');
+test('durable notification and shared feedback activation require explicit manifest, scoped configuration and exact proof', () => {
+ for (const [name, flag] of [['notificationOutbox','NOTIFICATION_OUTBOX_ENABLED'],['sharedFeedbackAdmission','SHARED_FEEDBACK_ADMISSION_ENABLED']]) {
+  const value=fixture(); delete value.inputs.features[name];
+  value.evidence.configuration_sha256=configurationDigest(value.inputs);
+  assert.equal(evaluateRelease(value).missing_gates.includes('feature_manifest_'+name),false);
+  value.env[flag]='true';
+  assert.ok(evaluateRelease(value).missing_gates.includes('feature_manifest_'+name));
+  value.inputs.features[name]=true;
+  const report=evaluateRelease(value);
+  assert.ok(report.missing_gates.includes('feature_acceptance_'+name));
+  assert.ok(report.missing_gates.includes('runtime_connection_configuration'));
+  assert.ok(report.missing_gates.includes(name==='notificationOutbox'?'notification_outbox_configuration':'shared_feedback_configuration'));
+  value.env[flag]='1'; assert.ok(evaluateRelease(value).missing_gates.includes('feature_configuration_'+name));
+ }
+});
+test('new scoped pools count against rollout capacity and older disabled maps remain readable', () => {
+ const value=fixture(); const process=value.inputs.connectionBudget.processes.find(p=>p.kind==='api');
+ delete process.pools.sharedFeedback; delete process.pools.notificationOutbox;
+ assert.doesNotThrow(()=>validateInputs(value.inputs));
+ value.env.SHARED_FEEDBACK_ADMISSION_ENABLED='true'; value.inputs.features.sharedFeedbackAdmission=true;
+ value.env.SHARED_FEEDBACK_DATABASE_URL='synthetic-private-url';value.env.SHARED_FEEDBACK_HMAC_KEY='synthetic-secret-never-output'.repeat(2);
+ assert.ok(evaluateRelease(value).missing_gates.includes('runtime_connection_configuration'));
+ process.pools.sharedFeedback='primary';
+ const report=evaluateRelease(value);
+ assert.equal(report.missing_gates.includes('runtime_connection_configuration'),false);
+ assert.ok(report.missing_gates.includes('aggregate_connection_budget'));
+ assert.equal(JSON.stringify(report).includes(value.env.SHARED_FEEDBACK_DATABASE_URL),false);
+ assert.equal(JSON.stringify(report).includes(value.env.SHARED_FEEDBACK_HMAC_KEY),false);
+});
 function source(){return {commit:'a'.repeat(40),candidate_sha256:'b'.repeat(64),dirty:true,file_sha256:Object.fromEntries(LOCKFILES.map(name=>[name,'c'.repeat(64)]))};}
 function fixture(){
  const inputs=template(),s=source(),env=Object.fromEntries(KEY_NAMES.map(name=>[name,'synthetic-secret-never-output']));

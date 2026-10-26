@@ -6,6 +6,7 @@ const { withUserClient } = require('./db');
 const { requireAuth, requireVerifiedSession } = require('./auth');
 const { chooseWeightedPrize, formatDateInZone, normalizeInvitationCode } = require('./referral_rules');
 const notificationService = require('./notification_service');
+const { enqueueNotification } = require('./notification_outbox');
 
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 
@@ -150,13 +151,16 @@ function registerReferralRoutes(app) {
            RETURNING id`,
           [event.beneficiaryId, copy.severity, copy.title, copy.body, dedupeKey],
         );
+        if (config.notificationOutboxEnabled && inserted.rowCount > 0) {
+          await enqueueNotification(client, inserted.rows[0].id);
+        }
         return { status: inserted.rowCount === 0 ? 'duplicate' : 'created', ...copy, dedupeKey };
       });
 
       if (result.status === 'recipient_unavailable') {
         return res.status(409).json({ accepted: false, error: 'recipient_unavailable' });
       }
-      if (result.status === 'created' && notificationService.isConfigured()) {
+      if (result.status === 'created' && !config.notificationOutboxEnabled && notificationService.isConfigured()) {
         notificationService.send({
           subscriberId: event.beneficiaryId,
           title: result.title,

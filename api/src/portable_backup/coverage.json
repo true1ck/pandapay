@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "label": "portable-backup-table-coverage-v1",
-  "updated": "2026-10-23",
+  "updated": "2026-10-26",
   "comment": "Schema-aware inventory of PostgreSQL CREATE TABLE objects in db/supabase/migrations. Public-schema keys remain unqualified for contract compatibility; non-public schemas are qualified. This registry covers server migration tables only, not SQLite tables or individual fields, and is not a full database disaster-recovery manifest. Portable export and restore services have separate device, integration and recovery acceptance gates; excluded user-linked rows remain explicit coverage gaps.",
   "tables": {
     "maintenance.jobs": {
@@ -560,6 +560,30 @@
     "account_recovery.automatic_devices": {
       "disposition": "excluded_with_intent",
       "reason": "Per-device automatic recovery consent is managed through explicit recovery routes and never grants recovery-key retrieval. Complete paired PostgreSQL dumps preserve consent and opaque device bindings."
+    },
+    "feedback_admission.buckets": {
+      "disposition": "platform_ops",
+      "reason": "Opaque keyed route admission counters are operational abuse state, not portable account data. Full PostgreSQL backups preserve them; account import must not reset shared quotas."
+    },
+    "feedback_admission.capacity": {
+      "disposition": "platform_ops",
+      "reason": "Exact global abuse-store allocation counter migrates with the full PostgreSQL schema and buckets, never independently in an account import."
+    },
+    "notification_delivery.profile_queue_counts": {
+      "disposition": "platform_ops",
+      "reason": "Exact notification queue counters migrate with their private delivery rows in full PostgreSQL recovery; portable account import must not reset delivery state."
+    },
+    "notification_delivery.global_queue_count": {
+      "disposition": "platform_ops",
+      "reason": "Global pending/retained notification storage counters must travel with the complete PostgreSQL queue, not a per-account archive."
+    },
+    "notification_delivery.revisions": {
+      "disposition": "excluded_with_intent",
+      "reason": "Private accepted notification intent and immutable payload revisions are preserved by full PostgreSQL backups. Account portable restore must not replay prior external sends; per-account portable notification history remains an explicit coverage gap. Full disaster recovery requires delivery replay/provider deduplication review before worker restart."
+    },
+    "notification_delivery.outbox": {
+      "disposition": "excluded_with_intent",
+      "reason": "Private accepted notification intent and immutable payload revisions are preserved by full PostgreSQL backups. Account portable restore must not replay prior external sends; per-account portable notification history remains an explicit coverage gap. Full disaster recovery requires delivery replay/provider deduplication review before worker restart."
     }
   }
 }

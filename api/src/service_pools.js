@@ -4,13 +4,13 @@ const { Pool } = require('pg');
 const { resolveDatabaseTls } = require('./db_tls');
 const { safeErrorCode } = require('./safeErrorCode');
 
-function createServicePool(connection, { PoolClass = Pool, tlsResolver = resolveDatabaseTls, logger = console } = {}, { size, name }) {
+function createServicePool(connection, { PoolClass = Pool, tlsResolver = resolveDatabaseTls, logger = console } = {}, { size, name, statementTimeoutMs = 15000, connectionTimeoutMs = 5000 }) {
   if (!connection) return null;
   const tls = tlsResolver(connection);
   const pool = new PoolClass({
     connectionString: tls.connectionString, ssl: tls.ssl, max: size,
-    idleTimeoutMillis: 10000, connectionTimeoutMillis: 5000,
-    statement_timeout: 15000, application_name: name,
+    idleTimeoutMillis: 10000, connectionTimeoutMillis: connectionTimeoutMs,
+    statement_timeout: statementTimeoutMs, application_name: name,
   });
   pool.on('error', error => logger.error('Service database unavailable', safeErrorCode(error)));
   return pool;
@@ -27,6 +27,44 @@ function createImapWorkerPool(connection, options) {
 }
 function createAccountLifecyclePool(connection,options){
   return createServicePool(connection,options,{size:1,name:'pandapay-account-lifecycle'});
+}
+function createSharedFeedbackPool(connection, options) {
+  return createServicePool(connection, options, { size: 1, name: 'pandapay-feedback-admission', statementTimeoutMs: 1000, connectionTimeoutMs: 1500 });
+}
+function createNotificationOutboxPool(connection, options) {
+  return createServicePool(connection, options, { size: 1, name: 'pandapay-notification-outbox' });
+}
+// Share one bounded permission probe among simultaneous readiness requests.
+// A successful probe is cached briefly; failures are never cached as success.
+const capabilityChecks = new WeakMap();
+async function checkNotificationCapabilityReadiness(pool, kind) {
+  if (!pool) return;
+  if (!['feedback', 'outbox'].includes(kind)) throw new TypeError('Unknown capability');
+  const cached = capabilityChecks.get(pool);
+  if (cached?.kind === kind && (cached.promise || cached.until > Date.now())) return cached.promise;
+  const role = kind === 'feedback' ? 'pandapay_feedback_admission' : 'notification_worker';
+  const schema = kind === 'feedback' ? 'feedback_admission' : 'notification_delivery';
+  const table = kind === 'feedback' ? 'buckets' : 'outbox';
+  const functions = kind === 'feedback' ? ['feedback_admission.consume(text,text,boolean)']
+    : ['notification_delivery.claim(text,integer,integer)', 'notification_delivery.finish(uuid,uuid,boolean,text,boolean)', 'notification_delivery.allowed(uuid,uuid)'];
+  const promise = (async () => {
+    const result = await pool.query(`SELECT
+      NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication AS bounded,
+      (SELECT bool_and(has_function_privilege(current_user, f, 'EXECUTE')) FROM unnest($1::text[]) f) AS can_execute,
+      has_any_column_privilege(current_user, $2, 'SELECT,INSERT,UPDATE') OR has_table_privilege(current_user, $2, 'DELETE,TRUNCATE,TRIGGER') AS direct_table,
+      has_schema_privilege(current_user, $3, 'CREATE') AS can_create,
+      EXISTS(SELECT 1 FROM pg_roles c WHERE c.rolname=$4 AND (c.rolcanlogin OR c.rolsuper OR c.rolbypassrls OR c.rolcreatedb OR c.rolcreaterole OR c.rolreplication)) AS unsafe_capability,
+      EXISTS(SELECT 1 FROM pg_auth_members m WHERE (m.member=current_user::regrole AND m.roleid<>$4::regrole) OR m.member=$4::regrole) AS unsafe_membership
+      FROM pg_roles r WHERE r.rolname=current_user`, [functions, `${schema}.${table}`, schema, role]);
+    const row = result.rows?.[0];
+    if (!row || row.bounded !== true || row.can_execute !== true || row.direct_table !== false
+        || row.can_create !== false || row.unsafe_capability !== false || row.unsafe_membership !== false) {
+      throw new Error('Unsafe notification or feedback capability');
+    }
+  })();
+  capabilityChecks.set(pool, { kind, promise });
+  try { await promise; capabilityChecks.set(pool, { kind, until: Date.now() + 30000 }); }
+  catch (error) { capabilityChecks.delete(pool); throw error; }
 }
 async function checkAccountLifecycleReadiness(pool){
   if(!pool)return;
@@ -68,4 +106,4 @@ async function checkImapWorkerReadiness(pool) {
     throw new Error('IMAP worker capability unavailable');
   }
 }
-module.exports = { createPartnerWebhookPool, createImapWorkerPool, checkPartnerWebhookReadiness, checkImapWorkerReadiness,createAccountLifecyclePool,checkAccountLifecycleReadiness };
+module.exports = { createPartnerWebhookPool, createImapWorkerPool, checkPartnerWebhookReadiness, checkImapWorkerReadiness,createAccountLifecyclePool,checkAccountLifecycleReadiness, createSharedFeedbackPool, createNotificationOutboxPool, checkNotificationCapabilityReadiness };

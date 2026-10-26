@@ -1,0 +1,100 @@
+{
+  "source": {
+    "candidate_sha256": "b167a4459c771f3a2b033f5c501b3b692ad09168aacaa669456e9698967d2fbe",
+    "file_count": 1423
+  },
+  "scope": "owned-synthetic-loopback-only",
+  "saved_credentials_or_customer_data": false,
+  "checks": {
+    "init": {
+      "exit_code": 0,
+      "log_sha256": "9f4f26f703d5660a21e55eab77717bac68fbf2ee9fc2753df02580cbe6d75d9f"
+    },
+    "start": {
+      "exit_code": 0,
+      "log_sha256": "66afd0411ccc09366e99fdd99b85f21899c8d2d064f5835126859618802153ad"
+    },
+    "create": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "version": {
+      "exit_code": 0,
+      "log_sha256": "9f37d3232c3d9c760ab750e986131361f48d3a9ab5ded13c3e2b322b13c48aa2"
+    },
+    "baseline-migrate": {
+      "exit_code": 0,
+      "log_sha256": "3f4203a4f07448c28ecae6f6598c701d1916436575d5149d2b5b3811ff376d37"
+    },
+    "seed": {
+      "exit_code": 0,
+      "log_sha256": "b6b585bc7c4bf7ebbc968057dafe84f698740755037d79df6bc052be4c591905"
+    },
+    "before-data": {
+      "exit_code": 0,
+      "log_sha256": "fc75900e27da0263727f08eeaa2eaadbb30aa880e08b7e59813b569e491792ec"
+    },
+    "upgrade": {
+      "exit_code": 0,
+      "log_sha256": "4068121d8599ad63bec807063acdb2935da7f6d5709afe32dd06c0167a7e6756"
+    },
+    "after-data": {
+      "exit_code": 0,
+      "log_sha256": "fc75900e27da0263727f08eeaa2eaadbb30aa880e08b7e59813b569e491792ec"
+    },
+    "repeat-ledger": {
+      "exit_code": 0,
+      "log_sha256": "a513ada1fc71a826a4de3937fc0175343485fc237e023135c05a3d72fef182a6"
+    },
+    "replay-20261026110000_notification_delivery_outbox.sql": {
+      "exit_code": 0,
+      "log_sha256": "d8a71f819ee94dd741220b82421f67b798e6c51274f0101e9e28e78cf3c5169c"
+    },
+    "fixture-20261026110000_notification_delivery_outbox.sql": {
+      "exit_code": 0,
+      "log_sha256": "d414e837b2dc75fccdb0cc0b9e734ad671995bd271cfee71ba34ccc055d291d1"
+    },
+    "replay-20261026120000_shared_feedback_admission.sql": {
+      "exit_code": 0,
+      "log_sha256": "66bf30e6b5e6742963c961ae65f567fc5d1e41314d9d3b8e16c8e925a745161d"
+    },
+    "fixture-20261026120000_shared_feedback_admission.sql": {
+      "exit_code": 0,
+      "log_sha256": "8deb14c16e717fce834e02a841d2175980fe7470d5b127941adca20e05202a7e"
+    },
+    "post-fixtures-data": {
+      "exit_code": 0,
+      "log_sha256": "fc75900e27da0263727f08eeaa2eaadbb30aa880e08b7e59813b569e491792ec"
+    },
+    "concurrency-and-login": {
+      "exit_code": 0,
+      "log_sha256": "82231c398e38285ea19ef21eea76362b6a67b791a7880184d73c0c3e87f48089"
+    },
+    "dump": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "restore-create": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "restore": {
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "restored-data": {
+      "exit_code": 0,
+      "log_sha256": "fc75900e27da0263727f08eeaa2eaadbb30aa880e08b7e59813b569e491792ec"
+    },
+    "stop": {
+      "exit_code": 0,
+      "log_sha256": "ca19178a35ab4153b75b494963b66ce8243e1b94c173107c87b44d09db23652d"
+    }
+  },
+  "postgres_version": "18.4 (Homebrew)",
+  "original_tables_preserved": 153,
+  "full_dump_restore_preservation": true,
+  "source_unchanged": true,
+  "result": "passed",
+  "logs_retained_in_git": false
+}

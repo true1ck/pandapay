@@ -20,6 +20,7 @@ if (!process.env.JWT_ACCESS_SECRET && !process.env.DATABASE_URL) {
 }
 
 const isProduction = process.env.NODE_ENV === 'production';
+const securityFeatures = require('./security_feature_config').readSecurityFeatureConfig();
 
 // DATABASE_URL and JWT_ACCESS_SECRET are required everywhere — api/ cannot
 // do anything useful without a database or without being able to verify
@@ -100,6 +101,7 @@ if (!jwtKeys[jwtActiveKeyId]) {
 }
 
 module.exports = {
+  ...securityFeatures,
   isProduction,
   port: Number(process.env.PORT) || 4000,
   // Prefer the product database when both service URLs live in a shared

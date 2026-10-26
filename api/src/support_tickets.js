@@ -91,7 +91,17 @@ function createSupportTicketHandler({ withUserClient, limiter = createSupportTic
 
     const authenticated = Boolean(req.userId);
     const identity = authenticated ? req.userId : (req.ip || req.socket?.remoteAddress || '');
-    const rate = limiter.consume(identity, authenticated);
+    let rate;
+    try { rate = await limiter.consume(identity, authenticated, 'support_tickets'); }
+    catch (err) {
+      console.error('POST /support-tickets admission unavailable', safeErrorCode(err));
+      res.set?.('Retry-After', '5');
+      return res.status(503).json({ error: 'feedback_admission_unavailable' });
+    }
+    if (rate.unavailable) {
+      res.set?.('Retry-After', '5');
+      return res.status(503).json({ error: 'feedback_admission_unavailable' });
+    }
     if (!rate.allowed) {
       res.set?.('Retry-After', String(rate.retryAfterSeconds));
       return res.status(429).json({ error: 'support_ticket_rate_limited' });

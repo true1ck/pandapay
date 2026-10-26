@@ -1,0 +1,14 @@
+{
+  "deploy": {
+    "exit_code": 0,
+    "summary": ".......................\n----------------------------------------------------------------------\nRan 23 tests in 19.485s\n\nOK\n"
+  },
+  "prod-compose": {
+    "exit_code": 0,
+    "summary": ""
+  },
+  "staging-compose": {
+    "exit_code": 0,
+    "summary": ""
+  }
+}

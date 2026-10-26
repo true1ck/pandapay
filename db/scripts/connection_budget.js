@@ -12,9 +12,9 @@ const MAX_AGE_MS = 48 * 60 * 60 * 1000;
 // api/src/sms_learning_worker_runner.js and the two maintenance CLIs.
 // rewards-worker imports api/src/db.js, including its optional service pools.
 const MODELS = Object.freeze({
-  api: { main: 'configured', partnerWebhook: 2, imapWorker: 2, accountLifecycle: 1 },
+  api: { main: 'configured', partnerWebhook: 2, imapWorker: 2, accountLifecycle: 1, sharedFeedback: 1, notificationOutbox: 1 },
   auth: { main: 'configured', consoleSession: 3, authLifecycle: 2 },
-  'rewards-worker': { main: 'configured', partnerWebhook: 2, imapWorker: 2, accountLifecycle: 1 },
+  'rewards-worker': { main: 'configured', partnerWebhook: 2, imapWorker: 2, accountLifecycle: 1, sharedFeedback: 1, notificationOutbox: 1 },
   'sms-learning-worker': { main: 2 },
   'gemini-worker': {}, // HTTP fan-out is capacity work, but not a local PG pool.
   'product-maintenance': { main: 1 },
@@ -81,7 +81,8 @@ function validateBudget(value) {
     integer(process.replicas, 0, 10000); integer(process.overlapReplicas, 0, 10000);
     if (configured) integer(process.dbPoolMax, 1, 100);
     if (process.replicas === 0 && process.overlapReplicas !== 0) throw new Error('Overlap requires a serving process');
-    fields(process.pools, Object.keys(model));
+    // New optional pools remain omitted in older disabled-feature manifests.
+    fields(process.pools, Object.keys(model), Object.keys(model).filter(name => !['sharedFeedback', 'notificationOutbox'].includes(name)));
     for (const [name, cluster] of Object.entries(process.pools)) {
       if (cluster !== null && !clusterIds.has(cluster)) throw new Error('Unknown pool cluster');
       if (process.replicas > 0 && ['main', 'ledger', 'retention'].includes(name) && cluster === null) throw new Error('Serving process needs its primary connections');
@@ -104,7 +105,7 @@ function evaluateBudget(value, { now = Date.now() } = {}) {
     const contributions = [];
     for (const [name, size] of Object.entries(MODELS[process.kind])) {
       const cluster = process.pools[name];
-      if (cluster === null) continue;
+      if (cluster == null) continue;
       const maximum = size === 'configured' ? process.dbPoolMax : size;
       const steady = maximum * process.replicas, rollout = maximum * (process.replicas + process.overlapReplicas);
       const total = clusters.get(cluster); total.steady_connections += steady; total.rollout_connections += rollout;

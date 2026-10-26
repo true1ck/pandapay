@@ -1,0 +1,11 @@
+{
+  "logs_retained_in_git": false,
+  "log_sha256": {
+    "tools-tests.log": "392afe84e047173259034eaecc6fc5bb68fd0143ef21db94670eb417be4e5bbc",
+    "api-tests.log": "119e4fbac6869894cdba6da912c8da1e099c0e826220fd326cda390188b91a0b",
+    "staging-compose.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "prod-compose.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "deploy.log": "182b6b3993d799f7189829d6d409886bb28e8151af5ecc94ca53523ceb3bf743",
+    "auth-tests.log": "57ad1baed6086e65029c32a9296483dbe80e36b5b22fa198f3c3c4b348e857a8"
+  }
+}

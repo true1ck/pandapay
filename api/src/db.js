@@ -2,10 +2,12 @@ const { Pool } = require('pg');
 const config = require('./config');
 const { resolveDatabaseTls } = require('./db_tls');
 const { safeErrorCode } = require('./safeErrorCode');
-const { createPartnerWebhookPool, createImapWorkerPool,createAccountLifecyclePool } = require('./service_pools');
+const { createPartnerWebhookPool, createImapWorkerPool,createAccountLifecyclePool,createSharedFeedbackPool,createNotificationOutboxPool } = require('./service_pools');
 const partnerWebhookPool = createPartnerWebhookPool(config.partnerWebhookDatabaseUrl);
 const imapWorkerPool = createImapWorkerPool(config.imapPollDatabaseUrl);
 const accountLifecyclePool=createAccountLifecyclePool(config.accountLifecycleEnabled?config.accountLifecycleDatabaseUrl:null);
+const sharedFeedbackPool=createSharedFeedbackPool(config.sharedFeedbackAdmissionEnabled?config.sharedFeedbackDatabaseUrl:null);
+const notificationOutboxPool=createNotificationOutboxPool(config.notificationOutboxEnabled?config.notificationOutboxDatabaseUrl:null);
 if(config.accountLifecycleEnabled&&!accountLifecyclePool)throw new Error('Dedicated account lifecycle database required');
 const {ASSERT_ACCESS_SQL}=require('./account_lifecycle_routes');
 const lifecycleJournalRuntime=require('./account_lifecycle_journal_runtime').createJournalRuntime({pool:accountLifecyclePool});
@@ -73,4 +75,4 @@ async function withUserClient(userId, fn) {
   }
 }
 
-module.exports = { lifecycleJournalRuntime, pool, withUserClient, partnerWebhookPool, imapWorkerPool,accountLifecyclePool };
+module.exports = { lifecycleJournalRuntime, pool, withUserClient, partnerWebhookPool, imapWorkerPool,accountLifecyclePool,sharedFeedbackPool,notificationOutboxPool };

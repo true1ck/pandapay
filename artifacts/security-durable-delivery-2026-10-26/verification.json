@@ -1,0 +1,256 @@
+{
+  "format": "pandapay-scoped-security-source-verification-v1",
+  "date": "2026-10-26",
+  "scope": "durable notifications, shared feedback admission and configuration/release integration",
+  "base_commit": "6443704",
+  "counts": {
+    "launch_priorities": {
+      "partial": 9,
+      "open": 1,
+      "accepted_for_launch": 0
+    },
+    "findings": 76,
+    "implementation_packages": 14,
+    "release_gates": 6,
+    "findings_closed_by_this_batch": 0
+  },
+  "live_actions": {
+    "live_database_connections": false,
+    "saved_credentials_or_customer_backups_read": false,
+    "real_provider_sends": false,
+    "production_deployed": false,
+    "flags_enabled": false,
+    "keys_rotated": false,
+    "backup_schedule_changed": false,
+    "purchases": false
+  },
+  "checks": {
+    "node": {
+      "node": "v24.15.0",
+      "groups": {
+        "api": {
+          "exit_code": 0,
+          "tests": 1163,
+          "pass": 1161,
+          "fail": 0,
+          "skipped": 2,
+          "scope": "api/test/*.test.js"
+        },
+        "auth": {
+          "exit_code": 0,
+          "tests": 344,
+          "pass": 344,
+          "fail": 0,
+          "skipped": 0,
+          "scope": "auth/test/*.test.js"
+        },
+        "tools": {
+          "exit_code": 0,
+          "tests": 223,
+          "pass": 223,
+          "fail": 0,
+          "skipped": 0,
+          "scope": "db/tests/*.test.js"
+        }
+      }
+    },
+    "deployment": {
+      "deploy": {
+        "exit_code": 0,
+        "summary": ".......................\n----------------------------------------------------------------------\nRan 23 tests in 19.485s\n\nOK\n"
+      },
+      "prod-compose": {
+        "exit_code": 0,
+        "summary": ""
+      },
+      "staging-compose": {
+        "exit_code": 0,
+        "summary": ""
+      }
+    },
+    "postgres": {
+      "source": {
+        "candidate_sha256": "b167a4459c771f3a2b033f5c501b3b692ad09168aacaa669456e9698967d2fbe",
+        "file_count": 1423
+      },
+      "scope": "owned-synthetic-loopback-only",
+      "saved_credentials_or_customer_data": false,
+      "checks": {
+        "init": {
+          "exit_code": 0,
+          "log_sha256": "9f4f26f703d5660a21e55eab77717bac68fbf2ee9fc2753df02580cbe6d75d9f"
+        },
+        "start": {
+          "exit_code": 0,
+          "log_sha256": "66afd0411ccc09366e99fdd99b85f21899c8d2d064f5835126859618802153ad"
+        },
+        "create": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "version": {
+          "exit_code": 0,
+          "log_sha256": "9f37d3232c3d9c760ab750e986131361f48d3a9ab5ded13c3e2b322b13c48aa2"
+        },
+        "baseline-migrate": {
+          "exit_code": 0,
+          "log_sha256": "3f4203a4f07448c28ecae6f6598c701d1916436575d5149d2b5b3811ff376d37"
+        },
+        "seed": {
+          "exit_code": 0,
+          "log_sha256": "b6b585bc7c4bf7ebbc968057dafe84f698740755037d79df6bc052be4c591905"
+        },
+        "before-data": {
+          "exit_code": 0,
+          "log_sha256": "fc75900e27da0263727f08eeaa2eaadbb30aa880e08b7e59813b569e491792ec"
+        },
+        "upgrade": {
+          "exit_code": 0,
+          "log_sha256": "4068121d8599ad63bec807063acdb2935da7f6d5709afe32dd06c0167a7e6756"
+        },
+        "after-data": {
+          "exit_code": 0,
+          "log_sha256": "fc75900e27da0263727f08eeaa2eaadbb30aa880e08b7e59813b569e491792ec"
+        },
+        "repeat-ledger": {
+          "exit_code": 0,
+          "log_sha256": "a513ada1fc71a826a4de3937fc0175343485fc237e023135c05a3d72fef182a6"
+        },
+        "replay-20261026110000_notification_delivery_outbox.sql": {
+          "exit_code": 0,
+          "log_sha256": "d8a71f819ee94dd741220b82421f67b798e6c51274f0101e9e28e78cf3c5169c"
+        },
+        "fixture-20261026110000_notification_delivery_outbox.sql": {
+          "exit_code": 0,
+          "log_sha256": "d414e837b2dc75fccdb0cc0b9e734ad671995bd271cfee71ba34ccc055d291d1"
+        },
+        "replay-20261026120000_shared_feedback_admission.sql": {
+          "exit_code": 0,
+          "log_sha256": "66bf30e6b5e6742963c961ae65f567fc5d1e41314d9d3b8e16c8e925a745161d"
+        },
+        "fixture-20261026120000_shared_feedback_admission.sql": {
+          "exit_code": 0,
+          "log_sha256": "8deb14c16e717fce834e02a841d2175980fe7470d5b127941adca20e05202a7e"
+        },
+        "post-fixtures-data": {
+          "exit_code": 0,
+          "log_sha256": "fc75900e27da0263727f08eeaa2eaadbb30aa880e08b7e59813b569e491792ec"
+        },
+        "concurrency-and-login": {
+          "exit_code": 0,
+          "log_sha256": "82231c398e38285ea19ef21eea76362b6a67b791a7880184d73c0c3e87f48089"
+        },
+        "dump": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "restore-create": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "restore": {
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "restored-data": {
+          "exit_code": 0,
+          "log_sha256": "fc75900e27da0263727f08eeaa2eaadbb30aa880e08b7e59813b569e491792ec"
+        },
+        "stop": {
+          "exit_code": 0,
+          "log_sha256": "ca19178a35ab4153b75b494963b66ce8243e1b94c173107c87b44d09db23652d"
+        }
+      },
+      "postgres_version": "18.4 (Homebrew)",
+      "original_tables_preserved": 153,
+      "full_dump_restore_preservation": true,
+      "source_unchanged": true,
+      "result": "passed",
+      "logs_retained_in_git": false
+    },
+    "strict_release": {
+      "exit_code": 2,
+      "release_ready": false
+    },
+    "html": {
+      "priorities": 10,
+      "partial": 9,
+      "open": 1,
+      "accepted_for_launch": 0,
+      "markdown_table_parity": true,
+      "new_links_resolve": true,
+      "historical_database_panel_unchanged": true,
+      "script_blocks_unchanged": 2,
+      "visual_browser_acceptance": false
+    }
+  },
+  "limits": [
+    "Synthetic PostgreSQL18 is not complete current customer-data or intended-provider PostgreSQL17 acceptance",
+    "New features default off; package and launch acceptance remain incomplete",
+    "No new signed Flutter/device/provider/load acceptance",
+    "Notifications retained history/immutable snapshots are full-PostgreSQL recovery scope, not per-account portable export",
+    "At-least-once external delivery; provider idempotency/account/replay acceptance remains required",
+    "Shared feedback admission covers only support tickets and catalogue error reports, not all general/admin APIs"
+  ],
+  "candidate_sha256": "b167a4459c771f3a2b033f5c501b3b692ad09168aacaa669456e9698967d2fbe",
+  "source_file_count": 1423,
+  "sha256": {
+    ".env.prod.example": "c3a9560fdd6d9e0448c9a60ea59a76bb3d96aaf22567ba40d64fad93adfc887d",
+    ".env.staging.example": "ad768e3e24c64ee6c6890e1571edb521ecf07530d10422d2cb7d3c7c3f310f26",
+    "api/package.json": "56e451fe9d1b15107852c0c30a30ef6721d619aa5e931ca78d97a3883e950a27",
+    "api/src/config.js": "f3b7c3769fc165d2d4ee5b1ffa6dbce183564984a880ceccfe68acc37d041472",
+    "api/src/data_error_reports.js": "4e4f28b86f0ea1a22b8192814a60a7c38fb7da0ad95d0f8d52857a714f6bc2ec",
+    "api/src/db.js": "efd587c5fefb69b8d2d05e279a08568454f063cef66a303a27feb27bed2f730c",
+    "api/src/feedback_rate_limit.js": "9462fa319afc7ce47bc886b88d7407ed104ed31c6b853f43fa9b2e3420c98197",
+    "api/src/index.js": "8ac062b661c178801b46adce658cb0ca57b6b1bddbe1dbf02703c3b1f3002198",
+    "api/src/notification_outbox.js": "300e299f871610278b3b82769aa0fd02279d12fcdb9fa68f4c5b7ff5cad9ca09",
+    "api/src/notification_outbox_worker.js": "15edb3780e870f54363db2cfa147ba3f89e8795a851300dd91fd648ad31a267d",
+    "api/src/notification_routes.js": "8d0e308dcbc9fa578a60d16ef6fbcf0b602e2f071d4c56fabeee7b6f3b9b9033",
+    "api/src/notification_service.js": "b921aafae09fe71b2d17b4897380b07d1a05efa7c27421d6acae82aa0486a02d",
+    "api/src/portable_backup/coverage.json": "b853ddd6e63207774dac8c00bbe4bae1939a8d73147ace8b994b0c141151363e",
+    "api/src/referral_routes.js": "b42d19856aa60b88eb9b714a7bb7e2f5f4d777a721e93f6813529123551cf2ce",
+    "api/src/security_feature_config.js": "19e0f51a4e790c6f3565a2e99b4571e351822ce0f052ff815cc02d8cb8821a43",
+    "api/src/service_pools.js": "9e67b1711b7efd048b2c1f146b60bcfc9b22e9bae899d532ff3f5e282dd1ae07",
+    "api/src/support_tickets.js": "49ddd1570f66046b30aa079f8f60ee1818cbf168b437e1a4298967479784be48",
+    "api/test/feedback_rate_limit_shared.test.js": "3f44f37f803587acf6c62de9c099f36cf5c23911658495332972e5316b5c8ef0",
+    "api/test/notification_outbox.test.js": "2635743e16c3c0988fe8857a34b5d9bf30de667373694352798d67c8eeccfb8d",
+    "api/test/notification_routes.test.js": "116adc0462571d654aa00427481297409818373450c1ae33543b2199c20cf4c2",
+    "api/test/notification_service_cancellation.test.js": "03628e9972321bd859c086ad525f581513ec4060e5525c2c4bb262faae5598ee",
+    "api/test/security_delivery_postgres.js": "9300db9edd812832c4ed8c69699b3755feee826680150da9fdc9282e165e6ab4",
+    "api/test/security_feature_config.test.js": "abfb6e7403af894a87d243a31224c7cbae0b4d42bde5fec2e9f8392ecba4c2df",
+    "api/test/service_pools.test.js": "8121306d77ce81d8868248eda9f67e7e18353b35679a07c4f6175a81ec3ae4a2",
+    "db/scripts/connection_budget.js": "6dc14b4db9cc990e8946046b4135bb705ae5ec412303e28b17ca55918c297517",
+    "db/scripts/release_security_check.js": "73b092137a390e89adc840da2b49ce3c30e62f6c4f35931a759fbbca111d9e45",
+    "db/security/product-runtime-privileges.json": "0347f2d53d8b69770bd6e2655fa980e6142ab269301d02eafb9cca0b32050af5",
+    "db/supabase/migrations/20261026110000_notification_delivery_outbox.sql": "a5a8bba66f881553d62252529471ff84d36a8c0f4f714bbb315b22cf146d2e45",
+    "db/supabase/migrations/20261026120000_shared_feedback_admission.sql": "b94e4556b4452b3001b99a2cd77a10f8608b5de069ef9be63cb7a6afc40d3585",
+    "db/tests/20261026110000_notification_delivery_outbox_test.sql": "a50056fa512eefa095f98d2adfa726330424577cb9d2ab424d5099ad3f6617c4",
+    "db/tests/20261026120000_shared_feedback_admission_test.sql": "47ce5115cace8203795294069933f942c98d9453ba7fdf79d41bc3d7d036fd58",
+    "db/tests/release_security_check.test.js": "4bfb906d2f7d3ed42ab6ea808100991206ceb2f83959636a243569374173841a",
+    "docker-compose.prod.yml": "ea925f23f695dc442e54a0715a0f064ddbc4161feecf40669c46a9118ec883b3",
+    "docker-compose.staging.yml": "1f22716ee09e0b6070c341b484fea39ca997d31150ee1f4e955195dca0d3ae0d",
+    "docs/security-and-backend-audit-2026-10-20.html": "6ae652c5de48bbc229b468b7c10ee0411f567af804a7e25eb02ff82d08d26094",
+    "docs/security-and-backend-audit-2026-10-20.md": "83f989e36a5fd9cc1ada301f83d0ecc7319e789711501c938bb135af2cdc9412",
+    "docs/security-durable-delivery-implementation-2026-10-26.md": "a7803e99c6caaeda635944d5dbfe1ae075eeb76d852ed949c325c1f246e273a9",
+    "docs/security-launch-implementation-plan-2026-10-26.md": "ffe5dcb3a05f6c598549210339523a64d88c8597d1a4f7ffdd53a9d3ff4743a9",
+    "docs/security-remaining-work-2026-10-25.html": "fc7fb8f74d5b27329e4d483fddec7a4365f713593f1d1efa0a2550863495971c",
+    "docs/security-remaining-work-2026-10-25.md": "7079d30e597328343d463c4a718e8c028364e375f0a696ae6892fdac0e3edd38",
+    "docs/security-source-completion-plan-2026-10-26.md": "29c078296e1c8000e86b58c746ec5daf3d1e20d8a8ce9a272d2373ba70b1dc8c"
+  },
+  "log_sha256": {
+    "tools-tests.log": "392afe84e047173259034eaecc6fc5bb68fd0143ef21db94670eb417be4e5bbc",
+    "api-tests.log": "119e4fbac6869894cdba6da912c8da1e099c0e826220fd326cda390188b91a0b",
+    "staging-compose.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "prod-compose.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "deploy.log": "182b6b3993d799f7189829d6d409886bb28e8151af5ecc94ca53523ceb3bf743",
+    "auth-tests.log": "57ad1baed6086e65029c32a9296483dbe80e36b5b22fa198f3c3c4b348e857a8"
+  },
+  "review": {
+    "luna_implementation": [
+      "notification outbox",
+      "shared feedback limiter"
+    ],
+    "parent_review_and_integration": true,
+    "additional_independent_source_review": "no clear privilege bypass or default-off regression found; provider replay and in-flight preference boundaries remain explicit"
+  }
+}

@@ -46,19 +46,19 @@ function headers() {
 async function request(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
   const requestHeaders = { ...headers(), ...(options.headers || {}) };
-  // Every write issued by PandaPay has a stable idempotency key. This makes
-  // a single retry safe even when the provider accepted the request but the
-  // response was lost to a timeout.
+  // Keep the same identity on retries. Actual duplicate protection depends
+  // on the provider's enabled idempotency support and retention window.
   const canRetry = Boolean(requestHeaders['Idempotency-Key']);
 
   for (let attempt = 0; ; attempt += 1) {
+    options.signal?.throwIfAborted();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch(serviceUrl(path), {
         ...options,
         headers: requestHeaders,
-        signal: controller.signal,
+        signal: options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal,
       });
       if (response.status === 401 || response.status === 403) {
         const error = new Error('Notification provider rejected the configured API credentials');
@@ -73,6 +73,7 @@ async function request(path, options = {}) {
       }
       return response;
     } catch (error) {
+      if (options.signal?.aborted) throw error;
       if (error?.code === 'notification_service_auth_failed') {
         throw error;
       }
@@ -237,11 +238,14 @@ async function registerDevice({ subscriberId, token, platform, email, displayNam
   return { configured: true, registered: true };
 }
 
-async function send({ subscriberId, title, body, category, severity, deepLink, dedupeKey }) {
+async function send({ subscriberId, title, body, category, severity, deepLink, dedupeKey, signal }) {
   if (!isConfigured()) return { configured: false, status: 'disabled' };
+  signal?.throwIfAborted();
   await ensureWorkflow();
+  signal?.throwIfAborted();
   const response = await request('/v1/events/trigger', {
     method: 'POST',
+    signal,
     headers: dedupeKey ? { 'Idempotency-Key': dedupeKey } : undefined,
     body: JSON.stringify({
       name: WORKFLOW_IDENTIFIER,
@@ -260,6 +264,7 @@ async function send({ subscriberId, title, body, category, severity, deepLink, d
     throw new Error(`Notification delivery request failed: ${await readError(response)}`);
   }
   const result = await readJson(response) || { status: 'accepted' };
+  signal?.throwIfAborted();
   if (result?.status === 'no_devices') {
     const error = new Error('Notification provider has no registered devices for this user');
     error.code = 'notification_no_devices';
