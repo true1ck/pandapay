@@ -2026,7 +2026,7 @@ void main() {
     db.close();
   });
   test(
-    'fetchAll auto-removes mutual fund folio allotment when matching investment debit exists within 72 hours',
+    'fetchAll deduplicates matched allotments and files unmatched folio investments',
     () async {
       final db = openInMemoryForTesting();
       final ns = 'mf-test-${DateTime.now().microsecondsSinceEpoch}';
@@ -2103,17 +2103,23 @@ void main() {
         'review-allotment-unmatched',
       });
 
-      // Fetch all: matched allotment must be auto-removed, unmatched kept
+      // Matched allotment is deduplicated against the bank debit; an unmatched
+      // completed allotment is recorded as an investment.
       final items = await repo.fetchAll();
-      expect(items.map((i) => i.id).toList(), ['review-allotment-unmatched']);
+      expect(items, isEmpty);
+      expect(
+        db.db.select(
+          "SELECT COUNT(*) AS n FROM financial_entities WHERE namespace=? AND entity='transactions'",
+          [ns],
+        ).single['n'],
+        2, // Original bank debit + unmatched folio investment.
+      );
 
       final afterFetch = db.db.select(
         'SELECT id FROM local_needs_review WHERE namespace=?',
         [ns],
       );
-      expect(afterFetch.map((r) => r['id']).toList(), [
-        'review-allotment-unmatched',
-      ]);
+      expect(afterFetch, isEmpty);
 
       // addNeedsReviewSync also drops matched allotment
       addNeedsReviewSync(db, ns, matchedAllotment);
@@ -2121,9 +2127,14 @@ void main() {
         'SELECT id FROM local_needs_review WHERE namespace=?',
         [ns],
       );
-      expect(afterSync.map((r) => r['id']).toList(), [
-        'review-allotment-unmatched',
-      ]);
+      expect(afterSync, isEmpty);
+      expect(
+        db.db.select(
+          "SELECT COUNT(*) AS n FROM financial_entities WHERE namespace=? AND entity='transactions'",
+          [ns],
+        ).single['n'],
+        2,
+      );
 
       db.close();
     },

@@ -2055,6 +2055,20 @@ class LocalSmsParser {
       return observation();
     }
     if (futureDebit) return observation();
+    // An initiated broker payout is not yet money received by the bank.
+    // Keep it reviewable until the message confirms a completed movement.
+    if (_brokerSettlement(body, sender) &&
+        !hasCompletedMovement &&
+        !_re(
+          r'\b(?:(?:has|have)\s+been|(?:was|were|is))\s+settled\b',
+        ).hasMatch(body)) {
+      return observation(
+        null,
+        LocalSmsEventType.investment,
+        LocalSmsDisposition.review,
+        const ['pending_investment_settlement'],
+      );
+    }
     final amount = money(
       _re(
         r'(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',

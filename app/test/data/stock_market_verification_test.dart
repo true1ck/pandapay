@@ -69,7 +69,7 @@ void main() {
       expect(txn.entryKind == TxnEntryKind.spend, isFalse);
     });
 
-    test('verifies Kotak Neo settlement payout', () {
+    test('keeps initiated Kotak Neo settlement pending until receipt', () {
       const sender = 'KOTAKN';
       const body =
           'Kotak Neo: Running A/c settlement payout of INR 15,500.00 initiated for your demat account. You should receive funds in A/c XX1234 by EOD.';
@@ -85,15 +85,8 @@ void main() {
       );
 
       expect(obs, isNotNull);
-      expect(obs!.transaction, isNotNull);
-      final txn = obs.transaction!;
-
-      expect(txn.merchantName, contains('Investment return'));
-      expect(txn.amount.rupees, 15500.00);
-      expect(txn.categoryId, 'investments');
-      expect(txn.entryKind, TxnEntryKind.income);
-      expect(txn.status, 'active');
-      expect(txn.entryKind == TxnEntryKind.spend, isFalse);
+      expect(obs!.transaction, isNull);
+      expect(obs.disposition, LocalSmsDisposition.review);
     });
 
     test('verifies SEBI quarterly unused funds settlement (Zerodha)', () {
