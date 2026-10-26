@@ -110,7 +110,7 @@ test('correction prompt includes only contract findings and requires safe absten
   assert.match(prompt, /CORRECTION PASS/);
   assert.match(prompt, /facts may be \[\]/);
   assert.match(prompt, /facts\[0\]: merchant is required/);
-  assert.doesNotMatch(prompt, /previous structured output/i);
+  assert.doesNotMatch(prompt, /previous raw (?:sms|message|model response)/i);
 });
 
 test('every few-shot output satisfies the fact contract the result route enforces', () => {
@@ -285,6 +285,82 @@ test('worker keeps the decision and safely omits facts after one invalid correct
   const posted = calls.find((call) => call.url.endsWith('/result'));
   assert.deepEqual(posted.body.facts, []);
   assert.equal(posted.body.decision.topic, 'upi_debit');
+});
+
+test('worker repairs an invalid decision once before posting the result', async () => {
+  const calls = [];
+  let classifications = 0;
+  const job = {
+    id: 'decision-repair-job', profileId: 'profile-1', leaseToken: 'e'.repeat(64),
+    payload: { sender: 'BANK', body: 'synthetic message' },
+  };
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job });
+    return response({ jobStatus: 'done' });
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: {
+      classify: async (_job, options) => {
+        classifications++;
+        if (!options?.repairErrors) {
+          return {
+            decision: {
+              topic: 'generic_promotional_spam',
+              shouldConsider: false,
+              rejectionReason: 'none',
+            },
+            facts: [],
+          };
+        }
+        return {
+          decision: { topic: 'upi_debit', shouldConsider: true, rejectionReason: 'none' },
+          facts: [],
+        };
+      },
+    },
+    reserveCapacity: async () => ({ allowed: true }),
+  });
+  assert.equal(result.completed, true);
+  assert.equal(classifications, 2);
+  const posted = calls.find((call) => call.url.endsWith('/result'));
+  assert.equal(posted.body.decision.topic, 'upi_debit');
+  assert.equal(posted.body.decision.shouldConsider, true);
+});
+
+test('worker never turns a contradictory dismissal into a valid one by dropping bad facts', async () => {
+  const calls = [];
+  const job = {
+    id: 'contradictory-decision-job', profileId: 'profile-1', leaseToken: 'f'.repeat(64),
+    payload: { sender: 'BANK', body: 'synthetic message' },
+  };
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job });
+    return response({ jobStatus: 'done' });
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: {
+      classify: async (_job, options) => {
+        if (options?.repairErrors) throw new Error('correction unavailable');
+        return {
+          decision: {
+            topic: 'generic_promotional_spam',
+            shouldConsider: false,
+            rejectionReason: 'promotional_spam',
+          },
+          facts: [{ factType: 'posted_movement', payload: { amountInr: 10 } }],
+        };
+      },
+    },
+    reserveCapacity: async () => ({ allowed: true }),
+  });
+  assert.equal(result.completed, true);
+  const posted = calls.find((call) => call.url.endsWith('/result'));
+  assert.equal(posted.body.decision, null);
+  assert.deepEqual(posted.body.facts, []);
 });
 
 test('provider 429 releases the same leased job for retry', async () => {

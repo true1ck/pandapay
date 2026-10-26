@@ -137,7 +137,6 @@ if [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${AI_WORKER_TOKEN:-}" ]; then
   [ -n "${GEMINI_FALLBACK_API_KEY:-}" ] && upsert_env_value GEMINI_FALLBACK_API_KEY "$GEMINI_FALLBACK_API_KEY"
   [ -n "${GEMINI_MODEL:-}" ] && upsert_env_value GEMINI_MODEL "$GEMINI_MODEL"
   [ -n "${GEMINI_FALLBACK_MODEL:-}" ] && upsert_env_value GEMINI_FALLBACK_MODEL "$GEMINI_FALLBACK_MODEL"
-  upsert_env_value GEMINI_REQUESTS_PER_DAY "${GEMINI_REQUESTS_PER_DAY:-3000}"
   upsert_env_value GEMINI_REQUESTS_PER_MINUTE "${GEMINI_REQUESTS_PER_MINUTE:-30}"
   echo "    Gemini worker configuration updated"
 fi

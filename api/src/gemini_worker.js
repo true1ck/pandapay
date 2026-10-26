@@ -16,6 +16,7 @@ if (!process.env.GEMINI_API_KEY) {
 const crypto = require('crypto');
 const smsFacts = require('./sms_facts');
 const { verifyModelFacts } = require('./ai_fact_evidence');
+const { DECISION_TOPICS, REJECTION_REASONS, validateDecision } = require('./sms_decision');
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 const DEFAULT_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-flash-lite-latest';
 const DEFAULT_INTERVAL_MS = Number(process.env.AI_WORKER_INTERVAL_MS || 2000);
@@ -29,21 +30,6 @@ const SPEND_CATEGORIES = [
   'groceries', 'fuel', 'dining', 'online', 'travel', 'bills', 'rent',
   'insurance', 'education', 'government', 'wallet', 'entertainment',
   'health', 'emi', 'other',
-];
-
-const DECISION_TOPICS = [
-  'card_spend', 'card_refund', 'upi_debit', 'upi_credit',
-  'atm_withdrawal', 'bank_transfer', 'bill_due_notice',
-  'bill_payment_success', 'mandate_autopay', 'investment_purchase',
-  'salary_or_income', 'telecom_carrier_deduction', 'loan_upsell_or_offer',
-  'credit_card_limit_upsell', 'otp_or_security_code',
-  'generic_promotional_spam', 'informational_balance_notice',
-  'pay_later_due_notice', 'pay_later_drawdown', 'other_non_financial',
-];
-
-const REJECTION_REASONS = [
-  'none', 'telecom_carrier_deduction', 'loan_upsell',
-  'promotional_spam', 'security_otp', 'credit_limit_upsell', 'non_financial',
 ];
 
 const DECISION_SCHEMA = {
@@ -660,7 +646,7 @@ function buildGeminiPrompt(job, { batch = false, includeExamples = true, repairE
     'A posted spend also requires merchant. A mandate limit is valid only for registered status. Never omit required fields or invent values; if any required value is absent or uncertain, leave this SMS\'s facts array empty.',
     'Set isComplete=true only when every essential attribute for the fact type is present, and confidence to your extraction certainty from 0.0 to 1.0.',
     ...(Array.isArray(repairErrors) && repairErrors.length > 0 ? [
-      'CORRECTION PASS: Your previous structured facts did not satisfy the app contract. Re-evaluate the SMS and return a corrected decision and facts. Keep only facts fully supported by the SMS. If a required value is absent or uncertain, omit that fact (facts may be []). Do not guess to satisfy validation.',
+      'CORRECTION PASS: Your previous structured output did not satisfy the decision or fact contract. Re-evaluate the SMS and return a corrected decision and facts. Keep only facts fully supported by the SMS. If a required value is absent or uncertain, omit that fact (facts may be []). Do not guess to satisfy validation.',
       `Validator findings: ${repairErrors.slice(0, 8).join(' | ')}`,
     ] : []),
     'Do not treat a bill total, credit limit, or mandate ceiling as a posted movement.',
@@ -1048,24 +1034,31 @@ async function runWorkerOnce({
         let itemResult = byId.get(job.id);
         let facts = Array.isArray(itemResult) ? itemResult : (itemResult?.facts || []);
         let decision = Array.isArray(itemResult) ? null : (itemResult?.decision || null);
-        let errors = validationErrors(facts, job);
+        let errors = [
+          ...validationErrors(facts, job),
+          ...validateDecision(decision, facts).errors,
+        ];
         if (errors.length > 0 && typeof provider.classify === 'function') {
           try {
-            // One bounded correction call: send only contract error text, then
+            // One bounded correction call: send only contract findings, then
             // re-evaluate the original redacted SMS. Reserve it as a distinct
             // provider request so minute pacing remains accurate.
             await reserveFor([job]);
             itemResult = await provider.classify(job, { repairErrors: errors });
             facts = itemResult?.facts || [];
-            errors = validationErrors(facts, job);
-            if (errors.length === 0 && itemResult?.decision) decision = itemResult.decision;
+            decision = itemResult?.decision || null;
+            errors = [
+              ...validationErrors(facts, job),
+              ...validateDecision(decision, facts).errors,
+            ];
           } catch (_) {
-            // Keep the tracking decision even if correction itself is
-            // unavailable; invalid facts are never allowed to affect money.
+            // A prior valid classification may still be retained when only
+            // fact repair failed; an invalid decision is always discarded.
             errors = ['correction_unavailable'];
           }
         }
-        if (errors.length > 0) facts = [];
+        if (!validateDecision(decision, facts).valid) decision = null;
+        if (validationErrors(facts, job).length > 0) facts = [];
         const result = await jsonRequest(fetchImpl, `${base}/ai/jobs/${encodeURIComponent(job.id)}/result`, workerToken, {
           decision,
           facts,

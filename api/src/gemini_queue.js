@@ -2,7 +2,7 @@
  * SMS intelligence Phase 5: durable single-item AI queue logic.
  *
  * Enforced here, not in ad-hoc handlers: one job per (profile, source),
- * acceptance replay-safe before quota is consulted, lease with expiry and a
+ * acceptance replay-safe before insertion, lease with expiry and a
  * bounded attempt budget, per-item structured validation on the result path,
  * and a payload purge on completion or failure so raw bodies do not linger
  * server-side. AI results only fill fact slots that do not exist yet —
@@ -44,8 +44,8 @@ function redactBodyForAi(body) {
 
 /**
  * Accepts one source (or refuses). Order matters: a replayed source returns
- * `reused` before quota or inserts happen, so app retries, 429 retries and
- * double pushes never create a second job or burn a second quota unit.
+ * `reused` before inserts happen, so app retries, provider retries, and
+ * double pushes never create a second job for the same source.
  */
 async function acceptOneJob(client, profileId, {
   sourceKey, sender, body, occurredAt, retryFailed = false,
@@ -61,8 +61,7 @@ async function acceptOneJob(client, profileId, {
   );
   if (existing) {
     if (existing.status === 'failed' && retryFailed) {
-      // A failed job already consumed this source's daily admission. An
-      // explicit device retry reuses that row and must not spend another slot.
+      // An explicit device retry reuses the failed row and preserves its id.
       const smsFacts = require('./sms_facts');
       await client.query(
         `UPDATE ai_jobs

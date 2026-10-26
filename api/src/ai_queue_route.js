@@ -3,7 +3,7 @@
  *
  * Three actors, three guards:
  * - the app posts ONE source per /ai/jobs call (single-key gate); acceptance
- *   is replay-safe per (profile, source) and quota-gated per user per day;
+ *   is replay-safe per (profile, source); provider pacing is handled separately;
  * - the worker (bearer token via AI_WORKER_TOKEN; routes are disabled when
  *   the env var is unset) leases one job at a time and posts per-item
  *   validated results; the device-owned Needs Review item remains the user
@@ -19,6 +19,7 @@ const smsObservationMigration = require('./sms_observation_migration');
 const crypto = require('crypto');
 const { verifyModelFacts } = require('./ai_fact_evidence');
 const { providerLimits } = require('./ai_provider_quota_route');
+const { validateDecision } = require('./sms_decision');
 
 function leaseTokenMatches(expected, supplied) {
   if (typeof expected !== 'string' || typeof supplied !== 'string') return false;
@@ -243,10 +244,17 @@ function registerAiQueueRoutes(app, {
           });
           return { status: 422, error: 'result lacks SMS evidence', details: evidence.errors };
         }
+        const decisionValidation = validateDecision(decision, facts);
+        // A malformed decision is not a rejected SMS. Keep any validated facts
+        // as editable suggestions, but force the device to leave the source in
+        // Needs Review. In particular, only a consistent explicit negative
+        // decision may dismiss a row.
+        const acceptedDecision = decisionValidation.valid ? decision : null;
         const completion = await geminiQueue.completeJobWithResult(client, {
           job,
-          decision: decision || null,
+          decision: acceptedDecision,
           facts,
+          reviewRequired: decisionValidation.valid ? null : true,
           batchMetadata: {
             ...(typeof batchId === 'string' && /^[0-9a-f-]{36}$/i.test(batchId) ? { batchId } : {}),
             ...(Number.isInteger(batchSize) && batchSize >= 1 && batchSize <= 4 ? { batchSize } : {}),
@@ -259,6 +267,7 @@ function registerAiQueueRoutes(app, {
           status: 200,
           jobStatus: 'done',
           decision: completion.decision || null,
+          decisionValid: decisionValidation.valid,
           reviewRequired: completion.reviewRequired,
           confidenceScore: completion.confidenceScore,
         };
