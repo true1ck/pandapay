@@ -154,11 +154,11 @@ function makeFakeClient() {
     }
 
     // --- ai_jobs -----------------------------------------------------------
-    if (norm.startsWith('SELECT id FROM ai_jobs WHERE profile_id') || norm.startsWith('SELECT id, status FROM ai_jobs WHERE profile_id')) {
+    if (norm.startsWith('SELECT id FROM ai_jobs WHERE profile_id') || norm.startsWith('SELECT id, status, result FROM ai_jobs WHERE profile_id')) {
       const job = [...state.jobs.values()].find(
         (j) => j.profile_id === params[0] && j.source_key === params[1],
       );
-      return { rows: job ? [{ id: job.id, status: job.status }] : [], rowCount: job ? 1 : 0 };
+      return { rows: job ? [{ id: job.id, status: job.status, result: job.result }] : [], rowCount: job ? 1 : 0 };
     }
     if (norm.startsWith('INSERT INTO ai_jobs')) {
       const key = `${params[0]}:${params[1]}`;
@@ -232,6 +232,7 @@ function makeFakeClient() {
       if (!job) return { rows: [], rowCount: 0 };
       job.status = 'queued';
       job.payload = typeof params[1] === 'string' ? JSON.parse(params[1]) : params[1];
+      if (norm.includes('result = NULL')) job.result = null;
       job.attempts = 0;
       job.lease_token = null;
       job.lease_expires_at = null;
@@ -520,6 +521,39 @@ test('explicit device retry reopens one failed job without consuming another quo
   assert.equal(client.state.jobs.size, 1);
   assert.equal(client.state.quota.size, 0);
   assert.equal(client.state.events.filter((event) => event.event_type === 'requeued').length, 1);
+});
+
+test('explicit device retry reopens a completed empty result but preserves job identity', async () => {
+  const client = makeUserClient();
+  const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+  });
+  const job = client.state.jobs.get(accepted.jobId);
+  job.status = 'done';
+  job.result = { landed: [], factTypes: [], decision: { topic: 'bank_transfer', shouldConsider: true } };
+  job.payload = { purged: true };
+
+  const ordinaryReplay = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY,
+  });
+  assert.equal(ordinaryReplay.reused, true);
+  assert.equal(job.status, 'done');
+
+  const retry = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY, retryFailed: true,
+  });
+  assert.equal(retry.accepted, true);
+  assert.equal(retry.reused, false);
+  assert.equal(retry.jobId, accepted.jobId);
+  assert.equal(job.status, 'queued');
+  assert.equal(job.result, null);
+  assert.equal(job.payload.body, BILL_BODY);
+  assert.equal(
+    client.state.events.at(-1).payload.reason,
+    'explicit_device_retry_after_empty_result',
+  );
 });
 
 test('explicit failed-job retry works and preserves same job identity', async () => {

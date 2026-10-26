@@ -49,6 +49,7 @@ test('posted movements require completed-event language and reject declined or f
   };
   assert.equal(verifyModelFacts([fact], { body: 'Rs 250 debited from your account' }).valid, true);
   assert.equal(verifyModelFacts([fact], { body: 'payout for Rs. 250 is processed with reference ID: 12345' }).valid, true);
+  assert.equal(verifyModelFacts([fact], { body: 'Your payment of Rs 250 for REF123 was completed successfully.' }).valid, true);
   assert.equal(verifyModelFacts([fact], { body: 'Rs 250 debit declined' }).valid, false);
   assert.equal(verifyModelFacts([fact], { body: 'Rs 250 will be debited' }).valid, false);
 });
@@ -112,6 +113,7 @@ test('genuine failures, tentative language and scheduled-only messages still fai
     'Rs 250 cancelled',
     'Rs 250 scheduled for 24-10-26',
     'Rs 250 is scheduled',
+    'Your payment of Rs 250 will be completed tomorrow.',
   ]) {
     assert.equal(verifyModelFacts([fact], { body }).valid, false, body);
     assert.equal(hasCompletionEvidence(body), false, body);

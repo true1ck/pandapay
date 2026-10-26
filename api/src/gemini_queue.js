@@ -86,6 +86,36 @@ async function acceptOneJob(client, profileId, {
       });
       return { accepted: true, jobId: existing.id, reused: false };
     }
+    if (existing.status === 'done' && retryFailed &&
+        Array.isArray(existing.result?.landed) && existing.result.landed.length === 0 &&
+        Array.isArray(existing.result?.factTypes) && existing.result.factTypes.length === 0) {
+      // An explicit retry may re-run a completed classification only when it
+      // produced no facts. This lets the user retry after a safe abstention
+      // while preserving idempotency for successful or partially successful
+      // results.
+      const smsFacts = require('./sms_facts');
+      await client.query(
+        `UPDATE ai_jobs
+            SET status = 'queued', payload = $2, result = NULL, attempts = 0,
+                lease_token = NULL, lease_expires_at = NULL,
+                next_attempt_at = now(), updated_at = now()
+          WHERE id = $1 AND status = 'done'`,
+        [
+          existing.id,
+          JSON.stringify({
+            sender,
+            body: redactBodyForAi(body),
+            bodyHash: smsFacts.bodyHashOf(sender, body),
+            occurredAt,
+            kind: 'classify_sms',
+          }),
+        ],
+      );
+      await recordEvent(client, existing.id, profileId, 'requeued', {
+        reason: 'explicit_device_retry_after_empty_result',
+      });
+      return { accepted: true, jobId: existing.id, reused: false };
+    }
     // A failed row is terminal for this pipeline revision. Silently reopening
     // it resets the worker attempt budget every time the app reconciles and
     // creates an unbounded failed -> queued -> failed loop. Explicit/versioned
@@ -130,7 +160,7 @@ async function acceptOneJob(client, profileId, {
 
 async function findJobBySourceKey(client, profileId, sourceKey, lock = false) {
   const rows = await client.query(
-    `SELECT id, status FROM ai_jobs WHERE profile_id = $1 AND source_key = $2${lock ? ' FOR UPDATE' : ''}`,
+    `SELECT id, status, result FROM ai_jobs WHERE profile_id = $1 AND source_key = $2${lock ? ' FOR UPDATE' : ''}`,
     [profileId, sourceKey],
   );
   return rows.rows[0] || null;

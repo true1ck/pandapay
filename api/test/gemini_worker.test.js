@@ -171,6 +171,7 @@ test('Gemini prompt states required fact fields and fail-closed abstention rules
   assert.match(prompt, /due_minimum=minimumDueInr\/dueDate/);
   assert.match(prompt, /never omit required fields or invent values/i);
   assert.match(prompt, /leave this SMS's facts array empty/);
+  assert.match(prompt, /phone SMS receipt timestamp/);
   const batch = buildGeminiBatchPrompt([{ id: 'one' }, { id: 'two' }]);
   assert.match(batch, /"items":\[/);
   assert.match(batch, /If shouldConsider=false, set facts: \[\]/);

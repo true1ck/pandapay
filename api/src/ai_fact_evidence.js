@@ -12,6 +12,10 @@ const MONEY_FIELDS = [
  * settlements — the Indian message families the universal engine must accept.
  */
 const MOVEMENT_VERBS = /\b(debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred|transfer|processed|payout|settled|disbursed|invested|deposited|sent)\b/i;
+// Payment processors often say "payment ... was completed successfully"
+// instead of using "paid" or "debited". Treat that explicit confirmation as
+// movement evidence while requiring a transaction noun before "completed".
+const COMPLETED_TRANSACTION = /\b(?:payment|transaction|transfer|purchase)\b[\s\S]{0,100}\bcompleted(?:\s+successfully)?\b/i;
 
 /**
  * Marketing / operational footers appended to genuine bank alerts. Everything
@@ -51,7 +55,7 @@ function coreTransactionClause(body) {
 function hasCompletionEvidence(body) {
   const core = coreTransactionClause(body);
   if (!core) return false;
-  if (!MOVEMENT_VERBS.test(core)) return false;
+  if (!MOVEMENT_VERBS.test(core) && !COMPLETED_TRANSACTION.test(core)) return false;
   if (FAILURE_OR_TENTATIVE.test(core)) return false;
   return true;
 }
@@ -105,6 +109,7 @@ module.exports = {
   verifyModelFacts,
   moneyInMessage,
   MOVEMENT_VERBS,
+  COMPLETED_TRANSACTION,
   coreTransactionClause,
   hasCompletionEvidence,
 };

@@ -6264,6 +6264,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
                   item.id,
                   suggestions,
                   aiTopic: decision?['topic'] as String?,
+                  aiDecision: decision,
                 ) ||
                 changed;
             changed =

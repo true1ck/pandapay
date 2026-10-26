@@ -591,6 +591,11 @@ void main() {
         id,
         suggestions,
         aiTopic: 'Food & Dining',
+        aiDecision: {
+          'topic': 'upi_debit',
+          'shouldConsider': true,
+          'rejectionReason': 'none',
+        },
         aiSummary: 'Swiggy order payment',
       ),
       isTrue,
@@ -598,11 +603,13 @@ void main() {
     final fetched = (await repo.fetchAll()).single;
     expect(fetched.aiSuggestions, suggestions);
     expect(fetched.aiTopic, 'Food & Dining');
+    expect(fetched.aiDecision?['topic'], 'upi_debit');
     expect(fetched.aiSummary, 'Swiggy order payment');
 
     final json = fetched.toJson();
     final deserialized = NeedsReviewItem.fromJson(json);
     expect(deserialized.aiTopic, 'Food & Dining');
+    expect(deserialized.aiDecision?['shouldConsider'], true);
     expect(deserialized.aiSummary, 'Swiggy order payment');
 
     expect(
@@ -610,6 +617,11 @@ void main() {
         id,
         suggestions,
         aiTopic: 'Food & Dining',
+        aiDecision: {
+          'topic': 'upi_debit',
+          'shouldConsider': true,
+          'rejectionReason': 'none',
+        },
         aiSummary: 'Swiggy order payment',
       ),
       isFalse,

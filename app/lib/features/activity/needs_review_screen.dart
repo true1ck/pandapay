@@ -1361,7 +1361,9 @@ class _CommitmentNeedsReviewTileState
             style: BambooFonts.ui(12, color: BambooInk.ink500),
           ),
           if (item.aiSuggestions?.isNotEmpty == true ||
-              item.aiTopic?.trim().isNotEmpty == true) ...[
+              item.aiTopic?.trim().isNotEmpty == true ||
+              (item.aiDecision?['topic'] is String &&
+                  (item.aiDecision!['topic'] as String).trim().isNotEmpty)) ...[
             const SizedBox(height: AppSpace.xs),
             _AiBadge(summary: _aiSuggestedSummary(item)),
           ],
@@ -2238,6 +2240,10 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   bool _showAiOutput = false;
 
   String get _aiDecisionLabel {
+    final decisionTopic = widget.item.aiDecision?['topic'];
+    if (decisionTopic is String && decisionTopic.trim().isNotEmpty) {
+      return '✦ AI decision · ${decisionTopic.trim().replaceAll('_', ' ')}';
+    }
     if (widget.item.aiTopic?.trim().isNotEmpty == true) {
       final topic = widget.item.aiTopic!.trim().replaceAll('_', ' ');
       return '✦ AI decision · $topic';
@@ -2899,12 +2905,22 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             ),
           ),
           if (item.aiSuggestions?.isNotEmpty == true ||
-              item.aiTopic?.trim().isNotEmpty == true) ...[
+              item.aiTopic?.trim().isNotEmpty == true ||
+              (item.aiDecision?['topic'] is String &&
+                  (item.aiDecision!['topic'] as String).trim().isNotEmpty)) ...[
             const SizedBox(height: AppSpace.xs),
             _AiBadge(summary: _aiDecisionLabel),
           ],
           const SizedBox(height: AppSpace.xs),
-          _AiStatusBadge(status: item.aiStatus, onRetry: _retryAiReview),
+          _AiStatusBadge(
+            status: item.aiStatus,
+            retryAvailable:
+                item.aiStatus == AiReviewStatus.unavailable ||
+                (item.aiStatus == AiReviewStatus.checked &&
+                    (item.aiSuggestions?.isEmpty ?? true) &&
+                    item.aiDecision?['shouldConsider'] != false),
+            onRetry: _retryAiReview,
+          ),
           if (Env.isDev && item.aiStatus != AiReviewStatus.notChecked) ...[
             const SizedBox(height: AppSpace.xs),
             TextButton.icon(
@@ -2931,7 +2947,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                     'status': item.aiStatus.name,
                     if (item.aiFailureReason != null)
                       'failureReason': item.aiFailureReason,
-                    if (item.aiTopic != null)
+                    if (item.aiDecision != null) 'decision': item.aiDecision,
+                    if (item.aiDecision == null && item.aiTopic != null)
                       'decision': {
                         'topic': item.aiTopic,
                         'action': 'keep_for_review',
@@ -3694,8 +3711,13 @@ class _AiBadge extends StatelessWidget {
 
 class _AiStatusBadge extends ConsumerWidget {
   final AiReviewStatus status;
+  final bool retryAvailable;
   final VoidCallback? onRetry;
-  const _AiStatusBadge({required this.status, this.onRetry});
+  const _AiStatusBadge({
+    required this.status,
+    this.retryAvailable = false,
+    this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -3716,8 +3738,10 @@ class _AiStatusBadge extends ConsumerWidget {
         BambooInk.jade,
       ),
       AiReviewStatus.checked => (
-        'AI review completed',
-        Icons.auto_awesome_rounded,
+        retryAvailable
+            ? 'AI decision ready · No verified facts · Tap to retry'
+            : 'AI review completed',
+        retryAvailable ? Icons.refresh_rounded : Icons.auto_awesome_rounded,
         BambooInk.jade,
       ),
       AiReviewStatus.unavailable => (
@@ -3730,7 +3754,9 @@ class _AiStatusBadge extends ConsumerWidget {
     };
     final isTappable =
         status == AiReviewStatus.queued ||
-        (status == AiReviewStatus.unavailable && onRetry != null);
+        ((status == AiReviewStatus.unavailable ||
+                (status == AiReviewStatus.checked && retryAvailable)) &&
+            onRetry != null);
     final showSpinner =
         status == AiReviewStatus.queued || status == AiReviewStatus.processing;
     return Align(
@@ -3742,7 +3768,8 @@ class _AiStatusBadge extends ConsumerWidget {
           behavior: HitTestBehavior.opaque,
           onTap: isTappable
               ? () {
-                  if (status == AiReviewStatus.unavailable) {
+                  if (status == AiReviewStatus.unavailable ||
+                      (status == AiReviewStatus.checked && retryAvailable)) {
                     onRetry?.call();
                     return;
                   }

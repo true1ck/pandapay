@@ -296,6 +296,47 @@ void main() {
     expect(find.text('✦ AI decision · upi debit'), findsOneWidget);
   });
 
+  testWidgets('shows and retries a decision that has no verified facts', (
+    tester,
+  ) async {
+    final itemId = List.filled(64, 'e').join();
+    await reviews.add(
+      NeedsReviewItem(
+        id: itemId,
+        sender: 'VM-HDFCBK',
+        body: 'Your payment of Rs 250 was completed successfully.',
+        reason: 'unparseable_amount',
+        receivedAt: DateTime.now(),
+        aiStatus: AiReviewStatus.checked,
+        aiDecision: const {
+          'topic': 'upi_debit',
+          'shouldConsider': true,
+          'rejectionReason': 'none',
+        },
+        aiSuggestions: const [],
+      ),
+    );
+    final repo = _FakeUserCardsRepository();
+    await _pump(tester, repo: repo, reviews: reviews, settle: false);
+
+    expect(find.text('✦ AI decision · upi debit'), findsOneWidget);
+    expect(
+      find.text('AI decision ready · No verified facts · Tap to retry'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('View AI output'));
+    await tester.pump();
+    expect(find.textContaining('"shouldConsider": true'), findsOneWidget);
+    await tester.tap(
+      find.text('AI decision ready · No verified facts · Tap to retry'),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(repo.lastAiJobArgs?['retryFailed'], isTrue);
+    expect((await reviews.fetchAll()).single.aiStatus, AiReviewStatus.queued);
+  });
+
   testWidgets(
     'shows queued AI check status with spinner and allows tap to retry',
     (tester) async {
