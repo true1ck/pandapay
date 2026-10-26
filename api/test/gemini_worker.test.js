@@ -218,6 +218,7 @@ test('provider 429 releases the same leased job for retry', async () => {
   });
   assert.equal(result.retried, true);
   assert.equal(calls[1].url, 'http://worker.test/ai/jobs/job-2/retry');
+  assert.equal(calls[1].body.reason, 'provider_rate_limited');
   assert.equal(calls[1].body.retryAfterMs, 60000);
 });
 
@@ -244,6 +245,7 @@ test('provider 503 releases the same leased job and preserves retry-after', asyn
 
   assert.equal(result.retried, true);
   assert.equal(calls[1].url, 'http://worker.test/ai/jobs/job-503/retry');
+  assert.equal(calls[1].body.reason, 'provider_http_503');
   assert.equal(calls[1].body.retryAfterMs, 3500);
   assert.equal(calls[1].body.profileId, 'profile-503');
 });
@@ -265,6 +267,28 @@ test('capacity API failure records its stage and does not call Gemini', async ()
   });
   assert.equal(result.retried, true);
   assert.equal(calls[0].body.reason, 'provider_capacity_unavailable');
+});
+
+test('provider transport failures keep a safe diagnostic class without leaking text', async () => {
+  const calls = [];
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token',
+    reserveCapacity: async () => ({ allowed: true }),
+    provider: { classify: async () => {
+      throw new GeminiProviderError('Gemini request failed or timed out', { retryable: true });
+    } },
+    fetchImpl: async (url, options) => {
+      calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+      if (url.endsWith('/lease')) return response({ leased: true, job: {
+        id: 'job-transport', profileId: 'profile-transport',
+        leaseToken: 't'.repeat(64), payload: {},
+      } });
+      return response({ jobStatus: 'queued' });
+    },
+  });
+  assert.equal(result.retried, true);
+  assert.equal(calls[1].body.reason, 'provider_transport_error');
+  assert.equal(JSON.stringify(calls[1].body).includes('request failed or timed out'), false);
 });
 
 test('missing Gemini key fails before opening a provider request', async () => {

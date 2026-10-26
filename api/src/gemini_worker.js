@@ -930,6 +930,21 @@ async function jsonRequest(fetchImpl, url, token, body) {
   return data;
 }
 
+function providerRetryReason(error) {
+  if (error?.capacityCheckFailed) return 'provider_capacity_unavailable';
+  if (error?.status === 429) return 'provider_rate_limited';
+  if (error?.status === 408) return 'provider_timeout';
+  if (error?.status === 409) return 'provider_conflict';
+  if (Number.isInteger(error?.status) && error.status >= 500 && error.status <= 599) {
+    return `provider_http_${error.status}`;
+  }
+  if (/request failed or timed out/i.test(error?.message || '')) return 'provider_transport_error';
+  if (error instanceof GeminiProviderError && /daily Free-tier request limit/.test(error.message)) {
+    return 'provider_daily_limit';
+  }
+  return 'provider_retry';
+}
+
 async function runWorkerOnce({
   apiBaseUrl = DEFAULT_API_BASE_URL,
   workerToken = process.env.AI_WORKER_TOKEN,
@@ -968,10 +983,7 @@ async function runWorkerOnce({
       profileId: job.profileId,
       leaseToken: job.leaseToken,
       ...(retryable ? {
-        reason: error?.capacityCheckFailed ? 'provider_capacity_unavailable'
-          : error?.status === 429 ? 'provider_rate_limited'
-            : error instanceof GeminiProviderError && /daily Free-tier request limit/.test(error.message)
-              ? 'provider_daily_limit' : 'provider_retry',
+        reason: providerRetryReason(error),
         ...(Number.isFinite(error.retryAfterMs) ? { retryAfterMs: error.retryAfterMs } : {}),
       } : { reason: error instanceof GeminiProviderError ? 'invalid_provider_output' : 'invalid_result' }),
     });
@@ -1099,6 +1111,7 @@ module.exports = {
   nextAdaptiveBatchSize,
   estimateProviderTokens,
   reserveProviderCapacity,
+  providerRetryReason,
   runWorkerOnce,
   startWorker,
 };
