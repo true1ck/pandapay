@@ -91,6 +91,60 @@ List<Override> _deterministicOverrides() => [
 ];
 
 void main() {
+  test('generic HDFC projection cannot pick a card from two HDFC cards', () {
+    const moneyBack = UserCard(
+      id: 'moneyback',
+      cardProductId: 'p1',
+      cardName: 'MoneyBack+ Credit Card',
+      isDefault: false,
+      last4: '8780',
+    );
+    const tataNeu = UserCard(
+      id: 'tata-neu',
+      cardProductId: 'p2',
+      cardName: 'Tata Neu Plus HDFC Bank Credit Card',
+      isDefault: false,
+      last4: '1366',
+    );
+    const generic = BillProjection(
+      id: 'generic',
+      projectionKind: 'bill_obligation',
+      projectionKey: 'generic',
+      status: 'active',
+      projection: {'billerName': 'HDFC Bank Credit Card'},
+      sourceKey: null,
+      sourceFactIds: [],
+      projectionVersion: 1,
+      updatedAt: null,
+    );
+    const identified = BillProjection(
+      id: 'identified',
+      projectionKind: 'bill_obligation',
+      projectionKey: 'identified',
+      status: 'active',
+      projection: {'billerName': 'HDFC Bank Credit Card', 'last4': '8780'},
+      sourceKey: null,
+      sourceFactIds: [],
+      projectionVersion: 1,
+      updatedAt: null,
+    );
+    const aggregatorTitle = BillProjection(
+      id: 'tata-neu-app',
+      projectionKind: 'bill_obligation',
+      projectionKey: 'tata-neu-app',
+      status: 'active',
+      projection: {'billerName': 'Tata Neu HDFC Credit Card'},
+      sourceKey: null,
+      sourceFactIds: [],
+      projectionVersion: 1,
+      updatedAt: null,
+    );
+
+    expect(findMatchingCardForCentralBill(generic, [moneyBack, tataNeu]), isNull);
+    expect(findMatchingCardForCentralBill(aggregatorTitle, [moneyBack, tataNeu]), isNull);
+    expect(findMatchingCardForCentralBill(identified, [moneyBack, tataNeu]), moneyBack);
+  });
+
   testWidgets('bill category and cadence chips use the app selection palette', (
     tester,
   ) async {
@@ -781,6 +835,72 @@ void main() {
       expect(find.text('Bills from messages'), findsNothing);
     },
   );
+
+  testWidgets('generic projection does not repeat an observed card bill', (
+    tester,
+  ) async {
+    const projection = BillProjection(
+      id: 'generic-hdfc',
+      projectionKind: 'bill_obligation',
+      projectionKey: 'generic-hdfc',
+      status: 'active',
+      projection: {
+        'billerName': 'Tata Neu HDFC Credit Card',
+        'amountInr': 8331.0,
+        'dueDate': '2026-11-08T00:00:00.000',
+      },
+      sourceKey: 'sms-hdfc',
+      sourceFactIds: [],
+      projectionVersion: 1,
+      updatedAt: null,
+    );
+    final moneyBack = _card(
+      id: 'moneyback',
+      name: 'MoneyBack+ Credit Card',
+      dueDay: 8,
+    );
+    final tataNeu = _card(
+      id: 'tata-neu',
+      name: 'Tata Neu Plus HDFC Bank Credit Card',
+      dueDay: 7,
+    );
+    await _pumpBills(
+      tester,
+      overrides: [
+        ..._deterministicOverrides(),
+        myCardsProvider.overrideWith((ref) async => [moneyBack, tataNeu]),
+        userCardsRepositoryProvider.overrideWithValue(_FakeRepo()),
+        cardBillLedgerProvider.overrideWith(
+          (ref) async => {
+            'moneyback': CardBillLedger(
+              current: CardBill(
+                statementDate: DateTime(2026, 10, 20),
+                dueDate: DateTime(2026, 11, 8),
+                amountDue: Money.fromRupees(8331),
+                minimumDue: null,
+                paidToward: Money.zero(),
+                lastPaymentAt: null,
+                confidence: 0.95,
+                statementDateVerified: true,
+                statementDateExplicit: true,
+              ),
+            ),
+          },
+        ),
+        centralBillsProjectionProvider.overrideWith(
+          (ref) async => const BillProjectionSnapshot(
+            available: true,
+            projections: [projection],
+          ),
+        ),
+        commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+      ],
+    );
+
+    expect(find.text('MoneyBack+ Credit Card'), findsOneWidget);
+    expect(find.text('Tata Neu Plus HDFC Bank Credit Card'), findsOneWidget);
+    expect(find.textContaining('8,331'), findsOneWidget);
+  });
 
   testWidgets(
     'scheduled payments section is omitted when _showScheduledPayments is off',

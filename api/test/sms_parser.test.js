@@ -1588,3 +1588,30 @@ test('real ATM cash withdrawals and real salary or UPI credits are not noise', (
     assert.equal(isNonTransactionNoise(sender, body), false, 'Should not be noise: ' + body);
   }
 });
+
+
+test('Axio Amazon Pay Later drawdown parses as spend transaction with merchant Amazon Pay Later', () => {
+  const drawdowns = [
+    {
+      sender: 'AX-axioFS-S',
+      body: 'Thank you for availing Pay Later credit of Rs299.0. For more info click https://u.axio.ac/axo/UqpJfCtWpqntk To report misuse call 180012001637 -axio',
+      amountInr: 299,
+    },
+    {
+      sender: 'VM-axioFS-S',
+      body: 'Thank you for availing Pay Later credit of Rs859.0. For more info click https://u.axio.ac/axo/OIzBfFTIVHRH30R To report misuse call 180012001637 -axio',
+      amountInr: 859,
+    },
+  ];
+
+  for (const item of drawdowns) {
+    const result = parseSmsAgainstPatterns([], { sender: item.sender, body: item.body });
+    assert.equal(result.ok, true, 'Failed to parse: ' + item.body);
+    assert.equal(result.parserKind, 'builtin_pay_later_drawdown');
+    assert.equal(result.fields.amountInr, item.amountInr);
+    assert.equal(result.fields.merchant, 'Amazon Pay Later');
+    assert.equal(result.fields.entryKind, 'spend');
+    assert.equal(result.fields.instrument, 'other');
+    assert.equal(result.fields.accountLast4, 'Amazon Pay Later');
+  }
+});

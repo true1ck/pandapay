@@ -102,16 +102,13 @@ const _authBaseUrl = Env.authBaseUrl;
 /// must never become a user-facing review item. Successful formats are
 /// recorded by the server as transactions; card attribution is optional.
 bool _isIgnorableSmsReason(String? reason) {
-  final r = (reason ?? '').trim().toLowerCase();
-  return r == 'security_message' ||
-      r == 'not_a_successful_spend' ||
-      r == 'non_transaction_message' ||
-      r == 'not_a_transaction_alert' ||
-      r == 'non_transaction_alert';
+  final normalized = (reason ?? '').trim().toLowerCase();
+  return normalized == 'security_message' ||
+      normalized == 'not_a_successful_spend' ||
+      normalized == 'non_transaction_message' ||
+      normalized == 'not_a_transaction_alert' ||
+      normalized == 'non_transaction_alert';
 }
-
-bool _isIgnorableSmsResult(SmsImportResult result) =>
-    _isIgnorableSmsReason(result.reason);
 
 /// Determines whether an error during startup review replay is fatal to the pass.
 /// Server refusals on specific messages (4xx) should skip that message and continue,
@@ -1138,7 +1135,9 @@ final autoResolvedHistoryProvider =
     FutureProvider<List<AutoResolvedHistoryEntry>>((ref) async {
       final markReady = _financialChanges(ref, 'auto_resolved_history');
       final markTransactionsReady = _financialChanges(ref, 'transactions');
-      final store = (await ref.watch(responseCacheProvider.future)).financialStore;
+      final store = (await ref.watch(
+        responseCacheProvider.future,
+      )).financialStore;
       final rows = AutoResolvedHistoryRepository(
         store.database,
         namespace: ref.watch(cacheNamespaceProvider),
@@ -3530,15 +3529,14 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   // its own rows in bankAccounts(). Checked on the RAW issuer strings —
   // canonicalBankSender collapses 'sbiupi' to 'sbi', hiding the marker.
   // ponytail: remove once server dedupes.
-  bool isNonDepositAccount(BankAccountSummary account) => RegExp(
-    r'upi|axio',
-  ).hasMatch(
-    [
-      account.issuerSlug,
-      account.issuerShortName,
-      account.issuerName,
-    ].whereType<String>().join(' ').toLowerCase(),
-  );
+  bool isNonDepositAccount(BankAccountSummary account) =>
+      RegExp(r'upi|axio').hasMatch(
+        [
+          account.issuerSlug,
+          account.issuerShortName,
+          account.issuerName,
+        ].whereType<String>().join(' ').toLowerCase(),
+      );
 
   List<BankAccountSummary> decode(CachedResponse snapshot) =>
       ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['accounts']
@@ -3773,6 +3771,8 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
   store?.migrateLegacy(namespace);
 
   final evidence = <CardBillEvidence>[];
+  final billAssignments = store?.cardBillAssignments(namespace) ??
+      const <String, Map<String, dynamic>>{};
   DateTime? earliestAnchor;
   for (final obs
       in store?.entities(namespace, 'sms_observations') ?? const []) {
@@ -3781,8 +3781,7 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
     // card-bill ledger. Bills delivered via aggregator senders (MYTNEU,
     // TNBPAY) also carry utility bills; sender-family alone is not enough.
     final hasCcEvidence =
-        obs['card_last4'] != null ||
-        _isCreditCardBillObs(obs);
+        obs['card_last4'] != null || _isCreditCardBillObs(obs);
     if (!hasCcEvidence) continue;
     final parsedStatement = DateTime.tryParse(
       obs['statement_date'] as String? ?? '',
@@ -3793,17 +3792,34 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
         ? parsedStatement
         : (received ?? parsedStatement);
     if (anchor == null) continue;
+    final sourceId = obs['id'] as String?;
+    final correction = billAssignments[sourceId];
+    final selectedId = correction?['user_card_id'] as String?;
+    final chosenCardId = cards.any((card) => card.id == selectedId)
+        ? selectedId : null;
+    final correctedStatement = DateTime.tryParse(
+      correction?['statement_date'] as String? ?? '',
+    );
+    final correctedDue = DateTime.tryParse(
+      correction?['due_date'] as String? ?? '',
+    );
     earliestAnchor = earliestAnchor == null || anchor.isBefore(earliestAnchor)
         ? anchor
         : earliestAnchor;
     evidence.add(
       CardBillEvidence(
+        sourceId: sourceId,
+        userCardId: chosenCardId,
         cardLast4: obs['card_last4'] as String?,
+        billerName: obs['biller_name'] as String?,
         family: obs['sender_bank'] as String?,
-        statementDate: anchor,
-        statementDateExplicit: statementDateExplicit && parsedStatement != null,
-        dueDate: DateTime.tryParse(obs['due_date'] as String? ?? ''),
-        amountDue: _moneyFromPaise(obs['amount_due_paise']),
+        statementDate: correctedStatement ?? anchor,
+        statementDateExplicit: correctedStatement != null ||
+            (statementDateExplicit && parsedStatement != null),
+        dueDate: correctedDue ?? DateTime.tryParse(obs['due_date'] as String? ?? ''),
+        amountDue: _moneyFromPaise(
+          correction?['amount_due_paise'] ?? obs['amount_due_paise'],
+        ),
         minimumDue: _moneyFromPaise(obs['minimum_due_paise']),
         confidence: (obs['confidence'] as num?)?.toDouble() ?? 0.5,
         isAutopay: obs['is_autopay'] == true,
@@ -3849,6 +3865,57 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
   );
 });
 
+final cardBillReviewItemsProvider = FutureProvider<List<CardBillReviewItem>>((
+  ref,
+) async {
+  final ledgers = await ref.watch(cardBillLedgerProvider.future);
+  final cache = await _cacheOrNull(ref);
+  final store = cache?.financialStore;
+  if (store == null) return const [];
+  final namespace = ref.watch(cacheNamespaceProvider);
+  final assignments = store.cardBillAssignments(namespace);
+  final linkedSources = {
+    for (final ledger in ledgers.values)
+      for (final bill in ledger.history)
+        ...bill.sourceIds,
+  };
+  final rows = <CardBillReviewItem>[];
+  for (final obs in store.entities(namespace, 'sms_observations')) {
+    if (obs['event_type'] != 'bill' ||
+        (obs['card_last4'] == null && !_isCreditCardBillObs(obs))) {
+      continue;
+    }
+    final id = obs['id'] as String?;
+    if (id == null || (linkedSources.contains(id) && !assignments.containsKey(id))) {
+      continue;
+    }
+    final correction = assignments[id];
+    final received = DateTime.tryParse(obs['received_at'] as String? ?? '');
+    if (received == null) continue;
+    rows.add(CardBillReviewItem(
+      id: id,
+      sender: obs['sender_bank'] as String? ?? '',
+      billerName: obs['biller_name'] as String?,
+      body: obs['sample_body'] as String?,
+      receivedAt: received,
+      dueDate: DateTime.tryParse(correction?['due_date'] as String? ?? '') ??
+          DateTime.tryParse(obs['due_date'] as String? ?? ''),
+      statementDate: DateTime.tryParse(
+            correction?['statement_date'] as String? ?? '',
+          ) ??
+          (obs['statement_date_explicit'] == true
+              ? DateTime.tryParse(obs['statement_date'] as String? ?? '')
+              : null),
+      amountDue: _moneyFromPaise(
+        correction?['amount_due_paise'] ?? obs['amount_due_paise'],
+      ),
+      assignedCardId: correction?['user_card_id'] as String?,
+    ));
+  }
+  rows.sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+  return rows;
+});
+
 /// Returns true when an sms_observations row carries positive evidence that
 /// it describes a credit-card bill (not a utility bill routed via an
 /// aggregator sender such as MYTNEU or TNBPAY).
@@ -3863,6 +3930,7 @@ bool _isCreditCardBillObs(Map<String, dynamic> obs) {
   final biller = ((obs['biller_name'] as String?) ?? '').toLowerCase();
   return biller.contains('credit card') || biller.contains('card bill');
 }
+
 Money? _moneyFromPaise(Object? value) {
   final paise = (value as num?)?.toInt();
   if (paise == null || paise <= 0) return null;
@@ -5700,38 +5768,35 @@ final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
 /// larger surface than "which cards does this person actually have") —
 /// every card is evaluated as if its caps/milestones are fully fresh.
 final rankedRecommendationsProvider =
-    Provider<AsyncValue<List<Recommendation>>>(
-      (ref) {
-        final selectedSlug = ref.watch(selectedCategoryProvider);
-        final nearby = ref.watch(homeNearbyContextProvider);
-        final match = nearby?.match;
-        String? merchantName;
-        String? nearbyCategoryId;
+    Provider<AsyncValue<List<Recommendation>>>((ref) {
+      final selectedSlug = ref.watch(selectedCategoryProvider);
+      final nearby = ref.watch(homeNearbyContextProvider);
+      final match = nearby?.match;
+      String? merchantName;
+      String? nearbyCategoryId;
 
-        if (match != null) {
-          final candidate = match.candidate;
-          final categories =
-              ref.watch(categoriesProvider).valueOrNull ?? const [];
-          final cat = categories.firstWhereOrNull(
-            (c) =>
-                c.id == candidate.categoryId || c.slug == candidate.categoryId,
-          );
-          final merchantCategorySlug = cat?.slug ?? candidate.categoryId;
-          if (selectedSlug == null || selectedSlug == merchantCategorySlug) {
-            merchantName = candidate.displayName;
-            nearbyCategoryId = candidate.categoryId ?? cat?.id;
-          }
-        }
-
-        return _rankRecommendations(
-          ref,
-          amount: ref.watch(enteredAmountProvider),
-          categoryId: nearbyCategoryId,
-          categorySlug: selectedSlug,
-          merchantName: merchantName,
+      if (match != null) {
+        final candidate = match.candidate;
+        final categories =
+            ref.watch(categoriesProvider).valueOrNull ?? const [];
+        final cat = categories.firstWhereOrNull(
+          (c) => c.id == candidate.categoryId || c.slug == candidate.categoryId,
         );
-      },
-    );
+        final merchantCategorySlug = cat?.slug ?? candidate.categoryId;
+        if (selectedSlug == null || selectedSlug == merchantCategorySlug) {
+          merchantName = candidate.displayName;
+          nearbyCategoryId = candidate.categoryId ?? cat?.id;
+        }
+      }
+
+      return _rankRecommendations(
+        ref,
+        amount: ref.watch(enteredAmountProvider),
+        categoryId: nearbyCategoryId,
+        categorySlug: selectedSlug,
+        merchantName: merchantName,
+      );
+    });
 
 /// Context passed by Quick Add as the user fills in a transaction. Keeping
 /// the rank request tied to the actual form values makes its card verdict use
@@ -6090,65 +6155,6 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         summary.statementDaysUpdated;
   }
 
-  // Parser improvements must also help messages that were already placed in
-  // the on-device review queue before this app version was installed. Retry
-  // once at startup through the same server path. Successful imports,
-  // cardless imports, and explicitly recognised security/non-spend messages
-  // are removed from the old queue.
-  Future<bool> retryExistingNeedsReview() async {
-    final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null) return false;
-    var completed = true;
-    final reviewRepo = ref.read(needsReviewRepositoryProvider);
-    final items = await reviewRepo.fetchAll();
-    var changed = false;
-    var dueDayUpdated = false;
-    var statementDayUpdated = false;
-    for (final item in items) {
-      if (NeedsReviewRepository.isNoiseItem(item)) {
-        await reviewRepo.remove(item.id);
-        changed = true;
-        continue;
-      }
-      try {
-        final result = await repo.logTransactionFromSms(
-          sender: item.sender,
-          body: item.body,
-          occurredAt: item.receivedAt,
-        );
-        dueDayUpdated = dueDayUpdated || result.dueDayUpdated;
-        statementDayUpdated = statementDayUpdated || result.statementDayUpdated;
-        final canRemove =
-            (result.parsed && !result.needsReview) ||
-            _isIgnorableSmsResult(result);
-        if (canRemove) {
-          await reviewRepo.remove(item.id);
-          changed = true;
-        }
-      } catch (e) {
-        if (reviewReplayShouldStop(e)) {
-          // Keep the remaining items for the next app start if the API is
-          // offline or auth has not finished restoring yet.
-          completed = false;
-          break;
-        }
-      }
-    }
-    if (changed || dueDayUpdated || statementDayUpdated) {
-      if (dueDayUpdated || statementDayUpdated) {
-        await _clearUserCardsCacheForRef(ref);
-      }
-      ref.invalidate(needsReviewItemsProvider);
-      ref.invalidate(needsReviewCountProvider);
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(utilizationTransactionsProvider);
-      ref.invalidate(homeSummaryProvider);
-    }
-    return completed;
-  }
-
   // The local review row is the durable source of truth for unresolved SMSs.
   // Reconcile by the existing source key; a crash between local capture and
   // POST /ai/jobs can then safely retry without rereading the inbox.
@@ -6169,15 +6175,14 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           ? item.id.substring('commitment:'.length)
           : item.id;
       if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(cleanId) ||
-          LocalSmsParser.sensitive(item.body) ||
-          !capturesFinancialSms(item.body, sender: item.sender)) {
+          LocalSmsParser.sensitive(item.body)) {
         continue;
       }
       try {
         final status = await repo.fetchAiJobStatus(cleanId);
-        if (status == null || status['status'] == 'failed') {
-          // Allow items that previously had AiReviewStatus.unavailable to be
-          // retried if status == null and they have no suggestions yet.
+        if (status == null) {
+          // The first submission may have been interrupted before acceptance.
+          // Retry only that gap under the same idempotent source key.
           final jobId = await repo.submitAiJob(
             sourceKey: cleanId,
             sender: item.sender,
@@ -6190,6 +6195,20 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
                 jobId == null
                     ? AiReviewStatus.unavailable
                     : AiReviewStatus.queued,
+              ) ||
+              changed;
+          continue;
+        }
+
+        if (status['status'] == 'failed') {
+          // Failed jobs are terminal for this pipeline revision. Reopening on
+          // every reconciliation reset the attempt budget and caused a retry
+          // storm. Keep the local message available for manual review.
+          changed =
+              await reviewRepo.updateAiStatus(
+                item.id,
+                AiReviewStatus.unavailable,
+                failureReason: status['failureReason'] as String?,
               ) ||
               changed;
           continue;
@@ -6209,41 +6228,39 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         final decision = (status['decision'] is Map
             ? Map<String, dynamic>.from(status['decision'] as Map)
             : (result is Map && result['decision'] is Map)
-                ? Map<String, dynamic>.from(result['decision'] as Map)
-                : null);
+            ? Map<String, dynamic>.from(result['decision'] as Map)
+            : null);
         if (status['status'] == 'done') {
           final suggestions = (rawSuggestions is List)
               ? rawSuggestions
-                  .whereType<Map>()
-                  .map((v) => Map<String, dynamic>.from(v))
-                  .toList()
+                    .whereType<Map>()
+                    .map((v) => Map<String, dynamic>.from(v))
+                    .toList()
               : <Map<String, dynamic>>[];
-          // Tier 1 auto-files the movement/bill and removes the row; Tier 2
-          // keeps it with a prefilled draft; Tier 3 drops it silently. The
-          // decision is made locally from the same composite score the server
-          // computed, so a stale/failed poll can never bypass the threshold.
+          // High-confidence complete facts auto-file; uncertain or incomplete
+          // results stay editable in Needs Review. Only an explicit negative
+          // decision may dismiss the row. Triage uses the server's composite
+          // score, so a stale/failed poll cannot bypass the confidence gate.
           final cache = await ref.read(responseCacheProvider.future);
-          final resolution = SmsImportStore(
-            cache.financialStore,
-          ).resolveAiSuggestions(
-            namespace,
-            item,
-            suggestions,
-            decision: decision,
-            reviewRequired: result is Map
-                ? result['reviewRequired'] as bool?
-                : null,
-            serverScore: result is Map && result['confidenceScore'] is num
-                ? (result['confidenceScore'] as num).toDouble()
-                : null,
-          );
+          final resolution = SmsImportStore(cache.financialStore)
+              .resolveAiSuggestions(
+                namespace,
+                item,
+                suggestions,
+                decision: decision,
+                reviewRequired: result is Map
+                    ? result['reviewRequired'] as bool?
+                    : null,
+                serverScore: result is Map && result['confidenceScore'] is num
+                    ? (result['confidenceScore'] as num).toDouble()
+                    : null,
+              );
           if (resolution.outcome == SmsAiResolutionOutcome.needsReview) {
             changed =
                 await reviewRepo.updateAiSuggestions(
                   item.id,
                   suggestions,
                   aiTopic: decision?['topic'] as String?,
-                  aiSummary: decision?['summary'] as String?,
                 ) ||
                 changed;
             changed =
@@ -6407,13 +6424,6 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           } catch (_) {
             /* Retry the one-time migration after connectivity returns. */
           }
-        }
-        final reviewKey =
-            'pandapay_app.sms_review_replayed_${LocalSmsParser.version}_${ref.read(cacheNamespaceProvider)}';
-        if (ref.read(isOnlineProvider).valueOrNull != false &&
-            prefs.getBool(reviewKey) != true &&
-            await retryExistingNeedsReview()) {
-          await prefs.setBool(reviewKey, true);
         }
         try {
           await reconcileAiNeedsReview();
@@ -6650,7 +6660,9 @@ class SmsAutoImportController {
       final clientVersion =
           _ref.read(appVersionProvider).valueOrNull ?? '1.0.0';
       final ruleStore = SmsRuleBundleStore(store.database);
-      final rules = ruleStore.loadActiveBundleSync(clientVersion: clientVersion);
+      final rules = ruleStore.loadActiveBundleSync(
+        clientVersion: clientVersion,
+      );
       final candidateRules = ruleStore.loadCandidateBundlesSync(
         clientVersion: clientVersion,
         namespace: namespace,
@@ -6677,7 +6689,9 @@ class SmsAutoImportController {
         }
         store.notifyExternalChanges(namespace, changed);
       } catch (e) {
-        debugPrint('Worker capture failed ($e), falling back to direct store capture');
+        debugPrint(
+          'Worker capture failed ($e), falling back to direct store capture',
+        );
         captureDirect();
       }
     }

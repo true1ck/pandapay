@@ -1399,10 +1399,32 @@ class LocalSmsParser {
           ? folioMatch.substring(folioMatch.length - 4)
           : folioMatch;
 
+      final key = smsSourceKey(namespace, sender, body);
+      final entry = amount != null
+          ? TransactionEntry(
+              id: 'local-sms:$key',
+              sourceKey: key,
+              amount: amount,
+              occurredAt: receivedAt,
+              merchantName: merchant ?? 'Investment',
+              categoryId: 'investments',
+              categoryName: 'Investments',
+              instrument: TxnInstrument.upiBank,
+              instrumentKnown: true,
+              entryKind: TxnEntryKind.investment,
+              source: 'sms',
+              status: 'active',
+              rewardState: 'estimated',
+              accountLast4: folioLast4,
+            )
+          : null;
+
       return LocalSmsObservation(
         eventType: LocalSmsEventType.investment,
-        disposition: LocalSmsDisposition.localObservation,
-        transaction: null,
+        disposition: entry != null
+            ? LocalSmsDisposition.sync
+            : LocalSmsDisposition.localObservation,
+        transaction: entry,
         amount: amount,
         amountDue: amount,
         billerName: merchant,
@@ -1421,6 +1443,59 @@ class LocalSmsParser {
         disposition: LocalSmsDisposition.localIgnore,
         reasonCodes: ['non_transaction_message'],
       );
+    }
+
+    // Axio / Amazon Pay Later credit drawdown → treat as a spend transaction.
+    // These messages say "availing Pay Later credit of Rs X" which contains no
+    // standard movement verb, so the generic parser misses them and lands them
+    // in the "Needs Review" queue. The repayment acknowledgement ("received
+    // your timely repayment towards your Pay Later …") is already caught above
+    // by isNonTransactionNoise → repaymentCourtesyOrLoanUpsell, so it never
+    // reaches here. Bank-side AutoPay debits ("Rs X debited … towards Axio Pay
+    // Later bill") come from a BANK sender and are routed through the bank
+    // debit path by isBankAccountMessage; the senderText guard below therefore
+    // never fires for those, preventing double-counting.
+    final _payLaterDrawdownAmountRe = RegExp(
+      r'\bavail(?:ing|ed)\s+(?:(?:amazon\s+)?pay\s+later\s+)?credit\s+of\s+(?:Rs\.?\s*)(\d+(?:\.\d+)?)',
+      caseSensitive: false,
+    );
+    final senderLower = sender.toLowerCase();
+    final isPayLaterDrawdownSpend =
+        (senderLower.contains('axio') ||
+            RegExp(
+              r'\b(?:amazon\s+)?pay\s+later\b',
+              caseSensitive: false,
+            ).hasMatch(body)) &&
+        _payLaterDrawdownAmountRe.hasMatch(body);
+    if (isPayLaterDrawdownSpend) {
+      final rawAmount = _payLaterDrawdownAmountRe
+          .firstMatch(body)
+          ?.group(1)
+          ?.replaceAll(',', '');
+      final amountVal = rawAmount != null ? double.tryParse(rawAmount) : null;
+      if (amountVal != null && amountVal > 0) {
+        final key = smsSourceKey(namespace, sender, body);
+        return LocalSmsObservation(
+          eventType: LocalSmsEventType.transaction,
+          disposition: LocalSmsDisposition.sync,
+          confidence: 1.0,
+          reasonCodes: const ['axio_pay_later_drawdown'],
+          transaction: TransactionEntry(
+            id: 'local-sms:$key',
+            sourceKey: key,
+            amount: Money.fromRupees(amountVal),
+            occurredAt: receivedAt,
+            merchantName: 'Amazon Pay Later',
+            instrument: TxnInstrument.other,
+            instrumentKnown: true,
+            entryKind: TxnEntryKind.spend,
+            accountLast4: 'Amazon Pay Later',
+            source: 'sms',
+            status: 'active',
+            rewardState: 'estimated',
+          ),
+        );
+      }
     }
 
     if (downloadedRules != null &&
@@ -1792,7 +1867,7 @@ class LocalSmsParser {
           r'\b(?:no\s+money\s+(?:was|is)?\s*(?:debited|deducted)|not\s+(?:debited|deducted|charged))\b',
         ).hasMatch(body) &&
         (_re(
-              r'\b(?:spent|debited|debit|paid|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed|deducted|deduct)\b',
+              r'\b(?:spent|debited|debit|paid|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed|deducted|deduct|availing|availed)\b',
             ).hasMatch(movementBody) ||
             (!failed &&
                 _re(r'\b(?:purchase|purchased)\b').hasMatch(movementBody)) ||
@@ -1975,7 +2050,8 @@ class LocalSmsParser {
     if (_re(
           r'\b(?:declined|failed|failure|cancelled|canceled|pending|processing|initiated)\b',
         ).hasMatch(body) &&
-        !hasCompletedMovement) {
+        !hasCompletedMovement &&
+        !_brokerSettlement(body, sender)) {
       return observation();
     }
     if (futureDebit) return observation();

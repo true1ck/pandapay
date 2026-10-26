@@ -56,7 +56,7 @@ bool isBrokerSettlementMessage(String value, [String? sender]) {
 
   final senderMatch = sender != null &&
       RegExp(
-        r'\b(?:DHAN|ZERODHA|GROWW|KOTAKN|KOTAKS|UPSTOX|ANGEL|5PAISA|MOSWAL|MOTLAL|PYTMMN|PAYTMM|SHRKHN|ESPRSO|LEMONN|SHOONY|FNVASIA|BLINKX|JMFIN|GEOJIT|AXISDIR|AXISD|MSTOCK|MIRAEA|IIFLSC|IIFLSEC|SBISEC|SBICAP|HDFCSEC|HDFCSKY|ICICID|ICICIS)\b',
+        r'(?:DHAN|ZERODHA|GROWW|KOTAKN|KOTAKS|UPSTOX|ANGEL|5PAISA|MOSWAL|MOTLAL|PYTMMN|PAYTMM|SHRKHN|ESPRSO|LEMONN|SHOONY|FNVASIA|BLINKX|JMFIN|GEOJIT|AXISDIR|AXISD|MSTOCK|MIRAEA|IIFLSC|IIFLSEC|SBISEC|SBICAP|HDFCSEC|HDFCSKY|ICICID|ICICIS)',
         caseSensitive: false,
       ).hasMatch(sender);
 
@@ -68,7 +68,7 @@ bool isBrokerSettlementMessage(String value, [String? sender]) {
   if (!senderMatch && !brokerInBody) return false;
 
   return RegExp(
-    r'\b(?:monthly\s+settlement|quarterly\s+settlement|running\s+(?:a\/?c|account)\s+settlement|settlement\s+of\s+(?:unused|unutilised)\s+funds|(?:unused|unutilised)\s+funds\b[\s\S]{0,40}\b(?:settled|transferred)|account\s+settlement|settlement\s+(?:payout|credit|dated)|as\s+per\s+sebi\b[\s\S]{0,60}\bsettlement|payout|pay-?out|funds?\s+released)\b',
+    r'\b(?:monthly\s+settlement|quarterly\s+settlement|running\s+(?:a\/?c|account)\s+settlement|settlement\s+of\s+(?:unused|unutilised)\s+funds|(?:unused|unutilised)\s+funds\b[\s\S]{0,120}\b(?:settled|transferred|settlement)|account\s+settlement|settlement\s+(?:payout|credit|dated)|as\s+per\s+sebi\b[\s\S]{0,120}\b(?:settlement|settled)|settled|payout|pay-?out|funds?\s+released)\b',
     caseSensitive: false,
   ).hasMatch(text);
 }

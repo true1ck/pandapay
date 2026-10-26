@@ -39,8 +39,7 @@ AutoResolvedHistoryEntry _historyEntry({
   autoResolvedAt: autoResolvedAt,
 );
 
-class _FakeSmsAutoResolutionController
-    implements SmsAutoResolutionController {
+class _FakeSmsAutoResolutionController implements SmsAutoResolutionController {
   AutoResolvedHistoryEntry? changedEntry;
   String? changedCategory;
   AutoResolvedHistoryEntry? movedEntry;
@@ -72,6 +71,8 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   Map<String, dynamic>? lastLogArgs;
   Map<String, dynamic>? lastOverrideArgs;
   final List<Map<String, dynamic>> allOverrideArgs = [];
+  Map<String, dynamic>? lastAiJobArgs;
+  bool aiJobSubmitted = false;
 
   @override
   Future<String> logTransaction({
@@ -118,6 +119,31 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     allOverrideArgs.add(lastOverrideArgs!);
     return true;
   }
+
+  @override
+  Future<String?> submitAiJob({
+    required String sourceKey,
+    required String sender,
+    required String body,
+    DateTime? occurredAt,
+    bool retryFailed = false,
+  }) async {
+    aiJobSubmitted = true;
+    lastAiJobArgs = {
+      'sourceKey': sourceKey,
+      'sender': sender,
+      'body': body,
+      'occurredAt': occurredAt,
+      'retryFailed': retryFailed,
+    };
+    return 'retry-job-id';
+  }
+
+  @override
+  Future<Map<String, dynamic>?> fetchAiJobStatus(String sourceKey) async => {
+    'status': aiJobSubmitted ? 'queued' : 'failed',
+    'suggestions': const [],
+  };
 
   Map<String, dynamic>? lastDismissArgs;
   final List<Map<String, dynamic>> allDismissArgs = [];
@@ -251,48 +277,87 @@ void main() {
     expect(find.text('Review transaction'), findsOneWidget);
   });
 
-  testWidgets('surfaces Gemini AI summary explanation on review tile', (
+  testWidgets('surfaces Gemini decision category on review tile', (
     tester,
   ) async {
     await reviews.add(
       NeedsReviewItem(
         id: 'f' * 64,
         sender: 'VM-HDFCBK',
-        body: 'Paid Rs. 420 to Swiggy via HDFC Bank UPI',
+        body: 'Rs. 420 spent at Swiggy',
+        reason: 'unparseable_amount',
         receivedAt: DateTime.now(),
         aiStatus: AiReviewStatus.checked,
-        aiSummary: 'Paid Rs. 420 to Swiggy via HDFC Bank UPI',
+        aiTopic: 'upi_debit',
       ),
     );
     await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
-expect(find.text('✦ AI · Paid Rs. 420 to Swiggy via HDFC Bank UPI'), findsOneWidget);
+    expect(find.text('✦ AI decision · upi debit'), findsOneWidget);
   });
 
-  testWidgets('shows queued AI check status with spinner and allows tap to retry', (
+  testWidgets(
+    'shows queued AI check status with spinner and allows tap to retry',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: '1',
+          sender: 'VM-HDFCBK',
+          body: 'Rs.499 spent at AMAZON',
+          receivedAt: DateTime.now(),
+          aiStatus: AiReviewStatus.queued,
+        ),
+      );
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(),
+        reviews: reviews,
+        settle: false,
+      );
+
+      expect(find.text('AI review queued · Checking...'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      await tester.tap(find.text('AI review queued · Checking...'));
+      await tester.pump();
+    },
+  );
+
+  testWidgets('failed Gemini decision can be explicitly retried', (
     tester,
   ) async {
+    final itemId = List.filled(64, 'f').join();
     await reviews.add(
       NeedsReviewItem(
-        id: '1',
+        id: itemId,
         sender: 'VM-HDFCBK',
-        body: 'Rs.499 spent at AMAZON',
+        body: 'INR 499 spent at AMAZON',
         receivedAt: DateTime.now(),
-        aiStatus: AiReviewStatus.queued,
+        aiStatus: AiReviewStatus.unavailable,
+        aiFailureReason: 'worker_retry_limit',
       ),
     );
-    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews, settle: false);
+    final repo = _FakeUserCardsRepository();
+    await _pump(tester, repo: repo, reviews: reviews, settle: false);
 
-    expect(find.text('AI review queued · Checking...'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
-
-    await tester.tap(find.text('AI review queued · Checking...'));
+    expect(find.text('AI review failed · Tap to retry'), findsOneWidget);
+    await tester.tap(find.text('AI review failed · Tap to retry'));
+    // Queued state intentionally keeps its spinner animated, so settle would
+    // time out even though the retry request completed.
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('View AI output'));
+    await tester.pump();
+    expect(find.textContaining('"status": "queued"'), findsOneWidget);
+    expect(find.textContaining('"sourceKey"'), findsNothing);
+
+    expect(repo.lastAiJobArgs?['sourceKey'], itemId);
+    expect(repo.lastAiJobArgs?['retryFailed'], isTrue);
+    expect((await reviews.fetchAll()).single.aiStatus, AiReviewStatus.queued);
   });
 
-  testWidgets('shows in-progress AI check status with spinner', (
-    tester,
-  ) async {
+  testWidgets('shows in-progress AI check status with spinner', (tester) async {
     await reviews.add(
       NeedsReviewItem(
         id: '1',
@@ -302,7 +367,12 @@ expect(find.text('✦ AI · Paid Rs. 420 to Swiggy via HDFC Bank UPI'), findsOne
         aiStatus: AiReviewStatus.processing,
       ),
     );
-    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews, settle: false);
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(),
+      reviews: reviews,
+      settle: false,
+    );
 
     expect(find.text('AI review in progress'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -413,7 +483,8 @@ expect(find.text('✦ AI · Paid Rs. 420 to Swiggy via HDFC Bank UPI'), findsOne
         NeedsReviewItem(
           id: 'axio-1',
           sender: 'AX-axioFS-S',
-          body: 'You have availed Amazon Pay Later credit of Rs. 250.00 for order on Amazon.',
+          body:
+              'You have availed Amazon Pay Later credit of Rs. 250.00 for order on Amazon.',
           receivedAt: DateTime(2026, 3, 10),
           kind: NeedsReviewKind.payLaterDrawdown,
         ),
@@ -422,7 +493,8 @@ expect(find.text('✦ AI · Paid Rs. 420 to Swiggy via HDFC Bank UPI'), findsOne
         NeedsReviewItem(
           id: 'axio-2',
           sender: 'AX-axioFS-S',
-          body: 'You have availed Amazon Pay Later credit of Rs. 450.00 for order on Swiggy.',
+          body:
+              'You have availed Amazon Pay Later credit of Rs. 450.00 for order on Swiggy.',
           receivedAt: DateTime(2026, 3, 15),
           kind: NeedsReviewKind.payLaterDrawdown,
         ),
@@ -431,7 +503,8 @@ expect(find.text('✦ AI · Paid Rs. 420 to Swiggy via HDFC Bank UPI'), findsOne
         NeedsReviewItem(
           id: 'axio-3',
           sender: 'AX-axioFS-S',
-          body: 'You have availed Amazon Pay Later credit of Rs. 100.00 for order on Uber.',
+          body:
+              'You have availed Amazon Pay Later credit of Rs. 100.00 for order on Uber.',
           receivedAt: DateTime(2026, 3, 20),
           kind: NeedsReviewKind.payLaterDrawdown,
         ),
@@ -442,7 +515,10 @@ expect(find.text('✦ AI · Paid Rs. 420 to Swiggy via HDFC Bank UPI'), findsOne
       expect(find.text('Amazon Pay Later (Axio)'), findsOneWidget);
       expect(find.text('3 messages'), findsOneWidget);
       expect(find.text('Total: ₹800.00'), findsOneWidget);
-      expect(find.text('Credit line drawdowns (billed in monthly AutoPay)'), findsOneWidget);
+      expect(
+        find.text('Credit line drawdowns (billed in monthly AutoPay)'),
+        findsOneWidget,
+      );
       expect(find.text('Dismiss all 3 (Billed in AutoPay)'), findsOneWidget);
       expect(find.text('Show all 3'), findsOneWidget);
 
@@ -469,41 +545,40 @@ expect(find.text('✦ AI · Paid Rs. 420 to Swiggy via HDFC Bank UPI'), findsOne
     },
   );
 
-  testWidgets(
-    'Pay Later / BNPL filter chip isolates Pay Later drawdowns',
-    (tester) async {
-      await reviews.add(
-        NeedsReviewItem(
-          id: 'spend-1',
-          sender: 'VM-HDFCBK',
-          body: 'Rs. 500 spent on Card ending 1234 at RELIANCE.',
-          receivedAt: DateTime(2026, 3, 10),
-        ),
-      );
-      await reviews.add(
-        NeedsReviewItem(
-          id: 'paylater-1',
-          sender: 'AX-axioFS-S',
-          body: 'You have availed Amazon Pay Later credit of Rs. 250.00.',
-          receivedAt: DateTime(2026, 3, 15),
-          kind: NeedsReviewKind.payLaterDrawdown,
-        ),
-      );
+  testWidgets('Pay Later / BNPL filter chip isolates Pay Later drawdowns', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'spend-1',
+        sender: 'VM-HDFCBK',
+        body: 'Rs. 500 spent on Card ending 1234 at RELIANCE.',
+        receivedAt: DateTime(2026, 3, 10),
+      ),
+    );
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'paylater-1',
+        sender: 'AX-axioFS-S',
+        body: 'You have availed Amazon Pay Later credit of Rs. 250.00.',
+        receivedAt: DateTime(2026, 3, 15),
+        kind: NeedsReviewKind.payLaterDrawdown,
+      ),
+    );
 
-      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
-      expect(find.text('VM-HDFCBK'), findsOneWidget);
-      expect(find.text('AX-axioFS-S'), findsOneWidget);
+    expect(find.text('VM-HDFCBK'), findsOneWidget);
+    expect(find.text('AX-axioFS-S'), findsOneWidget);
 
-      await tester.tap(find.text('Pay Later / BNPL'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Pay Later / BNPL'));
+    await tester.pumpAndSettle();
 
-      expect(find.text('VM-HDFCBK'), findsNothing);
-      expect(find.text('AX-axioFS-S'), findsOneWidget);
-      expect(find.text('Pay Later / Credit line drawdown'), findsOneWidget);
-      expect(find.text('Review drawdown'), findsOneWidget);
-    },
-  );
+    expect(find.text('VM-HDFCBK'), findsNothing);
+    expect(find.text('AX-axioFS-S'), findsOneWidget);
+    expect(find.text('Pay Later / Credit line drawdown'), findsOneWidget);
+    expect(find.text('Review drawdown'), findsOneWidget);
+  });
 
   testWidgets('future non-card bill bypasses review and persists directly', (
     tester,
@@ -1192,11 +1267,7 @@ expect(find.text('✦ AI · Paid Rs. 420 to Swiggy via HDFC Bank UPI'), findsOne
         ),
       );
       final entries = [
-        _historyEntry(
-          id: 'auto-1',
-          title: 'SWIGGY',
-          autoResolvedAt: 2000,
-        ),
+        _historyEntry(id: 'auto-1', title: 'SWIGGY', autoResolvedAt: 2000),
         _historyEntry(
           id: 'auto-2',
           title: 'Airtel Broadband',
@@ -1221,50 +1292,43 @@ expect(find.text('✦ AI · Paid Rs. 420 to Swiggy via HDFC Bank UPI'), findsOne
     },
   );
 
-  testWidgets(
-    'renders both tabs without overflow at a small phone width',
-    (tester) async {
-      await reviews.add(
-        NeedsReviewItem(
-          id: 'small-1',
-          sender: 'VM-HDFCBK',
-          body: 'Rs.499 spent on HDFC Bank Card ending 1234 at SHOP.',
-          receivedAt: DateTime.now(),
-        ),
-      );
-      final entries = [
-        _historyEntry(id: 'small-auto', title: 'SWIGGY'),
-      ];
+  testWidgets('renders both tabs without overflow at a small phone width', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'small-1',
+        sender: 'VM-HDFCBK',
+        body: 'Rs.499 spent on HDFC Bank Card ending 1234 at SHOP.',
+        receivedAt: DateTime.now(),
+      ),
+    );
+    final entries = [_historyEntry(id: 'small-auto', title: 'SWIGGY')];
 
-      await _pump(
-        tester,
-        repo: _FakeUserCardsRepository(),
-        reviews: reviews,
-        autoResolved: entries,
-        surfaceSize: const Size(360, 800),
-      );
-      expect(tester.takeException(), isNull);
-      expect(find.text('Needs Review (1)'), findsOneWidget);
-      expect(find.text('Auto-Resolved (1)'), findsOneWidget);
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(),
+      reviews: reviews,
+      autoResolved: entries,
+      surfaceSize: const Size(360, 800),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Needs Review (1)'), findsOneWidget);
+    expect(find.text('Auto-Resolved (1)'), findsOneWidget);
 
-      await tester.tap(find.text('Auto-Resolved (1)'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Auto-Resolved (1)'));
+    await tester.pumpAndSettle();
 
-      expect(tester.takeException(), isNull);
-      expect(find.text('Change Category'), findsOneWidget);
-      expect(find.text('Move to Review'), findsOneWidget);
-    },
-  );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Change Category'), findsOneWidget);
+    expect(find.text('Move to Review'), findsOneWidget);
+  });
 
   testWidgets(
     'auto-resolved tab shows newest-first feed with AI badge, category and due date',
     (tester) async {
       final entries = [
-        _historyEntry(
-          id: 'auto-new',
-          title: 'SWIGGY',
-          autoResolvedAt: 2000,
-        ),
+        _historyEntry(id: 'auto-new', title: 'SWIGGY', autoResolvedAt: 2000),
         _historyEntry(
           id: 'auto-old',
           title: 'Airtel Broadband',

@@ -60,6 +60,7 @@ class NeedsReviewItem {
   final AiReviewStatus aiStatus;
   final String? aiTopic;
   final String? aiSummary;
+  final String? aiFailureReason;
 
   const NeedsReviewItem({
     required this.id,
@@ -72,6 +73,7 @@ class NeedsReviewItem {
     this.aiStatus = AiReviewStatus.notChecked,
     this.aiTopic,
     this.aiSummary,
+    this.aiFailureReason,
   });
 
   NeedsReviewItem copyWith({
@@ -80,6 +82,8 @@ class NeedsReviewItem {
     AiReviewStatus? aiStatus,
     String? aiTopic,
     String? aiSummary,
+    String? aiFailureReason,
+    bool clearAiFailureReason = false,
   }) => NeedsReviewItem(
     id: id,
     sender: sender,
@@ -91,6 +95,9 @@ class NeedsReviewItem {
     aiStatus: aiStatus ?? this.aiStatus,
     aiTopic: aiTopic ?? this.aiTopic,
     aiSummary: aiSummary ?? this.aiSummary,
+    aiFailureReason: clearAiFailureReason
+        ? null
+        : aiFailureReason ?? this.aiFailureReason,
   );
 
   Map<String, dynamic> toJson() => {
@@ -104,6 +111,7 @@ class NeedsReviewItem {
     'aiStatus': aiStatus.name,
     if (aiTopic != null) 'aiTopic': aiTopic,
     if (aiSummary != null) 'aiSummary': aiSummary,
+    if (aiFailureReason != null) 'aiFailureReason': aiFailureReason,
   };
 
   factory NeedsReviewItem.fromJson(Map<String, dynamic> json) {
@@ -130,6 +138,7 @@ class NeedsReviewItem {
       ),
       aiTopic: json['aiTopic'] as String?,
       aiSummary: json['aiSummary'] as String?,
+      aiFailureReason: json['aiFailureReason'] as String?,
     );
   }
 }
@@ -146,9 +155,14 @@ bool _capturesReviewableFinancial(NeedsReviewItem item) {
   final hasBalanceSnapshot = RegExp(
     r'\b(?:available|current|closing|avl|avail)\s+(?:bal(?:ance)?|limit)\b[\s\S]{0,60}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?|\b(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?[\s\S]{0,40}\b(?:available|current|closing|avl|avail)\s+(?:bal(?:ance)?|limit)\b|\bcredit\s+limit\b[\s\S]{0,30}(?:₹|rs\.?|inr)\s?[\d,]+(?:\.\d{1,2})?',
   ).hasMatch(bodyLower);
-  final hasBillOrMandate = LocalSmsParser.isAutoPayNotice(item.body) ||
-      RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate|auto[-\s]?debit|sip\b|standing\s+instruction)\b').hasMatch(bodyLower) ||
-      RegExp(r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\bdue\s+(?:date|on|by)\b|\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\bbill\s+generated\b|\be-statement\s+generated\b').hasMatch(bodyLower);
+  final hasBillOrMandate =
+      LocalSmsParser.isAutoPayNotice(item.body) ||
+      RegExp(
+        r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate|auto[-\s]?debit|sip\b|standing\s+instruction)\b',
+      ).hasMatch(bodyLower) ||
+      RegExp(
+        r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\bdue\s+(?:date|on|by)\b|\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\bbill\s+generated\b|\be-statement\s+generated\b',
+      ).hasMatch(bodyLower);
   final hasMovement = RegExp(
     r'\b(?:debited|credited|spent|paid|charged|transferred|withdrawn|deposited|refunded|reversed|deducted)\b',
     caseSensitive: false,
@@ -238,7 +252,10 @@ void addNeedsReviewSync(
     }
     return;
   }
-  if (!NeedsReviewRepository.isPayLaterDrawdown(item.body, sender: item.sender) &&
+  if (!NeedsReviewRepository.isPayLaterDrawdown(
+        item.body,
+        sender: item.sender,
+      ) &&
       parsed != null &&
       parsed.eventType == LocalSmsEventType.bill &&
       parsed.cardLast4 == null &&
@@ -1837,11 +1854,13 @@ class NeedsReviewRepository {
       return false;
     }
     final updated = jsonEncode(
-      current.copyWith(
-        aiSuggestions: suggestions,
-        aiTopic: nextTopic,
-        aiSummary: nextSummary,
-      ).toJson(),
+      current
+          .copyWith(
+            aiSuggestions: suggestions,
+            aiTopic: nextTopic,
+            aiSummary: nextSummary,
+          )
+          .toJson(),
     );
     if (loadDatabase != null) {
       final db = await _database();
@@ -2055,11 +2074,28 @@ class NeedsReviewRepository {
     }
   }
 
-  Future<bool> updateAiStatus(String id, AiReviewStatus status) async {
+  Future<bool> updateAiStatus(
+    String id,
+    AiReviewStatus status, {
+    String? failureReason,
+  }) async {
     final items = await fetchAll();
     final current = items.where((item) => item.id == id).firstOrNull;
-    if (current == null || current.aiStatus == status) return false;
-    final updated = jsonEncode(current.copyWith(aiStatus: status).toJson());
+    if (current == null ||
+        (current.aiStatus == status &&
+            (status != AiReviewStatus.unavailable ||
+                current.aiFailureReason == failureReason))) {
+      return false;
+    }
+    final updated = jsonEncode(
+      current
+          .copyWith(
+            aiStatus: status,
+            aiFailureReason: failureReason,
+            clearAiFailureReason: status != AiReviewStatus.unavailable,
+          )
+          .toJson(),
+    );
     if (loadDatabase != null) {
       final db = await _database();
       db.db.execute(

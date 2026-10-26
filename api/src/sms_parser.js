@@ -725,6 +725,34 @@ function isSuccessfulSpend(body) {
     || isWalletLoadMessage(text);
 }
 
+function isAxioPayLaterSender(sender) {
+  return /axio/i.test(String(sender || ''));
+}
+
+// Amazon Pay Later (Axio) credit drawdown: the user consumed Pay Later balance
+// at a merchant. These messages use "availing/availed Pay Later credit of Rs X"
+// without a standard debit verb, so the generic grammar drops them without this
+// dedicated handler. Must run before isNonTransactionNoise so it is not
+// swallowed by the repaymentCourtesyOrLoanUpsell noise guard.
+function parseBuiltInPayLaterDrawdown(sms) {
+  if (!isAxioPayLaterSender(sms?.sender)) return { ok: false, reason: 'not_axio_sender' };
+  const body = String(sms?.body || '');
+  const m = body.match(/\bavail(?:ing|ed)\s+(?:(?:amazon\s+)?pay\s+later\s+)?credit\s+of\s+(?:Rs\.?\s*)(\d+(?:\.\d+)?)/i);
+  if (!m) return { ok: false, reason: 'no_pay_later_drawdown_match' };
+  return {
+    ok: true,
+    patternId: null,
+    parserKind: 'builtin_pay_later_drawdown',
+    fields: {
+      amountInr: parseFloat(m[1]),
+      merchant: 'Amazon Pay Later',
+      entryKind: 'spend',
+      instrument: 'other',
+      accountLast4: 'Amazon Pay Later',
+    },
+  };
+}
+
 // Paying a credit-card bill is a movement of money between the user's bank
 // account and the card, not a new merchant purchase. Some issuers phrase the
 // alert as "payment received towards your credit card" and some as an account
@@ -1280,6 +1308,8 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (isInvestmentFolioAllotment(sms?.body)) {
     return parseInvestmentFolioAllotment(sms);
   }
+  const payLaterDrawdown = parseBuiltInPayLaterDrawdown(sms);
+  if (payLaterDrawdown.ok) return payLaterDrawdown;
   if (isNonTransactionNoise(sms?.sender, sms?.body)) {
     return { ok: false, reason: 'non_transaction_message' };
   }
@@ -1495,6 +1525,7 @@ module.exports = {
   parseBuiltInAccountCredit,
   parseBuiltInWalletSpend,
   isInvestmentFolioAllotment,
+  parseBuiltInPayLaterDrawdown,
   parseInvestmentFolioAllotment,
   senderMatches,
   redactSmsShape,

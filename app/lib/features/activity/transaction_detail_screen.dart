@@ -1421,6 +1421,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           ? 'Credit card (unmatched)'
           : 'Credit card ending $last4';
     }
+    if (entry.instrument == TxnInstrument.other &&
+        (entry.accountLast4 == 'Amazon Pay Later' ||
+            entry.merchantName == 'Amazon Pay Later')) {
+      return 'Amazon Pay Later';
+    }
     if (entry.instrument == TxnInstrument.wallet) return 'Wallet';
     if (entry.instrument == TxnInstrument.cash) return 'Cash';
     return 'Payment method not matched';

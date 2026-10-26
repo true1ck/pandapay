@@ -73,7 +73,8 @@ class CentralBillDedupKey {
 }
 
 final centralBillsProjectionApiProvider = Provider<BillsProjectionApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  ref.watch(cacheNamespaceProvider);
+  final token = ref.read(accessTokenProvider);
   if (token == null) return null;
   return BillsProjectionApi(
     apiBaseUrl: Env.apiBaseUrl,

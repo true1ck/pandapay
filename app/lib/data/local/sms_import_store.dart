@@ -85,10 +85,7 @@ class SmsImportStore {
       message,
       store.entities(namespace, 'cards').map(UserCard.fromJson).toList(),
       SmsIntakeRepository(store.database),
-      SmsLearningFeedback(
-        store.database,
-        namespace: namespace,
-      ).loadRulesSync(),
+      SmsLearningFeedback(store.database, namespace: namespace).loadRulesSync(),
     );
   }
 
@@ -540,10 +537,10 @@ class SmsImportStore {
 
   /// Triage for a completed AI result (mirrors api/src/ai_fact_scoring.js).
   ///
-  /// Tier 1 (score >= 0.85, complete) files the movement/bill locally and
-  /// removes the review row. Tier 2 keeps the row for a prefilled draft.
-  /// Tier 3 removes it silently — an OTP or promotion must never reach the
-  /// review queue again.
+  /// A complete high-confidence movement/bill is filed locally and recorded
+  /// in Auto-Resolved history. Uncertain, low-confidence or field-incomplete
+  /// outcomes stay editable in Needs Review. Only an explicit negative
+  /// tracking decision may dismiss a row.
   ///
   /// The caller owns persisting suggestions for Tier 2 (the UI contract).
   SmsAiResolutionResult resolveAiSuggestions(
@@ -568,12 +565,20 @@ class SmsImportStore {
         : assessment.composite;
     final primary = assessment.primaryFact;
 
-    if (suggestions.isEmpty ||
-        primary == null ||
-        effectiveScore < kSmsReviewThreshold) {
-      _deleteReviewRow(namespace, item.id);
+    if (suggestions.isEmpty || primary == null) {
+      // A positive/unknown decision without usable structured fields is not a
+      // safe dismissal. Preserve the original SMS for inspection/correction.
       return SmsAiResolutionResult(
-        outcome: SmsAiResolutionOutcome.discarded,
+        outcome: SmsAiResolutionOutcome.needsReview,
+        score: effectiveScore,
+      );
+    }
+
+    if (effectiveScore < kSmsReviewThreshold) {
+      // Low confidence means abstain. Only an explicit shouldConsider=false
+      // decision is allowed to remove a review item.
+      return SmsAiResolutionResult(
+        outcome: SmsAiResolutionOutcome.needsReview,
         score: effectiveScore,
       );
     }
@@ -581,12 +586,7 @@ class SmsImportStore {
     if (effectiveScore >= kSmsAutoResolveThreshold &&
         assessment.isComplete &&
         reviewRequired != true) {
-      final resolved = _autoResolve(
-        namespace,
-        item,
-        primary,
-        effectiveScore,
-      );
+      final resolved = _autoResolve(namespace, item, primary, effectiveScore);
       if (resolved != null) return resolved;
     }
     // Missing amounts/dates or the server's own review flag leave the row in
@@ -676,8 +676,7 @@ class SmsImportStore {
     final amountRupees = smsPostedAmountRupees(payload);
     if (amountRupees == null) return null;
     final amount = Money.fromPaise((amountRupees * 100).round());
-    final occurredAt =
-        _parseDate(payload['occurredAt']) ?? item.receivedAt;
+    final occurredAt = _parseDate(payload['occurredAt']) ?? item.receivedAt;
     final merchant =
         _firstText([
           payload['merchant'],
@@ -776,8 +775,7 @@ class SmsImportStore {
     final now = DateTime.now();
     final startOfToday = DateTime(now.year, now.month, now.day);
     final title =
-        _firstText([payload['billerName'], payload['merchant']]) ??
-        item.sender;
+        _firstText([payload['billerName'], payload['merchant']]) ?? item.sender;
 
     if (!dueDay.isBefore(startOfToday)) {
       final category = CommitmentCategory.fromText('$title ${item.sender}');
@@ -876,10 +874,10 @@ class SmsImportStore {
     db.execute(
       'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
     );
-    db.execute(
-      'DELETE FROM local_needs_review WHERE namespace=? AND id=?',
-      [namespace, id],
-    );
+    db.execute('DELETE FROM local_needs_review WHERE namespace=? AND id=?', [
+      namespace,
+      id,
+    ]);
   }
 
   /// Strips the same `commitment:` prefix the UI helper does. A row that is
@@ -896,10 +894,7 @@ class SmsImportStore {
     return 'review-${item.receivedAt.millisecondsSinceEpoch}';
   }
 
-  String? _categorySlug(
-    Map<String, dynamic> payload, {
-    String? fallback,
-  }) {
+  String? _categorySlug(Map<String, dynamic> payload, {String? fallback}) {
     final raw = payload['category'];
     if (raw is String && smsSpendCategories.contains(raw)) return raw;
     return fallback;

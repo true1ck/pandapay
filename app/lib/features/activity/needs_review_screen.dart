@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +8,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
+import '../../app/env.dart';
 import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -34,7 +37,9 @@ TxnInstrument _instrumentFromReviewText(String body, [String sender = '']) {
       RegExp(r'\b(?:pay\s+later|credit\s+line)\b').hasMatch(text)) {
     return TxnInstrument.other;
   }
-  if (RegExp(r'\b(?:wallet|paytm\s+wallet|amazon\s+pay\s+balance)\b').hasMatch(text)) {
+  if (RegExp(
+    r'\b(?:wallet|paytm\s+wallet|amazon\s+pay\s+balance)\b',
+  ).hasMatch(text)) {
     return TxnInstrument.wallet;
   }
   final accountLike = RegExp(
@@ -78,7 +83,10 @@ bool _isMandateReview(String body) =>
 
 String _reviewTypeLabel(NeedsReviewItem item) {
   if (item.kind == NeedsReviewKind.payLaterDrawdown ||
-      NeedsReviewRepository.isPayLaterDrawdown(item.body, sender: item.sender)) {
+      NeedsReviewRepository.isPayLaterDrawdown(
+        item.body,
+        sender: item.sender,
+      )) {
     return 'Pay Later / Credit line drawdown';
   }
   if (item.kind == NeedsReviewKind.securityOrServiceAlert ||
@@ -147,8 +155,11 @@ String _reviewReasonLabel(String? reason, String body) {
 
 String _reviewActionLabel(NeedsReviewItem item) {
   if (item.kind == NeedsReviewKind.payLaterDrawdown ||
-      NeedsReviewRepository.isPayLaterDrawdown(item.body, sender: item.sender)) {
-    return 'Review drawdown';
+      NeedsReviewRepository.isPayLaterDrawdown(
+        item.body,
+        sender: item.sender,
+      )) {
+    return 'Add as Amazon Pay Later spend';
   }
   if (item.kind == NeedsReviewKind.securityOrServiceAlert ||
       _isSecurityOrServiceAlert(item.body)) {
@@ -193,8 +204,9 @@ String _suggestedCategoryName(NeedsReviewItem item) {
 }
 
 String _aiSuggestedSummary(NeedsReviewItem item) {
-  if (item.aiSummary?.trim().isNotEmpty == true) {
-    return '✦ AI · ${item.aiSummary!.trim()}';
+  if (item.aiTopic?.trim().isNotEmpty == true) {
+    final topic = item.aiTopic!.trim().replaceAll('_', ' ');
+    return '✦ AI decision · $topic';
   }
   return '✦ AI suggested · ${_suggestedCategoryName(item)}';
 }
@@ -309,7 +321,10 @@ enum _ReviewFilterCategory {
 
 _ReviewFilterCategory _categorizeItem(NeedsReviewItem item) {
   if (item.kind == NeedsReviewKind.payLaterDrawdown ||
-      NeedsReviewRepository.isPayLaterDrawdown(item.body, sender: item.sender)) {
+      NeedsReviewRepository.isPayLaterDrawdown(
+        item.body,
+        sender: item.sender,
+      )) {
     return _ReviewFilterCategory.payLater;
   }
   if (item.kind == NeedsReviewKind.commitment ||
@@ -582,14 +597,19 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<AsyncValue<List<NeedsReviewItem>>>(needsReviewItemsProvider, (previous, next) {
+    ref.listen<AsyncValue<List<NeedsReviewItem>>>(needsReviewItemsProvider, (
+      previous,
+      next,
+    ) {
       final items = next.valueOrNull;
       if (items == null) return;
-      final hadActive = previous?.valueOrNull?.any(
-        (item) =>
-            item.aiStatus == AiReviewStatus.queued ||
-            item.aiStatus == AiReviewStatus.processing,
-      ) ?? false;
+      final hadActive =
+          previous?.valueOrNull?.any(
+            (item) =>
+                item.aiStatus == AiReviewStatus.queued ||
+                item.aiStatus == AiReviewStatus.processing,
+          ) ??
+          false;
       final hasActive = items.any(
         (item) =>
             item.aiStatus == AiReviewStatus.queued ||
@@ -610,8 +630,7 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
         return byDate != 0 ? byDate : a.id.compareTo(b.id);
       });
 
-    final monthMap =
-        <String, ({String label, int count, DateTime date})>{};
+    final monthMap = <String, ({String label, int count, DateTime date})>{};
     for (final item in sortedList) {
       final key =
           '${item.receivedAt.year}-${item.receivedAt.month.toString().padLeft(2, '0')}';
@@ -650,13 +669,8 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
         final start = _customDateRange!.start;
         final end = _customDateRange!.end;
         final rangeStart = DateTime(start.year, start.month, start.day);
-        final rangeEndExclusive = DateTime(
-          end.year,
-          end.month,
-          end.day + 1,
-        );
-        if (date.isBefore(rangeStart) ||
-            !date.isBefore(rangeEndExclusive)) {
+        final rangeEndExclusive = DateTime(end.year, end.month, end.day + 1);
+        if (date.isBefore(rangeStart) || !date.isBefore(rangeEndExclusive)) {
           return false;
         }
       }
@@ -683,7 +697,9 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
           style: BambooFonts.heading(18, color: BambooInk.ink900),
         ),
         actions: [
-          if (_selectedTab == 0 && pendingItems.isNotEmpty && filteredList.isNotEmpty)
+          if (_selectedTab == 0 &&
+              pendingItems.isNotEmpty &&
+              filteredList.isNotEmpty)
             TextButton(
               style: TextButton.styleFrom(foregroundColor: BambooInk.ink900),
               onPressed: () => _dismissItems(
@@ -723,10 +739,14 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                         return Column(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: AppSpace.sm,
+                              ),
                               decoration: const BoxDecoration(
                                 border: Border(
-                                  bottom: BorderSide(color: BambooInk.hairlineOnPaper),
+                                  bottom: BorderSide(
+                                    color: BambooInk.hairlineOnPaper,
+                                  ),
                                 ),
                               ),
                               child: Column(
@@ -783,18 +803,25 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                                       children: [
                                         for (
                                           int i = 0;
-                                          i < _ReviewFilterCategory.values.length;
+                                          i <
+                                              _ReviewFilterCategory
+                                                  .values
+                                                  .length;
                                           i++
                                         ) ...[
-                                          if (i > 0) const SizedBox(width: AppSpace.xs),
+                                          if (i > 0)
+                                            const SizedBox(width: AppSpace.xs),
                                           _FilterChip(
-                                            label: _ReviewFilterCategory.values[i].label,
+                                            label: _ReviewFilterCategory
+                                                .values[i]
+                                                .label,
                                             selected:
                                                 _selectedCategory ==
                                                 _ReviewFilterCategory.values[i],
                                             onTap: () => setState(() {
                                               _selectedCategory =
-                                                  _ReviewFilterCategory.values[i];
+                                                  _ReviewFilterCategory
+                                                      .values[i];
                                             }),
                                           ),
                                         ],
@@ -813,46 +840,78 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                                           : _customDateRange != null
                                           ? 'No review items in selected dates'
                                           : 'No review items in ${_selectedCategory.label}',
-                                      message: 'Try changing your date or type filter.',
+                                      message:
+                                          'Try changing your date or type filter.',
                                     )
                                   : RefreshIndicator(
                                       onRefresh: () async {
-                                        ref.read(smsFlushTriggerProvider.notifier).state++;
-                                        ref.invalidate(needsReviewItemsProvider);
+                                        ref
+                                            .read(
+                                              smsFlushTriggerProvider.notifier,
+                                            )
+                                            .state++;
+                                        ref.invalidate(
+                                          needsReviewItemsProvider,
+                                        );
                                         try {
-                                          await ref.read(needsReviewItemsProvider.future);
+                                          await ref.read(
+                                            needsReviewItemsProvider.future,
+                                          );
                                         } catch (_) {}
-                                        await Future.delayed(const Duration(milliseconds: 600));
+                                        await Future.delayed(
+                                          const Duration(milliseconds: 600),
+                                        );
                                       },
                                       child: Builder(
                                         builder: (context) {
-                                          final groups = clusterReviewItems(filteredList);
+                                          final groups = clusterReviewItems(
+                                            filteredList,
+                                          );
                                           return ListView.builder(
-                                            padding: const EdgeInsets.all(AppSpace.lg),
+                                            padding: const EdgeInsets.all(
+                                              AppSpace.lg,
+                                            ),
                                             itemCount: groups.length,
                                             itemBuilder: (context, index) {
                                               final group = groups[index];
                                               return Padding(
-                                                key: ValueKey(
-                                                  switch (group) {
-                                                    BundleReviewGroup(:final key) => 'bundle_$key',
-                                                    SingleReviewGroup(:final item) => item.id,
-                                                  },
+                                                key: ValueKey(switch (group) {
+                                                  BundleReviewGroup(
+                                                    :final key,
+                                                  ) =>
+                                                    'bundle_$key',
+                                                  SingleReviewGroup(
+                                                    :final item,
+                                                  ) =>
+                                                    item.id,
+                                                }),
+                                                padding: const EdgeInsets.only(
+                                                  bottom: AppSpace.md,
                                                 ),
-                                                padding: const EdgeInsets.only(bottom: AppSpace.md),
                                                 child: switch (group) {
-                                                  BundleReviewGroup() => _ReviewBundleCard(group: group),
-                                                  SingleReviewGroup(:final item) =>
-                                                    item.kind == NeedsReviewKind.commitment
-                                                        ? _CommitmentNeedsReviewTile(item)
-                                                        : _NeedsReviewTile(item),
+                                                  BundleReviewGroup() =>
+                                                    _ReviewBundleCard(
+                                                      group: group,
+                                                    ),
+                                                  SingleReviewGroup(
+                                                    :final item,
+                                                  ) =>
+                                                    item.kind ==
+                                                            NeedsReviewKind
+                                                                .commitment
+                                                        ? _CommitmentNeedsReviewTile(
+                                                            item,
+                                                          )
+                                                        : _NeedsReviewTile(
+                                                            item,
+                                                          ),
                                                 },
                                               );
                                             },
                                           );
                                         },
                                       ),
-                                  ),
+                                    ),
                             ),
                           ],
                         );
@@ -1021,10 +1080,7 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
                   children: [
                     Text(
                       entry.title,
-                      style: BambooFonts.heading(
-                        14.5,
-                        color: BambooInk.ink900,
-                      ),
+                      style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -1298,7 +1354,7 @@ class _CommitmentNeedsReviewTileState
             style: BambooFonts.ui(12, color: BambooInk.ink500),
           ),
           if (item.aiSuggestions?.isNotEmpty == true ||
-              item.aiSummary?.trim().isNotEmpty == true) ...[
+              item.aiTopic?.trim().isNotEmpty == true) ...[
             const SizedBox(height: AppSpace.xs),
             _AiBadge(summary: _aiSuggestedSummary(item)),
           ],
@@ -1354,7 +1410,9 @@ class _CommitmentNeedsReviewTileState
                     backgroundColor: BambooInk.slate,
                     foregroundColor: BambooInk.lime,
                     minimumSize: const Size.fromHeight(44),
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.sm,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -2170,12 +2228,56 @@ class _NeedsReviewTile extends ConsumerStatefulWidget {
 
 class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   bool _busy = false;
+  bool _showAiOutput = false;
 
-  String get _aiSummary {
-    if (widget.item.aiSummary?.trim().isNotEmpty == true) {
-      return '✦ AI · ${widget.item.aiSummary!.trim()}';
+  String get _aiDecisionLabel {
+    if (widget.item.aiTopic?.trim().isNotEmpty == true) {
+      final topic = widget.item.aiTopic!.trim().replaceAll('_', ' ');
+      return '✦ AI decision · $topic';
     }
     return _aiSuggestedSummary(widget.item);
+  }
+
+  Future<void> _retryAiReview() async {
+    if (_busy) return;
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null) return;
+    setState(() => _busy = true);
+    try {
+      final jobId = await repo.submitAiJob(
+        sourceKey: _feedbackSourceKey(widget.item.id),
+        sender: widget.item.sender,
+        body: widget.item.body,
+        occurredAt: widget.item.receivedAt,
+        retryFailed: true,
+      );
+      if (jobId == null) {
+        await ref
+            .read(needsReviewRepositoryProvider)
+            .updateAiStatus(widget.item.id, AiReviewStatus.unavailable);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Gemini could not retry this message.'),
+            ),
+          );
+        }
+        return;
+      }
+      await ref
+          .read(needsReviewRepositoryProvider)
+          .updateAiStatus(widget.item.id, AiReviewStatus.queued);
+      ref.read(smsFlushTriggerProvider.notifier).state++;
+      ref.invalidate(needsReviewItemsProvider);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _dismissNotATransaction() async {
@@ -2492,10 +2594,62 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
     }
   }
 
+  Future<void> _addPayLaterSpend() async {
+    final m = RegExp(
+      r'\bavail(?:ing|ed)\s+(?:(?:amazon\s+)?pay\s+later\s+)?credit\s+of\s+(?:Rs\.?\s*)(\d+(?:\.\d+)?)',
+      caseSensitive: false,
+    ).firstMatch(widget.item.body);
+    final rawAmt = m?.group(1)?.replaceAll(',', '');
+    final parsedAmt = rawAmt != null ? double.tryParse(rawAmt) : null;
+    final amount = (parsedAmt != null && parsedAmt > 0)
+        ? parsedAmt
+        : LocalSmsParser.extractReceiptAmount(widget.item.body)?.rupees;
+
+    if (amount == null || amount <= 0) {
+      await _reviewMovement();
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final userCardsRepo = ref.read(userCardsRepositoryProvider);
+      if (userCardsRepo != null) {
+        await userCardsRepo.logTransaction(
+          amount: Money.fromRupees(amount),
+          merchantName: 'Amazon Pay Later',
+          occurredAt: widget.item.receivedAt,
+          instrument: TxnInstrument.other,
+          entryKind: TxnEntryKind.spend,
+        );
+      }
+      await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
+      ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
+      ref.invalidate(activityTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingErrorMessage(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _handlePrimaryAction() async {
     if (widget.item.kind == NeedsReviewKind.securityOrServiceAlert ||
         _isSecurityOrServiceAlert(widget.item.body)) {
       await _dismissNotATransaction();
+      return;
+    }
+    if (widget.item.kind == NeedsReviewKind.payLaterDrawdown ||
+        NeedsReviewRepository.isPayLaterDrawdown(
+          widget.item.body,
+          sender: widget.item.sender,
+        )) {
+      await _addPayLaterSpend();
       return;
     }
     final suggestions = widget.item.aiSuggestions;
@@ -2711,18 +2865,56 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
               12.5,
               weight: FontWeight.w700,
               color:
-                  _instrumentFromReviewText(item.body, item.sender) == TxnInstrument.upiBank
+                  _instrumentFromReviewText(item.body, item.sender) ==
+                      TxnInstrument.upiBank
                   ? BambooInk.jade
                   : BambooInk.ink500,
             ),
           ),
           if (item.aiSuggestions?.isNotEmpty == true ||
-              item.aiSummary?.trim().isNotEmpty == true) ...[
+              item.aiTopic?.trim().isNotEmpty == true) ...[
             const SizedBox(height: AppSpace.xs),
-            _AiBadge(summary: _aiSummary),
+            _AiBadge(summary: _aiDecisionLabel),
           ],
           const SizedBox(height: AppSpace.xs),
-          _AiStatusBadge(status: item.aiStatus),
+          _AiStatusBadge(status: item.aiStatus, onRetry: _retryAiReview),
+          if (Env.isDev && item.aiStatus != AiReviewStatus.notChecked) ...[
+            const SizedBox(height: AppSpace.xs),
+            TextButton.icon(
+              onPressed: () => setState(() => _showAiOutput = !_showAiOutput),
+              icon: Icon(
+                _showAiOutput
+                    ? Icons.expand_less_rounded
+                    : Icons.data_object_rounded,
+                size: 18,
+              ),
+              label: Text(_showAiOutput ? 'Hide AI output' : 'View AI output'),
+            ),
+            if (_showAiOutput)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpace.sm),
+                decoration: BoxDecoration(
+                  color: BambooInk.paperMuted,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(color: BambooInk.hairlineOnPaper),
+                ),
+                child: SelectableText(
+                  const JsonEncoder.withIndent('  ').convert({
+                    'status': item.aiStatus.name,
+                    if (item.aiFailureReason != null)
+                      'failureReason': item.aiFailureReason,
+                    if (item.aiTopic != null)
+                      'decision': {
+                        'topic': item.aiTopic,
+                        'action': 'keep_for_review',
+                      },
+                    'facts': item.aiSuggestions ?? const [],
+                  }),
+                  style: BambooFonts.ui(11.5, color: BambooInk.ink700),
+                ),
+              ),
+          ],
           if (item.aiSuggestions != null && item.aiSuggestions!.length > 1) ...[
             const SizedBox(height: AppSpace.sm),
             for (final suggestion in item.aiSuggestions!)
@@ -2768,7 +2960,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                     backgroundColor: BambooInk.slate,
                     foregroundColor: BambooInk.lime,
                     minimumSize: const Size.fromHeight(44),
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.sm,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -2970,11 +3164,15 @@ class _ReviewBundleCardState extends ConsumerState<_ReviewBundleCard> {
                   textStyle: BambooFonts.ui(12, weight: FontWeight.w600),
                 ),
                 icon: Icon(
-                  _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                  _expanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
                   size: 18,
                 ),
                 label: Text(
-                  _expanded ? 'Hide messages' : 'Show all ${group.items.length}',
+                  _expanded
+                      ? 'Hide messages'
+                      : 'Show all ${group.items.length}',
                 ),
               ),
             ],
@@ -3072,14 +3270,16 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
     }
 
     final senderUpper = widget.item.sender.toUpperCase();
-    final isInvestmentSender = senderUpper.contains('HDFCMF') ||
+    final isInvestmentSender =
+        senderUpper.contains('HDFCMF') ||
         senderUpper.contains('CAMSSM') ||
         senderUpper.contains('KFINTE');
     final isFolioOrSip = RegExp(
       r'\b(?:folio|sip)\b',
       caseSensitive: false,
     ).hasMatch(widget.item.body);
-    final isInvestment = isInvestmentSender ||
+    final isInvestment =
+        isInvestmentSender ||
         isFolioOrSip ||
         widget.item.kind == NeedsReviewKind.investmentSettlement ||
         _isInvestmentSettlement(widget.item.body) ||
@@ -3092,6 +3292,35 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
         final amt = LocalSmsParser.extractReceiptAmount(widget.item.body);
         if (amt != null && amt.paise > 0) {
           _amountController.text = amt.rupees.toStringAsFixed(2);
+        }
+      }
+    }
+
+    final isPayLater =
+        widget.item.kind == NeedsReviewKind.payLaterDrawdown ||
+        NeedsReviewRepository.isPayLaterDrawdown(
+          widget.item.body,
+          sender: widget.item.sender,
+        );
+    if (isPayLater) {
+      if (_merchantController.text.isEmpty) {
+        _merchantController.text = 'Amazon Pay Later';
+      }
+      _instrument = TxnInstrument.other;
+      _entryKind = TxnEntryKind.spend;
+      if (_amountController.text.isEmpty) {
+        final m = RegExp(
+          r'\bavail(?:ing|ed)\s+(?:(?:amazon\s+)?pay\s+later\s+)?credit\s+of\s+(?:Rs\.?\s*)(\d+(?:\.\d+)?)',
+          caseSensitive: false,
+        ).firstMatch(widget.item.body);
+        final raw = m?.group(1)?.replaceAll(',', '');
+        if (raw != null) {
+          _amountController.text = raw;
+        } else {
+          final amt = LocalSmsParser.extractReceiptAmount(widget.item.body);
+          if (amt != null && amt.paise > 0) {
+            _amountController.text = amt.rupees.toStringAsFixed(2);
+          }
         }
       }
     }
@@ -3438,7 +3667,8 @@ class _AiBadge extends StatelessWidget {
 
 class _AiStatusBadge extends ConsumerWidget {
   final AiReviewStatus status;
-  const _AiStatusBadge({required this.status});
+  final VoidCallback? onRetry;
+  const _AiStatusBadge({required this.status, this.onRetry});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -3464,13 +3694,16 @@ class _AiStatusBadge extends ConsumerWidget {
         BambooInk.jade,
       ),
       AiReviewStatus.unavailable => (
-        'AI review unavailable · Tap to retry',
+        onRetry == null
+            ? 'AI review could not complete · Review manually'
+            : 'AI review failed · Tap to retry',
         Icons.cloud_off_outlined,
         BambooInk.ink500,
       ),
     };
     final isTappable =
-        status == AiReviewStatus.queued || status == AiReviewStatus.unavailable;
+        status == AiReviewStatus.queued ||
+        (status == AiReviewStatus.unavailable && onRetry != null);
     final showSpinner =
         status == AiReviewStatus.queued || status == AiReviewStatus.processing;
     return Align(
@@ -3482,6 +3715,10 @@ class _AiStatusBadge extends ConsumerWidget {
           behavior: HitTestBehavior.opaque,
           onTap: isTappable
               ? () {
+                  if (status == AiReviewStatus.unavailable) {
+                    onRetry?.call();
+                    return;
+                  }
                   ref.read(smsFlushTriggerProvider.notifier).state++;
                   ref.invalidate(needsReviewItemsProvider);
                 }

@@ -570,6 +570,39 @@ class FinancialStore {
     _notify(ns, entity: 'observations');
   }
 
+  Map<String, Map<String, dynamic>> cardBillAssignments(String ns) => {
+    for (final row in entities(ns, 'bill_card_assignments'))
+      if (row['observation_id'] is String)
+        row['observation_id'] as String: row,
+  };
+
+  /// User corrections live separately from captured SMS so re-importing a
+  /// message cannot erase the chosen card or edited bill fields.
+  void saveCardBillAssignment(
+    String ns,
+    String observationId, {
+    required String? userCardId,
+    required int? amountDuePaise,
+    required DateTime? dueDate,
+    DateTime? statementDate,
+  }) {
+    final body = <String, dynamic>{
+      'observation_id': observationId,
+      'user_card_id': userCardId,
+      'amount_due_paise': amountDuePaise,
+      'due_date': dueDate?.toIso8601String(),
+      'statement_date': statementDate?.toIso8601String(),
+    };
+    _upsert(
+      ns,
+      'bill_card_assignments',
+      observationId,
+      body,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+    _notify(ns, entity: 'observations');
+  }
+
   Map<String, ({Money balance, DateTime updatedAt})> manualBankBalances(
     String ns,
   ) {

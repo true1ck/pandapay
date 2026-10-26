@@ -78,23 +78,32 @@ UserCard? findMatchingCardForCentralBill(
   // 1. Match by last4 if available
   final last4 = projection.last4;
   if (last4 != null && last4.isNotEmpty) {
-    final match = activeCards.where((c) => c.last4 == last4).firstOrNull;
-    if (match != null) return match;
+    final matches = activeCards.where((c) => c.last4 == last4).toList();
+    return matches.length == 1 ? matches.single : null;
   }
 
   // 2. Match by card name / nickname
   final title =
       (projection.billerName ?? projection.serviceName ?? '').toLowerCase();
-  for (final card in activeCards) {
-    final cName = card.cardName.toLowerCase();
-    final nick = (card.nickname ?? '').toLowerCase();
-    if (cName.isNotEmpty && (title.contains(cName) || cName.contains(title))) {
-      return card;
-    }
-    if (nick.isNotEmpty && (title.contains(nick) || nick.contains(title))) {
-      return card;
+  // A bank-only label identifies the issuer, not one of several cards from
+  // that issuer. Tata Neu delivery does not identify a Tata Neu card either.
+  if (activeCards.length > 1 && _genericCardBillTitle(title)) return null;
+  final namedMatches = <UserCard>[];
+  if (title.isNotEmpty) {
+    for (final card in activeCards) {
+      final cName = card.cardName.toLowerCase();
+      final nick = (card.nickname ?? '').toLowerCase();
+      if (cName.isNotEmpty && (title.contains(cName) || cName.contains(title))) {
+        namedMatches.add(card);
+        continue;
+      }
+      if (nick.isNotEmpty && (title.contains(nick) || nick.contains(title))) {
+        namedMatches.add(card);
+      }
     }
   }
+  if (namedMatches.length == 1) return namedMatches.single;
+  if (namedMatches.length > 1) return null;
 
   // 3. Match by bank/issuer tokens
   const issuers = [
@@ -103,12 +112,12 @@ UserCard? findMatchingCardForCentralBill(
   ];
   for (final issuer in issuers) {
     if (title.contains(issuer)) {
-      final match = activeCards.where((c) {
+      final matches = activeCards.where((c) {
         final cName = c.cardName.toLowerCase();
         final nick = (c.nickname ?? '').toLowerCase();
         return cName.contains(issuer) || nick.contains(issuer);
-      }).firstOrNull;
-      if (match != null) return match;
+      }).toList();
+      return matches.length == 1 ? matches.single : null;
     }
   }
 
@@ -118,6 +127,17 @@ UserCard? findMatchingCardForCentralBill(
   }
 
   return null;
+}
+
+bool _genericCardBillTitle(String title) {
+  final productWords = title
+      .replaceAll(RegExp(r'\btata\s*neu\b'), '')
+      .replaceAll(
+        RegExp(r'\b(?:hdfc|sbi|icici|axis|kotak|amex|citi|rbl|indusind|bob|pnb|idfc|onecard|bank|credit|card|bill|payment)\b'),
+        '',
+      )
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '');
+  return productWords.isEmpty;
 }
 
 /// Per-card bill ledger from SMS (bill-generated messages + payment
@@ -218,8 +238,18 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
       if (dueDate == null) continue;
       final amountInr = projection.amountInr;
       if (amountInr == null || amountInr <= 0) continue;
+      final amount = Money.fromRupees(amountInr);
 
-      final matchedCard = findMatchingCardForCentralBill(projection, cards) ??
+      final ownedMatch = findMatchingCardForCentralBill(projection, cards);
+      // A suffix-less central projection may be another view of an SMS bill
+      // already attached to a card. Do not show the same obligation twice as
+      // an unmatched card when its due date and amount agree exactly.
+      if (ownedMatch == null && projection.last4 == null &&
+          rows.any((r) => _sameDay(r.dueOn, dueDate) &&
+              r.bill?.amountDue?.paise == amount.paise)) {
+        continue;
+      }
+      final matchedCard = ownedMatch ??
           UserCard(
             id: 'central-${projection.id}',
             cardProductId: 'central-${projection.id}',
@@ -232,12 +262,13 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
       final cardBill = CardBill(
         statementDate: dueDate.subtract(const Duration(days: 20)),
         dueDate: dueDate,
-        amountDue: Money.fromRupees(amountInr),
+        amountDue: amount,
         minimumDue: null,
         paidToward: Money.zero(),
         lastPaymentAt: null,
         confidence: 0.95,
         statementDateVerified: true,
+        statementDateExplicit: false,
       );
 
       final existingIndex =

@@ -1423,12 +1423,12 @@ void main() {
 
       expect(obs, isNotNull);
       expect(
-        obs!.transaction,
-        isNull,
-        reason: 'Must not mint a cash spend transaction!',
+        obs!.transaction?.entryKind,
+        TxnEntryKind.investment,
+        reason: 'Must mint an investment transaction, never cash spend!',
       );
+      expect(obs.transaction?.entryKind == TxnEntryKind.spend, isFalse);
       expect(obs.eventType, LocalSmsEventType.investment);
-      expect(obs.disposition, LocalSmsDisposition.localObservation);
       expect(obs.reasonCodes, contains('mf_folio_unit_allotment'));
       expect(obs.amount, isNotNull);
       expect(obs.amount!.paise, greaterThan(0));
@@ -1450,9 +1450,12 @@ void main() {
     );
 
     expect(obs, isNotNull);
-    expect(obs!.transaction, isNull);
+    expect(obs!.transaction?.entryKind, TxnEntryKind.investment);
+    expect(obs.transaction?.entryKind == TxnEntryKind.spend, isFalse);
+    expect(obs.transaction?.amount.rupees, 100.0);
+    expect(obs.transaction?.merchantName, 'HDFC Gold ETF Fund of Fund-DP Growth');
     expect(obs.eventType, LocalSmsEventType.investment);
-    expect(obs.disposition, LocalSmsDisposition.localObservation);
+    expect(obs.disposition, LocalSmsDisposition.sync);
     expect(obs.merchantName, contains('HDFC Gold ETF Fund of Fund'));
     expect(obs.amount, Money.fromRupees(100.00));
     expect(obs.accountLast4, '5/67');

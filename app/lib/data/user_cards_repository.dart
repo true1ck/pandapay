@@ -2087,6 +2087,7 @@ class UserCardsRepository {
     required String sender,
     required String body,
     DateTime? occurredAt,
+    bool retryFailed = false,
   }) async {
     final response = await _client
         .post(
@@ -2096,6 +2097,7 @@ class UserCardsRepository {
             'sourceKey': sourceKey,
             'sender': sender,
             'body': body,
+            if (retryFailed) 'retryFailed': true,
             if (occurredAt != null)
               'occurredAt': occurredAt.toUtc().toIso8601String(),
           }),

@@ -1646,6 +1646,11 @@ class _TransactionTile extends StatelessWidget {
         entry.accountLast4 == null
             ? 'Bank account · unmatched'
             : 'Bank account ending ${entry.accountLast4}',
+      if (entry.cardDisplayName == null &&
+          entry.instrument == TxnInstrument.other &&
+          (entry.accountLast4 == 'Amazon Pay Later' ||
+              entry.merchantName == 'Amazon Pay Later'))
+        'Amazon Pay Later',
       if (isIgnored) 'Excluded from spend',
       if (entry.status == 'active' &&
           entry.rewardState == 'estimated' &&
