@@ -330,7 +330,7 @@ void main() {
     },
   );
 
-  testWidgets('hides queued AI job details from individual review cards', (
+  testWidgets('shows page-level progress for queued AI reviews', (
     tester,
   ) async {
     await reviews.add(
@@ -349,7 +349,11 @@ void main() {
       settle: false,
     );
 
-    expect(find.textContaining('AI review'), findsNothing);
+    expect(
+      find.text('Waiting for AI review · 1 message queued'),
+      findsOneWidget,
+    );
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
@@ -1412,7 +1416,7 @@ void main() {
     },
   );
 
-  testWidgets('Gemini dismissals stay in Auto-Resolved and can be reviewed', (
+  testWidgets('AI dismissals stay in Auto-Resolved and can be reviewed', (
     tester,
   ) async {
     final controller = _FakeSmsAutoResolutionController();
@@ -1434,7 +1438,12 @@ void main() {
     await tester.tap(find.text('Auto-Resolved (1)'));
     await tester.pumpAndSettle();
 
-    expect(find.text('✦ Gemini decision · Dismissed'), findsOneWidget);
+    expect(find.text('✦ AI decision · Dismissed'), findsOneWidget);
+    expect(
+      find.text('AI dismissed · generic promotional spam'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Gemini'), findsNothing);
     expect(find.text('Review this decision'), findsOneWidget);
     expect(find.text('Change Category'), findsNothing);
     expect(find.text('₹0.00'), findsNothing);
@@ -1443,35 +1452,34 @@ void main() {
     expect(controller.movedEntry?.id, dismissal.id);
   });
 
-  testWidgets(
-    'pending item with AI suggestions keeps AI details private',
-    (tester) async {
-      await reviews.add(
-        NeedsReviewItem(
-          id: 'ai-cat-1',
-          sender: 'VM-HDFCBK',
-          body: 'INR 499 spent at SWIGGY on card ending 1234.',
-          receivedAt: DateTime.now(),
-          aiSuggestions: const [
-            {
-              'factIndex': 0,
-              'factType': 'posted_movement',
-              'payload': {
-                'amountInr': 499,
-                'merchant': 'SWIGGY',
-                'category': 'dining',
-              },
+  testWidgets('pending item with AI suggestions keeps AI details private', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'ai-cat-1',
+        sender: 'VM-HDFCBK',
+        body: 'INR 499 spent at SWIGGY on card ending 1234.',
+        receivedAt: DateTime.now(),
+        aiSuggestions: const [
+          {
+            'factIndex': 0,
+            'factType': 'posted_movement',
+            'payload': {
+              'amountInr': 499,
+              'merchant': 'SWIGGY',
+              'category': 'dining',
             },
-          ],
-        ),
-      );
+          },
+        ],
+      ),
+    );
 
-      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
-      expect(find.textContaining('AI suggested'), findsNothing);
-      expect(find.textContaining('AI review'), findsNothing);
-    },
-  );
+    expect(find.textContaining('AI suggested'), findsNothing);
+    expect(find.textContaining('AI review'), findsNothing);
+  });
 
   testWidgets('Change Category calls the controller for the chosen category', (
     tester,

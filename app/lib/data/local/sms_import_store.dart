@@ -564,7 +564,7 @@ class SmsImportStore {
         sourceKey: sourceKey,
         sender: item.sender,
         resolvedKind: 'dismissed',
-        title: 'Gemini dismissed · $topic',
+        title: 'AI dismissed · $topic',
         amountPaise: 0,
         sourceBody: item.body,
         occurredAt: item.receivedAt.toIso8601String(),

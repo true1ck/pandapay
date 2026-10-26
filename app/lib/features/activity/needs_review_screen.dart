@@ -415,6 +415,8 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
   _ReviewFilterCategory _selectedCategory = _ReviewFilterCategory.all;
   int _selectedTab = 0;
   bool _retryingAiReviews = false;
+  bool _hasObservedAiReviewRun = false;
+  bool _showAiReviewCompleted = false;
 
   bool _canRetryAiReview(NeedsReviewItem item) {
     if (item.aiStatus != AiReviewStatus.unavailable) return false;
@@ -430,7 +432,11 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
     final namespace = ref.read(cacheNamespaceProvider);
     final retryable = failedItems.where(_canRetryAiReview).toList();
     if (retryable.isEmpty) return;
-    setState(() => _retryingAiReviews = true);
+    setState(() {
+      _retryingAiReviews = true;
+      _hasObservedAiReviewRun = true;
+      _showAiReviewCompleted = false;
+    });
     var queued = 0;
     for (final item in retryable) {
       if (!mounted || ref.read(cacheNamespaceProvider) != namespace) break;
@@ -463,15 +469,18 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
       }
     }
     if (mounted) {
-      setState(() => _retryingAiReviews = false);
+      setState(() {
+        _retryingAiReviews = false;
+        if (queued == 0) _hasObservedAiReviewRun = false;
+      });
       ref.read(smsFlushTriggerProvider.notifier).state++;
       ref.invalidate(needsReviewItemsProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             queued == 0
-                ? 'No failed Gemini reviews could be retried.'
-                : 'Retrying Gemini review for $queued message${queued == 1 ? '' : 's'}.',
+                ? 'No failed AI reviews could be retried.'
+                : 'Retrying AI review for $queued message${queued == 1 ? '' : 's'}.',
           ),
         ),
       );
@@ -675,6 +684,11 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
             item.aiStatus == AiReviewStatus.queued ||
             item.aiStatus == AiReviewStatus.processing,
       );
+      if (hasActive) _hasObservedAiReviewRun = true;
+      if (hadActive && !hasActive && _hasObservedAiReviewRun) {
+        _hasObservedAiReviewRun = false;
+        setState(() => _showAiReviewCompleted = true);
+      }
       if (hasActive && !hadActive) {
         ref.read(smsFlushTriggerProvider.notifier).state++;
       }
@@ -683,6 +697,13 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
     final items = ref.watch(needsReviewItemsProvider);
     final pendingItems = items.valueOrNull ?? const <NeedsReviewItem>[];
     final retryableAiCount = pendingItems.where(_canRetryAiReview).length;
+    final queuedAiCount = pendingItems
+        .where((item) => item.aiStatus == AiReviewStatus.queued)
+        .length;
+    final processingAiCount = pendingItems
+        .where((item) => item.aiStatus == AiReviewStatus.processing)
+        .length;
+    final activeAiCount = queuedAiCount + processingAiCount;
     final autoCount = ref.watch(autoResolvedCountProvider).valueOrNull ?? 0;
 
     final sortedList = List<NeedsReviewItem>.from(pendingItems)
@@ -779,6 +800,99 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
         child: Column(
           children: [
             _buildTabSelector(pendingItems.length, autoCount),
+            if (_selectedTab == 0 && (_retryingAiReviews || activeAiCount > 0))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  0,
+                  AppSpace.lg,
+                  AppSpace.sm,
+                ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpace.sm),
+                  decoration: BoxDecoration(
+                    color: BambooInk.paper,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: BambooInk.hairlineOnPaper),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _retryingAiReviews
+                            ? 'Sending $retryableAiCount failed message${retryableAiCount == 1 ? '' : 's'} for AI review…'
+                            : queuedAiCount > 0 && processingAiCount == 0
+                            ? 'Waiting for AI review · $queuedAiCount message${queuedAiCount == 1 ? '' : 's'} queued'
+                            : 'AI is reviewing $activeAiCount message${activeAiCount == 1 ? '' : 's'}',
+                        style: BambooFonts.ui(
+                          12.5,
+                          weight: FontWeight.w700,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                      if (!_retryingAiReviews &&
+                          queuedAiCount > 0 &&
+                          processingAiCount > 0) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '$queuedAiCount queued · $processingAiCount in progress',
+                          style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                        ),
+                      ],
+                      const SizedBox(height: AppSpace.xs),
+                      const LinearProgressIndicator(minHeight: 3),
+                    ],
+                  ),
+                ),
+              ),
+            if (_selectedTab == 0 &&
+                !_retryingAiReviews &&
+                activeAiCount == 0 &&
+                _showAiReviewCompleted)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  0,
+                  AppSpace.lg,
+                  AppSpace.sm,
+                ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.sm,
+                    vertical: AppSpace.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: BambooInk.paper,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: BambooInk.hairlineOnPaper),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.check_circle_outline_rounded,
+                        size: 17,
+                        color: BambooInk.jade,
+                      ),
+                      const SizedBox(width: AppSpace.xs),
+                      Expanded(
+                        child: Text(
+                          'AI review finished. Auto-resolved results are in Auto-Resolved; undecided messages remain here.',
+                          style: BambooFonts.ui(11.5, color: BambooInk.ink700),
+                        ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Dismiss status',
+                        onPressed: () =>
+                            setState(() => _showAiReviewCompleted = false),
+                        icon: const Icon(Icons.close_rounded, size: 17),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             if (_selectedTab == 0 && retryableAiCount > 0)
               Padding(
                 padding: const EdgeInsets.fromLTRB(
@@ -1188,6 +1302,10 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
   Widget build(BuildContext context) {
     final entry = widget.entry;
     final isDismissed = entry.resolvedKind == 'dismissed';
+    final displayTitle = entry.title.replaceFirst(
+      RegExp(r'^gemini dismissed\s*·\s*', caseSensitive: false),
+      'AI dismissed · ',
+    );
     return Container(
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
@@ -1208,13 +1326,13 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      entry.title,
+                      displayTitle,
                       style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       isDismissed
-                          ? '✦ Gemini decision · Dismissed'
+                          ? '✦ AI decision · Dismissed'
                           : '✦ Auto-Categorized by AI · ${entry.categoryName}',
                       style: BambooFonts.ui(
                         12.5,
