@@ -82,7 +82,7 @@ class _MockUserCardsRepository extends UserCardsRepository {
         sender: sender,
         body: body,
         occurredAt: occurredAt,
-        retryFailed: retryFailed ?? false,
+        retryFailed: retryFailed,
       );
     }
     return 'default-job-id';

@@ -129,13 +129,7 @@ bool reviewReplayShouldStop(Object error) {
 bool _isExplicitAiRefusal(Object error) {
   if (error is ApiException) {
     final status = error.statusCode;
-    if (status == 400) return true;
-    if (status == 503 &&
-        (error.errorCode == 'ai_queue_disabled' ||
-            error.debugMessage.contains('ai_queue_disabled'))) {
-      return true;
-    }
-    return false;
+    return status == 400 || status == 409 || status == 429 || status == 503;
   }
   final message = error.toString().toLowerCase();
   if (message.contains('ai_queue_disabled') ||
@@ -3771,7 +3765,8 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
   store?.migrateLegacy(namespace);
 
   final evidence = <CardBillEvidence>[];
-  final billAssignments = store?.cardBillAssignments(namespace) ??
+  final billAssignments =
+      store?.cardBillAssignments(namespace) ??
       const <String, Map<String, dynamic>>{};
   DateTime? earliestAnchor;
   for (final obs
@@ -3796,7 +3791,8 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
     final correction = billAssignments[sourceId];
     final selectedId = correction?['user_card_id'] as String?;
     final chosenCardId = cards.any((card) => card.id == selectedId)
-        ? selectedId : null;
+        ? selectedId
+        : null;
     final correctedStatement = DateTime.tryParse(
       correction?['statement_date'] as String? ?? '',
     );
@@ -3814,9 +3810,11 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
         billerName: obs['biller_name'] as String?,
         family: obs['sender_bank'] as String?,
         statementDate: correctedStatement ?? anchor,
-        statementDateExplicit: correctedStatement != null ||
+        statementDateExplicit:
+            correctedStatement != null ||
             (statementDateExplicit && parsedStatement != null),
-        dueDate: correctedDue ?? DateTime.tryParse(obs['due_date'] as String? ?? ''),
+        dueDate:
+            correctedDue ?? DateTime.tryParse(obs['due_date'] as String? ?? ''),
         amountDue: _moneyFromPaise(
           correction?['amount_due_paise'] ?? obs['amount_due_paise'],
         ),
@@ -3876,8 +3874,7 @@ final cardBillReviewItemsProvider = FutureProvider<List<CardBillReviewItem>>((
   final assignments = store.cardBillAssignments(namespace);
   final linkedSources = {
     for (final ledger in ledgers.values)
-      for (final bill in ledger.history)
-        ...bill.sourceIds,
+      for (final bill in ledger.history) ...bill.sourceIds,
   };
   final rows = <CardBillReviewItem>[];
   for (final obs in store.entities(namespace, 'sms_observations')) {
@@ -3886,31 +3883,34 @@ final cardBillReviewItemsProvider = FutureProvider<List<CardBillReviewItem>>((
       continue;
     }
     final id = obs['id'] as String?;
-    if (id == null || (linkedSources.contains(id) && !assignments.containsKey(id))) {
+    if (id == null ||
+        (linkedSources.contains(id) && !assignments.containsKey(id))) {
       continue;
     }
     final correction = assignments[id];
     final received = DateTime.tryParse(obs['received_at'] as String? ?? '');
     if (received == null) continue;
-    rows.add(CardBillReviewItem(
-      id: id,
-      sender: obs['sender_bank'] as String? ?? '',
-      billerName: obs['biller_name'] as String?,
-      body: obs['sample_body'] as String?,
-      receivedAt: received,
-      dueDate: DateTime.tryParse(correction?['due_date'] as String? ?? '') ??
-          DateTime.tryParse(obs['due_date'] as String? ?? ''),
-      statementDate: DateTime.tryParse(
-            correction?['statement_date'] as String? ?? '',
-          ) ??
-          (obs['statement_date_explicit'] == true
-              ? DateTime.tryParse(obs['statement_date'] as String? ?? '')
-              : null),
-      amountDue: _moneyFromPaise(
-        correction?['amount_due_paise'] ?? obs['amount_due_paise'],
+    rows.add(
+      CardBillReviewItem(
+        id: id,
+        sender: obs['sender_bank'] as String? ?? '',
+        billerName: obs['biller_name'] as String?,
+        body: obs['sample_body'] as String?,
+        receivedAt: received,
+        dueDate:
+            DateTime.tryParse(correction?['due_date'] as String? ?? '') ??
+            DateTime.tryParse(obs['due_date'] as String? ?? ''),
+        statementDate:
+            DateTime.tryParse(correction?['statement_date'] as String? ?? '') ??
+            (obs['statement_date_explicit'] == true
+                ? DateTime.tryParse(obs['statement_date'] as String? ?? '')
+                : null),
+        amountDue: _moneyFromPaise(
+          correction?['amount_due_paise'] ?? obs['amount_due_paise'],
+        ),
+        assignedCardId: correction?['user_card_id'] as String?,
       ),
-      assignedCardId: correction?['user_card_id'] as String?,
-    ));
+    );
   }
   rows.sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
   return rows;
@@ -6208,7 +6208,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
               await reviewRepo.updateAiStatus(
                 item.id,
                 AiReviewStatus.unavailable,
-                failureReason: status['failureReason'] as String?,
+                failureReason:
+                    status['failureReason'] as String? ?? 'worker_failed',
               ) ||
               changed;
           continue;
@@ -6280,6 +6281,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
               await reviewRepo.updateAiStatus(
                 item.id,
                 AiReviewStatus.unavailable,
+                failureReason: e is ApiException
+                    ? (e.errorCode ?? 'http_${e.statusCode}')
+                    : 'request_refused',
               ) ||
               changed;
         }

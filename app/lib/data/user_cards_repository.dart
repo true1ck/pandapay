@@ -2078,10 +2078,9 @@ class UserCardsRepository {
 
   /// SMS intelligence Phase 5: queues an unresolved SMS for server AI classification.
   /// Server deduplicates on (profile_id, source_id); retrying returns the same
-  /// job ID and does not burn quota. Server refusals (400, 429, 503) return null
-  /// so callers can distinguish explicit refusals from network errors.
-  /// Transport/network exceptions are rethrown so transient failures are not
-  /// swallowed as permanent rejections.
+  /// job ID and does not burn quota. Server refusals throw [ApiException] so
+  /// callers retain their status and machine-readable reason. Transport/network
+  /// exceptions are rethrown so transient failures are not swallowed.
   Future<String?> submitAiJob({
     required String sourceKey,
     required String sender,
@@ -2107,7 +2106,9 @@ class UserCardsRepository {
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
       return decoded['jobId'] as String?;
     }
-    return null;
+    throw ApiException(
+      'POST /ai/jobs failed: ${response.statusCode} ${response.body}',
+    );
   }
 
   /// Returns redacted status for a previously queued SMS. The body and lease
