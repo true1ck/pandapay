@@ -123,7 +123,10 @@ function registerAiQueueRoutes(app, {
       const job = await withUserClient(req.userId, async (client) => {
         const rows = await client.query(
           `SELECT id, status, result, attempts, created_at, updated_at,
-                  payload->>'failReason' AS fail_reason
+                  payload->>'failReason' AS fail_reason,
+                  (SELECT payload->>'reason' FROM ai_events
+                    WHERE job_id = ai_jobs.id AND event_type = 'provider_retry'
+                    ORDER BY created_at DESC LIMIT 1) AS last_retry_reason
              FROM ai_jobs WHERE profile_id = $1 AND source_key = $2`,
           [req.userId, req.params.sourceKey],
         );
@@ -155,7 +158,9 @@ function registerAiQueueRoutes(app, {
         // The raw SMS and model prompt have already been purged from the job.
         suggestions: job.suggestions,
         attempts: job.attempts,
-        ...(job.fail_reason ? { failureReason: job.fail_reason } : {}),
+        ...((job.last_retry_reason || job.fail_reason)
+          ? { failureReason: job.last_retry_reason || job.fail_reason }
+          : {}),
         createdAt: job.created_at,
         updatedAt: job.updated_at,
       });
@@ -323,12 +328,12 @@ function registerAiQueueRoutes(app, {
   app.get('/admin/sms-ai/summary', requireAdmin, async (req, res) => {
     try {
       const summary = await withUserClient(req.userId, async (client) => {
-        const { requestsPerMinute, tokensPerMinute, requestsPerDay } = providerLimits();
+        const { requestsPerMinute, tokensPerMinute } = providerLimits();
         const [result, capacity] = await Promise.all([
           client.query('SELECT pandapay.ai_admin_summary() AS summary'),
           client.query(
-            'SELECT pandapay.ai_provider_admin_summary($1, $2, $3) AS provider_capacity',
-            [requestsPerMinute, tokensPerMinute, requestsPerDay],
+            'SELECT pandapay.ai_provider_admin_summary($1, $2) AS provider_capacity',
+            [requestsPerMinute, tokensPerMinute],
           ),
         ]);
         return { ...result.rows[0].summary, providerCapacity: capacity.rows[0].provider_capacity };

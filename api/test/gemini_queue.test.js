@@ -314,7 +314,7 @@ function makeFakeClient() {
       return { rows: [{ summary: {
         statusCounts,
         oldestAgeSeconds: 0,
-        totalJobsToday: [...state.quota.values()].reduce((sum, value) => sum + value, 0),
+        totalJobsToday: state.jobs.size,
         retryCount: state.events.filter((event) => event.event_type === 'provider_retry').length,
       } }], rowCount: 1 };
     }
@@ -324,8 +324,6 @@ function makeFakeClient() {
         tokensLastMinute: 0,
         requestsPerMinuteLimit: params[0],
         tokensPerMinuteLimit: params[1],
-        requestsToday: 0,
-        requestsPerDayLimit: params[2],
         waitingLastMinute: 0,
         permanentlyBlockedLastMinute: 0,
       } }], rowCount: 1 };
@@ -468,7 +466,7 @@ test('acceptance is replay-safe: same source twice, one job, one event, one quot
   assert.equal(second.jobId, first.jobId);
   assert.equal(client.state.jobs.size, 1);
   assert.equal(client.state.events.filter((e) => e.event_type === 'accepted').length, 1);
-  assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 1);
+  assert.equal(client.state.quota.size, 0);
 });
 
 test('ordinary device replay cannot reopen a terminal failed job', async () => {
@@ -493,7 +491,7 @@ test('ordinary device replay cannot reopen a terminal failed job', async () => {
   assert.equal(retry.reason, 'job_terminal');
   assert.equal(retry.jobId, first.jobId);
   assert.equal(client.state.jobs.get(first.jobId).status, 'failed');
-  assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 1);
+  assert.equal(client.state.quota.size, 0);
 });
 
 test('explicit device retry reopens one failed job without consuming another quota slot', async () => {
@@ -520,17 +518,16 @@ test('explicit device retry reopens one failed job without consuming another quo
   assert.equal(job.attempts, 0);
   assert.equal(job.payload.body, BILL_BODY);
   assert.equal(client.state.jobs.size, 1);
-  assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 1);
+  assert.equal(client.state.quota.size, 0);
   assert.equal(client.state.events.filter((event) => event.event_type === 'requeued').length, 1);
 });
 
-test('explicit failed-job retry still works after the daily admission quota is exhausted', async () => {
+test('explicit failed-job retry works and preserves same job identity', async () => {
   const client = makeUserClient();
   const first = await geminiQueue.acceptOneJob(client, PROFILE_A, {
     sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY,
   });
   await geminiQueue.failJob(client, first.jobId, PROFILE_A, 'provider_failure');
-  client.state.quota.set(`${PROFILE_A}:${todayKey()}`, geminiQueue.DAILY_QUOTA);
 
   const retry = await geminiQueue.acceptOneJob(client, PROFILE_A, {
     sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY, retryFailed: true,
@@ -538,7 +535,7 @@ test('explicit failed-job retry still works after the daily admission quota is e
   assert.equal(retry.accepted, true);
   assert.equal(retry.jobId, first.jobId);
   assert.equal(client.state.jobs.get(first.jobId).status, 'queued');
-  assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), geminiQueue.DAILY_QUOTA);
+  assert.equal(client.state.quota.size, 0);
 });
 
 test('sensitive payloads are refused before any job or quota write', async () => {
@@ -564,7 +561,7 @@ test('the API queues phone-approved candidates without repeating triage', async 
   assert.equal(outcome.accepted, true);
   assert.equal(client.state.jobs.size, 1);
   assert.equal(client.state.events.length, 1);
-  assert.equal(client.state.quota.size, 1);
+  assert.equal(client.state.quota.size, 0);
 
   const unrelatedClient = makeUserClient();
   const unrelated = await geminiQueue.acceptOneJob(unrelatedClient, PROFILE_A, {
@@ -575,7 +572,7 @@ test('the API queues phone-approved candidates without repeating triage', async 
   assert.equal(unrelated.accepted, true);
   assert.equal(unrelatedClient.state.jobs.size, 1);
   assert.equal(unrelatedClient.state.events.length, 1);
-  assert.equal(unrelatedClient.state.quota.size, 1);
+  assert.equal(unrelatedClient.state.quota.size, 0);
 });
 
 test('legitimate financial alerts remain eligible for AI fallback', async () => {
@@ -603,24 +600,9 @@ test('accepted AI payload redacts long identifiers but preserves the source hash
   assert.equal(job.payload.bodyHash, smsFacts.bodyHashOf('HDFCBK', body));
 });
 
-test('AI quota insert supplies the required day column', async () => {
+test('fresh job admission ignores legacy per-profile daily quota counter', async () => {
   const client = makeUserClient();
-  const query = client.query.bind(client);
-  let quotaSql = '';
-  client.query = async (sql, params) => {
-    if (sql.includes('INSERT INTO ai_quota_days')) quotaSql = sql;
-    return query(sql, params);
-  };
-  await geminiQueue.acceptOneJob(client, PROFILE_A, {
-    sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: 'Rs 100 debited',
-  });
-  assert.match(quotaSql, /\(profile_id, day, jobs_used\)/);
-});
-
-test('concurrent fresh accepts cannot exceed the daily quota or leave a rejected job', async () => {
-  const client = makeUserClient();
-  const quotaKey = `${PROFILE_A}:${todayKey()}`;
-  client.state.quota.set(quotaKey, geminiQueue.DAILY_QUOTA - 1);
+  client.state.quota.set(`${PROFILE_A}:${todayKey()}`, 200);
 
   const outcomes = await Promise.all([
     geminiQueue.acceptOneJob(client, PROFILE_A, {
@@ -631,11 +613,9 @@ test('concurrent fresh accepts cannot exceed the daily quota or leave a rejected
     }),
   ]);
 
-  assert.equal(outcomes.filter((item) => item.accepted).length, 1);
-  assert.equal(outcomes.filter((item) => item.reason === 'daily_quota_exhausted').length, 1);
-  assert.equal(client.state.quota.get(quotaKey), geminiQueue.DAILY_QUOTA);
-  assert.equal(client.state.jobs.size, 1);
-  assert.equal(client.state.events.filter((event) => event.event_type === 'accepted').length, 1);
+  assert.equal(outcomes.filter((item) => item.accepted).length, 2);
+  assert.equal(client.state.jobs.size, 2);
+  assert.equal(client.state.events.filter((event) => event.event_type === 'accepted').length, 2);
 });
 
 test('AI sanitization hides full account IDs, addresses, references and URLs', () => {
@@ -657,18 +637,6 @@ test('AI sanitization masks long IDs separated by spaces or hyphens', () => {
   assert.match(sanitized, /XXXX1234/);
   assert.match(sanitized, /Rs 125\.50/);
   assert.match(sanitized, /20-10-2026/);
-});
-
-test('daily quota exhaustion refuses fresh work with a distinct reason', async () => {
-  const client = makeUserClient();
-  client.state.quota.set(`${PROFILE_A}:${todayKey()}`, geminiQueue.DAILY_QUOTA);
-  const outcome = await geminiQueue.acceptOneJob(client, PROFILE_A, {
-    sourceKey: SOURCE_KEY,
-    sender: 'HDFCBK',
-    body: BILL_BODY,
-  });
-  assert.deepEqual(outcome, { accepted: false, reason: 'daily_quota_exhausted' });
-  assert.equal(client.state.jobs.size, 0);
 });
 
 test('a crashed worker re-leases the SAME job after expiry; attempts accumulate', async () => {
@@ -1061,15 +1029,14 @@ test('worker auth: routes disabled without AI_WORKER_TOKEN, token-checked with i
   delete process.env.AI_WORKER_TOKEN;
 });
 
-test('POST /ai/jobs maps queue refusals and accepts promotional decision candidates', async () => {
-  const quota = harness({});
-  quota.state.quota.set(`${PROFILE_A}:${todayKey()}`, geminiQueue.DAILY_QUOTA);
-  const resQuota = await quota.call('/ai/jobs', {
+test('POST /ai/jobs accepts work after the legacy daily counter is full', async () => {
+  const unboundedAdmission = harness({});
+  unboundedAdmission.state.quota.set(`${PROFILE_A}:${todayKey()}`, 200);
+  const resAccepted = await unboundedAdmission.call('/ai/jobs', {
     userId: PROFILE_A,
     body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
   });
-  assert.equal(resQuota.status, 429);
-  assert.equal(resQuota.body.error, 'daily_quota_exhausted');
+  assert.equal(resAccepted.status, 200);
 
   const sensitive = harness({});
   const resSensitive = await sensitive.call('/ai/jobs', {
@@ -1392,9 +1359,7 @@ test('source status omits AI facts the user already confirmed or corrected', asy
 
   const query = h.client.query;
   h.client.query = async (sql, params) => {
-    if (sql.replace(/\s+/g, ' ').trim().startsWith(
-      "SELECT id, status, result, attempts, created_at, updated_at, payload->>'failReason' AS fail_reason FROM ai_jobs",
-    )) {
+    if (sql.includes("payload->>'failReason' AS fail_reason") && sql.includes('last_retry_reason')) {
       return { rows: [{
         id: job.id,
         status: job.status,
@@ -1436,7 +1401,7 @@ test('admin monitoring endpoints return redacted metrics and timeline without ra
   assert.equal(typeof summaryRes.body.oldestAgeSeconds, 'number');
   assert.equal(summaryRes.body.totalJobsToday, 1);
   assert.equal(summaryRes.body.providerCapacity.requestsPerMinuteLimit, 30);
-  assert.equal(summaryRes.body.providerCapacity.requestsPerDayLimit, 3000);
+  assert.equal(summaryRes.body.providerCapacity.tokensPerMinuteLimit, 24000);
 
   // 2. Jobs list (no raw payload)
   const jobsRes = await h.call('/admin/sms-ai/jobs', { query: {} });
@@ -1457,7 +1422,7 @@ test('admin monitoring endpoints return redacted metrics and timeline without ra
   // 4. Quota
   const quotaRes = await h.call('/admin/sms-ai/quota', {});
   assert.equal(quotaRes.status, 200);
-  assert.ok(quotaRes.body.quota.length >= 1);
+  assert.deepEqual(quotaRes.body.quota, []);
 });
 
 test('rule lifecycle: new account receives approved pattern, deactivation rolls it back', () => {

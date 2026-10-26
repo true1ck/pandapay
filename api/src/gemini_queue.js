@@ -13,7 +13,6 @@ const crypto = require('crypto');
 
 const MAX_LEASE_ATTEMPTS = 6;
 const LEASE_MINUTES = 10;
-const DAILY_QUOTA = 200;
 
 /** Refusal predicate for the automatic sensitive-field check. */
 function payloadLooksSensitive(body) {
@@ -100,10 +99,6 @@ async function acceptOneJob(client, profileId, {
     };
   }
 
-  if (!(await withinDailyQuota(client, profileId))) {
-    return { accepted: false, reason: 'daily_quota_exhausted' };
-  }
-
   const sourceId = await ensureSourceRow(client, profileId, { sourceKey, sender, body });
   const smsFacts = require('./sms_facts');
   const inserted = await client.query(
@@ -128,10 +123,6 @@ async function acceptOneJob(client, profileId, {
     // Lost a race against a concurrent accept; the unique index decided.
     const winner = await findJobBySourceKey(client, profileId, sourceKey);
     return { accepted: true, jobId: winner.id, reused: true };
-  }
-  if (!(await bumpDailyQuota(client, profileId))) {
-    await client.query('DELETE FROM ai_jobs WHERE id = $1', [inserted.rows[0].id]);
-    return { accepted: false, reason: 'daily_quota_exhausted' };
   }
   await recordEvent(client, inserted.rows[0].id, profileId, 'accepted', {});
   return { accepted: true, jobId: inserted.rows[0].id, reused: false };
@@ -165,27 +156,6 @@ async function ensureSourceRow(client, profileId, { sourceKey, sender, body }) {
     [profileId, sourceKey],
   );
   return raced.rows[0].id;
-}
-
-async function withinDailyQuota(client, profileId) {
-  const used = await client.query(
-    `SELECT jobs_used FROM ai_quota_days WHERE profile_id = $1 AND day = current_date`,
-    [profileId],
-  );
-  return used.rows.length === 0 || used.rows[0].jobs_used < DAILY_QUOTA;
-}
-
-async function bumpDailyQuota(client, profileId) {
-  const result = await client.query(
-    `INSERT INTO ai_quota_days (profile_id, day, jobs_used)
-     VALUES ($1, current_date, 1)
-     ON CONFLICT (profile_id, day) DO UPDATE
-       SET jobs_used = ai_quota_days.jobs_used + 1, updated_at = now()
-       WHERE ai_quota_days.jobs_used < $2
-     RETURNING profile_id`,
-    [profileId, DAILY_QUOTA],
-  );
-  return result.rowCount > 0;
 }
 
 async function recordEvent(client, jobId, profileId, eventType, payload) {
@@ -387,11 +357,9 @@ async function failJob(client, jobId, profileId, reason, extra = {}) {
 module.exports = {
   MAX_LEASE_ATTEMPTS,
   LEASE_MINUTES,
-  DAILY_QUOTA,
   payloadLooksSensitive,
   redactBodyForAi,
   acceptOneJob,
-  withinDailyQuota,
   leaseNextJob,
   heartbeatJob,
   releaseForRetry,

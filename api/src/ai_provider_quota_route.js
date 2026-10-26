@@ -6,12 +6,10 @@ function boundedEnvInt(name, fallback, minimum, maximum) {
 }
 
 function providerLimits() {
-  // Free tier / default cap is configurable via GEMINI_REQUESTS_PER_DAY
-  // up to 3000 RPD and 30 RPM to support dual-key active round-robin pools (2 x 1500).
+  // Testing phase: keep provider pacing per minute, with no daily request cap.
   return {
     requestsPerMinute: Math.min(30, boundedEnvInt('GEMINI_REQUESTS_PER_MINUTE', 30, 1, 1000)),
     tokensPerMinute: Math.min(2000000, boundedEnvInt('GEMINI_TOKENS_PER_MINUTE', 24000, 100, 2000000)),
-    requestsPerDay: Math.min(3000, boundedEnvInt('GEMINI_REQUESTS_PER_DAY', 3000, 1, 100000)),
   };
 }
 
@@ -21,12 +19,12 @@ function registerProviderQuotaRoute(app, { requireWorkerAuth, withUserClient }) 
     if (!Number.isInteger(estimatedTokens) || estimatedTokens < 1 || estimatedTokens > 20000) {
       return res.status(400).json({ error: 'estimatedTokens must be an integer from 1 to 20000' });
     }
-    const { requestsPerMinute, tokensPerMinute, requestsPerDay } = providerLimits();
+    const { requestsPerMinute, tokensPerMinute } = providerLimits();
     try {
       const reservation = await withUserClient(null, async (client) => {
         const result = await client.query(
-          'SELECT pandapay.ai_reserve_provider_capacity($1, $2, $3, $4) AS reservation',
-          [requestsPerMinute, tokensPerMinute, requestsPerDay, estimatedTokens],
+          'SELECT pandapay.ai_reserve_provider_capacity($1, $2, $3) AS reservation',
+          [requestsPerMinute, tokensPerMinute, estimatedTokens],
         );
         return result.rows[0].reservation;
       });
