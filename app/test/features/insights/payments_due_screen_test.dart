@@ -13,6 +13,7 @@ import 'package:pandapay/data/pending_bills.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/insights/bills_horizon.dart';
 import 'package:pandapay/features/insights/central_bills_section.dart';
+import 'package:pandapay/features/insights/card_bill_review_section.dart';
 import 'package:pandapay/features/insights/payments_due_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -91,6 +92,63 @@ List<Override> _deterministicOverrides() => [
 ];
 
 void main() {
+  testWidgets('bill message opens prefilled details and saves the chosen card', (
+    tester,
+  ) async {
+    final db = openInMemoryForTesting();
+    final cache = ResponseCache(db);
+    addTearDown(db.close);
+    const moneyBack = UserCard(
+      id: 'moneyback',
+      cardProductId: 'p1',
+      cardName: 'MoneyBack+ Credit Card',
+      isDefault: false,
+      last4: '8780',
+    );
+    final item = CardBillReviewItem(
+      id: 'source-1',
+      sender: 'MYTNEU',
+      billerName: 'HDFC Credit Card',
+      body: 'Your HDFC Credit Card bill of Rs. 8331 is ready. Pay by 08-Nov-2026.',
+      receivedAt: DateTime(2026, 10, 21),
+      dueDate: DateTime(2026, 11, 8),
+      statementDate: null,
+      amountDue: Money.fromRupees(8331),
+      assignedCardId: null,
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        cacheNamespaceProvider.overrideWithValue('user:test'),
+        responseCacheProvider.overrideWith((ref) async => cache),
+        myCardsProvider.overrideWith((ref) async => [moneyBack]),
+        cardBillReviewItemsProvider.overrideWith((ref) async => [item]),
+      ],
+      child: MaterialApp(
+        home: Scaffold(body: CardBillReviewSection(includes: (_) => true)),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('card-bill-review-source-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review credit-card bill'), findsOneWidget);
+    expect(find.textContaining('Your HDFC Credit Card bill'), findsOneWidget);
+    expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Amount due (₹)'))
+        .controller!.text, '8331.00');
+    expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Payment due date'))
+        .controller!.text, '2026-11-08');
+
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('MoneyBack+ Credit Card').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save bill and card'));
+    await tester.pumpAndSettle();
+
+    expect(cache.financialStore.cardBillAssignments('user:test')['source-1']?
+        ['user_card_id'], 'moneyback');
+  });
+
   test('generic HDFC projection cannot pick a card from two HDFC cards', () {
     const moneyBack = UserCard(
       id: 'moneyback',
@@ -239,31 +297,45 @@ void main() {
     expect(find.textContaining('Due 16 Sep'), findsOneWidget);
   });
 
-  testWidgets('upcoming keeps a recently overdue unpaid commitment', (
-    tester,
-  ) async {
-    final overdue = Commitment(
-      id: 'c-overdue',
-      title: 'Overdue power bill',
-      category: CommitmentCategory.utility,
-      dueOn: DateTime(2026, 10, 20),
-      status: CommitmentStatus.due,
-      confidence: 1.0,
-    );
-    await _pumpBills(
-      tester,
-      overrides: [
-        ..._deterministicOverrides(),
-        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
-        commitmentsProvider.overrideWith((ref) async => [overdue]),
-        billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
-      ],
-    );
+  testWidgets(
+    'overdue unpaid commitments appear in monthly view, not upcoming',
+    (tester) async {
+      final overdue = Commitment(
+        id: 'c-overdue',
+        title: 'Overdue power bill',
+        category: CommitmentCategory.utility,
+        dueOn: DateTime(2026, 10, 20),
+        status: CommitmentStatus.due,
+        confidence: 1.0,
+      );
+      final upcoming = Commitment(
+        id: 'c-upcoming',
+        title: 'Upcoming water bill',
+        category: CommitmentCategory.utility,
+        dueOn: DateTime(2026, 10, 28),
+        status: CommitmentStatus.due,
+        confidence: 1.0,
+      );
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+          commitmentsProvider.overrideWith((ref) async => [overdue, upcoming]),
+          billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+        ],
+      );
 
-    expect(find.text('Overdue power bill'), findsOneWidget);
-    expect(find.textContaining('Past due date'), findsOneWidget);
-    expect(find.text('No upcoming bills'), findsNothing);
-  });
+      expect(find.text('Upcoming water bill'), findsOneWidget);
+      expect(find.text('Overdue power bill'), findsNothing);
+
+      _setHorizon(tester, BillsHorizon.currentMonth);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Overdue power bill'), findsOneWidget);
+      expect(find.text('Upcoming water bill'), findsOneWidget);
+    },
+  );
 
   testWidgets('paid commitments stay in their due month, not upcoming', (
     tester,

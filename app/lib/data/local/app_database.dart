@@ -259,6 +259,7 @@ CREATE TABLE IF NOT EXISTS local_auto_resolved_history (
   occurred_at TEXT NOT NULL,
   instrument TEXT,
   account_last4 TEXT,
+  source_body TEXT,
   confidence REAL NOT NULL,
   resolved_by TEXT NOT NULL DEFAULT 'ai',
   auto_resolved_at INTEGER NOT NULL,
@@ -298,6 +299,7 @@ class AppDatabase {
     db.execute(_schema);
     _ensureUserCategoriesSchema();
     _ensureLocalUserCardsSchema();
+    _ensureAutoResolvedHistorySchema();
     _ensureOutboxSchema();
     if (!db
         .select('PRAGMA table_info(sync_pending_changes)')
@@ -327,6 +329,18 @@ class AppDatabase {
         .toSet();
     if (!columns.contains('last4')) {
       db.execute('ALTER TABLE local_user_cards ADD COLUMN last4 TEXT');
+    }
+  }
+
+  void _ensureAutoResolvedHistorySchema() {
+    final columns = db
+        .select('PRAGMA table_info(local_auto_resolved_history)')
+        .map((row) => row['name'] as String)
+        .toSet();
+    if (!columns.contains('source_body')) {
+      db.execute(
+        'ALTER TABLE local_auto_resolved_history ADD COLUMN source_body TEXT',
+      );
     }
   }
 

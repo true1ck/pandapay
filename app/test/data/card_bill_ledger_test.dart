@@ -81,6 +81,45 @@ void main() {
     expect(ledgers.containsKey('card-b'), isFalse);
   });
 
+  test('user card choice binds a suffix-less bill and keeps its source', () {
+    final moneyBack = UserCard.fromJson({
+      'id': 'moneyback',
+      'card_product_id': 'p1',
+      'card_name': 'MoneyBack+ Credit Card',
+      'is_default': false,
+      'last4': '8780',
+    });
+    final tataNeu = UserCard.fromJson({
+      'id': 'tata-neu',
+      'card_product_id': 'p2',
+      'card_name': 'Tata Neu Plus HDFC Bank Credit Card',
+      'is_default': false,
+      'last4': '1366',
+    });
+    final ledgers = deriveCardBills(
+      cards: [moneyBack, tataNeu],
+      evidence: [
+        CardBillEvidence(
+          sourceId: 'source-1',
+          userCardId: 'moneyback',
+          cardLast4: null,
+          family: 'MYTNEU',
+          statementDate: DateTime(2026, 10, 21),
+          statementDateExplicit: true,
+          dueDate: DateTime(2026, 11, 8),
+          amountDue: Money.fromRupees(8331),
+          minimumDue: null,
+          confidence: 0.95,
+        ),
+      ],
+      payments: const [],
+      now: now,
+    );
+    expect(ledgers['moneyback']?.current?.amountDue, Money.fromRupees(8331));
+    expect(ledgers['moneyback']?.history.single.sourceIds, ['source-1']);
+    expect(ledgers['tata-neu'], isNull);
+  });
+
   test('duplicate reminders for one cycle merge into one bill', () {
     final ledgers = deriveCardBills(
       cards: twoCards,
@@ -660,7 +699,7 @@ void main() {
     expect(bill.amountDue, Money.fromRupees(8331));
   });
   test(
-    'aggregator HDFC bill triangulates by spend when multiple HDFC cards exist',
+    'aggregator HDFC bill waits for a card choice despite a spend match',
     () {
       final moneyBack = UserCard.fromJson({
         'id': 'card-mb',
@@ -749,8 +788,8 @@ void main() {
 
       expect(ledgers['card-mb'], isNotNull);
       final mbBill = ledgers['card-mb']!.current!;
-      expect(mbBill.amountDue, Money.fromRupees(8331));
-      expect(mbBill.dueDate, DateTime(2026, 11, 8));
+      expect(mbBill.amountDue, isNull);
+      expect(mbBill.dueDate, isNull);
       expect(ledgers['card-tn']?.current?.amountDue, isNull);
     },
   );
@@ -1050,7 +1089,7 @@ void main() {
   );
 
   test(
-    'candidate cycle spend ignores bill payments, autopay, and huge single anomalies',
+    'candidate spend does not assign a suffix-less bill to one of two cards',
     () {
       final moneyBack = UserCard.fromJson({
         'id': 'card-mb',
@@ -1131,8 +1170,7 @@ void main() {
         now: now,
       );
 
-      expect(ledgers['card-mb'], isNotNull);
-      expect(ledgers['card-mb']!.current!.amountDue, Money.fromRupees(4000));
+      expect(ledgers['card-mb'], isNull);
       expect(ledgers['card-tn'], isNull);
     },
   );

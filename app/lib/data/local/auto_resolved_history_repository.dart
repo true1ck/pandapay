@@ -26,6 +26,9 @@ class AutoResolvedHistoryEntry {
   final String occurredAt;
   final String? instrument;
   final String? accountLast4;
+
+  /// Retained locally so a dismissed Gemini decision can be reopened exactly.
+  final String? sourceBody;
   final double confidence;
 
   /// 'ai' unless a future flow records a non-AI resolver.
@@ -46,6 +49,7 @@ class AutoResolvedHistoryEntry {
     required this.occurredAt,
     this.instrument,
     this.accountLast4,
+    this.sourceBody,
     required this.confidence,
     this.resolvedBy = 'ai',
     required this.autoResolvedAt,
@@ -73,6 +77,7 @@ class AutoResolvedHistoryEntry {
     occurredAt: occurredAt,
     instrument: instrument,
     accountLast4: accountLast4,
+    sourceBody: sourceBody,
     confidence: confidence,
     resolvedBy: resolvedBy,
     autoResolvedAt: autoResolvedAt,
@@ -92,6 +97,7 @@ class AutoResolvedHistoryEntry {
     'occurredAt': occurredAt,
     'instrument': instrument,
     'accountLast4': accountLast4,
+    'sourceBody': sourceBody,
     'confidence': confidence,
     'resolvedBy': resolvedBy,
     'autoResolvedAt': autoResolvedAt,
@@ -112,31 +118,32 @@ class AutoResolvedHistoryEntry {
         occurredAt: json['occurredAt'] as String,
         instrument: json['instrument'] as String?,
         accountLast4: json['accountLast4'] as String?,
+        sourceBody: json['sourceBody'] as String?,
         confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
         resolvedBy: json['resolvedBy'] as String? ?? 'ai',
         autoResolvedAt: (json['autoResolvedAt'] as num?)?.toInt() ?? 0,
         isUserModified: json['isUserModified'] == true,
       );
 
-  factory AutoResolvedHistoryEntry.fromRow(Row row) =>
-      AutoResolvedHistoryEntry(
-        id: row['id'] as String,
-        namespace: row['namespace'] as String,
-        sourceKey: row['source_key'] as String,
-        sender: row['sender'] as String,
-        resolvedKind: row['resolved_kind'] as String,
-        title: row['title'] as String,
-        amountPaise: (row['amount_paise'] as num).toInt(),
-        categorySlug: row['category_slug'] as String?,
-        dueDate: row['due_date'] as String?,
-        occurredAt: row['occurred_at'] as String,
-        instrument: row['instrument'] as String?,
-        accountLast4: row['account_last4'] as String?,
-        confidence: (row['confidence'] as num).toDouble(),
-        resolvedBy: row['resolved_by'] as String? ?? 'ai',
-        autoResolvedAt: (row['auto_resolved_at'] as num).toInt(),
-        isUserModified: (row['is_user_modified'] as num?)?.toInt() == 1,
-      );
+  factory AutoResolvedHistoryEntry.fromRow(Row row) => AutoResolvedHistoryEntry(
+    id: row['id'] as String,
+    namespace: row['namespace'] as String,
+    sourceKey: row['source_key'] as String,
+    sender: row['sender'] as String,
+    resolvedKind: row['resolved_kind'] as String,
+    title: row['title'] as String,
+    amountPaise: (row['amount_paise'] as num).toInt(),
+    categorySlug: row['category_slug'] as String?,
+    dueDate: row['due_date'] as String?,
+    occurredAt: row['occurred_at'] as String,
+    instrument: row['instrument'] as String?,
+    accountLast4: row['account_last4'] as String?,
+    sourceBody: row['source_body'] as String?,
+    confidence: (row['confidence'] as num).toDouble(),
+    resolvedBy: row['resolved_by'] as String? ?? 'ai',
+    autoResolvedAt: (row['auto_resolved_at'] as num).toInt(),
+    isUserModified: (row['is_user_modified'] as num?)?.toInt() == 1,
+  );
 }
 
 /// Durable, namespace-scoped access to the Tier-1 auto-resolution receipts.
@@ -152,9 +159,7 @@ class AutoResolvedHistoryRepository {
       'ORDER BY auto_resolved_at DESC, id LIMIT ?',
       [namespace, limit],
     );
-    return rows
-        .map(AutoResolvedHistoryEntry.fromRow)
-        .toList(growable: false);
+    return rows.map(AutoResolvedHistoryEntry.fromRow).toList(growable: false);
   }
 
   int count() {
@@ -180,9 +185,9 @@ class AutoResolvedHistoryRepository {
       '''INSERT OR REPLACE INTO local_auto_resolved_history
          (id, namespace, source_key, sender, resolved_kind, title,
           amount_paise, category_slug, due_date, occurred_at, instrument,
-          account_last4, confidence, resolved_by, auto_resolved_at,
+          account_last4, source_body, confidence, resolved_by, auto_resolved_at,
           is_user_modified)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
       [
         entry.id,
         namespace,
@@ -196,6 +201,7 @@ class AutoResolvedHistoryRepository {
         entry.occurredAt,
         entry.instrument,
         entry.accountLast4,
+        entry.sourceBody,
         entry.confidence,
         entry.resolvedBy,
         entry.autoResolvedAt,

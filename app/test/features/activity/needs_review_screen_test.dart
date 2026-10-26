@@ -1369,6 +1369,37 @@ void main() {
     },
   );
 
+  testWidgets('Gemini dismissals stay in Auto-Resolved and can be reviewed', (
+    tester,
+  ) async {
+    final controller = _FakeSmsAutoResolutionController();
+    final dismissal = _historyEntry(
+      id: 'ai-dismissal',
+      title: 'Gemini dismissed · generic promotional spam',
+      resolvedKind: 'dismissed',
+      categorySlug: null,
+      amountPaise: 0,
+    );
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(),
+      reviews: reviews,
+      autoResolved: [dismissal],
+      autoResolutionController: controller,
+    );
+
+    await tester.tap(find.text('Auto-Resolved (1)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('✦ Gemini decision · Dismissed'), findsOneWidget);
+    expect(find.text('Review this decision'), findsOneWidget);
+    expect(find.text('Change Category'), findsNothing);
+    expect(find.text('₹0.00'), findsNothing);
+    await tester.tap(find.text('Review this decision'));
+    await tester.pumpAndSettle();
+    expect(controller.movedEntry?.id, dismissal.id);
+  });
+
   testWidgets(
     'pending item with AI suggestions shows the suggested category badge',
     (tester) async {

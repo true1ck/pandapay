@@ -33,6 +33,30 @@ void main() {
     db.close();
   });
   const all = TransactionQuery();
+  test('bill card choice survives re-import of its source SMS', () {
+    const observation = {
+      'id': 'bill-sms-1',
+      'event_type': 'bill',
+      'amount_due_paise': 833100,
+      'due_date': '2026-11-08',
+    };
+    store.saveObservation('a', 'bill-sms-1', observation);
+    store.saveCardBillAssignment(
+      'a',
+      'bill-sms-1',
+      userCardId: 'moneyback',
+      amountDuePaise: 833100,
+      dueDate: DateTime(2026, 11, 8),
+      statementDate: DateTime(2026, 10, 20),
+    );
+    store.saveObservation('a', 'bill-sms-1', {...observation, 'confidence': 0.95});
+
+    final choice = store.cardBillAssignments('a')['bill-sms-1']!;
+    expect(choice['user_card_id'], 'moneyback');
+    expect(choice['amount_due_paise'], 833100);
+    expect(choice['statement_date'], startsWith('2026-10-20'));
+    expect(store.cardBillAssignments('b'), isEmpty);
+  });
   test(
     'targeted detail reads retain queued corrections and account isolation',
     () {

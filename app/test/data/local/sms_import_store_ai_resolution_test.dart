@@ -305,7 +305,7 @@ void main() {
   });
 
   test(
-    'AI decision shouldConsider=false immediately discards and deletes review row',
+    'AI negative decision is visible in Auto-Resolved and can be reopened',
     () {
       final item = reviewItem();
       insertReviewRow(item);
@@ -313,16 +313,70 @@ void main() {
       final result = importStore.resolveAiSuggestions(
         ns,
         item,
-        [swiggySuggestion()],
-        decision: {'shouldConsider': false, 'reason': 'not_financial'},
+        const [],
+        decision: {
+          'topic': 'generic_promotional_spam',
+          'shouldConsider': false,
+          'rejectionReason': 'promotional_spam',
+        },
       );
 
-      expect(result.outcome, SmsAiResolutionOutcome.discarded);
+      expect(result.outcome, SmsAiResolutionOutcome.autoResolved);
       expect(result.score, 0.0);
       expect(reviewCount(), 0);
       expect(transactions(), isEmpty);
+      final history = AutoResolvedHistoryRepository(
+        db,
+        namespace: ns,
+      ).fetchAll();
+      expect(history, hasLength(1));
+      expect(history.single.resolvedKind, 'dismissed');
+      expect(history.single.sourceBody, item.body);
+      expect(history.single.title, contains('generic promotional spam'));
     },
   );
+
+  test('reopening an AI dismissal restores the original SMS body', () async {
+    final item = reviewItem();
+    insertReviewRow(item);
+    importStore.resolveAiSuggestions(
+      ns,
+      item,
+      const [],
+      decision: {
+        'topic': 'other_non_financial',
+        'shouldConsider': false,
+        'rejectionReason': 'non_financial',
+      },
+    );
+    final dismissed = AutoResolvedHistoryRepository(
+      db,
+      namespace: ns,
+    ).fetchAll().single;
+
+    await SmsAutoResolutionController(
+      database: db,
+      store: store,
+      reviewRepository: NeedsReviewRepository(
+        namespace: ns,
+        loadDatabase: () async => db,
+      ),
+      namespace: ns,
+    ).moveToReview(dismissed);
+
+    expect(reviewCount(), 1);
+    final restored =
+        jsonDecode(
+              db.db.select(
+                    'SELECT payload FROM local_needs_review WHERE namespace=?',
+                    [ns],
+                  ).single['payload']
+                  as String,
+            )
+            as Map<String, dynamic>;
+    expect(restored['body'], item.body);
+    expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
+  });
 
   test('a movement fact without an amount stays in review', () {
     final item = reviewItem();

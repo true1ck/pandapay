@@ -104,10 +104,11 @@ void main() {
   });
 
   group('matchesOpenDue', () {
-    test('upcoming keeps unpaid rows up to 90 days overdue', () {
+    test('upcoming accepts today and future, rejects past dates', () {
       final filter = _filter(BillsHorizon.upcoming);
-      expect(filter.matchesOpenDue(DateTime(2026, 7, 27)), isTrue);
-      expect(filter.matchesOpenDue(DateTime(2026, 7, 26)), isFalse);
+      expect(filter.matchesOpenDue(DateTime(2026, 10, 25)), isTrue);
+      expect(filter.matchesOpenDue(DateTime(2026, 10, 26)), isTrue);
+      expect(filter.matchesOpenDue(DateTime(2026, 10, 24)), isFalse);
     });
 
     test('month windows behave like matchesDue', () {
@@ -129,7 +130,7 @@ void main() {
   });
 
   group('matchesSmsBill', () {
-    test('upcoming hides linked rows and old pending rows', () {
+    test('upcoming hides linked rows and past pending rows', () {
       final filter = _filter(BillsHorizon.upcoming);
       expect(
         filter.matchesSmsBill(
@@ -138,12 +139,18 @@ void main() {
         isFalse,
       );
       expect(
-        filter.matchesSmsBill(_smsBill(dueDate: DateTime(2026, 10, 20))),
+        filter.matchesSmsBill(_smsBill(dueDate: DateTime(2026, 10, 26))),
         isTrue,
       );
       expect(
-        filter.matchesSmsBill(_smsBill(dueDate: DateTime(2026, 7, 1))),
+        filter.matchesSmsBill(_smsBill(dueDate: DateTime(2026, 10, 20))),
         isFalse,
+      );
+      expect(
+        _filter(BillsHorizon.currentMonth).matchesSmsBill(
+          _smsBill(dueDate: DateTime(2026, 10, 20)),
+        ),
+        isTrue,
       );
     });
 
@@ -177,9 +184,21 @@ void main() {
       expect(_filter(BillsHorizon.currentMonth).matchesSmsBill(noDue), isFalse);
       expect(
         _filter(
-          BillsHorizon.upcoming,
+          BillsHorizon.currentMonth,
         ).matchesSmsBill(_smsBill(receivedAt: DateTime(2026, 10, 1))),
         isTrue,
+      );
+      expect(
+        _filter(
+          BillsHorizon.upcoming,
+        ).matchesSmsBill(_smsBill(receivedAt: DateTime(2026, 10, 25))),
+        isTrue,
+      );
+      expect(
+        _filter(
+          BillsHorizon.upcoming,
+        ).matchesSmsBill(_smsBill(receivedAt: DateTime(2026, 10, 24))),
+        isFalse,
       );
     });
   });

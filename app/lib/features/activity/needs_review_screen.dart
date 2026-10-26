@@ -1059,6 +1059,7 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
   @override
   Widget build(BuildContext context) {
     final entry = widget.entry;
+    final isDismissed = entry.resolvedKind == 'dismissed';
     return Container(
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
@@ -1084,7 +1085,9 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '✦ Auto-Categorized by AI · ${entry.categoryName}',
+                      isDismissed
+                          ? '✦ Gemini decision · Dismissed'
+                          : '✦ Auto-Categorized by AI · ${entry.categoryName}',
                       style: BambooFonts.ui(
                         12.5,
                         weight: FontWeight.w600,
@@ -1100,10 +1103,11 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
                 ),
               ),
               const SizedBox(width: AppSpace.sm),
-              Text(
-                entry.amount.format(),
-                style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-              ),
+              if (!isDismissed)
+                Text(
+                  entry.amount.format(),
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
             ],
           ),
           const SizedBox(height: AppSpace.xs),
@@ -1111,21 +1115,24 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
             spacing: AppSpace.sm,
             runSpacing: AppSpace.xs,
             children: [
-              TextButton(
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
+              if (!isDismissed)
+                TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
+                  ),
+                  onPressed: _busy ? null : _changeCategory,
+                  child: const Text('Change Category'),
                 ),
-                onPressed: _busy ? null : _changeCategory,
-                child: const Text('Change Category'),
-              ),
               TextButton(
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
                 ),
                 onPressed: _busy ? null : _moveToReview,
-                child: const Text('Move to Review'),
+                child: Text(
+                  isDismissed ? 'Review this decision' : 'Move to Review',
+                ),
               ),
             ],
           ),
@@ -2630,9 +2637,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       ref.invalidate(homeSummaryProvider);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingErrorMessage(e))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _busy = false);

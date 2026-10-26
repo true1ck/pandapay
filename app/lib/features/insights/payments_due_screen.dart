@@ -14,6 +14,7 @@ import '../../data/past_bill_receipts.dart';
 import '../../data/user_cards_repository.dart';
 import 'bills_horizon.dart';
 import 'central_bills_section.dart';
+import 'card_bill_review_section.dart';
 import 'insurance_premiums_section.dart';
 import 'sms_bills_section.dart';
 import 'past_bill_receipts_screen.dart';
@@ -435,16 +436,26 @@ class BillsAndCommitmentsTab extends ConsumerWidget {
           ),
         ),
         Expanded(
-          child: due.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
-              child: SkeletonList(count: 3),
-            ),
-            error: (err, _) => ErrorState(
-              message: userFacingErrorMessage(err),
-              onRetry: () => ref.invalidate(paymentsDueProvider),
-            ),
-            data: (rows) => _DueList(rows: rows, filter: filter),
+          child: Builder(
+            builder: (context) {
+              final rows = due.valueOrNull;
+              if (rows != null) {
+                return _DueList(rows: rows, filter: filter);
+              }
+              if (due.isLoading) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                  child: SkeletonList(count: 3),
+                );
+              }
+              if (due.hasError) {
+                return ErrorState(
+                  message: userFacingErrorMessage(due.error!),
+                  onRetry: () => ref.invalidate(paymentsDueProvider),
+                );
+              }
+              return const SizedBox.shrink();
+            },
           ),
         ),
       ],
@@ -491,6 +502,7 @@ class BillsHorizonSummary {
 // Hidden for now per user request; preserved to easily re-enable later.
 const bool _showSmsBills = false;
 const bool _showScheduledPayments = false;
+const bool _showCardBillReview = false;
 
 class _DueList extends ConsumerWidget {
   final List<DuePayment> rows;
@@ -512,14 +524,26 @@ class _DueList extends ConsumerWidget {
     final smsAsync = ref.watch(smsBillRowsProvider);
     final receiptsAsync = ref.watch(pastBillReceiptsProvider);
     final centralAsync = ref.watch(centralBillsProjectionProvider);
+    final reviewAsync = ref.watch(cardBillReviewItemsProvider);
+    bool showsReview(CardBillReviewItem item) {
+      final date = item.dueDate ?? item.receivedAt;
+      return filter.isUpcoming
+          ? (item.dueDate == null || filter.matchesOpenDue(date))
+          : filter.matchesDue(date);
+    }
+    final hasReview = _showCardBillReview &&
+        (reviewAsync.valueOrNull ?? const <CardBillReviewItem>[])
+            .any(showsReview);
     final commitments = commitmentsAsync.valueOrNull ?? const <Commitment>[];
     final localFailed = commitmentsAsync.hasError ||
         (_showSmsBills && smsAsync.hasError) ||
-        receiptsAsync.hasError;
+        receiptsAsync.hasError ||
+        (_showCardBillReview && reviewAsync.hasError);
     final settled = !commitmentsAsync.isLoading &&
         (!_showSmsBills || !smsAsync.isLoading) &&
         !receiptsAsync.isLoading &&
-        !centralAsync.isLoading;
+        !centralAsync.isLoading &&
+        (!_showCardBillReview || !reviewAsync.isLoading);
     final visibleCommitments = commitments
         .where((c) => _matchesCommitment(c, filter))
         .toList()
@@ -582,6 +606,7 @@ class _DueList extends ConsumerWidget {
         !hasSms &&
         !hasReceipts &&
         !hasCentral &&
+        !hasReview &&
         !hasLocalMandates &&
         visiblePremiums.isEmpty;
 
@@ -678,7 +703,7 @@ class _DueList extends ConsumerWidget {
           _EmptyHorizonState(filter: filter, nextDue: nextDue)
         else ...[
           // Hero card is hidden for now as requested; can be re-enabled later.
-          if (commitmentsAsync.isLoading)
+          if (commitmentsAsync.isLoading && !commitmentsAsync.hasValue)
             const Padding(
               padding: EdgeInsets.only(bottom: AppSpace.lg),
               child: SkeletonList(count: 2),
@@ -722,7 +747,12 @@ class _DueList extends ConsumerWidget {
             const SizedBox(height: AppSpace.lg),
           ],
 
-          // 3. Insurance & renewals (CommitmentCategory.insurance + InsurancePremiumsSection)
+          if (_showCardBillReview) CardBillReviewSection(includes: showsReview),
+
+          // 3. Central bills / AutoPay authorizations
+          CentralBillsSection(cardRows: centralDedupKeys, filter: filter),
+
+          // 4. Insurance & renewals (CommitmentCategory.insurance + InsurancePremiumsSection)
           if (renewals.isNotEmpty) ...[
             _SectionHeader(
               label: 'Insurance & renewals',
@@ -741,7 +771,7 @@ class _DueList extends ConsumerWidget {
             upcoming: filter.isUpcoming,
           ),
 
-          // 4. Scheduled payments (loans, EMIs, rent, education, tax, other)
+          // 5. Scheduled payments (loans, EMIs, rent, education, tax, other)
           if (_showScheduledPayments && scheduled.isNotEmpty) ...[
             _SectionHeader(
               label: 'Scheduled payments',
@@ -756,8 +786,6 @@ class _DueList extends ConsumerWidget {
             const SizedBox(height: AppSpace.lg),
           ],
 
-          // 5. Central bills
-          CentralBillsSection(cardRows: centralDedupKeys, filter: filter),
           // 6. SMS bills
           if (_showSmsBills) SmsBillsSection(filter: filter),
           // 7. Past bills preview
@@ -801,6 +829,9 @@ class _BillsLoadError extends ConsumerWidget {
               ref.invalidate(commitmentsProvider);
               if (_showSmsBills) ref.invalidate(smsBillRowsProvider);
               ref.invalidate(pastBillReceiptsProvider);
+              if (_showCardBillReview) {
+                ref.invalidate(cardBillReviewItemsProvider);
+              }
             },
             child: Text(
               'Retry',

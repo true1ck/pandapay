@@ -14,7 +14,10 @@ void main() {
       'INSERT OR REPLACE INTO cached_responses (key, raw_json, fetched_at) VALUES (?, ?, ?)',
       ['catalogue', '{"cards":[]}', DateTime.now().millisecondsSinceEpoch],
     );
-    final rows = appDb.db.select('SELECT raw_json FROM cached_responses WHERE key = ?', ['catalogue']);
+    final rows = appDb.db.select(
+      'SELECT raw_json FROM cached_responses WHERE key = ?',
+      ['catalogue'],
+    );
     expect(rows.single['raw_json'], '{"cards":[]}');
   });
 
@@ -32,18 +35,24 @@ void main() {
     expect(rows.single['raw_json'], 'second');
   });
 
-  test('transaction_outbox_entries auto-increments id and stores a queued quick-add', () {
-    appDb.db.execute(
-      'INSERT INTO transaction_outbox_entries (user_card_id, amount_paise, created_at) VALUES (?, ?, ?)',
-      ['uc-1', 150000, DateTime.now().millisecondsSinceEpoch],
-    );
-    final id = appDb.db.lastInsertRowId;
-    expect(id, greaterThan(0));
-    final rows = appDb.db.select('SELECT * FROM transaction_outbox_entries WHERE id = ?', [id]);
-    expect(rows.single['user_card_id'], 'uc-1');
-    expect(rows.single['amount_paise'], 150000);
-    expect(rows.single['category_id'], isNull);
-  });
+  test(
+    'transaction_outbox_entries auto-increments id and stores a queued quick-add',
+    () {
+      appDb.db.execute(
+        'INSERT INTO transaction_outbox_entries (user_card_id, amount_paise, created_at) VALUES (?, ?, ?)',
+        ['uc-1', 150000, DateTime.now().millisecondsSinceEpoch],
+      );
+      final id = appDb.db.lastInsertRowId;
+      expect(id, greaterThan(0));
+      final rows = appDb.db.select(
+        'SELECT * FROM transaction_outbox_entries WHERE id = ?',
+        [id],
+      );
+      expect(rows.single['user_card_id'], 'uc-1');
+      expect(rows.single['amount_paise'], 150000);
+      expect(rows.single['category_id'], isNull);
+    },
+  );
 
   test('legacy card-only outbox is upgraded without losing queued writes', () {
     final legacyDb = sqlite3.openInMemory();
@@ -69,13 +78,19 @@ void main() {
     final migrated = AppDatabase.forTesting(legacyDb);
     addTearDown(migrated.close);
 
-    final columns = migrated.db.select('PRAGMA table_info(transaction_outbox_entries)');
-    final userCardColumn = columns.firstWhere((row) => row['name'] == 'user_card_id');
+    final columns = migrated.db.select(
+      'PRAGMA table_info(transaction_outbox_entries)',
+    );
+    final userCardColumn = columns.firstWhere(
+      (row) => row['name'] == 'user_card_id',
+    );
     expect(userCardColumn['notnull'], 0);
     expect(columns.any((row) => row['name'] == 'instrument'), isTrue);
     expect(columns.any((row) => row['name'] == 'entry_kind'), isTrue);
 
-    final row = migrated.db.select('SELECT * FROM transaction_outbox_entries').single;
+    final row = migrated.db
+        .select('SELECT * FROM transaction_outbox_entries')
+        .single;
     expect(row['user_card_id'], 'legacy-card');
     expect(row['amount_paise'], 9900);
     expect(row['instrument'], 'credit_card');
@@ -107,6 +122,7 @@ void main() {
         'occurred_at',
         'instrument',
         'account_last4',
+        'source_body',
         'confidence',
         'resolved_by',
         'auto_resolved_at',
@@ -179,28 +195,51 @@ void main() {
     });
     expect(invalid.valid, isFalse);
     expect(
-      invalid.errors.any((error) => error.startsWith('category must be one of')),
+      invalid.errors.any(
+        (error) => error.startsWith('category must be one of'),
+      ),
       isTrue,
     );
   });
 
-  test('confidence must be a unit-interval number and isComplete a boolean', () {
-    Map<String, Object?> payload(Object? confidence, Object? isComplete) => {
-      'amountRole': 'posted',
-      'amountInr': 100,
-      'entryKind': 'spend',
-      'merchant': 'MERCHANT',
-      'occurredAt': '2026-10-24T00:00:00.000Z',
-      'category': 'dining',
-      'confidence': confidence,
-      'isComplete': isComplete,
-    };
+  test(
+    'confidence must be a unit-interval number and isComplete a boolean',
+    () {
+      Map<String, Object?> payload(Object? confidence, Object? isComplete) => {
+        'amountRole': 'posted',
+        'amountInr': 100,
+        'entryKind': 'spend',
+        'merchant': 'MERCHANT',
+        'occurredAt': '2026-10-24T00:00:00.000Z',
+        'category': 'dining',
+        'confidence': confidence,
+        'isComplete': isComplete,
+      };
 
-    expect(validateSmsFactPayload('posted_movement', payload(0.0, true)).valid, isTrue);
-    expect(validateSmsFactPayload('posted_movement', payload(1.0, false)).valid, isTrue);
-    expect(validateSmsFactPayload('posted_movement', payload(1.4, true)).valid, isFalse);
-    expect(validateSmsFactPayload('posted_movement', payload(-0.1, true)).valid, isFalse);
-    expect(validateSmsFactPayload('posted_movement', payload('high', true)).valid, isFalse);
-    expect(validateSmsFactPayload('posted_movement', payload(0.5, 'yes')).valid, isFalse);
-  });
+      expect(
+        validateSmsFactPayload('posted_movement', payload(0.0, true)).valid,
+        isTrue,
+      );
+      expect(
+        validateSmsFactPayload('posted_movement', payload(1.0, false)).valid,
+        isTrue,
+      );
+      expect(
+        validateSmsFactPayload('posted_movement', payload(1.4, true)).valid,
+        isFalse,
+      );
+      expect(
+        validateSmsFactPayload('posted_movement', payload(-0.1, true)).valid,
+        isFalse,
+      );
+      expect(
+        validateSmsFactPayload('posted_movement', payload('high', true)).valid,
+        isFalse,
+      );
+      expect(
+        validateSmsFactPayload('posted_movement', payload(0.5, 'yes')).valid,
+        isFalse,
+      );
+    },
+  );
 }

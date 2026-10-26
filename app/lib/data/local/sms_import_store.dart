@@ -552,10 +552,46 @@ class SmsImportStore {
     double? serverScore,
   }) {
     if (decision != null && decision['shouldConsider'] == false) {
-      _deleteReviewRow(namespace, item.id);
-      return const SmsAiResolutionResult(
-        outcome: SmsAiResolutionOutcome.discarded,
-        score: 0.0,
+      final sourceKey = _cleanSourceKey(item);
+      final topic = (decision['topic'] as String? ?? 'other_non_financial')
+          .replaceAll('_', ' ');
+      final score = serverScore != null && serverScore.isFinite
+          ? serverScore
+          : 0.0;
+      final history = AutoResolvedHistoryEntry(
+        id: 'ai:$sourceKey',
+        namespace: namespace,
+        sourceKey: sourceKey,
+        sender: item.sender,
+        resolvedKind: 'dismissed',
+        title: 'Gemini dismissed · $topic',
+        amountPaise: 0,
+        sourceBody: item.body,
+        occurredAt: item.receivedAt.toIso8601String(),
+        confidence: score,
+        autoResolvedAt: DateTime.now().millisecondsSinceEpoch,
+      );
+      store.batch(() {
+        final db = store.database.db;
+        db.execute('SAVEPOINT sms_ai_dismiss');
+        try {
+          AutoResolvedHistoryRepository(
+            store.database,
+            namespace: namespace,
+          ).record(history);
+          _deleteReviewRow(namespace, item.id);
+          store.notifyPendingChange(namespace);
+          db.execute('RELEASE SAVEPOINT sms_ai_dismiss');
+        } catch (_) {
+          db.execute('ROLLBACK TO SAVEPOINT sms_ai_dismiss');
+          db.execute('RELEASE SAVEPOINT sms_ai_dismiss');
+          rethrow;
+        }
+      });
+      return SmsAiResolutionResult(
+        outcome: SmsAiResolutionOutcome.autoResolved,
+        score: score,
+        historyId: history.id,
       );
     }
 

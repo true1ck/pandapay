@@ -11,6 +11,7 @@ import '../../data/card_bill_ledger.dart';
 import '../../data/user_cards_repository.dart';
 import '../../domain/cycle_engine.dart';
 import '../cards/card_visual.dart';
+import 'card_bill_review_section.dart';
 import 'payments_due_screen.dart' show DuePayment, paymentsDueProvider;
 
 final dueDateCalendarMonthProvider = StateProvider<DateTime>((ref) {
@@ -132,6 +133,12 @@ class DueDateCalendarScreen extends ConsumerWidget {
                       .toggle(userCard.id),
                 ),
               ),
+            CardBillReviewSection(
+              includes: (item) {
+                final date = item.dueDate ?? item.receivedAt;
+                return date.year == month.year && date.month == month.month;
+              },
+            ),
           ],
         );
       },

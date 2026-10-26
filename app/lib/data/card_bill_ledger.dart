@@ -328,7 +328,9 @@ Map<String, CardBillLedger> deriveCardBills({
 /// Finds a unique suffix-identified bill from the same cycle as [orphan].
 /// The suffix must identify exactly one saved card. Equal due dates are the
 /// strongest cycle link; when either message lacks a due date, statement
-/// anchors within seven days may link them. Ambiguous cycles remain unresolved.
+/// anchors within seven days may link them when both dates are explicit, or
+/// when the same SMS sender family names the card. Ambiguous cycles remain
+/// unresolved.
 List<UserCard> _explicitCardsForCycle(
   CardBillEvidence orphan,
   List<UserCard> candidates,
@@ -350,8 +352,10 @@ List<UserCard> _explicitCardsForCycle(
         _day(orphan.dueDate!) == _day(row.dueDate!);
     final closeAnchors =
         (orphan.dueDate == null || row.dueDate == null) &&
-        orphan.statementDateExplicit &&
-        row.statementDateExplicit &&
+        ((orphan.statementDateExplicit && row.statementDateExplicit) ||
+            (orphan.family != null && row.family != null &&
+                canonicalBankSender(orphan.family) ==
+                    canonicalBankSender(row.family))) &&
         orphan.statementDate.difference(row.statementDate).abs() <=
             const Duration(days: 7);
     if (sameDue || closeAnchors) owners[matches.single.id] = matches.single;
@@ -562,7 +566,7 @@ CardBill _mergeOne(List<CardBillEvidence> cycle) {
     confidence: confidence,
     isAutopay: cycle.any((e) => e.isAutopay),
     statementDateVerified: cycle.any(
-      (e) => e.statementDateExplicit || e.isAutopay,
+      (e) => e.statementDateExplicit || e.isAutopay || e.userCardId != null,
     ),
     statementDateExplicit: cycle.any((e) => e.statementDateExplicit),
     sourceIds: cycle.map((e) => e.sourceId).whereType<String>().toSet().toList(),
@@ -650,6 +654,7 @@ List<UserCard> _candidateCardsForEvidence(
   return named;
 }
 
+// ignore: unused_element
 Money _calculateCandidateCycleSpend(
   UserCard card,
   DateTime statementDate,
@@ -692,6 +697,7 @@ Money _calculateCandidateCycleSpend(
   return total;
 }
 
+// ignore: unused_element
 bool _hasHistoricalAttribution(
   UserCard candidate,
   String? orphanFamily,
