@@ -222,6 +222,24 @@ test('provider 429 releases the same leased job for retry', async () => {
   assert.equal(calls[1].body.retryAfterMs, 60000);
 });
 
+test('provider 403 quota response is classified as rate limited without exposing provider text', async () => {
+  const provider = new GeminiProvider({
+    apiKey: 'synthetic-key',
+    endpointBase: 'https://example.test/models',
+    fetchImpl: async () => response({ error: { message: 'Resource has been exhausted (e.g. check quota).' } }, 403),
+  });
+  await assert.rejects(
+    provider.classify({ payload: { sender: 'BANK', body: 'synthetic fixture' } }),
+    (error) => error instanceof GeminiProviderError && error.retryable === true
+      && error.status === 403 && error.rateLimited === true,
+  );
+
+  const { providerRetryReason } = require('../src/gemini_worker');
+  assert.equal(providerRetryReason(new GeminiProviderError('Gemini HTTP 403', {
+    retryable: true, status: 403, rateLimited: true,
+  })), 'provider_rate_limited');
+});
+
 test('provider 503 releases the same leased job and preserves retry-after', async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {

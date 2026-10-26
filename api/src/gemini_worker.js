@@ -579,12 +579,15 @@ function renderFewShots() {
 }
 
 class GeminiProviderError extends Error {
-  constructor(message, { retryable = false, retryAfterMs = undefined, status = undefined } = {}) {
+  constructor(message, {
+    retryable = false, retryAfterMs = undefined, status = undefined, rateLimited = false,
+  } = {}) {
     super(message);
     this.name = 'GeminiProviderError';
     this.retryable = retryable;
     this.retryAfterMs = retryAfterMs;
     this.status = status;
+    this.rateLimited = rateLimited;
   }
 }
 
@@ -800,6 +803,7 @@ class GeminiProvider {
           retryable,
           retryAfterMs,
           status: response.status,
+          rateLimited: is429,
         });
       }
       const data = await response.json();
@@ -884,6 +888,7 @@ class GeminiProvider {
           retryable: response.status === 408 || response.status === 409 || is429 || response.status >= 500,
           retryAfterMs,
           status: response.status,
+          rateLimited: is429,
         });
       }
       const data = await response.json();
@@ -932,7 +937,7 @@ async function jsonRequest(fetchImpl, url, token, body) {
 
 function providerRetryReason(error) {
   if (error?.capacityCheckFailed) return 'provider_capacity_unavailable';
-  if (error?.status === 429) return 'provider_rate_limited';
+  if (error?.rateLimited === true || error?.status === 429) return 'provider_rate_limited';
   if (error?.status === 408) return 'provider_timeout';
   if (error?.status === 409) return 'provider_conflict';
   if (Number.isInteger(error?.status) && error.status >= 500 && error.status <= 599) {
