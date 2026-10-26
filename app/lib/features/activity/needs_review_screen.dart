@@ -707,7 +707,7 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
     final failedAiCount = pendingItems
         .where((item) => item.aiStatus == AiReviewStatus.unavailable)
         .length;
-    final completedAiCount = pendingItems
+    final checkedNeedsReviewCount = pendingItems
         .where((item) => item.aiStatus == AiReviewStatus.checked)
         .length;
     final notQueuedAiCount = pendingItems
@@ -832,7 +832,9 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                       Text(
                         _retryingAiReviews
                             ? 'Sending $retryableAiCount failed message${retryableAiCount == 1 ? '' : 's'} for AI review…'
-                            : 'AI review · $activeAiCount of ${pendingItems.length} messages active',
+                            : activeAiCount > 0
+                                ? 'AI is reviewing $activeAiCount message${activeAiCount == 1 ? '' : 's'}'
+                                : 'AI review paused · ${pendingItems.length} need review',
                         style: BambooFonts.ui(
                           12.5,
                           weight: FontWeight.w700,
@@ -846,7 +848,7 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                           style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                         ),
                         Text(
-                          '$completedAiCount completed · $notQueuedAiCount not queued',
+                          '$checkedNeedsReviewCount checked, still need review · $notQueuedAiCount not queued',
                           style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                         ),
                       ],
