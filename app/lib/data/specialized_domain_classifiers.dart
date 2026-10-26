@@ -76,7 +76,7 @@ class InsuranceClassificationResult {
 /// High-precision specialized domain classifiers for Indian financial SMS and statements.
 class SpecializedDomainClassifiers {
   static final _brokerNamesRe = RegExp(
-    r'\b(?:zerodha|groww|upstox|angel\s+one|angel\s+broking|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|kotak\s+securities|sharekhan)\b',
+    r'\b(?:zerodha|groww|upstox|angel\s+one|angel\s+broking|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|kotak\s+securities|kotak\s+neo|lemonn|shoonya|finvasia|blinkx|geojit|axis\s+direct|m\.?stock|mirae|sbi\s+securities|iifl|sharekhan)\b',
     caseSensitive: false,
   );
 
@@ -174,7 +174,7 @@ class SpecializedDomainClassifiers {
         RegExp(r'\b(?:credited|received|payout|transferred\s+to\s+your\s+bank)\b').hasMatch(lower)) {
       return BrokerClassificationResult(
         eventType: BrokerEventType.brokerSettlement,
-        suggestedKind: TxnEntryKind.transfer,
+        suggestedKind: TxnEntryKind.income,
         entityName: brokerName,
         reason: 'Broker settlement payout returned to bank account',
       );
@@ -184,7 +184,7 @@ class SpecializedDomainClassifiers {
     if (RegExp(r'\b(?:added|transferred|funded|deposited|debited)\b').hasMatch(lower)) {
       return BrokerClassificationResult(
         eventType: BrokerEventType.brokerFunding,
-        suggestedKind: TxnEntryKind.transfer,
+        suggestedKind: TxnEntryKind.investment,
         entityName: brokerName,
         reason: 'Transfer of funds to trading broker account',
       );

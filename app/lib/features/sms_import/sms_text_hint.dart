@@ -90,6 +90,11 @@ const _promoWords = [
   'instant loan',
   'congratulations',
   'hurry',
+  'betting',
+  'casino',
+  'gullybet',
+  'aviator',
+  'slots',
 ];
 
 bool _looksPromotional(String lower) => _promoWords.any(lower.contains);
@@ -257,9 +262,30 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
     return const SmsTriageResult(SmsTriageKind.promotion, 'emi_solicitation');
   }
 
+  final bettingOrGamblingSpam = RegExp(
+    r'\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling|huge\s+bonus\b[\s\S]{0,30}\b(?:bet|casino|slots|win)|gbets\.win)\b',
+  ).hasMatch(lower);
+  if (bettingOrGamblingSpam) {
+    return const SmsTriageResult(SmsTriageKind.promotion, 'betting_spam');
+  }
+
+  final hasCurrencyAmount = RegExp(
+    r'(?:₹|\brs\.?|\binr|\$|usd|eur|gbp)\s*[:.]?\s*[\d,]+|\b[\d,]+(?:\.\d{1,2})?\s*(?:₹|rs\.?|inr|\$|usd|eur|gbp)\b',
+  ).hasMatch(lower);
+
+  final isLoanLimitMarketing = RegExp(
+    r'\b(?:new\s+credit\s+alert|your\s+loan\s+limit\s+is\s+revised|(?:loan|credit)\s+limit\b[\s\S]{0,30}\b(?:revised|increased|enhanced|updated)|digital\s+credit\s+power\s+is\s+(?:now\s+)?active|updated\s+limit\s+here\b|view\s+your\s+updated\s+limit)\b',
+  ).hasMatch(lower) && !hasCurrencyAmount;
+  if (isLoanLimitMarketing) {
+    return const SmsTriageResult(SmsTriageKind.promotion, 'loan_limit_marketing');
+  }
+
   final strongFinancialEvidence = RegExp(
-    r'\b(?:debited|credited|debit|credit|spent|paid|charged|transferred|withdrawn|withdrawal|received|deposited|refund|refunded|reversal|reversed|payout|settlement|deducted|sent)\b|\b(?:txn|transaction|purchase|recharge|payment)\b[\s\S]{0,55}\b(?:successful|completed|processed)\b|\b(?:amount|payment|minimum|total)\s+due\b|\bdue\s+(?:date|on|by)\b|\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\b(?:available|current|closing|avl|avail)\s+(?:bal(?:ance)?|limit)\b',
+    r'\b(?:debited|credited|credit\s+of|credit\s+hua|credit\s+kiya\s+gaya|credited\s+(?:to|with|by)|debited\s+(?:from|with|by)|debit\s+of|debit\s+hua|debit\s+kiya\s+gaya|spent|paid|charged|transferred|withdrawn|cash\s+withdrawal|atm\s+withdrawal|withdrawal\s+of|received|deposited|refund|refunded|reversal|reversed|payout|settlement|deducted|sent)\b|\b(?:txn|transaction|purchase|recharge|payment)\b[\s\S]{0,55}\b(?:successful|completed|processed)\b|\b(?:amount|payment|minimum|total)\s+due\b|\bdue\s+(?:date|on|by)\b|\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\b(?:available|current|closing|avl|avail)\s+(?:bal(?:ance)?|limit)\b',
   ).hasMatch(lower) || (
+    hasCurrencyAmount && RegExp(r'\b(?:debit|credit|withdrawal)\b').hasMatch(lower) &&
+    RegExp(r'\b(?:a\/?c|account|card)\b[\s\S]{0,30}\b(?:ending|no\.?|xx|\*{2,})\b').hasMatch(lower)
+  ) || (
     RegExp(r'\bcredit\s+limit\b').hasMatch(lower) &&
     RegExp(r'\b(?:a\/?c|account|card)\b[\s\S]{0,30}\b(?:ending|no\.?|xx|\*{2,})\b').hasMatch(lower) &&
     !RegExp(r'\b(?:apply\s+now|pre[-\s]?approved|upgrade\s+your|zero\s+joining\s+fee|no\s+annual\s+fee|lifetime\s+free)\b').hasMatch(lower)
@@ -276,6 +302,37 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
   if (LocalSmsParser.isNonTransactionNoise(sender, smsBody) &&
       !balanceSnapshotEvidence) {
     return const SmsTriageResult(SmsTriageKind.promotion, 'promotional_noise');
+  }
+
+  final hasDueDate = RegExp(
+    r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\bdue\s+(?:date|on|by)\b|\bpay(?:ment)?\s+(?:by|before|on\s+or\s+before)\b|\blast\s+date\s+(?:for\s+payment|is)\b',
+  ).hasMatch(lower);
+
+  final hasBillGenerated = RegExp(
+    r'\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\bbill\s+generated\b|\be-statement\s+generated\b',
+  ).hasMatch(lower);
+
+  final isAutoPay = LocalSmsParser.isAutoPayNotice(smsBody) ||
+      RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate|auto[-\s]?debit|sip\b|standing\s+instruction)\b').hasMatch(lower);
+
+  final hasMovement = RegExp(
+    r'\b(?:debited|credited|spent|paid|charged|transferred|withdrawn|deposited|refunded|reversed|deducted)\b',
+    caseSensitive: false,
+  ).hasMatch(lower);
+
+  final hasFinancialAnchor = hasCurrencyAmount ||
+      balanceSnapshotEvidence ||
+      hasDueDate ||
+      hasBillGenerated ||
+      isAutoPay ||
+      hasMovement ||
+      LocalSmsParser.isActionableInsuranceRenewal(smsBody);
+
+  if (!hasFinancialAnchor) {
+    if (_looksPromotional(lower)) {
+      return const SmsTriageResult(SmsTriageKind.promotion, 'promotional_message');
+    }
+    return const SmsTriageResult(SmsTriageKind.unrelated, 'no_financial_signal');
   }
 
   if (LocalSmsParser.isActionableInsuranceRenewal(smsBody)) {
@@ -296,8 +353,8 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
     return const SmsTriageResult(SmsTriageKind.financialCandidate, 'financial_evidence');
   }
 
-  if (RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate|auto[-\s]?debit|sip\b|standing\s+instruction)\b').hasMatch(lower) ||
-      LocalSmsParser.isAutoPayNotice(smsBody)) {
+  if (isAutoPay) {
+
     return const SmsTriageResult(SmsTriageKind.financialCandidate, 'mandate_lifecycle');
   }
 

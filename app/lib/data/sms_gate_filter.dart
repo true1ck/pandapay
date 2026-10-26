@@ -64,7 +64,8 @@ class SmsGateFilter {
     r'\b(?:order\b[\s\S]{0,40}\b(?:is\s+)?dispatched\s+through|order\s+(?:is\s+)?dispatched\s+through|we\s+have\s+received\s+your\s+order\s+id)\b|'
     r'\blifetime[- ]free\s+credit\s+card\s+facility\s+has\s+been\s+enabled\b|'
     r'\b(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+for\b[\s\S]{0,50}\b(?:has\s+expired|expires\s+today|will\s+expire)\b|'
-    r'\b(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+expired\b',
+    r'\b(?:two\s+wheeler|car|motor|vehicle)?\s*insurance\s+expired\b|'
+    r'\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling)\b',
     caseSensitive: false,
   );
 

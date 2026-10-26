@@ -326,16 +326,18 @@ jobs:
             },
           });
 
-          provider.classify({ payload }).then((facts) => {
+          provider.classify({ payload }).then(({ decision, facts }) => {
             const smsFacts = require('./src/sms_facts');
             const { verifyModelFacts } = require('./src/ai_fact_evidence');
             const contract = smsFacts.validateFactSet(facts);
             const evidence = verifyModelFacts(facts, payload);
-            const valid = contract.valid && evidence.valid;
+            const valid = decision && typeof decision.shouldConsider === 'boolean' &&
+              contract.valid && evidence.valid;
             console.log(JSON.stringify({
               provider: 'gemini',
               success: valid,
               factCount: facts.length,
+              decisionPresent: !!decision,
               contractValid: contract.valid,
               contractErrors: contract.errors.slice(0, 5),
               evidenceValid: evidence.valid,

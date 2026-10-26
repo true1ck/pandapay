@@ -231,7 +231,7 @@ function makeFakeClient() {
       const job = state.jobs.get(params[0]);
       if (!job) return { rows: [], rowCount: 0 };
       job.status = 'queued';
-      job.payload = JSON.parse(params[1]);
+      job.payload = typeof params[1] === 'string' ? JSON.parse(params[1]) : params[1];
       job.attempts = 0;
       job.lease_token = null;
       job.lease_expires_at = null;
@@ -314,7 +314,7 @@ function makeFakeClient() {
       return { rows: [{ summary: {
         statusCounts,
         oldestAgeSeconds: 0,
-        totalJobsToday: [...state.quota.values()].reduce((sum, value) => sum + value, 0),
+        totalJobsToday: state.jobs.size,
         retryCount: state.events.filter((event) => event.event_type === 'provider_retry').length,
       } }], rowCount: 1 };
     }
@@ -324,8 +324,6 @@ function makeFakeClient() {
         tokensLastMinute: 0,
         requestsPerMinuteLimit: params[0],
         tokensPerMinuteLimit: params[1],
-        requestsToday: 0,
-        requestsPerDayLimit: params[2],
         waitingLastMinute: 0,
         permanentlyBlockedLastMinute: 0,
       } }], rowCount: 1 };
@@ -468,10 +466,10 @@ test('acceptance is replay-safe: same source twice, one job, one event, one quot
   assert.equal(second.jobId, first.jobId);
   assert.equal(client.state.jobs.size, 1);
   assert.equal(client.state.events.filter((e) => e.event_type === 'accepted').length, 1);
-  assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 1);
+  assert.equal(client.state.quota.size, 0);
 });
 
-test('failed job can be re-queued with fresh payload', async () => {
+test('ordinary device replay cannot reopen a terminal failed job', async () => {
   const client = makeUserClient();
   const first = await geminiQueue.acceptOneJob(client, PROFILE_A, {
     sourceKey: SOURCE_KEY,
@@ -487,10 +485,57 @@ test('failed job can be re-queued with fresh payload', async () => {
     sender: 'HDFCBK',
     body: BILL_BODY,
   });
+  assert.equal(retry.accepted, false);
+  assert.equal(retry.reused, true);
+  assert.equal(retry.terminal, true);
+  assert.equal(retry.reason, 'job_terminal');
+  assert.equal(retry.jobId, first.jobId);
+  assert.equal(client.state.jobs.get(first.jobId).status, 'failed');
+  assert.equal(client.state.quota.size, 0);
+});
+
+test('explicit device retry reopens one failed job without consuming another quota slot', async () => {
+  const client = makeUserClient();
+  const first = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+  });
+  await geminiQueue.failJob(client, first.jobId, PROFILE_A, 'test_failure');
+
+  const retry = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+    retryFailed: true,
+  });
+
   assert.equal(retry.accepted, true);
   assert.equal(retry.reused, false);
   assert.equal(retry.jobId, first.jobId);
+  const job = client.state.jobs.get(first.jobId);
+  assert.equal(job.status, 'queued');
+  assert.equal(job.attempts, 0);
+  assert.equal(job.payload.body, BILL_BODY);
+  assert.equal(client.state.jobs.size, 1);
+  assert.equal(client.state.quota.size, 0);
+  assert.equal(client.state.events.filter((event) => event.event_type === 'requeued').length, 1);
+});
+
+test('explicit failed-job retry works and preserves same job identity', async () => {
+  const client = makeUserClient();
+  const first = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY,
+  });
+  await geminiQueue.failJob(client, first.jobId, PROFILE_A, 'provider_failure');
+
+  const retry = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY, retryFailed: true,
+  });
+  assert.equal(retry.accepted, true);
+  assert.equal(retry.jobId, first.jobId);
   assert.equal(client.state.jobs.get(first.jobId).status, 'queued');
+  assert.equal(client.state.quota.size, 0);
 });
 
 test('sensitive payloads are refused before any job or quota write', async () => {
@@ -506,17 +551,28 @@ test('sensitive payloads are refused before any job or quota write', async () =>
   assert.equal(client.state.quota.size, 0);
 });
 
-test('promotional and non-financial messages are refused before storage and quota', async () => {
+test('the API queues phone-approved candidates without repeating triage', async () => {
   const client = makeUserClient();
   const outcome = await geminiQueue.acceptOneJob(client, PROFILE_A, {
     sourceKey: SOURCE_KEY,
     sender: 'VM-HDFCBK-P',
     body: 'Exclusive offer: apply now for a pre-approved card and earn cashback on spend.',
   });
-  assert.deepEqual(outcome, { accepted: false, reason: 'payload_refused_nonfinancial' });
-  assert.equal(client.state.jobs.size, 0);
-  assert.equal(client.state.events.length, 0);
+  assert.equal(outcome.accepted, true);
+  assert.equal(client.state.jobs.size, 1);
+  assert.equal(client.state.events.length, 1);
   assert.equal(client.state.quota.size, 0);
+
+  const unrelatedClient = makeUserClient();
+  const unrelated = await geminiQueue.acceptOneJob(unrelatedClient, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'FRIEND',
+    body: 'Are we still meeting for lunch tomorrow?',
+  });
+  assert.equal(unrelated.accepted, true);
+  assert.equal(unrelatedClient.state.jobs.size, 1);
+  assert.equal(unrelatedClient.state.events.length, 1);
+  assert.equal(unrelatedClient.state.quota.size, 0);
 });
 
 test('legitimate financial alerts remain eligible for AI fallback', async () => {
@@ -544,24 +600,9 @@ test('accepted AI payload redacts long identifiers but preserves the source hash
   assert.equal(job.payload.bodyHash, smsFacts.bodyHashOf('HDFCBK', body));
 });
 
-test('AI quota insert supplies the required day column', async () => {
+test('fresh job admission ignores legacy per-profile daily quota counter', async () => {
   const client = makeUserClient();
-  const query = client.query.bind(client);
-  let quotaSql = '';
-  client.query = async (sql, params) => {
-    if (sql.includes('INSERT INTO ai_quota_days')) quotaSql = sql;
-    return query(sql, params);
-  };
-  await geminiQueue.acceptOneJob(client, PROFILE_A, {
-    sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: 'Rs 100 debited',
-  });
-  assert.match(quotaSql, /\(profile_id, day, jobs_used\)/);
-});
-
-test('concurrent fresh accepts cannot exceed the daily quota or leave a rejected job', async () => {
-  const client = makeUserClient();
-  const quotaKey = `${PROFILE_A}:${todayKey()}`;
-  client.state.quota.set(quotaKey, geminiQueue.DAILY_QUOTA - 1);
+  client.state.quota.set(`${PROFILE_A}:${todayKey()}`, 200);
 
   const outcomes = await Promise.all([
     geminiQueue.acceptOneJob(client, PROFILE_A, {
@@ -572,11 +613,9 @@ test('concurrent fresh accepts cannot exceed the daily quota or leave a rejected
     }),
   ]);
 
-  assert.equal(outcomes.filter((item) => item.accepted).length, 1);
-  assert.equal(outcomes.filter((item) => item.reason === 'daily_quota_exhausted').length, 1);
-  assert.equal(client.state.quota.get(quotaKey), geminiQueue.DAILY_QUOTA);
-  assert.equal(client.state.jobs.size, 1);
-  assert.equal(client.state.events.filter((event) => event.event_type === 'accepted').length, 1);
+  assert.equal(outcomes.filter((item) => item.accepted).length, 2);
+  assert.equal(client.state.jobs.size, 2);
+  assert.equal(client.state.events.filter((event) => event.event_type === 'accepted').length, 2);
 });
 
 test('AI sanitization hides full account IDs, addresses, references and URLs', () => {
@@ -598,18 +637,6 @@ test('AI sanitization masks long IDs separated by spaces or hyphens', () => {
   assert.match(sanitized, /XXXX1234/);
   assert.match(sanitized, /Rs 125\.50/);
   assert.match(sanitized, /20-10-2026/);
-});
-
-test('daily quota exhaustion refuses fresh work with a distinct reason', async () => {
-  const client = makeUserClient();
-  client.state.quota.set(`${PROFILE_A}:${todayKey()}`, geminiQueue.DAILY_QUOTA);
-  const outcome = await geminiQueue.acceptOneJob(client, PROFILE_A, {
-    sourceKey: SOURCE_KEY,
-    sender: 'HDFCBK',
-    body: BILL_BODY,
-  });
-  assert.deepEqual(outcome, { accepted: false, reason: 'daily_quota_exhausted' });
-  assert.equal(client.state.jobs.size, 0);
 });
 
 test('a crashed worker re-leases the SAME job after expiry; attempts accumulate', async () => {
@@ -862,7 +889,11 @@ test('result fact validation failure purges the server body without duplicating 
     details: validation.errors.slice(0, 5),
   });
   assert.equal(job.status, 'failed');
-  assert.deepEqual(job.payload, { purged: true, failReason: 'invalid_result_facts' });
+  assert.deepEqual(job.payload, {
+    purged: true,
+    failReason: 'invalid_result_facts',
+    failureDetails: validation.errors.slice(0, 5),
+  });
   assert.equal(client.state.reviews.length, 0);
   assert.equal(
     client.state.events.some((event) => event.event_type === 'failed'),
@@ -1002,15 +1033,14 @@ test('worker auth: routes disabled without AI_WORKER_TOKEN, token-checked with i
   delete process.env.AI_WORKER_TOKEN;
 });
 
-test('POST /ai/jobs maps refusal reasons to quota (429) and validation (400) statuses', async () => {
-  const quota = harness({});
-  quota.state.quota.set(`${PROFILE_A}:${todayKey()}`, geminiQueue.DAILY_QUOTA);
-  const resQuota = await quota.call('/ai/jobs', {
+test('POST /ai/jobs accepts work after the legacy daily counter is full', async () => {
+  const unboundedAdmission = harness({});
+  unboundedAdmission.state.quota.set(`${PROFILE_A}:${todayKey()}`, 200);
+  const resAccepted = await unboundedAdmission.call('/ai/jobs', {
     userId: PROFILE_A,
     body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
   });
-  assert.equal(resQuota.status, 429);
-  assert.equal(resQuota.body.error, 'daily_quota_exhausted');
+  assert.equal(resAccepted.status, 200);
 
   const sensitive = harness({});
   const resSensitive = await sensitive.call('/ai/jobs', {
@@ -1029,9 +1059,57 @@ test('POST /ai/jobs maps refusal reasons to quota (429) and validation (400) sta
       body: 'Exclusive offer: apply now for a pre-approved card and earn cashback on spend.',
     },
   });
-  assert.equal(resPromotion.status, 400);
-  assert.equal(resPromotion.body.error, 'payload_refused_nonfinancial');
-  assert.equal(promotion.state.jobs.size, 0);
+  assert.equal(resPromotion.status, 200);
+  assert.equal(promotion.state.jobs.size, 1);
+
+  const unrelated = harness({});
+  const resUnrelated = await unrelated.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: {
+      sourceKey: SOURCE_KEY,
+      sender: 'FRIEND',
+      body: 'Are we still meeting for lunch tomorrow?',
+    },
+  });
+  assert.equal(resUnrelated.status, 200);
+  assert.equal(unrelated.state.jobs.size, 1);
+
+  const longCandidate = harness({});
+  const resLongCandidate = await longCandidate.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: {
+      sourceKey: 'b'.repeat(64),
+      sender: 'VM-HDFCBK',
+      body: `INR 250.00 spent at a merchant. ${'context '.repeat(130)}`,
+    },
+  });
+  assert.equal(resLongCandidate.status, 200);
+  assert.equal(longCandidate.state.jobs.size, 1);
+
+  const explicitRetry = harness({});
+  const retryBody = {
+    sourceKey: 'c'.repeat(64),
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+  };
+  const firstAttempt = await explicitRetry.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: retryBody,
+  });
+  assert.equal(firstAttempt.status, 200);
+  await geminiQueue.failJob(
+    explicitRetry.client,
+    firstAttempt.body.jobId,
+    PROFILE_A,
+    'test_failure',
+  );
+  const retryAttempt = await explicitRetry.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: {...retryBody, retryFailed: true},
+  });
+  assert.equal(retryAttempt.status, 200);
+  assert.equal(retryAttempt.body.jobId, firstAttempt.body.jobId);
+  assert.equal(retryAttempt.body.reused, false);
 
   const ok = harness({});
   const resOk = await ok.call('/ai/jobs', {
@@ -1212,6 +1290,8 @@ test('valid AI result endpoint completes review-only without invoking projection
     assert.equal(job.status, 'done');
     assert.equal(job.result.reviewRequired, true);
     assert.equal(job.result.specialists, null);
+  assert.equal(result.body.decision, null);
+  assert.equal(job.result.decision, null);
     assert.deepEqual(job.payload, { purged: true });
     assert.equal(h.state.events.filter((event) => event.event_type === 'result').length, 1);
   }
@@ -1236,6 +1316,35 @@ test('result endpoint carries the computed auto-resolution decision and score', 
   assert.ok(result.body.confidenceScore >= 0.85);
   assert.equal(job.result.reviewRequired, false);
   assert.equal(job.result.specialists, null);
+  assert.equal(result.body.decision, null);
+  assert.equal(job.result.decision, null);
+});
+
+test('noise rejection: shouldConsider=false forces reviewRequired=false and persists decision', async () => {
+  const h = harness({});
+  const accepted = await h.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: SWIGGY_BODY },
+  });
+  const lease = await h.call('/ai/jobs/lease', { body: {} });
+  const job = h.state.jobs.get(accepted.body.jobId);
+  job.lease_expires_at = new Date(Date.now() + 600000);
+  const decision = {
+    topic: 'telecom_carrier_deduction',
+    summary: 'Jio number retention airtime deduction',
+    shouldConsider: false,
+    rejectionReason: 'telecom_carrier_deduction',
+  };
+  const result = await h.call('/ai/jobs/:id/result', {
+    params: { id: job.id },
+    body: { profileId: PROFILE_A, leaseToken: lease.body.job.leaseToken, facts: [], decision },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.jobStatus, 'done');
+  assert.equal(result.body.reviewRequired, false);
+  assert.deepEqual(result.body.decision, decision);
+  assert.deepEqual(job.result.decision, decision);
+  assert.equal(job.result.reviewRequired, false);
 });
 
 test('source status omits AI facts the user already confirmed or corrected', async () => {
@@ -1268,9 +1377,7 @@ test('source status omits AI facts the user already confirmed or corrected', asy
 
   const query = h.client.query;
   h.client.query = async (sql, params) => {
-    if (sql.replace(/\s+/g, ' ').trim().startsWith(
-      'SELECT id, status, result, attempts, created_at, updated_at FROM ai_jobs',
-    )) {
+    if (sql.includes("payload->>'failReason' AS fail_reason") && sql.includes('last_retry_reason')) {
       return { rows: [{
         id: job.id,
         status: job.status,
@@ -1278,6 +1385,7 @@ test('source status omits AI facts the user already confirmed or corrected', asy
         attempts: job.attempts,
         created_at: job.created_at,
         updated_at: job.created_at,
+        fail_reason: null,
       }] };
     }
     return query(sql, params);
@@ -1292,6 +1400,61 @@ test('source status omits AI facts the user already confirmed or corrected', asy
     'balance_snapshot',
   ]);
   assert.equal(response.body.suggestions[0].factIndex === confirmedIndex, false);
+});
+
+test('terminal source status shows the terminal failure instead of a stale retry reason', async () => {
+  const h = harness({});
+  await h.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
+  });
+  const query = h.client.query;
+  h.client.query = async (sql, params) => {
+    if (sql.includes("payload->>'failReason' AS fail_reason") && sql.includes('last_retry_reason')) {
+      return { rows: [{
+        id: 'failed-job', status: 'failed', result: null, attempts: 1,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        fail_reason: 'invalid_provider_output', last_retry_reason: 'provider_retry',
+      }] };
+    }
+    return query(sql, params);
+  };
+
+  const response = await h.call('/ai/jobs/source/:sourceKey', {
+    userId: PROFILE_A,
+    params: { sourceKey: SOURCE_KEY },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.status, 'failed');
+  assert.equal(response.body.failureReason, 'invalid_provider_output');
+});
+
+test('terminal source status exposes schema field diagnostics without model or SMS content', async () => {
+  const h = harness({});
+  await h.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
+  });
+  const query = h.client.query;
+  h.client.query = async (sql, params) => {
+    if (sql.includes("payload->>'failReason' AS fail_reason") && sql.includes('last_retry_reason')) {
+      return { rows: [{
+        id: 'failed-job', status: 'failed', result: null, attempts: 1,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        fail_reason: 'invalid_result_facts', failure_details: ['facts[0]: merchant is required'],
+        last_retry_reason: null,
+      }] };
+    }
+    return query(sql, params);
+  };
+
+  const response = await h.call('/ai/jobs/source/:sourceKey', {
+    userId: PROFILE_A,
+    params: { sourceKey: SOURCE_KEY },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.failureReason, 'invalid_result_facts: facts[0]: merchant is required');
+  assert.equal(JSON.stringify(response.body).includes(BILL_BODY), false);
 });
 
 // Phase 6: Admin monitoring & Learning loop
@@ -1310,8 +1473,8 @@ test('admin monitoring endpoints return redacted metrics and timeline without ra
   assert.equal(summaryRes.body.statusCounts.queued, 1);
   assert.equal(typeof summaryRes.body.oldestAgeSeconds, 'number');
   assert.equal(summaryRes.body.totalJobsToday, 1);
-  assert.equal(summaryRes.body.providerCapacity.requestsPerMinuteLimit, 5);
-  assert.equal(summaryRes.body.providerCapacity.requestsPerDayLimit, 20);
+  assert.equal(summaryRes.body.providerCapacity.requestsPerMinuteLimit, 30);
+  assert.equal(summaryRes.body.providerCapacity.tokensPerMinuteLimit, 24000);
 
   // 2. Jobs list (no raw payload)
   const jobsRes = await h.call('/admin/sms-ai/jobs', { query: {} });
@@ -1332,7 +1495,7 @@ test('admin monitoring endpoints return redacted metrics and timeline without ra
   // 4. Quota
   const quotaRes = await h.call('/admin/sms-ai/quota', {});
   assert.equal(quotaRes.status, 200);
-  assert.ok(quotaRes.body.quota.length >= 1);
+  assert.deepEqual(quotaRes.body.quota, []);
 });
 
 test('rule lifecycle: new account receives approved pattern, deactivation rolls it back', () => {

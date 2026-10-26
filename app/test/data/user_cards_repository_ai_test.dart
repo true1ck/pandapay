@@ -45,151 +45,186 @@ void main() {
       },
     );
 
-    test('returns null on explicit server refusals (400, 401, 429, 503)', () async {
+    test('preserves explicit server refusal status and reason', () async {
       for (final status in [400, 401, 429, 503]) {
         final repository = UserCardsRepository(
           apiBaseUrl: 'https://api.test',
           accessToken: 'session-token',
-          client: MockClient((_) async => http.Response('refused', status)),
+          client: MockClient(
+            (_) async => http.Response(
+              jsonEncode({'error': 'daily_quota_exhausted'}),
+              status,
+            ),
+          ),
         );
 
         expect(
-          await repository.submitAiJob(
+          () => repository.submitAiJob(
             sourceKey: sourceKey,
             sender: 'HDFCBK',
             body: 'Rs 120 debited',
           ),
-          isNull,
-          reason: 'Server refusal $status should return null to signal refusal',
+          throwsA(
+            isA<ApiException>()
+                .having((error) => error.statusCode, 'statusCode', status)
+                .having(
+                  (error) => error.errorCode,
+                  'errorCode',
+                  'daily_quota_exhausted',
+                ),
+          ),
         );
       }
     });
 
-    test('rethrows network and transport exceptions rather than swallowing as null', () async {
-      final offline = UserCardsRepository(
-        apiBaseUrl: 'https://api.test',
-        accessToken: 'session-token',
-        client: MockClient((_) async => throw http.ClientException('offline')),
-      );
-      expect(
-        () => offline.submitAiJob(
-          sourceKey: sourceKey,
-          sender: 'HDFCBK',
-          body: 'Rs 120 debited',
-        ),
-        throwsA(isA<http.ClientException>()),
-      );
+    test(
+      'rethrows network and transport exceptions rather than swallowing as null',
+      () async {
+        final offline = UserCardsRepository(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'session-token',
+          client: MockClient(
+            (_) async => throw http.ClientException('offline'),
+          ),
+        );
+        expect(
+          () => offline.submitAiJob(
+            sourceKey: sourceKey,
+            sender: 'HDFCBK',
+            body: 'Rs 120 debited',
+          ),
+          throwsA(isA<http.ClientException>()),
+        );
 
-      final socketFail = UserCardsRepository(
-        apiBaseUrl: 'https://api.test',
-        accessToken: 'session-token',
-        client: MockClient((_) async => throw const SocketException('Connection reset')),
-      );
-      expect(
-        () => socketFail.submitAiJob(
-          sourceKey: sourceKey,
-          sender: 'HDFCBK',
-          body: 'Rs 120 debited',
-        ),
-        throwsA(isA<SocketException>()),
-      );
+        final socketFail = UserCardsRepository(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'session-token',
+          client: MockClient(
+            (_) async => throw const SocketException('Connection reset'),
+          ),
+        );
+        expect(
+          () => socketFail.submitAiJob(
+            sourceKey: sourceKey,
+            sender: 'HDFCBK',
+            body: 'Rs 120 debited',
+          ),
+          throwsA(isA<SocketException>()),
+        );
 
-      final timedOut = UserCardsRepository(
-        apiBaseUrl: 'https://api.test',
-        accessToken: 'session-token',
-        client: MockClient((_) async => throw TimeoutException('Request timed out')),
-      );
-      expect(
-        () => timedOut.submitAiJob(
-          sourceKey: sourceKey,
-          sender: 'HDFCBK',
-          body: 'Rs 120 debited',
-        ),
-        throwsA(isA<TimeoutException>()),
-      );
-    });
+        final timedOut = UserCardsRepository(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'session-token',
+          client: MockClient(
+            (_) async => throw TimeoutException('Request timed out'),
+          ),
+        );
+        expect(
+          () => timedOut.submitAiJob(
+            sourceKey: sourceKey,
+            sender: 'HDFCBK',
+            body: 'Rs 120 debited',
+          ),
+          throwsA(isA<TimeoutException>()),
+        );
+      },
+    );
   });
 
   group('fetchAiJobStatus', () {
+    test('is source-scoped and returns job status on 200', () async {
+      late http.Request sent;
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'session-token',
+        client: MockClient((request) async {
+          sent = request;
+          return http.Response(
+            jsonEncode({'status': 'queued', 'suggestions': []}),
+            200,
+          );
+        }),
+      );
+
+      expect(await repository.fetchAiJobStatus(sourceKey), {
+        'status': 'queued',
+        'suggestions': <dynamic>[],
+      });
+      expect(sent.method, 'GET');
+      expect(sent.url, Uri.parse('https://api.test/ai/jobs/source/$sourceKey'));
+      expect(sent.headers['authorization'], 'Bearer session-token');
+    });
+
     test(
-      'is source-scoped and returns job status on 200',
+      'returns null ONLY on HTTP 404 (not found / not yet queued)',
       () async {
-        late http.Request sent;
-        final repository = UserCardsRepository(
+        final notFound = UserCardsRepository(
           apiBaseUrl: 'https://api.test',
           accessToken: 'session-token',
-          client: MockClient((request) async {
-            sent = request;
-            return http.Response(
-              jsonEncode({'status': 'queued', 'suggestions': []}),
-              200,
-            );
-          }),
+          client: MockClient((_) async => http.Response('not found', 404)),
         );
-
-        expect(await repository.fetchAiJobStatus(sourceKey), {
-          'status': 'queued',
-          'suggestions': <dynamic>[],
-        });
-        expect(sent.method, 'GET');
-        expect(sent.url, Uri.parse('https://api.test/ai/jobs/source/$sourceKey'));
-        expect(sent.headers['authorization'], 'Bearer session-token');
+        expect(await notFound.fetchAiJobStatus(sourceKey), isNull);
       },
     );
 
-    test('returns null ONLY on HTTP 404 (not found / not yet queued)', () async {
-      final notFound = UserCardsRepository(
-        apiBaseUrl: 'https://api.test',
-        accessToken: 'session-token',
-        client: MockClient((_) async => http.Response('not found', 404)),
-      );
-      expect(await notFound.fetchAiJobStatus(sourceKey), isNull);
-    });
+    test(
+      'throws ApiException on non-200 non-404 responses (e.g. 500, 503)',
+      () async {
+        for (final status in [500, 503]) {
+          final serverError = UserCardsRepository(
+            apiBaseUrl: 'https://api.test',
+            accessToken: 'session-token',
+            client: MockClient(
+              (_) async => http.Response('server error', status),
+            ),
+          );
+          expect(
+            () => serverError.fetchAiJobStatus(sourceKey),
+            throwsA(isA<ApiException>()),
+          );
+        }
+      },
+    );
 
-    test('throws ApiException on non-200 non-404 responses (e.g. 500, 503)', () async {
-      for (final status in [500, 503]) {
-        final serverError = UserCardsRepository(
+    test(
+      'rethrows network and transport exceptions rather than returning null',
+      () async {
+        final offline = UserCardsRepository(
           apiBaseUrl: 'https://api.test',
           accessToken: 'session-token',
-          client: MockClient((_) async => http.Response('server error', status)),
+          client: MockClient(
+            (_) async => throw http.ClientException('connection refused'),
+          ),
         );
         expect(
-          () => serverError.fetchAiJobStatus(sourceKey),
-          throwsA(isA<ApiException>()),
+          () => offline.fetchAiJobStatus(sourceKey),
+          throwsA(isA<http.ClientException>()),
         );
-      }
-    });
 
-    test('rethrows network and transport exceptions rather than returning null', () async {
-      final offline = UserCardsRepository(
-        apiBaseUrl: 'https://api.test',
-        accessToken: 'session-token',
-        client: MockClient((_) async => throw http.ClientException('connection refused')),
-      );
-      expect(
-        () => offline.fetchAiJobStatus(sourceKey),
-        throwsA(isA<http.ClientException>()),
-      );
+        final socketFail = UserCardsRepository(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'session-token',
+          client: MockClient(
+            (_) async => throw const SocketException('No route to host'),
+          ),
+        );
+        expect(
+          () => socketFail.fetchAiJobStatus(sourceKey),
+          throwsA(isA<SocketException>()),
+        );
 
-      final socketFail = UserCardsRepository(
-        apiBaseUrl: 'https://api.test',
-        accessToken: 'session-token',
-        client: MockClient((_) async => throw const SocketException('No route to host')),
-      );
-      expect(
-        () => socketFail.fetchAiJobStatus(sourceKey),
-        throwsA(isA<SocketException>()),
-      );
-
-      final timedOut = UserCardsRepository(
-        apiBaseUrl: 'https://api.test',
-        accessToken: 'session-token',
-        client: MockClient((_) async => throw TimeoutException('Connection timed out')),
-      );
-      expect(
-        () => timedOut.fetchAiJobStatus(sourceKey),
-        throwsA(isA<TimeoutException>()),
-      );
-    });
+        final timedOut = UserCardsRepository(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'session-token',
+          client: MockClient(
+            (_) async => throw TimeoutException('Connection timed out'),
+          ),
+        );
+        expect(
+          () => timedOut.fetchAiJobStatus(sourceKey),
+          throwsA(isA<TimeoutException>()),
+        );
+      },
+    );
   });
 }

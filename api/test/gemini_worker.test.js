@@ -37,10 +37,11 @@ test('Gemini provider requests JSON and parses the model fact envelope', async (
       return response({ candidates: [{ content: { parts: [{ text: '{"facts":[]}' }] } }] });
     },
   });
-  const facts = await provider.classify({ payload: { sender: 'BANK', body: 'Card XXXX1234 paid Rs 100' } });
-  assert.deepEqual(facts, []);
+  const result = await provider.classify({ payload: { sender: 'BANK', body: 'Card XXXX1234 paid Rs 100' } });
+  assert.deepEqual(result.facts, []);
+  assert.equal(typeof result.decision, 'object');
   assert.equal(request.generationConfig.responseMimeType, 'application/json');
-  assert.equal(request.generationConfig.maxOutputTokens, 1024);
+  assert.equal(request.generationConfig.maxOutputTokens, 2048);
   assert.equal(Object.hasOwn(request.generationConfig, 'temperature'), false,
     'Gemini 3.8 Flash rejects deprecated sampling parameters');
   assert.equal(request.systemInstruction.parts[0].text, UNIVERSAL_SYSTEM_INSTRUCTION);
@@ -58,8 +59,10 @@ test('Gemini worker defaults to the supported Flash model unless configured', ()
 
 test('universal system instruction and schema cover movements, categories and completeness', () => {
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /ZERO HALLUCINATION/);
-  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /PandaPay's Financial SMS Extraction/);
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /PandaPay's SMS classification and structured-decision engine/);
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /broker funds payout/i);
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /Pay Later repayment/i);
+  assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /Do not write a summary/i);
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /mandate_lifecycle/);
   assert.match(UNIVERSAL_SYSTEM_INSTRUCTION, /isComplete/);
 
@@ -80,23 +83,34 @@ test('universal system instruction and schema cover movements, categories and co
   assert.equal(item.properties.payload.properties.confidence.type, 'NUMBER');
 });
 
-test('twelve few-shot scenarios are exported and rendered into the prompt', () => {
-  assert.equal(FEW_SHOT_EXAMPLES.length, 12);
+test('few-shot scenarios are exported and rendered into the prompt', () => {
+  assert.equal(FEW_SHOT_EXAMPLES.length, 18);
   const labels = FEW_SHOT_EXAMPLES.map((example) => example.label).join(' | ');
   for (const scenario of [
-    'Swiggy', 'Flipkart', 'Axis', 'BESCOM', 'credit card bill paid',
+    'Swiggy', 'Flipkart', 'Axis', 'BESCOM', 'Pay Later', 'credit card bill paid',
     'Kotak Neo', 'Zerodha', 'salary credit', 'Loan EMI', 'Netflix',
     'ATM cash withdrawal', 'Partial',
   ]) {
     assert.match(labels, new RegExp(scenario, 'i'));
   }
   const prompt = buildGeminiPrompt({ payload: { body: 'synthetic fixture' } });
-  assert.match(prompt, /Example 12 \(Partial/);
+  assert.match(prompt, /Example \d+ \(Partial/);
   assert.match(prompt, /"category":"dining"/);
   assert.match(prompt, /"isComplete":false/);
   assert.match(prompt, /groceries, fuel, dining, online, travel, bills, rent/);
   // Keep the prompt bounded even with every example rendered.
   assert.ok(prompt.length < 30000, `prompt length ${prompt.length}`);
+});
+
+test('correction prompt includes only contract findings and requires safe abstention', () => {
+  const prompt = buildGeminiPrompt(
+    { payload: { sender: 'BANK', body: 'synthetic fixture' } },
+    { repairErrors: ['facts[0]: merchant is required'] },
+  );
+  assert.match(prompt, /CORRECTION PASS/);
+  assert.match(prompt, /facts may be \[\]/);
+  assert.match(prompt, /facts\[0\]: merchant is required/);
+  assert.doesNotMatch(prompt, /previous structured output/i);
 });
 
 test('every few-shot output satisfies the fact contract the result route enforces', () => {
@@ -137,7 +151,7 @@ test('Gemini batch generation has a bounded output token limit', async () => {
     { id: 'b', payload: { body: 'synthetic fixture B' } },
   ]);
   assert.deepEqual(result, new Map());
-  assert.equal(request.generationConfig.maxOutputTokens, 1024);
+  assert.equal(request.generationConfig.maxOutputTokens, 2048);
   assert.equal(Object.hasOwn(request.generationConfig, 'temperature'), false);
   assert.equal(request.systemInstruction.parts[0].text, UNIVERSAL_SYSTEM_INSTRUCTION);
   const batchSchema = request.generationConfig.responseSchema;
@@ -159,7 +173,7 @@ test('Gemini prompt states required fact fields and fail-closed abstention rules
   assert.match(prompt, /leave this SMS's facts array empty/);
   const batch = buildGeminiBatchPrompt([{ id: 'one' }, { id: 'two' }]);
   assert.match(batch, /"items":\[/);
-  assert.match(batch, /keep this item with facts: \[\] when uncertain/);
+  assert.match(batch, /If shouldConsider=false, set facts: \[\]/);
   assert.doesNotMatch(batch, /Return JSON only in the form \{"facts"/);
 });
 
@@ -187,10 +201,89 @@ test('worker posts the leased result with the profile and lease token', async ()
   });
   assert.equal(result.completed, true);
   assert.deepEqual(calls[1].body, {
+    decision: null,
     facts: [], profileId: 'profile-1', leaseToken: 'a'.repeat(64),
     batchId: calls[1].body.batchId, batchSize: 1,
   });
   assert.match(calls[1].body.batchId, /^[0-9a-f-]{36}$/i);
+});
+
+test('worker repairs an invalid fact once and reserves capacity for the correction call', async () => {
+  const calls = [];
+  const job = {
+    id: 'repair-job', profileId: 'profile-1', leaseToken: 'c'.repeat(64),
+    payload: {
+      sender: 'BANK', body: 'Rs 100 debited from your account on 15-Apr-2026',
+      occurredAt: '2026-04-15T00:00:00.000Z',
+    },
+  };
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job });
+    return response({ jobStatus: 'done' });
+  };
+  const invalid = {
+    decision: { topic: 'upi_debit', shouldConsider: true, rejectionReason: 'none' },
+    facts: [{
+      factType: 'posted_movement',
+      payload: {
+        amountRole: 'posted', entryKind: 'spend', amountInr: 100,
+        occurredAt: '2026-04-15T00:00:00.000Z', category: 'other',
+      },
+    }],
+  };
+  const corrected = {
+    ...invalid,
+    facts: [{ ...invalid.facts[0], payload: { ...invalid.facts[0].payload, merchant: 'Merchant' } }],
+  };
+  const repairs = [];
+  let reservations = 0;
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: {
+      classify: async (_job, options) => {
+        repairs.push(options?.repairErrors || null);
+        return repairs.length === 1 ? invalid : corrected;
+      },
+    },
+    reserveCapacity: async () => { reservations += 1; return { allowed: true }; },
+  });
+  assert.equal(result.completed, true);
+  assert.equal(reservations, 2);
+  assert.equal(repairs.length, 2);
+  assert.match(repairs[1][0], /merchant/);
+  const posted = calls.find((call) => call.url.endsWith('/result'));
+  assert.equal(posted.body.facts[0].payload.merchant, 'Merchant');
+});
+
+test('worker keeps the decision and safely omits facts after one invalid correction', async () => {
+  const calls = [];
+  const job = {
+    id: 'abstain-job', profileId: 'profile-1', leaseToken: 'd'.repeat(64),
+    payload: { sender: 'BANK', body: 'Rs 100 debited from your account' },
+  };
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job });
+    return response({ jobStatus: 'done' });
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: {
+      classify: async (_job, options) => ({
+        decision: { topic: 'upi_debit', shouldConsider: true, rejectionReason: 'none' },
+        facts: options?.repairErrors ? [] : [{
+          factType: 'posted_movement',
+          payload: { amountRole: 'posted', entryKind: 'spend', amountInr: 100 },
+        }],
+      }),
+    },
+    reserveCapacity: async () => ({ allowed: true }),
+  });
+  assert.equal(result.completed, true);
+  const posted = calls.find((call) => call.url.endsWith('/result'));
+  assert.deepEqual(posted.body.facts, []);
+  assert.equal(posted.body.decision.topic, 'upi_debit');
 });
 
 test('provider 429 releases the same leased job for retry', async () => {
@@ -214,7 +307,26 @@ test('provider 429 releases the same leased job for retry', async () => {
   });
   assert.equal(result.retried, true);
   assert.equal(calls[1].url, 'http://worker.test/ai/jobs/job-2/retry');
+  assert.equal(calls[1].body.reason, 'provider_rate_limited');
   assert.equal(calls[1].body.retryAfterMs, 60000);
+});
+
+test('provider 403 quota response is classified as rate limited without exposing provider text', async () => {
+  const provider = new GeminiProvider({
+    apiKey: 'synthetic-key',
+    endpointBase: 'https://example.test/models',
+    fetchImpl: async () => response({ error: { message: 'Resource has been exhausted (e.g. check quota).' } }, 403),
+  });
+  await assert.rejects(
+    provider.classify({ payload: { sender: 'BANK', body: 'synthetic fixture' } }),
+    (error) => error instanceof GeminiProviderError && error.retryable === true
+      && error.status === 403 && error.rateLimited === true,
+  );
+
+  const { providerRetryReason } = require('../src/gemini_worker');
+  assert.equal(providerRetryReason(new GeminiProviderError('Gemini HTTP 403', {
+    retryable: true, status: 403, rateLimited: true,
+  })), 'provider_rate_limited');
 });
 
 test('provider 503 releases the same leased job and preserves retry-after', async () => {
@@ -240,8 +352,50 @@ test('provider 503 releases the same leased job and preserves retry-after', asyn
 
   assert.equal(result.retried, true);
   assert.equal(calls[1].url, 'http://worker.test/ai/jobs/job-503/retry');
+  assert.equal(calls[1].body.reason, 'provider_http_503');
   assert.equal(calls[1].body.retryAfterMs, 3500);
   assert.equal(calls[1].body.profileId, 'profile-503');
+});
+
+test('capacity API failure records its stage and does not call Gemini', async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job: {
+      id: 'job-capacity', profileId: 'profile-capacity',
+      leaseToken: 'c'.repeat(64), payload: { body: 'Rs 100 debited' },
+    } });
+    if (url.endsWith('/ai/provider/reserve')) return response({ error: 'capacity unavailable' }, 503);
+    calls.push({ url, body: JSON.parse(options.body) });
+    return response({ jobStatus: 'queued' });
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: { classify: async () => assert.fail('Gemini must not run without capacity') },
+  });
+  assert.equal(result.retried, true);
+  assert.equal(calls[0].body.reason, 'provider_capacity_unavailable');
+});
+
+test('provider transport failures keep a safe diagnostic class without leaking text', async () => {
+  const calls = [];
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token',
+    reserveCapacity: async () => ({ allowed: true }),
+    provider: { classify: async () => {
+      throw new GeminiProviderError('Gemini request failed or timed out', { retryable: true });
+    } },
+    fetchImpl: async (url, options) => {
+      calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+      if (url.endsWith('/lease')) return response({ leased: true, job: {
+        id: 'job-transport', profileId: 'profile-transport',
+        leaseToken: 't'.repeat(64), payload: {},
+      } });
+      return response({ jobStatus: 'queued' });
+    },
+  });
+  assert.equal(result.retried, true);
+  assert.equal(calls[1].body.reason, 'provider_transport_error');
+  assert.equal(JSON.stringify(calls[1].body).includes('request failed or timed out'), false);
 });
 
 test('missing Gemini key fails before opening a provider request', async () => {
@@ -531,8 +685,9 @@ test('Gemini provider automatically rotates to fallback API key on HTTP 429 quot
     },
   });
 
-  const facts = await provider.classify({ payload: { sender: 'BANK', body: 'Card XXXX1234 spent Rs 100' } });
-  assert.deepEqual(facts, []);
+  const result = await provider.classify({ payload: { sender: 'BANK', body: 'Card XXXX1234 spent Rs 100' } });
+  assert.deepEqual(result.facts, []);
+  assert.equal(typeof result.decision, 'object');
   assert.deepEqual(attempts, ['primary-key', 'fallback-lab-key']);
   assert.equal(provider.apiKey, 'fallback-lab-key');
 });
@@ -554,8 +709,160 @@ test('Gemini provider automatically switches to fallback model on HTTP 404 model
     },
   });
 
-  const facts = await provider.classify({ payload: { sender: 'BANK', body: 'Spent Rs 100' } });
-  assert.deepEqual(facts, []);
+  const result = await provider.classify({ payload: { sender: 'BANK', body: 'Spent Rs 100' } });
+  assert.deepEqual(result.facts, []);
+  assert.equal(typeof result.decision, 'object');
   assert.deepEqual(modelsRequested, ['deprecated-model', 'gemini-flash-lite-latest']);
   assert.equal(provider.model, 'gemini-flash-lite-latest');
+});
+
+test('UNIVERSAL_RESPONSE_SCHEMA requires decision and facts', () => {
+  assert.deepEqual(UNIVERSAL_RESPONSE_SCHEMA.required, ['decision', 'facts']);
+  assert.equal(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.type, 'OBJECT');
+  assert.deepEqual(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.required, [
+    'topic', 'shouldConsider', 'rejectionReason',
+  ]);
+  assert.equal(UNIVERSAL_RESPONSE_SCHEMA.properties.facts.type, 'ARRAY');
+  assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('telecom_carrier_deduction'));
+  assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('loan_upsell_or_offer'));
+  assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('otp_or_security_code'));
+  assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('pay_later_due_notice'));
+  assert.ok(UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties.topic.enum.includes('pay_later_drawdown'));
+  assert.equal('summary' in UNIVERSAL_RESPONSE_SCHEMA.properties.decision.properties, false);
+});
+
+test('telecom carrier deduction, loan offer, and OTP noise return shouldConsider: false and empty facts', async () => {
+  const noiseScenarios = [
+    {
+      topic: 'telecom_carrier_deduction',
+      shouldConsider: false,
+      rejectionReason: 'telecom_carrier_deduction',
+    },
+    {
+      topic: 'loan_upsell_or_offer',
+      shouldConsider: false,
+      rejectionReason: 'loan_upsell',
+    },
+    {
+      topic: 'otp_or_security_code',
+      shouldConsider: false,
+      rejectionReason: 'security_otp',
+    },
+  ];
+
+  for (const scenario of noiseScenarios) {
+    const provider = new GeminiProvider({
+      apiKey: 'test-key',
+      fetchImpl: async () => response({
+        candidates: [{
+          content: {
+            parts: [{
+              text: JSON.stringify({
+                decision: scenario,
+                facts: [],
+              }),
+            }],
+          },
+        }],
+      }),
+    });
+    const result = await provider.classify({ payload: { sender: 'TEST', body: scenario.topic } });
+    assert.equal(result.decision.shouldConsider, false, `${scenario.topic} must have shouldConsider: false`);
+    assert.equal(result.decision.topic, scenario.topic);
+    assert.equal(result.decision.rejectionReason, scenario.rejectionReason);
+    assert.deepEqual(result.facts, [], `${scenario.topic} must have empty facts array`);
+  }
+});
+
+test('valid spend returns shouldConsider: true and populated facts', async () => {
+  const spendDecision = {
+    topic: 'card_spend',
+    shouldConsider: true,
+    rejectionReason: 'none',
+  };
+  const spendFacts = [
+    {
+      factType: 'posted_movement',
+      payload: {
+        amountRole: 'posted',
+        entryKind: 'spend',
+        amountInr: 2499.0,
+        occurredAt: '2026-10-25T00:00:00.000Z',
+        instrument: 'credit_card',
+        last4: '4002',
+        issuerName: 'ICICI Bank',
+        merchant: 'Flipkart',
+        category: 'online',
+        isComplete: true,
+        confidence: 0.99,
+      },
+    },
+  ];
+
+  const provider = new GeminiProvider({
+    apiKey: 'test-key',
+    fetchImpl: async () => response({
+      candidates: [{
+        content: {
+          parts: [{
+            text: JSON.stringify({
+              decision: spendDecision,
+              facts: spendFacts,
+            }),
+          }],
+        },
+      }],
+    }),
+  });
+  const result = await provider.classify({
+    payload: { sender: 'ICICIB', body: 'INR 2,499.00 spent on ICICI Bank Credit Card ending XX4002 at FLIPKART' },
+  });
+
+  assert.equal(result.decision.shouldConsider, true);
+  assert.equal(result.decision.topic, 'card_spend');
+  assert.equal(result.decision.rejectionReason, 'none');
+  assert.equal(result.facts.length, 1);
+  assert.equal(result.facts[0].factType, 'posted_movement');
+  assert.equal(result.facts[0].payload.amountInr, 2499.0);
+  assert.equal(result.facts[0].payload.merchant, 'Flipkart');
+  assert.equal(result.facts[0].payload.category, 'online');
+});
+
+test('Pay Later due is a trackable obligation decision, not a loan offer', async () => {
+  const decision = {
+    topic: 'pay_later_due_notice',
+    shouldConsider: true,
+    rejectionReason: 'none',
+  };
+  const facts = [{
+    factType: 'bill_obligation',
+    payload: {
+      amountRole: 'due_total',
+      amountDueInr: 5300,
+      dueDate: '2026-11-05T00:00:00.000Z',
+      billerName: 'Axio Pay Later',
+      category: 'emi',
+      targetKind: 'utility_or_other_bill',
+      isComplete: true,
+      confidence: 0.98,
+    },
+  }];
+  const provider = new GeminiProvider({
+    apiKey: 'test-key',
+    fetchImpl: async () => response({
+      candidates: [{ content: { parts: [{ text: JSON.stringify({ decision, facts }) }] } }],
+    }),
+  });
+  const result = await provider.classify({
+    payload: {
+      sender: 'AXIO',
+      body: 'Axio Pay Later: Your bill amount of INR 5,300.00 is due on 05-Nov-2026. Auto debit will be processed on the due date.',
+    },
+  });
+  assert.equal(result.decision.topic, 'pay_later_due_notice');
+  assert.equal(result.decision.shouldConsider, true);
+  assert.equal(result.facts[0].factType, 'bill_obligation');
+  assert.equal(result.facts[0].payload.amountDueInr, 5300);
+  assert.equal(result.facts[0].payload.billerName, 'Axio Pay Later');
+  assert.equal('summary' in result.decision, false);
 });

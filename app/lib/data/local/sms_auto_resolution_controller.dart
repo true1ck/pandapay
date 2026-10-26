@@ -56,30 +56,32 @@ class SmsAutoResolutionController {
   /// drops the receipt and puts the message back into Needs Review.
   Future<void> moveToReview(AutoResolvedHistoryEntry entry) async {
     store.batch(() {
-      database.db.execute(
-        "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' "
-        "AND (source_key=? OR id=?)",
-        [namespace, entry.sourceKey, 'local-ai:${entry.sourceKey}'],
-      );
+      if (entry.resolvedKind != 'dismissed') {
+        database.db.execute(
+          "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' "
+          "AND (source_key=? OR id=?)",
+          [namespace, entry.sourceKey, 'local-ai:${entry.sourceKey}'],
+        );
+      }
       if (entry.resolvedKind == 'bill') {
         database.db.execute(
           'DELETE FROM local_commitments WHERE namespace=? AND id=?',
           [namespace, 'commitment:${entry.sourceKey}'],
         );
       }
-      AutoResolvedHistoryRepository(database, namespace: namespace).delete(
-        entry.id,
-      );
+      AutoResolvedHistoryRepository(
+        database,
+        namespace: namespace,
+      ).delete(entry.id);
       store.notifyPendingChange(namespace);
     });
-    final receivedAt =
-        DateTime.tryParse(entry.occurredAt) ?? DateTime.now();
+    final receivedAt = DateTime.tryParse(entry.occurredAt) ?? DateTime.now();
     final id = entry.sourceKey.trim().isEmpty ? entry.id : entry.sourceKey;
     await reviewRepository.add(
       NeedsReviewItem(
         id: id,
         sender: entry.sender,
-        body: _reviewBody(entry, receivedAt),
+        body: entry.sourceBody ?? _reviewBody(entry, receivedAt),
         reason: 'moved_from_auto_resolved',
         receivedAt: receivedAt,
         kind: entry.resolvedKind == 'bill'
@@ -133,7 +135,6 @@ class SmsAutoResolutionController {
     return '$described (previously auto-categorized by AI).';
   }
 
-  String _formatAmount(int paise) => paise % 100 == 0
-      ? '${paise ~/ 100}'
-      : (paise / 100).toStringAsFixed(2);
+  String _formatAmount(int paise) =>
+      paise % 100 == 0 ? '${paise ~/ 100}' : (paise / 100).toStringAsFixed(2);
 }

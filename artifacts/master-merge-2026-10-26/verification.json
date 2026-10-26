@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-26",
+  "scope": "master into dev integration; not a production release approval",
+  "dev_parent": "56255939e63edec530d3d578ed5009e281c84af7",
+  "master_parent": "520dc4ba30b0a925737857ce06f7c1c77df3299e",
+  "candidate_sha256": "4902d3a6d933807e634e80cd6ab7a8edb4d604d2682aa44547aa5f7b630061a5",
+  "source_file_count": 1451,
+  "conflicts_resolved": [
+    "api/src/gemini_worker.js",
+    "app/tool/render_notification_sample.dart"
+  ],
+  "migration_prefix_exception": [
+    "20261026130000_notification_delivery_health.sql",
+    "20261026130000_remove_gemini_daily_caps.sql"
+  ],
+  "modified_historical_migration": {
+    "file": "20261025230000_expand_gemini_daily_capacity.sql",
+    "dev_sha256": "e6290c048ad5a38838017a125b3c3bd400807b5f69748dc4fb9dade6c99f3fbd",
+    "master_sha256": "b7393268685c9e61bf14032d9a011b8421d62e9c3348cf0453df5dfc18f34711",
+    "pre_deploy_history_reconciliation_required": true,
+    "checksum_override_added": false
+  },
+  "checks": {
+    "api": {
+      "exit_code": 0,
+      "log_sha256": "cbec22c525cf059555db9149c5164805a0530fef4a9b547e806d858307f205fd",
+      "tests": 1191,
+      "pass": 1189,
+      "fail": 0,
+      "skipped": 2
+    },
+    "auth": {
+      "exit_code": 0,
+      "log_sha256": "42f4283e040c0248dcae5407636e0fc0a9a4d381aec8056bea8f1ff54d9505a8",
+      "tests": 356,
+      "pass": 356,
+      "fail": 0,
+      "skipped": 0
+    },
+    "tools": {
+      "exit_code": 0,
+      "log_sha256": "302c2db3f566f220a3d5bab5cd196edd40114f3eb3dc2415604f69f29017359e",
+      "tests": 229,
+      "pass": 229,
+      "fail": 0,
+      "skipped": 0
+    },
+    "app-analysis": {
+      "exit_code": 0,
+      "log_sha256": "c08a3aa8db2d6fb34fb603a77f9f3f0071e445acbacf5b566ed63e6b31f02d97",
+      "errors": 0,
+      "warnings": 0,
+      "informational_lints": 94
+    },
+    "app-tests": {
+      "exit_code": 0,
+      "log_sha256": "ca06048cd9e722f6af48a338b3130e11c57719dc50a2dfae367b78f49d1a8de7",
+      "pass": 2032
+    },
+    "notification-preview": {
+      "exit_code": 0,
+      "log_sha256": "001c6b13ae27a43bc2aa1a9f2aec9a869c31f2570186c142fcc4a4b9537d6829"
+    },
+    "history-check": {
+      "synthetic_only": true,
+      "database_access": false,
+      "old_dev_checksum_refused": true,
+      "matching_master_checksum_validated": true,
+      "checksum_override_added": false
+    },
+    "syntax": {
+      "javascript_files_parse": 160,
+      "yaml_files_parse": 4
+    },
+    "deployment": {
+      "passed": 23,
+      "failed": 0,
+      "prod_compose_example_parses": true,
+      "deploy_shell_syntax": true
+    }
+  },
+  "strict_release": {
+    "exit_code": 2,
+    "release_ready": false
+  },
+  "live_database_changed": false,
+  "deployed": false,
+  "previous_security_evidence_rewritten": false
+}

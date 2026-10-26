@@ -7,10 +7,17 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/card_bill_ledger.dart';
 import '../../data/user_cards_repository.dart';
 import '../../domain/cycle_engine.dart';
 import '../cards/card_visual.dart';
+import 'card_bill_review_section.dart';
 import 'payments_due_screen.dart' show DuePayment, paymentsDueProvider;
+
+final dueDateCalendarMonthProvider = StateProvider<DateTime>((ref) {
+  final now = ref.watch(clockProvider).now();
+  return DateTime(now.year, now.month);
+});
 
 /// ui-spec.md E8 Due Date Calendar. Statement/due days come from Task E-0's
 /// gap-fill (statementDay already existed client-side; dueDay is new).
@@ -26,6 +33,32 @@ class DueDateCalendarScreen extends ConsumerWidget {
     final pairs = ref.watch(ownedCardsWithProductProvider);
     final reminders = ref.watch(dueDateRemindersProvider);
     final duePayments = ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
+    final ledgers = ref.watch(cardBillLedgerProvider).valueOrNull ??
+        const <String, CardBillLedger>{};
+    final month = ref.watch(dueDateCalendarMonthProvider);
+    final monthHeader = Row(
+      children: [
+        IconButton(
+          tooltip: 'Previous month',
+          icon: const Icon(Icons.chevron_left_rounded),
+          onPressed: () => ref.read(dueDateCalendarMonthProvider.notifier).state =
+              DateTime(month.year, month.month - 1),
+        ),
+        Expanded(
+          child: Text(
+            '${_monthName(month.month)} ${month.year}',
+            textAlign: TextAlign.center,
+            style: BambooFonts.heading(16, color: BambooInk.ink900),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Next month',
+          icon: const Icon(Icons.chevron_right_rounded),
+          onPressed: () => ref.read(dueDateCalendarMonthProvider.notifier).state =
+              DateTime(month.year, month.month + 1),
+        ),
+      ],
+    );
 
     return pairs.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -34,16 +67,11 @@ class DueDateCalendarScreen extends ConsumerWidget {
         onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
       ),
       data: (owned) {
-        final now = DateTime.now();
-
         if (owned.isEmpty) {
           return ListView(
             padding: const EdgeInsets.all(AppSpace.lg),
             children: [
-              Text(
-                '${_monthName(now.month)} ${now.year}',
-                style: BambooFonts.heading(16, color: BambooInk.ink900),
-              ),
+              monthHeader,
               const SizedBox(height: AppSpace.md),
               Container(
                 padding: const EdgeInsets.all(AppSpace.md),
@@ -86,10 +114,7 @@ class DueDateCalendarScreen extends ConsumerWidget {
         return ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
-            Text(
-              '${_monthName(now.month)} ${now.year}',
-              style: BambooFonts.heading(16, color: BambooInk.ink900),
-            ),
+            monthHeader,
             const SizedBox(height: AppSpace.lg),
             // Show every active card. A missing issuer date is shown as
             // unknown instead of hiding that card or inventing a date.
@@ -100,12 +125,20 @@ class DueDateCalendarScreen extends ConsumerWidget {
                   userCard: userCard,
                   product: product,
                   duePayment: duePayments.where((d) => d.card.id == userCard.id).firstOrNull,
+                  ledger: ledgers[userCard.id],
+                  month: month,
                   reminderOn: reminders.contains(userCard.id),
                   onToggleReminder: () => ref
                       .read(dueDateRemindersProvider.notifier)
                       .toggle(userCard.id),
                 ),
               ),
+            CardBillReviewSection(
+              includes: (item) {
+                final date = item.dueDate ?? item.receivedAt;
+                return date.year == month.year && date.month == month.month;
+              },
+            ),
           ],
         );
       },
@@ -132,23 +165,38 @@ class _CardDateTile extends StatelessWidget {
   final UserCard userCard;
   final CardProduct product;
   final DuePayment? duePayment;
+  final CardBillLedger? ledger;
+  final DateTime month;
   final bool reminderOn;
   final VoidCallback onToggleReminder;
   const _CardDateTile({
     required this.userCard,
     required this.product,
     this.duePayment,
+    this.ledger,
+    required this.month,
     required this.reminderOn,
     required this.onToggleReminder,
   });
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final nextDue = duePayment?.dueOn ??
-        (userCard.dueDay == null ? null : _nextOccurrence(userCard.dueDay!, now));
-    final nextStatement = duePayment?.bill?.statementDate ??
-        (userCard.statementDay == null ? null : _nextOccurrence(userCard.statementDay!, now));
+    bool inMonth(DateTime date) => date.year == month.year && date.month == month.month;
+    final observedDue = ledger?.history
+            .where((bill) => bill.dueDate != null && inMonth(bill.dueDate!))
+            .firstOrNull?.dueDate ??
+        (duePayment != null && inMonth(duePayment!.dueOn)
+            ? duePayment!.dueOn : null);
+    final observedStatement = ledger?.history
+            .where((bill) => bill.statementDateExplicit && inMonth(bill.statementDate))
+            .firstOrNull?.statementDate ??
+        (duePayment?.bill?.statementDateExplicit == true &&
+                inMonth(duePayment!.bill!.statementDate)
+            ? duePayment!.bill!.statementDate : null);
+    final nextDue = observedDue ??
+        (userCard.dueDay == null ? null : _dateInMonth(userCard.dueDay!, month));
+    final nextStatement = observedStatement ??
+        (userCard.statementDay == null ? null : _dateInMonth(userCard.statementDay!, month));
     final displayName = userCard.nickname?.isNotEmpty == true
         ? userCard.nickname!
         : product.name;
@@ -208,7 +256,7 @@ class _CardDateTile extends StatelessWidget {
               const SizedBox(height: AppSpace.sm),
               _DateRow(
                 icon: Icons.receipt_outlined,
-                label: 'Statement cuts',
+                label: observedStatement == null ? 'Statement cuts (scheduled)' : 'Statement cuts',
                 date: nextStatement,
               ),
             ],
@@ -216,7 +264,7 @@ class _CardDateTile extends StatelessWidget {
               const SizedBox(height: AppSpace.sm),
               _DateRow(
                 icon: Icons.event_outlined,
-                label: 'Payment due',
+                label: observedDue == null ? 'Payment due (scheduled)' : 'Payment due',
                 date: nextDue,
                 emphasize: true,
               ),
@@ -231,8 +279,8 @@ class _CardDateTile extends StatelessWidget {
     );
   }
 
-  static DateTime _nextOccurrence(int day, DateTime now) =>
-      CycleEngine.nextOccurrence(day, now);
+  static DateTime _dateInMonth(int day, DateTime month) =>
+      CycleEngine.nextOccurrence(day, DateTime(month.year, month.month, 1));
 }
 
 class _MissingDateRow extends StatelessWidget {
@@ -297,7 +345,7 @@ class _DateRow extends StatelessWidget {
           ),
         ),
         Text(
-          '${daysLeft}d',
+          daysLeft < 0 ? '${-daysLeft}d ago' : '${daysLeft}d',
           style: BambooFonts.ui(
             12.5,
             color: emphasize ? BambooInk.clay : BambooInk.ink500,

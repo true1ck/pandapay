@@ -9,7 +9,14 @@ import 'local/financial_store.dart'
 /// ("Minimum due ₹X · due 02 Nov") and combined evidence must still
 /// describe the full bill.
 class CardBillEvidence {
+  final String? sourceId;
+  final String? userCardId;
   final String? cardLast4;
+
+  /// Parsed biller identity, kept separate from the transport sender family.
+  /// Aggregators such as MYTNEU deliver both HDFC card bills and utilities,
+  /// so sender family alone must never make a utility bill card evidence.
+  final String? billerName;
 
   /// Issuer/vendor family of the sending bank, e.g. `MYTNEU` for the HDFC
   /// Tata Neu card whose bill SMS never quotes any card digits.
@@ -29,7 +36,10 @@ class CardBillEvidence {
   final bool isAutopay;
 
   const CardBillEvidence({
+    this.sourceId,
+    this.userCardId,
     required this.cardLast4,
+    this.billerName,
     required this.statementDate,
     required this.statementDateExplicit,
     required this.dueDate,
@@ -56,12 +66,18 @@ class CardBill {
   final DateTime? lastPaymentAt;
   final double confidence;
   final bool isAutopay;
+  final List<String> sourceIds;
 
   /// True when any bill SMS in this cycle explicitly stated the generated /
   /// statement date. A received-date anchor is an approximation, and a due
   /// date collected from a mere reminder SMS must not claim a payments-due
   /// row on its own.
   final bool statementDateVerified;
+
+  /// The issuer explicitly stated this date (or the statement period end).
+  /// A received-date anchor and a scheduled AutoPay date are not statement
+  /// generation dates, even when they are enough to show a due bill.
+  final bool statementDateExplicit;
 
   const CardBill({
     required this.statementDate,
@@ -72,7 +88,9 @@ class CardBill {
     required this.lastPaymentAt,
     required this.confidence,
     this.statementDateVerified = false,
+    this.statementDateExplicit = false,
     this.isAutopay = false,
+    this.sourceIds = const [],
   });
 
   Money? get outstanding {
@@ -106,8 +124,38 @@ class CardBill {
 class CardBillLedger {
   final CardBill? current;
   final CardBill? previous;
+  /// All observed statement cycles, newest first. Older cycles are kept for
+  /// the Due Date Calendar; the live due/payment calculation still uses only
+  /// [current] and [previous].
+  final List<CardBill> history;
 
-  const CardBillLedger({this.current, this.previous});
+  const CardBillLedger({this.current, this.previous, this.history = const []});
+}
+
+/// A captured card-bill SMS that needs a card choice, or one whose choice can
+/// be edited. The original message remains the source of the suggested data.
+class CardBillReviewItem {
+  final String id;
+  final String sender;
+  final String? billerName;
+  final String? body;
+  final DateTime receivedAt;
+  final DateTime? dueDate;
+  final DateTime? statementDate;
+  final Money? amountDue;
+  final String? assignedCardId;
+
+  const CardBillReviewItem({
+    required this.id,
+    required this.sender,
+    required this.billerName,
+    required this.body,
+    required this.receivedAt,
+    required this.dueDate,
+    required this.statementDate,
+    required this.amountDue,
+    required this.assignedCardId,
+  });
 }
 
 /// Payment-shaped transaction detection: the server's canonical merchant
@@ -153,66 +201,28 @@ Map<String, CardBillLedger> deriveCardBills({
   required DateTime now,
 }) {
   final orphanAttributed = <String, List<CardBillEvidence>>{};
-  final orphanRows = evidence.where((e) => e.cardLast4 == null).toList();
+  final orphanRows = evidence
+      .where((e) => e.cardLast4 == null && e.userCardId == null)
+      .toList();
 
   for (final orphan in orphanRows) {
+    if (_isNamedAggregatorNonCardBill(orphan)) continue;
     final candidates = _candidateCardsForEvidence(orphan, cards);
     if (candidates.isEmpty) continue;
 
     UserCard? target;
     if (candidates.length == 1) {
       target = candidates.single;
-    } else if (orphan.amountDue != null) {
-      final billPaise = orphan.amountDue!.paise;
-      final candidateSpends = <UserCard, int>{};
-      final activeCandidates = <UserCard>[];
-
-      for (final candidate in candidates) {
-        final spendPaise = _calculateCandidateCycleSpend(
-          candidate,
-          orphan.statementDate,
-          transactions,
-          evidence: evidence,
-        ).paise;
-        candidateSpends[candidate] = spendPaise;
-        // Disqualify candidates with spend < 5% of bill.
-        if (spendPaise >= billPaise * 0.05 && spendPaise > 0) {
-          activeCandidates.add(candidate);
-        }
-      }
-
-      // Spend data can be incomplete; only use it to identify a bill when one
-      // candidate is within the same rounding band used for payment matching.
-      final spendMatches = activeCandidates.where((candidate) {
-        final difference = (candidateSpends[candidate]! - billPaise).abs();
-        return difference <= (billPaise * 0.02).ceil() + 100;
-      }).toList();
-      if (spendMatches.length == 1) {
-        target = spendMatches.single;
-      }
-    }
-
-    if (target == null) {
-      // Historical attribution fallback if orphan.amountDue was null or unresolved
-      final historical = candidates
-          .where(
-            (c) => _hasHistoricalAttribution(c, orphan.family, evidence, [
-              ...transactions,
-              ...payments,
-            ]),
-          )
-          .toList();
-      if (historical.length == 1) {
-        target = historical.single;
-      } else {
-        // Fallback: only attach if exactly one candidate has a direct name token match
-        final directlyNamed = candidates
-            .where((c) => _familyNamesCard(orphan.family, c))
-            .toList();
-        if (directlyNamed.length == 1) {
-          target = directlyNamed.single;
-        }
-      }
+    } else {
+      // Only a unique card-specific message in this cycle can attach a
+      // suffix-less aggregator bill when several cards share the issuer.
+      final cycleMatches = _explicitCardsForCycle(
+        orphan,
+        candidates,
+        cards,
+        evidence,
+      );
+      if (cycleMatches.length == 1) target = cycleMatches.single;
     }
 
     if (target != null) {
@@ -223,17 +233,30 @@ Map<String, CardBillLedger> deriveCardBills({
   final ledgers = <String, CardBillLedger>{};
   for (final card in cards) {
     final own = evidence
-        .where((e) => e.cardLast4 != null && e.cardLast4 == card.last4 &&
-            cards.where((c) => c.last4 == e.cardLast4).length == 1)
+        .where(
+          (e) =>
+              e.userCardId == card.id ||
+              (e.userCardId == null &&
+                  e.cardLast4 != null &&
+                  e.cardLast4 == card.last4 &&
+                  cards.where((c) => c.last4 == e.cardLast4).length == 1),
+        )
         .toList();
     final attachedOrphans = orphanAttributed[card.id] ?? const [];
     final combined = [...own, ...attachedOrphans];
     if (combined.isNotEmpty) {
       final cycles = _mergeCycles(combined, now: now);
-      if (cycles.isNotEmpty) {
+      final history = _mergeCycles(
+        combined,
+        now: now,
+        maxAge: null,
+        maxCycles: null,
+      );
+      if (cycles.isNotEmpty || history.isNotEmpty) {
         ledgers[card.id] = CardBillLedger(
-          current: cycles.first,
+          current: cycles.firstOrNull,
           previous: cycles.length > 1 ? cycles[1] : null,
+          history: history,
         );
       }
     }
@@ -255,7 +278,8 @@ Map<String, CardBillLedger> deriveCardBills({
     }
     // An explicit but unknown/ambiguous card must never fall back to another
     // card merely because its bill window or amount happens to match.
-    if (txn.cardLast4 != null || txn.userCardId != null ||
+    if (txn.cardLast4 != null ||
+        txn.userCardId != null ||
         _mentionedLast4(txn) != null) {
       continue;
     }
@@ -301,12 +325,51 @@ Map<String, CardBillLedger> deriveCardBills({
   return ledgers;
 }
 
+/// Finds a unique suffix-identified bill from the same cycle as [orphan].
+/// The suffix must identify exactly one saved card. Equal due dates are the
+/// strongest cycle link; when either message lacks a due date, statement
+/// anchors within seven days may link them when both dates are explicit, or
+/// when the same SMS sender family names the card. Ambiguous cycles remain
+/// unresolved.
+List<UserCard> _explicitCardsForCycle(
+  CardBillEvidence orphan,
+  List<UserCard> candidates,
+  List<UserCard> allCards,
+  List<CardBillEvidence> evidence,
+) {
+  final owners = <String, UserCard>{};
+  for (final row in evidence) {
+    final last4 = row.cardLast4;
+    if (last4 == null) continue;
+    final matches = allCards.where((card) => card.last4 == last4).toList();
+    if (matches.length != 1 ||
+        !candidates.any((c) => c.id == matches.single.id)) {
+      continue;
+    }
+    final sameDue =
+        orphan.dueDate != null &&
+        row.dueDate != null &&
+        _day(orphan.dueDate!) == _day(row.dueDate!);
+    final closeAnchors =
+        (orphan.dueDate == null || row.dueDate == null) &&
+        ((orphan.statementDateExplicit && row.statementDateExplicit) ||
+            (orphan.family != null && row.family != null &&
+                canonicalBankSender(orphan.family) ==
+                    canonicalBankSender(row.family))) &&
+        orphan.statementDate.difference(row.statementDate).abs() <=
+            const Duration(days: 7);
+    if (sameDue || closeAnchors) owners[matches.single.id] = matches.single;
+  }
+  return owners.values.toList(growable: false);
+}
+
 UserCard? _explicitCard(List<UserCard> cards, TransactionEntry txn) {
   final last4 = txn.cardLast4;
   if (last4 != null) {
     final hits = cards.where((c) => c.last4 == last4).toList();
     return hits.length == 1
-        ? hits.single : hits.firstWhereOrNull((c) => c.id == txn.userCardId);
+        ? hits.single
+        : hits.firstWhereOrNull((c) => c.id == txn.userCardId);
   }
   final mentioned = _mentionedLast4(txn);
   if (mentioned != null) {
@@ -374,7 +437,9 @@ CardBillLedger _attached(CardBillLedger ledger, List<TransactionEntry> txns) {
           : bill.lastPaymentAt,
       confidence: bill.confidence,
       statementDateVerified: bill.statementDateVerified,
+      statementDateExplicit: bill.statementDateExplicit,
       isAutopay: bill.isAutopay,
+      sourceIds: bill.sourceIds,
     );
   }
 
@@ -410,12 +475,14 @@ CardBillLedger _attached(CardBillLedger ledger, List<TransactionEntry> txns) {
         ledger = CardBillLedger(
           current: ledger.current,
           previous: settle(ledger.previous!, [txn]),
+          history: ledger.history,
         );
       }
     } else if (ledger.current != null) {
       ledger = CardBillLedger(
         current: settle(ledger.current!, [txn]),
         previous: ledger.previous,
+          history: ledger.history,
       );
     }
   }
@@ -425,35 +492,39 @@ CardBillLedger _attached(CardBillLedger ledger, List<TransactionEntry> txns) {
 List<CardBill> _mergeCycles(
   List<CardBillEvidence> rows, {
   required DateTime now,
+  Duration? maxAge = const Duration(days: 95),
+  int? maxCycles = 2,
 }) {
   final ordered = [...rows]
     ..sort((a, b) => b.statementDate.compareTo(a.statementDate));
   ordered.retainWhere(
     (e) =>
         !e.statementDate.isAfter(now) &&
-        _day(now).difference(e.statementDate) <= const Duration(days: 95),
+        (maxAge == null || _day(now).difference(e.statementDate) <= maxAge),
   );
   if (ordered.isEmpty) return const [];
   final cycles = <List<CardBillEvidence>>[
     [ordered.first],
   ];
   for (final row in ordered.skip(1)) {
-    final matchingCycle = cycles.firstWhereOrNull((cycle) => cycle.any(
-      (r) =>
-          (r.dueDate != null &&
-              row.dueDate != null &&
-              r.dueDate == row.dueDate) ||
-          ((r.dueDate == null || row.dueDate == null) &&
-              r.statementDate.difference(row.statementDate).abs() <=
-                  const Duration(days: 7)),
-    ));
+    final matchingCycle = cycles.firstWhereOrNull(
+      (cycle) => cycle.any(
+        (r) =>
+            (r.dueDate != null &&
+                row.dueDate != null &&
+                r.dueDate == row.dueDate) ||
+            ((r.dueDate == null || row.dueDate == null) &&
+                r.statementDate.difference(row.statementDate).abs() <=
+                    const Duration(days: 7)),
+      ),
+    );
     if (matchingCycle != null) {
       matchingCycle.add(row);
-    } else if (cycles.length == 1) {
+    } else if (maxCycles == null || cycles.length < maxCycles) {
       cycles.add([row]);
     }
   }
-  return cycles.take(2).map(_mergeOne).toList();
+  return cycles.map(_mergeOne).toList();
 }
 
 CardBill _mergeOne(List<CardBillEvidence> cycle) {
@@ -495,8 +566,10 @@ CardBill _mergeOne(List<CardBillEvidence> cycle) {
     confidence: confidence,
     isAutopay: cycle.any((e) => e.isAutopay),
     statementDateVerified: cycle.any(
-      (e) => e.statementDateExplicit || e.isAutopay,
+      (e) => e.statementDateExplicit || e.isAutopay || e.userCardId != null,
     ),
+    statementDateExplicit: cycle.any((e) => e.statementDateExplicit),
+    sourceIds: cycle.map((e) => e.sourceId).whereType<String>().toSet().toList(),
   );
 }
 
@@ -507,6 +580,18 @@ bool _familyNamesCard(String? family, UserCard card) =>
       family,
       '${card.nickname ?? ''} ${card.cardName}',
     );
+
+bool _isNamedAggregatorNonCardBill(CardBillEvidence evidence) {
+  final family = evidence.family;
+  final billerName = evidence.billerName?.trim().toLowerCase();
+  if (family == null || billerName == null || billerName.isEmpty) return false;
+  final canonical = canonicalBankSender(family);
+  final aggregator =
+      canonical == 'mytneu' || canonical == 'tnbpay' || canonical == 'tatanu';
+  return aggregator &&
+      !billerName.contains('credit card') &&
+      !billerName.contains('card bill');
+}
 
 extension _FirstWhereOrNull<T> on Iterable<T> {
   T? firstWhereOrNull(bool Function(T) test) {
@@ -569,6 +654,7 @@ List<UserCard> _candidateCardsForEvidence(
   return named;
 }
 
+// ignore: unused_element
 Money _calculateCandidateCycleSpend(
   UserCard card,
   DateTime statementDate,
@@ -611,16 +697,30 @@ Money _calculateCandidateCycleSpend(
   return total;
 }
 
+// ignore: unused_element
 bool _hasHistoricalAttribution(
   UserCard candidate,
   String? orphanFamily,
   List<CardBillEvidence> evidence,
-  List<TransactionEntry> txns,
-) {
+  List<TransactionEntry> txns, {
+  String? orphanBillerName,
+}) {
   if (orphanFamily == null || orphanFamily.isEmpty) return false;
   final canonical = canonicalBankSender(orphanFamily);
   final isAggregator =
       (canonical == 'mytneu' || canonical == 'tnbpay' || canonical == 'tatanu');
+
+  // Aggregator sender history is meaningful only for an actual card bill.
+  // The same MYTNEU/TNBPAY channels deliver utilities, so a named non-card
+  // bill must never inherit a card association through any fallback below.
+  if (isAggregator && orphanBillerName != null) {
+    final biller = orphanBillerName.trim().toLowerCase();
+    if (biller.isNotEmpty &&
+        !biller.contains('credit card') &&
+        !biller.contains('card bill')) {
+      return false;
+    }
+  }
 
   // 1. Evidence check: does any orphan bill from this sender family share an amount with an explicit bill for this candidate?
   for (final orphan in evidence.where(
@@ -643,6 +743,10 @@ bool _hasHistoricalAttribution(
           e.amountDue != null,
     )) {
       if (orphan.amountDue == ex.amountDue) {
+        // For aggregator senders (MYTNEU/TNBPAY) that carry both credit-card
+        // and utility bills, require the biller identity to be absent or to
+        // indicate a credit-card bill. A Goa Electricity bill must not
+        // inherit a historical link established by an HDFC CC bill.
         return true;
       }
     }

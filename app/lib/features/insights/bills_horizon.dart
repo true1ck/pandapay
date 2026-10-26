@@ -85,11 +85,9 @@ class BillsHorizonFilter {
     }
   }
 
-  /// Upcoming keeps recently overdue unpaid rows visible; the month windows
-  /// never widen.
   bool matchesOpenDue(DateTime date) {
     if (isUpcoming) {
-      return !date.isBefore(today.subtract(const Duration(days: 90)));
+      return !date.isBefore(today);
     }
     return matchesDue(date);
   }
@@ -98,7 +96,7 @@ class BillsHorizonFilter {
     final date = bill.dueDate ?? bill.receivedAt;
     if (isUpcoming) {
       if (bill.state == SmsBillState.linked) return false;
-      return !date.isBefore(today.subtract(const Duration(days: 90)));
+      return !date.isBefore(today);
     }
     return matchesDue(date);
   }

@@ -296,7 +296,7 @@ void main() {
   );
 
   test(
-    'investment redemption proceeds are not treated as a new contribution',
+    'investment redemption proceeds are classified as income with investments category',
     () {
       final result = LocalSmsParser.parse(
         namespace: 'user:test',
@@ -305,13 +305,15 @@ void main() {
             'Mutual fund redemption proceeds of Rs.5000 credited to your account ending 2626.',
         receivedAt: DateTime(2026, 10, 18),
       );
-      expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
-      expect(result?.transaction?.merchantName, 'Investment proceeds');
+      expect(result?.transaction?.entryKind, TxnEntryKind.income);
+      expect(result?.transaction?.merchantName, 'Investment return');
+      expect(result?.transaction?.categoryId, 'investments');
+      expect(result?.transaction?.categoryName, 'Investments');
     },
   );
 
   test(
-    'broker settlement payout to the bank is an investment-proceeds transfer',
+    'broker settlement payout to the bank is an investment return income',
     () {
       final result = LocalSmsParser.parse(
         namespace: 'user:test',
@@ -320,8 +322,10 @@ void main() {
             'Dear Sujay We have transferred Rs 93.82 to your bank account ending with XXXXXXX2626 as a part of running account settlement vide Ref No PO26101713812965. To continue trading and investing, add funds back to your Dhan account.',
         receivedAt: DateTime(2026, 10, 18),
       );
-      expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
-      expect(result?.transaction?.merchantName, 'Investment proceeds');
+      expect(result?.transaction?.entryKind, TxnEntryKind.income);
+      expect(result?.transaction?.merchantName, 'Investment return · Dhan');
+      expect(result?.transaction?.categoryId, 'investments');
+      expect(result?.transaction?.categoryName, 'Investments');
       expect(result?.transaction?.accountLast4, '2626');
     },
   );
@@ -338,7 +342,7 @@ void main() {
     expect(result?.transaction?.merchantName, 'Wallet load');
   });
 
-  test('broker refill instruction is not a wallet load of this transaction', () {
+  test('broker refill instruction is an investment return and not a wallet load', () {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'VM-ZERODHA',
@@ -346,8 +350,10 @@ void main() {
           'Rs 2500 payout credited to your bank a/c XX9123. To continue investing, add funds back to your Zerodha account.',
       receivedAt: DateTime(2026, 10, 18),
     );
-    expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
-    expect(result?.transaction?.merchantName, isNot('Wallet load'));
+    expect(result?.transaction?.entryKind, TxnEntryKind.income);
+    expect(result?.transaction?.merchantName, 'Investment return · Zerodha');
+    expect(result?.transaction?.categoryId, 'investments');
+    expect(result?.transaction?.categoryName, 'Investments');
   });
 
   test(
@@ -931,6 +937,54 @@ void main() {
     expect(result?.confidence, greaterThanOrEqualTo(0.85));
   });
 
+  test('keeps MYTNEU Goa Electricity separate from credit-card bills', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'AD-MYTNEU-S',
+      body:
+          'Your Goa Electricity bill of Rs. 927.00 is ready. Pay by 2026-11-09 to avoid late charges: https://m.tneu.in/MYTNEU/X0jzNhN - Tata Neu',
+      receivedAt: DateTime(2026, 10, 25, 8, 22),
+    );
+
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.billerName, 'Goa Electricity');
+    expect(result?.amountDue?.rupees, 927);
+    expect(result?.dueDate, DateTime(2026, 11, 9));
+    expect(result?.cardLast4, isNull);
+    expect(result?.reasonCodes, isNot(contains('credit_card_bill')));
+  });
+
+  test('marks suffix-less MYTNEU HDFC bill as positive card evidence', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'JK-MYTNEU-S',
+      body:
+          'Your HDFC Credit Card bill of Rs. 8331.00 is ready. Pay by 2026-11-08 to avoid late charges: https://m.tneu.in/MYTNEU/r0L1AAE - Tata Neu',
+      receivedAt: DateTime(2026, 10, 21, 10, 1),
+    );
+
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.billerName, 'HDFC Credit Card');
+    expect(result?.amountDue?.rupees, 8331);
+    expect(result?.dueDate, DateTime(2026, 11, 8));
+    expect(result?.cardLast4, isNull);
+    expect(result?.reasonCodes, contains('credit_card_bill'));
+  });
+
+  test('does not parse an AutoPay bill reference as a money amount', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VD-HDFCBK-S',
+      body:
+          'LICNEW Bill 930688185 set for AutoPay on HDFC Bank SmartPay via Credit Card XXXXXXXXXXXX8708 is updated.',
+      receivedAt: DateTime(2026, 9, 3),
+    );
+
+    expect(result?.amountDue, isNull);
+    expect(result?.autopayLimit, isNull);
+    expect(result?.transaction, isNull);
+  });
+
   test(
     'classifies AutoPay alert deduction as a bill observation without creating spend',
     () {
@@ -1350,7 +1404,7 @@ void main() {
   );
   test('mutual fund folio unit allotment does not create a cash spend transaction', () {
     const amcMessages = [
-      'Folio 12345/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',
+      'Folio 1235/67: Purchase of Rs 5000 in HDFC Top 100 Fund processed. 54.321 units allotted at NAV 92.0450 on 05-Oct-2026.',
       'Dear Investor, 45.123 units allotted under Folio 9876543/21 in Nippon India Small Cap Fund - Reg (G) for your investment of Rs 5,000 at NAV 110.8123 on 05-Oct-2026.',
       'Units: 25.432, NAV: 196.50 allotted for your investment of Rs. 5000 in Parag Parikh Flexi Cap Fund, Folio: 123456789.',
       'Units allotted under folio 11223344 for Rs 10000 in ICICI Prudential Bluechip Fund. NAV: 85.25.',
@@ -1369,18 +1423,65 @@ void main() {
 
       expect(obs, isNotNull);
       expect(
-        obs!.transaction,
-        isNull,
-        reason: 'Must not mint a cash spend transaction!',
+        obs!.transaction?.entryKind,
+        TxnEntryKind.investment,
+        reason: 'Must mint an investment transaction, never cash spend!',
       );
+      expect(obs.transaction?.entryKind == TxnEntryKind.spend, isFalse);
       expect(obs.eventType, LocalSmsEventType.investment);
-      expect(obs.disposition, LocalSmsDisposition.localObservation);
       expect(obs.reasonCodes, contains('mf_folio_unit_allotment'));
       expect(obs.amount, isNotNull);
       expect(obs.amount!.paise, greaterThan(0));
       expect(obs.amountDue, obs.amount);
       expect(obs.merchantName, isNotNull);
     }
+  });
+
+  test('mutual fund SIP allotment with under scheme pattern extracts cleanly', () {
+    const body = 'Units allotted under HDFC Gold ETF Fund of Fund-DP Growth for Rs. 100.00 in Folio 1235/67. NAV: 24.50 on 24-Oct-2026.';
+    expect(LocalSmsParser.isInvestmentFolioAllotment(body), isTrue);
+    expect(LocalSmsParser.isNonTransactionNoise('HDFCMF', body), isFalse);
+
+    final obs = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'HDFCMF',
+      body: body,
+      receivedAt: DateTime(2026, 10, 24, 11, 0),
+    );
+
+    expect(obs, isNotNull);
+    expect(obs!.transaction?.entryKind, TxnEntryKind.investment);
+    expect(obs.transaction?.entryKind == TxnEntryKind.spend, isFalse);
+    expect(obs.transaction?.amount.rupees, 100.0);
+    expect(obs.transaction?.merchantName, 'HDFC Gold ETF Fund of Fund-DP Growth');
+    expect(obs.eventType, LocalSmsEventType.investment);
+    expect(obs.disposition, LocalSmsDisposition.sync);
+    expect(obs.merchantName, contains('HDFC Gold ETF Fund of Fund'));
+    expect(obs.amount, Money.fromRupees(100.00));
+    expect(obs.accountLast4, '5/67');
+  });
+
+  test('SEBI quarterly settlement with amount transferred is not noise', () {
+    const body = 'As per SEBI regulations, unused funds of Rs. 15,400.00 have been transferred to your bank account A/C **1234 towards quarterly settlement.';
+    expect(LocalSmsParser.isNonTransactionNoise('VK-ZERODHA', body), isFalse);
+
+    final obs = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VK-ZERODHA',
+      body: body,
+      receivedAt: DateTime(2026, 10, 24),
+    );
+    expect(obs?.transaction, isNotNull);
+    expect(obs?.transaction?.entryKind, TxnEntryKind.income);
+    expect(obs?.transaction?.merchantName, 'Investment return · Zerodha');
+  });
+
+  test('SEBI settlement advisory without amount or future tense is noise', () {
+    const advisory1 = 'As per SEBI guidelines, quarterly settlement of accounts will be processed today. Unused funds will be transferred to your bank account.';
+    expect(LocalSmsParser.isNonTransactionNoise('VK-ZERODHA', advisory1), isTrue);
+
+    const advisory2 = 'As per SEBI regulations, quarterly settlement is scheduled for Friday. Please ensure your bank details are updated.';
+    expect(LocalSmsParser.isNonTransactionNoise('VK-ZERODHA', advisory2), isTrue);
   });
   test('bank account balance and account discovery extracts balance and accounts', () {
     // 1. Canara Bank interest credit 1
@@ -1478,6 +1579,41 @@ void main() {
     }
   });
 
+  test('Axio Amazon Pay Later credit drawdown parses as spend transaction', () {
+    const messages = [
+      (
+        'AX-axioFS-S',
+        'Thank you for availing Pay Later credit of Rs299.0. For more info click https://u.axio.ac/axo/UqpJfCtWpqntk To report misuse call 180012001637 -axio',
+        299.0,
+      ),
+      (
+        'VM-axioFS-S',
+        'Thank you for availing Pay Later credit of Rs859.0. For more info click https://u.axio.ac/axo/OIzBfFTIVHRH30R To report misuse call 180012001637 -axio',
+        859.0,
+      ),
+    ];
+
+    for (final (sender, body, amount) in messages) {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: sender,
+        body: body,
+        receivedAt: DateTime(2026, 10, 24, 15, 30),
+      );
+
+      expect(result, isNotNull);
+      expect(result!.eventType, LocalSmsEventType.transaction);
+      expect(result.disposition, LocalSmsDisposition.sync);
+      expect(result.reasonCodes, contains('axio_pay_later_drawdown'));
+      final txn = result.transaction;
+      expect(txn, isNotNull);
+      expect(txn!.amount, Money.fromRupees(amount));
+      expect(txn.merchantName, 'Amazon Pay Later');
+      expect(txn.instrument, TxnInstrument.other);
+      expect(txn.accountLast4, 'Amazon Pay Later');
+      expect(txn.entryKind, TxnEntryKind.spend);
+    }
+  });
   test('Axio Pay Later bill becomes an upcoming bill, not an account', () {
     const body =
         'Your Pay Later bill of Rs 1038 will be debited on 5th of this month '
@@ -1616,6 +1752,46 @@ void main() {
 
       const s4Vi = 'Dear Customer, Vi postpaid bill generated for 9876543210. Bill amount: Rs 399. Payment due date: 10-Nov-2026.';
       expect(LocalSmsParser.isNonTransactionNoise('VI-CARE', s4Vi), isFalse);
+    });
+  });
+
+  group('betting/gambling spam and no-amount loan limit marketing', () {
+    const loanLimitSpam =
+        'New Credit alert\nYour loan limit is revised. Click here to know more: 1kx.in/khOzn2\nBajaj Markets\nT&C';
+    const bettingSpam =
+        'FRPendingDTIL IPL trusted betting site GullyBET, Instant withdrawal. Fancy bet All games, casino, slots, aviator, cockfight. Huge bonus gbets.win/1w1';
+
+    test('VK-BFDLPS-S loan limit alert is noise and not captured as financial', () {
+      expect(
+        LocalSmsParser.isNonTransactionNoise('VK-BFDLPS-S', loanLimitSpam),
+        isTrue,
+      );
+      expect(
+        capturesFinancialSms(loanLimitSpam, sender: 'VK-BFDLPS-S'),
+        isFalse,
+      );
+    });
+
+    test('CP-DISHTV-S betting spam is noise and not captured as financial', () {
+      expect(
+        LocalSmsParser.isNonTransactionNoise('CP-DISHTV-S', bettingSpam),
+        isTrue,
+      );
+      expect(
+        capturesFinancialSms(bettingSpam, sender: 'CP-DISHTV-S'),
+        isFalse,
+      );
+    });
+
+    test('Counter-tests: Real ATM withdrawal and credit are captured and not noise', () {
+      const realAtm = 'Cash withdrawal of Rs. 2,000 from A/c XX1234';
+      const realCredit = 'Rs. 5,000 credited to A/c XX1234';
+
+      expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', realAtm), isFalse);
+      expect(capturesFinancialSms(realAtm, sender: 'HDFCBK'), isTrue);
+
+      expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', realCredit), isFalse);
+      expect(capturesFinancialSms(realCredit, sender: 'HDFCBK'), isTrue);
     });
   });
 }

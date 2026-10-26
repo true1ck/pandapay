@@ -26,7 +26,7 @@ void main(List<String> args) {
     ]) {
       final tinted = read('drawable-$density/ic_notification.png');
       for (final p in tinted) {
-        p.setRgba(0x14, 0xB8, 0xA6, p.a);
+        p.setRgba(0xFF, 0xFF, 0xFF, p.a);
       }
       img.compositeImage(
         strip,

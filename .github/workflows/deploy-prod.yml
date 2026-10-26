@@ -214,10 +214,17 @@ jobs:
                 WHERE created_at > now() - interval '24 hours' GROUP BY status
               ) AS counts
             ), '{}'::json),
-            'providerReservationsLast24Hours', (
+            'providerReservationsLast10Minutes', (
               SELECT count(*) FROM public.ai_provider_reservations
-              WHERE created_at > now() - interval '24 hours'
+              WHERE created_at > now() - interval '10 minutes'
             ),
+            'capacityChecksByOutcomeLast24Hours', COALESCE((
+              SELECT json_object_agg(outcome, check_count)
+              FROM (
+                SELECT outcome, count(*) AS check_count FROM public.ai_provider_capacity_checks
+                WHERE checked_at > now() - interval '24 hours' GROUP BY outcome
+              ) AS capacity_checks
+            ), '{}'::json),
             'successfulResultsLast24Hours', (
               SELECT count(*) FROM public.ai_events
               WHERE event_type = 'result' AND created_at > now() - interval '24 hours'
@@ -225,7 +232,16 @@ jobs:
             'providerRetriesLast24Hours', (
               SELECT count(*) FROM public.ai_events
               WHERE event_type = 'provider_retry' AND created_at > now() - interval '24 hours'
-            )
+            ),
+            'providerRetriesByReasonLast24Hours', COALESCE((
+              SELECT json_object_agg(reason, retry_count)
+              FROM (
+                SELECT COALESCE(payload->>'reason', 'unspecified') AS reason, count(*) AS retry_count
+                FROM public.ai_events
+                WHERE event_type = 'provider_retry' AND created_at > now() - interval '24 hours'
+                GROUP BY COALESCE(payload->>'reason', 'unspecified')
+              ) AS retry_reasons
+            ), '{}'::json)
           );
           SQL
           REMOTE

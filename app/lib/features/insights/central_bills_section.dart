@@ -13,6 +13,24 @@ import 'bills_horizon.dart';
 String _identity(String? value) =>
     (value ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
 
+/// Returns true if a central projection represents a credit card obligation.
+bool isCreditCardBill(BillProjection row) {
+  if (row.projectionKind != 'bill_obligation') return false;
+  final title = (row.billerName ?? row.serviceName ?? '').toLowerCase();
+  final kind = (row.projection['obligationKind'] as String? ?? '').toLowerCase();
+  final category = (row.projection['category'] as String? ?? '').toLowerCase();
+  if (kind.contains('credit_card') || kind.contains('card')) return true;
+  if (category.contains('credit_card') || category.contains('card')) return true;
+  if (title.contains('credit card') || title.contains('card bill')) return true;
+  const issuers = [
+    'hdfc', 'sbi', 'icici', 'axis', 'kotak', 'amex',
+    'citi', 'rbl', 'indusind', 'bob', 'pnb', 'idfc', 'onecard'
+  ];
+  final hasIssuer = issuers.any((b) => title.contains(b));
+  if (hasIssuer && (title.contains('card') || title.contains('credit'))) return true;
+  return false;
+}
+
 /// Local NACH/auto-debit evidence that has not been turned into a
 /// subscription. Shared so the tab's empty state and the section agree.
 List<Map<String, dynamic>> localAutopayMandates(
@@ -55,7 +73,8 @@ class CentralBillDedupKey {
 }
 
 final centralBillsProjectionApiProvider = Provider<BillsProjectionApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  ref.watch(cacheNamespaceProvider);
+  final token = ref.read(accessTokenProvider);
   if (token == null) return null;
   return BillsProjectionApi(
     apiBaseUrl: Env.apiBaseUrl,
@@ -104,7 +123,10 @@ class CentralBillsSection extends ConsumerWidget {
         .toList(growable: false);
 
     final showMandates = filter == null || filter!.showsAutopay;
-    final bills = rows.where((row) => row.projectionKind == 'bill_obligation').toList();
+    final bills = rows
+        .where((row) => row.projectionKind == 'bill_obligation')
+        .where((row) => !isCreditCardBill(row))
+        .toList();
     final mandates = showMandates
         ? rows.where((row) {
             if (row.projectionKind != 'mandate') return false;
@@ -167,6 +189,16 @@ bool _duplicatesExistingBill(
     return true;
   }
 
+  // Hosted facts created from issuer/aggregator bill messages may not carry
+  // a suffix. Once the local ledger has resolved that exact amount and due
+  // date to an owned card, the suffix-less projection is the same bill, not
+  // a second generic "HDFC Credit Card" obligation.
+  if (row.last4 == null &&
+      cardRows.any((card) =>
+          _sameLocalDay(card.dueOn, date) && sameAmount(card.amountInr))) {
+    return true;
+  }
+
   final title = _identity(row.billerName ?? row.serviceName);
   if (title.isEmpty) return false;
   return localCommitments.any((commitment) {
@@ -196,6 +228,9 @@ bool hasVisibleCentralBills(
   return snapshot.projections.any((row) {
     if (row.projectionKind != 'bill_obligation' &&
         row.projectionKind != 'mandate') {
+      return false;
+    }
+    if (row.projectionKind == 'bill_obligation' && isCreditCardBill(row)) {
       return false;
     }
     if (row.projectionKind == 'mandate') {

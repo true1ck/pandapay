@@ -169,7 +169,7 @@ void main() {
       ('Annual premium.', 'annual'),
     ]) {
       final namespace = 'user:insurance-$cadence';
-      final body = 'Your vehicle insurance expires on 25-Oct-2026. $evidence';
+      final body = 'Your vehicle insurance expires on 25-Oct-2027. $evidence';
       expect(classifySmsTriage('VM-HDFCER-S', body).kind,
           SmsTriageKind.financialCandidate);
       SmsImportStore(cache.financialStore).capture(namespace, QueuedSms(

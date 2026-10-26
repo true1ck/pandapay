@@ -12,11 +12,10 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
-import '../../data/spend_by_category_repository.dart' show CategorySpend;
 import '../../data/spend_reports_repository.dart'
     show SpendBreakdownRow, SpendPeriod, SpendReportQuery;
 import '../../data/user_cards_repository.dart'
-    show BankAccountSummary, TransactionEntry, TxnEntryKind, UserCard;
+    show BankAccountSummary, TransactionEntry, UserCard;
 import '../../main.dart' show MoneyText;
 import '../comparison/comparison_view_screen.dart';
 import '../insights/credit_utilization_screen.dart';
@@ -25,7 +24,6 @@ import '../insights/payments_due_screen.dart'
     show DuePayment, paymentsDueProvider;
 import '../../data/card_bill_ledger.dart' show CardBill;
 import '../insights/spend_trends_screen.dart' show SpendingDonut;
-import '../insights/spending_visuals.dart' show spendingCategoryVisual;
 import '../import/import_hub_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
 import '../quickadd/quick_add_screen.dart';
@@ -211,7 +209,6 @@ class HomeScreen extends ConsumerWidget {
                       ),
                       const _AlertsStrip(),
                       const _UtilizationWarningBanner(),
-                      const _HomeCategories(),
                       const _HomeDuesAndReminders(),
                       const _HomeAccountSnapshot(),
                       const SizedBox(height: AppSpace.lg),
@@ -3120,218 +3117,6 @@ class _HomeBankLogo extends StatelessWidget {
           11,
           weight: FontWeight.w800,
           color: BambooInk.lime,
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeCategories extends ConsumerWidget {
-  const _HomeCategories();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final report = ref
-        .watch(
-          spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
-        )
-        .valueOrNull;
-    final apiRows =
-        ref.watch(categorySpendProvider).valueOrNull ?? const <CategorySpend>[];
-    final transactions =
-        ref.watch(transactionsProvider).valueOrNull ??
-        const <TransactionEntry>[];
-    final reportRows = report?.byCategory ?? const [];
-    final rows = reportRows.isNotEmpty
-        ? [
-            for (final row in reportRows)
-              CategorySpend(
-                categoryId: row.categoryId,
-                categorySlug: null,
-                categoryName: row.label == 'Other' ? null : row.label,
-                totalSpend: row.total,
-                txnCount: row.txnCount,
-              ),
-          ]
-        : (apiRows.isNotEmpty
-              ? apiRows
-              : _categorySpendFromTransactions(transactions));
-    final sorted = [...rows]
-      ..sort((a, b) => b.totalSpend.rupees.compareTo(a.totalSpend.rupees));
-    final visible = sorted.take(6).toList();
-
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpace.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: HomeScreen._gutter),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Categories',
-                    style: BambooFonts.heading(20, color: BambooInk.ink900),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => context.push(AppRoute.spendTrends),
-                  child: const Text('View all'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpace.xs),
-          if (visible.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: HomeScreen._gutter,
-              ),
-              child: Container(
-                height: 96,
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpace.md),
-                decoration: BoxDecoration(
-                  color: BambooInk.glassFillOnPaper,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: BambooInk.hairlineOnPaper),
-                ),
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Categories will appear after your first categorized spend.',
-                  style: BambooFonts.ui(13, color: BambooInk.ink500),
-                ),
-              ),
-            )
-          else
-            SizedBox(
-              height: 132,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: HomeScreen._gutter,
-                ),
-                scrollDirection: Axis.horizontal,
-                itemCount: visible.length,
-                separatorBuilder: (_, _) => const SizedBox(width: AppSpace.sm),
-                itemBuilder: (context, index) =>
-                    _HomeCategoryCard(row: visible[index]),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              HomeScreen._gutter,
-              AppSpace.xs,
-              HomeScreen._gutter,
-              0,
-            ),
-            child: Text(
-              visible.isEmpty
-                  ? 'Waiting for categorized spends'
-                  : 'This month · tap a category for details',
-              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-List<CategorySpend> _categorySpendFromTransactions(
-  List<TransactionEntry> transactions,
-) {
-  final totals = <String, Money>{};
-  final counts = <String, int>{};
-  for (final transaction in transactions) {
-    if (transaction.status != 'active' ||
-        transaction.entryKind != TxnEntryKind.spend) {
-      continue;
-    }
-    final label = transaction.categoryLabel == 'Other'
-        ? 'Other spending'
-        : transaction.categoryLabel;
-    totals[label] = (totals[label] ?? const Money.zero()) + transaction.amount;
-    counts[label] = (counts[label] ?? 0) + 1;
-  }
-  return [
-    for (final entry in totals.entries)
-      CategorySpend(
-        categoryId: null,
-        categorySlug: null,
-        categoryName: entry.key == 'Other spending' ? null : entry.key,
-        totalSpend: entry.value,
-        txnCount: counts[entry.key] ?? 0,
-      ),
-  ];
-}
-
-class _HomeCategoryCard extends StatelessWidget {
-  final CategorySpend row;
-
-  const _HomeCategoryCard({required this.row});
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = spendingCategoryVisual(row.displayName);
-    return SizedBox(
-      width: 232,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => context.push(
-          '${AppRoute.spendTrends}?category=${Uri.encodeComponent(row.categoryId ?? row.categoryName ?? 'Other')}',
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpace.md),
-          decoration: BoxDecoration(
-            color: BambooInk.glassFillOnPaper,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: BambooInk.hairlineOnPaper),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: visual.surface,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(visual.icon, size: 19, color: visual.accent),
-                  ),
-                  const SizedBox(width: AppSpace.sm),
-                  Expanded(
-                    child: Text(
-                      row.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: BambooFonts.ui(
-                        14,
-                        weight: FontWeight.w700,
-                        color: BambooInk.ink900,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              MoneyText(
-                row.totalSpend,
-                confidence: Confidence.estimated,
-                style: BambooFonts.money(20, color: BambooInk.ink900),
-                hidePaise: true,
-                showConfidenceIcon: false,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${row.txnCount} ${row.txnCount == 1 ? 'spend' : 'spends'}',
-                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-              ),
-            ],
-          ),
         ),
       ),
     );

@@ -22,12 +22,12 @@ function routeHarness(withUserClient) {
   };
 }
 
-test('provider reservation validates token estimates and applies the Free RPM, TPM, and RPD caps', async () => {
+test('provider reservation validates token estimates and applies minute request/token pacing', async () => {
   let args;
   const call = routeHarness(async (userId, fn) => {
     assert.equal(userId, null);
     return fn({ query: async (sql, params) => {
-      assert.match(sql, /ai_reserve_provider_capacity\(\$1, \$2, \$3, \$4\)/);
+      assert.match(sql, /ai_reserve_provider_capacity\(\$1, \$2, \$3\)/);
       args = params;
       return { rows: [{ reservation: { allowed: false, waitMs: 900 } }] };
     } });
@@ -35,7 +35,7 @@ test('provider reservation validates token estimates and applies the Free RPM, T
   const bad = await call({ estimatedTokens: 0 });
   assert.equal(bad.statusCode, 400);
   const ok = await call({ estimatedTokens: 450 });
-  assert.deepEqual(args, [5, 12000, 20, 450]);
+  assert.deepEqual(args, [30, 24000, 450]);
   assert.deepEqual(ok.body, { allowed: false, waitMs: 900 });
 });
 
@@ -46,11 +46,10 @@ test('provider reservation returns a safe unavailable response on database error
   assert.deepEqual(res.body, { error: 'provider capacity reservation unavailable' });
 });
 
-test('Free-tier daily exhaustion releases capacity once with the next reset delay', async () => {
+test('minute pacing waits and retries without applying a daily request cap', async () => {
   const { reserveProviderCapacity } = require('../src/gemini_worker');
   let calls = 0;
-  await assert.rejects(
-    reserveProviderCapacity({
+  const permit = await reserveProviderCapacity({
       jobs: [{ id: 'job', payload: { body: 'synthetic fixture' } }],
       apiBaseUrl: 'http://api.test',
       workerToken: 'worker-token',
@@ -60,35 +59,29 @@ test('Free-tier daily exhaustion releases capacity once with the next reset dela
           ok: true,
           status: 200,
           headers: { get: () => null },
-          json: async () => ({ allowed: false, dailyLimitReached: true, retryAfterMs: 60000 }),
+          json: async () => calls === 1
+            ? ({ allowed: false, waitMs: 250 })
+            : ({ allowed: true, waitMs: 0 }),
         };
       },
-      waitImpl: async () => assert.fail('daily exhaustion must not poll in a tight loop'),
-    }),
-    (error) => error.retryable === true && error.retryAfterMs === 60000,
-  );
-  assert.equal(calls, 1);
+      waitImpl: async (ms) => assert.equal(ms, 250),
+    });
+  assert.equal(calls, 2);
+  assert.deepEqual(permit, { allowed: true, waitMs: 0 });
 });
 
-test('Gemini Free-tier limits cap configured settings at 15 RPM and 1500 RPD', () => {
+test('provider limits configure minute request/token pacing only', () => {
   const { providerLimits } = require('../src/ai_provider_quota_route');
   process.env.GEMINI_REQUESTS_PER_MINUTE = '12';
   process.env.GEMINI_TOKENS_PER_MINUTE = '500000';
-  process.env.GEMINI_REQUESTS_PER_DAY = '200';
   assert.deepEqual(providerLimits(), {
     requestsPerMinute: 12,
     tokensPerMinute: 500000,
-    requestsPerDay: 200,
   });
-  process.env.GEMINI_REQUESTS_PER_MINUTE = '20';
-  process.env.GEMINI_REQUESTS_PER_DAY = '2000';
-  assert.equal(providerLimits().requestsPerMinute, 15);
-  assert.equal(providerLimits().requestsPerDay, 1500);
+  process.env.GEMINI_REQUESTS_PER_MINUTE = '40';
+  assert.equal(providerLimits().requestsPerMinute, 30);
   process.env.GEMINI_REQUESTS_PER_MINUTE = '0';
-  assert.equal(providerLimits().requestsPerMinute, 5);
-  process.env.GEMINI_REQUESTS_PER_DAY = '0';
-  assert.equal(providerLimits().requestsPerDay, 20);
+  assert.equal(providerLimits().requestsPerMinute, 30);
   delete process.env.GEMINI_REQUESTS_PER_MINUTE;
   delete process.env.GEMINI_TOKENS_PER_MINUTE;
-  delete process.env.GEMINI_REQUESTS_PER_DAY;
 });

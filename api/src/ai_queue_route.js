@@ -71,27 +71,38 @@ function registerAiQueueRoutes(app, {
     if (!workerAuthEnabled()) {
       return res.status(503).json({ error: 'ai_queue_disabled' });
     }
-    const { sourceKey, sender, body, occurredAt } = req.body || {};
+    const { sourceKey, sender, body, occurredAt, retryFailed } = req.body || {};
     if (typeof sourceKey !== 'string' || !/^[0-9a-f]{64}$/.test(sourceKey)) {
       return res.status(400).json({ error: 'sourceKey must be a hex sha256' });
     }
     if (typeof sender !== 'string' || sender.length < 2 || sender.length > 40) {
       return res.status(400).json({ error: 'sender must be 2-40 chars' });
     }
-    if (typeof body !== 'string' || body.length === 0 || body.length > 900) {
-      return res.status(400).json({ error: 'body must be a non-empty message under 900 chars' });
+    if (typeof body !== 'string' || body.length === 0) {
+      return res.status(400).json({ error: 'body must be a non-empty message' });
     }
     try {
       const outcome = await withUserClient(req.userId, async (client) => {
         if (!(await aiQueueEnabled(client, req.userId))) {
           return { accepted: false, reason: 'ai_queue_disabled' };
         }
-        return geminiQueue.acceptOneJob(client, req.userId, { sourceKey, sender, body, occurredAt });
+        return geminiQueue.acceptOneJob(client, req.userId, {
+          sourceKey,
+          sender,
+          body,
+          occurredAt,
+          retryFailed: retryFailed === true,
+        });
       });
       if (!outcome.accepted) {
         const status = outcome.reason === 'daily_quota_exhausted' ? 429
-          : outcome.reason === 'ai_queue_disabled' ? 503 : 400;
-        return res.status(status).json({ error: outcome.reason });
+          : outcome.reason === 'ai_queue_disabled' ? 503
+            : outcome.reason === 'job_terminal' ? 409 : 400;
+        return res.status(status).json({
+          error: outcome.reason,
+          ...(outcome.jobId ? { jobId: outcome.jobId } : {}),
+          ...(outcome.terminal ? { terminal: true } : {}),
+        });
       }
       res.status(200).json({ jobId: outcome.jobId, reused: outcome.reused === true });
     } catch (error) {
@@ -110,7 +121,12 @@ function registerAiQueueRoutes(app, {
     try {
       const job = await withUserClient(req.userId, async (client) => {
         const rows = await client.query(
-          `SELECT id, status, result, attempts, created_at, updated_at
+          `SELECT id, status, result, attempts, created_at, updated_at,
+                  payload->>'failReason' AS fail_reason,
+                  payload->'failureDetails' AS failure_details,
+                  (SELECT payload->>'reason' FROM ai_events
+                    WHERE job_id = ai_jobs.id AND event_type = 'provider_retry'
+                    ORDER BY created_at DESC LIMIT 1) AS last_retry_reason
              FROM ai_jobs WHERE profile_id = $1 AND source_key = $2`,
           [req.userId, req.params.sourceKey],
         );
@@ -126,17 +142,31 @@ function registerAiQueueRoutes(app, {
             factType: fact.factType,
             payload: fact.payload,
           }));
-        return { ...found, suggestions };
+        return {
+          ...found,
+          decision: found.result?.decision || null,
+          suggestions,
+        };
       });
       if (!job) return res.status(404).json({ error: 'unknown source' });
       res.status(200).json({
         jobId: job.id,
         status: job.status,
+        decision: job.decision || null,
         result: job.result || null,
         // Only validated structured facts, scoped to the authenticated owner.
         // The raw SMS and model prompt have already been purged from the job.
         suggestions: job.suggestions,
         attempts: job.attempts,
+        ...((job.status === 'failed' ? job.fail_reason : job.last_retry_reason || job.fail_reason)
+          ? { failureReason: job.status === 'failed'
+            ? [job.fail_reason, ...(Array.isArray(job.failure_details) ? job.failure_details : [])]
+              .filter(Boolean).join(': ')
+            : (job.last_retry_reason || job.fail_reason) }
+          : {}),
+        ...(job.status === 'failed' && Array.isArray(job.failure_details) && job.failure_details.length > 0
+          ? { failureDetails: job.failure_details }
+          : {}),
         createdAt: job.created_at,
         updatedAt: job.updated_at,
       });
@@ -181,7 +211,7 @@ function registerAiQueueRoutes(app, {
   });
 
   app.post('/ai/jobs/:id/result', requireWorkerAuth, async (req, res) => {
-    const { facts, leaseToken, profileId, batchId, batchSize } = req.body || {};
+    const { decision, facts, leaseToken, profileId, batchId, batchSize } = req.body || {};
     if (!Array.isArray(facts) || facts.length > 20) {
       return res.status(400).json({ error: 'facts must be an array (max 20)' });
     }
@@ -214,6 +244,7 @@ function registerAiQueueRoutes(app, {
         }
         const completion = await geminiQueue.completeJobWithResult(client, {
           job,
+          decision: decision || null,
           facts,
           batchMetadata: {
             ...(typeof batchId === 'string' && /^[0-9a-f-]{36}$/i.test(batchId) ? { batchId } : {}),
@@ -226,6 +257,7 @@ function registerAiQueueRoutes(app, {
         return {
           status: 200,
           jobStatus: 'done',
+          decision: completion.decision || null,
           reviewRequired: completion.reviewRequired,
           confidenceScore: completion.confidenceScore,
         };
@@ -302,12 +334,12 @@ function registerAiQueueRoutes(app, {
   app.get('/admin/sms-ai/summary', requireAdmin, async (req, res) => {
     try {
       const summary = await withUserClient(req.userId, async (client) => {
-        const { requestsPerMinute, tokensPerMinute, requestsPerDay } = providerLimits();
+        const { requestsPerMinute, tokensPerMinute } = providerLimits();
         const [result, capacity] = await Promise.all([
           client.query('SELECT pandapay.ai_admin_summary() AS summary'),
           client.query(
-            'SELECT pandapay.ai_provider_admin_summary($1, $2, $3) AS provider_capacity',
-            [requestsPerMinute, tokensPerMinute, requestsPerDay],
+            'SELECT pandapay.ai_provider_admin_summary($1, $2) AS provider_capacity',
+            [requestsPerMinute, tokensPerMinute],
           ),
         ]);
         return { ...result.rows[0].summary, providerCapacity: capacity.rows[0].provider_capacity };

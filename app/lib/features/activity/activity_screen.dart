@@ -965,7 +965,9 @@ extension on _ActivityTypeFilter {
           entry.entryKind == TxnEntryKind.investment,
     _ActivityTypeFilter.transfers => entry.entryKind == TxnEntryKind.transfer,
     _ActivityTypeFilter.investments =>
-      entry.entryKind == TxnEntryKind.investment,
+      entry.entryKind == TxnEntryKind.investment ||
+          entry.categoryId == 'investments' ||
+          (entry.categoryName?.toLowerCase() == 'investments'),
   };
 }
 
@@ -1592,7 +1594,14 @@ class _TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isIncome = entry.entryKind == TxnEntryKind.income;
-    final entryLabel = entry.entryKind.label;
+    final isInvestmentCategory =
+        entry.categoryId == 'investments' ||
+        entry.categoryName?.toLowerCase() == 'investments';
+    final entryLabel = (isIncome && isInvestmentCategory)
+        ? 'Investment return'
+        : (entry.entryKind == TxnEntryKind.investment || isInvestmentCategory)
+        ? 'Investment'
+        : entry.entryKind.label;
     final isMoneyOut =
         entry.entryKind == TxnEntryKind.spend ||
         entry.entryKind == TxnEntryKind.investment;
@@ -1624,7 +1633,8 @@ class _TransactionTile extends StatelessWidget {
     );
     final subtitleParts = <String>[
       isSmsImported ? '$timeLabel · SMS' : timeLabel,
-      if (entry.entryKind != TxnEntryKind.spend) entryLabel,
+      if (entry.entryKind != TxnEntryKind.spend || isInvestmentCategory)
+        entryLabel,
       if (entry.cardDisplayName != null) entry.cardDisplayName!,
       if (entry.cardDisplayName == null &&
           entry.instrument == TxnInstrument.creditCard)
@@ -1636,6 +1646,11 @@ class _TransactionTile extends StatelessWidget {
         entry.accountLast4 == null
             ? 'Bank account · unmatched'
             : 'Bank account ending ${entry.accountLast4}',
+      if (entry.cardDisplayName == null &&
+          entry.instrument == TxnInstrument.other &&
+          (entry.accountLast4 == 'Amazon Pay Later' ||
+              entry.merchantName == 'Amazon Pay Later'))
+        'Amazon Pay Later',
       if (isIgnored) 'Excluded from spend',
       if (entry.status == 'active' &&
           entry.rewardState == 'estimated' &&
@@ -1670,8 +1685,12 @@ class _TransactionTile extends StatelessWidget {
                     ? Icons.undo_rounded
                     : isIgnored
                     ? Icons.block_rounded
+                    : (isInvestmentCategory && isIncome)
+                    ? Icons.trending_up_rounded
                     : isIncome
                     ? Icons.arrow_downward_rounded
+                    : (entry.entryKind == TxnEntryKind.investment || isInvestmentCategory)
+                    ? Icons.trending_up_rounded
                     : isMoneyOut
                     ? Icons.arrow_upward_rounded
                     : entry.entryKind == TxnEntryKind.transfer

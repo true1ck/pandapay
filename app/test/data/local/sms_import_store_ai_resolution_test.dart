@@ -47,22 +47,22 @@ void main() {
       );
 
   void insertReviewRow(NeedsReviewItem item) {
-    db.db.execute(
-      'INSERT OR REPLACE INTO local_needs_review VALUES (?,?,?)',
-      [ns, item.id, jsonEncode(item.toJson())],
-    );
+    db.db.execute('INSERT OR REPLACE INTO local_needs_review VALUES (?,?,?)', [
+      ns,
+      item.id,
+      jsonEncode(item.toJson()),
+    ]);
   }
 
-  int reviewCount() => db.db
-      .select('SELECT COUNT(*) AS n FROM local_needs_review WHERE namespace=?', [
-        ns,
-      ])
-      .single['n'] as int;
+  int reviewCount() =>
+      db.db.select(
+            'SELECT COUNT(*) AS n FROM local_needs_review WHERE namespace=?',
+            [ns],
+          ).single['n']
+          as int;
 
-  List<Map<String, dynamic>> transactions() => store.entities(
-    ns,
-    'transactions',
-  );
+  List<Map<String, dynamic>> transactions() =>
+      store.entities(ns, 'transactions');
 
   Map<String, dynamic> swiggySuggestion({bool isComplete = true}) => {
     'factIndex': 0,
@@ -127,46 +127,49 @@ void main() {
     return DateTime.utc(now.year, now.month, now.day).add(Duration(days: days));
   }
 
-  test('Tier 1 spend writes a transaction and history, then removes review', () {
-    final item = reviewItem();
-    insertReviewRow(item);
+  test(
+    'Tier 1 spend writes a transaction and history, then removes review',
+    () {
+      final item = reviewItem();
+      insertReviewRow(item);
 
-    final result = importStore.resolveAiSuggestions(ns, item, [
-      swiggySuggestion(),
-    ]);
+      final result = importStore.resolveAiSuggestions(ns, item, [
+        swiggySuggestion(),
+      ]);
 
-    expect(result.outcome, SmsAiResolutionOutcome.autoResolved);
-    expect(result.score, greaterThanOrEqualTo(0.85));
-    expect(result.historyId, 'ai:$sourceKey');
-    expect(reviewCount(), 0);
+      expect(result.outcome, SmsAiResolutionOutcome.autoResolved);
+      expect(result.score, greaterThanOrEqualTo(0.85));
+      expect(result.historyId, 'ai:$sourceKey');
+      expect(reviewCount(), 0);
 
-    final rows = transactions();
-    expect(rows, hasLength(1));
-    expect(rows.single['id'], 'local-ai:$sourceKey');
-    expect(rows.single['source_key'], sourceKey);
-    expect(rows.single['amount_inr'], 420.0);
-    expect(rows.single['category_id'], 'dining');
-    expect(rows.single['category_name'], 'Dining');
-    expect(rows.single['instrument'], 'upi_bank');
-    expect(rows.single['entry_kind'], 'spend');
-    expect(rows.single['source'], 'sms');
-    expect(rows.single['status'], 'active');
+      final rows = transactions();
+      expect(rows, hasLength(1));
+      expect(rows.single['id'], 'local-ai:$sourceKey');
+      expect(rows.single['source_key'], sourceKey);
+      expect(rows.single['amount_inr'], 420.0);
+      expect(rows.single['category_id'], 'dining');
+      expect(rows.single['category_name'], 'Dining');
+      expect(rows.single['instrument'], 'upi_bank');
+      expect(rows.single['entry_kind'], 'spend');
+      expect(rows.single['source'], 'sms');
+      expect(rows.single['status'], 'active');
 
-    final history = AutoResolvedHistoryRepository(
-      db,
-      namespace: ns,
-    ).fetchAll();
-    expect(history, hasLength(1));
-    final entry = history.single;
-    expect(entry.id, 'ai:$sourceKey');
-    expect(entry.resolvedKind, 'transaction');
-    expect(entry.title, 'Swiggy');
-    expect(entry.amountPaise, 42000);
-    expect(entry.categorySlug, 'dining');
-    expect(entry.categoryName, 'Dining');
-    expect(entry.confidence, result.score);
-    expect(entry.isUserModified, isFalse);
-  });
+      final history = AutoResolvedHistoryRepository(
+        db,
+        namespace: ns,
+      ).fetchAll();
+      expect(history, hasLength(1));
+      final entry = history.single;
+      expect(entry.id, 'ai:$sourceKey');
+      expect(entry.resolvedKind, 'transaction');
+      expect(entry.title, 'Swiggy');
+      expect(entry.amountPaise, 42000);
+      expect(entry.categorySlug, 'dining');
+      expect(entry.categoryName, 'Dining');
+      expect(entry.confidence, result.score);
+      expect(entry.isUserModified, isFalse);
+    },
+  );
 
   test('replay is idempotent: one transaction, one history row', () {
     final item = reviewItem();
@@ -179,10 +182,7 @@ void main() {
 
     expect(replay.outcome, SmsAiResolutionOutcome.autoResolved);
     expect(transactions(), hasLength(1));
-    expect(
-      AutoResolvedHistoryRepository(db, namespace: ns).count(),
-      1,
-    );
+    expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 1);
   });
 
   test('Tier 1 future bill writes local_commitments and history', () {
@@ -212,10 +212,7 @@ void main() {
     expect(payload['status'], 'due');
     expect(payload['source'], 'sms');
 
-    final history = AutoResolvedHistoryRepository(
-      db,
-      namespace: ns,
-    ).fetchAll();
+    final history = AutoResolvedHistoryRepository(db, namespace: ns).fetchAll();
     expect(history.single.resolvedKind, 'bill');
     expect(history.single.amountPaise, 145000);
     expect(history.single.dueDate, isNotNull);
@@ -265,38 +262,35 @@ void main() {
     expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
   });
 
-  test('server reviewRequired=true keeps an otherwise high score in review', () {
+  test(
+    'server reviewRequired=true keeps an otherwise high score in review',
+    () {
+      final item = reviewItem();
+      insertReviewRow(item);
+
+      final result = importStore.resolveAiSuggestions(ns, item, [
+        swiggySuggestion(),
+      ], reviewRequired: true);
+
+      expect(result.outcome, SmsAiResolutionOutcome.needsReview);
+      expect(reviewCount(), 1);
+      expect(transactions(), isEmpty);
+    },
+  );
+
+  test('low server confidence keeps the message available for review', () {
     final item = reviewItem();
     insertReviewRow(item);
 
-    final result = importStore.resolveAiSuggestions(
-      ns,
-      item,
-      [swiggySuggestion()],
-      reviewRequired: true,
-    );
-
+    final result = importStore.resolveAiSuggestions(ns, item, [
+      swiggySuggestion(),
+    ], serverScore: 0.2);
     expect(result.outcome, SmsAiResolutionOutcome.needsReview);
     expect(reviewCount(), 1);
     expect(transactions(), isEmpty);
   });
 
-  test('a server confidence score overrides the local composite', () {
-    final item = reviewItem();
-    insertReviewRow(item);
-
-    final discarded = importStore.resolveAiSuggestions(
-      ns,
-      item,
-      [swiggySuggestion()],
-      serverScore: 0.2,
-    );
-    expect(discarded.outcome, SmsAiResolutionOutcome.discarded);
-    expect(reviewCount(), 0);
-    expect(transactions(), isEmpty);
-  });
-
-  test('Tier 3 removes the review row silently', () {
+  test('missing AI facts keeps the SMS in Needs Review', () {
     final item = reviewItem(
       body: 'Get 10% cashback on your next Amazon purchase. Offer valid.',
     );
@@ -304,9 +298,83 @@ void main() {
 
     final result = importStore.resolveAiSuggestions(ns, item, const []);
 
-    expect(result.outcome, SmsAiResolutionOutcome.discarded);
+    expect(result.outcome, SmsAiResolutionOutcome.needsReview);
     expect(result.score, 0);
-    expect(reviewCount(), 0);
+    expect(reviewCount(), 1);
+    expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
+  });
+
+  test(
+    'AI negative decision is visible in Auto-Resolved and can be reopened',
+    () {
+      final item = reviewItem();
+      insertReviewRow(item);
+
+      final result = importStore.resolveAiSuggestions(
+        ns,
+        item,
+        const [],
+        decision: {
+          'topic': 'generic_promotional_spam',
+          'shouldConsider': false,
+          'rejectionReason': 'promotional_spam',
+        },
+      );
+
+      expect(result.outcome, SmsAiResolutionOutcome.autoResolved);
+      expect(result.score, 0.0);
+      expect(reviewCount(), 0);
+      expect(transactions(), isEmpty);
+      final history = AutoResolvedHistoryRepository(
+        db,
+        namespace: ns,
+      ).fetchAll();
+      expect(history, hasLength(1));
+      expect(history.single.resolvedKind, 'dismissed');
+      expect(history.single.sourceBody, item.body);
+      expect(history.single.title, contains('generic promotional spam'));
+    },
+  );
+
+  test('reopening an AI dismissal restores the original SMS body', () async {
+    final item = reviewItem();
+    insertReviewRow(item);
+    importStore.resolveAiSuggestions(
+      ns,
+      item,
+      const [],
+      decision: {
+        'topic': 'other_non_financial',
+        'shouldConsider': false,
+        'rejectionReason': 'non_financial',
+      },
+    );
+    final dismissed = AutoResolvedHistoryRepository(
+      db,
+      namespace: ns,
+    ).fetchAll().single;
+
+    await SmsAutoResolutionController(
+      database: db,
+      store: store,
+      reviewRepository: NeedsReviewRepository(
+        namespace: ns,
+        loadDatabase: () async => db,
+      ),
+      namespace: ns,
+    ).moveToReview(dismissed);
+
+    expect(reviewCount(), 1);
+    final restored =
+        jsonDecode(
+              db.db.select(
+                    'SELECT payload FROM local_needs_review WHERE namespace=?',
+                    [ns],
+                  ).single['payload']
+                  as String,
+            )
+            as Map<String, dynamic>;
+    expect(restored['body'], item.body);
     expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
   });
 
@@ -357,10 +425,7 @@ void main() {
     expect(reviewCount(), 0);
     expect(transactions(), isEmpty);
     expect(db.db.select('SELECT * FROM local_commitments'), isEmpty);
-    final history = AutoResolvedHistoryRepository(
-      db,
-      namespace: ns,
-    ).fetchAll();
+    final history = AutoResolvedHistoryRepository(db, namespace: ns).fetchAll();
     expect(history.single.resolvedKind, 'mandate');
     expect(history.single.amountPaise, 150000);
   });
@@ -409,38 +474,47 @@ void main() {
     namespace: ns,
   );
 
-  test('changeCategory retags receipt, transaction and learns a rule', () async {
-    final item = reviewItem();
-    insertReviewRow(item);
-    importStore.resolveAiSuggestions(ns, item, [swiggySuggestion()]);
-    final entry = AutoResolvedHistoryRepository(db, namespace: ns).fetchAll().single;
+  test(
+    'changeCategory retags receipt, transaction and learns a rule',
+    () async {
+      final item = reviewItem();
+      insertReviewRow(item);
+      importStore.resolveAiSuggestions(ns, item, [swiggySuggestion()]);
+      final entry = AutoResolvedHistoryRepository(
+        db,
+        namespace: ns,
+      ).fetchAll().single;
 
-    await controller().changeCategory(entry, 'groceries');
+      await controller().changeCategory(entry, 'groceries');
 
-    final updated = AutoResolvedHistoryRepository(
-      db,
-      namespace: ns,
-    ).fetchAll().single;
-    expect(updated.categorySlug, 'groceries');
-    expect(updated.categoryName, 'Groceries');
-    expect(updated.isUserModified, isTrue);
+      final updated = AutoResolvedHistoryRepository(
+        db,
+        namespace: ns,
+      ).fetchAll().single;
+      expect(updated.categorySlug, 'groceries');
+      expect(updated.categoryName, 'Groceries');
+      expect(updated.isUserModified, isTrue);
 
-    final rows = transactions();
-    expect(rows, hasLength(1));
-    expect(rows.single['category_id'], 'groceries');
-    expect(rows.single['category_name'], 'Groceries');
-    expect(rows.single['amount_inr'], 420.0);
+      final rows = transactions();
+      expect(rows, hasLength(1));
+      expect(rows.single['category_id'], 'groceries');
+      expect(rows.single['category_name'], 'Groceries');
+      expect(rows.single['amount_inr'], 420.0);
 
-    expect(SmsLearningFeedback(db, namespace: ns).loadRulesSync(), {
-      'SWIGGY': 'groceries',
-    });
-  });
+      expect(SmsLearningFeedback(db, namespace: ns).loadRulesSync(), {
+        'SWIGGY': 'groceries',
+      });
+    },
+  );
 
   test('moveToReview deletes the auto-filed row and reopens review', () async {
     final item = reviewItem();
     insertReviewRow(item);
     importStore.resolveAiSuggestions(ns, item, [swiggySuggestion()]);
-    final entry = AutoResolvedHistoryRepository(db, namespace: ns).fetchAll().single;
+    final entry = AutoResolvedHistoryRepository(
+      db,
+      namespace: ns,
+    ).fetchAll().single;
     expect(reviewCount(), 0);
 
     await controller().moveToReview(entry);
@@ -472,7 +546,10 @@ void main() {
       db.db.select('SELECT * FROM local_commitments WHERE namespace=?', [ns]),
       hasLength(1),
     );
-    final entry = AutoResolvedHistoryRepository(db, namespace: ns).fetchAll().single;
+    final entry = AutoResolvedHistoryRepository(
+      db,
+      namespace: ns,
+    ).fetchAll().single;
 
     await controller().moveToReview(entry);
 

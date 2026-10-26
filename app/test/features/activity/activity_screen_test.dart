@@ -429,4 +429,81 @@ void main() {
       expect(repo.lastFetchArgs!.first['query'], isNull);
     },
   );
+
+  testWidgets(
+    'displays investment contributions and returns with correct signs, labels and icons',
+    (tester) async {
+      final repo = _FakeUserCardsRepository([
+        _txn(
+          id: 'inv-out',
+          amount: Money.fromRupees(10000),
+          occurredAt: DateTime.now(),
+          merchantName: 'Zerodha',
+          entryKind: TxnEntryKind.investment,
+        ),
+        _txn(
+          id: 'inv-in',
+          amount: Money.fromRupees(2500),
+          occurredAt: DateTime.now(),
+          merchantName: 'Groww Settlement',
+          entryKind: TxnEntryKind.income,
+          categoryId: 'investments',
+          categoryName: 'Investments',
+        ),
+      ]);
+      await _pump(tester, repo: repo, cards: const []);
+
+      expect(find.text('−₹10,000'), findsOneWidget);
+      expect(find.text('+₹2,500'), findsOneWidget);
+      expect(find.textContaining('Investment'), findsNWidgets(2));
+      expect(find.textContaining('Investment return'), findsOneWidget);
+      expect(find.byIcon(Icons.trending_up_rounded), findsNWidgets(2));
+    },
+  );
+
+  testWidgets(
+    'filtering by Investments matches both contributions and investment returns',
+    (tester) async {
+      final repo = _FakeUserCardsRepository([
+        _txn(
+          id: 'inv-out',
+          amount: Money.fromRupees(10000),
+          occurredAt: DateTime.now(),
+          merchantName: 'Zerodha',
+          entryKind: TxnEntryKind.investment,
+        ),
+        _txn(
+          id: 'inv-in',
+          amount: Money.fromRupees(2500),
+          occurredAt: DateTime.now(),
+          merchantName: 'Groww Settlement',
+          entryKind: TxnEntryKind.income,
+          categoryId: 'investments',
+          categoryName: 'Investments',
+        ),
+        _txn(
+          id: 'spend-1',
+          amount: Money.fromRupees(500),
+          occurredAt: DateTime.now(),
+          merchantName: 'Grocery',
+          entryKind: TxnEntryKind.spend,
+        ),
+      ]);
+      await _pump(tester, repo: repo, cards: const []);
+
+      expect(find.text('Zerodha'), findsOneWidget);
+      expect(find.text('Groww Settlement'), findsOneWidget);
+      expect(find.text('Grocery'), findsOneWidget);
+
+      await tester.tap(find.text('All activities'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Investments'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Zerodha'), findsOneWidget);
+      expect(find.text('Groww Settlement'), findsOneWidget);
+      expect(find.text('Grocery'), findsNothing);
+    },
+  );
 }

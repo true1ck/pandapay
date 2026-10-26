@@ -25,6 +25,10 @@
       "20261021120000": [
         "20261021120000_referral_promotions_core.sql",
         "20261021120000_sms_source_facts.sql"
+      ],
+      "20261026130000": [
+        "20261026130000_notification_delivery_health.sql",
+        "20261026130000_remove_gemini_daily_caps.sql"
       ]
     },
     "product_seeds": {

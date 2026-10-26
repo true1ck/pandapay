@@ -50,15 +50,25 @@ bool isInvestmentMovementDescription(String value) {
 /// movement — never earned income, never spending, never new funding. The
 /// phrase "add funds back to your [broker] account" is an instruction about
 /// the user's next step, not this transaction.
-bool isBrokerSettlementMessage(String value) {
+bool isBrokerSettlementMessage(String value, [String? sender]) {
   final text = value.trim();
   if (text.isEmpty) return false;
-  return RegExp(
-    r'\b(?:dhan|zerodha|groww|upstox|angel\s+one|5paisa|sharekhan|motilal\s+oswal|hdfc\s+securities|icici\s+direct|kotak\s+securities|paytm\s+money|iifl)\b',
-    caseSensitive: false,
-  ).hasMatch(text) &&
+
+  final senderMatch = sender != null &&
       RegExp(
-    r'\b(?:running\s+account\s+settlement|quarterly\s+settlement|account\s+settlement|settlement\s+(?:payout|credit|dated)|payout|pay-?out|funds?\s+released)\b',
+        r'(?:DHAN|ZERODHA|GROWW|KOTAKN|KOTAKS|UPSTOX|ANGEL|5PAISA|MOSWAL|MOTLAL|PYTMMN|PAYTMM|SHRKHN|ESPRSO|LEMONN|SHOONY|FNVASIA|BLINKX|JMFIN|GEOJIT|AXISDIR|AXISD|MSTOCK|MIRAEA|IIFLSC|IIFLSEC|SBISEC|SBICAP|HDFCSEC|HDFCSKY|ICICID|ICICIS)',
+        caseSensitive: false,
+      ).hasMatch(sender);
+
+  final brokerInBody = RegExp(
+    r'\b(?:dhan|zerodha|groww|upstox|angel\s+one|5paisa|sharekhan|motilal\s+oswal|hdfc\s+securities|icici\s+direct|kotak\s+securities|kotak\s+neo|neo|lemonn|shoonya|finvasia|blinkx|geojit|axis\s+direct|m\.?stock|mirae|sbi\s+securities|fyers|paytm\s+money|iifl)\b',
+    caseSensitive: false,
+  ).hasMatch(text);
+
+  if (!senderMatch && !brokerInBody) return false;
+
+  return RegExp(
+    r'\b(?:monthly\s+settlement|quarterly\s+settlement|running\s+(?:a\/?c|account)\s+settlement|settlement\s+of\s+(?:unused|unutilised)\s+funds|(?:unused|unutilised)\s+funds\b[\s\S]{0,120}\b(?:settled|transferred|settlement)|account\s+settlement|settlement\s+(?:payout|credit|dated)|as\s+per\s+sebi\b[\s\S]{0,120}\b(?:settlement|settled)|settled|payout|pay-?out|funds?\s+released)\b',
     caseSensitive: false,
   ).hasMatch(text);
 }
@@ -68,11 +78,11 @@ bool isBrokerSettlementMessage(String value) {
 bool isInvestmentFolioAllotment(String body) {
   final text = body.toLowerCase();
   final hasAllotment = RegExp(
-    r'\b(?:units?\s+allotted|allotted\s+at\s+nav|units?\s*:\s*[\d.]+\s*,\s*nav|nav\s*:\s*[\d.]+|units?\s+(?:credited|allotted)\s+under\s+folio|allotted\s+for\s+your\s+investment)\b',
+    r'\b(?:units?\s+allotted|allotted\s+at\s+nav|units?\s*:\s*[\d.]+\s*,\s*nav|nav\s*:\s*[\d.]+|units?\s+(?:credited|allotted)\s+under\s+folio|allotted\s+for\s+your\s+investment|processed\s+at\s+(?:the\s+)?nav\s+of\s+[\d.]+|for\s+[\d.]+\s+units)\b',
     caseSensitive: false,
   ).hasMatch(text);
   final hasFolioOrFund = RegExp(
-    r'\b(?:folio|fund|mutual\s+fund|amc)\b',
+    r'\b(?:folio|fund|mutual\s+fund|amc|etf)\b',
     caseSensitive: false,
   ).hasMatch(text);
   return hasAllotment && hasFolioOrFund;

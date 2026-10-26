@@ -52,6 +52,7 @@ __pycache__/
 artifacts/ui-verification/
 # throwaway emulator/device screenshots from test runs
 artifacts/device-screen*.png
+artifacts/*.png
 
 # macOS
 .DS_Store

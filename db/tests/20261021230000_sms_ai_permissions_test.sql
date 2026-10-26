@@ -53,22 +53,21 @@ begin
     raise exception 'worker claim did not lease the queued job across profiles';
   end if;
 
-  select pandapay.ai_reserve_provider_capacity(1, 1000, 20, 100) into v_reservation;
+  select pandapay.ai_reserve_provider_capacity(1, 1000, 100) into v_reservation;
   if (v_reservation->>'allowed')::boolean is not true then
     raise exception 'first provider capacity reservation was denied';
   end if;
-  select pandapay.ai_reserve_provider_capacity(1, 1000, 20, 100) into v_reservation;
+  select pandapay.ai_reserve_provider_capacity(1, 1000, 100) into v_reservation;
   if (v_reservation->>'allowed')::boolean is not false
      or (v_reservation->>'permanentlyBlocked')::boolean is not false
      or (v_reservation->>'waitMs')::integer < 1 then
     raise exception 'RPM limiter did not return a retryable wait after capacity filled';
   end if;
 
-  select pandapay.ai_reserve_provider_capacity(5, 10000, 1, 100) into v_reservation;
-  if (v_reservation->>'allowed')::boolean is not false
-     or (v_reservation->>'dailyLimitReached')::boolean is not true
-     or (v_reservation->>'retryAfterMs')::bigint < 1000 then
-    raise exception 'daily limiter did not return the next Pacific midnight retry delay';
+  select pandapay.ai_reserve_provider_capacity(5, 10000, 100) into v_reservation;
+  if (v_reservation->>'allowed')::boolean is not true
+     or (v_reservation->>'permanentlyBlocked')::boolean is not false then
+    raise exception 'provider capacity unexpectedly applied a daily request cap';
   end if;
 end;
 $$;

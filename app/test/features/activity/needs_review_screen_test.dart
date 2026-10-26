@@ -39,8 +39,7 @@ AutoResolvedHistoryEntry _historyEntry({
   autoResolvedAt: autoResolvedAt,
 );
 
-class _FakeSmsAutoResolutionController
-    implements SmsAutoResolutionController {
+class _FakeSmsAutoResolutionController implements SmsAutoResolutionController {
   AutoResolvedHistoryEntry? changedEntry;
   String? changedCategory;
   AutoResolvedHistoryEntry? movedEntry;
@@ -72,6 +71,8 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   Map<String, dynamic>? lastLogArgs;
   Map<String, dynamic>? lastOverrideArgs;
   final List<Map<String, dynamic>> allOverrideArgs = [];
+  Map<String, dynamic>? lastAiJobArgs;
+  bool aiJobSubmitted = false;
 
   @override
   Future<String> logTransaction({
@@ -93,6 +94,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
       'userCardId': userCardId,
       'amount': amount,
       'categoryId': categoryId,
+      'entryKind': entryKind,
     };
     return 'fake-txn-id';
   }
@@ -117,6 +119,31 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     allOverrideArgs.add(lastOverrideArgs!);
     return true;
   }
+
+  @override
+  Future<String?> submitAiJob({
+    required String sourceKey,
+    required String sender,
+    required String body,
+    DateTime? occurredAt,
+    bool retryFailed = false,
+  }) async {
+    aiJobSubmitted = true;
+    lastAiJobArgs = {
+      'sourceKey': sourceKey,
+      'sender': sender,
+      'body': body,
+      'occurredAt': occurredAt,
+      'retryFailed': retryFailed,
+    };
+    return 'retry-job-id';
+  }
+
+  @override
+  Future<Map<String, dynamic>?> fetchAiJobStatus(String sourceKey) async => {
+    'status': aiJobSubmitted ? 'queued' : 'failed',
+    'suggestions': const [],
+  };
 
   Map<String, dynamic>? lastDismissArgs;
   final List<Map<String, dynamic>> allDismissArgs = [];
@@ -154,6 +181,7 @@ Future<void> _pump(
   List<AutoResolvedHistoryEntry> autoResolved = const [],
   SmsAutoResolutionController? autoResolutionController,
   Size surfaceSize = const Size(1000, 1000),
+  bool settle = true,
 }) async {
   await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -173,11 +201,17 @@ Future<void> _pump(
         ),
         if (commitments != null)
           commitmentsRepositoryProvider.overrideWithValue(commitments),
+        smsBackgroundFlushProvider.overrideWith((ref) {}),
       ],
       child: const MaterialApp(home: NeedsReviewScreen()),
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 void main() {
@@ -243,6 +277,107 @@ void main() {
     expect(find.text('Review transaction'), findsOneWidget);
   });
 
+  testWidgets('surfaces Gemini decision category on review tile', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'f' * 64,
+        sender: 'VM-HDFCBK',
+        body: 'Rs. 420 spent at Swiggy',
+        reason: 'unparseable_amount',
+        receivedAt: DateTime.now(),
+        aiStatus: AiReviewStatus.checked,
+        aiTopic: 'upi_debit',
+      ),
+    );
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+    expect(find.text('✦ AI decision · upi debit'), findsOneWidget);
+  });
+
+  testWidgets(
+    'shows queued AI check status with spinner and allows tap to retry',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: '1',
+          sender: 'VM-HDFCBK',
+          body: 'Rs.499 spent at AMAZON',
+          receivedAt: DateTime.now(),
+          aiStatus: AiReviewStatus.queued,
+        ),
+      );
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(),
+        reviews: reviews,
+        settle: false,
+      );
+
+      expect(find.text('AI review queued · Checking...'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      await tester.tap(find.text('AI review queued · Checking...'));
+      await tester.pump();
+    },
+  );
+
+  testWidgets('failed Gemini decision can be explicitly retried', (
+    tester,
+  ) async {
+    final itemId = List.filled(64, 'f').join();
+    await reviews.add(
+      NeedsReviewItem(
+        id: itemId,
+        sender: 'VM-HDFCBK',
+        body: 'INR 499 spent at AMAZON',
+        receivedAt: DateTime.now(),
+        aiStatus: AiReviewStatus.unavailable,
+        aiFailureReason: 'worker_retry_limit',
+      ),
+    );
+    final repo = _FakeUserCardsRepository();
+    await _pump(tester, repo: repo, reviews: reviews, settle: false);
+
+    expect(find.text('AI review failed · Tap to retry'), findsOneWidget);
+    await tester.tap(find.text('AI review failed · Tap to retry'));
+    // Queued state intentionally keeps its spinner animated, so settle would
+    // time out even though the retry request completed.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('View AI output'));
+    await tester.pump();
+    expect(find.textContaining('"status": "queued"'), findsOneWidget);
+    expect(find.textContaining('"sourceKey"'), findsNothing);
+
+    expect(repo.lastAiJobArgs?['sourceKey'], itemId);
+    expect(repo.lastAiJobArgs?['retryFailed'], isTrue);
+    expect((await reviews.fetchAll()).single.aiStatus, AiReviewStatus.queued);
+  });
+
+  testWidgets('shows in-progress AI check status with spinner', (tester) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: '1',
+        sender: 'VM-HDFCBK',
+        body: 'Rs.499 spent at AMAZON',
+        receivedAt: DateTime.now(),
+        aiStatus: AiReviewStatus.processing,
+      ),
+    );
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(),
+      reviews: reviews,
+      settle: false,
+    );
+
+    expect(find.text('AI review in progress'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
+
   testWidgets('Ignore message removes the item from the queue', (tester) async {
     await reviews.add(
       NeedsReviewItem(
@@ -289,7 +424,7 @@ void main() {
   });
 
   testWidgets(
-    'Dismiss all confirms the full queue even while a date filter is active',
+    'Dismiss filtered confirms and removes only visible items when a date filter is active',
     (tester) async {
       await reviews.add(
         NeedsReviewItem(
@@ -313,12 +448,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('VM-SEP'), findsNothing);
 
-      await tester.tap(find.text('Dismiss all'));
+      await tester.tap(find.text('Dismiss filtered (1)'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Dismiss all 2 review items?'), findsOneWidget);
+      expect(find.text('Dismiss 1 filtered review items?'), findsOneWidget);
       expect(
-        find.textContaining('even when a date or type filter is active'),
+        find.text(
+          'This removes only the 1 items currently visible under this filter. Other review items will not be affected.',
+        ),
         findsOneWidget,
       );
       await tester.tap(find.text('Cancel'));
@@ -327,15 +464,121 @@ void main() {
       expect(find.text('VM-OCT'), findsOneWidget);
       expect(find.text('VM-SEP'), findsNothing);
 
-      await tester.tap(find.text('Dismiss all'));
+      await tester.tap(find.text('Dismiss filtered (1)'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Dismiss all'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Dismiss filtered'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Nothing needs review'), findsOneWidget);
-      expect(await reviews.fetchAll(), isEmpty);
+      final remaining = await reviews.fetchAll();
+      expect(remaining, hasLength(1));
+      expect(remaining.single.id, '2');
     },
   );
+
+  testWidgets(
+    'BundleReviewCard displays aggregated Pay Later drawdown bundle and expands/dismisses',
+    (tester) async {
+      final repo = _FakeUserCardsRepository();
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'axio-1',
+          sender: 'AX-axioFS-S',
+          body:
+              'You have availed Amazon Pay Later credit of Rs. 250.00 for order on Amazon.',
+          receivedAt: DateTime(2026, 3, 10),
+          kind: NeedsReviewKind.payLaterDrawdown,
+        ),
+      );
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'axio-2',
+          sender: 'AX-axioFS-S',
+          body:
+              'You have availed Amazon Pay Later credit of Rs. 450.00 for order on Swiggy.',
+          receivedAt: DateTime(2026, 3, 15),
+          kind: NeedsReviewKind.payLaterDrawdown,
+        ),
+      );
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'axio-3',
+          sender: 'AX-axioFS-S',
+          body:
+              'You have availed Amazon Pay Later credit of Rs. 100.00 for order on Uber.',
+          receivedAt: DateTime(2026, 3, 20),
+          kind: NeedsReviewKind.payLaterDrawdown,
+        ),
+      );
+
+      await _pump(tester, repo: repo, reviews: reviews);
+
+      expect(find.text('Amazon Pay Later (Axio)'), findsOneWidget);
+      expect(find.text('3 messages'), findsOneWidget);
+      expect(find.text('Total: ₹800.00'), findsOneWidget);
+      expect(
+        find.text('Credit line drawdowns (billed in monthly AutoPay)'),
+        findsOneWidget,
+      );
+      expect(find.text('Dismiss all 3 (Billed in AutoPay)'), findsOneWidget);
+      expect(find.text('Show all 3'), findsOneWidget);
+
+      // Expanding shows individual message tiles
+      await tester.tap(find.text('Show all 3'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hide messages'), findsOneWidget);
+      expect(find.textContaining('Uber'), findsOneWidget);
+      expect(find.textContaining('Swiggy'), findsOneWidget);
+      expect(find.textContaining('Amazon'), findsWidgets);
+
+      // Tapping bulk dismiss removes all 3 from repository and sends feedback
+      await tester.tap(find.text('Dismiss all 3 (Billed in AutoPay)'));
+      await tester.pumpAndSettle();
+
+      expect(await reviews.fetchAll(), isEmpty);
+      expect(find.text('Nothing needs review'), findsOneWidget);
+      expect(repo.allDismissArgs, hasLength(3));
+      expect(
+        repo.allDismissArgs.every((a) => a['reason'] == 'bundle_dismissed'),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets('Pay Later / BNPL filter chip isolates Pay Later drawdowns', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'spend-1',
+        sender: 'VM-HDFCBK',
+        body: 'Rs. 500 spent on Card ending 1234 at RELIANCE.',
+        receivedAt: DateTime(2026, 3, 10),
+      ),
+    );
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'paylater-1',
+        sender: 'AX-axioFS-S',
+        body: 'You have availed Amazon Pay Later credit of Rs. 250.00.',
+        receivedAt: DateTime(2026, 3, 15),
+        kind: NeedsReviewKind.payLaterDrawdown,
+      ),
+    );
+
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+    expect(find.text('VM-HDFCBK'), findsOneWidget);
+    expect(find.text('AX-axioFS-S'), findsOneWidget);
+
+    await tester.tap(find.text('Pay Later / BNPL'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('VM-HDFCBK'), findsNothing);
+    expect(find.text('AX-axioFS-S'), findsOneWidget);
+    expect(find.text('Pay Later / Credit line drawdown'), findsOneWidget);
+    expect(find.text('Add as Amazon Pay Later spend'), findsOneWidget);
+  });
 
   testWidgets('future non-card bill bypasses review and persists directly', (
     tester,
@@ -1024,11 +1267,7 @@ void main() {
         ),
       );
       final entries = [
-        _historyEntry(
-          id: 'auto-1',
-          title: 'SWIGGY',
-          autoResolvedAt: 2000,
-        ),
+        _historyEntry(id: 'auto-1', title: 'SWIGGY', autoResolvedAt: 2000),
         _historyEntry(
           id: 'auto-2',
           title: 'Airtel Broadband',
@@ -1053,50 +1292,43 @@ void main() {
     },
   );
 
-  testWidgets(
-    'renders both tabs without overflow at a small phone width',
-    (tester) async {
-      await reviews.add(
-        NeedsReviewItem(
-          id: 'small-1',
-          sender: 'VM-HDFCBK',
-          body: 'Rs.499 spent on HDFC Bank Card ending 1234 at SHOP.',
-          receivedAt: DateTime.now(),
-        ),
-      );
-      final entries = [
-        _historyEntry(id: 'small-auto', title: 'SWIGGY'),
-      ];
+  testWidgets('renders both tabs without overflow at a small phone width', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'small-1',
+        sender: 'VM-HDFCBK',
+        body: 'Rs.499 spent on HDFC Bank Card ending 1234 at SHOP.',
+        receivedAt: DateTime.now(),
+      ),
+    );
+    final entries = [_historyEntry(id: 'small-auto', title: 'SWIGGY')];
 
-      await _pump(
-        tester,
-        repo: _FakeUserCardsRepository(),
-        reviews: reviews,
-        autoResolved: entries,
-        surfaceSize: const Size(360, 800),
-      );
-      expect(tester.takeException(), isNull);
-      expect(find.text('Needs Review (1)'), findsOneWidget);
-      expect(find.text('Auto-Resolved (1)'), findsOneWidget);
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(),
+      reviews: reviews,
+      autoResolved: entries,
+      surfaceSize: const Size(360, 800),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Needs Review (1)'), findsOneWidget);
+    expect(find.text('Auto-Resolved (1)'), findsOneWidget);
 
-      await tester.tap(find.text('Auto-Resolved (1)'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Auto-Resolved (1)'));
+    await tester.pumpAndSettle();
 
-      expect(tester.takeException(), isNull);
-      expect(find.text('Change Category'), findsOneWidget);
-      expect(find.text('Move to Review'), findsOneWidget);
-    },
-  );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Change Category'), findsOneWidget);
+    expect(find.text('Move to Review'), findsOneWidget);
+  });
 
   testWidgets(
     'auto-resolved tab shows newest-first feed with AI badge, category and due date',
     (tester) async {
       final entries = [
-        _historyEntry(
-          id: 'auto-new',
-          title: 'SWIGGY',
-          autoResolvedAt: 2000,
-        ),
+        _historyEntry(id: 'auto-new', title: 'SWIGGY', autoResolvedAt: 2000),
         _historyEntry(
           id: 'auto-old',
           title: 'Airtel Broadband',
@@ -1136,6 +1368,37 @@ void main() {
       expect(newest, lessThan(oldest));
     },
   );
+
+  testWidgets('Gemini dismissals stay in Auto-Resolved and can be reviewed', (
+    tester,
+  ) async {
+    final controller = _FakeSmsAutoResolutionController();
+    final dismissal = _historyEntry(
+      id: 'ai-dismissal',
+      title: 'Gemini dismissed · generic promotional spam',
+      resolvedKind: 'dismissed',
+      categorySlug: null,
+      amountPaise: 0,
+    );
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(),
+      reviews: reviews,
+      autoResolved: [dismissal],
+      autoResolutionController: controller,
+    );
+
+    await tester.tap(find.text('Auto-Resolved (1)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('✦ Gemini decision · Dismissed'), findsOneWidget);
+    expect(find.text('Review this decision'), findsOneWidget);
+    expect(find.text('Change Category'), findsNothing);
+    expect(find.text('₹0.00'), findsNothing);
+    await tester.tap(find.text('Review this decision'));
+    await tester.pumpAndSettle();
+    expect(controller.movedEntry?.id, dismissal.id);
+  });
 
   testWidgets(
     'pending item with AI suggestions shows the suggested category badge',
@@ -1241,6 +1504,37 @@ void main() {
         find.text('Rs.499 spent on HDFC Bank Card ending 1234 at SWIGGY.'),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'reviewing investment or folio allotment defaults category to investments and entryKind to investment',
+    (tester) async {
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'mf-allotment-1',
+          sender: 'CAMSSM',
+          body:
+              'Folio 99887766: Purchase of Rs 12000 in Parag Parikh Flexi Cap Fund processed. 45.67 units allotted at NAV 262.75 on 05-Oct-2026.',
+          kind: NeedsReviewKind.investmentSettlement,
+          receivedAt: DateTime(2026, 10, 16),
+        ),
+      );
+      final repo = _FakeUserCardsRepository();
+      await _pump(tester, repo: repo, reviews: reviews);
+
+      expect(find.text('Review transfer'), findsOneWidget);
+      await tester.tap(find.text('Review transfer'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review this transaction'), findsOneWidget);
+      expect(find.text('Investment'), findsOneWidget);
+
+      await tester.tap(find.text('Save transaction'));
+      await tester.pumpAndSettle();
+
+      expect(repo.lastLogArgs?['categoryId'], 'investments');
+      expect(repo.lastLogArgs?['entryKind'], TxnEntryKind.investment);
     },
   );
 }

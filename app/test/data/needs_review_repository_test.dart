@@ -568,6 +568,54 @@ void main() {
     expect(await repo.fetchAll(), isEmpty);
   });
 
+  test('AI suggestions update preserves aiTopic and aiSummary', () async {
+    final repo = NeedsReviewRepository();
+    const id = 'source-topic-1';
+    final suggestions = <Map<String, dynamic>>[
+      {
+        'factIndex': 0,
+        'factType': 'posted_movement',
+        'payload': {'amountInr': 125.0, 'entryKind': 'spend'},
+      },
+    ];
+    await repo.add(
+      NeedsReviewItem(
+        id: id,
+        sender: 'VM-BANK',
+        body: 'Rs.125 spent',
+        receivedAt: DateTime(2026, 1, 1),
+      ),
+    );
+    expect(
+      await repo.updateAiSuggestions(
+        id,
+        suggestions,
+        aiTopic: 'Food & Dining',
+        aiSummary: 'Swiggy order payment',
+      ),
+      isTrue,
+    );
+    final fetched = (await repo.fetchAll()).single;
+    expect(fetched.aiSuggestions, suggestions);
+    expect(fetched.aiTopic, 'Food & Dining');
+    expect(fetched.aiSummary, 'Swiggy order payment');
+
+    final json = fetched.toJson();
+    final deserialized = NeedsReviewItem.fromJson(json);
+    expect(deserialized.aiTopic, 'Food & Dining');
+    expect(deserialized.aiSummary, 'Swiggy order payment');
+
+    expect(
+      await repo.updateAiSuggestions(
+        id,
+        suggestions,
+        aiTopic: 'Food & Dining',
+        aiSummary: 'Swiggy order payment',
+      ),
+      isFalse,
+    );
+  });
+
   test('removeAll drops every id in the set', () async {
     final repo = NeedsReviewRepository();
     await repo.add(
@@ -1978,7 +2026,7 @@ void main() {
     db.close();
   });
   test(
-    'fetchAll auto-removes mutual fund folio allotment when matching investment debit exists within 72 hours',
+    'fetchAll deduplicates matched allotments and files unmatched folio investments',
     () async {
       final db = openInMemoryForTesting();
       final ns = 'mf-test-${DateTime.now().microsecondsSinceEpoch}';
@@ -2055,17 +2103,23 @@ void main() {
         'review-allotment-unmatched',
       });
 
-      // Fetch all: matched allotment must be auto-removed, unmatched kept
+      // Matched allotment is deduplicated against the bank debit; an unmatched
+      // completed allotment is recorded as an investment.
       final items = await repo.fetchAll();
-      expect(items.map((i) => i.id).toList(), ['review-allotment-unmatched']);
+      expect(items, isEmpty);
+      expect(
+        db.db.select(
+          "SELECT COUNT(*) AS n FROM financial_entities WHERE namespace=? AND entity='transactions'",
+          [ns],
+        ).single['n'],
+        2, // Original bank debit + unmatched folio investment.
+      );
 
       final afterFetch = db.db.select(
         'SELECT id FROM local_needs_review WHERE namespace=?',
         [ns],
       );
-      expect(afterFetch.map((r) => r['id']).toList(), [
-        'review-allotment-unmatched',
-      ]);
+      expect(afterFetch, isEmpty);
 
       // addNeedsReviewSync also drops matched allotment
       addNeedsReviewSync(db, ns, matchedAllotment);
@@ -2073,9 +2127,14 @@ void main() {
         'SELECT id FROM local_needs_review WHERE namespace=?',
         [ns],
       );
-      expect(afterSync.map((r) => r['id']).toList(), [
-        'review-allotment-unmatched',
-      ]);
+      expect(afterSync, isEmpty);
+      expect(
+        db.db.select(
+          "SELECT COUNT(*) AS n FROM financial_entities WHERE namespace=? AND entity='transactions'",
+          [ns],
+        ).single['n'],
+        2,
+      );
 
       db.close();
     },
@@ -2394,4 +2453,233 @@ void main() {
       db.close();
     },
   );
+
+  test(
+    'startup purge and fetchAll remove gambling and no-amount loan limit spam from Needs Review',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('pandapay.needs_review_noise_version', 15);
+
+      final db = openInMemoryForTesting();
+      db.db.execute(
+        'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+      );
+
+      final loanLimitItem = NeedsReviewItem(
+        id: 'spam-loan-limit',
+        sender: 'VK-BFDLPS-S',
+        body:
+            'New Credit alert\nYour loan limit is revised. Click here to know more: 1kx.in/khOzn2\nBajaj Markets\nT&C',
+        receivedAt: DateTime(2026, 10, 24),
+        reason: 'no_transaction_match',
+      );
+
+      final bettingItem = NeedsReviewItem(
+        id: 'spam-betting',
+        sender: 'CP-DISHTV-S',
+        body:
+            'FRPendingDTIL IPL trusted betting site GullyBET, Instant withdrawal. Fancy bet All games, casino, slots, aviator, cockfight. Huge bonus gbets.win/1w1',
+        receivedAt: DateTime(2026, 10, 24),
+        reason: 'no_transaction_match',
+      );
+
+      final realAtmItem = NeedsReviewItem(
+        id: 'real-atm-withdrawal',
+        sender: 'HDFCBK',
+        body: 'Cash withdrawal of Rs. 2,000 from A/c XX1234',
+        receivedAt: DateTime(2026, 10, 25),
+        reason: 'no_transaction_match',
+      );
+
+      final realCreditItem = NeedsReviewItem(
+        id: 'real-bank-credit',
+        sender: 'HDFCBK',
+        body: 'Rs. 5,000 credited to A/c XX1234',
+        receivedAt: DateTime(2026, 10, 25),
+        reason: 'no_transaction_match',
+      );
+
+      const ns = 'user:gambling-purge-test';
+      for (final item in [loanLimitItem, bettingItem, realAtmItem, realCreditItem]) {
+        db.db.execute('INSERT INTO local_needs_review VALUES (?,?,?)', [
+          ns,
+          item.id,
+          jsonEncode(item.toJson()),
+        ]);
+      }
+
+      final repo = NeedsReviewRepository(
+        namespace: ns,
+        loadDatabase: () async => db,
+      );
+
+      // fetchAll triggers _database() where startup purge runs
+      await repo.fetchAll();
+
+      // Noise items (loan limit & betting) must be purged from DB
+      final remainingIds = db.db.select(
+        'SELECT id FROM local_needs_review WHERE namespace = ?',
+        [ns],
+      ).map((r) => r['id'] as String).toList();
+
+      expect(remainingIds, contains('real-atm-withdrawal'));
+      expect(remainingIds, isNot(contains('spam-loan-limit')));
+      expect(remainingIds, isNot(contains('spam-betting')));
+
+      // Real bank credit was parsed as a valid transaction and resolved to financial_entities
+      final resolvedTxns = db.db.select(
+        'SELECT id FROM financial_entities WHERE namespace = ? AND entity = ?',
+        [ns, 'transactions'],
+      );
+      expect(resolvedTxns, isNotEmpty);
+
+      // Also verify add and addNeedsReviewSync reject them
+      addNeedsReviewSync(db, ns, loanLimitItem);
+      addNeedsReviewSync(db, ns, bettingItem);
+      await repo.add(loanLimitItem);
+      await repo.add(bettingItem);
+
+      final remainingAfterSync = db.db.select(
+        'SELECT id FROM local_needs_review WHERE namespace = ?',
+        [ns],
+      ).map((r) => r['id'] as String).toList();
+
+      expect(remainingAfterSync, isNot(contains('spam-loan-limit')));
+      expect(remainingAfterSync, isNot(contains('spam-betting')));
+
+      // Version is updated to 16
+      expect(prefs.getInt('pandapay.needs_review_noise_version'), 16);
+
+      db.close();
+    },
+  );
+  group('Pay Later / BNPL Drawdown Classification and Retention', () {
+    test('isPayLaterDrawdown detects Axio, Amazon Pay Later, LazyPay, Simpl, postpe', () {
+      final samples = [
+        (
+          'Thank you for availing Pay Later credit of Rs 499 at Amazon on 12-Mar-2026. Your available limit is Rs 15,000',
+          'axio',
+        ),
+        (
+          'You have availed Pay Later credit of Rs 1200 on Amazon. Repay on 5th of next month',
+          'VM-axioFS',
+        ),
+        (
+          'Availed credit of Rs. 350 using Amazon Pay Later',
+          null,
+        ),
+        (
+          'Congrats, we have received your repayment towards your Pay Later XXX6016 a/c',
+          'VD-axioPL-S',
+        ),
+        (
+          'Your Amazon Pay Later EMI of Rs 1,450 has been scheduled',
+          null,
+        ),
+        (
+          'Rs 250 paid at Swiggy using LazyPay',
+          'VK-LAZYPY',
+        ),
+        (
+          'Transaction of Rs. 450 using Simpl',
+          'AX-SIMPL',
+        ),
+        (
+          'Availed credit of Rs 1,000 using postpe',
+          'BZ-POSTPE',
+        ),
+      ];
+
+      for (final (body, sender) in samples) {
+        expect(
+          NeedsReviewRepository.isPayLaterDrawdown(body, sender: sender),
+          isTrue,
+          reason: 'Failed for body: $body, sender: $sender',
+        );
+      }
+
+      // Non-matches
+      expect(
+        NeedsReviewRepository.isPayLaterDrawdown(
+          'Rs. 100 spent at FIRST SHOP on HDFC Bank Card ending 1234.',
+          sender: 'VM-HDFCBK',
+        ),
+        isFalse,
+      );
+      expect(
+        NeedsReviewRepository.isPayLaterDrawdown(
+          'Your OTP for login is 123456. Do not share it with anyone.',
+          sender: 'HDFCBK',
+        ),
+        isFalse,
+      );
+    });
+
+    test('resolveItemKind categorizes Pay Later messages as NeedsReviewKind.payLaterDrawdown', () {
+      final item = NeedsReviewItem(
+        id: 'axio-drawdown',
+        sender: 'VM-axioFS',
+        body: 'Thank you for availing Pay Later credit of Rs 499 at Amazon on 12-Mar-2026. Your available limit is Rs 15,000',
+        receivedAt: DateTime(2026, 3, 12),
+      );
+
+      final resolved = NeedsReviewRepository.resolveItemKind(item);
+      expect(resolved.kind, NeedsReviewKind.payLaterDrawdown);
+
+      final lazyPayItem = NeedsReviewItem(
+        id: 'lazypay-drawdown',
+        sender: 'VK-LAZYPY',
+        body: 'Rs 250 paid at Swiggy using LazyPay',
+        receivedAt: DateTime(2026, 3, 13),
+      );
+      expect(
+        NeedsReviewRepository.resolveItemKind(lazyPayItem).kind,
+        NeedsReviewKind.payLaterDrawdown,
+      );
+    });
+
+    test('round-trip JSON serialization preserves NeedsReviewKind.payLaterDrawdown', () {
+      final item = NeedsReviewItem(
+        id: 'pay-later-json',
+        sender: 'axio',
+        body: 'Availed credit of Rs. 350 using Amazon Pay Later',
+        receivedAt: DateTime(2026, 3, 12, 14, 30),
+        kind: NeedsReviewKind.payLaterDrawdown,
+      );
+
+      final json = item.toJson();
+      expect(json['kind'], 'payLaterDrawdown');
+
+      final deserialized = NeedsReviewItem.fromJson(json);
+      expect(deserialized.id, item.id);
+      expect(deserialized.sender, item.sender);
+      expect(deserialized.body, item.body);
+      expect(deserialized.receivedAt, item.receivedAt);
+      expect(deserialized.kind, NeedsReviewKind.payLaterDrawdown);
+    });
+
+    test('Pay Later drawdown items are retained in NeedsReviewRepository and not discarded as noise', () async {
+      final db = openInMemoryForTesting();
+      addTearDown(db.close);
+      const ns = 'user:paylater-test';
+      final repo = NeedsReviewRepository(
+        namespace: ns,
+        loadDatabase: () async => db,
+      );
+
+      final item = NeedsReviewItem(
+        id: 'axio-review-1',
+        sender: 'axio',
+        body: 'Thank you for availing Pay Later credit of Rs 499 at Amazon on 12-Mar-2026. Your available limit is Rs 15,000',
+        receivedAt: DateTime(2026, 3, 12),
+      );
+
+      await repo.add(item);
+
+      final all = await repo.fetchAll();
+      expect(all, hasLength(1));
+      expect(all.single.id, 'axio-review-1');
+      expect(all.single.kind, NeedsReviewKind.payLaterDrawdown);
+    });
+  });
 }

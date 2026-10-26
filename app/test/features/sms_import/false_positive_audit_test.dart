@@ -307,5 +307,33 @@ void main() {
         }
       });
     }
+
+    test('Non-transaction noise: credit line marketing and betting spam are rejected', () {
+      final noiseMessages = [
+        (
+          'VK-BFDLPS-S',
+          'Notice: Your digital credit power is now active on Bajaj Markets. View your updated limit here: 1kx.in/TaEc4L T&C Apply.',
+        ),
+        (
+          'VK-BFDLPS-S',
+          'New Credit alert Your loan limit is revised. Click here to know more: 1kx.in/khOzn2 Bajaj Markets T&C',
+        ),
+        (
+          'CP-DISHTV-S',
+          'FRPendingDTIL IPL trusted betting site GullyBET, Instant withdrawal. Fancy bet All games, casino, slots, aviator, cockfight. Huge bonus gbets.win/1w1',
+        ),
+      ];
+
+      for (final record in noiseMessages) {
+        final sender = record.$1;
+        final body = record.$2;
+        expect(LocalSmsParser.isNonTransactionNoise(sender, body), isTrue,
+            reason: 'Expected noise rejection for: ' + body);
+        expect(classifySmsTriage(sender, body).kind, SmsTriageKind.promotion,
+            reason: 'Expected promotion triage for: ' + body);
+        expect(capturesFinancialSms(body, sender: sender), isFalse,
+            reason: 'capturesFinancialSms should be false for noise: ' + body);
+      }
+    });
   });
 }

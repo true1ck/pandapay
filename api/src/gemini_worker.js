@@ -15,6 +15,8 @@ if (!process.env.GEMINI_API_KEY) {
 
 const crypto = require('crypto');
 const { safeErrorCode } = require('./safeErrorCode');
+const smsFacts = require('./sms_facts');
+const { verifyModelFacts } = require('./ai_fact_evidence');
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 const DEFAULT_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-flash-lite-latest';
 const DEFAULT_INTERVAL_MS = Number(process.env.AI_WORKER_INTERVAL_MS || 2000);
@@ -22,7 +24,7 @@ const DEFAULT_API_BASE_URL = process.env.AI_WORKER_API_BASE_URL || `http://127.0
 const PROVIDER_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_PROVIDER_TIMEOUT_MS || 20000));
 const DEFAULT_BATCH_MAX = Math.min(4, Math.max(1, Number(process.env.AI_WORKER_BATCH_MAX || 4)));
 const DEFAULT_BATCH_WINDOW_MS = Math.min(500, Math.max(0, Number(process.env.AI_WORKER_BATCH_WINDOW_MS || 300)));
-const MAX_OUTPUT_TOKENS = 1024;
+const MAX_OUTPUT_TOKENS = 2048;
 
 const SPEND_CATEGORIES = [
   'groceries', 'fuel', 'dining', 'online', 'travel', 'bills', 'rent',
@@ -30,28 +32,62 @@ const SPEND_CATEGORIES = [
   'health', 'emi', 'other',
 ];
 
+const DECISION_TOPICS = [
+  'card_spend', 'card_refund', 'upi_debit', 'upi_credit',
+  'atm_withdrawal', 'bank_transfer', 'bill_due_notice',
+  'bill_payment_success', 'mandate_autopay', 'investment_purchase',
+  'salary_or_income', 'telecom_carrier_deduction', 'loan_upsell_or_offer',
+  'credit_card_limit_upsell', 'otp_or_security_code',
+  'generic_promotional_spam', 'informational_balance_notice',
+  'pay_later_due_notice', 'pay_later_drawdown', 'other_non_financial',
+];
+
+const REJECTION_REASONS = [
+  'none', 'telecom_carrier_deduction', 'loan_upsell',
+  'promotional_spam', 'security_otp', 'credit_limit_upsell', 'non_financial',
+];
+
+const DECISION_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    topic: { type: 'STRING', enum: DECISION_TOPICS },
+    shouldConsider: { type: 'BOOLEAN' },
+    rejectionReason: { type: 'STRING', enum: REJECTION_REASONS },
+  },
+  required: ['topic', 'shouldConsider', 'rejectionReason'],
+};
+
 const UNIVERSAL_SYSTEM_INSTRUCTION = [
-  "You are PandaPay's Financial SMS Extraction & Categorization Engine.",
-  'Your mission is to parse redacted Indian financial SMS messages into strictly typed, structured financial facts.',
+  "You are PandaPay's SMS classification and structured-decision engine.",
+  'Your mission is to evaluate redacted Indian SMS messages, make an intent-based tracking decision, and extract strictly typed financial facts.',
   '',
-  'CORE OPERATING INSTRUCTIONS:',
-  '1. ZERO HALLUCINATION: Never invent or extrapolate missing digits, dates, or merchants. The message has already been redacted.',
-  '2. DISTINGUISH MONEY MOVED FROM MONEY MENTIONED:',
+  'TWO-STAGE COGNITIVE EVALUATION:',
+  'STAGE 1: INTENT & TRACKING DECISION (decision object)',
+  '- What is this SMS about? Assign the most specific topic from DECISION_TOPICS. Return only the decision and supported facts; do not write a summary.',
+  '- Should PandaPay track this? (shouldConsider: boolean):',
+  '  * SET shouldConsider=true ONLY for completed or scheduled money movements, bill obligations, salary/income, investments, or active mandates.',
+  '  * SET shouldConsider=false for telecom carrier deductions (Jio/Airtel/Vi retention fees, talktime/validity debits), personal loan/pay-later offers (Axio, KreditBee), credit limit upsells, bank OTPs, gambling/promotional spam, or general service alerts.',
+  '- Rejection Reason: If shouldConsider=false, choose the matching reason from REJECTION_REASONS. If shouldConsider=true, set rejectionReason="none".',
+  '',
+  'STAGE 2: FACT EXTRACTION (facts array)',
+  '- When shouldConsider=false, facts MUST be an empty array []. Do NOT extract balance snapshots, service alerts, or partial movements for rejected messages.',
+  '- When shouldConsider=true, extract strictly typed facts following these rules:',
+  '  1. ZERO HALLUCINATION: Never invent or extrapolate missing digits, dates, or merchants. The message has already been redacted.',
+  '  2. DISTINGUISH MONEY MOVED FROM MONEY MENTIONED:',
   "   - A debit, card swipe, or purchase is 'posted_movement' with amountRole='posted' and entryKind='spend'.",
   "   - A salary credit or dividend is 'posted_movement' with amountRole='posted' and entryKind='income'.",
   "   - A broker funds payout (e.g., Kotak Neo, Zerodha quarterly settlement) or own-account transfer is 'posted_movement' with amountRole='posted' and entryKind='transfer'.",
   "   - A mutual fund SIP debit or stock purchase is 'posted_movement' with amountRole='posted' and entryKind='investment'.",
-  "   - A utility bill, credit card statement, or due notification is 'bill_obligation' with amountRole='due_total' (and 'due_minimum' if present). It is NEVER a posted movement.",
+  "   - A utility bill, credit card statement, or Pay Later due notification is 'bill_obligation' with amountRole='due_total' (and 'due_minimum' if present). It is NEVER a posted movement.",
+  "   - A Pay Later drawdown/purchase is a 'posted_movement' with entryKind='spend' only when the message confirms the purchase was completed; a Pay Later repayment notice is a bill obligation.",
   "   - An AutoPay registration or standing instruction is 'mandate_lifecycle' with amountRole='ceiling' and limitInr. It is NEVER a spend.",
   "   - An ATM withdrawal is 'posted_movement' with instrument='cash' and entryKind='transfer'.",
-  '3. CATEGORIZATION:',
+  '  3. CATEGORIZATION:',
   "   For every spend transaction, extract a clean merchant name (stripping noise words such as 'INFO/', 'VPA', 'IMPS-', 'POS', 'ECOM') and assign exactly ONE of the 15 canonical categories:",
   "   ['groceries', 'fuel', 'dining', 'online', 'travel', 'bills', 'rent', 'insurance', 'education', 'government', 'wallet', 'entertainment', 'health', 'emi', 'other'].",
-  '4. SCORING & COMPLETENESS:',
+  '  4. SCORING & COMPLETENESS:',
   "   - Set 'isComplete': true when the message has all necessary fields (for spend: amount, instrument, merchant, category; for bill: amountDue, dueDate, billerName).",
   "   - Set 'confidence': a float from 0.0 to 1.0 reflecting your extraction certainty.",
-  '5. NOISE HANDLING:',
-  '   If the message is an OTP, service validity alert, or promotional advertisement without completed financial movement, return {"facts": []}.',
 ].join('\n');
 
 const FACT_TYPE_ENUM = [
@@ -69,6 +105,7 @@ const FACT_TYPE_ENUM = [
 const UNIVERSAL_RESPONSE_SCHEMA = {
   type: 'OBJECT',
   properties: {
+    decision: DECISION_SCHEMA,
     facts: {
       type: 'ARRAY',
       items: {
@@ -129,7 +166,7 @@ const UNIVERSAL_RESPONSE_SCHEMA = {
       },
     },
   },
-  required: ['facts'],
+  required: ['decision', 'facts'],
 };
 
 const UNIVERSAL_BATCH_RESPONSE_SCHEMA = {
@@ -141,9 +178,10 @@ const UNIVERSAL_BATCH_RESPONSE_SCHEMA = {
         type: 'OBJECT',
         properties: {
           id: { type: 'STRING' },
+          decision: DECISION_SCHEMA,
           facts: UNIVERSAL_RESPONSE_SCHEMA.properties.facts,
         },
-        required: ['id', 'facts'],
+        required: ['id', 'decision', 'facts'],
       },
     },
   },
@@ -156,6 +194,11 @@ const FEW_SHOT_EXAMPLES = [
     label: 'UPI food delivery debit (Swiggy)',
     sms: 'Sent Rs.420.00 from HDFC Bank A/C **1797 to SWIGGY UPI on 24-10-26. UPI Ref 429812345678. Avail Bal: Rs.45,120.50',
     output: {
+      decision: {
+        topic: 'upi_debit',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -180,6 +223,11 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Credit card purchase (Flipkart)',
     sms: 'Alert: INR 2,499.00 spent on ICICI Bank Credit Card ending XX4002 at FLIPKART on 25-Oct-26. Available limit: INR 1,45,000.00.',
     output: {
+      decision: {
+        topic: 'card_spend',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -204,6 +252,11 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Credit card monthly statement bill (Axis)',
     sms: 'Your Axis Bank Credit Card XX8891 statement generated. Total Due: Rs 14,850.00, Min Due: Rs 750.00, Due Date: 12-Nov-2026.',
     output: {
+      decision: {
+        topic: 'bill_due_notice',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'bill_obligation',
@@ -227,9 +280,58 @@ const FEW_SHOT_EXAMPLES = [
     },
   },
   {
+    label: 'Pay Later drawdown purchase (Flipkart)',
+    sms: 'Axio Pay Later payment of INR 4,200.00 to Flipkart was successful on 24-Oct-2026.',
+    output: {
+      decision: {
+        topic: 'pay_later_drawdown',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
+      facts: [
+        {
+          factType: 'posted_movement',
+          payload: {
+            amountRole: 'posted', entryKind: 'spend', amountInr: 4200.0,
+            occurredAt: '2026-10-24T00:00:00.000Z', instrument: 'other',
+            merchant: 'Flipkart', category: 'online',
+            isComplete: true, confidence: 0.96,
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'Pay Later bill due notice (Axio)',
+    sms: 'Axio Pay Later bill amount INR 5,300.00 is due on 05-Nov-2026.',
+    output: {
+      decision: {
+        topic: 'pay_later_due_notice',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
+      facts: [
+        {
+          factType: 'bill_obligation',
+          payload: {
+            amountRole: 'due_total', amountDueInr: 5300.0,
+            dueDate: '2026-11-05T00:00:00.000Z', billerName: 'Axio Pay Later',
+            category: 'emi', targetKind: 'utility_or_other_bill',
+            isComplete: true, confidence: 0.98,
+          },
+        },
+      ],
+    },
+  },
+  {
     label: 'Utility bill (BESCOM electricity)',
     sms: 'Dear Consumer, Electricity bill for CA 102938475 is Rs 1,840.00. Due date is 05-Nov-2026. Pay via BESCOM portal to avoid disconnect.',
     output: {
+      decision: {
+        topic: 'bill_due_notice',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'bill_obligation',
@@ -247,6 +349,11 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Bill payment receipt (credit card bill paid)',
     sms: 'Thank you! Payment of Rs.14,850.00 received towards your Axis Bank Credit Card XX8891 on 25-Oct-26 via CRED.',
     output: {
+      decision: {
+        topic: 'bill_payment_success',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'bill_payment',
@@ -264,6 +371,11 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Broker settlement payout (Kotak Neo / Zerodha return to bank)',
     sms: 'Dear Investor, payout of Rs 1,944.38 has been processed towards your Bank A/c XX1797 on 24-Oct-26 on account of quarterly settlement of funds. - Kotak Neo',
     output: {
+      decision: {
+        topic: 'bank_transfer',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -282,6 +394,11 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Broker funding top-up (Zerodha funds added)',
     sms: 'Rs. 25,000.00 debited from HDFC Bank A/c XX1797 on 23-Oct-26 towards ZERODHA BROKING LTD via NetBanking. Ref 429712398.',
     output: {
+      decision: {
+        topic: 'investment_purchase',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -299,6 +416,11 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Earned income (monthly salary credit)',
     sms: 'Your Salary of Rs. 1,25,000.00 has been credited to your HDFC Bank A/c XX1797 on 30-Oct-2026 by ACME TECH CORP PVT LTD.',
     output: {
+      decision: {
+        topic: 'salary_or_income',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -316,6 +438,11 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Loan EMI debit (home loan auto-debit)',
     sms: 'EMI Rs 32,450.00 for Home Loan A/c HL-998822 debited from SBI Bank A/c XX4321 on 10-Oct-2026.',
     output: {
+      decision: {
+        topic: 'bank_transfer',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -333,6 +460,11 @@ const FEW_SHOT_EXAMPLES = [
     label: 'AutoPay e-mandate registration (Netflix)',
     sms: 'AutoPay e-mandate successfully registered for NETFLIX Entertainment with max limit INR 1,500.00 on HDFC Bank Card ending 1234. UMN: HDFC998877.',
     output: {
+      decision: {
+        topic: 'mandate_autopay',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'mandate_lifecycle',
@@ -351,6 +483,11 @@ const FEW_SHOT_EXAMPLES = [
     label: 'ATM cash withdrawal',
     sms: 'Rs 5,000.00 withdrawn from ATM using Debit Card XX9912 on 24-Oct-26 at SBI ATM KORAMANGALA BLR.',
     output: {
+      decision: {
+        topic: 'atm_withdrawal',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -367,6 +504,11 @@ const FEW_SHOT_EXAMPLES = [
     label: 'Partial / ambiguous spend (needs review)',
     sms: 'A/c XX1797 debited for INR 750.00 on 24-10-26. Info: POS-AMAZON PAY BLR. Avail Bal: 21,400.00.',
     output: {
+      decision: {
+        topic: 'upi_debit',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
       facts: [
         {
           factType: 'posted_movement',
@@ -378,6 +520,54 @@ const FEW_SHOT_EXAMPLES = [
           },
         },
       ],
+    },
+  },
+  {
+    label: 'Telecom carrier retention deduction (Jio ₹9.88 noise)',
+    sms: 'Paid Rs. 9.88 for Jio number retention charges via UPI on 20-Oct-2026. Avail Bal: Rs 12.00',
+    output: {
+      decision: {
+        topic: 'telecom_carrier_deduction',
+        shouldConsider: false,
+        rejectionReason: 'telecom_carrier_deduction',
+      },
+      facts: [],
+    },
+  },
+  {
+    label: 'Personal loan promotional upsell (Axio / KreditBee noise)',
+    sms: 'Congratulations! You are pre-approved for an instant personal loan of up to Rs 2,50,000 from Axio with zero paperwork. Apply now at https://axio.in/loan',
+    output: {
+      decision: {
+        topic: 'loan_upsell_or_offer',
+        shouldConsider: false,
+        rejectionReason: 'loan_upsell',
+      },
+      facts: [],
+    },
+  },
+  {
+    label: 'Bank security OTP verification',
+    sms: '482910 is your OTP for NetBanking login at HDFC Bank. Valid for 10 mins. Do not share OTP with anyone.',
+    output: {
+      decision: {
+        topic: 'otp_or_security_code',
+        shouldConsider: false,
+        rejectionReason: 'security_otp',
+      },
+      facts: [],
+    },
+  },
+  {
+    label: 'Gambling / spam marketing offer',
+    sms: 'Deposit Rs 500 & get Rs 1000 free bonus instantly on gbets.win! Play and win real cash now.',
+    output: {
+      decision: {
+        topic: 'generic_promotional_spam',
+        shouldConsider: false,
+        rejectionReason: 'promotional_spam',
+      },
+      facts: [],
     },
   },
 ];
@@ -392,12 +582,15 @@ function renderFewShots() {
 }
 
 class GeminiProviderError extends Error {
-  constructor(message, { retryable = false, retryAfterMs = undefined, status = undefined } = {}) {
+  constructor(message, {
+    retryable = false, retryAfterMs = undefined, status = undefined, rateLimited = false,
+  } = {}) {
     super(message);
     this.name = 'GeminiProviderError';
     this.retryable = retryable;
     this.retryAfterMs = retryAfterMs;
     this.status = status;
+    this.rateLimited = rateLimited;
   }
 }
 
@@ -448,14 +641,14 @@ function parseModelJson(text) {
   }
 }
 
-function buildGeminiPrompt(job, { batch = false, includeExamples = true } = {}) {
+function buildGeminiPrompt(job, { batch = false, includeExamples = true, repairErrors = null } = {}) {
   const payload = job?.payload || {};
   return [
-    'Classify this bank SMS into typed financial facts for a personal finance app.',
+    'Evaluate this Indian SMS for a personal finance app. First make a cognitive tracking decision, then extract facts if trackable.',
     'The message has already been redacted. Never infer or invent missing digits.',
     batch
-      ? 'Supply this item\'s facts array in the batch items envelope; keep this item with facts: [] when uncertain.'
-      : 'Return JSON only in the form {"facts":[...]}; return an empty facts array when uncertain.',
+      ? 'Supply this item\'s decision and facts array in the batch items envelope. If shouldConsider=false, set facts: [].'
+      : 'Return JSON only in the form {"decision":{...},"facts":[...]}. If shouldConsider=false, set facts: [].',
     'Each fact must use the app contract: factType, payload, provenance.',
     'Allowed factType values: posted_movement, pending_or_failed_attempt, balance_snapshot, bill_obligation, bill_payment, mandate_lifecycle, card_identity_hint, security_or_service_alert, promotion.',
     'Allowed entryKind values for posted_movement: spend, income, transfer, investment (use "spend" for debited/purchases).',
@@ -466,6 +659,10 @@ function buildGeminiPrompt(job, { batch = false, includeExamples = true } = {}) 
     'For amountRole, include its matching amount and date: posted=amountInr/occurredAt, due_total=amountDueInr/dueDate, due_minimum=minimumDueInr/dueDate, outstanding=outstandingInr/asOfAt, ceiling=limitInr/asOfAt, proposed=proposedAmountInr/proposedAt.',
     'A posted spend also requires merchant. A mandate limit is valid only for registered status. Never omit required fields or invent values; if any required value is absent or uncertain, leave this SMS\'s facts array empty.',
     'Set isComplete=true only when every essential attribute for the fact type is present, and confidence to your extraction certainty from 0.0 to 1.0.',
+    ...(Array.isArray(repairErrors) && repairErrors.length > 0 ? [
+      'CORRECTION PASS: Your previous structured facts did not satisfy the app contract. Re-evaluate the SMS and return a corrected decision and facts. Keep only facts fully supported by the SMS. If a required value is absent or uncertain, omit that fact (facts may be []). Do not guess to satisfy validation.',
+      `Validator findings: ${repairErrors.slice(0, 8).join(' | ')}`,
+    ] : []),
     'Do not treat a bill total, credit limit, or mandate ceiling as a posted movement.',
     ...(includeExamples ? [renderFewShots()] : []),
     `Sender: ${String(payload.sender || '')}`,
@@ -476,7 +673,7 @@ function buildGeminiPrompt(job, { batch = false, includeExamples = true } = {}) 
 
 function buildGeminiBatchPrompt(jobs) {
   return [
-    'Classify each SMS independently. Return JSON only: {"items":[{"id":"<id>","facts":[...]}]}.',
+    'Classify each SMS independently. Return JSON only: {"items":[{"id":"<id>","decision":{...},"facts":[...]}]}.',
     'Return exactly one item per supplied id, even when its facts array is empty.',
     'Never mix an amount, account or date from one item into another item.',
     renderFewShots(),
@@ -495,7 +692,13 @@ function estimateProviderTokens(jobs) {
 async function reserveProviderCapacity({ jobs, apiBaseUrl, workerToken, fetchImpl, waitImpl, heartbeat }) {
   const estimatedTokens = estimateProviderTokens(jobs);
   for (;;) {
-    const permit = await jsonRequest(fetchImpl, `${apiBaseUrl}/ai/provider/reserve`, workerToken, { estimatedTokens });
+    let permit;
+    try {
+      permit = await jsonRequest(fetchImpl, `${apiBaseUrl}/ai/provider/reserve`, workerToken, { estimatedTokens });
+    } catch (error) {
+      error.capacityCheckFailed = true;
+      throw error;
+    }
     if (permit.allowed === true) return permit;
     if (permit.dailyLimitReached === true) {
       throw new GeminiProviderError('Gemini daily Free-tier request limit reached', {
@@ -546,7 +749,7 @@ class GeminiProvider {
     this.endpointBase = endpointBase.replace(/\/$/, '');
   }
 
-  async classify(job) {
+  async classify(job, { repairErrors = null } = {}) {
     if (!this.apiKey && (!this.apiKeys || this.apiKeys.length === 0)) {
       throw new GeminiProviderError('GEMINI_API_KEY is not configured', { retryable: false });
     }
@@ -565,7 +768,7 @@ class GeminiProvider {
               systemInstruction: {
                 parts: [{ text: UNIVERSAL_SYSTEM_INSTRUCTION }],
               },
-              contents: [{ role: 'user', parts: [{ text: buildGeminiPrompt(job) }] }],
+              contents: [{ role: 'user', parts: [{ text: buildGeminiPrompt(job, { repairErrors }) }] }],
               generationConfig: {
                 responseMimeType: 'application/json',
                 responseSchema: UNIVERSAL_RESPONSE_SCHEMA,
@@ -607,6 +810,7 @@ class GeminiProvider {
           retryable,
           retryAfterMs,
           status: response.status,
+          rateLimited: is429,
         });
       }
       const data = await response.json();
@@ -615,7 +819,18 @@ class GeminiProvider {
       if (!parsed || !Array.isArray(parsed.facts)) {
         throw new GeminiProviderError('Gemini response has no facts array', { retryable: false });
       }
-      return parsed.facts;
+      if (attempt === 0 && this.apiKeys.length > 1) {
+        this.currentKeyIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
+        this.apiKey = this.apiKeys[this.currentKeyIndex];
+      }
+      return {
+        decision: parsed.decision || {
+          topic: parsed.facts.length > 0 ? 'card_spend' : 'other_non_financial',
+          shouldConsider: parsed.facts.length > 0,
+          rejectionReason: parsed.facts.length > 0 ? 'none' : 'non_financial',
+        },
+        facts: parsed.facts,
+      };
     }
   }
 
@@ -680,6 +895,7 @@ class GeminiProvider {
           retryable: response.status === 408 || response.status === 409 || is429 || response.status >= 500,
           retryAfterMs,
           status: response.status,
+          rateLimited: is429,
         });
       }
       const data = await response.json();
@@ -691,7 +907,18 @@ class GeminiProvider {
         if (!expected.has(item?.id) || output.has(item.id) || !Array.isArray(item.facts)) {
           throw new GeminiProviderError('Gemini batch has an invalid item');
         }
-        output.set(item.id, item.facts);
+        output.set(item.id, {
+          decision: item.decision || {
+            topic: item.facts.length > 0 ? 'card_spend' : 'other_non_financial',
+            shouldConsider: item.facts.length > 0,
+            rejectionReason: item.facts.length > 0 ? 'none' : 'non_financial',
+          },
+          facts: item.facts,
+        });
+      }
+      if (attempt === 0 && this.apiKeys.length > 1) {
+        this.currentKeyIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
+        this.apiKey = this.apiKeys[this.currentKeyIndex];
       }
       return output;
     }
@@ -713,6 +940,21 @@ async function jsonRequest(fetchImpl, url, token, body) {
     throw error;
   }
   return data;
+}
+
+function providerRetryReason(error) {
+  if (error?.capacityCheckFailed) return 'provider_capacity_unavailable';
+  if (error?.rateLimited === true || error?.status === 429) return 'provider_rate_limited';
+  if (error?.status === 408) return 'provider_timeout';
+  if (error?.status === 409) return 'provider_conflict';
+  if (Number.isInteger(error?.status) && error.status >= 500 && error.status <= 599) {
+    return `provider_http_${error.status}`;
+  }
+  if (/request failed or timed out/i.test(error?.message || '')) return 'provider_transport_error';
+  if (error instanceof GeminiProviderError && /daily Free-tier request limit/.test(error.message)) {
+    return 'provider_daily_limit';
+  }
+  return 'provider_retry';
 }
 
 async function runWorkerOnce({
@@ -753,35 +995,46 @@ async function runWorkerOnce({
       profileId: job.profileId,
       leaseToken: job.leaseToken,
       ...(retryable ? {
-        reason: 'provider_retry',
+        reason: providerRetryReason(error),
         ...(Number.isFinite(error.retryAfterMs) ? { retryAfterMs: error.retryAfterMs } : {}),
       } : { reason: error instanceof GeminiProviderError ? 'invalid_provider_output' : 'invalid_result' }),
     });
     return { jobId: job.id, [retryable ? 'retried' : 'failed']: true, outcome };
   };
-  try {
+  const heartbeat = async (leasedJobs) => {
+    for (const job of leasedJobs) {
+      const renewed = await jsonRequest(
+        fetchImpl,
+        `${base}/ai/jobs/${encodeURIComponent(job.id)}/heartbeat`,
+        workerToken,
+        { profileId: job.profileId, leaseToken: job.leaseToken },
+      );
+      if (renewed.renewed !== true) {
+        const error = new Error('worker lease heartbeat was refused');
+        error.status = 409;
+        throw error;
+      }
+    }
+  };
+  const reserveFor = async (leasedJobs) => {
     if (typeof reserveCapacity === 'function') {
-      await reserveCapacity({ jobs, estimatedTokens: estimateProviderTokens(jobs) });
-    } else {
-      await reserveProviderCapacity({
-        jobs, apiBaseUrl: base, workerToken, fetchImpl, waitImpl,
-        heartbeat: async (leasedJobs) => {
-          for (const job of leasedJobs) {
-            const renewed = await jsonRequest(
-              fetchImpl,
-              `${base}/ai/jobs/${encodeURIComponent(job.id)}/heartbeat`,
-              workerToken,
-              { profileId: job.profileId, leaseToken: job.leaseToken },
-            );
-            if (renewed.renewed !== true) {
-              const error = new Error('worker lease heartbeat was refused');
-              error.status = 409;
-              throw error;
-            }
-          }
-        },
+      return reserveCapacity({
+        jobs: leasedJobs,
+        estimatedTokens: estimateProviderTokens(leasedJobs),
       });
     }
+    return reserveProviderCapacity({
+      jobs: leasedJobs, apiBaseUrl: base, workerToken, fetchImpl, waitImpl, heartbeat,
+    });
+  };
+  const validationErrors = (facts, job) => {
+    const schema = smsFacts.validateFactSet(facts);
+    if (!schema.valid) return schema.errors;
+    const evidence = verifyModelFacts(facts, job.payload || {});
+    return evidence.valid ? [] : evidence.errors;
+  };
+  try {
+    await reserveFor(jobs);
     const byId = jobs.length > 1
       ? await provider.classifyBatch(jobs)
       : new Map([[jobs[0].id, await provider.classify(jobs[0])]]);
@@ -792,9 +1045,34 @@ async function runWorkerOnce({
         continue;
       }
       try {
+        let itemResult = byId.get(job.id);
+        let facts = Array.isArray(itemResult) ? itemResult : (itemResult?.facts || []);
+        let decision = Array.isArray(itemResult) ? null : (itemResult?.decision || null);
+        let errors = validationErrors(facts, job);
+        if (errors.length > 0 && typeof provider.classify === 'function') {
+          try {
+            // One bounded correction call: send only contract error text, then
+            // re-evaluate the original redacted SMS. Reserve it as a distinct
+            // provider request so minute pacing remains accurate.
+            await reserveFor([job]);
+            itemResult = await provider.classify(job, { repairErrors: errors });
+            facts = itemResult?.facts || [];
+            errors = validationErrors(facts, job);
+            if (errors.length === 0 && itemResult?.decision) decision = itemResult.decision;
+          } catch (_) {
+            // Keep the tracking decision even if correction itself is
+            // unavailable; invalid facts are never allowed to affect money.
+            errors = ['correction_unavailable'];
+          }
+        }
+        if (errors.length > 0) facts = [];
         const result = await jsonRequest(fetchImpl, `${base}/ai/jobs/${encodeURIComponent(job.id)}/result`, workerToken, {
-          facts: byId.get(job.id), profileId: job.profileId, leaseToken: job.leaseToken,
-          batchId, batchSize: jobs.length,
+          decision,
+          facts,
+          profileId: job.profileId,
+          leaseToken: job.leaseToken,
+          batchId,
+          batchSize: jobs.length,
         });
         outcomes.push({ jobId: job.id, completed: true, result });
       } catch (error) {
@@ -860,6 +1138,9 @@ if (require.main === module) {
 module.exports = {
   GeminiProvider,
   GeminiProviderError,
+  DECISION_TOPICS,
+  REJECTION_REASONS,
+  DECISION_SCHEMA,
   UNIVERSAL_SYSTEM_INSTRUCTION,
   UNIVERSAL_RESPONSE_SCHEMA,
   UNIVERSAL_BATCH_RESPONSE_SCHEMA,
@@ -871,6 +1152,7 @@ module.exports = {
   nextAdaptiveBatchSize,
   estimateProviderTokens,
   reserveProviderCapacity,
+  providerRetryReason,
   runWorkerOnce,
   startWorker,
 };

@@ -39,11 +39,11 @@ class _TestInbox extends SmsListenerService {
 
 class _MockUserCardsRepository extends UserCardsRepository {
   _MockUserCardsRepository()
-      : super(
-          apiBaseUrl: 'https://api.test',
-          accessToken: 'session-token',
-          client: MockClient((_) async => http.Response('{}', 200)),
-        );
+    : super(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'session-token',
+        client: MockClient((_) async => http.Response('{}', 200)),
+      );
 
   Future<Map<String, dynamic>?> Function(String sourceKey)? onFetchAiJobStatus;
   Future<String?> Function({
@@ -51,7 +51,9 @@ class _MockUserCardsRepository extends UserCardsRepository {
     required String sender,
     required String body,
     DateTime? occurredAt,
-  })? onSubmitAiJob;
+    bool? retryFailed,
+  })?
+  onSubmitAiJob;
 
   int fetchStatusCalls = 0;
   int submitJobCalls = 0;
@@ -71,6 +73,7 @@ class _MockUserCardsRepository extends UserCardsRepository {
     required String sender,
     required String body,
     DateTime? occurredAt,
+    bool retryFailed = false,
   }) async {
     submitJobCalls++;
     if (onSubmitAiJob != null) {
@@ -79,6 +82,7 @@ class _MockUserCardsRepository extends UserCardsRepository {
         sender: sender,
         body: body,
         occurredAt: occurredAt,
+        retryFailed: retryFailed,
       );
     }
     return 'default-job-id';
@@ -104,10 +108,7 @@ void main() {
     final repairKey = 'pandapay_app.sms_history_repaired_at_v2_$namespace';
     final reviewKey =
         'pandapay_app.sms_review_replayed_${LocalSmsParser.version}_$namespace';
-    SharedPreferences.setMockInitialValues({
-      repairKey: 1,
-      reviewKey: true,
-    });
+    SharedPreferences.setMockInitialValues({repairKey: 1, reviewKey: true});
 
     db = openInMemoryForTesting();
     cache = ResponseCache(db);
@@ -164,7 +165,9 @@ void main() {
       final completer = Completer<void>();
       mockRepo.onFetchAiJobStatus = (sourceKey) {
         if (!completer.isCompleted) completer.complete();
-        throw const SocketException('Transient network error: connection refused');
+        throw const SocketException(
+          'Transient network error: connection refused',
+        );
       };
 
       container.read(smsFlushTriggerProvider.notifier).state++;
@@ -192,15 +195,19 @@ void main() {
 
       final completer = Completer<void>();
       mockRepo.onFetchAiJobStatus = (sourceKey) async => null;
-      mockRepo.onSubmitAiJob = ({
-        required sourceKey,
-        required sender,
-        required body,
-        occurredAt,
-      }) {
-        if (!completer.isCompleted) completer.complete();
-        throw const SocketException('Transient network error: host unreachable');
-      };
+      mockRepo.onSubmitAiJob =
+          ({
+            required sourceKey,
+            required sender,
+            required body,
+            occurredAt,
+            retryFailed,
+          }) {
+            if (!completer.isCompleted) completer.complete();
+            throw const SocketException(
+              'Transient network error: host unreachable',
+            );
+          };
 
       container.read(smsFlushTriggerProvider.notifier).state++;
       await completer.future;
@@ -228,16 +235,18 @@ void main() {
 
       final completer = Completer<void>();
       mockRepo.onFetchAiJobStatus = (sourceKey) async => null;
-      mockRepo.onSubmitAiJob = ({
-        required sourceKey,
-        required sender,
-        required body,
-        occurredAt,
-      }) async {
-        if (!completer.isCompleted) completer.complete();
-        // Server explicit refusal: 429 quota exhausted or 400 bad format returns null
-        return null;
-      };
+      mockRepo.onSubmitAiJob =
+          ({
+            required sourceKey,
+            required sender,
+            required body,
+            occurredAt,
+            retryFailed,
+          }) async {
+            if (!completer.isCompleted) completer.complete();
+            // Server explicit refusal: 429 quota exhausted or 400 bad format returns null
+            return null;
+          };
 
       container.read(smsFlushTriggerProvider.notifier).state++;
       await completer.future;
@@ -257,21 +266,15 @@ void main() {
   );
 
   test(
-    'an explicit server failed status marks the review item as unavailable',
+    'a terminal server failed status is not resubmitted and stays unavailable',
     () async {
       final reviewRepo = container.read(needsReviewRepositoryProvider);
       await reviewRepo.add(makeReviewItem(aiStatus: AiReviewStatus.notChecked));
 
       final completer = Completer<void>();
-      mockRepo.onFetchAiJobStatus = (sourceKey) async => {'status': 'failed'};
-      mockRepo.onSubmitAiJob = ({
-        required sourceKey,
-        required sender,
-        required body,
-        occurredAt,
-      }) async {
+      mockRepo.onFetchAiJobStatus = (sourceKey) async {
         if (!completer.isCompleted) completer.complete();
-        return null;
+        return {'status': 'failed'};
       };
 
       container.read(smsFlushTriggerProvider.notifier).state++;
@@ -280,11 +283,12 @@ void main() {
 
       final items = await reviewRepo.fetchAll();
       expect(items, hasLength(1));
+      expect(mockRepo.submitJobCalls, 0);
       expect(
         items.single.aiStatus,
         AiReviewStatus.unavailable,
         reason:
-            'When a previously failed job cannot be resubmitted, the item is unavailable.',
+            'A terminal failed job must not be reopened during reconciliation.',
       );
     },
   );
@@ -301,15 +305,17 @@ void main() {
 
       final completer = Completer<void>();
       mockRepo.onFetchAiJobStatus = (sourceKey) async => null;
-      mockRepo.onSubmitAiJob = ({
-        required sourceKey,
-        required sender,
-        required body,
-        occurredAt,
-      }) async {
-        if (!completer.isCompleted) completer.complete();
-        return 'job-queued-789';
-      };
+      mockRepo.onSubmitAiJob =
+          ({
+            required sourceKey,
+            required sender,
+            required body,
+            occurredAt,
+            retryFailed,
+          }) async {
+            if (!completer.isCompleted) completer.complete();
+            return 'job-queued-789';
+          };
 
       // Trigger on-demand flush.
       container.read(smsFlushTriggerProvider.notifier).state++;
@@ -327,6 +333,64 @@ void main() {
         reason:
             'Incrementing smsFlushTriggerProvider should trigger flushAndRetry '
             'and transition pending items to queued.',
+      );
+    },
+  );
+
+  test(
+    'completed Gemini decision files the transaction and creates Auto-Resolved history',
+    () async {
+      final reviewRepo = container.read(needsReviewRepositoryProvider);
+      await reviewRepo.add(makeReviewItem(aiStatus: AiReviewStatus.notChecked));
+      final completed = Completer<void>();
+      mockRepo.onFetchAiJobStatus = (sourceKey) async {
+        if (!completed.isCompleted) completed.complete();
+        return {
+          'status': 'done',
+          'decision': {
+            'topic': 'card_spend',
+            'shouldConsider': true,
+            'rejectionReason': 'none',
+          },
+          'result': {'confidenceScore': 0.99, 'reviewRequired': false},
+          'suggestions': [
+            {
+              'factIndex': 0,
+              'factType': 'posted_movement',
+              'payload': {
+                'amountRole': 'posted',
+                'entryKind': 'spend',
+                'amountInr': 1200.0,
+                'occurredAt': '2026-10-24T00:00:00.000Z',
+                'instrument': 'upi_bank',
+                'accountLast4': '9876',
+                'issuerName': 'HDFC Bank',
+                'merchant': 'STARBUCKS',
+                'category': 'dining',
+                'isComplete': true,
+                'confidence': 0.99,
+              },
+            },
+          ],
+        };
+      };
+
+      container.read(smsFlushTriggerProvider.notifier).state++;
+      await completed.future;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(mockRepo.submitJobCalls, 0);
+      expect(await reviewRepo.fetchAll(), isEmpty);
+      expect(
+        cache.financialStore.entities(namespace, 'transactions'),
+        hasLength(1),
+      );
+      expect(
+        db.db.select(
+          'SELECT resolved_kind, title FROM local_auto_resolved_history WHERE namespace=?',
+          [namespace],
+        ),
+        hasLength(1),
       );
     },
   );

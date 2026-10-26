@@ -79,6 +79,12 @@ function isNonTransactionNoise(sender, body) {
     || /\bpersonal\s+loan\s+eligibility\s+here\b/i.test(text)
   ) && !hasCurrencyAmount;
   if (repaymentCourtesyOrLoanUpsell) return true;
+
+  const loanOrCreditPowerMarketing = /\b(?:new\s+credit\s+alert|your\s+loan\s+limit\s+is\s+revised|(?:loan|credit)\s+limit\b[\s\S]{0,30}\b(?:revised|increased|enhanced|updated)|digital\s+credit\s+power\s+is\s+(?:now\s+)?active|updated\s+limit\s+here\b|view\s+your\s+updated\s+limit)\b/i.test(text) && !hasCurrencyAmount;
+  if (loanOrCreditPowerMarketing) return true;
+
+  const bettingOrGamblingSpam = /\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling|huge\s+bonus\b[\s\S]{0,30}\b(?:bet|casino|slots|win)|gbets\.win)\b/i.test(text);
+  if (bettingOrGamblingSpam) return true;
   if (/\b(?:payment|amount|minimum|total)\s+due\b|\bdue\s+date\b|\b(?:statement|bill|premium)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b/i.test(text)) return false;
   if (/\b(?:eligible\s+for\s+(?:[\w\s]{0,20}\s+)?(?:conversion|flexipay|emis?)|convert(?:ed|ing)?\b[\s\S]{0,60}?\b(?:in)?to\b[\s\S]{0,20}?\b(?:smart\s+|flexipay\s+|easy\s+)?emis?|can\s+(?:now\s+)?be\s+converted\s+(?:in)?to\s+emis?|flexipay\s+emis?)\b/i.test(text)
       && !/\b(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)\b/i.test(text)
@@ -139,7 +145,8 @@ function isNonTransactionAlert(body) {
     // Card offers often say "Spend ₹15,000, get ₹250" and include the
     // masked card number. That is an offer condition, not a purchase alert.
     || /\bspend\s*(?:₹|rs\.?|inr)\s*[\d,]+[\s\S]{0,50}\b(?:get|earn|cashback|reward|voucher)\b/.test(text)
-    || /\b(?:cashback|reward|voucher|offer|eligible|campaign)\b[\s\S]{0,80}\b(?:spend|card)\b/.test(text);
+    || /\b(?:cashback|reward|voucher|offer|eligible|campaign)\b[\s\S]{0,80}\b(?:spend|card)\b/.test(text)
+    || /\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling|huge\s+bonus\b[\s\S]{0,30}\b(?:bet|casino|slots|win)|gbets\.win)\b/i.test(text);
 }
 
 // Bank-account UPI alerts often contain a four-digit account suffix. That
@@ -718,6 +725,34 @@ function isSuccessfulSpend(body) {
     || isWalletLoadMessage(text);
 }
 
+function isAxioPayLaterSender(sender) {
+  return /axio/i.test(String(sender || ''));
+}
+
+// Amazon Pay Later (Axio) credit drawdown: the user consumed Pay Later balance
+// at a merchant. These messages use "availing/availed Pay Later credit of Rs X"
+// without a standard debit verb, so the generic grammar drops them without this
+// dedicated handler. Must run before isNonTransactionNoise so it is not
+// swallowed by the repaymentCourtesyOrLoanUpsell noise guard.
+function parseBuiltInPayLaterDrawdown(sms) {
+  if (!isAxioPayLaterSender(sms?.sender)) return { ok: false, reason: 'not_axio_sender' };
+  const body = String(sms?.body || '');
+  const m = body.match(/\bavail(?:ing|ed)\s+(?:(?:amazon\s+)?pay\s+later\s+)?credit\s+of\s+(?:Rs\.?\s*)(\d+(?:\.\d+)?)/i);
+  if (!m) return { ok: false, reason: 'no_pay_later_drawdown_match' };
+  return {
+    ok: true,
+    patternId: null,
+    parserKind: 'builtin_pay_later_drawdown',
+    fields: {
+      amountInr: parseFloat(m[1]),
+      merchant: 'Amazon Pay Later',
+      entryKind: 'spend',
+      instrument: 'other',
+      accountLast4: 'Amazon Pay Later',
+    },
+  };
+}
+
 // Paying a credit-card bill is a movement of money between the user's bank
 // account and the card, not a new merchant purchase. Some issuers phrase the
 // alert as "payment received towards your credit card" and some as an account
@@ -1196,7 +1231,8 @@ function parseConservativeBankSpend(sms) {
 
   // These are opposite/non-spend events or secrets. A generic fallback must
   // prefer a missed import over turning any of them into spend.
-  if (/\b(otp|one[ -]?time password|verification code|payment due|amount due|minimum due|credited|refund(?:ed)?|reversal|reversed|declined|failed|cancelled)\b/i.test(body)) {
+  if (isNonTransactionAlert(body)
+      || /\b(otp|one[ -]?time password|verification code|payment due|amount due|minimum due|credited|refund(?:ed)?|reversal|reversed|declined|failed|cancelled)\b/i.test(body)) {
     return { ok: false, reason: 'non_spend_or_sensitive_message' };
   }
   if (isCardBillNotice(body)) {
@@ -1272,6 +1308,8 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (isInvestmentFolioAllotment(sms?.body)) {
     return parseInvestmentFolioAllotment(sms);
   }
+  const payLaterDrawdown = parseBuiltInPayLaterDrawdown(sms);
+  if (payLaterDrawdown.ok) return payLaterDrawdown;
   if (isNonTransactionNoise(sms?.sender, sms?.body)) {
     return { ok: false, reason: 'non_transaction_message' };
   }
@@ -1487,6 +1525,7 @@ module.exports = {
   parseBuiltInAccountCredit,
   parseBuiltInWalletSpend,
   isInvestmentFolioAllotment,
+  parseBuiltInPayLaterDrawdown,
   parseInvestmentFolioAllotment,
   senderMatches,
   redactSmsShape,
