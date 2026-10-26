@@ -1208,7 +1208,7 @@ class LocalSmsParser {
     if (effectiveAmountDue == null) {
       final amtMatch =
           _re(
-            r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|standing\s+instruction|si\s+debit|payment|bill)\s*(?:of\s+|is\s+|:\s*|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+            r'\b(?:autopay\s+(?:alert|reminder)|auto[- ]?pay|standing\s+instruction|si\s+debit|payment|bill)\s*(?:of\s+|is\s+|:\s*|-)?\s*(?:₹|rs\.?|inr)\s*(?:dr\.?|cr\.?)?\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body) ??
           _re(
             r'\b(?:standing\s+instruction|si\s+debit)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',

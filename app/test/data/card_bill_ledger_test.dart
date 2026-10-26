@@ -804,6 +804,52 @@ void main() {
   );
 
   test(
+    'aggregator utility bill never inherits a historical HDFC card link',
+    () {
+      final moneyBack = UserCard.fromJson({
+        'id': 'card-mb',
+        'card_product_id': 'p1',
+        'card_name': 'MoneyBack+ Credit Card',
+        'last4': '8708',
+        'is_default': false,
+      });
+      final ledgers = deriveCardBills(
+        cards: [moneyBack],
+        evidence: [
+          CardBillEvidence(
+            cardLast4: '8708',
+            billerName: 'HDFC Credit Card',
+            family: 'JK-MYTNEU-S',
+            statementDate: DateTime(2026, 10, 21),
+            statementDateExplicit: false,
+            dueDate: DateTime(2026, 11, 8),
+            amountDue: Money.fromRupees(8331),
+            minimumDue: null,
+            confidence: 0.95,
+          ),
+          CardBillEvidence(
+            cardLast4: null,
+            billerName: 'Goa Electricity',
+            family: 'AD-MYTNEU-S',
+            statementDate: DateTime(2026, 10, 25),
+            statementDateExplicit: false,
+            dueDate: DateTime(2026, 11, 9),
+            amountDue: Money.fromRupees(927),
+            minimumDue: null,
+            confidence: 0.95,
+          ),
+        ],
+        payments: const [],
+        now: DateTime(2026, 10, 26),
+      );
+
+      expect(ledgers['card-mb']!.current!.amountDue, Money.fromRupees(8331));
+      expect(ledgers['card-mb']!.current!.dueDate, DateTime(2026, 11, 8));
+      expect(ledgers['card-mb']!.previous, isNull);
+    },
+  );
+
+  test(
     'candidate cycle spend ignores bill payments, autopay, and huge single anomalies',
     () {
       final moneyBack = UserCard.fromJson({

@@ -178,4 +178,51 @@ void main() {
 
     expect(find.text('Axis Card'), findsNothing);
   });
+
+  testWidgets(
+    'hides a suffix-less server bill resolved locally by amount and due date',
+    (tester) async {
+      final projection = BillProjection.fromJson({
+        'id': 'bill-hdfc-8331',
+        'projectionKind': 'bill_obligation',
+        'projectionKey': 'bill:hdfccreditcard:2026-11-08:due_total',
+        'status': 'open',
+        'projection': {
+          'billerName': 'HDFC Credit Card',
+          'amountInr': 8331,
+          'dueDate': '2026-11-08T00:00:00Z',
+        },
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            centralBillsProjectionProvider.overrideWith(
+              (ref) async => BillProjectionSnapshot(
+                available: true,
+                projections: [projection],
+              ),
+            ),
+            commitmentsProvider.overrideWith((ref) async => const []),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: CentralBillsSection(
+                cardRows: [
+                  CentralBillDedupKey(
+                    last4: '8708',
+                    dueOn: DateTime(2026, 11, 8),
+                    amountInr: 8331,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('HDFC Credit Card'), findsNothing);
+    },
+  );
 }

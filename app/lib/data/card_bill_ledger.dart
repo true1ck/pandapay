@@ -11,6 +11,11 @@ import 'local/financial_store.dart'
 class CardBillEvidence {
   final String? cardLast4;
 
+  /// Parsed biller identity, kept separate from the transport sender family.
+  /// Aggregators such as MYTNEU deliver both HDFC card bills and utilities,
+  /// so sender family alone must never make a utility bill card evidence.
+  final String? billerName;
+
   /// Issuer/vendor family of the sending bank, e.g. `MYTNEU` for the HDFC
   /// Tata Neu card whose bill SMS never quotes any card digits.
   final String? family;
@@ -30,6 +35,7 @@ class CardBillEvidence {
 
   const CardBillEvidence({
     required this.cardLast4,
+    this.billerName,
     required this.statementDate,
     required this.statementDateExplicit,
     required this.dueDate,
@@ -156,6 +162,7 @@ Map<String, CardBillLedger> deriveCardBills({
   final orphanRows = evidence.where((e) => e.cardLast4 == null).toList();
 
   for (final orphan in orphanRows) {
+    if (_isNamedAggregatorNonCardBill(orphan)) continue;
     final candidates = _candidateCardsForEvidence(orphan, cards);
     if (candidates.isEmpty) continue;
 
@@ -199,7 +206,7 @@ Map<String, CardBillLedger> deriveCardBills({
             (c) => _hasHistoricalAttribution(c, orphan.family, evidence, [
               ...transactions,
               ...payments,
-            ]),
+            ], orphanBillerName: orphan.billerName),
           )
           .toList();
       if (historical.length == 1) {
@@ -508,6 +515,18 @@ bool _familyNamesCard(String? family, UserCard card) =>
       '${card.nickname ?? ''} ${card.cardName}',
     );
 
+bool _isNamedAggregatorNonCardBill(CardBillEvidence evidence) {
+  final family = evidence.family;
+  final billerName = evidence.billerName?.trim().toLowerCase();
+  if (family == null || billerName == null || billerName.isEmpty) return false;
+  final canonical = canonicalBankSender(family);
+  final aggregator =
+      canonical == 'mytneu' || canonical == 'tnbpay' || canonical == 'tatanu';
+  return aggregator &&
+      !billerName.contains('credit card') &&
+      !billerName.contains('card bill');
+}
+
 extension _FirstWhereOrNull<T> on Iterable<T> {
   T? firstWhereOrNull(bool Function(T) test) {
     for (final item in this) {
@@ -623,6 +642,18 @@ bool _hasHistoricalAttribution(
   final isAggregator =
       (canonical == 'mytneu' || canonical == 'tnbpay' || canonical == 'tatanu');
 
+  // Aggregator sender history is meaningful only for an actual card bill.
+  // The same MYTNEU/TNBPAY channels deliver utilities, so a named non-card
+  // bill must never inherit a card association through any fallback below.
+  if (isAggregator && orphanBillerName != null) {
+    final biller = orphanBillerName.trim().toLowerCase();
+    if (biller.isNotEmpty &&
+        !biller.contains('credit card') &&
+        !biller.contains('card bill')) {
+      return false;
+    }
+  }
+
   // 1. Evidence check: does any orphan bill from this sender family share an amount with an explicit bill for this candidate?
   for (final orphan in evidence.where(
     (e) => e.cardLast4 == null && e.amountDue != null,
@@ -648,14 +679,6 @@ bool _hasHistoricalAttribution(
         // and utility bills, require the biller identity to be absent or to
         // indicate a credit-card bill. A Goa Electricity bill must not
         // inherit a historical link established by an HDFC CC bill.
-        if (isAggregator && orphanBillerName != null) {
-          final billerLower = orphanBillerName.toLowerCase();
-          final isCcBiller =
-              billerLower.contains('credit card') ||
-              billerLower.contains('card bill') ||
-              billerLower.isEmpty;
-          if (!isCcBiller) continue;
-        }
         return true;
       }
     }

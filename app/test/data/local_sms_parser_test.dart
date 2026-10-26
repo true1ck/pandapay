@@ -931,6 +931,54 @@ void main() {
     expect(result?.confidence, greaterThanOrEqualTo(0.85));
   });
 
+  test('keeps MYTNEU Goa Electricity separate from credit-card bills', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'AD-MYTNEU-S',
+      body:
+          'Your Goa Electricity bill of Rs. 927.00 is ready. Pay by 2026-11-09 to avoid late charges: https://m.tneu.in/MYTNEU/X0jzNhN - Tata Neu',
+      receivedAt: DateTime(2026, 10, 25, 8, 22),
+    );
+
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.billerName, 'Goa Electricity');
+    expect(result?.amountDue?.rupees, 927);
+    expect(result?.dueDate, DateTime(2026, 11, 9));
+    expect(result?.cardLast4, isNull);
+    expect(result?.reasonCodes, isNot(contains('credit_card_bill')));
+  });
+
+  test('marks suffix-less MYTNEU HDFC bill as positive card evidence', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'JK-MYTNEU-S',
+      body:
+          'Your HDFC Credit Card bill of Rs. 8331.00 is ready. Pay by 2026-11-08 to avoid late charges: https://m.tneu.in/MYTNEU/r0L1AAE - Tata Neu',
+      receivedAt: DateTime(2026, 10, 21, 10, 1),
+    );
+
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.billerName, 'HDFC Credit Card');
+    expect(result?.amountDue?.rupees, 8331);
+    expect(result?.dueDate, DateTime(2026, 11, 8));
+    expect(result?.cardLast4, isNull);
+    expect(result?.reasonCodes, contains('credit_card_bill'));
+  });
+
+  test('does not parse an AutoPay bill reference as a money amount', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VD-HDFCBK-S',
+      body:
+          'LICNEW Bill 930688185 set for AutoPay on HDFC Bank SmartPay via Credit Card XXXXXXXXXXXX8708 is updated.',
+      receivedAt: DateTime(2026, 9, 3),
+    );
+
+    expect(result?.amountDue, isNull);
+    expect(result?.autopayLimit, isNull);
+    expect(result?.transaction, isNull);
+  });
+
   test(
     'classifies AutoPay alert deduction as a bill observation without creating spend',
     () {

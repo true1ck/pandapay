@@ -167,6 +167,16 @@ bool _duplicatesExistingBill(
     return true;
   }
 
+  // Hosted facts created from issuer/aggregator bill messages may not carry
+  // a suffix. Once the local ledger has resolved that exact amount and due
+  // date to an owned card, the suffix-less projection is the same bill, not
+  // a second generic "HDFC Credit Card" obligation.
+  if (row.last4 == null &&
+      cardRows.any((card) =>
+          _sameLocalDay(card.dueOn, date) && sameAmount(card.amountInr))) {
+    return true;
+  }
+
   final title = _identity(row.billerName ?? row.serviceName);
   if (title.isEmpty) return false;
   return localCommitments.any((commitment) {
