@@ -89,7 +89,7 @@ test('few-shot scenarios are exported and rendered into the prompt', () => {
   for (const scenario of [
     'Swiggy', 'Flipkart', 'Axis', 'BESCOM', 'Pay Later', 'credit card bill paid',
     'Kotak Neo', 'Zerodha', 'salary credit', 'Loan EMI', 'Netflix',
-    'ATM cash withdrawal', 'Partial', 'Turtlemint',
+    'ATM cash withdrawal', 'Partial', 'receipt-time fallback',
   ]) {
     assert.match(labels, new RegExp(scenario, 'i'));
   }
