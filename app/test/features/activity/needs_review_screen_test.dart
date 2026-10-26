@@ -577,7 +577,7 @@ void main() {
     expect(find.text('VM-HDFCBK'), findsNothing);
     expect(find.text('AX-axioFS-S'), findsOneWidget);
     expect(find.text('Pay Later / Credit line drawdown'), findsOneWidget);
-    expect(find.text('Review drawdown'), findsOneWidget);
+    expect(find.text('Add as Amazon Pay Later spend'), findsOneWidget);
   });
 
   testWidgets('future non-card bill bypasses review and persists directly', (

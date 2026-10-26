@@ -2625,7 +2625,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(needsReviewItemsProvider);
       ref.invalidate(needsReviewCountProvider);
-      ref.invalidate(activityTransactionsProvider);
+      ref.invalidate(userCardsProvider);
+      ref.invalidate(myCardsProvider);
       ref.invalidate(homeSummaryProvider);
     } catch (e) {
       if (mounted) {

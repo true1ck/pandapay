@@ -1579,6 +1579,41 @@ void main() {
     }
   });
 
+  test('Axio Amazon Pay Later credit drawdown parses as spend transaction', () {
+    const messages = [
+      (
+        'AX-axioFS-S',
+        'Thank you for availing Pay Later credit of Rs299.0. For more info click https://u.axio.ac/axo/UqpJfCtWpqntk To report misuse call 180012001637 -axio',
+        299.0,
+      ),
+      (
+        'VM-axioFS-S',
+        'Thank you for availing Pay Later credit of Rs859.0. For more info click https://u.axio.ac/axo/OIzBfFTIVHRH30R To report misuse call 180012001637 -axio',
+        859.0,
+      ),
+    ];
+
+    for (final (sender, body, amount) in messages) {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: sender,
+        body: body,
+        receivedAt: DateTime(2026, 10, 24, 15, 30),
+      );
+
+      expect(result, isNotNull);
+      expect(result!.eventType, LocalSmsEventType.transaction);
+      expect(result.disposition, LocalSmsDisposition.sync);
+      expect(result.reasonCodes, contains('axio_pay_later_drawdown'));
+      final txn = result.transaction;
+      expect(txn, isNotNull);
+      expect(txn!.amount, Money.fromRupees(amount));
+      expect(txn.merchantName, 'Amazon Pay Later');
+      expect(txn.instrument, TxnInstrument.other);
+      expect(txn.accountLast4, 'Amazon Pay Later');
+      expect(txn.entryKind, TxnEntryKind.spend);
+    }
+  });
   test('Axio Pay Later bill becomes an upcoming bill, not an account', () {
     const body =
         'Your Pay Later bill of Rs 1038 will be debited on 5th of this month '
