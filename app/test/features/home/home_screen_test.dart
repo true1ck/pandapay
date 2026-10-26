@@ -4,12 +4,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart' show AppRoute;
+import 'package:pandapay/data/card_bill_ledger.dart';
 import 'package:pandapay/features/comparison/comparison_view_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
+import 'package:pandapay/features/insights/payments_due_screen.dart'
+    show DuePayment, paymentsDueProvider;
 import 'package:pandapay/features/quickadd/quick_add_screen.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+
+class _TestClock implements Clock {
+  final DateTime _now;
+  const _TestClock(this._now);
+  @override
+  DateTime now() => _now;
+}
 
 CardProduct _card(String id) =>
     CardProduct(id: id, name: 'Card $id', network: CardNetwork.visa);
@@ -555,6 +565,64 @@ void main() {
       }
 
       expect(find.byType(QuickAddScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Dues & reminders omits cards with 0 spend and expired bills and shows all caught up',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      const kotakCard = UserCard(
+        id: 'kotak',
+        cardProductId: 'p-kotak',
+        cardName: 'Kotak Credit Card',
+        isDefault: false,
+        dueDay: 22,
+      );
+      final expiredBill = CardBill(
+        statementDate: DateTime(2026, 8, 2),
+        dueDate: DateTime(2026, 8, 22),
+        amountDue: Money.fromRupees(22245.32),
+        minimumDue: null,
+        paidToward: Money.zero(),
+        lastPaymentAt: null,
+        confidence: 0.95,
+        statementDateVerified: true,
+        statementDateExplicit: true,
+      );
+      final expiredRow = DuePayment(
+        card: kotakCard,
+        dueOn: DateTime(2026, 8, 22),
+        daysUntilDue: -65,
+        loggedThisCycle: Money.zero(),
+        bill: expiredBill,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            clockProvider
+                .overrideWithValue(_TestClock(DateTime(2026, 10, 26, 12))),
+            paymentsDueProvider.overrideWith((ref) async => [expiredRow]),
+            rankedRecommendationsProvider
+                .overrideWithValue(const AsyncValue.data([])),
+          ],
+          child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Dues & reminders'), findsOneWidget);
+      expect(find.text('Logged spend this cycle'), findsNothing);
+      expect(find.textContaining('Kotak Credit Card'), findsNothing);
+      expect(
+        find.text(
+          'All caught up! No upcoming dues or card spend for this cycle.',
+        ),
+        findsOneWidget,
+      );
     },
   );
 }

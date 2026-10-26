@@ -570,6 +570,30 @@ class FinancialStore {
     _notify(ns, entity: 'observations');
   }
 
+  void removeCardBillAssignment(String ns, String observationId) {
+    database.db.execute(
+      "DELETE FROM financial_entities WHERE namespace=? AND entity='bill_card_assignments' AND id=?",
+      [ns, observationId],
+    );
+    _notify(ns, entity: 'observations');
+  }
+
+  void deleteObservation(String ns, String id) {
+    database.db.execute(
+      "DELETE FROM financial_entities WHERE namespace=? AND entity='sms_observations' AND id=?",
+      [ns, id],
+    );
+    _notify(ns, entity: 'observations');
+  }
+
+  void deleteTransaction(String ns, String id) {
+    database.db.execute(
+      "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
+      [ns, id],
+    );
+    _notify(ns, entity: 'transactions');
+  }
+
   Map<String, Map<String, dynamic>> cardBillAssignments(String ns) => {
     for (final row in entities(ns, 'bill_card_assignments'))
       if (row['observation_id'] is String)

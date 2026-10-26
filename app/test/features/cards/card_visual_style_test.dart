@@ -111,4 +111,35 @@ void main() {
     expect(find.text('9th monthly'), findsOneWidget);
     expect(find.text('Not set'), findsNothing);
   });
+
+  testWidgets('CardVisual renders generated skin when product is null and only userCard is provided', (tester) async {
+    final userCard = UserCard(
+      id: 'central-hdfc',
+      cardProductId: 'central-hdfc',
+      cardName: 'HDFC Credit Card',
+      cardType: 'credit',
+      isDefault: false,
+      last4: '1234',
+    );
+
+    // Compact mode (e.g. Home screen dues & reminders card)
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            height: 58,
+            child: CardVisual(
+              product: null,
+              userCard: userCard,
+              showProductName: false,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(CardVisual), findsOneWidget);
+    expect(find.text('HDFC'), findsOneWidget);
+  });
 }

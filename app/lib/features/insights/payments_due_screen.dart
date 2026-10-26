@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+
+import '../../data/local/financial_store.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -182,11 +185,13 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
   for (final card in active) {
     final bill = ledger[card.id]?.current;
     final DateTime dueOn;
+    final billIsCurrent = bill != null && bill.isCurrentAsOf(now);
     if (bill?.dueDate != null &&
-        (bill!.statementDateVerified || card.dueDay != null)) {
+        (bill!.statementDateVerified || card.dueDay != null) &&
+        (billIsCurrent || card.dueDay == null)) {
       dueOn = bill.dueDate!;
     } else if (card.dueDay != null) {
-      dueOn = bill != null
+      dueOn = bill != null && billIsCurrent
           ? nextOccurrenceOf(card.dueDay!, bill.statementDate)
           : nextOccurrenceOf(card.dueDay!, today);
     } else if (bill != null) {
@@ -223,7 +228,7 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
         dueOn: dueOn,
         daysUntilDue: dueOn.difference(today).inDays,
         loggedThisCycle: logged,
-        bill: bill,
+        bill: billIsCurrent ? bill : null,
       ),
     );
   }
@@ -272,13 +277,26 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
         statementDateExplicit: false,
       );
 
-      final existingIndex =
+      int existingIndex =
           rows.indexWhere((r) => r.card.id == matchedCard.id);
+      if (existingIndex < 0 && ownedMatch == null) {
+        existingIndex = rows.indexWhere((r) {
+          final rName = r.card.cardName.toLowerCase();
+          final bName = (projection.billerName ??
+                  projection.serviceName ??
+                  '')
+              .toLowerCase();
+          return _sameDay(r.dueOn, dueDate) &&
+              (rName == bName ||
+                  (bName.isNotEmpty &&
+                      (rName.contains(bName) || bName.contains(rName))));
+        });
+      }
       if (existingIndex >= 0) {
         final existing = rows[existingIndex];
         if (existing.bill == null || !existing.bill!.statementDateVerified) {
           rows[existingIndex] = DuePayment(
-            card: matchedCard,
+            card: existing.card,
             dueOn: dueDate,
             daysUntilDue: dueDate.difference(today).inDays,
             loggedThisCycle: existing.loggedThisCycle,
@@ -982,6 +1000,112 @@ String _pastBillStatusLabel(PastBillReceipt item) => switch (item.status) {
   PastBillReceiptStatus.userSavedPurchase => 'Saved purchase',
 };
 
+void _showCardBillDetailSheet(
+  BuildContext context,
+  WidgetRef ref,
+  DuePayment row,
+) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: BambooInk.paper,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (ctx) => _CardBillDetailSheet(row: row),
+  );
+}
+
+Map<String, dynamic>? _findBestCandidateObs(
+  FinancialStore store,
+  String namespace,
+  UserCard card,
+  DateTime dueOn, {
+  String? issuerName,
+}) {
+  final allObs = store.entities(namespace, 'sms_observations');
+  final assignments = store.cardBillAssignments(namespace);
+  final cardBank = (issuerName ?? '').toLowerCase();
+  final cardName = card.cardName.toLowerCase();
+  final last4 = card.last4;
+
+  Map<String, dynamic>? best;
+  int bestScore = 0;
+
+  for (final obs in allObs) {
+    if (obs['event_type'] != 'bill') continue;
+    final id = obs['id'] as String?;
+    if (id == null) continue;
+
+    final assignedTo = assignments[id]?['user_card_id'] as String?;
+    if (assignedTo != null && assignedTo != card.id) continue;
+
+    final obsLast4 = obs['card_last4'] as String?;
+    final senderBank = (obs['sender_bank'] as String? ?? '').toLowerCase();
+    final biller = (obs['biller_name'] as String? ?? '').toLowerCase();
+    final body = (obs['sample_body'] as String? ?? '').toLowerCase();
+    final obsDue = DateTime.tryParse(obs['due_date'] as String? ?? '');
+
+    int score = 0;
+    if (last4 != null && last4.isNotEmpty && obsLast4 == last4) {
+      score += 100;
+    }
+    if (assignedTo == card.id) {
+      score += 80;
+    }
+    final isHdfc = cardBank.contains('hdfc') || cardName.contains('hdfc');
+    final isSbi = cardBank.contains('sbi') || cardName.contains('sbi');
+    final isIcici = cardBank.contains('icici') || cardName.contains('icici');
+    final isAxis = cardBank.contains('axis') || cardName.contains('axis');
+    final isKotak = cardBank.contains('kotak') || cardName.contains('kotak');
+
+    if (isHdfc &&
+        (senderBank.contains('hdfc') ||
+            senderBank.contains('mytneu') ||
+            senderBank.contains('tata') ||
+            body.contains('hdfc'))) {
+      score += 40;
+    } else if (isSbi &&
+        (senderBank.contains('sbi') || body.contains('sbi'))) {
+      score += 40;
+    } else if (isIcici &&
+        (senderBank.contains('icici') || body.contains('icici'))) {
+      score += 40;
+    } else if (isAxis &&
+        (senderBank.contains('axis') || body.contains('axis'))) {
+      score += 40;
+    } else if (isKotak &&
+        (senderBank.contains('kotak') || body.contains('kotak'))) {
+      score += 40;
+    } else if (cardBank.isNotEmpty &&
+        senderBank.isNotEmpty &&
+        (cardBank.contains(senderBank) || senderBank.contains(cardBank))) {
+      score += 30;
+    }
+
+    if (biller.isNotEmpty && cardName.contains(biller)) {
+      score += 20;
+    }
+
+    if (obsDue != null && _sameDay(obsDue, dueOn)) {
+      score += 30;
+    } else if (obsDue != null && (obsDue.difference(dueOn).inDays).abs() <= 5) {
+      score += 15;
+    }
+
+    if (obs['amount_due_paise'] != null) {
+      score += 10;
+    }
+
+    if (score > bestScore && score >= 30) {
+      bestScore = score;
+      best = obs;
+    }
+  }
+
+  return best;
+}
+
 class _ComingUpRow extends ConsumerWidget {
   final DuePayment row;
   const _ComingUpRow({required this.row});
@@ -1012,123 +1136,811 @@ class _ComingUpRow extends ConsumerWidget {
         .firstOrNull ??
         ref.watch(catalogueProvider).valueOrNull?.where((p) => p.id == card.cardProductId).firstOrNull;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isPaid
-            ? BambooInk.paperMuted.withValues(alpha: 0.5)
-            : BambooInk.glassFillOnPaper,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showCardBillDetailSheet(context, ref, row),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isUrgent && !isPaid
-              ? BambooInk.warningBorder
-              : BambooInk.hairlineOnPaper,
+        child: Container(
+          decoration: BoxDecoration(
+            color: isPaid
+                ? BambooInk.paperMuted.withValues(alpha: 0.5)
+                : BambooInk.glassFillOnPaper,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isUrgent && !isPaid
+                  ? BambooInk.warningBorder
+                  : BambooInk.hairlineOnPaper,
+            ),
+          ),
+          padding: const EdgeInsets.all(AppSpace.md),
+          child: Row(
+            children: [
+              MiniCardVisual(
+                product: product,
+                userCard: card,
+                width: 50,
+                height: 32,
+              ),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      card.nickname?.isNotEmpty == true
+                          ? card.nickname!
+                          : card.cardName,
+                      style: BambooFonts.ui(
+                        14,
+                        weight: FontWeight.w600,
+                        color: isPaid ? BambooInk.ink500 : BambooInk.ink900,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      dueDetail,
+                      style: BambooFonts.ui(
+                        12,
+                        color: isUrgent ? BambooInk.clayInk : BambooInk.ink500,
+                        weight: isUrgent ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                    if (isAutopay && !isPaid) ...[
+                      const SizedBox(height: 3),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.autorenew_rounded,
+                            size: 13,
+                            color: BambooInk.jade,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'AutoPay scheduled',
+                              style: BambooFonts.ui(
+                                11,
+                                color: BambooInk.jade,
+                                weight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              if (bill != null)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      bill.amountDue == null
+                          ? 'Amount not seen'
+                          : (bill.amountDue!.format(hidePaise: true)),
+                      style: BambooFonts.money(
+                        15,
+                        color: isPaid ? BambooInk.ink500 : BambooInk.ink900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    if (bill.isPaid)
+                      Text(
+                        'Paid ✓',
+                        style: BambooFonts.ui(
+                          12,
+                          weight: FontWeight.w600,
+                          color: BambooInk.rankBadgeInk,
+                        ),
+                      )
+                    else if (bill.hasPayments)
+                      Text(
+                        '${bill.paidToward.format(hidePaise: true)} paid',
+                        style: BambooFonts.ui(12, color: BambooInk.ink500),
+                      )
+                    else if (bill.minimumDue != null)
+                      Text(
+                        'Min ${bill.minimumDue!.format(hidePaise: true)}',
+                        style: BambooFonts.ui(12, color: BambooInk.ink500),
+                      ),
+                  ],
+                ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: BambooInk.ink500,
+              ),
+            ],
+          ),
         ),
       ),
-      padding: const EdgeInsets.all(AppSpace.md),
-      child: Row(
-        children: [
-          MiniCardVisual(
-            product: product,
-            userCard: card,
-            width: 50,
-            height: 32,
+    );
+  }
+}
+
+class _CardBillDetailSheet extends ConsumerStatefulWidget {
+  final DuePayment row;
+  const _CardBillDetailSheet({required this.row});
+
+  @override
+  ConsumerState<_CardBillDetailSheet> createState() =>
+      _CardBillDetailSheetState();
+}
+
+class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
+  late TextEditingController _amountCtrl;
+  late TextEditingController _minDueCtrl;
+  late DateTime _selectedDate;
+  late bool _isPaid;
+  late bool _initialIsPaid;
+  bool _saving = false;
+  String? _error;
+  String? _selectedObservationId;
+  Map<String, dynamic>? _detectedSmsObs;
+  bool _prefilledFromSms = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = widget.row.dueOn;
+    _isPaid = widget.row.bill?.isPaid ?? false;
+    _initialIsPaid = _isPaid;
+
+    if (widget.row.bill?.amountDue != null) {
+      _amountCtrl = TextEditingController(
+        text: widget.row.bill!.amountDue!.rupees.toStringAsFixed(0),
+      );
+    } else {
+      _amountCtrl = TextEditingController();
+    }
+
+    if (widget.row.bill?.minimumDue != null) {
+      _minDueCtrl = TextEditingController(
+        text: widget.row.bill!.minimumDue!.rupees.toStringAsFixed(0),
+      );
+    } else {
+      _minDueCtrl = TextEditingController();
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _lookForCandidateObs();
+    });
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    _minDueCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _lookForCandidateObs() async {
+    try {
+      final cache = await ref.read(responseCacheProvider.future);
+      final namespace = ref.read(cacheNamespaceProvider);
+      final pairs = ref.read(myCardsWithProductProvider).valueOrNull ?? const [];
+      final prod = pairs
+              .where((p) => p.$1.id == widget.row.card.id)
+              .map((p) => p.$2)
+              .firstOrNull ??
+          ref
+              .read(catalogueProvider)
+              .valueOrNull
+              ?.where((p) => p.id == widget.row.card.cardProductId)
+              .firstOrNull;
+
+      final candidate = _findBestCandidateObs(
+        cache.financialStore,
+        namespace,
+        widget.row.card,
+        widget.row.dueOn,
+        issuerName: prod?.issuerName,
+      );
+      if (candidate != null && mounted) {
+        setState(() {
+          _detectedSmsObs = candidate;
+          if (_amountCtrl.text.isEmpty &&
+              candidate['amount_due_paise'] != null) {
+            final paise = (candidate['amount_due_paise'] as num).toInt();
+            _amountCtrl.text = (paise / 100).toStringAsFixed(0);
+            _selectedObservationId = candidate['id'] as String?;
+            _prefilledFromSms = true;
+            final candDue =
+                DateTime.tryParse(candidate['due_date'] as String? ?? '');
+            if (candDue != null) {
+              _selectedDate = candDue;
+            }
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 365 * 2)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: BambooInk.slate,
+              onPrimary: BambooInk.lime,
+              onSurface: BambooInk.ink900,
+            ),
           ),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  card.nickname?.isNotEmpty == true
-                      ? card.nickname!
-                      : card.cardName,
-                  style: BambooFonts.ui(
-                    14,
-                    weight: FontWeight.w600,
-                    color: isPaid ? BambooInk.ink500 : BambooInk.ink900,
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _save() async {
+    final rawText = _amountCtrl.text.trim().replaceAll(',', '');
+    final amount = double.tryParse(rawText);
+    if (amount == null || amount <= 0) {
+      setState(() => _error = 'Please enter a valid statement amount.');
+      return;
+    }
+    final minRaw = _minDueCtrl.text.trim().replaceAll(',', '');
+    final minDue = double.tryParse(minRaw);
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final cache = await ref.read(responseCacheProvider.future);
+      final namespace = ref.read(cacheNamespaceProvider);
+      final store = cache.financialStore;
+      final card = widget.row.card;
+      final amountPaise = Money.fromRupees(amount).paise;
+      final minPaise =
+          minDue != null && minDue > 0 ? Money.fromRupees(minDue).paise : null;
+
+      final obsId = _selectedObservationId ??
+          (_detectedSmsObs != null
+              ? _detectedSmsObs!['id'] as String?
+              : null) ??
+          (widget.row.bill?.sourceIds.isNotEmpty == true
+              ? widget.row.bill!.sourceIds.first
+              : null);
+
+      if (obsId != null && obsId.isNotEmpty) {
+        store.saveCardBillAssignment(
+          namespace,
+          obsId,
+          userCardId: card.id,
+          amountDuePaise: amountPaise,
+          dueDate: _selectedDate,
+          statementDate: _selectedDate.subtract(const Duration(days: 20)),
+        );
+      }
+
+      final pairs = ref.read(myCardsWithProductProvider).valueOrNull ?? const [];
+      final prod = pairs
+              .where((p) => p.$1.id == card.id)
+              .map((p) => p.$2)
+              .firstOrNull ??
+          ref
+              .read(catalogueProvider)
+              .valueOrNull
+              ?.where((p) => p.id == card.cardProductId)
+              .firstOrNull;
+
+      final senderBankName = prod?.issuerName ??
+          (card.cardName.toLowerCase().contains('hdfc')
+              ? 'HDFCBK'
+              : card.cardName);
+
+      final manualId =
+          'manual-bill-${card.id}-${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}';
+      store.saveObservation(namespace, manualId, {
+        'id': manualId,
+        'event_type': 'bill',
+        'card_last4': card.last4,
+        'biller_name': card.cardName,
+        'sender_bank': senderBankName,
+        'amount_due_paise': amountPaise,
+        'minimum_due_paise': ?minPaise,
+        'due_date': _selectedDate.toIso8601String(),
+        'statement_date':
+            _selectedDate.subtract(const Duration(days: 20)).toIso8601String(),
+        'statement_date_explicit': true,
+        'received_at': DateTime.now().toIso8601String(),
+        'confidence': 1.0,
+        'reason_codes': ['credit_card_bill'],
+      });
+      store.saveCardBillAssignment(
+        namespace,
+        manualId,
+        userCardId: card.id,
+        amountDuePaise: amountPaise,
+        dueDate: _selectedDate,
+        statementDate: _selectedDate.subtract(const Duration(days: 20)),
+      );
+
+      final txnId =
+          'payment-${card.id}-${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}';
+      if (_isPaid && !_initialIsPaid) {
+        final paymentTxn = TransactionEntry(
+          id: txnId,
+          amount: Money.fromPaise(amountPaise),
+          occurredAt: DateTime.now(),
+          merchantName: 'Credit Card Bill Payment',
+          note:
+              'Card payment for ${card.cardName} •••• ${card.last4 ?? ""}',
+          entryKind: TxnEntryKind.transfer,
+          rail: TxnRail.unknown,
+          instrument: TxnInstrument.creditCard,
+          instrumentKnown: true,
+          source: 'manual',
+          status: 'active',
+          userCardId: card.id,
+          cardLast4: card.last4,
+        );
+        store.saveTransactions(namespace, [paymentTxn]);
+      } else if (!_isPaid && _initialIsPaid) {
+        store.deleteTransaction(namespace, txnId);
+      }
+
+      ref.invalidate(cardBillLedgerProvider);
+      ref.invalidate(paymentsDueProvider);
+      ref.invalidate(cardBillReviewItemsProvider);
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Updated bill for ${card.cardName}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Failed to save bill details: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _resetBill() async {
+    setState(() => _saving = true);
+    try {
+      final cache = await ref.read(responseCacheProvider.future);
+      final namespace = ref.read(cacheNamespaceProvider);
+      final store = cache.financialStore;
+      final card = widget.row.card;
+      final manualId =
+          'manual-bill-${card.id}-${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}';
+      final txnId =
+          'payment-${card.id}-${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}';
+
+      store.removeCardBillAssignment(namespace, manualId);
+      store.deleteObservation(namespace, manualId);
+      store.deleteTransaction(namespace, txnId);
+      if (_selectedObservationId != null) {
+        store.removeCardBillAssignment(namespace, _selectedObservationId!);
+      }
+
+      ref.invalidate(cardBillLedgerProvider);
+      ref.invalidate(paymentsDueProvider);
+      ref.invalidate(cardBillReviewItemsProvider);
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Reset bill override for ${card.cardName}')),
+        );
+      }
+    } catch (_) {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final card = widget.row.card;
+    final isAutopay = card.autopayMode != AutopayMode.off ||
+        widget.row.bill?.isAutopay == true;
+
+    final pairs =
+        ref.watch(myCardsWithProductProvider).valueOrNull ?? const [];
+    final product = pairs
+            .where((p) => p.$1.id == card.id)
+            .map((p) => p.$2)
+            .firstOrNull ??
+        ref
+            .watch(catalogueProvider)
+            .valueOrNull
+            ?.where((p) => p.id == card.cardProductId)
+            .firstOrNull;
+
+    final candPaise = _detectedSmsObs?['amount_due_paise'] as num?;
+    final candAmount = candPaise != null
+        ? (candPaise / 100).toStringAsFixed(0)
+        : null;
+    final candDue = _detectedSmsObs?['due_date'] != null
+        ? DateFormat('d MMM').format(
+            DateTime.tryParse(_detectedSmsObs!['due_date'] as String) ??
+                DateTime.now())
+        : null;
+
+    final daysDiff = _selectedDate.difference(DateTime.now()).inDays;
+    final dueSubtitle = daysDiff > 0
+        ? 'in $daysDiff days'
+        : daysDiff == 0
+            ? 'due today'
+            : '$daysDiff days ago';
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: AppSpace.lg,
+          right: AppSpace.lg,
+          top: AppSpace.md,
+          bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: BambooInk.hairlineOnPaper,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  dueDetail,
-                  style: BambooFonts.ui(
-                    12,
-                    color: isUrgent ? BambooInk.clayInk : BambooInk.ink500,
-                    weight: isUrgent ? FontWeight.w600 : FontWeight.w400,
+              ),
+              const SizedBox(height: AppSpace.md),
+
+              Row(
+                children: [
+                  MiniCardVisual(
+                    product: product,
+                    userCard: card,
+                    width: 52,
+                    height: 34,
                   ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          card.nickname?.isNotEmpty == true
+                              ? card.nickname!
+                              : card.cardName,
+                          style:
+                              BambooFonts.heading(17, color: BambooInk.ink900),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${product?.issuerName != null ? "${product!.issuerName} · " : ""}${card.last4 != null ? "•••• ${card.last4}" : card.cardName}',
+                          style: BambooFonts.ui(12, color: BambooInk.ink500),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                        color: BambooInk.ink500),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpace.md),
+              const Divider(height: 1, color: BambooInk.hairlineOnPaper),
+              const SizedBox(height: AppSpace.md),
+
+              if (_detectedSmsObs != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(AppSpace.md),
+                  decoration: BoxDecoration(
+                    color: BambooInk.jade.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border:
+                        Border.all(color: BambooInk.jade.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_awesome_rounded,
+                          color: BambooInk.jade, size: 20),
+                      const SizedBox(width: AppSpace.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _prefilledFromSms
+                                  ? 'Bill detected from SMS'
+                                  : 'Detected statement SMS',
+                              style: BambooFonts.ui(
+                                13,
+                                weight: FontWeight.w600,
+                                color: BambooInk.ink900,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _prefilledFromSms
+                                  ? 'Pre-filled ₹${_amountCtrl.text} due ${DateFormat('d MMM').format(_selectedDate)} from ${_detectedSmsObs!['sender_bank'] ?? 'bank'} statement SMS.'
+                                  : 'Found ₹$candAmount due $candDue from ${_detectedSmsObs!['sender_bank'] ?? 'bank'} SMS.',
+                              style:
+                                  BambooFonts.ui(12, color: BambooInk.ink700),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (!_prefilledFromSms && candAmount != null) ...[
+                        const SizedBox(width: AppSpace.xs),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _amountCtrl.text = candAmount;
+                              _selectedObservationId =
+                                  _detectedSmsObs!['id'] as String?;
+                              _prefilledFromSms = true;
+                              if (_detectedSmsObs!['due_date'] != null) {
+                                final d = DateTime.tryParse(
+                                    _detectedSmsObs!['due_date'] as String);
+                                if (d != null) _selectedDate = d;
+                              }
+                            });
+                          },
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            foregroundColor: BambooInk.jade,
+                          ),
+                          child: const Text('Use this'),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-                if (isAutopay && !isPaid) ...[
-                  const SizedBox(height: 3),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+                const SizedBox(height: AppSpace.md),
+              ],
+
+              // Total amount due input
+              TextField(
+                controller: _amountCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                style: BambooFonts.money(20, color: BambooInk.ink900),
+                decoration: InputDecoration(
+                  labelText: 'Total amount due',
+                  hintText: 'e.g. 8,331',
+                  prefixText: '₹ ',
+                  prefixStyle:
+                      BambooFonts.money(20, color: BambooInk.ink700),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpace.sm),
+
+              // Date picker
+              GestureDetector(
+                onTap: _pickDate,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.md,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: BambooInk.hairlineOnPaper),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_today_outlined,
+                        size: 18,
+                        color: BambooInk.ink700,
+                      ),
+                      const SizedBox(width: AppSpace.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Due date ($dueSubtitle)',
+                              style:
+                                  BambooFonts.ui(11, color: BambooInk.ink500),
+                            ),
+                            Text(
+                              DateFormat('EEEE, d MMMM yyyy')
+                                  .format(_selectedDate),
+                              style: BambooFonts.ui(
+                                14,
+                                color: BambooInk.ink900,
+                                weight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_drop_down,
+                          color: BambooInk.ink500),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpace.sm),
+
+              // Minimum due input
+              TextField(
+                controller: _minDueCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                style: BambooFonts.money(16, color: BambooInk.ink900),
+                decoration: InputDecoration(
+                  labelText: 'Minimum amount due (optional)',
+                  hintText: 'e.g. 500',
+                  prefixText: '₹ ',
+                  prefixStyle:
+                      BambooFonts.money(16, color: BambooInk.ink700),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpace.md),
+
+              if (isAutopay) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.md, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: BambooInk.jade.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
                     children: [
                       const Icon(
                         Icons.autorenew_rounded,
-                        size: 13,
+                        size: 16,
                         color: BambooInk.jade,
                       ),
-                      const SizedBox(width: 4),
-                      Flexible(
+                      const SizedBox(width: AppSpace.sm),
+                      Expanded(
                         child: Text(
-                          'AutoPay scheduled',
+                          'AutoPay is scheduled for this card on ${DateFormat('d MMM').format(_selectedDate)}',
                           style: BambooFonts.ui(
-                            11,
-                            color: BambooInk.jade,
+                            12,
                             weight: FontWeight.w600,
+                            color: BambooInk.jade,
                           ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
                         ),
                       ),
                     ],
                   ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpace.sm),
-          if (bill != null)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  bill.amountDue == null
-                      ? 'Amount not seen'
-                      : (bill.amountDue!.format(hidePaise: true)),
-                  style: BambooFonts.money(
-                    15,
-                    color: isPaid ? BambooInk.ink500 : BambooInk.ink900,
-                  ),
                 ),
-                const SizedBox(height: 2),
-                if (bill.isPaid)
-                  Text(
-                    'Paid ✓',
-                    style: BambooFonts.ui(
-                      12,
-                      weight: FontWeight.w600,
-                      color: BambooInk.rankBadgeInk,
-                    ),
-                  )
-                else if (bill.hasPayments)
-                  Text(
-                    '${bill.paidToward.format(hidePaise: true)} paid',
-                    style: BambooFonts.ui(12, color: BambooInk.ink500),
-                  )
-                else if (bill.minimumDue != null)
-                  Text(
-                    'Min ${bill.minimumDue!.format(hidePaise: true)}',
-                    style: BambooFonts.ui(12, color: BambooInk.ink500),
-                  ),
+                const SizedBox(height: AppSpace.sm),
               ],
-            )
-          else
-            const Icon(Icons.chevron_right_rounded, color: BambooInk.ink500),
-        ],
+
+              // Mark as paid switch
+              SwitchListTile.adaptive(
+                value: _isPaid,
+                onChanged: (val) => setState(() => _isPaid = val),
+                title: Text(
+                  'Mark bill as paid',
+                  style: BambooFonts.ui(14,
+                      weight: FontWeight.w600, color: BambooInk.ink900),
+                ),
+                subtitle: Text(
+                  _isPaid
+                      ? 'Bill marked as settled for this cycle'
+                      : 'Unpaid statement bill',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+                activeTrackColor: BambooInk.jade,
+                contentPadding: EdgeInsets.zero,
+              ),
+
+              if (_error != null) ...[
+                const SizedBox(height: AppSpace.xs),
+                Text(
+                  _error!,
+                  style: BambooFonts.ui(12, color: BambooInk.clayInk),
+                ),
+              ],
+              const SizedBox(height: AppSpace.md),
+
+              // Save button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: BambooInk.slate,
+                    foregroundColor: BambooInk.lime,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation(BambooInk.lime),
+                          ),
+                        )
+                      : Text(
+                          'Save bill details',
+                          style: BambooFonts.ui(
+                            15,
+                            weight: FontWeight.w600,
+                            color: BambooInk.lime,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: AppSpace.xs),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      context.push('/cards/${card.id}/edit');
+                    },
+                    icon: const Icon(Icons.settings_outlined, size: 16),
+                    label: const Text('Edit card settings'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: BambooInk.ink700,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                  if (widget.row.bill != null)
+                    TextButton(
+                      onPressed: _saving ? null : _resetBill,
+                      style: TextButton.styleFrom(
+                        foregroundColor: BambooInk.clayInk,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      child: const Text('Reset override'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
