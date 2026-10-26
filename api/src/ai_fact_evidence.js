@@ -38,6 +38,18 @@ function moneyInMessage(body) {
   return values;
 }
 
+/** Amount must occur in the same explicit completed payment clause. This
+ * prevents a nearby available-balance figure from being filed as the payment. */
+function amountInCompletedTransaction(body, amount) {
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return false;
+  const text = String(body || '');
+  const pattern = /\b(?:payment|transaction|transfer|purchase)\b[\s\S]{0,120}\bcompleted(?:\s+successfully)?\b/gi;
+  for (const match of text.matchAll(pattern)) {
+    if (moneyInMessage(match[0]).some((printed) => Math.abs(printed - amount) < 0.005)) return true;
+  }
+  return false;
+}
+
 /**
  * Returns the transaction-bearing part of a message, before any promotional or
  * maintenance footer that frequently trails Indian bank SMS.
@@ -84,6 +96,14 @@ function verifyModelFacts(facts, payload) {
     if (fact.factType === 'posted_movement' && !hasCompletionEvidence(body)) {
       errors.push(`facts[${index}]: posted movement lacks unambiguous completion`);
     }
+    if (fact.factType === 'bill_payment') {
+      if (!hasCompletionEvidence(body)) {
+        errors.push(`facts[${index}]: bill payment lacks unambiguous completion`);
+      }
+      if (!amountInCompletedTransaction(body, value.amountInr)) {
+        errors.push(`facts[${index}].amountInr: amount is not tied to completed payment`);
+      }
+    }
     if (fact.factType === 'balance_snapshot' && !/\b(balance|available|bal|avail)\b/i.test(body)) {
       errors.push(`facts[${index}]: no balance evidence`);
     }
@@ -108,6 +128,7 @@ function verifyModelFacts(facts, payload) {
 module.exports = {
   verifyModelFacts,
   moneyInMessage,
+  amountInCompletedTransaction,
   MOVEMENT_VERBS,
   COMPLETED_TRANSACTION,
   coreTransactionClause,

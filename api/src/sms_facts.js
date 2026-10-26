@@ -254,13 +254,24 @@ function validatePayload(factType, payload) {
   if (NON_POSTED_TYPES.has(factType) && payload.amountRole !== undefined && payload.amountRole !== null &&
       payload.amountRole !== 'proposed' &&
       !(factType === 'mandate_lifecycle' && payload.amountRole === 'ceiling')) {
-    if (factType === 'bill_obligation' || factType === 'bill_payment') {
-      // Bills legitimately use due/outstanding roles; posted is never right.
+    if (factType === 'bill_obligation') {
+      // Obligations may use due/outstanding roles; posted is never right.
       if (payload.amountRole === 'posted') {
         errors.push(`${factType} must not use amountRole 'posted'`);
       }
     } else {
       errors.push(`${factType} must not carry a due/posted amount role`);
+    }
+  }
+  // A completed bill payment is an actual posted transfer with bill context.
+  // Keep it distinct from an amount-due obligation while allowing the
+  // transaction projection to consume the evidenced amountInr.
+  if (factType === 'bill_payment') {
+    if (payload.amountRole !== 'posted') {
+      errors.push("bill_payment must use amountRole 'posted'");
+    }
+    if (payload.entryKind !== undefined && payload.entryKind !== 'transfer') {
+      errors.push("bill_payment entryKind, when supplied, must be 'transfer'");
     }
   }
   if (factType === 'mandate_lifecycle' && payload.limitInr !== undefined) {

@@ -595,7 +595,11 @@ class SmsImportStore {
       );
     }
 
-    final assessment = assessSmsFacts(suggestions, item.body);
+    final assessment = assessSmsFacts(
+      suggestions,
+      item.body,
+      receivedAt: item.receivedAt,
+    );
     final effectiveScore = serverScore != null && serverScore.isFinite
         ? serverScore
         : assessment.composite;

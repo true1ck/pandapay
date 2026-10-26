@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/sms_fact_scoring.dart';
 
-Map<String, dynamic> fact(
-  String type,
-  Map<String, dynamic> payload,
-) => {'factType': type, 'payload': payload};
+Map<String, dynamic> fact(String type, Map<String, dynamic> payload) => {
+  'factType': type,
+  'payload': payload,
+};
 
 const swiggyBody =
     'Sent Rs.420.00 from HDFC Bank A/C **1797 to SWIGGY UPI on 24-10-26. '
@@ -66,7 +66,10 @@ void main() {
   test('complete high-confidence Swiggy spend is auto-resolvable', () {
     final assessment = assessSmsFacts([swiggyFact()], swiggyBody);
     expect(assessment.primaryFact?['factType'], 'posted_movement');
-    expect(assessment.composite, greaterThanOrEqualTo(kSmsAutoResolveThreshold));
+    expect(
+      assessment.composite,
+      greaterThanOrEqualTo(kSmsAutoResolveThreshold),
+    );
     expect(assessment.isComplete, isTrue);
     expect(assessment.autoResolvable, isTrue);
     final scored = assessment.facts.single;
@@ -86,27 +89,110 @@ void main() {
 
   test('complete card bill obligation is auto-resolvable', () {
     final assessment = assessSmsFacts([axisBillFact()], axisBillBody);
-    expect(assessment.composite, greaterThanOrEqualTo(kSmsAutoResolveThreshold));
+    expect(
+      assessment.composite,
+      greaterThanOrEqualTo(kSmsAutoResolveThreshold),
+    );
     expect(assessment.autoResolvable, isTrue);
   });
 
+  test(
+    'completed bill payment can use phone receipt time when SMS has no date',
+    () {
+      const body =
+          'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20.';
+      final receivedAt = DateTime.utc(2026, 4, 15, 6, 59);
+      final payment = fact('bill_payment', {
+        'amountRole': 'posted',
+        'amountInr': 3160.8,
+        'occurredAt': receivedAt.toIso8601String(),
+        'billerName': 'Turtlemint',
+        'entryKind': 'transfer',
+        'isComplete': true,
+        'confidence': 0.8,
+      });
+      final assessment = assessSmsFacts(
+        [payment],
+        body,
+        receivedAt: receivedAt,
+      );
+      expect(
+        assessment.autoResolvable,
+        isTrue,
+        reason:
+            'score=${assessment.composite} fact=${assessment.facts.single.composite} evidence=${assessment.facts.single.evidence} completeness=${assessment.facts.single.completeness}',
+      );
+      expect(smsHasCompletionEvidence(body), isTrue);
+      expect(
+        assessment.composite,
+        greaterThanOrEqualTo(kSmsAutoResolveThreshold),
+      );
+    },
+  );
+
+  test(
+    'bill payment cannot use a nearby available balance as the transaction amount',
+    () {
+      const body =
+          'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20.';
+      final receivedAt = DateTime.utc(2026, 4, 15, 6, 59);
+      final payment = fact('bill_payment', {
+        'amountRole': 'posted',
+        'amountInr': 1.2,
+        'occurredAt': receivedAt.toIso8601String(),
+        'billerName': 'Turtlemint',
+        'isComplete': true,
+        'confidence': 0.99,
+      });
+      final assessment = assessSmsFacts(
+        [payment],
+        body,
+        receivedAt: receivedAt,
+      );
+      expect(assessment.autoResolvable, isFalse);
+    },
+  );
+
   test('a complete flag the model did not assert blocks auto-resolution', () {
-    final assessment = assessSmsFacts(
-      [axisBillFact(isComplete: false)],
-      axisBillBody,
+    final assessment = assessSmsFacts([
+      axisBillFact(isComplete: false),
+    ], axisBillBody);
+    expect(
+      assessment.composite,
+      greaterThanOrEqualTo(kSmsAutoResolveThreshold),
     );
-    expect(assessment.composite, greaterThanOrEqualTo(kSmsAutoResolveThreshold));
     expect(assessment.autoResolvable, isFalse);
   });
 
+  test(
+    'payment completion phrase does not accept failed or scheduled wording',
+    () {
+      expect(
+        smsHasCompletionEvidence(
+          'Your payment of Rs 500 will be completed tomorrow.',
+        ),
+        isFalse,
+      );
+      expect(
+        smsHasCompletionEvidence(
+          'Your payment of Rs 500 failed and was not completed.',
+        ),
+        isFalse,
+      );
+    },
+  );
+
   test('noise sorts to the review tier with no actionable fact', () {
-    final assessment = assessSmsFacts([
-      fact('promotion', {
-        'amountRole': 'proposed',
-        'proposedAmountInr': 500.0,
-        'isComplete': true,
-      }),
-    ], 'Get 10% cashback on your next Amazon purchase. Offer valid till 30 Nov.');
+    final assessment = assessSmsFacts(
+      [
+        fact('promotion', {
+          'amountRole': 'proposed',
+          'proposedAmountInr': 500.0,
+          'isComplete': true,
+        }),
+      ],
+      'Get 10% cashback on your next Amazon purchase. Offer valid till 30 Nov.',
+    );
     expect(assessment.composite, 0);
     expect(assessment.primaryFact, isNull);
     expect(assessment.isComplete, isFalse);
@@ -134,23 +220,20 @@ void main() {
         'Rs 500.00 debited from A/c XX1234 on 24-Oct-26. '
         'You are eligible for a personal loan of Rs 5 Lakh.';
     expect(smsHasCompletionEvidence(body), isTrue);
-    final assessment = assessSmsFacts(
-      [
-        fact('posted_movement', {
-          'amountRole': 'posted',
-          'entryKind': 'spend',
-          'amountInr': 500.0,
-          'occurredAt': '2026-10-24T00:00:00.000Z',
-          'instrument': 'upi_bank',
-          'accountLast4': '1234',
-          'merchant': 'SOME STORE',
-          'category': 'other',
-          'isComplete': true,
-          'confidence': 0.9,
-        }),
-      ],
-      body,
-    );
+    final assessment = assessSmsFacts([
+      fact('posted_movement', {
+        'amountRole': 'posted',
+        'entryKind': 'spend',
+        'amountInr': 500.0,
+        'occurredAt': '2026-10-24T00:00:00.000Z',
+        'instrument': 'upi_bank',
+        'accountLast4': '1234',
+        'merchant': 'SOME STORE',
+        'category': 'other',
+        'isComplete': true,
+        'confidence': 0.9,
+      }),
+    ], body);
     expect(assessment.facts.single.evidence, 1.0);
     expect(assessment.autoResolvable, isTrue);
   });

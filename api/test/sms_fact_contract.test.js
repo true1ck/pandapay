@@ -74,6 +74,18 @@ test('amount/date role consistency is enforced per fact type', () => {
   assert.equal(ceilingOmitted.valid, true);
 });
 
+test('completed bill payments use posted amount semantics and occurrence time', () => {
+  const result = smsFacts.validateFact({
+    factType: 'bill_payment',
+    payload: {
+      amountRole: 'posted', amountInr: 3160.8,
+      occurredAt: '2026-04-15T06:59:00.000Z', billerName: 'Turtlemint',
+      entryKind: 'transfer', isComplete: true, confidence: 0.8,
+    },
+  });
+  assert.equal(result.valid, true, result.errors.join('; '));
+});
+
 test('a mandate ceiling can never be booked as posted money', () => {
   const result = smsFacts.validateFact({
     ...mandate,

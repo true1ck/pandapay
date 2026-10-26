@@ -276,7 +276,7 @@ async function completeJobWithResult(client, {
   // Composite confidence gate: reviewRequired is derived from the model facts
   // and the redacted body. An explicit boolean from the caller still wins
   // (e.g. a replayed job that was already triaged).
-  const assessment = aiFactScoring.assessFacts(facts, payload.body || '');
+  const assessment = aiFactScoring.assessFacts(facts, payload.body || '', payload.occurredAt || null);
   let effectiveReviewRequired = typeof reviewRequired === 'boolean'
     ? reviewRequired
     : assessment.reviewRequired;

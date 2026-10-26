@@ -13,6 +13,7 @@ const {
   MOVEMENT_VERBS,
   hasCompletionEvidence,
   moneyInMessage,
+  amountInCompletedTransaction,
 } = require('./ai_fact_evidence');
 const { SPEND_CATEGORIES, INSTRUMENTS, AMOUNT_FIELD_BY_ROLE } = require('./sms_facts');
 
@@ -140,14 +141,20 @@ function anchorForPayload(payload) {
     payload.statementDate || payload.proposedAt || payload.nextPaymentDate || null;
 }
 
-function evidenceScore(fact, body) {
+function evidenceScore(fact, body, receivedAt = null) {
   const payload = fact.payload || {};
   let score = 0;
   const amount = amountForPayload(payload);
-  if (amountAppears(body, amount)) score += 0.40;
+  if (fact.factType === 'bill_payment'
+    ? amountInCompletedTransaction(body, payload.amountInr)
+    : amountAppears(body, amount)) score += 0.40;
   const suffix = payload.last4 || payload.accountLast4;
   if (suffix && body.includes(String(suffix))) score += 0.25;
-  if (dateAppears(body, anchorForPayload(payload))) score += 0.20;
+  const anchor = anchorForPayload(payload);
+  const hasReceiptTime = fact.factType === 'bill_payment' &&
+    validDate(anchor) && validDate(receivedAt) &&
+    Math.abs(new Date(anchor).getTime() - new Date(receivedAt).getTime()) <= 5 * 60 * 1000;
+  if (dateAppears(body, anchor) || hasReceiptTime) score += 0.20;
   if (fact.factType === 'posted_movement' || fact.factType === 'bill_payment') {
     if (hasCompletionEvidence(body)) score += 0.15;
   } else if (fact.factType === 'bill_obligation' || fact.factType === 'mandate_lifecycle') {
@@ -191,10 +198,9 @@ function completenessScore(fact) {
     }
     case 'bill_payment': {
       let score = 0;
-      if (isFiniteNumber(payload.amountInr) && payload.amountInr > 0) score += 0.25;
-      if (hasValidInstrument(payload)) score += 0.25;
-      if (shortText(payload.billerName) || shortText(payload.merchant)) score += 0.25;
-      if (hasValidCategory(payload) || shortText(payload.billerName)) score += 0.25;
+      if (isFiniteNumber(payload.amountInr) && payload.amountInr > 0) score += 0.4;
+      if (validDate(payload.occurredAt)) score += 0.2;
+      if (shortText(payload.billerName) || shortText(payload.merchant)) score += 0.4;
       return score;
     }
     case 'balance_snapshot': {
@@ -229,11 +235,13 @@ function completenessScore(fact) {
   }
 }
 
-function disambiguationScore(payload) {
+function disambiguationScore(payload, factType = null) {
   let score = 0;
   if (shortText(payload.merchant) || shortText(payload.billerName) || shortText(payload.serviceName)) {
     score += 0.5;
   }
+  if (factType === 'bill_payment' &&
+      (shortText(payload.merchant) || shortText(payload.billerName))) return 1;
   if (shortText(payload.last4) || shortText(payload.accountLast4)) score += 0.5;
   return Math.min(1, score);
 }
@@ -243,12 +251,12 @@ function disambiguationScore(payload) {
  * `isComplete` is the model's positive completeness assertion: absent or false
  * is never treated as complete.
  */
-function computeFactScore(fact, body) {
+function computeFactScore(fact, body, receivedAt = null) {
   const payload = fact?.payload || {};
   const model = modelScore(payload);
-  const evidence = evidenceScore(fact || {}, String(body || ''));
+  const evidence = evidenceScore(fact || {}, String(body || ''), receivedAt);
   const completeness = completenessScore(fact || {});
-  const disambiguation = disambiguationScore(payload);
+  const disambiguation = disambiguationScore(payload, fact?.factType);
   const score = round4(
     WEIGHTS.model * model +
     WEIGHTS.evidence * evidence +
@@ -272,9 +280,9 @@ function computeFactScore(fact, body) {
  * fact explicitly marked complete by the model. Informational facts are
  * reported but never gate the decision.
  */
-function assessFacts(facts, body) {
+function assessFacts(facts, body, receivedAt = null) {
   const list = Array.isArray(facts) ? facts : [];
-  const perFact = list.map((fact) => computeFactScore(fact, body));
+  const perFact = list.map((fact) => computeFactScore(fact, body, receivedAt));
   const actionable = perFact.filter((entry) => ACTIONABLE_FACT_TYPES.has(entry.factType));
   const composite = actionable.length > 0
     ? round4(Math.max(...actionable.map((entry) => entry.score)))

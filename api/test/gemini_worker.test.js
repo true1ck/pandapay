@@ -84,12 +84,12 @@ test('universal system instruction and schema cover movements, categories and co
 });
 
 test('few-shot scenarios are exported and rendered into the prompt', () => {
-  assert.equal(FEW_SHOT_EXAMPLES.length, 18);
+  assert.equal(FEW_SHOT_EXAMPLES.length, 19);
   const labels = FEW_SHOT_EXAMPLES.map((example) => example.label).join(' | ');
   for (const scenario of [
     'Swiggy', 'Flipkart', 'Axis', 'BESCOM', 'Pay Later', 'credit card bill paid',
     'Kotak Neo', 'Zerodha', 'salary credit', 'Loan EMI', 'Netflix',
-    'ATM cash withdrawal', 'Partial',
+    'ATM cash withdrawal', 'Partial', 'Turtlemint',
   ]) {
     assert.match(labels, new RegExp(scenario, 'i'));
   }

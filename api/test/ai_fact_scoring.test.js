@@ -135,6 +135,38 @@ test('a complete high-confidence bill obligation auto-resolves', () => {
   assert.equal(assessment.reviewRequired, false);
 });
 
+test('completed bill payment without printed date can auto-resolve using receipt time', () => {
+  const body = 'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20.';
+  const receivedAt = '2026-04-15T06:59:00.000Z';
+  const fact = {
+    factType: 'bill_payment',
+    payload: {
+      amountRole: 'posted', amountInr: 3160.8, occurredAt: receivedAt,
+      billerName: 'Turtlemint', entryKind: 'transfer',
+      isComplete: true, confidence: 0.8,
+    },
+  };
+  const assessment = assessFacts([fact], body, receivedAt);
+  assert.equal(assessment.reviewRequired, false);
+  assert.ok(assessment.composite >= AUTO_RESOLVE);
+  assert.equal(assessment.perFact[0].evidence, 0.75);
+});
+
+test('bill payment cannot auto-resolve when amount is only a balance or biller is missing', () => {
+  const body = 'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20.';
+  const receivedAt = '2026-04-15T06:59:00.000Z';
+  const fact = {
+    factType: 'bill_payment',
+    payload: {
+      amountRole: 'posted', amountInr: 1.2, occurredAt: receivedAt,
+      isComplete: true, confidence: 0.99,
+    },
+  };
+  const assessment = assessFacts([fact], body, receivedAt);
+  assert.equal(assessment.reviewRequired, true);
+  assert.equal(assessment.perFact[0].evidence, 0.35);
+});
+
 test('partial or incomplete extractions stay in review even with text evidence', () => {
   const result = computeFactScore(partialFact, PARTIAL_BODY);
   assert.ok(result.evidence >= 0.9, 'the amount, suffix, date and verb are all present');

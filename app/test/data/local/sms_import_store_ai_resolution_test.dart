@@ -263,6 +263,41 @@ void main() {
   });
 
   test(
+    'complete Gemini bill payment files a transfer transaction and Auto-Resolved history',
+    () {
+      final item = reviewItem(
+        body:
+            'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20.',
+      );
+      insertReviewRow(item);
+      final occurredAt = item.receivedAt.toUtc().toIso8601String();
+      final result = importStore.resolveAiSuggestions(ns, item, [
+        {
+          'factIndex': 0,
+          'factType': 'bill_payment',
+          'payload': {
+            'amountRole': 'posted',
+            'amountInr': 3160.8,
+            'occurredAt': occurredAt,
+            'billerName': 'Turtlemint',
+            'entryKind': 'transfer',
+            'isComplete': true,
+            'confidence': 0.8,
+          },
+        },
+      ]);
+
+      expect(result.outcome, SmsAiResolutionOutcome.autoResolved);
+      expect(reviewCount(), 0);
+      expect(transactions(), hasLength(1));
+      expect(transactions().single['amount_inr'], 3160.8);
+      expect(transactions().single['merchant_name'], 'Turtlemint');
+      expect(transactions().single['entry_kind'], 'transfer');
+      expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 1);
+    },
+  );
+
+  test(
     'server reviewRequired=true keeps an otherwise high score in review',
     () {
       final item = reviewItem();

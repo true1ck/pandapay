@@ -5,10 +5,28 @@ const assert = require('node:assert/strict');
 const {
   verifyModelFacts,
   moneyInMessage,
+  amountInCompletedTransaction,
   MOVEMENT_VERBS,
   coreTransactionClause,
   hasCompletionEvidence,
 } = require('../src/ai_fact_evidence');
+
+test('bill payment amount must be tied to the completed payment, not nearby balance', () => {
+  const body = 'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20.';
+  assert.equal(amountInCompletedTransaction(body, 3160.8), true);
+  assert.equal(amountInCompletedTransaction(body, 1.2), false);
+  const good = verifyModelFacts([{
+    factType: 'bill_payment',
+    payload: { amountInr: 3160.8 },
+  }], { body });
+  assert.equal(good.valid, true);
+  const wrongBalance = verifyModelFacts([{
+    factType: 'bill_payment',
+    payload: { amountInr: 1.2 },
+  }], { body });
+  assert.equal(wrongBalance.valid, false);
+  assert.match(wrongBalance.errors.join(' '), /not tied to completed payment/);
+});
 
 test('money evidence accepts printed amounts and rejects model-invented amounts', () => {
   const payload = { body: 'HDFC Bank A/c XX1234 available balance Rs 4,250.50' };

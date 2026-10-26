@@ -265,6 +265,28 @@ const FEW_SHOT_EXAMPLES = [
     },
   },
   {
+    label: 'Completed bill payment with receipt-time fallback',
+    sms: 'Your payment of Rs 5,250.00 for REF123 was completed successfully. Available balance is Rs 2,000.00. Details at Turtlemint.',
+    output: {
+      decision: {
+        topic: 'bill_payment_success',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
+      facts: [
+        {
+          factType: 'bill_payment',
+          payload: {
+            amountRole: 'posted', amountInr: 5250.0,
+            occurredAt: '2026-04-15T06:59:00.000Z',
+            billerName: 'Turtlemint', entryKind: 'transfer',
+            isComplete: true, confidence: 0.8,
+          },
+        },
+      ],
+    },
+  },
+  {
     label: 'Pay Later drawdown purchase (Flipkart)',
     sms: 'Axio Pay Later payment of INR 4,200.00 to Flipkart was successful on 24-Oct-2026.',
     output: {
@@ -640,9 +662,9 @@ function buildGeminiPrompt(job, { batch = false, includeExamples = true, repairE
     'Allowed instruments if present: upi_bank, credit_card, debit_card, cash, wallet, other.',
     `Allowed category values for spend facts: ${SPEND_CATEGORIES.join(', ')}.`,
     'Amounts must use the correct role: posted, due_total, due_minimum, outstanding, ceiling, or proposed.',
-    'Required payload fields: posted_movement = amountRole, entryKind, occurredAt; pending_or_failed_attempt = attemptStatus, occurredAt; balance_snapshot = availableBalanceInr, asOfAt; bill_obligation = amountRole, dueDate and its evidenced amount/date fields; bill_payment = amountRole, occurredAt and its evidenced amount field; mandate_lifecycle = mandateStatus, asOfAt; card_identity_hint = asOfAt; security_or_service_alert = alertKind, occurredAt; promotion may be empty.',
-    'For a completed posted movement or bill payment with no date/time in the SMS body, use the supplied Occurred at metadata (the phone SMS receipt timestamp) for occurredAt, set isComplete=false, and lower confidence. Never use this receipt timestamp as a dueDate, statementDate, or other deadline.',
-    'For amountRole, include its matching amount and date: posted=amountInr/occurredAt, due_total=amountDueInr/dueDate, due_minimum=minimumDueInr/dueDate, outstanding=outstandingInr/asOfAt, ceiling=limitInr/asOfAt, proposed=proposedAmountInr/proposedAt.',
+    'Required payload fields: posted_movement = amountRole, entryKind, occurredAt; pending_or_failed_attempt = attemptStatus, occurredAt; balance_snapshot = availableBalanceInr, asOfAt; bill_obligation = amountRole, dueDate and its evidenced amount/date fields; bill_payment = amountRole=posted, amountInr, occurredAt; mandate_lifecycle = mandateStatus, asOfAt; card_identity_hint = asOfAt; security_or_service_alert = alertKind, occurredAt; promotion may be empty.',
+    'For a completed posted movement or bill payment with no date/time in the SMS body, use the supplied Occurred at metadata (the phone SMS receipt timestamp) for occurredAt and lower confidence. The supplied timestamp is a valid event-time fallback for a confirmed completed payment; set isComplete=true only when all other required transaction fields are present. Never use this receipt timestamp as a dueDate, statementDate, or other deadline.',
+    'For amountRole, include its matching amount and date: posted=amountInr/occurredAt, due_total=amountDueInr/dueDate, due_minimum=minimumDueInr/dueDate, outstanding=outstandingInr/asOfAt, ceiling=limitInr/asOfAt, proposed=proposedAmountInr/proposedAt. A completed bill payment is a posted transfer, not an amount due.',
     'A posted spend also requires merchant. A mandate limit is valid only for registered status. Never omit required fields or invent values; if any required value is absent or uncertain, leave this SMS\'s facts array empty.',
     'Set isComplete=true only when every essential attribute for the fact type is present, and confidence to your extraction certainty from 0.0 to 1.0.',
     ...(Array.isArray(repairErrors) && repairErrors.length > 0 ? [
