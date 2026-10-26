@@ -81,6 +81,15 @@ test('universal system instruction and schema cover movements, categories and co
   ]);
   assert.equal(item.properties.payload.properties.isComplete.type, 'BOOLEAN');
   assert.equal(item.properties.payload.properties.confidence.type, 'NUMBER');
+  const postedBranch = item.anyOf.find((branch) =>
+    branch.properties?.factType?.enum?.includes('posted_movement'));
+  assert.ok(postedBranch.properties.payload.required.includes('amountInr'));
+  assert.ok(postedBranch.properties.payload.required.includes('merchant'));
+  assert.ok(postedBranch.properties.payload.required.includes('category'));
+  const paymentBranch = item.anyOf.find((branch) =>
+    branch.properties?.factType?.enum?.includes('bill_payment'));
+  assert.ok(paymentBranch.properties.payload.required.includes('amountInr'));
+  assert.ok(paymentBranch.properties.payload.required.includes('occurredAt'));
 });
 
 test('few-shot scenarios are exported and rendered into the prompt', () => {
@@ -100,6 +109,22 @@ test('few-shot scenarios are exported and rendered into the prompt', () => {
   assert.match(prompt, /groceries, fuel, dining, online, travel, bills, rent/);
   // Keep the prompt bounded even with every example rendered.
   assert.ok(prompt.length < 30000, `prompt length ${prompt.length}`);
+});
+
+test('few-shot examples keep one actionable fact and carry minimum bill due alongside total', () => {
+  const actionableTypes = new Set([
+    'posted_movement', 'bill_obligation', 'bill_payment', 'mandate_lifecycle',
+  ]);
+  for (const example of FEW_SHOT_EXAMPLES) {
+    const count = (example.output?.facts || [])
+      .filter((fact) => actionableTypes.has(fact.factType)).length;
+    assert.ok(count <= 1, `${example.label} must not teach multiple actionable facts`);
+  }
+  const statement = FEW_SHOT_EXAMPLES.find((example) => /monthly statement bill/i.test(example.label));
+  const obligations = statement.output.facts.filter((fact) => fact.factType === 'bill_obligation');
+  assert.equal(obligations.length, 1);
+  assert.equal(obligations[0].payload.amountRole, 'due_total');
+  assert.equal(obligations[0].payload.minimumDueInr, 750);
 });
 
 test('correction prompt includes only contract findings and requires safe abstention', () => {
@@ -176,6 +201,11 @@ test('Gemini prompt states required fact fields and fail-closed abstention rules
   assert.match(batch, /"items":\[/);
   assert.match(batch, /If shouldConsider=false, set facts: \[\]/);
   assert.doesNotMatch(batch, /Return JSON only in the form \{"facts"/);
+  const repairBatch = buildGeminiBatchPrompt([{ id: 'one', payload: { body: 'SMS one' } }], {
+    repairErrorsById: { one: ['facts[0]: merchant is required'] },
+  });
+  assert.match(repairBatch, /CORRECTION PASS/);
+  assert.match(repairBatch, /facts\[0\]: merchant is required/);
 });
 
 test('worker posts the leased result with the profile and lease token', async () => {
@@ -209,12 +239,56 @@ test('worker posts the leased result with the profile and lease token', async ()
   assert.match(calls[1].body.batchId, /^[0-9a-f-]{36}$/i);
 });
 
+test('worker drops an invalid informational side fact without losing a valid transaction', async () => {
+  const calls = [];
+  const job = {
+    id: 'mixed-facts', profileId: 'profile-1', leaseToken: 'm'.repeat(64),
+    payload: {
+      sender: 'BANK',
+      body: 'Your account XX1234 was debited Rs 420 at Swiggy on 26-Oct-2026. Available balance Rs 8,000.',
+      occurredAt: '2026-10-26T10:00:00.000Z',
+    },
+  };
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job });
+    return response({ jobStatus: 'done' });
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: {
+      classify: async () => ({
+        decision: { topic: 'upi_debit', shouldConsider: true, rejectionReason: 'none' },
+        facts: [
+          {
+            factType: 'posted_movement',
+            payload: {
+              amountRole: 'posted', entryKind: 'spend', amountInr: 420,
+              occurredAt: '2026-10-26T00:00:00.000Z', instrument: 'upi_bank',
+              merchant: 'Swiggy', category: 'dining', isComplete: true, confidence: 0.98,
+            },
+          },
+          {
+            factType: 'balance_snapshot',
+            payload: { availableBalanceInr: 8000, asOfAt: '2026-10-26T00:00:00.000Z', instrument: 'upi_bank' },
+          },
+        ],
+      }),
+    },
+    reserveCapacity: async () => ({ allowed: true }),
+  });
+  assert.equal(result.completed, true);
+  const posted = calls.find((call) => call.url.endsWith('/result'));
+  assert.deepEqual(posted.body.facts.map((fact) => fact.factType), ['posted_movement']);
+  assert.equal(posted.body.facts[0].payload.amountInr, 420);
+});
+
 test('worker repairs an invalid fact once and reserves capacity for the correction call', async () => {
   const calls = [];
   const job = {
     id: 'repair-job', profileId: 'profile-1', leaseToken: 'c'.repeat(64),
     payload: {
-      sender: 'BANK', body: 'Rs 100 debited from your account on 15-Apr-2026',
+      sender: 'BANK', body: 'Rs 100 debited at Merchant on 15-Apr-2026',
       occurredAt: '2026-04-15T00:00:00.000Z',
     },
   };
@@ -255,6 +329,63 @@ test('worker repairs an invalid fact once and reserves capacity for the correcti
   assert.match(repairs[1][0], /merchant/);
   const posted = calls.find((call) => call.url.endsWith('/result'));
   assert.equal(posted.body.facts[0].payload.merchant, 'Merchant');
+});
+
+test('worker batches one bounded correction request for invalid members of an SMS batch', async () => {
+  const jobs = ['repair-a', 'repair-b'].map((id) => ({
+    id, profileId: 'profile-1', leaseToken: id.padEnd(64, 'x'),
+    payload: { sender: 'BANK', body: 'Rs 100 debited at Shop A on 15-Apr-2026' },
+  }));
+  const calls = [];
+  let leaseIndex = 0;
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/ai/jobs/lease')) {
+      return leaseIndex < jobs.length
+        ? response({ leased: true, job: jobs[leaseIndex++] })
+        : response({ leased: false });
+    }
+    return response({ jobStatus: 'done' });
+  };
+  const makeResult = (job, includeMerchant) => ({
+    decision: { topic: 'upi_debit', shouldConsider: true, rejectionReason: 'none' },
+    facts: [{
+      factType: 'posted_movement',
+      payload: {
+        amountRole: 'posted', entryKind: 'spend', amountInr: 100,
+        occurredAt: '2026-04-15T00:00:00.000Z', instrument: 'upi_bank',
+        ...(includeMerchant ? { merchant: 'Shop A' } : {}),
+        category: 'other', isComplete: true, confidence: 0.98,
+      },
+    }],
+  });
+  let batchCalls = 0;
+  let reservations = 0;
+  const provider = {
+    classify: async () => { throw new Error('individual correction should be grouped'); },
+    classifyBatch: async (leasedJobs, options = {}) => {
+      batchCalls += 1;
+      if (!options.repairErrorsById) return new Map(leasedJobs.map((job) => [job.id, makeResult(job, false)]));
+      assert.deepEqual(Object.keys(options.repairErrorsById).sort(), ['repair-a', 'repair-b']);
+      assert.match(options.repairErrorsById['repair-a'].join(' '), /merchant/);
+      return new Map(leasedJobs.map((job) => [job.id, makeResult(job, true)]));
+    },
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider, maxBatch: 2, batchWindowMs: 0,
+    reserveCapacity: async ({ jobs: reservedJobs }) => {
+      reservations += 1;
+      return { allowed: true, jobs: reservedJobs.length };
+    },
+  });
+  assert.equal(result.completed, true);
+  assert.equal(result.batchSize, 2);
+  assert.equal(batchCalls, 2, 'one initial provider call plus one grouped repair call');
+  assert.equal(reservations, 2, 'reserve each actual provider request once');
+  const filedResults = calls.filter((call) => call.url.endsWith('/result'));
+  assert.equal(filedResults.length, 2);
+  assert.deepEqual(filedResults.map((call) => call.body.facts[0].payload.merchant), ['Shop A', 'Shop A']);
 });
 
 test('worker keeps the decision and safely omits facts after one invalid correction', async () => {

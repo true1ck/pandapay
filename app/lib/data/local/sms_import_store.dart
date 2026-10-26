@@ -624,6 +624,7 @@ class SmsImportStore {
     }
 
     if (effectiveScore >= kSmsAutoResolveThreshold &&
+        assessment.actionableFacts.length == 1 &&
         assessment.isComplete &&
         reviewRequired != true) {
       final resolved = _autoResolve(namespace, item, primary, effectiveScore);

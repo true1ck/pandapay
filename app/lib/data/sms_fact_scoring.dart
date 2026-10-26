@@ -274,6 +274,8 @@ double _evidenceScore(
   final paymentAmount = payload['amountInr'];
   final amountEvidence = factType == 'bill_payment'
       ? _amountInCompletedPayment(body, paymentAmount)
+      : factType == 'posted_movement'
+      ? _amountInPostedTransaction(body, paymentAmount)
       : smsAmountAppears(body, smsFactAmountRupees(payload));
   if (amountEvidence) score += 0.40;
   final suffix = payload['last4'] ?? payload['accountLast4'];
@@ -283,10 +285,11 @@ double _evidenceScore(
   final anchor = smsAnchorForPayload(payload);
   final parsedAnchor = DateTime.tryParse(anchor ?? '');
   final hasReceiptTime =
-      factType == 'bill_payment' &&
+      (factType == 'posted_movement' || factType == 'bill_payment') &&
       parsedAnchor != null &&
       receivedAt != null &&
-      parsedAnchor.difference(receivedAt).inMinutes.abs() <= 5;
+      parsedAnchor.difference(receivedAt).inMicroseconds.abs() <=
+          const Duration(minutes: 5).inMicroseconds;
   if (smsDateAppears(body, anchor) || hasReceiptTime) score += 0.20;
   if (factType == 'posted_movement' || factType == 'bill_payment') {
     if (smsHasCompletionEvidence(body)) score += 0.15;
@@ -309,6 +312,59 @@ bool _amountInCompletedPayment(String body, Object? amount) {
   );
   for (final match in pattern.allMatches(body)) {
     if (smsAmountAppears(match.group(0)!, amount)) return true;
+  }
+  return false;
+}
+
+bool _amountInPostedTransaction(String body, Object? amount) {
+  if (amount is! num || !amount.isFinite || amount <= 0) return false;
+  final movementOrCompletion = RegExp(
+    r'\b(debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred|transfer|processed|payout|settled|disbursed|invested|deposited|sent)\b|\b(?:payment|transaction|transfer|purchase)\b[\s\S]{0,100}\bcompleted(?:\s+successfully)?\b',
+    caseSensitive: false,
+  );
+  final balanceLabel = RegExp(
+    r'\b(?:available|avail\.?|current|closing|remaining|ledger)\s*(?:account\s*)?(?:bal(?:ance)?|balance\s+after)\b|\b(?:bal(?:ance)?|balance\s+after)\s*(?:is|after|now|:|=)?',
+    caseSensitive: false,
+  );
+  final clauses = smsCoreTransactionClause(body)
+      .split(RegExp(r'[!?;\n]+'))
+      .map((clause) => clause.trim())
+      .where((clause) => clause.isNotEmpty);
+  for (final clause in clauses) {
+    if (!movementOrCompletion.hasMatch(clause)) continue;
+    for (final match in _moneyInMessageRe.allMatches(clause)) {
+      final printed = double.tryParse(
+        (match.group(1) ?? '').replaceAll(',', ''),
+      );
+      if (printed == null || (printed - amount).abs() >= 0.005) continue;
+      final before = clause.substring(
+        math.max(0, match.start - 60),
+        match.start,
+      );
+      final after = clause.substring(
+        match.end,
+        math.min(clause.length, match.end + 40),
+      );
+      final balanceMatches = balanceLabel.allMatches(before).toList();
+      final movementMatches = RegExp(
+        r'\b(debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred|transfer|processed|payout|settled|disbursed|invested|deposited|sent)\b',
+        caseSensitive: false,
+      ).allMatches(before).toList();
+      final lastBalance = balanceMatches.isEmpty
+          ? -1
+          : balanceMatches.last.start;
+      final lastMovement = movementMatches.isEmpty
+          ? -1
+          : movementMatches.last.start;
+      if (lastBalance >= 0 && lastMovement <= lastBalance) continue;
+      if (RegExp(
+        r'\b(?:is|as)\s+(?:your\s+|the\s+)?(?:available\s+|current\s+|closing\s+|remaining\s+)?balance\b',
+        caseSensitive: false,
+      ).hasMatch(after)) {
+        continue;
+      }
+      return true;
+    }
   }
   return false;
 }
@@ -397,15 +453,53 @@ double _completenessScore(String factType, Map<String, dynamic> payload) {
   }
 }
 
-double _disambiguationScore(Map<String, dynamic> payload, [String? factType]) {
+double _disambiguationScore(
+  Map<String, dynamic> payload, [
+  String? factType,
+  String body = '',
+]) {
   var score = 0.0;
-  if (_shortText(payload['merchant']) ||
-      _shortText(payload['billerName']) ||
-      _shortText(payload['serviceName'])) {
+  final hasMovementParty =
+      _shortText(payload['merchant']) || _shortText(payload['transferParty']);
+  final normalizedBody = body.toLowerCase().replaceAll(
+    RegExp(r'[^a-z0-9]'),
+    '',
+  );
+  final evidencedParty =
+      [
+        payload['merchant'],
+        payload['transferParty'],
+        payload['billerName'],
+        payload['serviceName'],
+      ].whereType<String>().where((party) => party.trim().isNotEmpty).any((
+        party,
+      ) {
+        final normalizedParty = party.toLowerCase().replaceAll(
+          RegExp(r'[^a-z0-9]'),
+          '',
+        );
+        return normalizedParty.length >= 3 &&
+            normalizedBody.contains(normalizedParty);
+      });
+  if (factType == 'posted_movement' && hasMovementParty && evidencedParty) {
+    return 1.0;
+  }
+  if (factType == 'bill_obligation' && _shortText(payload['billerName'])) {
+    final biller = (payload['billerName'] as String).toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '',
+    );
+    if (biller.length >= 3 && normalizedBody.contains(biller)) return 1.0;
+  }
+  if ((_shortText(payload['merchant']) ||
+          _shortText(payload['billerName']) ||
+          _shortText(payload['serviceName'])) &&
+      evidencedParty) {
     score += 0.5;
   }
   if (factType == 'bill_payment' &&
-      (_shortText(payload['merchant']) || _shortText(payload['billerName']))) {
+      (_shortText(payload['merchant']) || _shortText(payload['billerName'])) &&
+      evidencedParty) {
     return 1;
   }
   if (_shortText(payload['last4']) || _shortText(payload['accountLast4'])) {
@@ -478,7 +572,7 @@ SmsFactConfidence _scoreFact(
     receivedAt: receivedAt,
   );
   final completeness = _completenessScore(factType, payload);
-  final disambiguation = _disambiguationScore(payload, factType);
+  final disambiguation = _disambiguationScore(payload, factType, body);
   final composite = _round4(
     _kModelWeight * model +
         _kEvidenceWeight * evidence +
@@ -525,7 +619,7 @@ SmsConfidenceAssessment assessSmsFacts(
   final isComplete =
       actionable.isNotEmpty && actionable.every((entry) => entry.isComplete);
   final autoResolvable =
-      actionable.isNotEmpty &&
+      actionable.length == 1 &&
       actionable.every(
         (entry) => entry.composite >= kSmsAutoResolveThreshold,
       ) &&

@@ -97,10 +97,29 @@ void main() {
   });
 
   test(
+    'source-evidenced utility biller can auto-resolve a normalized bill',
+    () {
+      const body = 'Your electricity bill of Rs 1,240 is due on 05 Nov 2026.';
+      final normalizedBill = fact('bill_obligation', {
+        'amountRole': 'due_total',
+        'amountDueInr': 1240.0,
+        'dueDate': '2026-11-04T18:30:00.000Z',
+        'billerName': 'Electricity',
+        'category': 'bills',
+        'isComplete': true,
+        'confidence': 0.9,
+      });
+      final assessment = assessSmsFacts([normalizedBill], body);
+      expect(assessment.facts.single.disambiguation, 1.0);
+      expect(assessment.autoResolvable, isTrue);
+    },
+  );
+
+  test(
     'completed bill payment can use phone receipt time when SMS has no date',
     () {
       const body =
-          'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20.';
+          'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20. Details at Turtlemint.';
       final receivedAt = DateTime.utc(2026, 4, 15, 6, 59);
       final payment = fact('bill_payment', {
         'amountRole': 'posted',
@@ -129,6 +148,115 @@ void main() {
       );
     },
   );
+
+  test(
+    'completed posted movement can use phone receipt time when SMS has no date',
+    () {
+      const body = 'Rs 420.00 debited for Swiggy UPI successfully.';
+      final receivedAt = DateTime.utc(2026, 10, 24, 12, 30);
+      final movement = fact('posted_movement', {
+        'amountRole': 'posted',
+        'amountInr': 420.0,
+        'occurredAt': receivedAt.toIso8601String(),
+        'entryKind': 'spend',
+        'instrument': 'upi_bank',
+        'merchant': 'Swiggy',
+        'category': 'dining',
+        'isComplete': true,
+        'confidence': 0.9,
+      });
+      final assessment = assessSmsFacts(
+        [movement],
+        body,
+        receivedAt: receivedAt,
+      );
+      expect(assessment.autoResolvable, isTrue);
+      expect(
+        assessment.composite,
+        greaterThanOrEqualTo(kSmsAutoResolveThreshold),
+      );
+      expect(assessment.facts.single.evidence, 0.75);
+    },
+  );
+
+  test('unsupported merchant and multi-fact results stay in review', () {
+    const body = 'Rs 420.00 debited successfully.';
+    final receivedAt = DateTime.utc(2026, 10, 24, 12, 30);
+    final unsupportedParty = fact('posted_movement', {
+      'amountRole': 'posted',
+      'amountInr': 420.0,
+      'occurredAt': receivedAt.toIso8601String(),
+      'entryKind': 'spend',
+      'instrument': 'upi_bank',
+      'merchant': 'Unrelated Vendor',
+      'category': 'dining',
+      'isComplete': true,
+      'confidence': 0.9,
+    });
+    final unsupported = assessSmsFacts(
+      [unsupportedParty],
+      body,
+      receivedAt: receivedAt,
+    );
+    expect(unsupported.facts.single.disambiguation, 0.0);
+    expect(unsupported.autoResolvable, isFalse);
+
+    final multiple = assessSmsFacts([swiggyFact(), swiggyFact()], swiggyBody);
+    expect(multiple.actionableFacts, hasLength(2));
+    expect(multiple.autoResolvable, isFalse);
+  });
+
+  test('receipt timestamp window matches server precision exactly', () {
+    const body = 'Rs 420.00 debited for Swiggy UPI successfully.';
+    final receivedAt = DateTime.utc(2026, 10, 24, 12, 30);
+    final factAt = receivedAt.add(const Duration(minutes: 5, seconds: 59));
+    final movement = fact('posted_movement', {
+      'amountRole': 'posted',
+      'amountInr': 420.0,
+      'occurredAt': factAt.toIso8601String(),
+      'entryKind': 'spend',
+      'instrument': 'upi_bank',
+      'merchant': 'Swiggy',
+      'category': 'dining',
+      'isComplete': true,
+      'confidence': 0.9,
+    });
+    final assessment = assessSmsFacts([movement], body, receivedAt: receivedAt);
+    expect(assessment.facts.single.evidence, 0.55);
+    expect(assessment.autoResolvable, isFalse);
+  });
+
+  test('posted movement amount cannot be taken from nearby balance_after', () {
+    const body =
+        'Rs 1,249.00 sent to SWIGGY UPI, available balance: Rs 18,422.65';
+    final receivedAt = DateTime.utc(2026, 9, 5, 0, 0);
+    Map<String, dynamic> movement(double amount) => fact('posted_movement', {
+      'amountRole': 'posted',
+      'amountInr': amount,
+      'occurredAt': receivedAt.toIso8601String(),
+      'entryKind': 'spend',
+      'instrument': 'upi_bank',
+      'merchant': 'Swiggy',
+      'category': 'dining',
+      'isComplete': true,
+      'confidence': 0.99,
+    });
+
+    final trueAmount = assessSmsFacts(
+      [movement(1249)],
+      body,
+      receivedAt: receivedAt,
+    );
+    final balanceAmount = assessSmsFacts(
+      [movement(18422.65)],
+      body,
+      receivedAt: receivedAt,
+    );
+    expect(trueAmount.facts.single.evidence, 0.75);
+    expect(trueAmount.autoResolvable, isTrue);
+    expect(balanceAmount.facts.single.evidence, 0.35);
+    expect(balanceAmount.autoResolvable, isFalse);
+  });
 
   test(
     'bill payment cannot use a nearby available balance as the transaction amount',

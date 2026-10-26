@@ -14,6 +14,7 @@ const {
   hasCompletionEvidence,
   moneyInMessage,
   amountInCompletedTransaction,
+  amountInPostedTransaction,
 } = require('./ai_fact_evidence');
 const { SPEND_CATEGORIES, INSTRUMENTS, AMOUNT_FIELD_BY_ROLE } = require('./sms_facts');
 
@@ -145,13 +146,16 @@ function evidenceScore(fact, body, receivedAt = null) {
   const payload = fact.payload || {};
   let score = 0;
   const amount = amountForPayload(payload);
-  if (fact.factType === 'bill_payment'
+  const exactAmountEvidence = fact.factType === 'bill_payment'
     ? amountInCompletedTransaction(body, payload.amountInr)
-    : amountAppears(body, amount)) score += 0.40;
+    : fact.factType === 'posted_movement'
+      ? amountInPostedTransaction(body, payload.amountInr)
+      : amountAppears(body, amount);
+  if (exactAmountEvidence) score += 0.40;
   const suffix = payload.last4 || payload.accountLast4;
   if (suffix && body.includes(String(suffix))) score += 0.25;
   const anchor = anchorForPayload(payload);
-  const hasReceiptTime = fact.factType === 'bill_payment' &&
+  const hasReceiptTime = ['posted_movement', 'bill_payment'].includes(fact.factType) &&
     validDate(anchor) && validDate(receivedAt) &&
     Math.abs(new Date(anchor).getTime() - new Date(receivedAt).getTime()) <= 5 * 60 * 1000;
   if (dateAppears(body, anchor) || hasReceiptTime) score += 0.20;
@@ -235,13 +239,26 @@ function completenessScore(fact) {
   }
 }
 
-function disambiguationScore(payload, factType = null) {
+function disambiguationScore(payload, factType = null, body = '') {
   let score = 0;
-  if (shortText(payload.merchant) || shortText(payload.billerName) || shortText(payload.serviceName)) {
+  const hasMovementParty = shortText(payload.merchant) || shortText(payload.transferParty);
+  const normalizedBody = String(body).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const evidencedParty = [payload.merchant, payload.transferParty, payload.billerName, payload.serviceName]
+    .filter(shortText)
+    .some((party) => {
+      const normalizedParty = party.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return normalizedParty.length >= 3 && normalizedBody.includes(normalizedParty);
+    });
+  if (factType === 'posted_movement' && hasMovementParty && evidencedParty) return 1;
+  if (factType === 'bill_obligation' && shortText(payload.billerName)) {
+    const biller = payload.billerName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (biller.length >= 3 && normalizedBody.includes(biller)) return 1;
+  }
+  if ((shortText(payload.merchant) || shortText(payload.billerName) || shortText(payload.serviceName)) && evidencedParty) {
     score += 0.5;
   }
   if (factType === 'bill_payment' &&
-      (shortText(payload.merchant) || shortText(payload.billerName))) return 1;
+      (shortText(payload.merchant) || shortText(payload.billerName)) && evidencedParty) return 1;
   if (shortText(payload.last4) || shortText(payload.accountLast4)) score += 0.5;
   return Math.min(1, score);
 }
@@ -256,7 +273,7 @@ function computeFactScore(fact, body, receivedAt = null) {
   const model = modelScore(payload);
   const evidence = evidenceScore(fact || {}, String(body || ''), receivedAt);
   const completeness = completenessScore(fact || {});
-  const disambiguation = disambiguationScore(payload, fact?.factType);
+  const disambiguation = disambiguationScore(payload, fact?.factType, String(body || ''));
   const score = round4(
     WEIGHTS.model * model +
     WEIGHTS.evidence * evidence +
@@ -288,7 +305,7 @@ function assessFacts(facts, body, receivedAt = null) {
     ? round4(Math.max(...actionable.map((entry) => entry.score)))
     : 0;
   const reviewRequired = !(
-    actionable.length > 0 &&
+    actionable.length === 1 &&
     actionable.every((entry) => entry.score >= AUTO_RESOLVE) &&
     actionable.every((entry) => entry.isComplete === true)
   );

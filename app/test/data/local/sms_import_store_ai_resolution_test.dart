@@ -185,6 +185,27 @@ void main() {
     expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 1);
   });
 
+  test('multiple actionable facts stay reviewable until all can be filed', () {
+    final item = reviewItem();
+    insertReviewRow(item);
+
+    final result = importStore.resolveAiSuggestions(
+      ns,
+      item,
+      [
+        swiggySuggestion(),
+        {...swiggySuggestion(), 'factIndex': 1},
+      ],
+      serverScore: 0.99,
+      reviewRequired: false,
+    );
+
+    expect(result.outcome, SmsAiResolutionOutcome.needsReview);
+    expect(reviewCount(), 1);
+    expect(transactions(), isEmpty);
+    expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
+  });
+
   test('Tier 1 future bill writes local_commitments and history', () {
     final due = utcDayOffset(7);
     final item = reviewItem(body: billBody(due));
@@ -267,7 +288,7 @@ void main() {
     () {
       final item = reviewItem(
         body:
-            'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20.',
+            'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20. Details at Turtlemint.',
       );
       insertReviewRow(item);
       final occurredAt = item.receivedAt.toUtc().toIso8601String();

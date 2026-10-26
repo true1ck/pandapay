@@ -136,7 +136,7 @@ test('a complete high-confidence bill obligation auto-resolves', () => {
 });
 
 test('completed bill payment without printed date can auto-resolve using receipt time', () => {
-  const body = 'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20.';
+  const body = 'Your payment of Rs 3,160.80 for REF123 was completed successfully. Available balance is Rs 1.20. Details at Turtlemint.';
   const receivedAt = '2026-04-15T06:59:00.000Z';
   const fact = {
     factType: 'bill_payment',
@@ -150,6 +150,47 @@ test('completed bill payment without printed date can auto-resolve using receipt
   assert.equal(assessment.reviewRequired, false);
   assert.ok(assessment.composite >= AUTO_RESOLVE);
   assert.equal(assessment.perFact[0].evidence, 0.75);
+});
+
+test('completed posted movement without printed date can auto-resolve using SMS receipt time', () => {
+  const body = 'Rs 420.00 debited for Swiggy UPI successfully.';
+  const receivedAt = '2026-10-24T12:30:00.000Z';
+  const fact = {
+    factType: 'posted_movement',
+    payload: {
+      amountRole: 'posted', amountInr: 420, occurredAt: receivedAt,
+      entryKind: 'spend', instrument: 'upi_bank', merchant: 'Swiggy',
+      category: 'dining', isComplete: true, confidence: 0.9,
+    },
+  };
+  const assessment = assessFacts([fact], body, receivedAt);
+  assert.equal(assessment.reviewRequired, false);
+  assert.ok(assessment.composite >= AUTO_RESOLVE);
+  assert.equal(assessment.perFact[0].evidence, 0.75);
+});
+
+test('unsupported merchant text cannot earn enough disambiguation to auto-resolve', () => {
+  const body = 'Rs 420.00 debited successfully.';
+  const receivedAt = '2026-10-24T12:30:00.000Z';
+  const fact = {
+    ...swiggyFact,
+    payload: {
+      ...swiggyFact.payload,
+      occurredAt: receivedAt,
+      accountLast4: null,
+      merchant: 'Unrelated Vendor',
+      confidence: 0.9,
+    },
+  };
+  const assessment = assessFacts([fact], body, receivedAt);
+  assert.equal(assessment.perFact[0].disambiguation, 0);
+  assert.equal(assessment.reviewRequired, true);
+});
+
+test('multiple actionable facts remain in review until atomic multi-fact filing exists', () => {
+  const assessment = assessFacts([swiggyFact, swiggyFact], SWIGGY_BODY);
+  assert.equal(assessment.actionableCount, 2);
+  assert.equal(assessment.reviewRequired, true);
 });
 
 test('bill payment cannot auto-resolve when amount is only a balance or biller is missing', () => {

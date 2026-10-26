@@ -15,13 +15,17 @@ if (!process.env.GEMINI_API_KEY) {
 
 const crypto = require('crypto');
 const smsFacts = require('./sms_facts');
-const { verifyModelFacts } = require('./ai_fact_evidence');
+const { verifyModelFacts, normalizeModelFacts } = require('./ai_fact_evidence');
+const { ACTIONABLE_FACT_TYPES } = require('./ai_fact_scoring');
 const { DECISION_TOPICS, REJECTION_REASONS, validateDecision } = require('./sms_decision');
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 const DEFAULT_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-flash-lite-latest';
 const DEFAULT_INTERVAL_MS = Number(process.env.AI_WORKER_INTERVAL_MS || 2000);
 const DEFAULT_API_BASE_URL = process.env.AI_WORKER_API_BASE_URL || `http://127.0.0.1:${process.env.PORT || 4000}`;
-const PROVIDER_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_PROVIDER_TIMEOUT_MS || 20000));
+// A four-SMS batch can legitimately take longer than the old 20s cutoff.
+// The queue lease is ten minutes, so this remains bounded with ample time
+// for validation, correction and result persistence after the model responds.
+const PROVIDER_TIMEOUT_MS = Math.max(1000, Number(process.env.AI_PROVIDER_TIMEOUT_MS || 45000));
 const DEFAULT_BATCH_MAX = Math.min(4, Math.max(1, Number(process.env.AI_WORKER_BATCH_MAX || 4)));
 const DEFAULT_BATCH_WINDOW_MS = Math.min(500, Math.max(0, Number(process.env.AI_WORKER_BATCH_WINDOW_MS || 300)));
 const MAX_OUTPUT_TOKENS = 2048;
@@ -73,6 +77,10 @@ const UNIVERSAL_SYSTEM_INSTRUCTION = [
   '  4. SCORING & COMPLETENESS:',
   "   - Set 'isComplete': true when the message has all necessary fields (for spend: amount, instrument, merchant, category; for bill: amountDue, dueDate, billerName).",
   "   - Set 'confidence': a float from 0.0 to 1.0 reflecting your extraction certainty.",
+  '  5. OUTPUT SCOPE:',
+  '   - Return at most one primary actionable fact per SMS. If one SMS contains multiple separate money movements, leave facts empty so the user can review it; never silently choose one and lose the others.',
+  '   - For a transaction, do not add a balance_snapshot side fact. A balance_after / available-balance amount is context only and can never be the transaction amount.',
+  '   - Only return a reference when its exact value is printed in the SMS. Use merchant for the named payee, employer, broker, or fund when supported by the text.',
 ].join('\n');
 
 const FACT_TYPE_ENUM = [
@@ -87,6 +95,67 @@ const FACT_TYPE_ENUM = [
   'promotion',
 ];
 
+const FACT_PAYLOAD_SCHEMA_PROPERTIES = {
+  amountRole: { type: 'STRING', enum: ['posted', 'due_total', 'due_minimum', 'outstanding', 'ceiling', 'proposed'] },
+  entryKind: { type: 'STRING', enum: ['spend', 'income', 'transfer', 'investment'] },
+  amountInr: { type: 'NUMBER' },
+  amountDueInr: { type: 'NUMBER' },
+  minimumDueInr: { type: 'NUMBER' },
+  outstandingInr: { type: 'NUMBER' },
+  limitInr: { type: 'NUMBER' },
+  proposedAmountInr: { type: 'NUMBER' },
+  availableBalanceInr: { type: 'NUMBER' },
+  occurredAt: { type: 'STRING' },
+  dueDate: { type: 'STRING' },
+  statementDate: { type: 'STRING' },
+  proposedAt: { type: 'STRING' },
+  asOfAt: { type: 'STRING' },
+  instrument: { type: 'STRING', enum: ['upi_bank', 'credit_card', 'debit_card', 'cash', 'wallet', 'other'] },
+  last4: { type: 'STRING' },
+  accountLast4: { type: 'STRING' },
+  merchant: { type: 'STRING' },
+  billerName: { type: 'STRING' },
+  serviceName: { type: 'STRING' },
+  transferParty: { type: 'STRING' },
+  issuerName: { type: 'STRING' },
+  category: { type: 'STRING', enum: SPEND_CATEGORIES },
+  reference: { type: 'STRING' },
+  mandateStatus: { type: 'STRING', enum: ['registered', 'scheduled', 'paused', 'cancelled', 'failed'] },
+  attemptStatus: { type: 'STRING', enum: ['attempted', 'scheduled', 'failed'] },
+  alertKind: { type: 'STRING', enum: ['otp', 'verification', 'service'] },
+  targetKind: { type: 'STRING', enum: ['card_bill', 'utility_or_other_bill', 'service_merchant', 'unknown'] },
+  isComplete: { type: 'BOOLEAN' },
+  confidence: { type: 'NUMBER' },
+};
+
+function payloadSchema(required, alternatives = []) {
+  const fieldNames = new Set([...required, ...alternatives.flat()]);
+  const properties = Object.fromEntries([...fieldNames].map((field) => [field, FACT_PAYLOAD_SCHEMA_PROPERTIES[field]]));
+  return {
+    type: 'OBJECT',
+    properties,
+    required,
+    ...(alternatives.length > 0 ? {
+      anyOf: alternatives.map((group) => ({
+        type: 'OBJECT',
+        properties: Object.fromEntries(group.map((field) => [field, FACT_PAYLOAD_SCHEMA_PROPERTIES[field]])),
+        required: group,
+      })),
+    } : {}),
+  };
+}
+
+function factSchemaBranch(factType, required, alternatives = []) {
+  return {
+    type: 'OBJECT',
+    properties: {
+      factType: { type: 'STRING', enum: [factType] },
+      payload: payloadSchema(required, alternatives),
+    },
+    required: ['factType', 'payload'],
+  };
+}
+
 const UNIVERSAL_RESPONSE_SCHEMA = {
   type: 'OBJECT',
   properties: {
@@ -99,48 +168,7 @@ const UNIVERSAL_RESPONSE_SCHEMA = {
           factType: { type: 'STRING', enum: FACT_TYPE_ENUM },
           payload: {
             type: 'OBJECT',
-            properties: {
-              amountRole: {
-                type: 'STRING',
-                enum: ['posted', 'due_total', 'due_minimum', 'outstanding', 'ceiling', 'proposed'],
-              },
-              entryKind: { type: 'STRING', enum: ['spend', 'income', 'transfer', 'investment'] },
-              amountInr: { type: 'NUMBER' },
-              amountDueInr: { type: 'NUMBER' },
-              minimumDueInr: { type: 'NUMBER' },
-              outstandingInr: { type: 'NUMBER' },
-              limitInr: { type: 'NUMBER' },
-              proposedAmountInr: { type: 'NUMBER' },
-              availableBalanceInr: { type: 'NUMBER' },
-              occurredAt: { type: 'STRING' },
-              dueDate: { type: 'STRING' },
-              statementDate: { type: 'STRING' },
-              proposedAt: { type: 'STRING' },
-              asOfAt: { type: 'STRING' },
-              instrument: {
-                type: 'STRING',
-                enum: ['upi_bank', 'credit_card', 'debit_card', 'cash', 'wallet', 'other'],
-              },
-              last4: { type: 'STRING' },
-              accountLast4: { type: 'STRING' },
-              merchant: { type: 'STRING' },
-              billerName: { type: 'STRING' },
-              serviceName: { type: 'STRING' },
-              transferParty: { type: 'STRING' },
-              issuerName: { type: 'STRING' },
-              category: { type: 'STRING', enum: SPEND_CATEGORIES },
-              reference: { type: 'STRING' },
-              mandateStatus: {
-                type: 'STRING',
-                enum: ['registered', 'scheduled', 'paused', 'cancelled', 'failed'],
-              },
-              targetKind: {
-                type: 'STRING',
-                enum: ['card_bill', 'utility_or_other_bill', 'service_merchant', 'unknown'],
-              },
-              isComplete: { type: 'BOOLEAN' },
-              confidence: { type: 'NUMBER' },
-            },
+            properties: FACT_PAYLOAD_SCHEMA_PROPERTIES,
             // amountRole is required only for money-bearing fact types; the
             // prompt states that per type. A blanket schema requirement would
             // force balance snapshots to carry a role whose matching amount
@@ -148,6 +176,22 @@ const UNIVERSAL_RESPONSE_SCHEMA = {
           },
         },
         required: ['factType', 'payload'],
+        // Gemini's structured output schema must require the fields that
+        // make each actionable fact usable. Prompt-only requirements allowed
+        // schema-valid but incomplete payloads to omit amount and merchant.
+        anyOf: [
+          factSchemaBranch('posted_movement', ['amountRole', 'entryKind', 'amountInr', 'occurredAt', 'instrument', 'merchant', 'category', 'isComplete', 'confidence']),
+          factSchemaBranch('bill_obligation', ['amountRole', 'dueDate', 'billerName', 'isComplete', 'confidence'], [
+            ['amountRole', 'amountDueInr'], ['amountRole', 'minimumDueInr'], ['amountRole', 'outstandingInr', 'asOfAt'],
+          ]),
+          factSchemaBranch('bill_payment', ['amountRole', 'amountInr', 'occurredAt', 'entryKind', 'isComplete', 'confidence'], [['billerName'], ['merchant']]),
+          factSchemaBranch('mandate_lifecycle', ['mandateStatus', 'asOfAt', 'isComplete', 'confidence'], [['serviceName'], ['merchant']]),
+          factSchemaBranch('pending_or_failed_attempt', ['attemptStatus', 'occurredAt']),
+          factSchemaBranch('balance_snapshot', ['availableBalanceInr', 'asOfAt', 'instrument']),
+          factSchemaBranch('card_identity_hint', ['asOfAt'], [['last4'], ['accountLast4']]),
+          factSchemaBranch('security_or_service_alert', ['alertKind', 'occurredAt']),
+          factSchemaBranch('promotion', []),
+        ],
       },
     },
   },
@@ -247,15 +291,7 @@ const FEW_SHOT_EXAMPLES = [
           factType: 'bill_obligation',
           payload: {
             amountRole: 'due_total', amountDueInr: 14850.0,
-            dueDate: '2026-11-12T00:00:00.000Z', instrument: 'credit_card',
-            last4: '8891', issuerName: 'Axis Bank', billerName: 'Axis Bank Credit Card',
-            targetKind: 'card_bill', isComplete: true, confidence: 0.99,
-          },
-        },
-        {
-          factType: 'bill_obligation',
-          payload: {
-            amountRole: 'due_minimum', minimumDueInr: 750.0,
+            minimumDueInr: 750.0,
             dueDate: '2026-11-12T00:00:00.000Z', instrument: 'credit_card',
             last4: '8891', issuerName: 'Axis Bank', billerName: 'Axis Bank Credit Card',
             targetKind: 'card_bill', isComplete: true, confidence: 0.99,
@@ -266,7 +302,7 @@ const FEW_SHOT_EXAMPLES = [
   },
   {
     label: 'Completed bill payment with receipt-time fallback',
-    sms: 'Your payment of Rs 5,250.00 for REF123 was completed successfully. Available balance is Rs 2,000.00. Details at Turtlemint.',
+    sms: 'Your payment of Rs 5,250.00 for REF123 was completed successfully on 15-Apr-2026. Available balance is Rs 2,000.00. Details at Turtlemint.',
     output: {
       decision: {
         topic: 'bill_payment_success',
@@ -656,16 +692,16 @@ function buildGeminiPrompt(job, { batch = false, includeExamples = true, repairE
     batch
       ? 'Supply this item\'s decision and facts array in the batch items envelope. If shouldConsider=false, set facts: [].'
       : 'Return JSON only in the form {"decision":{...},"facts":[...]}. If shouldConsider=false, set facts: [].',
-    'Each fact must use the app contract: factType, payload, provenance.',
+    'Each fact must contain only factType and payload. The worker attaches provenance; never invent message IDs, references, merchant names, amounts, categories, or dates.',
     'Allowed factType values: posted_movement, pending_or_failed_attempt, balance_snapshot, bill_obligation, bill_payment, mandate_lifecycle, card_identity_hint, security_or_service_alert, promotion.',
     'Allowed entryKind values for posted_movement: spend, income, transfer, investment (use "spend" for debited/purchases).',
     'Allowed instruments if present: upi_bank, credit_card, debit_card, cash, wallet, other.',
     `Allowed category values for spend facts: ${SPEND_CATEGORIES.join(', ')}.`,
     'Amounts must use the correct role: posted, due_total, due_minimum, outstanding, ceiling, or proposed.',
-    'Required payload fields: posted_movement = amountRole, entryKind, occurredAt; pending_or_failed_attempt = attemptStatus, occurredAt; balance_snapshot = availableBalanceInr, asOfAt; bill_obligation = amountRole, dueDate and its evidenced amount/date fields; bill_payment = amountRole=posted, amountInr, occurredAt; mandate_lifecycle = mandateStatus, asOfAt; card_identity_hint = asOfAt; security_or_service_alert = alertKind, occurredAt; promotion may be empty.',
+    'Required payload fields: posted_movement = amountRole=posted, amountInr, entryKind, occurredAt, instrument, merchant, category, isComplete, confidence; pending_or_failed_attempt = attemptStatus, occurredAt; balance_snapshot = availableBalanceInr, asOfAt, instrument; bill_obligation = amountRole, its matching evidenced amount, dueDate, billerName, isComplete, confidence; bill_payment = amountRole=posted, amountInr, occurredAt, entryKind=transfer, billerName or merchant, isComplete, confidence; mandate_lifecycle = mandateStatus, asOfAt, serviceName or merchant, isComplete, confidence; card_identity_hint = asOfAt plus last4 or accountLast4; security_or_service_alert = alertKind, occurredAt; promotion may be empty.',
     'For a completed posted movement or bill payment with no date/time in the SMS body, use the supplied Occurred at metadata (the phone SMS receipt timestamp) for occurredAt and lower confidence. The supplied timestamp is a valid event-time fallback for a confirmed completed payment; set isComplete=true only when all other required transaction fields are present. Never use this receipt timestamp as a dueDate, statementDate, or other deadline.',
     'For amountRole, include its matching amount and date: posted=amountInr/occurredAt, due_total=amountDueInr/dueDate, due_minimum=minimumDueInr/dueDate, outstanding=outstandingInr/asOfAt, ceiling=limitInr/asOfAt, proposed=proposedAmountInr/proposedAt. A completed bill payment is a posted transfer, not an amount due.',
-    'A posted spend also requires merchant. A mandate limit is valid only for registered status. Never omit required fields or invent values; if any required value is absent or uncertain, leave this SMS\'s facts array empty.',
+    'A posted spend requires the exact amount tied to its debit/purchase clause, a supported merchant, a canonical category, and an instrument; never use balance_after as amount. A mandate limit is valid only for registered status. Never omit required fields or invent values; if any required value is absent or uncertain, leave this SMS\'s facts array empty.',
     'Set isComplete=true only when every essential attribute for the fact type is present, and confidence to your extraction certainty from 0.0 to 1.0.',
     ...(Array.isArray(repairErrors) && repairErrors.length > 0 ? [
       'CORRECTION PASS: Your previous structured output did not satisfy the decision or fact contract. Re-evaluate the SMS and return a corrected decision and facts. Keep only facts fully supported by the SMS. If a required value is absent or uncertain, omit that fact (facts may be []). Do not guess to satisfy validation.',
@@ -679,13 +715,17 @@ function buildGeminiPrompt(job, { batch = false, includeExamples = true, repairE
   ].join('\n');
 }
 
-function buildGeminiBatchPrompt(jobs) {
+function buildGeminiBatchPrompt(jobs, { repairErrorsById = null } = {}) {
   return [
     'Classify each SMS independently. Return JSON only: {"items":[{"id":"<id>","decision":{...},"facts":[...]}]}.',
     'Return exactly one item per supplied id, even when its facts array is empty.',
     'Never mix an amount, account or date from one item into another item.',
     renderFewShots(),
-    ...jobs.map((job) => `ITEM ${job.id}\n${buildGeminiPrompt(job, { batch: true, includeExamples: false })}`),
+    ...jobs.map((job) => `ITEM ${job.id}\n${buildGeminiPrompt(job, {
+      batch: true,
+      includeExamples: false,
+      repairErrors: repairErrorsById?.[job.id] || null,
+    })}`),
   ].join('\n\n');
 }
 
@@ -842,8 +882,12 @@ class GeminiProvider {
     }
   }
 
-  async classifyBatch(jobs) {
-    if (jobs.length === 1) return new Map([[jobs[0].id, await this.classify(jobs[0])]]);
+  async classifyBatch(jobs, { repairErrorsById = null } = {}) {
+    if (jobs.length === 1) {
+      return new Map([[jobs[0].id, await this.classify(jobs[0], {
+        repairErrors: repairErrorsById?.[jobs[0].id] || null,
+      })]]);
+    }
     if (!this.apiKey && (!this.apiKeys || this.apiKeys.length === 0)) {
       throw new GeminiProviderError('GEMINI_API_KEY is not configured');
     }
@@ -862,7 +906,7 @@ class GeminiProvider {
               systemInstruction: {
                 parts: [{ text: UNIVERSAL_SYSTEM_INSTRUCTION }],
               },
-              contents: [{ role: 'user', parts: [{ text: buildGeminiBatchPrompt(jobs) }] }],
+              contents: [{ role: 'user', parts: [{ text: buildGeminiBatchPrompt(jobs, { repairErrorsById }) }] }],
               generationConfig: {
                 responseMimeType: 'application/json',
                 responseSchema: UNIVERSAL_BATCH_RESPONSE_SCHEMA,
@@ -1035,17 +1079,70 @@ async function runWorkerOnce({
       jobs: leasedJobs, apiBaseUrl: base, workerToken, fetchImpl, waitImpl, heartbeat,
     });
   };
-  const validationErrors = (facts, job) => {
-    const schema = smsFacts.validateFactSet(facts);
-    if (!schema.valid) return schema.errors;
-    const evidence = verifyModelFacts(facts, job.payload || {});
-    return evidence.valid ? [] : evidence.errors;
+  const prepareFactsForResult = (facts, job) => {
+    const accepted = [];
+    const actionableErrors = [];
+    for (const [index, fact] of (Array.isArray(facts) ? facts : []).entries()) {
+      const schema = smsFacts.validateFact(fact);
+      const evidence = schema.valid
+        ? verifyModelFacts([fact], job.payload || {})
+        : { valid: false, errors: schema.errors };
+      if (schema.valid && evidence.valid) {
+        accepted.push(fact);
+      } else if (ACTIONABLE_FACT_TYPES.has(fact?.factType)) {
+        actionableErrors.push(...(schema.valid ? evidence.errors : schema.errors)
+          .map((error) => `facts[${index}]: ${error}`));
+      }
+      // Invalid informational facts are dropped independently. They must not
+      // poison a separately valid posted movement in the same Gemini response.
+    }
+    return { facts: accepted, actionableErrors };
   };
   try {
     await reserveFor(jobs);
     const byId = jobs.length > 1
       ? await provider.classifyBatch(jobs)
       : new Map([[jobs[0].id, await provider.classify(jobs[0])]]);
+    const repairJobs = [];
+    const repairErrorsById = {};
+    for (const job of jobs) {
+      if (!byId.has(job.id) || typeof provider.classify !== 'function') continue;
+      const itemResult = byId.get(job.id);
+      const modelFacts = normalizeModelFacts(
+        Array.isArray(itemResult) ? itemResult : (itemResult?.facts || []),
+        job.payload || {},
+      );
+      const decision = Array.isArray(itemResult) ? null : (itemResult?.decision || null);
+      const { facts, actionableErrors } = prepareFactsForResult(modelFacts, job);
+      const errors = [
+        ...actionableErrors,
+        ...validateDecision(decision, facts).errors,
+      ];
+      if (errors.length > 0) {
+        repairJobs.push(job);
+        repairErrorsById[job.id] = errors;
+      }
+    }
+    let repairedById = new Map();
+    const repairUnavailable = new Set();
+    if (repairJobs.length > 0) {
+      try {
+        // Keep the bounded one-pass correction, but group invalid members of
+        // the same initial batch into one provider request where supported.
+        await reserveFor(repairJobs);
+        if (repairJobs.length > 1 && typeof provider.classifyBatch === 'function') {
+          repairedById = await provider.classifyBatch(repairJobs, { repairErrorsById });
+        } else {
+          for (const job of repairJobs) {
+            repairedById.set(job.id, await provider.classify(job, {
+              repairErrors: repairErrorsById[job.id],
+            }));
+          }
+        }
+      } catch (_) {
+        for (const job of repairJobs) repairUnavailable.add(job.id);
+      }
+    }
     const outcomes = [];
     for (const job of jobs) {
       if (!byId.has(job.id)) {
@@ -1053,34 +1150,28 @@ async function runWorkerOnce({
         continue;
       }
       try {
-        let itemResult = byId.get(job.id);
-        let facts = Array.isArray(itemResult) ? itemResult : (itemResult?.facts || []);
+        let itemResult = repairedById.get(job.id) || byId.get(job.id);
+        let modelFacts = normalizeModelFacts(
+          Array.isArray(itemResult) ? itemResult : (itemResult?.facts || []),
+          job.payload || {},
+        );
         let decision = Array.isArray(itemResult) ? null : (itemResult?.decision || null);
+        let prepared = prepareFactsForResult(modelFacts, job);
+        let facts = prepared.facts;
         let errors = [
-          ...validationErrors(facts, job),
+          ...prepared.actionableErrors,
           ...validateDecision(decision, facts).errors,
         ];
-        if (errors.length > 0 && typeof provider.classify === 'function') {
-          try {
-            // One bounded correction call: send only contract findings, then
-            // re-evaluate the original redacted SMS. Reserve it as a distinct
-            // provider request so minute pacing remains accurate.
-            await reserveFor([job]);
-            itemResult = await provider.classify(job, { repairErrors: errors });
-            facts = itemResult?.facts || [];
-            decision = itemResult?.decision || null;
-            errors = [
-              ...validationErrors(facts, job),
-              ...validateDecision(decision, facts).errors,
-            ];
-          } catch (_) {
-            // A prior valid classification may still be retained when only
-            // fact repair failed; an invalid decision is always discarded.
-            errors = ['correction_unavailable'];
-          }
+        if (repairUnavailable.has(job.id)) {
+          // Invalid facts are omitted below and the app keeps the SMS in
+          // Needs Review.
+          errors = ['correction_unavailable'];
+          // A negative dismissal that arrived alongside an invalid actionable
+          // fact is contradictory; dropping that fact must not validate the
+          // dismissal by accident.
+          if (decision?.shouldConsider === false) decision = null;
         }
         if (!validateDecision(decision, facts).valid) decision = null;
-        if (validationErrors(facts, job).length > 0) facts = [];
         const result = await jsonRequest(fetchImpl, `${base}/ai/jobs/${encodeURIComponent(job.id)}/result`, workerToken, {
           decision,
           facts,
