@@ -35,7 +35,8 @@ const DECISION_TOPICS = [
   'bill_payment_success', 'mandate_autopay', 'investment_purchase',
   'salary_or_income', 'telecom_carrier_deduction', 'loan_upsell_or_offer',
   'credit_card_limit_upsell', 'otp_or_security_code',
-  'generic_promotional_spam', 'informational_balance_notice', 'other_non_financial',
+  'generic_promotional_spam', 'informational_balance_notice',
+  'pay_later_due_notice', 'pay_later_drawdown', 'other_non_financial',
 ];
 
 const REJECTION_REASONS = [
@@ -47,20 +48,19 @@ const DECISION_SCHEMA = {
   type: 'OBJECT',
   properties: {
     topic: { type: 'STRING', enum: DECISION_TOPICS },
-    summary: { type: 'STRING' },
     shouldConsider: { type: 'BOOLEAN' },
     rejectionReason: { type: 'STRING', enum: REJECTION_REASONS },
   },
-  required: ['topic', 'summary', 'shouldConsider', 'rejectionReason'],
+  required: ['topic', 'shouldConsider', 'rejectionReason'],
 };
 
 const UNIVERSAL_SYSTEM_INSTRUCTION = [
-  "You are PandaPay's Cognitive Financial SMS Intelligence & Extraction Engine.",
+  "You are PandaPay's SMS classification and structured-decision engine.",
   'Your mission is to evaluate redacted Indian SMS messages, make an intent-based tracking decision, and extract strictly typed financial facts.',
   '',
   'TWO-STAGE COGNITIVE EVALUATION:',
   'STAGE 1: INTENT & TRACKING DECISION (decision object)',
-  '- What is this SMS about? Assign the most specific topic from DECISION_TOPICS and write a concise 1-sentence summary.',
+  '- What is this SMS about? Assign the most specific topic from DECISION_TOPICS. Return only the decision and supported facts; do not write a summary.',
   '- Should PandaPay track this? (shouldConsider: boolean):',
   '  * SET shouldConsider=true ONLY for completed or scheduled money movements, bill obligations, salary/income, investments, or active mandates.',
   '  * SET shouldConsider=false for telecom carrier deductions (Jio/Airtel/Vi retention fees, talktime/validity debits), personal loan/pay-later offers (Axio, KreditBee), credit limit upsells, bank OTPs, gambling/promotional spam, or general service alerts.',
@@ -75,7 +75,8 @@ const UNIVERSAL_SYSTEM_INSTRUCTION = [
   "   - A salary credit or dividend is 'posted_movement' with amountRole='posted' and entryKind='income'.",
   "   - A broker funds payout (e.g., Kotak Neo, Zerodha quarterly settlement) or own-account transfer is 'posted_movement' with amountRole='posted' and entryKind='transfer'.",
   "   - A mutual fund SIP debit or stock purchase is 'posted_movement' with amountRole='posted' and entryKind='investment'.",
-  "   - A utility bill, credit card statement, or due notification is 'bill_obligation' with amountRole='due_total' (and 'due_minimum' if present). It is NEVER a posted movement.",
+  "   - A utility bill, credit card statement, or Pay Later due notification is 'bill_obligation' with amountRole='due_total' (and 'due_minimum' if present). It is NEVER a posted movement.",
+  "   - A Pay Later drawdown/purchase is a 'posted_movement' with entryKind='spend' only when the message confirms the purchase was completed; a Pay Later repayment notice is a bill obligation.",
   "   - An AutoPay registration or standing instruction is 'mandate_lifecycle' with amountRole='ceiling' and limitInr. It is NEVER a spend.",
   "   - An ATM withdrawal is 'posted_movement' with instrument='cash' and entryKind='transfer'.",
   '  3. CATEGORIZATION:',
@@ -192,7 +193,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'upi_debit',
-        summary: 'Paid Rs. 420 to Swiggy via HDFC Bank UPI',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -222,7 +222,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'card_spend',
-        summary: 'Spent Rs. 2,499 on Flipkart with ICICI Bank Credit Card ending 4002',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -252,7 +251,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'bill_due_notice',
-        summary: 'Axis Bank Credit Card XX8891 bill due of Rs. 14,850 on 12-Nov-2026',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -279,12 +277,55 @@ const FEW_SHOT_EXAMPLES = [
     },
   },
   {
+    label: 'Pay Later drawdown purchase (Flipkart)',
+    sms: 'Axio Pay Later payment of INR 4,200.00 to Flipkart was successful on 24-Oct-2026.',
+    output: {
+      decision: {
+        topic: 'pay_later_drawdown',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
+      facts: [
+        {
+          factType: 'posted_movement',
+          payload: {
+            amountRole: 'posted', entryKind: 'spend', amountInr: 4200.0,
+            occurredAt: '2026-10-24T00:00:00.000Z', instrument: 'other',
+            merchant: 'Flipkart', category: 'online',
+            isComplete: true, confidence: 0.96,
+          },
+        },
+      ],
+    },
+  },
+  {
+    label: 'Pay Later bill due notice (Axio)',
+    sms: 'Axio Pay Later bill amount INR 5,300.00 is due on 05-Nov-2026.',
+    output: {
+      decision: {
+        topic: 'pay_later_due_notice',
+        shouldConsider: true,
+        rejectionReason: 'none',
+      },
+      facts: [
+        {
+          factType: 'bill_obligation',
+          payload: {
+            amountRole: 'due_total', amountDueInr: 5300.0,
+            dueDate: '2026-11-05T00:00:00.000Z', billerName: 'Axio Pay Later',
+            category: 'emi', targetKind: 'utility_or_other_bill',
+            isComplete: true, confidence: 0.98,
+          },
+        },
+      ],
+    },
+  },
+  {
     label: 'Utility bill (BESCOM electricity)',
     sms: 'Dear Consumer, Electricity bill for CA 102938475 is Rs 1,840.00. Due date is 05-Nov-2026. Pay via BESCOM portal to avoid disconnect.',
     output: {
       decision: {
         topic: 'bill_due_notice',
-        summary: 'BESCOM electricity bill of Rs. 1,840 due on 05-Nov-2026',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -307,7 +348,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'bill_payment_success',
-        summary: 'Paid Rs. 14,850 towards Axis Bank Credit Card XX8891 via CRED',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -330,7 +370,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'bank_transfer',
-        summary: 'Kotak Neo quarterly funds settlement payout of Rs. 1,944.38 to Bank A/c XX1797',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -354,7 +393,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'investment_purchase',
-        summary: 'Transferred Rs. 25,000 from HDFC Bank to Zerodha for investment',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -377,7 +415,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'salary_or_income',
-        summary: 'Salary credit of Rs. 1,25,000 from ACME TECH CORP to HDFC Bank A/c XX1797',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -400,7 +437,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'bank_transfer',
-        summary: 'Home loan EMI debit of Rs. 32,450 from SBI Bank A/c XX4321',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -423,7 +459,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'mandate_autopay',
-        summary: 'Netflix AutoPay e-mandate registered on HDFC Card ending 1234 up to Rs. 1,500',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -447,7 +482,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'atm_withdrawal',
-        summary: 'ATM cash withdrawal of Rs. 5,000 using Debit Card XX9912',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -469,7 +503,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'upi_debit',
-        summary: 'Partial debit of Rs. 750 at Amazon Pay from A/c XX1797',
         shouldConsider: true,
         rejectionReason: 'none',
       },
@@ -492,7 +525,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'telecom_carrier_deduction',
-        summary: 'Jio number retention airtime deduction of Rs 9.88',
         shouldConsider: false,
         rejectionReason: 'telecom_carrier_deduction',
       },
@@ -505,7 +537,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'loan_upsell_or_offer',
-        summary: 'Pre-approved personal loan marketing offer from Axio',
         shouldConsider: false,
         rejectionReason: 'loan_upsell',
       },
@@ -518,7 +549,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'otp_or_security_code',
-        summary: 'HDFC Bank NetBanking login verification OTP',
         shouldConsider: false,
         rejectionReason: 'security_otp',
       },
@@ -531,7 +561,6 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       decision: {
         topic: 'generic_promotional_spam',
-        summary: 'Gbets gambling deposit bonus promotional spam',
         shouldConsider: false,
         rejectionReason: 'promotional_spam',
       },
@@ -780,7 +809,6 @@ class GeminiProvider {
       return {
         decision: parsed.decision || {
           topic: parsed.facts.length > 0 ? 'card_spend' : 'other_non_financial',
-          summary: parsed.facts.length > 0 ? 'Financial transaction detected' : 'Non-financial or unrecognized message',
           shouldConsider: parsed.facts.length > 0,
           rejectionReason: parsed.facts.length > 0 ? 'none' : 'non_financial',
         },
@@ -864,7 +892,6 @@ class GeminiProvider {
         output.set(item.id, {
           decision: item.decision || {
             topic: item.facts.length > 0 ? 'card_spend' : 'other_non_financial',
-            summary: item.facts.length > 0 ? 'Financial transaction detected' : 'Non-financial or unrecognized message',
             shouldConsider: item.facts.length > 0,
             rejectionReason: item.facts.length > 0 ? 'none' : 'non_financial',
           },
