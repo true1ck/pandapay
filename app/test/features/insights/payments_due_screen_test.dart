@@ -284,59 +284,62 @@ void main() {
     expect(find.text('No bills in Sep 2026'), findsOneWidget);
   });
 
-  testWidgets('switching months swaps linked history for open bills', (
-    tester,
-  ) async {
-    SmsBillRow bill({
-      required String id,
-      required String title,
-      required DateTime dueDate,
-      required SmsBillState state,
-    }) => SmsBillRow(
-      id: id,
-      title: title,
-      category: CommitmentCategory.telecom,
-      amountDue: Money.fromRupees(799),
-      minimumDue: null,
-      isMinimumOnly: false,
-      dueDate: dueDate,
-      receivedAt: dueDate.subtract(const Duration(days: 5)),
-      isAutopay: false,
-      sawFailedAttempt: false,
-      state: state,
-    );
-    final linked = bill(
-      id: 's-linked',
-      title: 'September broadband',
-      dueDate: DateTime(2026, 9, 15),
-      state: SmsBillState.linked,
-    );
-    final pending = bill(
-      id: 's-pending',
-      title: 'October electricity',
-      dueDate: DateTime(2026, 10, 28),
-      state: SmsBillState.pending,
-    );
-    await _pumpBills(
-      tester,
-      overrides: [
-        ..._deterministicOverrides(),
-        smsBillRowsProvider.overrideWith((ref) async => [linked, pending]),
-        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
-        commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
-      ],
-    );
+  testWidgets(
+    'SMS bills and Bill payment status are omitted when feature flag is off',
+    (tester) async {
+      SmsBillRow bill({
+        required String id,
+        required String title,
+        required DateTime dueDate,
+        required SmsBillState state,
+      }) => SmsBillRow(
+        id: id,
+        title: title,
+        category: CommitmentCategory.telecom,
+        amountDue: Money.fromRupees(799),
+        minimumDue: null,
+        isMinimumOnly: false,
+        dueDate: dueDate,
+        receivedAt: dueDate.subtract(const Duration(days: 5)),
+        isAutopay: false,
+        sawFailedAttempt: false,
+        state: state,
+      );
+      final linked = bill(
+        id: 's-linked',
+        title: 'September broadband',
+        dueDate: DateTime(2026, 9, 15),
+        state: SmsBillState.linked,
+      );
+      final pending = bill(
+        id: 's-pending',
+        title: 'October electricity',
+        dueDate: DateTime(2026, 10, 28),
+        state: SmsBillState.pending,
+      );
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          smsBillRowsProvider.overrideWith((ref) async => [linked, pending]),
+          paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+          commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+        ],
+      );
 
-    expect(find.text('Bill payment status'), findsOneWidget);
-    expect(find.text('October electricity'), findsOneWidget);
-    expect(find.text('September broadband'), findsNothing);
+      expect(find.text('Bill payment status'), findsNothing);
+      expect(find.text('October electricity'), findsNothing);
+      expect(find.text('September broadband'), findsNothing);
+      expect(find.text('No upcoming bills'), findsOneWidget);
 
-    _setHorizon(tester, BillsHorizon.lastMonth);
-    await tester.pumpAndSettle();
-    expect(find.text('Bill payment status'), findsOneWidget);
-    expect(find.text('September broadband'), findsOneWidget);
-    expect(find.text('October electricity'), findsNothing);
-  });
+      _setHorizon(tester, BillsHorizon.lastMonth);
+      await tester.pumpAndSettle();
+      expect(find.text('Bill payment status'), findsNothing);
+      expect(find.text('September broadband'), findsNothing);
+      expect(find.text('October electricity'), findsNothing);
+      expect(find.text('No bills in Sep 2026'), findsOneWidget);
+    },
+  );
 
   testWidgets('past empty state names the next card due and jumps back', (
     tester,
@@ -498,50 +501,54 @@ void main() {
     expect(find.text('BESCOM'), findsNothing);
   });
 
-  testWidgets('past pending bills are not labelled Upcoming', (tester) async {
-    final pending = SmsBillRow(
-      id: 's-pending-past',
-      title: 'September power',
-      category: CommitmentCategory.utility,
-      amountDue: Money.fromRupees(500),
-      minimumDue: null,
-      isMinimumOnly: false,
-      dueDate: DateTime(2026, 9, 20),
-      receivedAt: DateTime(2026, 9, 15),
-      isAutopay: false,
-      sawFailedAttempt: false,
-      state: SmsBillState.pending,
-    );
-    final undated = SmsBillRow(
-      id: 's-undated',
-      title: 'September water',
-      category: CommitmentCategory.utility,
-      amountDue: Money.fromRupees(300),
-      minimumDue: null,
-      isMinimumOnly: false,
-      dueDate: null,
-      receivedAt: DateTime(2026, 9, 18),
-      isAutopay: false,
-      sawFailedAttempt: false,
-      state: SmsBillState.pending,
-    );
-    await _pumpBills(
-      tester,
-      overrides: [
-        ..._deterministicOverrides(),
-        smsBillRowsProvider.overrideWith((ref) async => [pending, undated]),
-        paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
-        commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
-      ],
-    );
-    _setHorizon(tester, BillsHorizon.lastMonth);
-    await tester.pumpAndSettle();
+  testWidgets(
+    'past pending SMS bills are omitted and do not block empty state when flag is off',
+    (tester) async {
+      final pending = SmsBillRow(
+        id: 's-pending-past',
+        title: 'September power',
+        category: CommitmentCategory.utility,
+        amountDue: Money.fromRupees(500),
+        minimumDue: null,
+        isMinimumOnly: false,
+        dueDate: DateTime(2026, 9, 20),
+        receivedAt: DateTime(2026, 9, 15),
+        isAutopay: false,
+        sawFailedAttempt: false,
+        state: SmsBillState.pending,
+      );
+      final undated = SmsBillRow(
+        id: 's-undated',
+        title: 'September water',
+        category: CommitmentCategory.utility,
+        amountDue: Money.fromRupees(300),
+        minimumDue: null,
+        isMinimumOnly: false,
+        dueDate: null,
+        receivedAt: DateTime(2026, 9, 18),
+        isAutopay: false,
+        sawFailedAttempt: false,
+        state: SmsBillState.pending,
+      );
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          smsBillRowsProvider.overrideWith((ref) async => [pending, undated]),
+          paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+          commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+        ],
+      );
+      _setHorizon(tester, BillsHorizon.lastMonth);
+      await tester.pumpAndSettle();
 
-    expect(find.text('Payment not found yet'), findsOneWidget);
-    expect(find.text('No due date seen'), findsOneWidget);
-    expect(find.text('Upcoming'), findsNothing);
-    expect(find.textContaining('Received 18 Sep'), findsOneWidget);
-  });
+      expect(find.text('Bill payment status'), findsNothing);
+      expect(find.text('Payment not found yet'), findsNothing);
+      expect(find.text('No due date seen'), findsNothing);
+      expect(find.text('Upcoming'), findsNothing);
+      expect(find.text('No bills in Sep 2026'), findsOneWidget);
+    },
+  );
 
   testWidgets('a local load failure never renders a false empty state', (
     tester,
@@ -722,6 +729,85 @@ void main() {
       final cardsY = tester.getTopLeft(find.text('Credit cards')).dy;
 
       expect(upcomingY, lessThan(cardsY));
+    },
+  );
+
+  testWidgets(
+    'central credit card bill projection maps to Credit cards section and excludes from Central bills',
+    (tester) async {
+      const hdfcProjection = BillProjection(
+        id: 'bp-hdfc',
+        projectionKind: 'bill_obligation',
+        projectionKey: 'k-hdfc',
+        status: 'active',
+        projection: {
+          'billerName': 'HDFC Credit Card',
+          'amountInr': 8331.0,
+          'dueDate': '2026-11-08T00:00:00.000',
+        },
+        sourceKey: 's-hdfc',
+        sourceFactIds: [],
+        projectionVersion: 1,
+        updatedAt: null,
+      );
+
+      final userHdfcCard = _card(
+        id: 'uc-hdfc',
+        name: 'HDFC Regalia',
+      );
+
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          myCardsProvider.overrideWith((ref) async => [userHdfcCard]),
+          userCardsRepositoryProvider.overrideWithValue(_FakeRepo()),
+          cardBillLedgerProvider.overrideWith((ref) async => const {}),
+          centralBillsProjectionProvider.overrideWith(
+            (ref) async => const BillProjectionSnapshot(
+              available: true,
+              projections: [hdfcProjection],
+            ),
+          ),
+          commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+          billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+        ],
+      );
+
+      expect(find.text('Credit cards'), findsOneWidget);
+      expect(find.text('HDFC Regalia'), findsOneWidget);
+      expect(find.textContaining('Due 8 Nov'), findsOneWidget);
+      expect(find.textContaining('8,331'), findsOneWidget);
+      expect(find.text('Bills from messages'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'scheduled payments section is omitted when _showScheduledPayments is off',
+    (tester) async {
+      final rent = Commitment(
+        id: 'c-rent',
+        title: 'Monthly Flat Rent',
+        category: CommitmentCategory.rent,
+        amount: Money.fromRupees(25000),
+        dueOn: DateTime(2026, 10, 28),
+        status: CommitmentStatus.due,
+        confidence: 1.0,
+      );
+
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          paymentsDueProvider.overrideWith((ref) async => const <DuePayment>[]),
+          commitmentsProvider.overrideWith((ref) async => [rent]),
+          billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+        ],
+      );
+
+      expect(find.text('Scheduled payments'), findsNothing);
+      expect(find.text('Monthly Flat Rent'), findsNothing);
+      expect(find.text('No upcoming bills'), findsOneWidget);
     },
   );
 }

@@ -8,6 +8,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_bill_ledger.dart';
+import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/past_bill_receipts.dart';
 import '../../data/user_cards_repository.dart';
@@ -65,6 +66,59 @@ class DuePayment {
   bool get needsAttention => true;
 }
 
+/// Finds an owned card that matches a credit card central projection obligation.
+UserCard? findMatchingCardForCentralBill(
+  BillProjection projection,
+  List<UserCard> cards,
+) {
+  final activeCards = cards.where((c) => !c.isArchived).toList();
+  if (activeCards.isEmpty) return null;
+
+  // 1. Match by last4 if available
+  final last4 = projection.last4;
+  if (last4 != null && last4.isNotEmpty) {
+    final match = activeCards.where((c) => c.last4 == last4).firstOrNull;
+    if (match != null) return match;
+  }
+
+  // 2. Match by card name / nickname
+  final title =
+      (projection.billerName ?? projection.serviceName ?? '').toLowerCase();
+  for (final card in activeCards) {
+    final cName = card.cardName.toLowerCase();
+    final nick = (card.nickname ?? '').toLowerCase();
+    if (cName.isNotEmpty && (title.contains(cName) || cName.contains(title))) {
+      return card;
+    }
+    if (nick.isNotEmpty && (title.contains(nick) || nick.contains(title))) {
+      return card;
+    }
+  }
+
+  // 3. Match by bank/issuer tokens
+  const issuers = [
+    'hdfc', 'sbi', 'icici', 'axis', 'kotak', 'amex',
+    'citi', 'rbl', 'indusind', 'bob', 'pnb', 'idfc', 'onecard'
+  ];
+  for (final issuer in issuers) {
+    if (title.contains(issuer)) {
+      final match = activeCards.where((c) {
+        final cName = c.cardName.toLowerCase();
+        final nick = (c.nickname ?? '').toLowerCase();
+        return cName.contains(issuer) || nick.contains(issuer);
+      }).firstOrNull;
+      if (match != null) return match;
+    }
+  }
+
+  // 4. If user only has one active card, map to it
+  if (activeCards.length == 1) {
+    return activeCards.first;
+  }
+
+  return null;
+}
+
 /// Per-card bill ledger from SMS (bill-generated messages + payment
 /// receipts), used to show the issuer's actual bill instead of the logged
 /// estimate. Empty when nothing has been imported.
@@ -76,6 +130,7 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
   final today = DateTime(now.year, now.month, now.day);
   final ledger = await ref.watch(cardBillLedgerProvider.future);
 
+  final rows = <DuePayment>[];
   final active = cards
       .where(
         (c) =>
@@ -89,7 +144,7 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
                     ledger[c.id]!.current!.statementDateVerified)),
       )
       .toList();
-  if (active.isEmpty) return const [];
+  if (active.isNotEmpty) {
 
   final earliestCycleStart = DateTime(now.year, now.month - 2, 1);
   final transactions = repo == null
@@ -101,7 +156,7 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
           from: earliestCycleStart,
         );
 
-  final rows = <DuePayment>[];
+  // active rows loop
   for (final card in active) {
     final bill = ledger[card.id]?.current;
     final DateTime dueOn;
@@ -149,6 +204,66 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
         bill: bill,
       ),
     );
+  }
+
+  }
+
+  // Central credit card bill projection mapping:
+  final centralSnapshot = ref.watch(centralBillsProjectionProvider).valueOrNull;
+  if (centralSnapshot != null && centralSnapshot.available) {
+    for (final projection in centralSnapshot.projections) {
+      if (!isCreditCardBill(projection)) continue;
+      final dueDate = projection.dueDate;
+      if (dueDate == null) continue;
+      final amountInr = projection.amountInr;
+      if (amountInr == null || amountInr <= 0) continue;
+
+      final matchedCard = findMatchingCardForCentralBill(projection, cards) ??
+          UserCard(
+            id: 'central-${projection.id}',
+            cardProductId: 'central-${projection.id}',
+            cardName: projection.billerName ??
+                projection.serviceName ??
+                'Credit card',
+            isDefault: false,
+          );
+
+      final cardBill = CardBill(
+        statementDate: dueDate.subtract(const Duration(days: 20)),
+        dueDate: dueDate,
+        amountDue: Money.fromRupees(amountInr),
+        minimumDue: null,
+        paidToward: Money.zero(),
+        lastPaymentAt: null,
+        confidence: 0.95,
+        statementDateVerified: true,
+      );
+
+      final existingIndex =
+          rows.indexWhere((r) => r.card.id == matchedCard.id);
+      if (existingIndex >= 0) {
+        final existing = rows[existingIndex];
+        if (existing.bill == null || !existing.bill!.statementDateVerified) {
+          rows[existingIndex] = DuePayment(
+            card: matchedCard,
+            dueOn: dueDate,
+            daysUntilDue: dueDate.difference(today).inDays,
+            loggedThisCycle: existing.loggedThisCycle,
+            bill: cardBill,
+          );
+        }
+      } else {
+        rows.add(
+          DuePayment(
+            card: matchedCard,
+            dueOn: dueDate,
+            daysUntilDue: dueDate.difference(today).inDays,
+            loggedThisCycle: Money.zero(),
+            bill: cardBill,
+          ),
+        );
+      }
+    }
   }
 
   rows.sort((a, b) => a.dueOn.compareTo(b.dueOn));
@@ -338,6 +453,13 @@ class BillsHorizonSummary {
       totalBilled.paise == 0 && actionableCount == 0 && autopayCount == 0;
 }
 
+// ---------------------------------------------------------------------------
+// Section Visibility Flags
+// ---------------------------------------------------------------------------
+// Hidden for now per user request; preserved to easily re-enable later.
+const bool _showSmsBills = false;
+const bool _showScheduledPayments = false;
+
 class _DueList extends ConsumerWidget {
   final List<DuePayment> rows;
   final BillsHorizonFilter filter;
@@ -360,10 +482,10 @@ class _DueList extends ConsumerWidget {
     final centralAsync = ref.watch(centralBillsProjectionProvider);
     final commitments = commitmentsAsync.valueOrNull ?? const <Commitment>[];
     final localFailed = commitmentsAsync.hasError ||
-        smsAsync.hasError ||
+        (_showSmsBills && smsAsync.hasError) ||
         receiptsAsync.hasError;
     final settled = !commitmentsAsync.isLoading &&
-        !smsAsync.isLoading &&
+        (!_showSmsBills || !smsAsync.isLoading) &&
         !receiptsAsync.isLoading &&
         !centralAsync.isLoading;
     final visibleCommitments = commitments
@@ -397,6 +519,7 @@ class _DueList extends ConsumerWidget {
         .toList(growable: false);
 
     final hasSms =
+        _showSmsBills &&
         (smsAsync.valueOrNull ?? const []).any(filter.matchesSmsBill);
     final hasReceipts =
         (receiptsAsync.valueOrNull ?? const []).any(filter.matchesReceipt);
@@ -421,7 +544,9 @@ class _DueList extends ConsumerWidget {
     final showEmptyState = settled &&
         !localFailed &&
         cardRows.isEmpty &&
-        visibleCommitments.isEmpty &&
+        !(utilities.isNotEmpty ||
+            renewals.isNotEmpty ||
+            (_showScheduledPayments && scheduled.isNotEmpty)) &&
         !hasSms &&
         !hasReceipts &&
         !hasCentral &&
@@ -585,7 +710,7 @@ class _DueList extends ConsumerWidget {
           ),
 
           // 4. Scheduled payments (loans, EMIs, rent, education, tax, other)
-          if (scheduled.isNotEmpty) ...[
+          if (_showScheduledPayments && scheduled.isNotEmpty) ...[
             _SectionHeader(
               label: 'Scheduled payments',
               count: scheduled.length,
@@ -602,7 +727,7 @@ class _DueList extends ConsumerWidget {
           // 5. Central bills
           CentralBillsSection(cardRows: centralDedupKeys, filter: filter),
           // 6. SMS bills
-          SmsBillsSection(filter: filter),
+          if (_showSmsBills) SmsBillsSection(filter: filter),
           // 7. Past bills preview
           _PastBillsPreview(filter: filter),
           const SizedBox(height: AppSpace.xl),
@@ -642,7 +767,7 @@ class _BillsLoadError extends ConsumerWidget {
           TextButton(
             onPressed: () {
               ref.invalidate(commitmentsProvider);
-              ref.invalidate(smsBillRowsProvider);
+              if (_showSmsBills) ref.invalidate(smsBillRowsProvider);
               ref.invalidate(pastBillReceiptsProvider);
             },
             child: Text(
