@@ -27,7 +27,8 @@ class AutoResolvedHistoryEntry {
   final String? instrument;
   final String? accountLast4;
 
-  /// Retained locally so a dismissed Gemini decision can be reopened exactly.
+  /// Retained locally so users can verify or reopen a decision against the
+  /// original SMS. Older receipts can be hydrated from captured messages.
   final String? sourceBody;
   final double confidence;
 
@@ -154,9 +155,21 @@ class AutoResolvedHistoryRepository {
   const AutoResolvedHistoryRepository(this.database, {required this.namespace});
 
   List<AutoResolvedHistoryEntry> fetchAll({int limit = 200}) {
+    final hasCapturedMessages = database.db
+        .select(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sms_captured_messages'",
+        )
+        .isNotEmpty;
     final rows = database.db.select(
-      'SELECT * FROM local_auto_resolved_history WHERE namespace=? '
-      'ORDER BY auto_resolved_at DESC, id LIMIT ?',
+      hasCapturedMessages
+          ? '''SELECT h.*, COALESCE(h.source_body, s.body) AS source_body
+             FROM local_auto_resolved_history h
+             LEFT JOIN sms_captured_messages s
+               ON s.namespace=h.namespace AND s.id=h.source_key
+             WHERE h.namespace=?
+             ORDER BY h.auto_resolved_at DESC, h.id LIMIT ?'''
+          : 'SELECT * FROM local_auto_resolved_history WHERE namespace=? '
+                'ORDER BY auto_resolved_at DESC, id LIMIT ?',
       [namespace, limit],
     );
     return rows.map(AutoResolvedHistoryEntry.fromRow).toList(growable: false);
@@ -171,8 +184,19 @@ class AutoResolvedHistoryRepository {
   }
 
   AutoResolvedHistoryEntry? findById(String id) {
+    final hasCapturedMessages = database.db
+        .select(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sms_captured_messages'",
+        )
+        .isNotEmpty;
     final rows = database.db.select(
-      'SELECT * FROM local_auto_resolved_history WHERE namespace=? AND id=? LIMIT 1',
+      hasCapturedMessages
+          ? '''SELECT h.*, COALESCE(h.source_body, s.body) AS source_body
+             FROM local_auto_resolved_history h
+             LEFT JOIN sms_captured_messages s
+               ON s.namespace=h.namespace AND s.id=h.source_key
+             WHERE h.namespace=? AND h.id=? LIMIT 1'''
+          : 'SELECT * FROM local_auto_resolved_history WHERE namespace=? AND id=? LIMIT 1',
       [namespace, id],
     );
     return rows.isEmpty ? null : AutoResolvedHistoryEntry.fromRow(rows.single);

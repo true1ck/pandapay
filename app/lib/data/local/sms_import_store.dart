@@ -795,6 +795,7 @@ class SmsImportStore {
       occurredAt: occurredAt.toIso8601String(),
       instrument: instrumentWire ?? instrument.wireValue,
       accountLast4: accountLast4,
+      sourceBody: item.body,
       confidence: score,
       autoResolvedAt: DateTime.now().millisecondsSinceEpoch,
     );
@@ -869,6 +870,7 @@ class SmsImportStore {
       instrument: payload['instrument'] as String?,
       accountLast4:
           payload['accountLast4'] as String? ?? payload['last4'] as String?,
+      sourceBody: item.body,
       confidence: score,
       autoResolvedAt: DateTime.now().millisecondsSinceEpoch,
     );
@@ -905,6 +907,7 @@ class SmsImportStore {
       instrument: payload['instrument'] as String?,
       accountLast4:
           payload['accountLast4'] as String? ?? payload['last4'] as String?,
+      sourceBody: item.body,
       confidence: score,
       autoResolvedAt: DateTime.now().millisecondsSinceEpoch,
     );

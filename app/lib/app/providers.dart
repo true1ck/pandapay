@@ -6183,8 +6183,24 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       try {
         final status = await repo.fetchAiJobStatus(cleanId);
         if (status == null) {
-          // The first submission may have been interrupted before acceptance.
-          // Retry only that gap under the same idempotent source key.
+          // Recover only the crash window where local capture persisted but
+          // the initial POST was never acknowledged. A completed/failed local
+          // result must never be re-submitted just because the server record
+          // is temporarily missing; successful empty-fact decisions are still
+          // completed decisions and should not spend provider tokens again.
+          if (item.aiStatus != AiReviewStatus.notChecked) {
+            if (item.aiStatus == AiReviewStatus.queued ||
+                item.aiStatus == AiReviewStatus.processing) {
+              changed =
+                  await reviewRepo.updateAiStatus(
+                    item.id,
+                    AiReviewStatus.unavailable,
+                    failureReason: 'job_not_found',
+                  ) ||
+                  changed;
+            }
+            continue;
+          }
           final jobId = await repo.submitAiJob(
             sourceKey: cleanId,
             sender: item.sender,

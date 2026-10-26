@@ -1,15 +1,18 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/auto_resolved_history_repository.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sms_auto_resolution_controller.dart';
 import 'package:pandapay/data/local/sms_import_store.dart';
+import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/local/sms_learning_feedback.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/data/past_bill_receipts.dart';
+import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -166,6 +169,7 @@ void main() {
       expect(entry.amountPaise, 42000);
       expect(entry.categorySlug, 'dining');
       expect(entry.categoryName, 'Dining');
+      expect(entry.sourceBody, item.body);
       expect(entry.confidence, result.score);
       expect(entry.isUserModified, isFalse);
     },
@@ -183,6 +187,42 @@ void main() {
     expect(replay.outcome, SmsAiResolutionOutcome.autoResolved);
     expect(transactions(), hasLength(1));
     expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 1);
+  });
+
+  test('older auto-resolved receipts recover their captured SMS body', () {
+    final item = reviewItem();
+    final capturedKey = smsSourceKey(ns, item.sender, item.body);
+    SmsIntakeRepository(db).remember(
+      ns,
+      QueuedSms(
+        sender: item.sender,
+        body: item.body,
+        receivedAt: item.receivedAt,
+      ),
+    );
+    AutoResolvedHistoryRepository(db, namespace: ns).record(
+      AutoResolvedHistoryEntry(
+        id: 'ai:$capturedKey',
+        namespace: ns,
+        sourceKey: capturedKey,
+        sender: item.sender,
+        resolvedKind: 'transaction',
+        title: 'Swiggy',
+        amountPaise: 42000,
+        categorySlug: 'dining',
+        occurredAt: item.receivedAt.toIso8601String(),
+        confidence: 0.95,
+        autoResolvedAt: 1,
+      ),
+    );
+
+    expect(
+      AutoResolvedHistoryRepository(
+        db,
+        namespace: ns,
+      ).fetchAll().single.sourceBody,
+      item.body,
+    );
   });
 
   test('multiple actionable facts stay reviewable until all can be filed', () {
@@ -560,6 +600,43 @@ void main() {
       expect(SmsLearningFeedback(db, namespace: ns).loadRulesSync(), {
         'SWIGGY': 'groceries',
       });
+    },
+  );
+
+  test(
+    'editTransaction updates the local transaction and receipt together',
+    () async {
+      final item = reviewItem();
+      insertReviewRow(item);
+      importStore.resolveAiSuggestions(ns, item, [swiggySuggestion()]);
+      final entry = AutoResolvedHistoryRepository(
+        db,
+        namespace: ns,
+      ).fetchAll().single;
+      final editedDate = DateTime(2026, 10, 23, 14, 30);
+
+      await controller().editTransaction(
+        entry,
+        merchantName: 'Swiggy Instamart',
+        amount: Money.fromRupees(515.25),
+        occurredAt: editedDate,
+      );
+
+      final transaction = transactions().single;
+      expect(transaction['merchant_name'], 'Swiggy Instamart');
+      expect(transaction['amount_inr'], 515.25);
+      expect(
+        DateTime.parse(transaction['occurred_at'] as String).toUtc(),
+        editedDate.toUtc(),
+      );
+      final updated = AutoResolvedHistoryRepository(
+        db,
+        namespace: ns,
+      ).fetchAll().single;
+      expect(updated.title, 'Swiggy Instamart');
+      expect(updated.amountPaise, 51525);
+      expect(DateTime.parse(updated.occurredAt).toUtc(), editedDate.toUtc());
+      expect(updated.isUserModified, isTrue);
     },
   );
 
