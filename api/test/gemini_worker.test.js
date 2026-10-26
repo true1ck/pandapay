@@ -248,6 +248,25 @@ test('provider 503 releases the same leased job and preserves retry-after', asyn
   assert.equal(calls[1].body.profileId, 'profile-503');
 });
 
+test('capacity API failure records its stage and does not call Gemini', async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job: {
+      id: 'job-capacity', profileId: 'profile-capacity',
+      leaseToken: 'c'.repeat(64), payload: { body: 'Rs 100 debited' },
+    } });
+    if (url.endsWith('/ai/provider/reserve')) return response({ error: 'capacity unavailable' }, 503);
+    calls.push({ url, body: JSON.parse(options.body) });
+    return response({ jobStatus: 'queued' });
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: { classify: async () => assert.fail('Gemini must not run without capacity') },
+  });
+  assert.equal(result.retried, true);
+  assert.equal(calls[0].body.reason, 'provider_capacity_unavailable');
+});
+
 test('missing Gemini key fails before opening a provider request', async () => {
   let called = false;
   const provider = new GeminiProvider({

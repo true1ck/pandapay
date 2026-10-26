@@ -682,7 +682,13 @@ function estimateProviderTokens(jobs) {
 async function reserveProviderCapacity({ jobs, apiBaseUrl, workerToken, fetchImpl, waitImpl, heartbeat }) {
   const estimatedTokens = estimateProviderTokens(jobs);
   for (;;) {
-    const permit = await jsonRequest(fetchImpl, `${apiBaseUrl}/ai/provider/reserve`, workerToken, { estimatedTokens });
+    let permit;
+    try {
+      permit = await jsonRequest(fetchImpl, `${apiBaseUrl}/ai/provider/reserve`, workerToken, { estimatedTokens });
+    } catch (error) {
+      error.capacityCheckFailed = true;
+      throw error;
+    }
     if (permit.allowed === true) return permit;
     if (permit.dailyLimitReached === true) {
       throw new GeminiProviderError('Gemini daily Free-tier request limit reached', {
@@ -962,7 +968,10 @@ async function runWorkerOnce({
       profileId: job.profileId,
       leaseToken: job.leaseToken,
       ...(retryable ? {
-        reason: 'provider_retry',
+        reason: error?.capacityCheckFailed ? 'provider_capacity_unavailable'
+          : error?.status === 429 ? 'provider_rate_limited'
+            : error instanceof GeminiProviderError && /daily Free-tier request limit/.test(error.message)
+              ? 'provider_daily_limit' : 'provider_retry',
         ...(Number.isFinite(error.retryAfterMs) ? { retryAfterMs: error.retryAfterMs } : {}),
       } : { reason: error instanceof GeminiProviderError ? 'invalid_provider_output' : 'invalid_result' }),
     });

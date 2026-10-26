@@ -496,7 +496,7 @@ test('ordinary device replay cannot reopen a terminal failed job', async () => {
   assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 1);
 });
 
-test('explicit device retry reopens one failed job under the quota and same identity', async () => {
+test('explicit device retry reopens one failed job without consuming another quota slot', async () => {
   const client = makeUserClient();
   const first = await geminiQueue.acceptOneJob(client, PROFILE_A, {
     sourceKey: SOURCE_KEY,
@@ -520,8 +520,25 @@ test('explicit device retry reopens one failed job under the quota and same iden
   assert.equal(job.attempts, 0);
   assert.equal(job.payload.body, BILL_BODY);
   assert.equal(client.state.jobs.size, 1);
-  assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 2);
+  assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), 1);
   assert.equal(client.state.events.filter((event) => event.event_type === 'requeued').length, 1);
+});
+
+test('explicit failed-job retry still works after the daily admission quota is exhausted', async () => {
+  const client = makeUserClient();
+  const first = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY,
+  });
+  await geminiQueue.failJob(client, first.jobId, PROFILE_A, 'provider_failure');
+  client.state.quota.set(`${PROFILE_A}:${todayKey()}`, geminiQueue.DAILY_QUOTA);
+
+  const retry = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY, retryFailed: true,
+  });
+  assert.equal(retry.accepted, true);
+  assert.equal(retry.jobId, first.jobId);
+  assert.equal(client.state.jobs.get(first.jobId).status, 'queued');
+  assert.equal(client.state.quota.get(`${PROFILE_A}:${todayKey()}`), geminiQueue.DAILY_QUOTA);
 });
 
 test('sensitive payloads are refused before any job or quota write', async () => {

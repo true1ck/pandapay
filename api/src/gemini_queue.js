@@ -62,12 +62,8 @@ async function acceptOneJob(client, profileId, {
   );
   if (existing) {
     if (existing.status === 'failed' && retryFailed) {
-      if (!(await withinDailyQuota(client, profileId))) {
-        return { accepted: false, reason: 'daily_quota_exhausted' };
-      }
-      if (!(await bumpDailyQuota(client, profileId))) {
-        return { accepted: false, reason: 'daily_quota_exhausted' };
-      }
+      // A failed job already consumed this source's daily admission. An
+      // explicit device retry reuses that row and must not spend another slot.
       const smsFacts = require('./sms_facts');
       await client.query(
         `UPDATE ai_jobs
