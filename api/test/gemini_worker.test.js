@@ -102,6 +102,17 @@ test('few-shot scenarios are exported and rendered into the prompt', () => {
   assert.ok(prompt.length < 30000, `prompt length ${prompt.length}`);
 });
 
+test('correction prompt includes only contract findings and requires safe abstention', () => {
+  const prompt = buildGeminiPrompt(
+    { payload: { sender: 'BANK', body: 'synthetic fixture' } },
+    { repairErrors: ['facts[0]: merchant is required'] },
+  );
+  assert.match(prompt, /CORRECTION PASS/);
+  assert.match(prompt, /facts may be \[\]/);
+  assert.match(prompt, /facts\[0\]: merchant is required/);
+  assert.doesNotMatch(prompt, /previous structured output/i);
+});
+
 test('every few-shot output satisfies the fact contract the result route enforces', () => {
   for (const example of FEW_SHOT_EXAMPLES) {
     const validation = smsFacts.validateFactSet(example.output.facts);
@@ -195,6 +206,84 @@ test('worker posts the leased result with the profile and lease token', async ()
     batchId: calls[1].body.batchId, batchSize: 1,
   });
   assert.match(calls[1].body.batchId, /^[0-9a-f-]{36}$/i);
+});
+
+test('worker repairs an invalid fact once and reserves capacity for the correction call', async () => {
+  const calls = [];
+  const job = {
+    id: 'repair-job', profileId: 'profile-1', leaseToken: 'c'.repeat(64),
+    payload: {
+      sender: 'BANK', body: 'Rs 100 debited from your account on 15-Apr-2026',
+      occurredAt: '2026-04-15T00:00:00.000Z',
+    },
+  };
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job });
+    return response({ jobStatus: 'done' });
+  };
+  const invalid = {
+    decision: { topic: 'upi_debit', shouldConsider: true, rejectionReason: 'none' },
+    facts: [{
+      factType: 'posted_movement',
+      payload: {
+        amountRole: 'posted', entryKind: 'spend', amountInr: 100,
+        occurredAt: '2026-04-15T00:00:00.000Z', category: 'other',
+      },
+    }],
+  };
+  const corrected = {
+    ...invalid,
+    facts: [{ ...invalid.facts[0], payload: { ...invalid.facts[0].payload, merchant: 'Merchant' } }],
+  };
+  const repairs = [];
+  let reservations = 0;
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: {
+      classify: async (_job, options) => {
+        repairs.push(options?.repairErrors || null);
+        return repairs.length === 1 ? invalid : corrected;
+      },
+    },
+    reserveCapacity: async () => { reservations += 1; return { allowed: true }; },
+  });
+  assert.equal(result.completed, true);
+  assert.equal(reservations, 2);
+  assert.equal(repairs.length, 2);
+  assert.match(repairs[1][0], /merchant/);
+  const posted = calls.find((call) => call.url.endsWith('/result'));
+  assert.equal(posted.body.facts[0].payload.merchant, 'Merchant');
+});
+
+test('worker keeps the decision and safely omits facts after one invalid correction', async () => {
+  const calls = [];
+  const job = {
+    id: 'abstain-job', profileId: 'profile-1', leaseToken: 'd'.repeat(64),
+    payload: { sender: 'BANK', body: 'Rs 100 debited from your account' },
+  };
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job });
+    return response({ jobStatus: 'done' });
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: {
+      classify: async (_job, options) => ({
+        decision: { topic: 'upi_debit', shouldConsider: true, rejectionReason: 'none' },
+        facts: options?.repairErrors ? [] : [{
+          factType: 'posted_movement',
+          payload: { amountRole: 'posted', entryKind: 'spend', amountInr: 100 },
+        }],
+      }),
+    },
+    reserveCapacity: async () => ({ allowed: true }),
+  });
+  assert.equal(result.completed, true);
+  const posted = calls.find((call) => call.url.endsWith('/result'));
+  assert.deepEqual(posted.body.facts, []);
+  assert.equal(posted.body.decision.topic, 'upi_debit');
 });
 
 test('provider 429 releases the same leased job for retry', async () => {

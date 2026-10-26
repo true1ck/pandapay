@@ -124,6 +124,7 @@ function registerAiQueueRoutes(app, {
         const rows = await client.query(
           `SELECT id, status, result, attempts, created_at, updated_at,
                   payload->>'failReason' AS fail_reason,
+                  payload->'failureDetails' AS failure_details,
                   (SELECT payload->>'reason' FROM ai_events
                     WHERE job_id = ai_jobs.id AND event_type = 'provider_retry'
                     ORDER BY created_at DESC LIMIT 1) AS last_retry_reason
@@ -160,8 +161,12 @@ function registerAiQueueRoutes(app, {
         attempts: job.attempts,
         ...((job.status === 'failed' ? job.fail_reason : job.last_retry_reason || job.fail_reason)
           ? { failureReason: job.status === 'failed'
-            ? job.fail_reason
+            ? [job.fail_reason, ...(Array.isArray(job.failure_details) ? job.failure_details : [])]
+              .filter(Boolean).join(': ')
             : (job.last_retry_reason || job.fail_reason) }
+          : {}),
+        ...(job.status === 'failed' && Array.isArray(job.failure_details) && job.failure_details.length > 0
+          ? { failureDetails: job.failure_details }
           : {}),
         createdAt: job.created_at,
         updatedAt: job.updated_at,

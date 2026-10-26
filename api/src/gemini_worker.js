@@ -14,6 +14,8 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 const crypto = require('crypto');
+const smsFacts = require('./sms_facts');
+const { verifyModelFacts } = require('./ai_fact_evidence');
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 const DEFAULT_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-flash-lite-latest';
 const DEFAULT_INTERVAL_MS = Number(process.env.AI_WORKER_INTERVAL_MS || 2000);
@@ -638,7 +640,7 @@ function parseModelJson(text) {
   }
 }
 
-function buildGeminiPrompt(job, { batch = false, includeExamples = true } = {}) {
+function buildGeminiPrompt(job, { batch = false, includeExamples = true, repairErrors = null } = {}) {
   const payload = job?.payload || {};
   return [
     'Evaluate this Indian SMS for a personal finance app. First make a cognitive tracking decision, then extract facts if trackable.',
@@ -656,6 +658,10 @@ function buildGeminiPrompt(job, { batch = false, includeExamples = true } = {}) 
     'For amountRole, include its matching amount and date: posted=amountInr/occurredAt, due_total=amountDueInr/dueDate, due_minimum=minimumDueInr/dueDate, outstanding=outstandingInr/asOfAt, ceiling=limitInr/asOfAt, proposed=proposedAmountInr/proposedAt.',
     'A posted spend also requires merchant. A mandate limit is valid only for registered status. Never omit required fields or invent values; if any required value is absent or uncertain, leave this SMS\'s facts array empty.',
     'Set isComplete=true only when every essential attribute for the fact type is present, and confidence to your extraction certainty from 0.0 to 1.0.',
+    ...(Array.isArray(repairErrors) && repairErrors.length > 0 ? [
+      'CORRECTION PASS: Your previous structured facts did not satisfy the app contract. Re-evaluate the SMS and return a corrected decision and facts. Keep only facts fully supported by the SMS. If a required value is absent or uncertain, omit that fact (facts may be []). Do not guess to satisfy validation.',
+      `Validator findings: ${repairErrors.slice(0, 8).join(' | ')}`,
+    ] : []),
     'Do not treat a bill total, credit limit, or mandate ceiling as a posted movement.',
     ...(includeExamples ? [renderFewShots()] : []),
     `Sender: ${String(payload.sender || '')}`,
@@ -742,7 +748,7 @@ class GeminiProvider {
     this.endpointBase = endpointBase.replace(/\/$/, '');
   }
 
-  async classify(job) {
+  async classify(job, { repairErrors = null } = {}) {
     if (!this.apiKey && (!this.apiKeys || this.apiKeys.length === 0)) {
       throw new GeminiProviderError('GEMINI_API_KEY is not configured', { retryable: false });
     }
@@ -761,7 +767,7 @@ class GeminiProvider {
               systemInstruction: {
                 parts: [{ text: UNIVERSAL_SYSTEM_INSTRUCTION }],
               },
-              contents: [{ role: 'user', parts: [{ text: buildGeminiPrompt(job) }] }],
+              contents: [{ role: 'user', parts: [{ text: buildGeminiPrompt(job, { repairErrors }) }] }],
               generationConfig: {
                 responseMimeType: 'application/json',
                 responseSchema: UNIVERSAL_RESPONSE_SCHEMA,
@@ -994,29 +1000,40 @@ async function runWorkerOnce({
     });
     return { jobId: job.id, [retryable ? 'retried' : 'failed']: true, outcome };
   };
-  try {
+  const heartbeat = async (leasedJobs) => {
+    for (const job of leasedJobs) {
+      const renewed = await jsonRequest(
+        fetchImpl,
+        `${base}/ai/jobs/${encodeURIComponent(job.id)}/heartbeat`,
+        workerToken,
+        { profileId: job.profileId, leaseToken: job.leaseToken },
+      );
+      if (renewed.renewed !== true) {
+        const error = new Error('worker lease heartbeat was refused');
+        error.status = 409;
+        throw error;
+      }
+    }
+  };
+  const reserveFor = async (leasedJobs) => {
     if (typeof reserveCapacity === 'function') {
-      await reserveCapacity({ jobs, estimatedTokens: estimateProviderTokens(jobs) });
-    } else {
-      await reserveProviderCapacity({
-        jobs, apiBaseUrl: base, workerToken, fetchImpl, waitImpl,
-        heartbeat: async (leasedJobs) => {
-          for (const job of leasedJobs) {
-            const renewed = await jsonRequest(
-              fetchImpl,
-              `${base}/ai/jobs/${encodeURIComponent(job.id)}/heartbeat`,
-              workerToken,
-              { profileId: job.profileId, leaseToken: job.leaseToken },
-            );
-            if (renewed.renewed !== true) {
-              const error = new Error('worker lease heartbeat was refused');
-              error.status = 409;
-              throw error;
-            }
-          }
-        },
+      return reserveCapacity({
+        jobs: leasedJobs,
+        estimatedTokens: estimateProviderTokens(leasedJobs),
       });
     }
+    return reserveProviderCapacity({
+      jobs: leasedJobs, apiBaseUrl: base, workerToken, fetchImpl, waitImpl, heartbeat,
+    });
+  };
+  const validationErrors = (facts, job) => {
+    const schema = smsFacts.validateFactSet(facts);
+    if (!schema.valid) return schema.errors;
+    const evidence = verifyModelFacts(facts, job.payload || {});
+    return evidence.valid ? [] : evidence.errors;
+  };
+  try {
+    await reserveFor(jobs);
     const byId = jobs.length > 1
       ? await provider.classifyBatch(jobs)
       : new Map([[jobs[0].id, await provider.classify(jobs[0])]]);
@@ -1027,9 +1044,27 @@ async function runWorkerOnce({
         continue;
       }
       try {
-        const itemResult = byId.get(job.id);
-        const facts = Array.isArray(itemResult) ? itemResult : (itemResult?.facts || []);
-        const decision = Array.isArray(itemResult) ? null : (itemResult?.decision || null);
+        let itemResult = byId.get(job.id);
+        let facts = Array.isArray(itemResult) ? itemResult : (itemResult?.facts || []);
+        let decision = Array.isArray(itemResult) ? null : (itemResult?.decision || null);
+        let errors = validationErrors(facts, job);
+        if (errors.length > 0 && typeof provider.classify === 'function') {
+          try {
+            // One bounded correction call: send only contract error text, then
+            // re-evaluate the original redacted SMS. Reserve it as a distinct
+            // provider request so minute pacing remains accurate.
+            await reserveFor([job]);
+            itemResult = await provider.classify(job, { repairErrors: errors });
+            facts = itemResult?.facts || [];
+            errors = validationErrors(facts, job);
+            if (errors.length === 0 && itemResult?.decision) decision = itemResult.decision;
+          } catch (_) {
+            // Keep the tracking decision even if correction itself is
+            // unavailable; invalid facts are never allowed to affect money.
+            errors = ['correction_unavailable'];
+          }
+        }
+        if (errors.length > 0) facts = [];
         const result = await jsonRequest(fetchImpl, `${base}/ai/jobs/${encodeURIComponent(job.id)}/result`, workerToken, {
           decision,
           facts,

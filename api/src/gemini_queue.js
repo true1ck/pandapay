@@ -349,7 +349,15 @@ async function failJob(client, jobId, profileId, reason, extra = {}) {
     `UPDATE ai_jobs
         SET status = 'failed', payload = $2, lease_token = NULL, lease_expires_at = NULL, updated_at = now()
       WHERE id = $1`,
-    [jobId, JSON.stringify({ purged: true, failReason: reason })],
+    [jobId, JSON.stringify({
+      purged: true,
+      failReason: reason,
+      // Validator messages contain field names and contract rules only; never
+      // persist model output or SMS text in a failed job's diagnostic.
+      ...(Array.isArray(extra.details)
+        ? { failureDetails: extra.details.filter((item) => typeof item === 'string').slice(0, 5) }
+        : {}),
+    })],
   );
   return updated.rowCount > 0;
 }

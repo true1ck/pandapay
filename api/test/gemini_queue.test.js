@@ -889,7 +889,11 @@ test('result fact validation failure purges the server body without duplicating 
     details: validation.errors.slice(0, 5),
   });
   assert.equal(job.status, 'failed');
-  assert.deepEqual(job.payload, { purged: true, failReason: 'invalid_result_facts' });
+  assert.deepEqual(job.payload, {
+    purged: true,
+    failReason: 'invalid_result_facts',
+    failureDetails: validation.errors.slice(0, 5),
+  });
   assert.equal(client.state.reviews.length, 0);
   assert.equal(
     client.state.events.some((event) => event.event_type === 'failed'),
@@ -1409,6 +1413,34 @@ test('terminal source status shows the terminal failure instead of a stale retry
   assert.equal(response.status, 200);
   assert.equal(response.body.status, 'failed');
   assert.equal(response.body.failureReason, 'invalid_provider_output');
+});
+
+test('terminal source status exposes schema field diagnostics without model or SMS content', async () => {
+  const h = harness({});
+  await h.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY },
+  });
+  const query = h.client.query;
+  h.client.query = async (sql, params) => {
+    if (sql.includes("payload->>'failReason' AS fail_reason") && sql.includes('last_retry_reason')) {
+      return { rows: [{
+        id: 'failed-job', status: 'failed', result: null, attempts: 1,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        fail_reason: 'invalid_result_facts', failure_details: ['facts[0]: merchant is required'],
+        last_retry_reason: null,
+      }] };
+    }
+    return query(sql, params);
+  };
+
+  const response = await h.call('/ai/jobs/source/:sourceKey', {
+    userId: PROFILE_A,
+    params: { sourceKey: SOURCE_KEY },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.failureReason, 'invalid_result_facts: facts[0]: merchant is required');
+  assert.equal(JSON.stringify(response.body).includes(BILL_BODY), false);
 });
 
 // Phase 6: Admin monitoring & Learning loop
