@@ -108,9 +108,14 @@ function fakeClient({ contributionsOptIn = true } = {}) {
         });
         return { rows: [] };
       }
+      if (sql.includes('pg_advisory_xact_lock')) return { rows: [] };
+      if (sql.startsWith('SELECT id FROM public.sms_learning_examples')) {
+        const key = params.join('|');
+        return { rows: learningExampleKeys.has(key) ? [{ id: 'ex-1' }] : [] };
+      }
       if (sql.startsWith('INSERT INTO sms_learning_feedback') || sql.includes('sms_learning_examples')) {
         if (sql.includes('sms_learning_examples')) {
-          const key = [params[0], params[1], params[3], params[4]].join('|');
+          const key = [params[9], params[1], params[3], params[4]].join('|');
           if (learningExampleKeys.has(key)) return { rows: [], rowCount: 0 };
           learningExampleKeys.add(key);
         }

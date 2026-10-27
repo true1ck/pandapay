@@ -158,12 +158,33 @@ async function recordLearningExample(client, {
     return { recorded: 0, disabled: false, error: 'unable_to_synthesize_template' };
   }
 
+  // Production can have an older learning table without the intended unique
+  // index. Serialize this exact example and check for it before inserting so
+  // retries stay idempotent even on that schema. ON CONFLICT without a target
+  // still handles any available unique index without requiring one to exist.
+  const dedupValues = [userHash, fingerprint, family, cleanTemplate];
+  const dedupLock = crypto.createHash('sha256')
+    .update(JSON.stringify(dedupValues)).digest('hex');
+  await client.query(
+    'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
+    [dedupLock],
+  );
+  const existing = await client.query(
+    `SELECT id FROM public.sms_learning_examples
+      WHERE user_hash = $1 AND sender_fingerprint = $2
+        AND fact_family = $3 AND template_text = $4 LIMIT 1`,
+    dedupValues,
+  );
+  if (existing.rows?.length) {
+    return { recorded: 0, disabled: false, userHash, issuerPrefix, exampleId: null };
+  }
+
   const insertRes = await client.query(
     `INSERT INTO public.sms_learning_examples (
        profile_id, sender_fingerprint, issuer_prefix, fact_family, template_text,
        sample_body, extracted_fields, is_negative, negative_reason, user_hash
      ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)
-     ON CONFLICT (user_hash, sender_fingerprint, fact_family, template_text) DO NOTHING
+     ON CONFLICT DO NOTHING
      RETURNING id`,
     [
       profileId,

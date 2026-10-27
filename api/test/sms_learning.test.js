@@ -183,6 +183,45 @@ test('opt-out consent check for recordLearningExample', async () => {
   }
 });
 
+test('learning feedback writes once on a database without the four-column conflict index', async () => {
+  const rows = [];
+  let inserts = 0;
+  const client = {
+    async query(sql, params) {
+      if (sql.includes('FROM profiles')) return { rows: [{ contributions_opt_in: true }] };
+      if (sql.includes('pg_advisory_xact_lock')) return { rows: [] };
+      if (sql.startsWith('SELECT id FROM public.sms_learning_examples')) {
+        return { rows: rows.length ? [{ id: rows[0].id }] : [] };
+      }
+      if (sql.includes('INSERT INTO public.sms_learning_examples')) {
+        if (/ON CONFLICT\s*\(/.test(sql)) {
+          const error = new Error('no matching unique constraint');
+          error.code = '42P10';
+          throw error;
+        }
+        inserts++;
+        rows.push({ id: 'example-1', params });
+        return { rows: [{ id: 'example-1' }] };
+      }
+      throw new Error(`unexpected query: ${sql}`);
+    },
+  };
+  const input = {
+    profileId: '00000000-0000-0000-0000-000000000001',
+    sender: 'VM-HDFCBK-S',
+    factFamily: 'ignore_noise',
+    sampleBody: 'Your offer is available',
+    hmacKey: VALID_KEY,
+  };
+
+  const first = await learning.recordLearningExample(client, input);
+  const second = await learning.recordLearningExample(client, input);
+  assert.equal(first.recorded, 1);
+  assert.equal(second.recorded, 0);
+  assert.equal(second.error, undefined);
+  assert.equal(inserts, 1);
+});
+
 test('redaction of PII (card numbers, phone numbers, urls, emails)', async () => {
   const rawText = 'Paid Rs 1,500 for order at https://shop.example.com/checkout?ref=abc to merchant@example.in. Contact +919876543210 or 09876543210. Card 4111 2222 3333 4567 debited.';
   const redacted = learning.redactBody(rawText);
