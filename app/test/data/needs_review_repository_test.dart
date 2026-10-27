@@ -2559,8 +2559,8 @@ void main() {
       expect(remainingAfterSync, isNot(contains('spam-loan-limit')));
       expect(remainingAfterSync, isNot(contains('spam-betting')));
 
-      // Version is updated to 16
-      expect(prefs.getInt('pandapay.needs_review_noise_version'), 16);
+      // Version is updated to 19
+      expect(prefs.getInt('pandapay.needs_review_noise_version'), 19);
 
       db.close();
     },

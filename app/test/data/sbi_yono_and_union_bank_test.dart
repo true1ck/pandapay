@@ -1,10 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/financial_store.dart';
+import 'package:pandapay/data/local/sms_import_store.dart';
+import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/sms_gate_filter.dart';
-import 'package:pandapay/data/local/financial_store.dart';
+import 'package:pandapay/features/sms_import/sms_background_queue.dart';
+import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 import 'package:pandapay/data/user_cards_repository.dart'
-    show TxnEntryKind, TxnInstrument;
+    show TransactionEntry, TxnEntryKind, TxnInstrument;
 
 void main() {
   group('Real Device Union Bank & SBI / YONO Parsing Verification', () {
@@ -12,6 +18,7 @@ void main() {
       const msg =
           'A/c *8565 Credited for Rs:2900.00 on 26-10-2026 17:48:45 by Mob Bk ref no 629947468298 Avl Bal Rs:4625.92.Never Share OTP/PIN/CVV-Union Bank of India';
       
+      expect(capturesFinancialSms(msg, sender: 'VA-UNIONB-S'), isTrue);
       expect(LocalSmsParser.isBankAccountMessage(msg, 'VA-UNIONB-S'), isTrue);
 
       final parsed = LocalSmsParser.parse(
@@ -27,6 +34,8 @@ void main() {
       expect(parsed.transaction, isNotNull);
       expect(parsed.transaction!.amount.paise, equals(290000));
       expect(parsed.transaction!.accountLast4, equals('8565'));
+      print('Union Bank credit entryKind: ${parsed.transaction!.entryKind}');
+      print('Union Bank credit merchantName: ${parsed.transaction!.merchantName}');
       expect(parsed.transaction!.entryKind, isNot(equals(TxnEntryKind.investment)));
       expect(parsed.transaction!.merchantName, isNot(equals('Investment')));
     });
@@ -48,6 +57,8 @@ void main() {
       expect(parsed!.transaction, isNotNull);
       expect(parsed.transaction!.amount.paise, equals(50000));
       expect(parsed.transaction!.accountLast4, equals('8565'));
+      print('Union Bank credit entryKind: ${parsed.transaction!.entryKind}');
+      print('Union Bank credit merchantName: ${parsed.transaction!.merchantName}');
       expect(parsed.transaction!.entryKind, isNot(equals(TxnEntryKind.investment)));
     });
 
@@ -115,6 +126,58 @@ void main() {
       expect(parsed.transaction!.accountLast4, equals('1234'));
       expect(parsed.transaction!.merchantName, equals('Airtel Postpaid'));
       expect(parsed.transaction!.entryKind, equals(TxnEntryKind.spend));
+    });
+
+    test('Upgrade scan re-processes historical Union Bank credit previously marked final under older parser version', () {
+      final db = AppDatabase.forTesting(sqlite3.openInMemory());
+      final store = FinancialStore(db);
+      final intake = SmsIntakeRepository(db);
+      final importStore = SmsImportStore(store);
+      const ns = 'user:test-upgrade';
+
+      const msg =
+          'A/c *8565 Credited for Rs:2900.00 on 26-10-2026 17:48:45 by Mob Bk ref no 629947468298 Avl Bal Rs:4625.92.Never Share OTP/PIN/CVV-Union Bank of India';
+      final queued = QueuedSms(
+        sender: 'VA-UNIONB-S',
+        body: msg,
+        receivedAt: DateTime(2026, 10, 26, 17, 48),
+      );
+
+      final sourceKey = smsSourceKey(ns, queued.sender, queued.body);
+      // Simulate historical capture under parser version 17
+      intake.recordDecision(
+        ns,
+        sourceKey: sourceKey,
+        decision: 'financial_auto',
+        state: 'final',
+        reasonCode: 'investment_movement',
+        receivedAt: queued.receivedAt.millisecondsSinceEpoch,
+        parserVersion: '17',
+      );
+      intake.remember(ns, queued);
+      intake.acknowledge(ns, sourceKey);
+
+      // Verify that under old logic wasProcessed would be true
+      expect(intake.wasProcessed(ns, sourceKey), isTrue);
+      // Under new version check, wasProcessed returns false for upgraded parser
+      expect(intake.wasProcessed(ns, sourceKey, parserVersion: LocalSmsParser.version), isFalse);
+
+      // Now run batch capture with v19 parser
+      importStore.captureBatch(ns, [queued]);
+
+      // The transaction must now be saved as provisional in financial_entities!
+      final txns = store.entities(ns, 'transactions');
+      expect(txns, isNotEmpty);
+      expect(txns.first['source_key'], equals(sourceKey));
+      final entry = TransactionEntry.fromJson(txns.first);
+      expect(entry.amount.paise, equals(290000));
+      expect(entry.accountLast4, equals('8565'));
+      expect(entry.entryKind, isNot(equals(TxnEntryKind.investment)));
+
+      // And sms_source_decisions must now reflect version 19
+      final decision = intake.decision(ns, sourceKey);
+      expect(decision, isNotNull);
+      expect(decision!.parserVersion, equals(LocalSmsParser.version.toString()));
     });
   });
 }

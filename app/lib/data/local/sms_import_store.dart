@@ -103,8 +103,12 @@ class SmsImportStore {
     db.execute('SAVEPOINT sms_capture');
     try {
       final sourceKey = smsSourceKey(namespace, message.sender, message.body);
-      if (intake.wasProcessed(namespace, sourceKey) ||
-          store.hasReceipt(namespace, sourceKey)) {
+      if (store.hasReceipt(namespace, sourceKey) ||
+          intake.wasProcessed(
+            namespace,
+            sourceKey,
+            parserVersion: LocalSmsParser.version,
+          )) {
         intake.remember(namespace, message);
         db.execute('RELEASE SAVEPOINT sms_capture');
         return;
@@ -128,7 +132,11 @@ class SmsImportStore {
         return;
       }
 
-      final key = intake.capture(namespace, message);
+      final key = intake.capture(
+        namespace,
+        message,
+        parserVersion: LocalSmsParser.version,
+      );
       // Always evaluate the built-in/current rule set independently. A
       // candidate in shadow mode may be wrong, so its observation must never
       // become the baseline merely because it matched first.

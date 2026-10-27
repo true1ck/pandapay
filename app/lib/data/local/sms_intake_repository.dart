@@ -171,12 +171,12 @@ class SmsIntakeRepository {
     );
   }
 
-  String capture(String namespace, QueuedSms sms) {
+  String capture(String namespace, QueuedSms sms, {int? parserVersion}) {
     final id = smsSourceKey(namespace, sms.sender, sms.body);
     remember(namespace, sms);
-    if (wasProcessed(namespace, id)) return id;
+    if (wasProcessed(namespace, id, parserVersion: parserVersion)) return id;
     database.db.execute(
-      'INSERT OR IGNORE INTO sms_intake(namespace,id,sender,body,received_at) VALUES (?,?,?,?,?)',
+      'INSERT OR REPLACE INTO sms_intake(namespace,id,sender,body,received_at) VALUES (?,?,?,?,?)',
       [
         namespace,
         id,
@@ -218,11 +218,25 @@ class SmsIntakeRepository {
     );
   }
 
-  bool wasProcessed(String namespace, String id) => database.db.select(
-    'SELECT 1 FROM sms_captured_messages WHERE namespace=? AND id=? AND processed=1 '
-    "UNION ALL SELECT 1 FROM sms_source_decisions WHERE namespace=? AND source_key=? AND state='final'",
-    [namespace, id, namespace, id],
-  ).isNotEmpty;
+  bool wasProcessed(String namespace, String id, {int? parserVersion}) {
+    if (parserVersion != null) {
+      final rows = database.db.select(
+        "SELECT parser_version FROM sms_source_decisions WHERE namespace=? AND source_key=? AND state='final' LIMIT 1",
+        [namespace, id],
+      );
+      if (rows.isNotEmpty) {
+        final ver =
+            int.tryParse(rows.first['parser_version'] as String? ?? '0') ?? 0;
+        return ver >= parserVersion;
+      }
+      return false;
+    }
+    return database.db.select(
+      'SELECT 1 FROM sms_captured_messages WHERE namespace=? AND id=? AND processed=1 '
+      "UNION ALL SELECT 1 FROM sms_source_decisions WHERE namespace=? AND source_key=? AND state='final'",
+      [namespace, id, namespace, id],
+    ).isNotEmpty;
+  }
 
   List<String> capturedBodies(String namespace, {int limit = 500}) => database
       .db
