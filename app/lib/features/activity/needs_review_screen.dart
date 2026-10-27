@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -10,8 +12,10 @@ import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/commitments_repository.dart';
+import '../../data/consents_api.dart';
 import '../../data/local/auto_resolved_history_repository.dart';
 import '../../data/local/sms_facts_outbox.dart';
+import '../../data/local/sms_feedback_outbox.dart';
 import '../../data/local_sms_parser.dart';
 import '../../data/needs_review_repository.dart';
 import '../../data/sms_fact_contract.dart';
@@ -289,6 +293,151 @@ Future<void> _persistSmsFactCorrection(
   } catch (_) {
     outbox.failedOverride(namespace, sourceKey, factIndex);
   }
+}
+
+DateTime? _smsLearningConsentAtCapture(WidgetRef ref) {
+  final consent = ref.read(smsSharedLearningConsentProvider).valueOrNull;
+  if (consent?.granted != true ||
+      consent?.policyVersion != smsSharedLearningPolicyVersion) {
+    return null;
+  }
+  return consent!.grantedAt;
+}
+
+Future<void> _recordReviewedTransactionFeedback(
+  WidgetRef ref, {
+  required NeedsReviewItem item,
+  required DateTime consentGrantedAt,
+  required Map<String, dynamic>? aiFact,
+  required double amountInr,
+  required String? merchant,
+  required String? category,
+  required DateTime occurredAt,
+  required TxnInstrument instrument,
+  required TxnEntryKind entryKind,
+}) async {
+  final sourceKey = _feedbackSourceKey(item.id);
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sourceKey)) return;
+  final rawPayload = aiFact?['payload'];
+  final payload = rawPayload is Map
+      ? Map<String, dynamic>.from(rawPayload)
+      : <String, dynamic>{};
+  const safeOriginalFields = [
+    'amountInr', 'merchant', 'category', 'occurredAt', 'instrument', 'entryKind',
+  ];
+  final originalFields = <String, dynamic>{
+    for (final key in safeOriginalFields)
+      if (payload[key] != null) key: payload[key],
+  };
+  final correctedFields = <String, dynamic>{
+    'amountInr': amountInr,
+    if (merchant != null && merchant.trim().isNotEmpty)
+      'merchant': merchant.trim(),
+    if (category != null && category.trim().isNotEmpty)
+      'categorySlug': category.trim(),
+    'occurredAt': occurredAt.toUtc().toIso8601String(),
+    'instrument': instrument.wireValue,
+    'entryKind': entryKind.wireValue,
+  };
+  bool sameDate(dynamic raw) {
+    final suggested = raw is String ? DateTime.tryParse(raw) : null;
+    return suggested != null && suggested.toUtc() == occurredAt.toUtc();
+  }
+  final matches = payload['amountInr'] is num &&
+      (payload['amountInr'] as num).toDouble() == amountInr &&
+      payload['merchant'] is String &&
+      (payload['merchant'] as String).trim().toLowerCase() ==
+          (merchant ?? '').trim().toLowerCase() &&
+      payload['category'] == category &&
+      sameDate(payload['occurredAt']) &&
+      payload['instrument'] == instrument.wireValue &&
+      payload['entryKind'] == entryKind.wireValue;
+
+  final cache = await ref.read(responseCacheProvider.future);
+  SmsFeedbackOutbox(cache.financialStore.database,
+    namespace: ref.read(cacheNamespaceProvider),
+  ).enqueue(
+    sourceKey: sourceKey,
+    action: matches ? 'confirmed' : 'edited',
+    sender: item.sender,
+    resolvedKind: 'transaction',
+    occurredAt: item.receivedAt.toUtc().toIso8601String(),
+    consentGrantedAt: consentGrantedAt,
+    sampleBody: item.body,
+    originalDecision: {
+      'kind': 'posted_movement',
+      'fields': originalFields,
+    },
+    correctedFields: correctedFields,
+    reason: matches ? null : 'user_saved_reviewed_transaction',
+  );
+  // The transaction has already been saved. Enqueue first, then let the
+  // repository retry the upload without delaying the user's review action.
+  unawaited(
+    ref.read(userCardsRepositoryProvider)?.flushSmsLearningFeedbackQueue() ??
+        Future<int>.value(0),
+  );
+}
+
+Future<void> _recordReviewedBillFeedback(
+  WidgetRef ref, {
+  required NeedsReviewItem item,
+  required DateTime consentGrantedAt,
+  required _BillReviewResult result,
+}) async {
+  final sourceKey = _feedbackSourceKey(item.id);
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sourceKey)) return;
+  final suggestion = item.aiSuggestions
+      ?.where((fact) => fact['factType'] == 'bill_obligation')
+      .firstOrNull;
+  final rawPayload = suggestion?['payload'];
+  final payload = rawPayload is Map
+      ? Map<String, dynamic>.from(rawPayload)
+      : <String, dynamic>{};
+  final dueDate = result.dueOn.toUtc().toIso8601String();
+  final correctedFields = <String, dynamic>{
+    'billerName': result.title,
+    if (result.amount != null) 'amountDueInr': result.amount!.rupees,
+    'dueDate': dueDate,
+    'categorySlug': result.category.name,
+  };
+  final sameAmount = result.amount == null
+      ? payload['amountDueInr'] == null
+      : payload['amountDueInr'] is num &&
+          (payload['amountDueInr'] as num).toDouble() ==
+              result.amount!.rupees;
+  final sameDate = DateTime.tryParse('${payload['dueDate'] ?? ''}')?.toUtc() ==
+      result.dueOn.toUtc();
+  final matches = payload['billerName'] == result.title &&
+      sameAmount &&
+      sameDate &&
+      payload['category'] == result.category.name;
+  final cache = await ref.read(responseCacheProvider.future);
+  SmsFeedbackOutbox(
+    cache.financialStore.database,
+    namespace: ref.read(cacheNamespaceProvider),
+  ).enqueue(
+    sourceKey: sourceKey,
+    action: matches ? 'confirmed' : 'edited',
+    sender: item.sender,
+    resolvedKind: 'bill',
+    occurredAt: item.receivedAt.toUtc().toIso8601String(),
+    consentGrantedAt: consentGrantedAt,
+    sampleBody: item.body,
+    originalDecision: {
+      'kind': 'bill_obligation',
+      'fields': {
+        for (final key in ['billerName', 'amountDueInr', 'dueDate', 'category'])
+          if (payload[key] != null) key: payload[key],
+      },
+    },
+    correctedFields: correctedFields,
+    reason: matches ? null : 'user_saved_reviewed_bill',
+  );
+  unawaited(
+    ref.read(userCardsRepositoryProvider)?.flushSmsLearningFeedbackQueue() ??
+        Future<int>.value(0),
+  );
 }
 
 typedef _BillReviewResult = ({
@@ -833,8 +982,8 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                         _retryingAiReviews
                             ? 'Sending $retryableAiCount failed message${retryableAiCount == 1 ? '' : 's'} for AI review…'
                             : activeAiCount > 0
-                                ? 'AI is reviewing $activeAiCount message${activeAiCount == 1 ? '' : 's'}'
-                                : 'AI review paused · ${pendingItems.length} need review',
+                            ? 'AI is reviewing $activeAiCount message${activeAiCount == 1 ? '' : 's'}'
+                            : 'AI review paused · ${pendingItems.length} need review',
                         style: BambooFonts.ui(
                           12.5,
                           weight: FontWeight.w700,
@@ -1154,6 +1303,30 @@ class _AutoResolvedCard extends ConsumerStatefulWidget {
 class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
   bool _busy = false;
   bool _showSourceSms = false;
+  bool _confirmedThisSession = false;
+
+  Future<void> _confirmDecision() async {
+    if (_busy || _confirmedThisSession) return;
+    setState(() => _busy = true);
+    try {
+      ref
+          .read(smsAutoResolutionControllerProvider)
+          .confirmDecision(widget.entry);
+      ref
+          .read(userCardsRepositoryProvider)
+          ?.flushSmsLearningFeedbackQueue()
+          .ignore();
+      if (mounted) setState(() => _confirmedThisSession = true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   String _dateLabel(AutoResolvedHistoryEntry entry) {
     final showDue =
@@ -1235,6 +1408,10 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
       await ref
           .read(smsAutoResolutionControllerProvider)
           .changeCategory(widget.entry, slug);
+      ref
+          .read(userCardsRepositoryProvider)
+          ?.flushSmsLearningFeedbackQueue()
+          .ignore();
       ref.invalidate(autoResolvedHistoryProvider);
       ref.invalidate(autoResolvedCountProvider);
     } catch (error) {
@@ -1270,6 +1447,10 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
             amount: result.amount,
             occurredAt: result.occurredAt,
           );
+      ref
+          .read(userCardsRepositoryProvider)
+          ?.flushSmsLearningFeedbackQueue()
+          .ignore();
       ref.invalidate(autoResolvedHistoryProvider);
       ref.invalidate(autoResolvedCountProvider);
       ref.invalidate(transactionsProvider);
@@ -1291,6 +1472,10 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
       await ref
           .read(smsAutoResolutionControllerProvider)
           .moveToReview(widget.entry);
+      ref
+          .read(userCardsRepositoryProvider)
+          ?.flushSmsLearningFeedbackQueue()
+          .ignore();
       ref.invalidate(autoResolvedHistoryProvider);
       ref.invalidate(autoResolvedCountProvider);
       ref.invalidate(needsReviewItemsProvider);
@@ -1425,6 +1610,19 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
             spacing: AppSpace.sm,
             runSpacing: AppSpace.xs,
             children: [
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
+                ),
+                onPressed: _busy || _confirmedThisSession
+                    ? null
+                    : _confirmDecision,
+                icon: const Icon(Icons.check_circle_outline, size: 16),
+                label: Text(
+                  _confirmedThisSession ? 'Confirmed' : 'Looks right',
+                ),
+              ),
               if (entry.resolvedKind == 'transaction')
                 TextButton.icon(
                   style: TextButton.styleFrom(
@@ -1654,6 +1852,7 @@ class _CommitmentNeedsReviewTileState
   }
 
   Future<void> _saveCommitment(_BillReviewResult result) async {
+    final consentAt = _smsLearningConsentAtCapture(ref);
     setState(() => _busy = true);
     try {
       await ref
@@ -1672,6 +1871,14 @@ class _CommitmentNeedsReviewTileState
               confidence: 1,
             ),
           );
+      if (consentAt != null) {
+        await _recordReviewedBillFeedback(
+          ref,
+          item: widget.item,
+          consentGrantedAt: consentAt,
+          result: result,
+        );
+      }
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(commitmentsProvider);
       ref.invalidate(needsReviewItemsProvider);
@@ -2767,6 +2974,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
               _FillFieldsSheet(item: widget.item, suggestionFact: fact),
         );
     if (result == null || !mounted) return;
+    final consentAt = _smsLearningConsentAtCapture(ref);
     setState(() => _busy = true);
     try {
       await ref
@@ -2780,6 +2988,20 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             instrument: result.instrument,
             entryKind: result.entryKind,
           );
+      if (consentAt != null) {
+        await _recordReviewedTransactionFeedback(
+          ref,
+          item: widget.item,
+          consentGrantedAt: consentAt,
+          aiFact: fact,
+          amountInr: result.amount,
+          merchant: result.merchantName,
+          category: result.categoryId,
+          occurredAt: result.occurredAt,
+          instrument: result.instrument,
+          entryKind: result.entryKind,
+        );
+      }
       final suggestedIndex = fact?['factIndex'];
       final factIdx = suggestedIndex is int && suggestedIndex >= 0
           ? suggestedIndex
@@ -3028,6 +3250,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
     }
 
     setState(() => _busy = true);
+    final consentAt = _smsLearningConsentAtCapture(ref);
     try {
       final userCardsRepo = ref.read(userCardsRepositoryProvider);
       if (userCardsRepo != null) {
@@ -3038,6 +3261,22 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           instrument: TxnInstrument.other,
           entryKind: TxnEntryKind.spend,
         );
+        if (consentAt != null) {
+          await _recordReviewedTransactionFeedback(
+            ref,
+            item: widget.item,
+            consentGrantedAt: consentAt,
+            aiFact: widget.item.aiSuggestions
+                ?.where((fact) => fact['factType'] == 'posted_movement')
+                .firstOrNull,
+            amountInr: amount,
+            merchant: 'Amazon Pay Later',
+            category: null,
+            occurredAt: widget.item.receivedAt,
+            instrument: TxnInstrument.other,
+            entryKind: TxnEntryKind.spend,
+          );
+        }
       }
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(needsReviewItemsProvider);

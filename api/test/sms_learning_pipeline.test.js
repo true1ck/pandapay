@@ -34,17 +34,17 @@ function createMockDb() {
   const candidates = [];
   const bundles = [];
   const profiles = new Map([
-    ['user-opted-in-1', { contributions_opt_in: true }],
-    ['user-opted-in-2', { contributions_opt_in: true }],
-    ['user-opted-in-3', { contributions_opt_in: true }],
-    ['user-opted-in-4', { contributions_opt_in: true }],
-    ['user-opted-in-5', { contributions_opt_in: true }],
-    ['user-opted-in-6', { contributions_opt_in: true }],
-    ['user-opted-in-7', { contributions_opt_in: true }],
-    ['user-opted-in-8', { contributions_opt_in: true }],
-    ['user-opted-in-9', { contributions_opt_in: true }],
-    ['user-opted-in-10', { contributions_opt_in: true }],
-    ['user-opted-out', { contributions_opt_in: false }],
+    ['user-opted-in-1', { sms_shared_learning: true }],
+    ['user-opted-in-2', { sms_shared_learning: true }],
+    ['user-opted-in-3', { sms_shared_learning: true }],
+    ['user-opted-in-4', { sms_shared_learning: true }],
+    ['user-opted-in-5', { sms_shared_learning: true }],
+    ['user-opted-in-6', { sms_shared_learning: true }],
+    ['user-opted-in-7', { sms_shared_learning: true }],
+    ['user-opted-in-8', { sms_shared_learning: true }],
+    ['user-opted-in-9', { sms_shared_learning: true }],
+    ['user-opted-in-10', { sms_shared_learning: true }],
+    ['user-opted-out', { sms_shared_learning: false }],
   ]);
 
   let advisoryLockHeld = false;
@@ -70,9 +70,9 @@ function createMockDb() {
       }
 
       // 2. Profiles Consent
-      if (sql.includes('SELECT contributions_opt_in FROM profiles WHERE id = $1')) {
+      if (sql.includes("purpose = 'sms_shared_learning'")) {
         const prof = profiles.get(params[0]);
-        return { rows: prof ? [{ contributions_opt_in: prof.contributions_opt_in }] : [] };
+        return { rows: prof ? [{ granted: prof.sms_shared_learning, policy_version: 'sms-shared-learning-v1' }] : [] };
       }
 
       // 3. Learning Examples Insert

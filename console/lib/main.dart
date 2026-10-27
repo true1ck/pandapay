@@ -14,6 +14,7 @@ import 'features/dashboard/anonymization_audit_screen.dart';
 import 'features/dashboard/data_quality_dashboard_screen.dart';
 import 'features/dashboard/sms_ai_operations_screen.dart';
 import 'features/parser_patterns/parser_patterns_screen.dart';
+import 'features/parser_patterns/sms_category_proposals_screen.dart';
 import 'features/queues/card_requests_screen.dart';
 import 'features/queues/error_reports_screen.dart';
 import 'features/queues/support_tickets_screen.dart';
@@ -185,6 +186,7 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
     (label: 'SMS AI Operations', screen: SmsAiOperationsScreen()),
     (label: 'Anonymization Audit', screen: AnonymizationAuditScreen()),
     (label: 'Parser Patterns', screen: ParserPatternsScreen()),
+    (label: 'SMS Rule Approvals', screen: SmsCategoryProposalsScreen()),
     (label: 'Sources', screen: SourcesScreen()),
     (label: 'Scrape Diff Review', screen: ScrapeDiffReviewScreen()),
     (label: 'Referral Operations', screen: ReferralOperationsScreen()),

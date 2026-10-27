@@ -31,8 +31,8 @@ test('confirmed correction inserts only dedup hash, sender fingerprint, family a
     const outcome = await learning.recordConfirmedCorrection({
       async query(sql, params) {
         calls.push({ sql, params });
-        if (sql.startsWith('SELECT contributions_opt_in')) {
-          return { rows: [{ contributions_opt_in: true }] };
+        if (sql.includes("purpose = 'sms_shared_learning'")) {
+          return { rows: [{ granted: true, policy_version: 'sms-shared-learning-v1' }] };
         }
         return { rowCount: 1 };
       },
@@ -57,7 +57,7 @@ test('confirmed correction inserts only dedup hash, sender fingerprint, family a
   }
 });
 
-test('shared learning stays disabled when profile contribution consent is off', async () => {
+test('shared learning stays disabled when SMS learning consent is off', async () => {
   const original = process.env.SMS_LEARNING_HMAC_KEY;
   process.env.SMS_LEARNING_HMAC_KEY = VALID_KEY;
   const calls = [];
@@ -65,7 +65,7 @@ test('shared learning stays disabled when profile contribution consent is off', 
     const outcome = await learning.recordConfirmedCorrection({
       async query(sql, params) {
         calls.push({ sql, params });
-        return { rows: [{ contributions_opt_in: false }], rowCount: 1 };
+        return { rows: [{ granted: false, policy_version: 'sms-shared-learning-v1' }], rowCount: 1 };
       },
     }, {
       profileId: 'profile-1', sourceKey: 'a'.repeat(64), sender: 'SENDER',
@@ -73,7 +73,7 @@ test('shared learning stays disabled when profile contribution consent is off', 
     });
     assert.deepEqual(outcome, { recorded: 0, disabled: true });
     assert.equal(calls.length, 1);
-    assert.match(calls[0].sql, /SELECT contributions_opt_in FROM profiles/);
+    assert.match(calls[0].sql, /purpose = 'sms_shared_learning'/);
   } finally {
     if (original === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;
     else process.env.SMS_LEARNING_HMAC_KEY = original;
@@ -143,8 +143,8 @@ test('opt-out consent check for recordLearningExample', async () => {
     const client = {
       async query(sql, params) {
         queries.push({ sql, params });
-        if (sql.includes('FROM profiles')) {
-          return { rows: [{ contributions_opt_in: false }] };
+        if (sql.includes("purpose = 'sms_shared_learning'")) {
+          return { rows: [{ granted: false, policy_version: 'sms-shared-learning-v1' }] };
         }
         return { rows: [{ id: 'example-1' }] };
       },
@@ -159,7 +159,7 @@ test('opt-out consent check for recordLearningExample', async () => {
 
     assert.deepEqual(res, { recorded: 0, disabled: true });
     assert.equal(queries.length, 1);
-    assert.match(queries[0].sql, /SELECT contributions_opt_in FROM profiles/);
+    assert.match(queries[0].sql, /purpose = 'sms_shared_learning'/);
 
     // Profile missing altogether (no rows returned)
     queries.length = 0;
@@ -188,7 +188,7 @@ test('learning feedback writes once on a database without the four-column confli
   let inserts = 0;
   const client = {
     async query(sql, params) {
-      if (sql.includes('FROM profiles')) return { rows: [{ contributions_opt_in: true }] };
+      if (sql.includes("purpose = 'sms_shared_learning'")) return { rows: [{ granted: true, policy_version: 'sms-shared-learning-v1' }] };
       if (sql.includes('pg_advisory_xact_lock')) return { rows: [] };
       if (sql.startsWith('SELECT id FROM public.sms_learning_examples')) {
         return { rows: rows.length ? [{ id: rows[0].id }] : [] };
@@ -246,8 +246,8 @@ test('redaction of PII (card numbers, phone numbers, urls, emails)', async () =>
     let insertParams = null;
     const client = {
       async query(sql, params) {
-        if (sql.includes('FROM profiles')) {
-          return { rows: [{ contributions_opt_in: true }] };
+        if (sql.includes("purpose = 'sms_shared_learning'")) {
+          return { rows: [{ granted: true, policy_version: 'sms-shared-learning-v1' }] };
         }
         if (sql.includes('INSERT INTO public.sms_learning_examples')) {
           insertQuery = sql;
@@ -269,16 +269,14 @@ test('redaction of PII (card numbers, phone numbers, urls, emails)', async () =>
     assert.equal(result.recorded, 1);
     assert.equal(result.disabled, false);
     assert.ok(insertQuery);
-    // insertParams[4] is sample_body
-    const storedBody = insertParams[4];
+    // insertParams[5] is an anonymized validation sample, not the SMS text.
+    const storedBody = insertParams[5];
     assert.doesNotMatch(storedBody, /https?:\/\//i);
     assert.doesNotMatch(storedBody, /merchant@example\.in/);
     assert.doesNotMatch(storedBody, /9876543210/);
     assert.doesNotMatch(storedBody, /4111\s*2222\s*3333/);
-    assert.ok(storedBody.includes('[URL]'));
-    assert.ok(storedBody.includes('[EMAIL]'));
-    assert.ok(storedBody.includes('[PHONE]'));
-    assert.ok(storedBody.includes('XXXX4567'));
+    assert.doesNotMatch(storedBody, /XXXX4567/);
+    assert.match(storedBody, /123\.45|9876\.54/);
   } finally {
     if (original === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;
     else process.env.SMS_LEARNING_HMAC_KEY = original;

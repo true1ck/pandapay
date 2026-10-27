@@ -53,12 +53,20 @@ class RestrictedSmsRule {
     try {
       final id = json['id'] as String?;
       if (id == null || id.length < 3 || id.length > 64) return null;
-      final family = SmsRuleFamilyWire.fromWire(json['family'] as String? ?? '');
+      final family = SmsRuleFamilyWire.fromWire(
+        json['family'] as String? ?? '',
+      );
       if (family == null) return null;
       final senderPattern = (json['senderPattern'] as String?)?.trim();
-      if (senderPattern == null || senderPattern.isEmpty || senderPattern.length > 100) return null;
+      if (senderPattern == null ||
+          senderPattern.isEmpty ||
+          senderPattern.length > 100)
+        return null;
       final regexPattern = json['regex'] as String?;
-      if (regexPattern == null || regexPattern.isEmpty || regexPattern.length > 250) return null;
+      if (regexPattern == null ||
+          regexPattern.isEmpty ||
+          regexPattern.length > 250)
+        return null;
 
       // ReDoS checks
       if (RegExp(r'[+*?]\s*[+*?]').hasMatch(regexPattern)) return null;
@@ -98,7 +106,8 @@ class RestrictedSmsRule {
         }
       }
 
-      final defaultFields = (json['defaultFields'] as Map?)?.cast<String, dynamic>() ?? const {};
+      final defaultFields =
+          (json['defaultFields'] as Map?)?.cast<String, dynamic>() ?? const {};
       final confidence = (json['confidence'] as num?)?.toDouble() ?? 0.98;
 
       return RestrictedSmsRule._(
@@ -182,16 +191,25 @@ class SmsRuleBundle {
     required String minClientVersion,
     required List<Map<String, dynamic>> rawRules,
   }) {
-    final normalized = rawRules.map((r) => {
-      'id': r['id'].toString(),
-      'family': r['family'].toString(),
-      'senderPattern': r['senderPattern'].toString().trim(),
-      'regex': r['regex'].toString(),
-      'fieldMap': (r['fieldMap'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{},
-      'defaultFields': (r['defaultFields'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{},
-      'confidence': (r['confidence'] as num?)?.toDouble() ?? 0.98,
-    }).toList()
-      ..sort((a, b) => (a['id'] as String).compareTo(b['id'] as String));
+    final normalized =
+        rawRules
+            .map(
+              (r) => {
+                'id': r['id'].toString(),
+                'family': r['family'].toString(),
+                'senderPattern': r['senderPattern'].toString().trim(),
+                'regex': r['regex'].toString(),
+                'fieldMap':
+                    (r['fieldMap'] as Map?)?.cast<String, dynamic>() ??
+                    <String, dynamic>{},
+                'defaultFields':
+                    (r['defaultFields'] as Map?)?.cast<String, dynamic>() ??
+                    <String, dynamic>{},
+                'confidence': (r['confidence'] as num?)?.toDouble() ?? 0.98,
+              },
+            )
+            .toList()
+          ..sort((a, b) => (a['id'] as String).compareTo(b['id'] as String));
 
     final canonical = jsonEncode({
       'bundleVersion': bundleVersion,
@@ -201,21 +219,29 @@ class SmsRuleBundle {
     return crypto.sha256.convert(utf8.encode(canonical)).toString();
   }
 
-  static SmsRuleBundle? fromJson(Map<String, dynamic> json, {bool verifySha = true}) {
+  static SmsRuleBundle? fromJson(
+    Map<String, dynamic> json, {
+    bool verifySha = true,
+  }) {
     try {
       final bundleVersion = json['bundleVersion'] as int?;
       if (bundleVersion == null || bundleVersion < 1) return null;
       final expectedSha = (json['sha256'] as String?)?.toLowerCase().trim();
-      if (expectedSha == null || !RegExp(r'^[0-9a-f]{64}$').hasMatch(expectedSha)) return null;
+      if (expectedSha == null ||
+          !RegExp(r'^[0-9a-f]{64}$').hasMatch(expectedSha))
+        return null;
 
       final rawRules = json['rules'] as List?;
       if (rawRules == null) return null;
 
       final minClientVersion = (json['minClientVersion'] as String?) ?? '1.0.0';
-      if (!RegExp(r'^\d+(?:\.\d+){0,3}$').hasMatch(minClientVersion)) return null;
+      if (!RegExp(r'^\d+(?:\.\d+){0,3}$').hasMatch(minClientVersion))
+        return null;
 
       if (verifySha) {
-        final rawMapList = rawRules.map((r) => Map<String, dynamic>.from(r as Map)).toList();
+        final rawMapList = rawRules
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList();
         final computedSha = computeSha256(
           bundleVersion: bundleVersion,
           minClientVersion: minClientVersion,
@@ -230,7 +256,8 @@ class SmsRuleBundle {
       for (final r in rawRules) {
         if (r is Map<String, dynamic>) {
           final rule = RestrictedSmsRule.fromJson(r);
-          if (rule == null) return null; // Reject entire bundle if any rule is invalid
+          if (rule == null)
+            return null; // Reject entire bundle if any rule is invalid
           rules.add(rule);
         } else if (r is Map) {
           final rule = RestrictedSmsRule.fromJson(r.cast<String, dynamic>());
@@ -266,6 +293,7 @@ class SmsCandidateRuleBundle {
   final String candidateId;
   final String stage;
   final String mode;
+
   /// Server-issued assignment identity. It lets delayed offline exposure
   /// events be verified against the assignment that was actually delivered.
   final String? assignmentId;
@@ -287,12 +315,17 @@ class SmsCandidateRuleBundle {
       final stage = json['stage'] as String?;
       final mode = json['mode'] as String?;
       if (id == null || stage == null || mode == null) return null;
-      if (!const {'shadow', 'limited', 'expanded', 'active'}.contains(stage)) return null;
+      if (!const {'shadow', 'limited', 'expanded', 'active'}.contains(stage))
+        return null;
       if (!const {'shadow', 'apply'}.contains(mode)) return null;
-      final stageVersion = (json['stageVersion'] ?? json['stage_version'] ?? 1) as int?;
+      final stageVersion =
+          (json['stageVersion'] ?? json['stage_version'] ?? 1) as int?;
       if (stageVersion == null || stageVersion < 1) return null;
-      final assignmentId = json['assignmentId'] as String? ?? json['assignment_id'] as String?;
-      if (assignmentId != null && (assignmentId.isEmpty || assignmentId.length > 80)) return null;
+      final assignmentId =
+          json['assignmentId'] as String? ?? json['assignment_id'] as String?;
+      if (assignmentId != null &&
+          (assignmentId.isEmpty || assignmentId.length > 80))
+        return null;
       final bundle = SmsRuleBundle.fromJson(json, verifySha: true);
       if (bundle == null || bundle.rules.isEmpty) return null;
       return SmsCandidateRuleBundle(
@@ -307,4 +340,89 @@ class SmsCandidateRuleBundle {
       return null;
     }
   }
+}
+
+/// Shared merchant category learned only from explicit user corrections.
+/// Matching is exact after case/whitespace normalization to avoid applying a
+/// correction for one merchant to a similarly named merchant.
+class SmsSharedCategoryRule {
+  static const allowedCategories = <String>{
+    'groceries',
+    'dining',
+    'online',
+    'fuel',
+    'travel',
+    'bills',
+    'health',
+    'entertainment',
+    'rent',
+    'investments',
+    'emi',
+    'insurance',
+    'education',
+    'income',
+    'wallet',
+    'cash',
+  };
+  static const _genericMerchants = <String>{
+    'UNKNOWN',
+    'OTHER',
+    'ONLINE',
+    'MERCHANT',
+    'PAYMENT',
+    'TRANSACTION',
+  };
+
+  final String merchantKey;
+  final String categorySlug;
+  final int supportCount;
+  final int agreementBp;
+
+  const SmsSharedCategoryRule({
+    required this.merchantKey,
+    required this.categorySlug,
+    required this.supportCount,
+    required this.agreementBp,
+  });
+
+  static String normalizeMerchant(String value) =>
+      value.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+
+  static SmsSharedCategoryRule? fromJson(Map<String, dynamic> json) {
+    final merchant = json['merchantKey'];
+    final category = json['categorySlug'];
+    final support = json['supportCount'];
+    final agreement = json['agreementBp'];
+    if (merchant is! String ||
+        category is! String ||
+        support is! num ||
+        agreement is! num) {
+      return null;
+    }
+    final key = normalizeMerchant(merchant);
+    final slug = category.toLowerCase();
+    if (key.length < 3 ||
+        key.length > 80 ||
+        _genericMerchants.contains(key) ||
+        merchant != key ||
+        !allowedCategories.contains(slug) ||
+        support < 10 ||
+        agreement < 9000 ||
+        agreement > 10000) {
+      return null;
+    }
+    return SmsSharedCategoryRule(
+      merchantKey: key,
+      categorySlug: slug,
+      supportCount: support.toInt(),
+      agreementBp: agreement.toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'merchantKey': merchantKey,
+    'categorySlug': categorySlug,
+    'supportCount': supportCount,
+    'agreementBp': agreementBp,
+  };
 }

@@ -34,6 +34,7 @@ const importResolvers = require('./import_resolvers');
 const centralProjection = require('./central_financial_projection');
 const { registerBillsProjectionRoutes } = require('./bills_projection_route');
 const smsFactsRoute = require('./sms_facts_route');
+const smsLearningFeedbackRoute = require('./sms_learning_feedback_route');
 const smsRuleBundleRoute = require('./sms_rule_bundle');
 const smsLearning = require('./sms_learning');
 const { testImapLogin } = require('./imap_test');
@@ -5509,6 +5510,10 @@ smsFactsRoute.registerSmsFactsRoutes(app, {
   withUserClient,
   persistSubscriptionMandate,
 });
+smsLearningFeedbackRoute.registerSmsLearningFeedbackRoute(app, {
+  requireAuth,
+  withUserClient,
+});
 registerBillsProjectionRoutes(app, { requireAuth, withUserClient });
 // The versioned rule bundle the device downloads and applies locally, so a
 // parser improvement reaches a phone without an app release.
@@ -9275,6 +9280,7 @@ const CONSENT_PURPOSES = [
   'marketing',
   'aggregate_insights',
   'partner_sharing',
+  'sms_shared_learning',
 ];
 
 /**
@@ -9342,14 +9348,26 @@ app.post('/consents', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'policyVersion is required' });
   }
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
+    const result = await withUserClient(req.userId, async (client) => {
+      if (purpose === 'sms_shared_learning') {
+        // Match the feedback route's lock so revocation/purge cannot race an
+        // in-flight contribution write under the previous grant.
+        await client.query(
+          'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
+          [`sms-shared-learning-consent:${req.userId}`],
+        );
+      }
+      const inserted = await client.query(
         `INSERT INTO user_consents (profile_id, purpose, policy_version, granted, source_screen)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING purpose, granted, granted_at, policy_version, source_screen`,
         [req.userId, purpose, policyVersion, granted, sourceScreen || null]
-      )
-    );
+      );
+      if (purpose === 'sms_shared_learning' && !granted) {
+        await smsLearning.deleteLearningExamplesForUser(client, req.userId);
+      }
+      return inserted;
+    });
     res.status(201).json({ consent: result.rows[0] });
   } catch (err) {
     console.error('POST /consents error', err);

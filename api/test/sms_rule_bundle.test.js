@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('crypto');
 const smsRuleBundle = require('../src/sms_rule_bundle');
 
 test('validateRule: accepts well-formed rules across supported families', () => {
@@ -188,8 +189,19 @@ test('routes: GET /sms/rules/active, publish, immutability, and rollback', async
   };
 
   const dbRows = [];
+  let categoryApproved = false;
   const fakeClient = {
     query: async (sql, params) => {
+      if (sql.includes("purpose = 'sms_shared_learning'")) {
+        return { rows: [{ granted: false }], rowCount: 1 };
+      }
+      if (sql.includes('sms_approved_category_rules()')) {
+        if (!categoryApproved) return { rows: [] };
+        return { rows: [
+          { merchant_key: 'ZED CAFE', category_slug: 'food_dining', support_count: '12', agreement_rate: '0.95' },
+          { merchant_key: 'ALPHA STORE', category_slug: 'shopping', support_count: 10, agreement_rate: '0.9' },
+        ] };
+      }
       if (sql.includes('SELECT bundle_version')) {
         const active = dbRows.filter((r) => r.is_active).sort((a, b) => b.bundle_version - a.bundle_version)[0];
         return { rows: active ? [active] : [] };
@@ -252,6 +264,25 @@ test('routes: GET /sms/rules/active, publish, immutability, and rollback', async
   assert.equal(res1.statusReceived, 200);
   assert.equal(res1.payload.bundleVersion, 0);
   assert.deepEqual(res1.payload.rules, []);
+  assert.deepEqual(res1.payload.categoryRules, []);
+
+  categoryApproved = true;
+  const approvedResponse = makeRes();
+  await handlers.get('GET /sms/rules/active')({ userId: 'u1', query: {} }, approvedResponse);
+  assert.equal(approvedResponse.statusReceived, 200);
+  assert.deepEqual(approvedResponse.payload.categoryRules, [
+    { merchantKey: 'ALPHA STORE', categorySlug: 'shopping', supportCount: 10, agreementBp: 9000 },
+    { merchantKey: 'ZED CAFE', categorySlug: 'food_dining', supportCount: 12, agreementBp: 9500 },
+  ]);
+  assert.equal(approvedResponse.payload.categoryRulesVersion, 1);
+  assert.equal(approvedResponse.payload.categoryRulesMinClientVersion, '1.0.0');
+  const canonicalCategoryPayload = {
+    categoryRulesVersion: 1,
+    minClientVersion: '1.0.0',
+    categoryRules: approvedResponse.payload.categoryRules,
+  };
+  assert.equal(approvedResponse.payload.categoryRulesSha256, crypto.createHash('sha256')
+    .update(JSON.stringify(canonicalCategoryPayload)).digest('hex'));
 
   // 2. Publish a valid bundle
   const publishPayload = {

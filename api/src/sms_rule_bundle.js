@@ -186,12 +186,13 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
     try {
       const result = await withUserClient(req.userId, async (client) => {
         const consent = await client.query(
-          `SELECT contributions_opt_in
-             FROM public.profiles
-            WHERE id = $1`,
+          `SELECT granted
+             FROM public.user_consents
+            WHERE profile_id = $1 AND purpose = 'sms_shared_learning'
+            ORDER BY granted_at DESC, id DESC LIMIT 1`,
           [req.userId],
         );
-        const contributionsOptIn = consent.rows?.[0]?.contributions_opt_in === true;
+        const smsLearningConsent = consent.rows?.[0]?.granted === true;
         const active = await client.query(
           `SELECT bundle_version, rules, sha256, published_at, min_client_ver
              FROM public.sms_rule_bundles
@@ -200,14 +201,31 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
             LIMIT 1`,
         );
         const candidates = await client.query(
-          `SELECT candidate_id, family, sender_pattern, compiled_regex,
-                  field_map, default_fields, confidence, state, bundle_version,
-                  min_client_ver, stage_version
-             FROM public.sms_rule_candidates
-            WHERE state IN ('shadow', 'limited', 'expanded', 'active')
+          `SELECT c.candidate_id, c.family, c.sender_pattern, c.compiled_regex,
+                  c.field_map, c.default_fields, c.confidence, c.state, c.bundle_version,
+                  c.min_client_ver, c.stage_version, a.rule_sha256 AS approved_sha256
+             FROM public.sms_rule_candidates c
+             JOIN public.sms_parser_candidate_approvals a
+               ON a.candidate_id = c.candidate_id AND a.status = 'approved'
+            WHERE c.state IN ('shadow', 'limited', 'expanded', 'active')
             ORDER BY candidate_id ASC`,
         );
-        if (!contributionsOptIn) {
+        // Published generalized parser/category rules can be consumed by all
+        // signed-in devices. Consent gates contributions and experiments, not
+        // access to already evaluated shared product improvements.
+        const categoryResult = await client.query(
+          `SELECT merchant_key, category_slug, support_count, agreement_rate
+             FROM pandapay.sms_approved_category_rules()
+            ORDER BY merchant_key, category_slug`,
+        );
+        const categoryRules = (categoryResult.rows || []).map((item) => ({
+          merchantKey: item.merchant_key,
+          categorySlug: item.category_slug,
+          supportCount: Number(item.support_count),
+          agreementBp: Math.round(Number(item.agreement_rate) * 10000),
+        })).sort((a, b) => a.merchantKey.localeCompare(b.merchantKey) ||
+          a.categorySlug.localeCompare(b.categorySlug));
+        if (!smsLearningConsent) {
           let revokedCandidateIds = candidates.rows.map((row) => row.candidate_id);
           try {
             const issued = await client.query(
@@ -226,6 +244,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           return {
             active,
             candidateRules: [],
+            categoryRules,
             revokedCandidateIds,
           };
         }
@@ -233,7 +252,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
         const candidateRules = [];
         for (const row of candidates.rows) {
           const delivery = candidateDelivery(row, req.userId);
-          if (!delivery) continue;
+          if (!delivery || delivery.sha256 !== row.approved_sha256) continue;
           let assignment;
           try {
             assignment = await client.query(
@@ -288,10 +307,20 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           // guess which cached candidate rules are safe to remove.
           console.warn('SMS candidate revocation lookup unavailable:', error.message || error);
         }
-        return { active, candidateRules, revokedCandidateIds };
+        return { active, candidateRules, categoryRules, revokedCandidateIds };
       });
       const row = result.active.rows?.[0];
       const candidateRules = result.candidateRules || [];
+      const categoryRulesVersion = 1;
+      const categoryRulesMinClientVersion = '1.0.0';
+      const categoryRules = result.categoryRules || [];
+      const categoryRulesSha256 = crypto.createHash('sha256')
+        .update(JSON.stringify({
+          categoryRulesVersion,
+          minClientVersion: categoryRulesMinClientVersion,
+          categoryRules,
+        }))
+        .digest('hex');
       if (!row) {
         // No active bundles: tell device to roll back to version 0
         return res.status(200).json({
@@ -300,6 +329,10 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           sha256: '',
           rolledBack: true,
           candidateRules,
+          categoryRulesVersion,
+          categoryRulesMinClientVersion,
+          categoryRules,
+          categoryRulesSha256,
           revokedCandidateIds: result.revokedCandidateIds || [],
         });
       }
@@ -310,6 +343,10 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           upToDate: true,
           bundleVersion: row.bundle_version,
           candidateRules,
+          categoryRulesVersion,
+          categoryRulesMinClientVersion,
+          categoryRules,
+          categoryRulesSha256,
           revokedCandidateIds: result.revokedCandidateIds || [],
         });
       }
@@ -324,11 +361,166 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
         minClientVersion: row.min_client_ver,
         rolledBack: Number.isInteger(sinceVersion) && sinceVersion > row.bundle_version,
         candidateRules,
+        categoryRulesVersion,
+        categoryRulesMinClientVersion,
+        categoryRules,
+        categoryRulesSha256,
         revokedCandidateIds: result.revokedCandidateIds || [],
       });
     } catch (error) {
       console.error('GET /sms/rules/active error', error.message || error);
       res.status(500).json({ error: 'failed to fetch active SMS rules' });
+    }
+  });
+
+  // Eligible category rules are proposals until an operator reviews them.
+  app.get('/admin/sms-rules/category-proposals', requireAdmin, async (req, res) => {
+    try {
+      const proposals = await withUserClient(req.userId, async (client) => {
+        const result = await client.query(
+          `SELECT c.merchant_key, c.category_slug, c.support_count,
+                  c.agreement_rate,
+                  CASE WHEN a.category_slug = c.category_slug THEN a.status END AS status,
+                  CASE WHEN a.category_slug = c.category_slug THEN a.reviewed_at END AS reviewed_at,
+                  CASE WHEN a.category_slug = c.category_slug THEN a.reason END AS reason
+             FROM pandapay.sms_shared_category_rules() c
+             LEFT JOIN public.sms_category_rule_approvals a
+               ON a.merchant_key = c.merchant_key
+            ORDER BY c.merchant_key, c.category_slug LIMIT 500`,
+        );
+        return result.rows;
+      });
+      res.status(200).json({ proposals });
+    } catch (error) {
+      console.error('GET /admin/sms-rules/category-proposals error', error.message || error);
+      res.status(500).json({ error: 'failed to fetch category proposals' });
+    }
+  });
+
+  app.post('/admin/sms-rules/category-proposals/review', requireAdmin, async (req, res) => {
+    const { merchantKey, categorySlug, decision, reason } = req.body || {};
+    if (typeof merchantKey !== 'string' || merchantKey.length < 3 || merchantKey.length > 80 ||
+        typeof categorySlug !== 'string' || !/^[a-z0-9_-]{1,64}$/.test(categorySlug) ||
+        !['approved', 'rejected'].includes(decision) ||
+        typeof reason !== 'string' || reason.trim().length < 5 || reason.length > 500) {
+      return res.status(400).json({ error: 'invalid review request' });
+    }
+    try {
+      const result = await withUserClient(req.userId, async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('sms_category_rule_approval'))");
+        const eligible = await client.query(
+          `SELECT merchant_key, category_slug, support_count, agreement_rate
+             FROM pandapay.sms_shared_category_rules()
+            WHERE merchant_key = $1 AND category_slug = $2`,
+          [merchantKey, categorySlug],
+        );
+        const proposal = eligible.rows?.[0];
+        if (!proposal) return { stale: true };
+        await client.query(
+          `INSERT INTO public.sms_category_rule_approvals
+             (merchant_key, category_slug, status, reviewed_by, reason,
+              support_count_at_review, agreement_rate_at_review)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (merchant_key) DO UPDATE SET
+             category_slug=excluded.category_slug, status=excluded.status,
+             reviewed_by=excluded.reviewed_by, reviewed_at=now(),
+             reason=excluded.reason,
+             support_count_at_review=excluded.support_count_at_review,
+             agreement_rate_at_review=excluded.agreement_rate_at_review`,
+          [merchantKey, categorySlug, decision, req.userId, reason.trim(),
+            proposal.support_count, proposal.agreement_rate],
+        );
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+           VALUES ($1, 'review_sms_category_rule', 'sms_category_rule_approvals', NULL, $2, $3)`,
+          [req.userId, JSON.stringify({ merchantKey, categorySlug, decision,
+            supportCount: proposal.support_count, agreementRate: proposal.agreement_rate }), reason.trim()],
+        );
+        return { stale: false };
+      });
+      if (result.stale) return res.status(409).json({ error: 'proposal_no_longer_eligible' });
+      res.status(200).json({ ok: true, merchantKey, categorySlug, decision });
+    } catch (error) {
+      console.error('POST /admin/sms-rules/category-proposals/review error', error.message || error);
+      res.status(500).json({ error: 'failed to review category proposal' });
+    }
+  });
+
+  app.get('/admin/sms-rules/parser-proposals', requireAdmin, async (req, res) => {
+    try {
+      const proposals = await withUserClient(req.userId, async (client) => {
+        const rows = await client.query(
+          `SELECT c.candidate_id, c.family, c.sender_pattern, c.compiled_regex,
+                  c.field_map, c.default_fields, c.confidence, c.state,
+                  c.bundle_version, c.min_client_ver, c.stage_version,
+                  c.stage_metrics, a.status, a.rule_sha256 AS approved_sha256,
+                  a.reviewed_at, a.reason
+             FROM public.sms_rule_candidates c
+             LEFT JOIN public.sms_parser_candidate_approvals a
+               ON a.candidate_id = c.candidate_id
+            WHERE c.state IN ('evaluated', 'shadow', 'limited', 'expanded', 'active')
+            ORDER BY c.created_at DESC LIMIT 200`,
+        );
+        return rows.rows.map((row) => ({
+          candidateId: row.candidate_id, family: row.family,
+          senderPattern: row.sender_pattern, regex: row.compiled_regex,
+          fieldMap: row.field_map, defaultFields: row.default_fields,
+          confidence: row.confidence, state: row.state,
+          stageMetrics: row.stage_metrics, status: row.status || 'pending',
+          reviewedAt: row.reviewed_at, reason: row.reason,
+          currentRuleSha256: candidateDelivery({ ...row, state: 'shadow' }, req.userId)?.sha256,
+          approvedSha256: row.approved_sha256,
+        }));
+      });
+      res.status(200).json({ proposals });
+    } catch (error) {
+      console.error('GET /admin/sms-rules/parser-proposals error', error.message || error);
+      res.status(500).json({ error: 'failed to fetch parser proposals' });
+    }
+  });
+
+  app.post('/admin/sms-rules/parser-proposals/review', requireAdmin, async (req, res) => {
+    const { candidateId, decision, reason, ruleSha256 } = req.body || {};
+    if (typeof candidateId !== 'string' || candidateId.length < 1 || candidateId.length > 120 ||
+        !['approved', 'rejected'].includes(decision) ||
+        typeof reason !== 'string' || reason.trim().length < 5 || reason.length > 500 ||
+        typeof ruleSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(ruleSha256)) {
+      return res.status(400).json({ error: 'invalid review request' });
+    }
+    try {
+      const outcome = await withUserClient(req.userId, async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('sms_parser_candidate_approval'))");
+        const result = await client.query(
+          `SELECT candidate_id, family, sender_pattern, compiled_regex,
+                  field_map, default_fields, confidence, state, bundle_version,
+                  min_client_ver, stage_version
+             FROM public.sms_rule_candidates WHERE candidate_id = $1`,
+          [candidateId],
+        );
+        const row = result.rows?.[0];
+        const currentHash = row ? candidateDelivery({ ...row, state: 'shadow' }, req.userId)?.sha256 : null;
+        if (!currentHash || currentHash !== ruleSha256) return { stale: true };
+        await client.query(
+          `INSERT INTO public.sms_parser_candidate_approvals
+             (candidate_id, status, reviewed_by, reason, rule_sha256)
+           VALUES ($1,$2,$3,$4,$5)
+           ON CONFLICT (candidate_id) DO UPDATE SET status=excluded.status,
+             reviewed_by=excluded.reviewed_by, reviewed_at=now(),
+             reason=excluded.reason, rule_sha256=excluded.rule_sha256`,
+          [candidateId, decision, req.userId, reason.trim(), currentHash],
+        );
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+           VALUES ($1, 'review_sms_parser_candidate', 'sms_parser_candidate_approvals', NULL, $2, $3)`,
+          [req.userId, JSON.stringify({ candidateId, decision, ruleSha256: currentHash }), reason.trim()],
+        );
+        return { stale: false };
+      });
+      if (outcome.stale) return res.status(409).json({ error: 'proposal_changed' });
+      res.status(200).json({ ok: true, candidateId, decision });
+    } catch (error) {
+      console.error('POST /admin/sms-rules/parser-proposals/review error', error.message || error);
+      res.status(500).json({ error: 'failed to review parser proposal' });
     }
   });
 

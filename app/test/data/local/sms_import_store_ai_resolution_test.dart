@@ -560,6 +560,31 @@ void main() {
     expect(corrected?.transaction?.amount.paise, 34900);
   });
 
+  test('shared category mapping only applies to exact merchant key', () {
+    const body =
+        'Rs 349.00 spent on HDFC Bank Card ending 1234 at BUNDL '
+        'TECHNOLOGIES on 20-Oct-26.';
+    final exact = LocalSmsParser.parse(
+      namespace: ns,
+      sender: 'HDFCBK',
+      body: body,
+      receivedAt: DateTime(2026, 10, 20),
+      sharedCategoryRules: const {'BUNDL TECHNOLOGIES': 'groceries'},
+    );
+    expect(exact?.transaction?.categoryId, 'groceries');
+
+    final extendedMerchant = LocalSmsParser.parse(
+      namespace: ns,
+      sender: 'HDFCBK',
+      body:
+          'Rs 349.00 spent on HDFC Bank Card ending 1234 at BUNDL '
+          'TECHNOLOGIES SERVICES on 20-Oct-26.',
+      receivedAt: DateTime(2026, 10, 20),
+      sharedCategoryRules: const {'BUNDL TECHNOLOGIES': 'groceries'},
+    );
+    expect(extendedMerchant?.transaction?.categoryId, isNot('groceries'));
+  });
+
   SmsAutoResolutionController controller() => SmsAutoResolutionController(
     database: db,
     store: store,
@@ -712,8 +737,14 @@ void main() {
     final item = reviewItem(body: billBody(due));
     insertReviewRow(item);
     importStore.resolveAiSuggestions(ns, item, [billSuggestion(due)]);
-    expect(PastBillReceiptRepository(db, namespace: ns).fetchAll(), hasLength(1));
-    final entry = AutoResolvedHistoryRepository(db, namespace: ns).fetchAll().single;
+    expect(
+      PastBillReceiptRepository(db, namespace: ns).fetchAll(),
+      hasLength(1),
+    );
+    final entry = AutoResolvedHistoryRepository(
+      db,
+      namespace: ns,
+    ).fetchAll().single;
 
     await controller().moveToReview(entry);
 

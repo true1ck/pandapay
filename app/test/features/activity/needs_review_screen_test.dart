@@ -75,6 +75,9 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   bool aiJobSubmitted = false;
 
   @override
+  Future<int> flushSmsLearningFeedbackQueue() async => 0;
+
+  @override
   Future<String> logTransaction({
     String? userCardId,
     required dynamic amount,
@@ -351,7 +354,10 @@ void main() {
 
     expect(find.text('AI is reviewing 1 message'), findsOneWidget);
     expect(find.text('1 queued · 0 in progress · 0 failed'), findsOneWidget);
-    expect(find.text('0 checked, still need review · 0 not queued'), findsOneWidget);
+    expect(
+      find.text('0 checked, still need review · 0 not queued'),
+      findsOneWidget,
+    );
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
@@ -388,7 +394,10 @@ void main() {
 
     expect(find.text('AI review paused · 2 need review'), findsOneWidget);
     expect(find.text('0 queued · 0 in progress · 1 failed'), findsOneWidget);
-    expect(find.text('1 checked, still need review · 0 not queued'), findsOneWidget);
+    expect(
+      find.text('1 checked, still need review · 0 not queued'),
+      findsOneWidget,
+    );
     expect(find.text('Retry failed AI reviews (1)'), findsOneWidget);
     expect(find.textContaining('AI review failed'), findsNothing);
     await tester.tap(find.text('Retry failed AI reviews (1)'));
@@ -1159,6 +1168,7 @@ void main() {
         apiBaseUrl: 'https://api.pandapay.test',
         accessToken: 'test-token',
         client: failingClient,
+        loadSmsSharedLearningConsent: () async => DateTime.utc(2026, 10, 27),
       );
 
       expect(repo.dismissalRetryQueue, isEmpty);
@@ -1191,13 +1201,14 @@ void main() {
         if (!isOnline) {
           throw http.ClientException('Connection reset');
         }
-        return http.Response(jsonEncode({'ok': true}), 200);
+        return http.Response(jsonEncode({'acknowledged': true}), 200);
       });
 
       final repo = UserCardsRepository(
         apiBaseUrl: 'https://api.pandapay.test',
         accessToken: 'test-token',
         client: mockClient,
+        loadSmsSharedLearningConsent: () async => DateTime.utc(2026, 10, 27),
       );
 
       // Initially offline

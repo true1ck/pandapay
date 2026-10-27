@@ -42,7 +42,12 @@ test('real database: app_user RLS, worker separation, advisory locks, and deleti
       // 2. Set RLS context for user1
       await client.query("SELECT set_config('app.user_id', $1, true)", [user1]);
       await client.query("SELECT set_config('app.sms_learning_hmac_key', $1, true)", [hmacKey]);
-      await client.query('INSERT INTO profiles(id, contributions_opt_in) VALUES ($1, true)', [user1]);
+      await client.query('INSERT INTO profiles(id, contributions_opt_in) VALUES ($1, false)', [user1]);
+      await client.query(
+        `INSERT INTO user_consents(profile_id, purpose, policy_version, granted, source_screen)
+         VALUES ($1, 'sms_shared_learning', 'sms-shared-learning-v1', true, 'test')`,
+        [user1],
+      );
       await client.query('SET LOCAL ROLE app_user');
       const appRole = await client.query('SELECT current_user AS role');
       assert.equal(appRole.rows[0].role, 'app_user');

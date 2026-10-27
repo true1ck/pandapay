@@ -9,6 +9,7 @@ import 'app_database.dart';
 import 'auto_resolved_history_repository.dart';
 import 'financial_store.dart';
 import 'sms_learning_feedback.dart';
+import 'sms_feedback_outbox.dart';
 
 /// User actions on a Tier-1 auto-resolution receipt.
 ///
@@ -21,12 +22,14 @@ class SmsAutoResolutionController {
   final FinancialStore store;
   final NeedsReviewRepository reviewRepository;
   final String namespace;
+  final DateTime? smsLearningConsentGrantedAt;
 
   SmsAutoResolutionController({
     required this.database,
     required this.store,
     required this.reviewRepository,
     required this.namespace,
+    this.smsLearningConsentGrantedAt,
   });
 
   /// Corrects the category of an auto-filed transaction and teaches the local
@@ -50,6 +53,12 @@ class SmsAutoResolutionController {
         merchantOrPattern: entry.title,
         categorySlug: slug,
       );
+      _recordFeedback(
+        entry,
+        action: 'category_changed',
+        correctedFields: {'categorySlug': slug},
+        consentGrantedAt: smsLearningConsentGrantedAt,
+      );
       _updateTransactionCategory(entry, slug);
       store.notifyPendingChange(namespace);
     });
@@ -71,6 +80,7 @@ class SmsAutoResolutionController {
     final merchant = merchantName.trim();
     if (merchant.isEmpty) throw ArgumentError('Merchant is required.');
     if (amount.paise <= 0) throw ArgumentError('Amount must be positive.');
+    final occurredAtUtc = occurredAt.toUtc();
 
     store.batch(() {
       final rows = database.db.select(
@@ -87,7 +97,6 @@ class SmsAutoResolutionController {
       final payload =
           jsonDecode(row['payload'] as String) as Map<String, dynamic>;
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final occurredAtUtc = occurredAt.toUtc();
       payload['amount_inr'] = amount.rupees;
       payload['merchant_name'] = merchant;
       payload['occurred_at'] = occurredAtUtc.toIso8601String();
@@ -95,6 +104,16 @@ class SmsAutoResolutionController {
         "UPDATE financial_entities SET payload=?, observed_at=? "
         "WHERE namespace=? AND entity='transactions' AND id=?",
         [jsonEncode(payload), timestamp, namespace, row['id']],
+      );
+      _recordFeedback(
+        entry,
+        action: 'edited',
+        consentGrantedAt: smsLearningConsentGrantedAt,
+        correctedFields: {
+          'merchant': merchant,
+          'amountInr': amount.rupees,
+          'occurredAt': occurredAtUtc.toIso8601String(),
+        },
       );
       database.db.execute(
         'UPDATE local_auto_resolved_history SET title=?, amount_paise=?, '
@@ -115,6 +134,11 @@ class SmsAutoResolutionController {
   /// drops the receipt and puts the message back into Needs Review.
   Future<void> moveToReview(AutoResolvedHistoryEntry entry) async {
     store.batch(() {
+      _recordFeedback(
+        entry,
+        action: 'moved_to_review',
+        consentGrantedAt: smsLearningConsentGrantedAt,
+      );
       if (entry.resolvedKind != 'dismissed') {
         database.db.execute(
           "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' "
@@ -157,6 +181,46 @@ class SmsAutoResolutionController {
             ? NeedsReviewKind.commitment
             : NeedsReviewKind.transaction,
       ),
+    );
+  }
+
+  /// A positive label is captured only after the user explicitly confirms the
+  /// saved AI decision. Repeated taps are idempotent by source and action.
+  void confirmDecision(AutoResolvedHistoryEntry entry) {
+    store.batch(
+      () => _recordFeedback(
+        entry,
+        action: 'confirmed',
+        consentGrantedAt: smsLearningConsentGrantedAt,
+      ),
+    );
+  }
+
+  void _recordFeedback(
+    AutoResolvedHistoryEntry entry, {
+    required String action,
+    required DateTime? consentGrantedAt,
+    Map<String, dynamic>? correctedFields,
+  }) {
+    if (consentGrantedAt == null || entry.sourceKey.trim().isEmpty) return;
+    final fields = <String, dynamic>{
+      'merchant': entry.title,
+      'amountInr': entry.amountPaise / 100,
+      if (entry.categorySlug != null) 'categorySlug': entry.categorySlug,
+      'occurredAt': entry.occurredAt,
+      if (entry.dueDate != null) 'dueDate': entry.dueDate,
+    };
+    SmsFeedbackOutbox(database, namespace: namespace).enqueue(
+      sourceKey: entry.sourceKey,
+      action: action,
+      sender: entry.sender,
+      resolvedKind: entry.resolvedKind,
+      occurredAt: entry.occurredAt,
+      consentGrantedAt: consentGrantedAt,
+      sampleBody: entry.sourceBody,
+      originalDecision: {'kind': entry.resolvedKind, 'fields': fields},
+      correctedFields: correctedFields,
+      reason: action == 'moved_to_review' ? 'user_disputed_ai_decision' : null,
     );
   }
 

@@ -232,6 +232,9 @@ jobs:
       - name: Verify autonomous SMS learner role separation and grants
         run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261022143500_sms_learning_worker_permissions_test.sql
 
+      - name: Verify shared SMS category learning thresholds and consent
+        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261027153000_sms_shared_category_rules_test.sql
+
       # The deploy runs the role script as an admin that has CREATEROLE but
       # not SUPERUSER. Restating a role's SUPERUSER attribute is refused for
       # that admin ("permission denied to alter role"), so the second and

@@ -39,6 +39,7 @@ import '../data/local/sms_rule_bundle.dart';
 import '../data/local/sms_rule_bundle_store.dart';
 import '../data/local/sms_facts_outbox.dart';
 import '../data/local/sms_dismissal_outbox.dart';
+import '../data/local/sms_feedback_outbox.dart';
 import '../data/local/sms_rule_exposure_outbox.dart';
 import '../data/local/sms_intake_repository.dart';
 import '../data/local/sms_import_store.dart';
@@ -306,6 +307,46 @@ final consentsApiProvider = Provider<ConsentsApi?>((ref) {
     client: ref.read(authenticatedHttpClientProvider),
   );
 });
+
+Future<ConsentRecord?> _currentSmsSharedLearningConsent(Ref ref) async {
+  final cached = ref.read(smsSharedLearningConsentProvider).valueOrNull;
+  if (cached != null) return cached;
+  try {
+    return await ref.read(smsSharedLearningConsentProvider.future);
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> _flushSmsLearningQueues(
+  Ref ref,
+  UserCardsRepository repository,
+  String namespace,
+) async {
+  if (ref.read(cacheNamespaceProvider) != namespace) return;
+  final consent = await _currentSmsSharedLearningConsent(ref);
+  if (consent == null || ref.read(cacheNamespaceProvider) != namespace) return;
+  await repository.flushDismissalQueue();
+  await repository.flushSmsLearningFeedbackQueue();
+}
+
+/// Latest explicit SMS shared-learning permission. It is separate from
+/// merchant contributions consent because SMS feedback may include financial
+/// fields such as amount, merchant, date, and category.
+final smsSharedLearningConsentProvider =
+    FutureProvider.autoDispose<ConsentRecord?>((ref) async {
+      final api = ref.watch(consentsApiProvider);
+      if (api == null) return null;
+      final records = await api.fetchLatest();
+      for (final record in records) {
+        if (record.purpose == smsSharedLearningPurpose &&
+            record.granted &&
+            record.policyVersion == smsSharedLearningPolicyVersion) {
+          return record;
+        }
+      }
+      return null;
+    });
 
 /// Plan Phase 2.3 — attributed outbound "Apply" links. Null when signed out:
 /// a click has to belong to a profile for the attribution to mean anything.
@@ -1164,11 +1205,17 @@ final smsAutoResolutionControllerProvider =
           'to be initialized before it is read',
         );
       }
+      final consent = ref.watch(smsSharedLearningConsentProvider).valueOrNull;
       return SmsAutoResolutionController(
         database: cache.financialStore.database,
         store: cache.financialStore,
         reviewRepository: ref.watch(needsReviewRepositoryProvider),
         namespace: ref.watch(cacheNamespaceProvider),
+        smsLearningConsentGrantedAt:
+            consent?.policyVersion == smsSharedLearningPolicyVersion &&
+                consent?.granted == true
+            ? consent!.grantedAt
+            : null,
       );
     });
 
@@ -1645,6 +1692,18 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       final cache = await ref.read(responseCacheProvider.future);
       return SmsDismissalOutbox(cache.financialStore.database, namespace);
     },
+    feedbackOutbox: () async {
+      if (ref.read(cacheNamespaceProvider) != namespace) {
+        throw StateError('Account changed before SMS feedback sync');
+      }
+      final cache = await ref.read(responseCacheProvider.future);
+      return SmsFeedbackOutbox(
+        cache.financialStore.database,
+        namespace: namespace,
+      );
+    },
+    loadSmsSharedLearningConsent: () async =>
+        (await _currentSmsSharedLearningConsent(ref))?.grantedAt,
     onTransactionSaved: (mutationId, transactionId) {
       if (ref.read(cacheNamespaceProvider) != namespace) return;
       ref
@@ -1888,7 +1947,7 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       }
     },
   );
-  repository.flushDismissalQueue().ignore();
+  _flushSmsLearningQueues(ref, repository, namespace).ignore();
   return repository;
 });
 
@@ -2801,6 +2860,7 @@ final outboxFlushProvider = Provider<void>((ref) {
         duplicateResolutionOutboxRepositoryProvider.future,
       );
       final duplicateSent = await duplicateOutbox.flush(repo);
+      await _flushSmsLearningQueues(ref, repo, namespace);
       if (!disposed &&
           ref.read(cacheNamespaceProvider) == namespace &&
           (sent > 0 || duplicateSent > 0)) {
@@ -6707,10 +6767,14 @@ class SmsAutoImportController {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    final lastScanVer = prefs.getInt('pandapay_app.sms_inbox_scanner_ver_${namespace}') ?? 0;
+    final lastScanVer =
+        prefs.getInt('pandapay_app.sms_inbox_scanner_ver_${namespace}') ?? 0;
     if (lastScanVer < LocalSmsParser.version) {
       SmsInboxProgress(store.database).rewind(namespace, 300);
-      await prefs.setInt('pandapay_app.sms_inbox_scanner_ver_${namespace}', LocalSmsParser.version);
+      await prefs.setInt(
+        'pandapay_app.sms_inbox_scanner_ver_${namespace}',
+        LocalSmsParser.version,
+      );
     }
 
     final scanner = SmsInboxScanner(

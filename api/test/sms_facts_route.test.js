@@ -18,7 +18,7 @@ const lightlyParse = (value) => {
   }
 };
 
-function fakeClient({ contributionsOptIn = true } = {}) {
+function fakeClient({ contributionsOptIn = true, smsLearningConsent = contributionsOptIn } = {}) {
   const sources = new Map();
   const sourceRows = new Map();
   const facts = new Map();
@@ -56,8 +56,8 @@ function fakeClient({ contributionsOptIn = true } = {}) {
       cardFitRows.rows = value ? [{ id: 'uc-1' }] : [];
     },
     async query(sql, params) {
-      if (sql.includes('SELECT contributions_opt_in FROM profiles')) {
-        return { rows: [{ contributions_opt_in: contributionsOptIn }] };
+      if (sql.includes("purpose = 'sms_shared_learning'")) {
+        return { rows: [{ granted: smsLearningConsent, policy_version: 'sms-shared-learning-v1' }] };
       }
       if (sql.startsWith('INSERT INTO sms_sources')) {
         const key = `${params[0]}|${params[1]}`;
@@ -122,10 +122,10 @@ function fakeClient({ contributionsOptIn = true } = {}) {
         learningFeedback.push(params);
         return { rows: [{ id: 'ex-1' }], rowCount: 1 };
       }
-      // Learning needs the user's cross-user contribution opt-in. Without it
+      // Learning needs the user's purpose-specific SMS learning consent. Without it
       // the route correctly records nothing, so the fake must grant consent.
-      if (sql.includes('contributions_opt_in')) {
-        return { rows: [{ contributions_opt_in: true }] };
+      if (sql.includes('sms_shared_learning')) {
+        return { rows: [{ granted: smsLearningConsent, policy_version: 'sms-shared-learning-v1' }] };
       }
       if (sql.includes('FROM sms_sources WHERE profile_id')) {
         const source = [...sourceRows.values()].find(
@@ -810,10 +810,8 @@ test('POST /sms/dismiss accepts an unsynced authenticated source as redacted pos
     assert.equal(client.learningFeedback.length, 1);
     assert.equal(client.learningFeedback[0][3], 'ignore_noise');
     assert.equal(client.learningFeedback[0][7], false);
-    assert.deepEqual(JSON.parse(client.learningFeedback[0][6]), {
-      feedbackProvenance: 'authenticated_unknown_source',
-    });
-    assert.equal(client.learningFeedback[0][5], 'Loan offer for account XXXX3456 is ready');
+    assert.deepEqual(JSON.parse(client.learningFeedback[0][6]), {});
+  assert.equal(client.learningFeedback[0][5], 'Loan offer for account XXXX1234 is ready');
   } finally {
     if (prevKey === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;
     else process.env.SMS_LEARNING_HMAC_KEY = prevKey;

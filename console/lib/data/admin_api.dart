@@ -1167,6 +1167,72 @@ class AdminApi {
     return (body['bundles'] as List).cast<Map<String, dynamic>>();
   }
 
+  Future<List<Map<String, dynamic>>> fetchSmsCategoryProposals() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sms-rules/category-proposals'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('Failed to load SMS category proposals: ${response.statusCode}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['proposals'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> reviewSmsCategoryProposal({
+    required String merchantKey,
+    required String categorySlug,
+    required String decision,
+    required String reason,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/sms-rules/category-proposals/review'),
+      headers: _headers,
+      body: jsonEncode({
+        'merchantKey': merchantKey,
+        'categorySlug': categorySlug,
+        'decision': decision,
+        'reason': reason,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('Failed to review SMS category proposal: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSmsParserProposals() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sms-rules/parser-proposals'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('Failed to load parser proposals: ${response.statusCode}');
+    }
+    return ((jsonDecode(response.body) as Map<String, dynamic>)['proposals'] as List)
+        .cast<Map<String, dynamic>>();
+  }
+
+  Future<void> reviewSmsParserProposal({
+    required String candidateId,
+    required String ruleSha256,
+    required String decision,
+    required String reason,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/sms-rules/parser-proposals/review'),
+      headers: _headers,
+      body: jsonEncode({
+        'candidateId': candidateId,
+        'ruleSha256': ruleSha256,
+        'decision': decision,
+        'reason': reason,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('Failed to review parser proposal: ${response.statusCode} ${response.body}');
+    }
+  }
+
   Future<Map<String, dynamic>> fetchSmsRuleBundle(int bundleVersion) async {
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/admin/sms-rules/bundles/$bundleVersion'),

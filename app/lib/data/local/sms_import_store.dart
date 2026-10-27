@@ -19,6 +19,7 @@ import 'sms_facts_outbox.dart';
 import 'sms_intake_repository.dart';
 import 'sms_learning_feedback.dart';
 import 'sms_rule_bundle.dart';
+import 'sms_rule_bundle_store.dart';
 import 'sms_rule_exposure_outbox.dart';
 
 /// How an AI suggestion set was routed by [SmsImportStore.resolveAiSuggestions].
@@ -64,11 +65,21 @@ class SmsImportStore {
         store.database,
         namespace: namespace,
       ).loadRulesSync();
+      final sharedCategoryRules = SmsRuleBundleStore(
+        store.database,
+      ).loadSharedCategoryRulesSync();
       final intake = SmsIntakeRepository(store.database);
       db.execute('SAVEPOINT sms_batch');
       try {
         for (final message in messages) {
-          _capture(namespace, message, cards, intake, userCategoryRules);
+          _capture(
+            namespace,
+            message,
+            cards,
+            intake,
+            userCategoryRules,
+            sharedCategoryRules,
+          );
         }
         db.execute('RELEASE SAVEPOINT sms_batch');
       } catch (_) {
@@ -86,6 +97,7 @@ class SmsImportStore {
       store.entities(namespace, 'cards').map(UserCard.fromJson).toList(),
       SmsIntakeRepository(store.database),
       SmsLearningFeedback(store.database, namespace: namespace).loadRulesSync(),
+      SmsRuleBundleStore(store.database).loadSharedCategoryRulesSync(),
     );
   }
 
@@ -95,6 +107,7 @@ class SmsImportStore {
     List<UserCard> cards,
     SmsIntakeRepository intake,
     Map<String, String> userCategoryRules,
+    Map<String, String> sharedCategoryRules,
   ) {
     final triage = classifySmsTriage(message.sender, message.body);
     if (triage.kind == SmsTriageKind.sensitive) return;
@@ -150,6 +163,7 @@ class SmsImportStore {
             ownUserName ?? store.database.profileDisplayName(namespace),
         downloadedRules: downloadedRules,
         userCategoryRules: userCategoryRules,
+        sharedCategoryRules: sharedCategoryRules,
       );
       final candidateResults =
           <
@@ -170,6 +184,7 @@ class SmsImportStore {
               ownUserName ?? store.database.profileDisplayName(namespace),
           downloadedRules: candidate.bundle,
           userCategoryRules: userCategoryRules,
+          sharedCategoryRules: sharedCategoryRules,
         );
         final matched = _isDownloadedRuleMatch(candidateObservation);
         candidateResults.add((

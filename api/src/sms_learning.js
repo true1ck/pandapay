@@ -64,6 +64,62 @@ function changedSafeFields(before, after) {
     JSON.stringify(before?.[field]) !== JSON.stringify(after?.[field]));
 }
 
+// Generate a validation sample from the structural template rather than
+// retaining numbers from the user's SMS. Stable example values let the rule
+// evaluator exercise its parser contract while removing amounts, timestamps,
+// references, account fragments and other numeric identifiers from samples.
+function anonymizedTrainingSample(template) {
+  const structural = String(template || '').replace(/\{[A-Z0-9_]+\}|\d[\d,./:-]*/g, (part) =>
+    part.startsWith('{') ? part : '{REF}');
+  return structural
+    .replace(/\{AMOUNT\}/g, 'Rs. 123.45')
+    .replace(/\{BAL\}/g, 'Rs. 9,876.54')
+    .replace(/\{DUE_DATE\}/g, '01-01-2025')
+    .replace(/\{DATE\}/g, '01-01-2025')
+    .replace(/\{LAST4\}/g, '1234')
+    .replace(/\{REF\}/g, 'TESTREF123456')
+    .replace(/\{MERCHANT\}/g, 'MerchantTest')
+    .slice(0, 1201);
+}
+
+function anonymizedTrainingFields(fields, template) {
+  const safe = {};
+  for (const [key, value] of Object.entries(fields || {})) {
+    if (SAFE_FIELDS.has(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) {
+      safe[key] = value;
+    }
+  }
+  const has = (slot) => template.includes(`{${slot}}`);
+  if (has('AMOUNT')) {
+    for (const field of ['amount', 'amountInr', 'amountDue', 'amountDueInr', 'minimumDue', 'minimumDueInr']) {
+      if (field in safe) safe[field] = 123.45;
+    }
+    if ('amountPaise' in safe) safe.amountPaise = 12345;
+    if ('amountDuePaise' in safe) safe.amountDuePaise = 12345;
+  }
+  if (has('BAL')) {
+    for (const field of ['availableBalance', 'availableBalanceInr', 'currentBalance', 'currentBalanceInr']) {
+      if (field in safe) safe[field] = 9876.54;
+    }
+    if ('availableBalancePaise' in safe) safe.availableBalancePaise = 987654;
+    if ('currentBalancePaise' in safe) safe.currentBalancePaise = 987654;
+  }
+  if (has('LAST4')) {
+    if ('last4' in safe) safe.last4 = '1234';
+    if ('accountLast4' in safe) safe.accountLast4 = '1234';
+  }
+  if (has('MERCHANT') && 'merchant' in safe) safe.merchant = 'MerchantTest';
+  if (has('DATE')) {
+    if ('asOf' in safe) safe.asOf = '01-01-2025';
+    if ('asOfAt' in safe) safe.asOfAt = '2025-01-01T00:00:00.000Z';
+  }
+  if (has('DUE_DATE')) {
+    if ('dueDate' in safe) safe.dueDate = '01-01-2025';
+  }
+  if (has('REF') && 'reference' in safe) safe.reference = 'TESTREF123456';
+  return safe;
+}
+
 async function recordConfirmedCorrection(client, {
   profileId, sourceKey, sender, family, fields, hmacKey,
 }) {
@@ -73,11 +129,7 @@ async function recordConfirmedCorrection(client, {
   // Shared learning is an opt-in product contribution. Do not assume consent
   // to use a local correction for cross-user learning; fail closed if the
   // profile is missing or its existing contribution preference is off.
-  const consent = await client.query(
-    'SELECT contributions_opt_in FROM profiles WHERE id = $1',
-    [profileId],
-  );
-  if (consent.rows?.[0]?.contributions_opt_in !== true) {
+  if (!(await hasSmsSharedLearningConsent(client, profileId))) {
     return { recorded: 0, disabled: true };
   }
   let recorded = 0;
@@ -93,6 +145,21 @@ async function recordConfirmedCorrection(client, {
     recorded += 1;
   }
   return { recorded, disabled: false };
+}
+
+async function hasSmsSharedLearningConsent(client, profileId) {
+  return (await getSmsSharedLearningConsent(client, profileId))?.granted === true;
+}
+
+async function getSmsSharedLearningConsent(client, profileId) {
+  if (!profileId) return null;
+  const consent = await client.query(
+    `SELECT granted, policy_version, granted_at FROM public.user_consents
+      WHERE profile_id = $1 AND purpose = 'sms_shared_learning'
+      ORDER BY granted_at DESC, id DESC LIMIT 1`,
+    [profileId],
+  );
+  return consent.rows?.[0] || null;
 }
 
 /**
@@ -124,11 +191,7 @@ async function recordLearningExample(client, {
   }
 
   // 1. Consent check: fail closed if opt-in is false or missing
-  const consent = await client.query(
-    'SELECT contributions_opt_in FROM profiles WHERE id = $1',
-    [profileId],
-  );
-  if (consent.rows?.[0]?.contributions_opt_in !== true) {
+  if (!(await hasSmsSharedLearningConsent(client, profileId))) {
     return { recorded: 0, disabled: true };
   }
 
@@ -150,9 +213,11 @@ async function recordLearningExample(client, {
     return { recorded: 0, disabled: true, error: 'sensitive_sms' };
   }
   const cleanBody = redactBody(rawBody);
-  const cleanTemplate = templateText && templateText.includes('{')
+  const rawTemplate = (templateText && templateText.includes('{')
     ? templateText
-    : synthesizeTemplate(cleanBody, extractedFields);
+    : synthesizeTemplate(cleanBody, extractedFields));
+  const cleanTemplate = rawTemplate.replace(/\{[A-Z0-9_]+\}|\d[\d,./:-]*/g, (part) =>
+    part.startsWith('{') ? part : '{REF}');
 
   if (!cleanTemplate) {
     return { recorded: 0, disabled: false, error: 'unable_to_synthesize_template' };
@@ -192,8 +257,8 @@ async function recordLearningExample(client, {
       issuerPrefix,
       family,
       cleanTemplate,
-      cleanBody,
-      JSON.stringify(extractedFields || {}),
+      anonymizedTrainingSample(cleanTemplate),
+      JSON.stringify(anonymizedTrainingFields(extractedFields, cleanTemplate)),
       Boolean(isNegative),
       negativeReason || null,
       userHash,
@@ -453,7 +518,11 @@ module.exports = {
   redactBody,
   senderFingerprint,
   changedSafeFields,
+  anonymizedTrainingSample,
+  anonymizedTrainingFields,
   recordConfirmedCorrection,
+  hasSmsSharedLearningConsent,
+  getSmsSharedLearningConsent,
   recordLearningExample,
   recordReviewDismissal,
   deleteLearningExamplesForUser,
