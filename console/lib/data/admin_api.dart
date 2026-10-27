@@ -1212,6 +1212,37 @@ class AdminApi {
         .cast<Map<String, dynamic>>();
   }
 
+  Future<List<Map<String, dynamic>>> fetchSmsAiProposals() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sms-learning/ai-proposals'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('Failed to load AI-origin SMS proposals: ${response.statusCode}');
+    }
+    return ((jsonDecode(response.body) as Map<String, dynamic>)['proposals'] as List)
+        .cast<Map<String, dynamic>>();
+  }
+
+  Future<void> reviewSmsAiProposal({
+    required String proposalId,
+    required String decision,
+    required String reason,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/sms-learning/ai-proposals/review'),
+      headers: _headers,
+      body: jsonEncode({
+        'proposalId': proposalId,
+        'decision': decision,
+        'reason': reason,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('Failed to review AI proposal: ${response.statusCode} ${response.body}');
+    }
+  }
+
   Future<void> reviewSmsParserProposal({
     required String candidateId,
     required String ruleSha256,

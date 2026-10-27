@@ -201,7 +201,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
             LIMIT 1`,
         );
         const candidates = await client.query(
-          `SELECT c.candidate_id, c.family, c.sender_pattern, c.compiled_regex,
+          `SELECT c.candidate_id, c.family, c.sender_pattern, c.template, c.compiled_regex,
                   c.field_map, c.default_fields, c.confidence, c.state, c.bundle_version,
                   c.min_client_ver, c.stage_version, a.rule_sha256 AS approved_sha256
              FROM public.sms_rule_candidates c
@@ -382,13 +382,21 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
                   c.agreement_rate,
                   CASE WHEN a.category_slug = c.category_slug THEN a.status END AS status,
                   CASE WHEN a.category_slug = c.category_slug THEN a.reviewed_at END AS reviewed_at,
-                  CASE WHEN a.category_slug = c.category_slug THEN a.reason END AS reason
+                  CASE WHEN a.category_slug = c.category_slug THEN a.reason END AS reason,
+                  evidence.redacted_pattern
              FROM pandapay.sms_shared_category_rules() c
              LEFT JOIN public.sms_category_rule_approvals a
                ON a.merchant_key = c.merchant_key
+             LEFT JOIN pandapay.sms_admin_category_evidence() evidence
+               ON evidence.merchant_key = c.merchant_key
             ORDER BY c.merchant_key, c.category_slug LIMIT 500`,
         );
-        return result.rows;
+        return result.rows.map((row) => ({
+          ...row,
+          origin: 'user_category_corrections',
+          evidence_strength: 'multi_user_confirmed',
+          proposed_rule: { merchantKey: row.merchant_key, categorySlug: row.category_slug },
+        }));
       });
       res.status(200).json({ proposals });
     } catch (error) {
@@ -466,6 +474,10 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           senderPattern: row.sender_pattern, regex: row.compiled_regex,
           fieldMap: row.field_map, defaultFields: row.default_fields,
           confidence: row.confidence, state: row.state,
+          redactedPattern: String(row.template || '').replace(/\d+/g, '{n}').slice(0, 250),
+          origin: 'learning_examples', evidenceStrength: 'multi_user_candidate',
+          proposedRule: { family: row.family, senderPattern: row.sender_pattern,
+            regex: row.compiled_regex, fieldMap: row.field_map },
           stageMetrics: row.stage_metrics, status: row.status || 'pending',
           reviewedAt: row.reviewed_at, reason: row.reason,
           currentRuleSha256: candidateDelivery({ ...row, state: 'shadow' }, req.userId)?.sha256,

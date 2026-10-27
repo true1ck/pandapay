@@ -25,6 +25,16 @@ async function proposeCandidates(dbClient, options = {}) {
   const minUsers = Number.isInteger(options.minDistinctUsers) ? options.minDistinctUsers : 5;
 
   const clusterQuery = `
+    WITH eligible_examples AS (
+      SELECT sender_fingerprint, fact_family, template_text, issuer_prefix, user_hash
+        FROM public.sms_learning_examples
+       WHERE is_negative = false
+      UNION ALL
+      SELECT p.sender_fingerprint, p.fact_family, p.template_text,
+             p.issuer_prefix, p.user_hash
+        FROM public.sms_ai_learning_proposals p
+       WHERE p.status = 'approved' AND p.template_text IS NOT NULL
+    )
     SELECT
       sender_fingerprint,
       fact_family,
@@ -32,9 +42,8 @@ async function proposeCandidates(dbClient, options = {}) {
       coalesce(issuer_prefix, 'UNKNOWN') AS issuer,
       count(distinct user_hash)::int AS distinct_users,
       count(*)::int AS example_count
-    FROM public.sms_learning_examples
-    WHERE is_negative = false
-      AND fact_family IN ('posted_movement', 'balance_snapshot', 'bill_obligation', 'mandate_lifecycle', 'ignore_noise')
+    FROM eligible_examples
+    WHERE fact_family IN ('posted_movement', 'balance_snapshot', 'bill_obligation', 'bill_payment', 'mandate_lifecycle', 'ignore_noise')
     GROUP BY sender_fingerprint, fact_family, template_text, coalesce(issuer_prefix, 'UNKNOWN')
     HAVING count(distinct user_hash) >= $1
     ORDER BY count(distinct user_hash) DESC

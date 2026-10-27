@@ -5512,6 +5512,7 @@ smsFactsRoute.registerSmsFactsRoutes(app, {
 });
 smsLearningFeedbackRoute.registerSmsLearningFeedbackRoute(app, {
   requireAuth,
+  requireAdmin,
   withUserClient,
 });
 registerBillsProjectionRoutes(app, { requireAuth, withUserClient });
@@ -9365,6 +9366,10 @@ app.post('/consents', requireAuth, async (req, res) => {
       );
       if (purpose === 'sms_shared_learning' && !granted) {
         await smsLearning.deleteLearningExamplesForUser(client, req.userId);
+        await client.query(
+          'DELETE FROM public.sms_ai_learning_proposals WHERE profile_id = $1',
+          [req.userId],
+        );
       }
       return inserted;
     });

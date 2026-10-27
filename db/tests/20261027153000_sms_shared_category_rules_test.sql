@@ -18,23 +18,27 @@ begin
     values (('10000000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid, 'sms_shared_learning', 'test-v1', true);
     insert into public.sms_learning_feedback_events (
       profile_id, event_id, source_key_hash, sender_fingerprint, action,
-      resolved_kind, consent_policy_version, merchant_key, category_slug,
+      resolved_kind, consent_policy_version, consent_granted_at, merchant_key, category_slug,
       original_category_slug, created_at
     ) values (
       ('10000000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid, gen_random_uuid(),
       repeat(lpad(to_hex(i), 2, '0'), 32), repeat(lpad(to_hex(i + 16), 2, '0'), 32),
-      'category_changed', 'transaction', 'test-v1', 'ALPHA MARKET',
+      'category_changed', 'transaction', 'test-v1',
+      (select max(granted_at) from public.user_consents where profile_id = ('10000000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid),
+      'ALPHA MARKET',
       case when i = 12 then 'dining' else 'groceries' end, 'dining', now()
     );
   end loop;
   -- Later correction from user 12 replaces the older vote for this merchant.
   insert into public.sms_learning_feedback_events (
     profile_id, event_id, source_key_hash, sender_fingerprint, action,
-    resolved_kind, consent_policy_version, merchant_key, category_slug,
+    resolved_kind, consent_policy_version, consent_granted_at, merchant_key, category_slug,
     original_category_slug, created_at
   ) values (
     '10000000-0000-0000-0000-000000000012', gen_random_uuid(), repeat('a', 64), repeat('b', 64),
-    'category_changed', 'transaction', 'test-v1', 'ALPHA MARKET', 'groceries', 'dining', now() + interval '1 second'
+    'category_changed', 'transaction', 'test-v1',
+    (select max(granted_at) from public.user_consents where profile_id = '10000000-0000-0000-0000-000000000012'),
+    'ALPHA MARKET', 'groceries', 'dining', now() + interval '1 second'
   );
 
   for i in 21..32 loop
@@ -45,12 +49,14 @@ begin
     values (('10000000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid, 'sms_shared_learning', 'test-v1', true);
     insert into public.sms_learning_feedback_events (
       profile_id, event_id, source_key_hash, sender_fingerprint, action,
-      resolved_kind, consent_policy_version, merchant_key, category_slug,
+      resolved_kind, consent_policy_version, consent_granted_at, merchant_key, category_slug,
       created_at
     ) values (
       ('10000000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid, gen_random_uuid(),
       repeat(lpad(to_hex(i), 2, '0'), 32), repeat(lpad(to_hex(i + 16), 2, '0'), 32),
-      'category_changed', 'transaction', 'test-v1', 'CONTESTED STORE',
+      'category_changed', 'transaction', 'test-v1',
+      (select max(granted_at) from public.user_consents where profile_id = ('10000000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid),
+      'CONTESTED STORE',
       case when i <= 30 then 'groceries' else 'dining' end, now()
     );
   end loop;
@@ -76,15 +82,18 @@ begin
     values (('10000000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid, 'sms_shared_learning', 'test-v1', true);
     insert into public.sms_learning_feedback_events (
       profile_id, event_id, source_key_hash, sender_fingerprint, action,
-      resolved_kind, consent_policy_version, merchant_key, category_slug, created_at
+      resolved_kind, consent_policy_version, consent_granted_at, merchant_key, category_slug, created_at
     ) values (
       ('10000000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid, gen_random_uuid(),
       repeat(lpad(to_hex(i), 2, '0'), 32), repeat(lpad(to_hex(i + 16), 2, '0'), 32),
-      'category_changed', 'transaction', 'test-v1', 'CONSENT TEST', 'fuel', now()
+      'category_changed', 'transaction', 'test-v1',
+      (select max(granted_at) from public.user_consents where profile_id = ('10000000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid),
+      'CONSENT TEST', 'fuel', now()
     );
   end loop;
-  insert into public.user_consents (profile_id, purpose, policy_version, granted)
-  values ('10000000-0000-0000-0000-000000000041', 'sms_shared_learning', 'test-v2', false);
+  insert into public.user_consents (profile_id, purpose, policy_version, granted, granted_at)
+  values ('10000000-0000-0000-0000-000000000041', 'sms_shared_learning', 'test-v2', false,
+          now() + interval '1 second');
   if exists (select 1 from pandapay.sms_shared_category_rules() where merchant_key = 'CONSENT TEST') then
     raise exception 'latest revoked consent was counted in shared category support';
   end if;

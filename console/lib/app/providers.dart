@@ -281,6 +281,12 @@ final smsParserProposalsProvider = FutureProvider<List<Map<String, dynamic>>>((r
   return api.fetchSmsParserProposals();
 });
 
+final smsAiProposalsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchSmsAiProposals();
+});
+
 final smsAiJobTimelineProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, jobId) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];

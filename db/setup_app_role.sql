@@ -166,19 +166,23 @@ begin
       execute 'grant usage on schema pandapay to sms_learning_worker';
     end if;
 
-    -- Publishing and autonomous rollback are worker-only operations. The API
-    -- keeps its user-scoped ingestion and manual admin endpoints, but its
-    -- app_user connection cannot execute the cross-user learning cycle.
+    -- Publishing and autonomous rollback are reserved for the authenticated
+    -- admin API. This script is re-run AFTER the migrations by
+    -- db/scripts/migrate.sh, so it must converge on the same policy that
+    -- 20261027160000_sms_category_rule_approval.sql revokes: granting these
+    -- back to the worker here both re-opened the global publication gate and
+    -- made sms_autonomous_worker's own capability check refuse to start (it
+    -- requires can_publish and can_rollback to be false).
     if to_regprocedure('pandapay.sms_publish_bundle(integer,jsonb,text,text)') is not null then
       execute 'revoke execute on function pandapay.sms_publish_bundle(integer, jsonb, text, text) from app_user';
       if worker_role_exists then
-        execute 'grant execute on function pandapay.sms_publish_bundle(integer, jsonb, text, text) to sms_learning_worker';
+        execute 'revoke execute on function pandapay.sms_publish_bundle(integer, jsonb, text, text) from sms_learning_worker';
       end if;
     end if;
     if to_regprocedure('pandapay.sms_rollback_bundle(integer)') is not null then
       execute 'revoke execute on function pandapay.sms_rollback_bundle(integer) from app_user';
       if worker_role_exists then
-        execute 'grant execute on function pandapay.sms_rollback_bundle(integer) to sms_learning_worker';
+        execute 'revoke execute on function pandapay.sms_rollback_bundle(integer) from sms_learning_worker';
       end if;
     end if;
   else
