@@ -720,6 +720,20 @@ test('loan repayments and bank fees do not inflate purchase spending', () => {
   assert.equal(fee.fields.transferKind, 'fee');
 });
 
+test('credited EMI repayment alerts are loan repayments, not income', () => {
+  for (const body of [
+    'Dear Customer, your account no. XX3510 has been credited with Rs.6300 towards the payment of EMI on 04-10-2026. UCO Bank',
+    'Dear Customer, your account no. XX2315 has been credited with Rs.9700 towards the payment of EMI on 04-10-2026. UCO Bank',
+    'Loan EMI payment of Rs.5000 credited to your account ending 2626.',
+  ]) {
+    const result = parseSmsAgainstPatterns([], { sender: 'VM-UCOBNK-S', body });
+    assert.equal(result.ok, true, body);
+    assert.equal(result.fields.entryKind, 'transfer', body);
+    assert.equal(result.fields.transferKind, 'loan_repayment', body);
+    assert.equal(result.fields.merchant, 'Loan or EMI repayment', body);
+  }
+});
+
 test('loan disbursement, investment proceeds, gifts and reimbursements are not earned income by default', () => {
   const cases = [
     ['Loan disbursement of Rs.50000 credited to your bank account.', 'loan_disbursement'],

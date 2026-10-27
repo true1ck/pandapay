@@ -39,6 +39,85 @@ test('automatic ingestion links source alias and never applies card state', asyn
   assert.ok(writes.some(({sql})=>sql.includes("status = 'ignored'")));
 });
 
+test('replaying an EMI-repayment credit replaces the stale generic merchant label', async () => {
+  const observations=[];
+  const legacy = {
+    id:'emi-old', amount_inr:6300, occurred_at:'2026-10-04T10:00:00Z',
+    merchant_name:'Money received', source:'sms', instrument:'upi_bank',
+    entry_kind:'transfer', user_card_id:null, status:'active',
+    state_applied:false, is_backfill:false, category_id:null, rail:'unknown',
+    is_locked:false,
+  };
+  const writer=new Function('recordTransactionObservation','detectDuplicates','loadUserCardForState','applyTransactionState','transactionTags',`${extract('insertTransactionAndUpdateState','importParsedMessage')} return insertTransactionAndUpdateState;`)(
+    async(...args)=>observations.push(args),async()=>null,async()=>null,async()=>{throw Error('must not apply state');},
+    {mergeTransactionTags:async()=>{throw Error('must not merge tags');}});
+  const writes=[];
+  const client={query:async(sql,params)=>{
+    writes.push({sql,params});
+    if (sql.includes('INSERT INTO transactions')) return {rowCount:0,rows:[]};
+    if (sql.includes('FOR UPDATE')) return {rows:[{...legacy}]};
+    if (sql.includes('bool_or')) return {rows:[{locked:false}]};
+    if (sql.includes('UPDATE transactions t')) {
+      return {rows:[{...legacy, merchant_name: params[7] || legacy.merchant_name}]};
+    }
+    return {rows:[]};
+  }};
+  const result=await writer(client,'profile',{
+    amount:6300, occurred:new Date('2026-10-04T10:00:00Z'), rail:'unknown',
+    merchantName:'Loan or EMI repayment', source:'sms', sourceKey:'emi-key',
+    instrument:'upi_bank', entryKind:'transfer', accountLast4:'3510',
+    observationMetadata:{transferKind:'loan_repayment'},
+  });
+  assert.equal(result.status,200);
+  assert.equal(result.duplicateKind,'exact_retry');
+  const refreshed=writes.find(({sql})=>sql.includes('UPDATE transactions t'));
+  assert.ok(refreshed, 'replay must refresh the existing row');
+  assert.equal(refreshed.params[7],'Loan or EMI repayment');
+  assert.ok(/WHEN t\.merchant_name = 'Money received'/.test(refreshed.sql));
+  assert.equal(result.transaction.merchant_name,'Loan or EMI repayment');
+  // The retry observation keeps classification metadata current for later
+  // read-time repairs.
+  const retryObservation=observations.at(-1);
+  assert.equal(retryObservation[3].metadata.transferKind,'loan_repayment');
+  assert.equal(retryObservation[3].metadata.exactRetry,true);
+});
+
+test('replay never renames a merchant the parser already named', async () => {
+  const named = {
+    ...{
+      id:'txn-old', amount_inr:250, occurred_at:'2026-08-05T10:00:00Z',
+      merchant_name:'SWIGGY', source:'sms', instrument:'credit_card',
+      entry_kind:'spend', user_card_id:null, status:'active',
+      state_applied:false, is_backfill:false, category_id:null, rail:'unknown',
+    },
+  };
+  const writer=new Function('recordTransactionObservation','detectDuplicates','loadUserCardForState','applyTransactionState','transactionTags',`${extract('insertTransactionAndUpdateState','importParsedMessage')} return insertTransactionAndUpdateState;`)(
+    async(...args)=>{},async()=>null,async()=>null,async()=>{throw Error('must not apply state');},
+    {mergeTransactionTags:async()=>{}});
+  let refreshedParams=null;
+  const client={query:async(sql,params)=>{
+    if (sql.includes('INSERT INTO transactions')) return {rowCount:0,rows:[]};
+    if (sql.includes('FOR UPDATE')) return {rows:[{...named}]};
+    if (sql.includes('bool_or')) return {rows:[{locked:false}]};
+    if (sql.includes('UPDATE transactions t')) { refreshedParams=params; return {rows:[{...named}]}; }
+    return {rows:[]};
+  }};
+  await writer(client,'profile',{
+    amount:250, occurred:new Date('2026-08-05T10:00:00Z'), rail:'unknown',
+    merchantName:'SWIGGY', source:'sms', sourceKey:'spend-key',
+    instrument:'credit_card', entryKind:'spend', observationMetadata:{},
+  });
+  // Same merchant on replay: CASE keeps the stored name and never re-applies
+  // card state for a row that did not reclassify.
+  assert.equal(refreshedParams[7],'SWIGGY');
+  await writer(client,'profile',{
+    amount:250, occurred:new Date('2026-08-05T10:00:00Z'), rail:'unknown',
+    merchantName:null, source:'sms', sourceKey:'spend-key',
+    instrument:'credit_card', entryKind:'spend', observationMetadata:{},
+  });
+  assert.equal(refreshedParams[7], null);
+});
+
 test('SMS and email imports keep unresolved generic cards cardless despite a selected credit card', async () => {
   const importMessage = new Function(
     'extractVpa', 'extractMcc', 'isBankAccountMessage', 'importResolvers', 'insertTransactionAndUpdateState',

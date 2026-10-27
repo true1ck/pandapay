@@ -418,7 +418,7 @@ function parseBuiltInAccountCredit(sms) {
   const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?|utr)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
   const lower = body.toLowerCase();
   const salaryCredit = /\bsalary\b/i.test(body);
-  const nonIncomeCredit = /\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|investment|mutual\s+fund|shares|equity\s+shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b/i.test(body);
+  const nonIncomeCredit = /\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|emi|equated\s+monthly\s+installment|instalment|investment|mutual\s+fund|shares|equity\s+shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b/i.test(body);
   const earnedIncomeCredit = !nonIncomeCredit
     && !/\bsalary\s+advance\b/i.test(body)
     && /\b(?:salary|wages?|payroll|pension|interest|dividend|rent|commission|consulting|business\s+(?:receipt|income)|invoice\s+paid)\b/i.test(body);
@@ -427,6 +427,10 @@ function parseBuiltInAccountCredit(sms) {
   const refundCredit = /\b(?:refund(?:ed)?|chargeback)\b/i.test(body);
   const reversalCredit = /\b(?:reversal|reversed)\b/i.test(body);
   const loanDisbursement = /\b(?:loan|personal\s+loan|salary\s+advance|credit\s+line)\b[\s\S]{0,70}\b(?:credited|received|disbursed|disbursement)\b/i.test(body);
+  // "credited ... towards the payment of EMI" is an EMI repayment booked on
+  // the loan account — a movement, never earned income. Both word orders:
+  const loanRepaymentCredit = /\b(?:loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|repaid|repayment)\b/i.test(body)
+    || /\b(?:paid|payment|repaid|repayment)\b[\s\S]{0,60}\b(?:of|towards?|for)\b[\s\S]{0,20}\b(?:the\s+)?(?:loan|emi|equated\s+monthly\s+installment|instalment)\b/i.test(body);
   const investmentProceeds = /\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b[\s\S]{0,80}\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b/i.test(body)
     || /\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b[\s\S]{0,80}\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b/i.test(body);
   const cashDeposit = /\bcash\s+(?:deposit|deposited)\b/i.test(body);
@@ -442,6 +446,7 @@ function parseBuiltInAccountCredit(sms) {
     && !rewardCredit
     && !refundCredit
     && !reversalCredit
+    && !loanRepaymentCredit
     && !loanDisbursement
     && !investmentProceeds
     && !cashDeposit
@@ -464,6 +469,8 @@ function parseBuiltInAccountCredit(sms) {
     ? 'reversal'
     : cashbackCredit || rewardCredit
     ? 'reward'
+    : loanRepaymentCredit
+    ? 'loan_repayment'
     : loanDisbursement
     ? 'loan_disbursement'
     : investmentProceeds
@@ -491,6 +498,8 @@ function parseBuiltInAccountCredit(sms) {
     ? 'Reversal'
     : cashbackCredit || rewardCredit
     ? 'Reward or cashback'
+    : loanRepaymentCredit
+    ? 'Loan or EMI repayment'
     : loanDisbursement
     ? 'Loan disbursement'
     : investmentProceeds

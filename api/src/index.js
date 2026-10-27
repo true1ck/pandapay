@@ -3876,7 +3876,10 @@ async function insertTransactionAndUpdateState(client, userId, {
     // an unmatched credit-card alert to `other`. The source key correctly
     // prevents a second ledger row, but returning the stale attribution would
     // make the bug permanent. Refresh only stronger parser evidence here:
-    // never alter amount/date/merchant and never replace an existing card.
+    // never alter amount/date, and never replace a named merchant — except
+    // the stale generic `Money received` fallback, which a parser upgrade
+    // may now name precisely (e.g. EMI repayments previously mislabelled as
+    // generic credits). Amount/merchant are otherwise immutable on retries.
     const existing = await client.query(
       `SELECT t.*
          FROM transactions t
@@ -3914,7 +3917,14 @@ async function insertTransactionAndUpdateState(client, userId, {
       && Boolean(old.user_card_id || userCardId);
     const refreshed = await client.query(
       `UPDATE transactions t
-          SET instrument = CASE
+          SET merchant_name = CASE
+                -- Parser upgrade: replace only the stale generic credit label.
+                WHEN t.merchant_name = 'Money received'
+                     AND $8::text IS NOT NULL AND $8::text <> 'Money received'
+                  THEN $8::text
+                ELSE t.merchant_name
+              END,
+              instrument = CASE
                 WHEN t.instrument::text IN ('other', '')
                  AND $3::text IN ('credit_card', 'debit_card', 'upi_bank', 'wallet')
                   THEN $3::txn_instrument
@@ -3933,7 +3943,7 @@ async function insertTransactionAndUpdateState(client, userId, {
               END
         WHERE t.id = $1 AND t.profile_id = $2
       RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
-      [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify)]
+      [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify), merchantName || null]
     );
     if (shouldReclassify && refreshedMovesCardState && !old.is_backfill) {
       const card = oldCard || (userCardId ? await loadUserCardForState(client, userId, userCardId) : null);

@@ -240,6 +240,34 @@ void main() {
     },
   );
 
+  test(
+    'credited EMI repayment alerts are loan repayments, not income',
+    () {
+      for (final body in [
+        'Dear Customer, your account no. XX3510 has been credited with Rs.6300 towards the payment of EMI on 04-10-2026. UCO Bank',
+        'Dear Customer, your account no. XX2315 has been credited with Rs.9700 towards the payment of EMI on 04-10-2026. UCO Bank',
+        'Loan EMI payment of Rs.5000 credited to your account ending 2626.',
+      ]) {
+        final result = LocalSmsParser.parse(
+          namespace: 'user:test',
+          sender: 'VM-UCOBNK-S',
+          body: body,
+          receivedAt: DateTime(2026, 10, 4),
+        );
+        expect(
+          result?.transaction?.entryKind,
+          TxnEntryKind.transfer,
+          reason: body,
+        );
+        expect(
+          result?.transaction?.merchantName,
+          'Loan or EMI repayment',
+          reason: body,
+        );
+      }
+    },
+  );
+
   test('card refunds, reversals and statement rewards remain transfers', () {
     LocalSmsObservation? parse(String body) => LocalSmsParser.parse(
       namespace: 'user:test',

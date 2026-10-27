@@ -134,7 +134,8 @@ class LocalSmsParser {
   // 16: Betting/gambling promotions and digital credit power / loan limit marketing.
   // 17: Bank cautionary advisory warnings ("Never share OTP/PIN/CVV") do not drop valid transactions.
   // 18: Disambiguate investment share vs advisory warnings, support YONO UPI, and dot-masked accounts.
-  static const version = 18;
+  // 19: Allow scanner reprocessing of historical alerts on parser upgrade without lockout.
+  static const version = 19;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -714,7 +715,7 @@ class LocalSmsParser {
 
   static bool _earnedIncomeCredit(String body) =>
       !_re(
-        r'\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|investment|mutual\s+fund|shares|equity\s+shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
+        r'\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|emi|equated\s+monthly\s+installment|instalment|investment|mutual\s+fund|shares|equity\s+shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
       ).hasMatch(body) &&
       !_re(r'\bsalary\s+advance\b').hasMatch(body) &&
       _re(
@@ -723,9 +724,13 @@ class LocalSmsParser {
 
   static bool _loanRepayment(String body) =>
       !_feeCharge(body) &&
-      _re(
-        r'\b(?:loan|personal\s+loan|home\s+loan|car\s+loan|education\s+loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|debited|repaid|repayment|deducted|transferred)\b',
-      ).hasMatch(body);
+      (_re(
+            r'\b(?:loan|personal\s+loan|home\s+loan|car\s+loan|education\s+loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|debited|repaid|repayment|deducted|transferred)\b',
+          ).hasMatch(body) ||
+          // "credited ... towards the payment of EMI" — verb before keyword.
+          _re(
+            r'\b(?:payment|repayment|repaid)\b[\s\S]{0,60}\b(?:of|towards?|for)\b[\s\S]{0,20}\b(?:the\s+)?(?:loan|emi|equated\s+monthly\s+installment|instalment)\b',
+          ).hasMatch(body));
 
   static bool _feeCharge(String body) => _re(
     r'\b(?:bank\s+charges?|service\s+charges?|processing\s+fees?|convenience\s+fees?|'
@@ -1206,7 +1211,7 @@ class LocalSmsParser {
                   _isOwnPersonName(merchant, ownUserName)) ||
               _ownNameInFromClause(body, ownUserName) ||
               _re(
-                r'\b(?:refund(?:ed)?|reversal|reversed|cashback|reward|salary\s+advance|loan\s+disbursement|cash\s+deposit|cash\s+withdrawal)\b',
+                r'\b(?:refund(?:ed)?|reversal|reversed|cashback|reward|salary\s+advance|loan\s+(?:disbursement|repayment)|emi|equated\s+monthly\s+installment|instalment|cash\s+deposit|cash\s+withdrawal)\b',
               ).hasMatch(body)
         ? TxnEntryKind.transfer
         : _re(r'\b(?:credited|received|deposited)\b').hasMatch(body) &&
