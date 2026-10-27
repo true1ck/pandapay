@@ -622,8 +622,10 @@ function registerSmsFactsRoutes(app, {
           // a stable code that makes a failed durable retry diagnosable.
           const code = /^[0-9A-Z]{5}$/.test(String(learningError.code || ''))
             ? learningError.code : 'unknown';
+          const constraint = /^[a-zA-Z0-9_]{1,100}$/.test(String(learningError.constraint || ''))
+            ? learningError.constraint : null;
           console.warn('SMS dismissal learning feedback skipped:', code, learningError.message || learningError);
-          return { status: 503, error: 'dismissal_feedback_unavailable', learningReason: `database_${code}` };
+          return { status: 503, error: 'dismissal_feedback_unavailable', learningReason: `database_${code}${constraint ? `_${constraint}` : ''}` };
         }
 
         const learningErrors = Array.isArray(learningOutcome?.errors)
