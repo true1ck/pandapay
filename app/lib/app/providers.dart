@@ -1799,17 +1799,23 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
             outcome == 'duplicate' ||
             store.hasReceipt(namespace, key)) {
           acknowledgements.add(() {
-            store.discardProvisional(
-              namespace,
-              key,
-              confirmedId: matched.isNotEmpty
-                  ? matched.first.id
-                  : inactive
-                  ? serverId
-                  : outcome == 'imported'
-                  ? serverId
-                  : null,
-            );
+            if (matched.isNotEmpty ||
+                inactive ||
+                outcome == 'imported' ||
+                outcome == 'duplicate' ||
+                localEventByKey[key] != 'transaction') {
+              store.discardProvisional(
+                namespace,
+                key,
+                confirmedId: matched.isNotEmpty
+                    ? matched.first.id
+                    : inactive
+                    ? serverId
+                    : outcome == 'imported'
+                    ? serverId
+                    : null,
+              );
+            }
             intake.acknowledge(namespace, key);
           });
         } else if (localEventByKey[key] == 'bill') {
