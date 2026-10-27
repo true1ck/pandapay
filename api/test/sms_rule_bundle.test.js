@@ -188,7 +188,14 @@ test('routes: GET /sms/rules/active, publish, immutability, and rollback', async
     post: (path, ...middleware) => handlers.set(`POST ${path}`, middleware[middleware.length - 1]),
   };
 
-  const dbRows = [];
+  const dbRows = [{
+    bundle_version: 77,
+    rules: [{ id: 'legacy_unapproved_rule' }],
+    sha256: 'a'.repeat(64),
+    published_by: null,
+    is_active: true,
+    min_client_ver: '1.0.0',
+  }];
   let categoryApproved = false;
   const fakeClient = {
     query: async (sql, params) => {
@@ -203,7 +210,9 @@ test('routes: GET /sms/rules/active, publish, immutability, and rollback', async
         ] };
       }
       if (sql.includes('SELECT bundle_version')) {
-        const active = dbRows.filter((r) => r.is_active).sort((a, b) => b.bundle_version - a.bundle_version)[0];
+        const active = dbRows.filter((r) => r.is_active &&
+          (!sql.includes('published_by IS NOT NULL') || r.published_by !== null))
+          .sort((a, b) => b.bundle_version - a.bundle_version)[0];
         return { rows: active ? [active] : [] };
       }
       if (sql.includes('INSERT INTO public.sms_rule_bundles')) {
@@ -264,6 +273,7 @@ test('routes: GET /sms/rules/active, publish, immutability, and rollback', async
   assert.equal(res1.statusReceived, 200);
   assert.equal(res1.payload.bundleVersion, 0);
   assert.deepEqual(res1.payload.rules, []);
+  assert.deepEqual(res1.payload.candidateRules, []);
   assert.deepEqual(res1.payload.categoryRules, []);
 
   categoryApproved = true;

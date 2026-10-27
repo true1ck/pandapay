@@ -54,6 +54,13 @@ class _ParserProposalTileState extends ConsumerState<_ParserProposalTile> {
   bool busy = false;
 
   Future<void> review(String decision) async {
+    final ruleSha256 = widget.proposal['currentRuleSha256'];
+    if (ruleSha256 is! String || !RegExp(r'^[0-9a-f]{64}$').hasMatch(ruleSha256)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This parser proposal has no valid current rule hash and cannot be reviewed.')),
+      );
+      return;
+    }
     final controller = TextEditingController();
     try {
       final reason = await showDialog<String>(
@@ -80,7 +87,7 @@ class _ParserProposalTileState extends ConsumerState<_ParserProposalTile> {
       setState(() => busy = true);
       await ref.read(adminApiProvider)!.reviewSmsParserProposal(
         candidateId: widget.proposal['candidateId'] as String,
-        ruleSha256: widget.proposal['currentRuleSha256'] as String,
+        ruleSha256: ruleSha256,
         decision: decision,
         reason: reason,
       );
@@ -97,14 +104,31 @@ class _ParserProposalTileState extends ConsumerState<_ParserProposalTile> {
   @override
   Widget build(BuildContext context) {
     final p = widget.proposal;
+    final canReview = p['currentRuleSha256'] is String &&
+        RegExp(r'^[0-9a-f]{64}$').hasMatch(p['currentRuleSha256'] as String);
     return ExpansionTile(
       title: Text('${p['candidateId']} · ${p['family']} · ${p['status']}'),
       subtitle: Text('Stage: ${p['state']} · sender: ${p['senderPattern']}'),
       children: [
-        SelectableText('Regex: ${p['regex']}\nFields: ${p['fieldMap']}\nMetrics: ${p['stageMetrics']}'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SelectableText(
+            'Confidence: ${p['confidence'] ?? '—'}\n'
+            'Regex: ${p['regex'] ?? '—'}\n'
+            'Fields: ${p['fieldMap'] ?? '—'}\n'
+            'Default fields: ${p['defaultFields'] ?? '—'}\n'
+            'Metrics: ${p['stageMetrics'] ?? '—'}\n'
+            'Rule SHA-256: ${p['currentRuleSha256'] ?? 'unavailable'}',
+          ),
+        ),
+        if (!canReview)
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('Review is unavailable because this proposal has no valid current rule hash.'),
+          ),
         Wrap(spacing: 8, children: [
-          OutlinedButton(onPressed: busy ? null : () => review('rejected'), child: const Text('Reject')),
-          FilledButton(onPressed: busy ? null : () => review('approved'), child: const Text('Approve')),
+          OutlinedButton(onPressed: busy || !canReview ? null : () => review('rejected'), child: const Text('Reject')),
+          FilledButton(onPressed: busy || !canReview ? null : () => review('approved'), child: const Text('Approve')),
         ]),
       ],
     );

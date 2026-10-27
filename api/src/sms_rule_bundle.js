@@ -196,7 +196,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
         const active = await client.query(
           `SELECT bundle_version, rules, sha256, published_at, min_client_ver
              FROM public.sms_rule_bundles
-            WHERE is_active = true
+            WHERE is_active = true AND published_by IS NOT NULL
             ORDER BY bundle_version DESC
             LIMIT 1`,
         );

@@ -235,6 +235,51 @@ void main() {
       },
     );
 
+    test('an approved category rollback clears the cached rule set', () async {
+      final rule = SmsSharedCategoryRule.fromJson({
+        'merchantKey': 'BUNDL TECHNOLOGIES',
+        'categorySlug': 'groceries',
+        'supportCount': 12,
+        'agreementBp': 10000,
+      })!;
+      final populated = [rule];
+      await store.saveSharedCategoryRules({
+        'categoryRulesVersion': 1,
+        'categoryRulesMinClientVersion': '1.0.0',
+        'categoryRulesSha256':
+            SmsRuleBundleStore.computeSharedCategoryRulesSha256(
+              version: 1,
+              minClientVersion: '1.0.0',
+              rules: populated,
+            ),
+        'categoryRules': populated.map((item) => item.toJson()).toList(),
+      });
+      expect(store.loadSharedCategoryRulesSync(), isNotEmpty);
+
+      const emptyRules = <SmsSharedCategoryRule>[];
+      final rollback = {
+        'rolledBack': true,
+        'bundleVersion': 0,
+        'rules': <Object>[],
+        'sha256': '',
+        'categoryRulesVersion': 1,
+        'categoryRulesMinClientVersion': '1.0.0',
+        'categoryRulesSha256':
+            SmsRuleBundleStore.computeSharedCategoryRulesSha256(
+              version: 1,
+              minClientVersion: '1.0.0',
+              rules: emptyRules,
+            ),
+        'categoryRules': <Object>[],
+      };
+      await store.syncRules(
+        MockClient((_) async => http.Response(jsonEncode(rollback), 200)),
+        apiBaseUrl: 'https://api.example.test',
+      );
+
+      expect(store.loadSharedCategoryRulesSync(), isEmpty);
+    });
+
     test(
       'syncRules downloads new bundle and ignores upToDate response',
       () async {

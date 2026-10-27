@@ -26,6 +26,27 @@ test('real database: app_user RLS, worker separation, advisory locks, and deleti
     try {
       const role = await client.query('SELECT current_user AS role');
       assert.equal(role.rows[0].role, 'postgres');
+      const legacyBundles = await client.query(`
+        SELECT count(*)::int AS count
+          FROM public.sms_rule_bundles
+         WHERE is_active = true AND published_by IS NULL
+      `);
+      assert.equal(legacyBundles.rows[0].count, 0, 'legacy worker bundles must be withdrawn');
+      const categoryGate = await client.query(`
+        SELECT pg_get_functiondef('pandapay.sms_approved_category_rules()'::regprocedure) AS definition
+      `);
+      assert.match(categoryGate.rows[0].definition, /sms_category_rule_approvals/);
+      assert.match(categoryGate.rows[0].definition, /status = 'approved'/);
+      const workerGlobalMutation = await client.query(`
+        SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sms_learning_worker')
+          THEN has_function_privilege('sms_learning_worker',
+            'pandapay.sms_publish_bundle(integer,jsonb,text,text)', 'EXECUTE')
+            OR has_function_privilege('sms_learning_worker',
+              'pandapay.sms_rollback_bundle(integer)', 'EXECUTE')
+          ELSE false END AS allowed
+      `);
+      assert.equal(workerGlobalMutation.rows[0].allowed, false);
+
       const user1 = crypto.randomUUID();
       const user2 = crypto.randomUUID();
       const hmacKey = 'test_learning_secret_key_32_characters_long';

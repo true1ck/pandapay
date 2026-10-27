@@ -467,55 +467,13 @@ test('sms_learning_pipeline: complete connected loop from review to local execut
   assert.equal(advanceRes.advanced, 1);
   assert.equal(db.candidates[0].state, 'active');
 
-  // 5. Publish validated bundle
+  // 5. Candidate promotion alone cannot publish a global bundle.
   const publishRes = await publishActiveBundle(db);
-  assert.equal(publishRes.published, true);
-  assert.equal(publishRes.bundleVersion, 1);
-  assert.equal(db.bundles.length, 1);
-
-  // 6. Device download & local extraction with CHANGED values
-  const downloadedBundle = db.bundles[0];
-  assert.equal(downloadedBundle.rules.length, 1);
-
-  const downloadedRule = downloadedBundle.rules[0];
-  assert.equal(downloadedRule.senderPattern, 'HDFC');
-
-  // New incoming SMS for a DIFFERENT user with completely different values:
-  // - Amount: ₹120.50 (was ₹100.00-1000.00)
-  // - Card: 9999 (was 100x)
-  // - Merchant: Swiggy (was Amazon)
-  // - Date: 23-10-2026 (was 22-10-2026)
-  // - Ref: 987654321 (was 123456789)
-  // - Balance: ₹8,500.00 (was ₹50,000)
-  const incomingSender = 'VM-HDFCBK-S';
-  const incomingBody = 'debited by Rs. 120.50 on card 9999 at Swiggy on 23-10-2026 ref 987654321. Avail Bal Rs. 8,500.00';
-
-  // Device checks sender
-  assert.ok(incomingSender.toUpperCase().includes(downloadedRule.senderPattern.toUpperCase()));
-
-  // Device runs compiled regex locally
-  const localRegex = new RegExp(downloadedRule.regex, 'i');
-  const match = incomingBody.match(localRegex);
-  assert.ok(match, 'Regex must match incoming SMS locally');
-
-  // Device extracts fields using fieldMap
-  const { fieldMap } = downloadedRule;
-  const extractedAmount = match[fieldMap.amount];
-  const extractedLast4 = match[fieldMap.last4];
-  const extractedMerchant = match[fieldMap.merchant];
-  const extractedDate = match[fieldMap.asOf];
-  const extractedRef = match[fieldMap.reference];
-  const extractedBal = match[fieldMap.availableBalance];
-
-  assert.equal(extractedAmount, '120.50');
-  assert.equal(extractedLast4, '9999');
-  assert.equal(extractedMerchant, 'Swiggy');
-  assert.equal(extractedDate, '23-10-2026');
-  assert.equal(extractedRef, '987654321');
-  assert.equal(extractedBal, '8,500.00');
+  assert.deepEqual(publishRes, { published: false, reason: 'admin_approval_required' });
+  assert.equal(db.bundles.length, 0);
 });
 
-test('sms_learning_pipeline: advisory lock ensures concurrent promotion safety and idempotency', async () => {
+test('sms_learning_pipeline: worker cannot publish or create global bundles', async () => {
   const db = createMockDb();
 
   // Create an active candidate
@@ -532,20 +490,14 @@ test('sms_learning_pipeline: advisory lock ensures concurrent promotion safety a
     state: 'active',
   });
 
-  // First publish succeeds
+  // Worker promotion is limited to cohort experiments; global publication
+  // must be initiated through the audited admin API.
   const pub1 = await publishActiveBundle(db);
-  assert.equal(pub1.published, true);
-  assert.equal(pub1.bundleVersion, 1);
-
-  // Second immediate publish is idempotent (returns upToDate: true without creating redundant bundle)
-  const pub2 = await publishActiveBundle(db);
-  assert.equal(pub2.published, false);
-  assert.equal(pub2.upToDate, true);
-  assert.equal(pub2.bundleVersion, 1);
-  assert.equal(db.bundles.length, 1);
+  assert.deepEqual(pub1, { published: false, reason: 'admin_approval_required' });
+  assert.equal(db.bundles.length, 0);
 });
 
-test('sms_learning_pipeline: rollback bundle immediately inactivates bundle and reverts candidates', async () => {
+test('sms_learning_pipeline: unpublished candidates do not create rollback targets', async () => {
   const db = createMockDb();
 
   db.candidates.push({
@@ -562,12 +514,6 @@ test('sms_learning_pipeline: rollback bundle immediately inactivates bundle and 
   });
 
   const pub = await publishActiveBundle(db);
-  assert.equal(pub.published, true);
-  assert.equal(db.bundles[0].is_active, true);
-
-  // Trigger automatic rollback on detected regression
-  const rollbackRes = await rollbackRegressedBundle(db, pub.bundleVersion, 'false_positive_spike');
-  assert.equal(rollbackRes.rolledBack, true);
-  assert.equal(db.bundles[0].is_active, false);
-  assert.equal(db.candidates[0].state, 'rolled_back');
+  assert.equal(pub.published, false);
+  assert.equal(db.bundles.length, 0);
 });
