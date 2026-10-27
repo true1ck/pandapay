@@ -2920,7 +2920,7 @@ class _MonthlyComparisonCard extends StatefulWidget {
 }
 
 class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
-  int _selectedIndex = 0;
+  int? _selectedIndex;
 
   static String _monthLabel(DateTime date) {
     const months = <String>[
@@ -2945,7 +2945,9 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
   Widget build(BuildContext context) {
     final series = widget.series;
     if (series.length < 2) return const SizedBox.shrink();
-    final selectedIndex = _selectedIndex.clamp(0, series.length - 1).toInt();
+    final selectedIndex = (_selectedIndex ?? series.length - 1)
+        .clamp(0, series.length - 1)
+        .toInt();
     final selected = series[selectedIndex];
     final latest = series.last;
     final previous = series[series.length - 2];
@@ -2977,7 +2979,7 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
                 ),
               ),
               Tooltip(
-                message: 'Tap or swipe across a bar to inspect that month',
+                message: 'Tap a bar to inspect that month',
                 child: Icon(
                   Icons.info_outline_rounded,
                   color: BambooInk.ink500,
@@ -3054,7 +3056,7 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    '$comparisonText\nTap or swipe across bars to inspect each month.',
+                    '$comparisonText\nTap a bar to inspect a month. Swipe sideways when months overflow.',
                     style: BambooFonts.ui(10.5, color: BambooInk.ink900),
                   ),
                 ),
@@ -3067,7 +3069,93 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
   }
 }
 
-class _InteractiveMonthlyBarChart extends StatelessWidget {
+/// Painted area of the chart: gridlines, bars and the month labels.
+const double _monthlyChartPlotHeight = 145;
+
+/// Box around it — the spare height under the month labels carries the
+/// scroll position bar, so the bar never crosses the dates.
+const double _monthlyChartHeight = _monthlyChartPlotHeight + 6;
+
+const double _monthlyChartAxisGutter = 48;
+const double _monthlyChartTopPad = 22;
+const double _monthlyChartBottomPad = 38;
+
+/// Minimum horizontal space a month gets before the plot starts scrolling.
+/// Sized for the widest label pair ("Sep 2026" above a "₹1.2L" bar value) so
+/// labels never fall back to ellipses.
+const double _monthlyChartMinSlot = 56;
+
+const double _monthlyChartScrollbarThickness = 3;
+const double _monthlyChartScrollbarInset = 5;
+const double _monthlyChartMinThumbWidth = 28;
+
+const double _monthlyChartMaxBarWidth = 64;
+const double _monthlyChartMinBarWidth = 20;
+const double _monthlyChartBarSlotFraction = 0.56;
+
+double _monthlyChartBarWidth(double slot) => math
+    .min(
+      _monthlyChartMaxBarWidth,
+      math.max(_monthlyChartMinBarWidth, slot * _monthlyChartBarSlotFraction),
+    )
+    .toDouble();
+
+String _monthlyAxisLabel(int paise) {
+  final rupees = paise / 100;
+  if (rupees >= 100000) return '₹${(rupees / 100000).toStringAsFixed(1)}L';
+  if (rupees >= 1000) return '₹${(rupees / 1000).toStringAsFixed(0)}K';
+  return '₹${rupees.toStringAsFixed(0)}';
+}
+
+String _monthlyBarLabel(Money amount) {
+  final rupees = amount.paise / 100;
+  if (rupees >= 100000) return '₹${(rupees / 100000).toStringAsFixed(1)}L';
+  if (rupees >= 1000) return '₹${(rupees / 1000).toStringAsFixed(1)}K';
+  return amount.format(hidePaise: true);
+}
+
+String _monthlyPointLabel(DateTime date) {
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final local = date.toLocal();
+  return '${months[local.month - 1]} ${local.year}';
+}
+
+void _paintMonthlyChartText(
+  Canvas canvas,
+  String value,
+  Offset offset,
+  double maxWidth,
+  TextStyle style, {
+  TextAlign align = TextAlign.left,
+}) {
+  final painter = TextPainter(
+    text: TextSpan(text: value, style: style),
+    textAlign: align,
+    maxLines: 1,
+    ellipsis: '…',
+    textDirection: TextDirection.ltr,
+  )..layout(maxWidth: maxWidth);
+  final x = align == TextAlign.center
+      ? offset.dx + (maxWidth - painter.width) / 2
+      : offset.dx;
+  painter.paint(canvas, Offset(x, offset.dy));
+  painter.dispose();
+}
+
+class _InteractiveMonthlyBarChart extends StatefulWidget {
   final List<SpendSeriesPoint> series;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
@@ -3078,39 +3166,161 @@ class _InteractiveMonthlyBarChart extends StatelessWidget {
     required this.onSelected,
   });
 
-  void _selectAt(Offset position, Size size) {
-    const left = 48.0;
-    const right = 4.0;
-    if (position.dx < left || position.dx > size.width - right) return;
-    final chartWidth = math.max(1.0, size.width - left - right).toDouble();
-    final slot = chartWidth / series.length;
-    final index = ((position.dx - left) / slot).floor();
-    if (index >= 0 && index < series.length) onSelected(index);
+  @override
+  State<_InteractiveMonthlyBarChart> createState() =>
+      _InteractiveMonthlyBarChartState();
+}
+
+class _InteractiveMonthlyBarChartState
+    extends State<_InteractiveMonthlyBarChart> {
+  final ScrollController _controller = ScrollController();
+
+  /// Slot and viewport of the most recent layout, needed to map taps and to
+  /// scroll the selected month into view from lifecycle callbacks.
+  double _slotWidth = _monthlyChartMinSlot;
+  double _viewportWidth = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _revealSelected(animate: false);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _InteractiveMonthlyBarChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedIndex != widget.selectedIndex ||
+        oldWidget.series.length != widget.series.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _revealSelected(
+          animate: oldWidget.series.length == widget.series.length,
+        );
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _revealSelected({required bool animate}) {
+    if (!_controller.hasClients) return;
+    final position = _controller.position;
+    if (position.maxScrollExtent <= 0) return;
+    final barWidth = _monthlyChartBarWidth(_slotWidth);
+    final barLeft =
+        widget.selectedIndex * _slotWidth + (_slotWidth - barWidth) / 2;
+    final barRight = barLeft + barWidth;
+    final viewLeft = position.pixels;
+    final viewRight = viewLeft + _viewportWidth;
+    // Already fully visible — scrolling would just nudge the chart under the
+    // user's finger.
+    if (barLeft >= viewLeft && barRight <= viewRight) return;
+    final target = (barLeft + barRight) / 2 - _viewportWidth / 2;
+    final offset = target.clamp(0.0, position.maxScrollExtent).toDouble();
+    if ((position.pixels - offset).abs() < 0.5) return;
+    if (!animate) {
+      _controller.jumpTo(offset);
+      return;
+    }
+    _controller.animateTo(
+      offset,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _selectAt(Offset position) {
+    if (_slotWidth <= 0) return;
+    final index = (position.dx / _slotWidth).floor();
+    if (index >= 0 && index < widget.series.length) widget.onSelected(index);
   }
 
   @override
   Widget build(BuildContext context) {
+    final maxPaise = widget.series.fold<int>(
+      1,
+      (maxValue, point) =>
+          maxValue > point.spend.paise ? maxValue : point.spend.paise,
+    );
     return SizedBox(
+      key: const ValueKey('monthly-comparison-chart'),
       width: double.infinity,
-      height: 145,
+      height: _monthlyChartHeight,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final size = Size(constraints.maxWidth, 145);
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapUp: (details) => _selectAt(details.localPosition, size),
-            onHorizontalDragUpdate: (details) =>
-                _selectAt(details.localPosition, size),
-            child: Semantics(
-              label:
-                  'Monthly spending chart. Swipe or tap a bar to select a month.',
-              child: CustomPaint(
-                painter: _MonthlyBarChartPainter(
-                  series: series,
-                  selectedIndex: selectedIndex,
+          final viewport = math.max(
+            1.0,
+            constraints.maxWidth - _monthlyChartAxisGutter,
+          );
+          // Every month keeps a legible slot; when that no longer fits the
+          // card the plot overflows and scrolls instead of truncating labels.
+          final slot = math.max(
+            _monthlyChartMinSlot,
+            viewport / widget.series.length,
+          );
+          final contentWidth = math.max(
+            viewport,
+            slot * widget.series.length,
+          );
+          final scrollable = contentWidth > viewport + 0.5;
+          _slotWidth = contentWidth / widget.series.length;
+          _viewportWidth = viewport;
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _MonthlyChartAxisPainter(
+                      maxPaise: maxPaise,
+                      controller: _controller,
+                      scrollable: scrollable,
+                      contentWidth: contentWidth,
+                      viewportWidth: viewport,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              Row(
+                children: [
+                  const SizedBox(width: _monthlyChartAxisGutter),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: _controller,
+                      scrollDirection: Axis.horizontal,
+                      physics: scrollable
+                          ? const ClampingScrollPhysics()
+                          : const NeverScrollableScrollPhysics(),
+                      child: SizedBox(
+                        width: contentWidth,
+                        height: _monthlyChartHeight,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTapUp: (details) => _selectAt(details.localPosition),
+                          child: Semantics(
+                            label: scrollable
+                                ? 'Monthly spending chart. Swipe sideways to scroll months. Tap a bar to select a month.'
+                                : 'Monthly spending chart. Tap a bar to select a month.',
+                            child: CustomPaint(
+                              painter: _MonthlyBarsPainter(
+                                series: widget.series,
+                                selectedIndex: widget.selectedIndex,
+                                maxPaise: maxPaise,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           );
         },
       ),
@@ -3118,83 +3328,34 @@ class _InteractiveMonthlyBarChart extends StatelessWidget {
   }
 }
 
-class _MonthlyBarChartPainter extends CustomPainter {
-  final List<SpendSeriesPoint> series;
-  final int selectedIndex;
+/// Gridlines, the value axis and the scroll position bar. Painted once behind
+/// the scrolled plot so all three stay pinned while months move underneath.
+class _MonthlyChartAxisPainter extends CustomPainter {
+  final int maxPaise;
+  final ScrollController controller;
+  final bool scrollable;
+  final double contentWidth;
+  final double viewportWidth;
 
-  const _MonthlyBarChartPainter({
-    required this.series,
-    required this.selectedIndex,
-  });
-
-  String _axisLabel(int paise) {
-    final rupees = paise / 100;
-    if (rupees >= 100000) return '₹${(rupees / 100000).toStringAsFixed(1)}L';
-    if (rupees >= 1000) return '₹${(rupees / 1000).toStringAsFixed(0)}K';
-    return '₹${rupees.toStringAsFixed(0)}';
-  }
-
-  String _barLabel(Money amount) {
-    final rupees = amount.paise / 100;
-    if (rupees >= 100000) return '₹${(rupees / 100000).toStringAsFixed(1)}L';
-    if (rupees >= 1000) return '₹${(rupees / 1000).toStringAsFixed(1)}K';
-    return amount.format(hidePaise: true);
-  }
-
-  static String _monthLabel(DateTime date) {
-    const months = <String>[
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final local = date.toLocal();
-    return '${months[local.month - 1]} ${local.year}';
-  }
-
-  void _text(
-    Canvas canvas,
-    String value,
-    Offset offset,
-    double maxWidth,
-    TextStyle style, {
-    TextAlign align = TextAlign.left,
-  }) {
-    final painter = TextPainter(
-      text: TextSpan(text: value, style: style),
-      textAlign: align,
-      maxLines: 1,
-      ellipsis: '…',
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: maxWidth);
-    final x = align == TextAlign.center
-        ? offset.dx + (maxWidth - painter.width) / 2
-        : offset.dx;
-    painter.paint(canvas, Offset(x, offset.dy));
-  }
+  _MonthlyChartAxisPainter({
+    required this.maxPaise,
+    required this.controller,
+    required this.scrollable,
+    required this.contentWidth,
+    required this.viewportWidth,
+  }) : super(repaint: controller);
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (series.isEmpty || size.width <= 0 || size.height <= 0) return;
-    const left = 48.0;
-    const right = 4.0;
-    const top = 22.0;
-    const bottom = 38.0;
-    final chartWidth = math.max(1.0, size.width - left - right).toDouble();
-    final chartHeight = math.max(1.0, size.height - top - bottom).toDouble();
-    final maxPaise = series.fold<int>(
-      1,
-      (maxValue, point) =>
-          maxValue > point.spend.paise ? maxValue : point.spend.paise,
-    );
+    if (size.width <= 0 || size.height <= 0) return;
+    final chartHeight = math
+        .max(
+          1.0,
+          _monthlyChartPlotHeight -
+              _monthlyChartTopPad -
+              _monthlyChartBottomPad,
+        )
+        .toDouble();
     final gridPaint = Paint()
       ..color = BambooInk.hairlineOnPaper
       ..strokeWidth = 1;
@@ -3203,40 +3364,120 @@ class _MonthlyBarChartPainter extends CustomPainter {
       ..strokeWidth = 1.2;
 
     for (final fraction in <double>[0, 0.5, 1]) {
-      final y = top + chartHeight * (1 - fraction);
+      final y = _monthlyChartTopPad + chartHeight * (1 - fraction);
       canvas.drawLine(
-        Offset(left, y),
-        Offset(size.width - right, y),
+        Offset(_monthlyChartAxisGutter, y),
+        Offset(size.width, y),
         gridPaint,
       );
-      _text(
+      _paintMonthlyChartText(
         canvas,
-        _axisLabel((maxPaise * fraction).round()),
+        _monthlyAxisLabel((maxPaise * fraction).round()),
         Offset(0, y - 7),
-        left - 7,
+        _monthlyChartAxisGutter - 7,
         BambooFonts.ui(10.5, color: BambooInk.ink500),
         align: TextAlign.right,
       );
     }
     canvas.drawLine(
-      Offset(left, top),
-      Offset(left, top + chartHeight),
+      Offset(_monthlyChartAxisGutter, _monthlyChartTopPad),
+      Offset(_monthlyChartAxisGutter, _monthlyChartTopPad + chartHeight),
       axisPaint,
     );
     canvas.drawLine(
-      Offset(left, top + chartHeight),
-      Offset(size.width - right, top + chartHeight),
+      Offset(_monthlyChartAxisGutter, _monthlyChartTopPad + chartHeight),
+      Offset(size.width, _monthlyChartTopPad + chartHeight),
       axisPaint,
     );
 
-    final slot = chartWidth / series.length;
-    final barWidth = math.min(64.0, math.max(20.0, slot * 0.56)).toDouble();
+    if (!scrollable) return;
+    // Own strip under the month labels: a Material scrollbar lands on the
+    // labels at this height, which reads as a stray line through the dates.
+    final trackLeft = _monthlyChartAxisGutter + 2;
+    final trackWidth = math.max(0.0, size.width - 2 - trackLeft);
+    if (trackWidth <= 0) return;
+    final centerY = _monthlyChartHeight - _monthlyChartScrollbarInset;
+    final trackPaint = Paint()
+      ..color = BambooInk.ink500.withValues(alpha: 0.14);
+    final thumbPaint = Paint()
+      ..color = BambooInk.ink500.withValues(alpha: 0.5);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          trackLeft,
+          centerY - _monthlyChartScrollbarThickness / 2,
+          trackWidth,
+          _monthlyChartScrollbarThickness,
+        ),
+        const Radius.circular(2),
+      ),
+      trackPaint,
+    );
+    if (!controller.hasClients) return;
+    final position = controller.position;
+    final visible = (viewportWidth / contentWidth).clamp(0.0, 1.0);
+    final thumbWidth = math.max(
+      _monthlyChartMinThumbWidth,
+      trackWidth * visible,
+    );
+    final progress = position.maxScrollExtent <= 0
+        ? 0.0
+        : (position.pixels / position.maxScrollExtent).clamp(0.0, 1.0);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          trackLeft + (trackWidth - thumbWidth) * progress,
+          centerY - _monthlyChartScrollbarThickness / 2,
+          thumbWidth,
+          _monthlyChartScrollbarThickness,
+        ),
+        const Radius.circular(2),
+      ),
+      thumbPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MonthlyChartAxisPainter oldDelegate) =>
+      oldDelegate.maxPaise != maxPaise ||
+      oldDelegate.controller != controller ||
+      oldDelegate.scrollable != scrollable ||
+      oldDelegate.contentWidth != contentWidth ||
+      oldDelegate.viewportWidth != viewportWidth;
+}
+
+/// Bars, their values and month labels. Laid out in content coordinates
+/// (no axis gutter) because the parent scroll view owns the horizontal offset.
+class _MonthlyBarsPainter extends CustomPainter {
+  final List<SpendSeriesPoint> series;
+  final int selectedIndex;
+  final int maxPaise;
+
+  const _MonthlyBarsPainter({
+    required this.series,
+    required this.selectedIndex,
+    required this.maxPaise,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (series.isEmpty || size.width <= 0 || size.height <= 0) return;
+    final chartHeight = math
+        .max(
+          1.0,
+          _monthlyChartPlotHeight -
+              _monthlyChartTopPad -
+              _monthlyChartBottomPad,
+        )
+        .toDouble();
+    final slot = size.width / series.length;
+    final barWidth = _monthlyChartBarWidth(slot);
     for (var index = 0; index < series.length; index += 1) {
       final point = series[index];
       final normalized = point.spend.paise / maxPaise;
       final barHeight = chartHeight * normalized;
-      final x = left + slot * index + (slot - barWidth) / 2;
-      final y = top + chartHeight - barHeight;
+      final x = slot * index + (slot - barWidth) / 2;
+      final y = _monthlyChartTopPad + chartHeight - barHeight;
       final barPaint = Paint()
         ..color = index == selectedIndex
             ? BambooInk.lime
@@ -3249,18 +3490,18 @@ class _MonthlyBarChartPainter extends CustomPainter {
         ),
         barPaint,
       );
-      _text(
+      _paintMonthlyChartText(
         canvas,
-        _barLabel(point.spend),
-        Offset(left + slot * index, math.max(0, y - 19)),
+        _monthlyBarLabel(point.spend),
+        Offset(slot * index, math.max(0, y - 19)),
         slot,
         BambooFonts.ui(10.5, weight: FontWeight.w700, color: BambooInk.ink900),
         align: TextAlign.center,
       );
-      _text(
+      _paintMonthlyChartText(
         canvas,
-        _monthLabel(point.periodStart),
-        Offset(left + slot * index, top + chartHeight + 9),
+        _monthlyPointLabel(point.periodStart),
+        Offset(slot * index, _monthlyChartTopPad + chartHeight + 9),
         slot,
         BambooFonts.ui(10.5, color: BambooInk.ink500),
         align: TextAlign.center,
@@ -3269,9 +3510,10 @@ class _MonthlyBarChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MonthlyBarChartPainter oldDelegate) =>
+  bool shouldRepaint(covariant _MonthlyBarsPainter oldDelegate) =>
       oldDelegate.series != series ||
-      oldDelegate.selectedIndex != selectedIndex;
+      oldDelegate.selectedIndex != selectedIndex ||
+      oldDelegate.maxPaise != maxPaise;
 }
 
 /// A visual summary of the same category totals shown in the expandable rows

@@ -1552,15 +1552,63 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final chart = find.descendant(
-      of: find.ancestor(
-        of: find.text('Monthly comparison'),
-        matching: find.byType(CardSummaryPanel),
-      ),
-      matching: find.byType(CustomPaint),
-    );
+    final chart = find.byKey(const ValueKey('monthly-comparison-chart'));
     expect(chart, findsOneWidget);
     expect(tester.getSize(chart).width, greaterThan(0));
+
+    final scrollable = find.descendant(
+      of: chart,
+      matching: find.byType(Scrollable),
+    );
+    final position = tester.state<ScrollableState>(scrollable).position;
+    // Three months fit inside a tablet-width card, so nothing scrolls.
+    expect(position.maxScrollExtent, 0);
+  });
+
+  testWidgets('monthly chart scrolls sideways when months stop fitting', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => SpendReportQuery.custom(
+              from: DateTime(2026, 1, 1),
+              to: DateTime(2026, 12, 31),
+            ),
+          ),
+          spendReportProvider.overrideWith((ref, query) async => _report()),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => const [],
+          ),
+        ],
+        child: const MaterialApp(home: SpendTrendsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final chart = find.byKey(const ValueKey('monthly-comparison-chart'));
+    expect(chart, findsOneWidget);
+    final scrollable = find.descendant(
+      of: chart,
+      matching: find.byType(Scrollable),
+    );
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.maxScrollExtent, greaterThan(0));
+    // Opens on the latest month rather than the oldest.
+    expect(position.pixels, greaterThan(0));
+    expect(find.text('Dec 2026'), findsOneWidget);
+
+    await tester.ensureVisible(chart);
+    await tester.pumpAndSettle();
+    final rect = tester.getRect(chart);
+    await tester.tapAt(Offset(rect.left + 56, rect.center.dy));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dec 2026'), findsNothing);
   });
 
   testWidgets('an empty period shows an explicit zero-spending state', (
