@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:pandapay_domain/pandapay_domain.dart';
+
 import '../local_sms_parser.dart';
 import '../needs_review_repository.dart';
 import 'app_database.dart';
@@ -52,6 +54,62 @@ class SmsAutoResolutionController {
     });
   }
 
+  /// Edits the locally filed transaction behind an Auto-Resolved SMS.
+  /// These AI-created rows are device-local, so edits must update the local
+  /// financial snapshot and receipt together instead of calling the server
+  /// transaction API with a synthetic `local-ai:` id.
+  Future<void> editTransaction(
+    AutoResolvedHistoryEntry entry, {
+    required String merchantName,
+    required Money amount,
+    required DateTime occurredAt,
+  }) async {
+    if (entry.resolvedKind != 'transaction') {
+      throw ArgumentError('Only auto-resolved transactions can be edited.');
+    }
+    final merchant = merchantName.trim();
+    if (merchant.isEmpty) throw ArgumentError('Merchant is required.');
+    if (amount.paise <= 0) throw ArgumentError('Amount must be positive.');
+
+    store.batch(() {
+      final rows = database.db.select(
+        "SELECT id, payload FROM financial_entities WHERE namespace=? "
+        "AND entity='transactions' AND (source_key=? OR id=?) LIMIT 1",
+        [namespace, entry.sourceKey, 'local-ai:${entry.sourceKey}'],
+      );
+      if (rows.isEmpty) {
+        throw StateError(
+          'The auto-resolved transaction is no longer available.',
+        );
+      }
+      final row = rows.single;
+      final payload =
+          jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final occurredAtUtc = occurredAt.toUtc();
+      payload['amount_inr'] = amount.rupees;
+      payload['merchant_name'] = merchant;
+      payload['occurred_at'] = occurredAtUtc.toIso8601String();
+      database.db.execute(
+        "UPDATE financial_entities SET payload=?, observed_at=? "
+        "WHERE namespace=? AND entity='transactions' AND id=?",
+        [jsonEncode(payload), timestamp, namespace, row['id']],
+      );
+      database.db.execute(
+        'UPDATE local_auto_resolved_history SET title=?, amount_paise=?, '
+        'occurred_at=?, is_user_modified=1 WHERE namespace=? AND id=?',
+        [
+          merchant,
+          amount.paise,
+          occurredAtUtc.toIso8601String(),
+          namespace,
+          entry.id,
+        ],
+      );
+      store.notifyPendingChange(namespace);
+    });
+  }
+
   /// Undoes an auto-resolution: removes the auto-filed transaction (or bill),
   /// drops the receipt and puts the message back into Needs Review.
   Future<void> moveToReview(AutoResolvedHistoryEntry entry) async {
@@ -81,7 +139,13 @@ class SmsAutoResolutionController {
       NeedsReviewItem(
         id: id,
         sender: entry.sender,
-        body: entry.sourceBody ?? _reviewBody(entry, receivedAt),
+        // Keep the non-parsable review summary here. Feeding the original bill
+        // or mandate SMS back through NeedsReviewRepository.add() can
+        // immediately auto-file it again, defeating the user's undo action.
+        // The original SMS remains visible on the Auto-Resolved receipt.
+        body: entry.resolvedKind == 'dismissed' && entry.sourceBody != null
+            ? entry.sourceBody!
+            : _reviewBody(entry, receivedAt),
         reason: 'moved_from_auto_resolved',
         receivedAt: receivedAt,
         kind: entry.resolvedKind == 'bill'

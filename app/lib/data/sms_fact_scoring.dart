@@ -36,6 +36,14 @@ final RegExp smsMovementVerbRe = RegExp(
   caseSensitive: false,
 );
 
+// Some processors confirm a payment as "payment ... completed successfully"
+// without using paid/debited. Require the explicit transaction noun and
+// completed wording just as the API verifier does.
+final RegExp smsCompletedTransactionRe = RegExp(
+  r'\b(?:payment|transaction|transfer|purchase)\b[\s\S]{0,100}\bcompleted(?:\s+successfully)?\b',
+  caseSensitive: false,
+);
+
 /// Marketing / operational footers appended to genuine bank alerts. Everything
 /// from the first marker onwards is not part of the transaction clause, so a
 /// footer word like "eligible" or "scheduled maintenance" must never
@@ -70,7 +78,10 @@ String smsCoreTransactionClause(String body) {
 bool smsHasCompletionEvidence(String body) {
   final core = smsCoreTransactionClause(body);
   if (core.isEmpty) return false;
-  if (!smsMovementVerbRe.hasMatch(core)) return false;
+  if (!smsMovementVerbRe.hasMatch(core) &&
+      !smsCompletedTransactionRe.hasMatch(core)) {
+    return false;
+  }
   if (smsFailureOrTentativeRe.hasMatch(core)) return false;
   return true;
 }
@@ -79,9 +90,7 @@ bool smsHasCompletionEvidence(String body) {
 List<double> smsMoneyInMessage(String body) {
   final values = <double>[];
   for (final match in _moneyInMessageRe.allMatches(body)) {
-    final value = double.tryParse(
-      (match.group(1) ?? '').replaceAll(',', ''),
-    );
+    final value = double.tryParse((match.group(1) ?? '').replaceAll(',', ''));
     if (value != null && value.isFinite) values.add(value);
   }
   return values;
@@ -107,8 +116,7 @@ double _unitScore(Object? value) {
   return math.min(1, math.max(0, number));
 }
 
-bool _shortText(Object? value) =>
-    value is String && value.trim().isNotEmpty;
+bool _shortText(Object? value) => value is String && value.trim().isNotEmpty;
 
 bool _validDate(Object? value) =>
     value is String && DateTime.tryParse(value) != null;
@@ -256,18 +264,36 @@ double _modelScore(Map<String, dynamic> payload) {
   return 0.8;
 }
 
-double _evidenceScore(String factType, Map<String, dynamic> payload, String body) {
+double _evidenceScore(
+  String factType,
+  Map<String, dynamic> payload,
+  String body, {
+  DateTime? receivedAt,
+}) {
   var score = 0.0;
-  if (smsAmountAppears(body, smsFactAmountRupees(payload))) score += 0.40;
+  final paymentAmount = payload['amountInr'];
+  final amountEvidence = factType == 'bill_payment'
+      ? _amountInCompletedPayment(body, paymentAmount)
+      : factType == 'posted_movement'
+      ? _amountInPostedTransaction(body, paymentAmount)
+      : smsAmountAppears(body, smsFactAmountRupees(payload));
+  if (amountEvidence) score += 0.40;
   final suffix = payload['last4'] ?? payload['accountLast4'];
   if (suffix is String && suffix.isNotEmpty && body.contains(suffix)) {
     score += 0.25;
   }
-  if (smsDateAppears(body, smsAnchorForPayload(payload))) score += 0.20;
+  final anchor = smsAnchorForPayload(payload);
+  final parsedAnchor = DateTime.tryParse(anchor ?? '');
+  final hasReceiptTime =
+      (factType == 'posted_movement' || factType == 'bill_payment') &&
+      parsedAnchor != null &&
+      receivedAt != null &&
+      parsedAnchor.difference(receivedAt).inMicroseconds.abs() <=
+          const Duration(minutes: 5).inMicroseconds;
+  if (smsDateAppears(body, anchor) || hasReceiptTime) score += 0.20;
   if (factType == 'posted_movement' || factType == 'bill_payment') {
     if (smsHasCompletionEvidence(body)) score += 0.15;
-  } else if (factType == 'bill_obligation' ||
-      factType == 'mandate_lifecycle') {
+  } else if (factType == 'bill_obligation' || factType == 'mandate_lifecycle') {
     if (RegExp(
       r'\b(bill|due|mandate|autopay|auto.pay)\b',
       caseSensitive: false,
@@ -276,6 +302,71 @@ double _evidenceScore(String factType, Map<String, dynamic> payload, String body
     }
   }
   return _round4(math.min(1, score));
+}
+
+bool _amountInCompletedPayment(String body, Object? amount) {
+  if (amount is! num || !amount.isFinite || amount <= 0) return false;
+  final pattern = RegExp(
+    r'\b(?:payment|transaction|transfer|purchase)\b[\s\S]{0,120}\bcompleted(?:\s+successfully)?\b',
+    caseSensitive: false,
+  );
+  for (final match in pattern.allMatches(body)) {
+    if (smsAmountAppears(match.group(0)!, amount)) return true;
+  }
+  return false;
+}
+
+bool _amountInPostedTransaction(String body, Object? amount) {
+  if (amount is! num || !amount.isFinite || amount <= 0) return false;
+  final movementOrCompletion = RegExp(
+    r'\b(debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred|transfer|processed|payout|settled|disbursed|invested|deposited|sent)\b|\b(?:payment|transaction|transfer|purchase)\b[\s\S]{0,100}\bcompleted(?:\s+successfully)?\b',
+    caseSensitive: false,
+  );
+  final balanceLabel = RegExp(
+    r'\b(?:available|avail\.?|current|closing|remaining|ledger)\s*(?:account\s*)?(?:bal(?:ance)?|balance\s+after)\b|\b(?:bal(?:ance)?|balance\s+after)\s*(?:is|after|now|:|=)?',
+    caseSensitive: false,
+  );
+  final clauses = smsCoreTransactionClause(body)
+      .split(RegExp(r'[!?;\n]+'))
+      .map((clause) => clause.trim())
+      .where((clause) => clause.isNotEmpty);
+  for (final clause in clauses) {
+    if (!movementOrCompletion.hasMatch(clause)) continue;
+    for (final match in _moneyInMessageRe.allMatches(clause)) {
+      final printed = double.tryParse(
+        (match.group(1) ?? '').replaceAll(',', ''),
+      );
+      if (printed == null || (printed - amount).abs() >= 0.005) continue;
+      final before = clause.substring(
+        math.max(0, match.start - 60),
+        match.start,
+      );
+      final after = clause.substring(
+        match.end,
+        math.min(clause.length, match.end + 40),
+      );
+      final balanceMatches = balanceLabel.allMatches(before).toList();
+      final movementMatches = RegExp(
+        r'\b(debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred|transfer|processed|payout|settled|disbursed|invested|deposited|sent)\b',
+        caseSensitive: false,
+      ).allMatches(before).toList();
+      final lastBalance = balanceMatches.isEmpty
+          ? -1
+          : balanceMatches.last.start;
+      final lastMovement = movementMatches.isEmpty
+          ? -1
+          : movementMatches.last.start;
+      if (lastBalance >= 0 && lastMovement <= lastBalance) continue;
+      if (RegExp(
+        r'\b(?:is|as)\s+(?:your\s+|the\s+)?(?:available\s+|current\s+|closing\s+|remaining\s+)?balance\b',
+        caseSensitive: false,
+      ).hasMatch(after)) {
+        continue;
+      }
+      return true;
+    }
+  }
+  return false;
 }
 
 bool _hasValidInstrument(Map<String, dynamic> payload) =>
@@ -323,15 +414,11 @@ double _completenessScore(String factType, Map<String, dynamic> payload) {
       var score = 0.0;
       if (_isFiniteNumber(payload['amountInr']) &&
           (payload['amountInr'] as num) > 0) {
-        score += 0.25;
+        score += 0.4;
       }
-      if (_hasValidInstrument(payload)) score += 0.25;
-      if (_shortText(payload['billerName']) || _shortText(payload['merchant'])) {
-        score += 0.25;
-      }
-      if (_hasValidCategory(payload) || _shortText(payload['billerName'])) {
-        score += 0.25;
-      }
+      if (_validDate(payload['occurredAt'])) score += 0.2;
+      if (_shortText(payload['billerName']) || _shortText(payload['merchant']))
+        score += 0.4;
       return score;
     case 'balance_snapshot':
       var score = 0.0;
@@ -349,8 +436,7 @@ double _completenessScore(String factType, Map<String, dynamic> payload) {
       return score;
     case 'card_identity_hint':
       var score = 0.0;
-      if (_shortText(payload['last4']) ||
-          _shortText(payload['accountLast4'])) {
+      if (_shortText(payload['last4']) || _shortText(payload['accountLast4'])) {
         score += 0.5;
       }
       if (_validDate(payload['asOfAt'])) score += 0.5;
@@ -367,12 +453,54 @@ double _completenessScore(String factType, Map<String, dynamic> payload) {
   }
 }
 
-double _disambiguationScore(Map<String, dynamic> payload) {
+double _disambiguationScore(
+  Map<String, dynamic> payload, [
+  String? factType,
+  String body = '',
+]) {
   var score = 0.0;
-  if (_shortText(payload['merchant']) ||
-      _shortText(payload['billerName']) ||
-      _shortText(payload['serviceName'])) {
+  final hasMovementParty =
+      _shortText(payload['merchant']) || _shortText(payload['transferParty']);
+  final normalizedBody = body.toLowerCase().replaceAll(
+    RegExp(r'[^a-z0-9]'),
+    '',
+  );
+  final evidencedParty =
+      [
+        payload['merchant'],
+        payload['transferParty'],
+        payload['billerName'],
+        payload['serviceName'],
+      ].whereType<String>().where((party) => party.trim().isNotEmpty).any((
+        party,
+      ) {
+        final normalizedParty = party.toLowerCase().replaceAll(
+          RegExp(r'[^a-z0-9]'),
+          '',
+        );
+        return normalizedParty.length >= 3 &&
+            normalizedBody.contains(normalizedParty);
+      });
+  if (factType == 'posted_movement' && hasMovementParty && evidencedParty) {
+    return 1.0;
+  }
+  if (factType == 'bill_obligation' && _shortText(payload['billerName'])) {
+    final biller = (payload['billerName'] as String).toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '',
+    );
+    if (biller.length >= 3 && normalizedBody.contains(biller)) return 1.0;
+  }
+  if ((_shortText(payload['merchant']) ||
+          _shortText(payload['billerName']) ||
+          _shortText(payload['serviceName'])) &&
+      evidencedParty) {
     score += 0.5;
+  }
+  if (factType == 'bill_payment' &&
+      (_shortText(payload['merchant']) || _shortText(payload['billerName'])) &&
+      evidencedParty) {
+    return 1;
   }
   if (_shortText(payload['last4']) || _shortText(payload['accountLast4'])) {
     score += 0.5;
@@ -403,7 +531,8 @@ class SmsFactConfidence {
 
   String? get factType => fact['factType'] as String?;
   Map<String, dynamic> get payload => smsFactPayload(fact);
-  bool get actionable => factType != null && smsActionableFactTypes.contains(factType);
+  bool get actionable =>
+      factType != null && smsActionableFactTypes.contains(factType);
 }
 
 /// Whole-result assessment. Only actionable facts gate routing; informational
@@ -428,13 +557,22 @@ class SmsConfidenceAssessment {
 }
 
 /// Scores one candidate fact against the redacted SMS body.
-SmsFactConfidence _scoreFact(Map<String, dynamic> fact, String body) {
+SmsFactConfidence _scoreFact(
+  Map<String, dynamic> fact,
+  String body, {
+  DateTime? receivedAt,
+}) {
   final payload = smsFactPayload(fact);
   final factType = fact['factType'] as String? ?? '';
   final model = _modelScore(payload);
-  final evidence = _evidenceScore(factType, payload, body);
+  final evidence = _evidenceScore(
+    factType,
+    payload,
+    body,
+    receivedAt: receivedAt,
+  );
   final completeness = _completenessScore(factType, payload);
-  final disambiguation = _disambiguationScore(payload);
+  final disambiguation = _disambiguationScore(payload, factType, body);
   final composite = _round4(
     _kModelWeight * model +
         _kEvidenceWeight * evidence +
@@ -460,9 +598,12 @@ SmsFactConfidence _scoreFact(Map<String, dynamic> fact, String body) {
 /// complete.
 SmsConfidenceAssessment assessSmsFacts(
   List<Map<String, dynamic>> facts,
-  String body,
-) {
-  final scored = facts.map((fact) => _scoreFact(fact, body)).toList();
+  String body, {
+  DateTime? receivedAt,
+}) {
+  final scored = facts
+      .map((fact) => _scoreFact(fact, body, receivedAt: receivedAt))
+      .toList();
   final actionable = scored.where((entry) => entry.actionable).toList();
 
   var composite = 0.0;
@@ -478,7 +619,7 @@ SmsConfidenceAssessment assessSmsFacts(
   final isComplete =
       actionable.isNotEmpty && actionable.every((entry) => entry.isComplete);
   final autoResolvable =
-      actionable.isNotEmpty &&
+      actionable.length == 1 &&
       actionable.every(
         (entry) => entry.composite >= kSmsAutoResolveThreshold,
       ) &&

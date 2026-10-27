@@ -3128,14 +3128,36 @@ class _HomeDuesAndReminders extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final rows =
+    final allRows =
         ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
     final catalogue = ref.watch(catalogueProvider).valueOrNull ?? const [];
     final now = ref.watch(clockProvider).now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Deduplicate and filter for relevant active/upcoming dues:
+    // Only show cards that are upcoming/due today (or recently overdue within 5 days),
+    // and that have active spend or an outstanding bill.
+    final seenCardIds = <String>{};
+    final rows = allRows.where((row) {
+      if (!seenCardIds.add(row.card.id)) return false;
+      final bill = row.bill;
+      final isCurrentBill = bill != null && bill.isCurrentAsOf(now);
+      final hasOpenBill = isCurrentBill && (bill.outstanding?.paise ?? 0) > 0;
+      final hasLoggedSpend = row.loggedThisCycle.paise > 0;
+      final isUpcoming = !row.dueOn.isBefore(today);
+      final isRecentlyOverdue =
+          row.daysUntilDue >= -5 && row.daysUntilDue < 0 && hasOpenBill;
+
+      if (!isUpcoming && !isRecentlyOverdue) return false;
+      return hasOpenBill ||
+          hasLoggedSpend ||
+          (isCurrentBill && bill.isPaid && isUpcoming);
+    }).toList();
+
     var total = const Money.zero();
     for (final row in rows) {
       final bill = row.bill;
-      if (bill != null && bill.amountDue != null) {
+      if (bill != null && bill.isCurrentAsOf(now) && bill.amountDue != null) {
         total += bill.outstanding ?? const Money.zero();
       } else {
         total += row.loggedThisCycle;
@@ -3197,7 +3219,9 @@ class _HomeDuesAndReminders extends ConsumerWidget {
                       const SizedBox(width: AppSpace.sm),
                       Expanded(
                         child: Text(
-                          'No due dates set yet. Add due dates to see upcoming payments here.',
+                          allRows.isEmpty
+                              ? 'No due dates set yet. Add due dates to see upcoming payments here.'
+                              : 'All caught up! No upcoming dues or card spend for this cycle.',
                           style: BambooFonts.ui(13, color: BambooInk.ink500),
                         ),
                       ),
@@ -3219,8 +3243,13 @@ class _HomeDuesAndReminders extends ConsumerWidget {
                   itemBuilder: (context, index) => _HomeDueCard(
                     row: rows[index],
                     product: catalogue.firstWhereOrNull(
-                      (product) => product.id == rows[index].card.cardProductId,
-                    ),
+                          (product) => product.id == rows[index].card.cardProductId,
+                        ) ??
+                        catalogue.firstWhereOrNull(
+                          (product) =>
+                              product.name.toLowerCase() ==
+                              rows[index].card.cardName.toLowerCase(),
+                        ),
                     now: now,
                   ),
                 ),
@@ -3235,7 +3264,10 @@ class _HomeDuesAndReminders extends ConsumerWidget {
                 child: Row(
                   children: [
                     Text(
-                      rows.any((row) => row.bill?.amountDue != null)
+                      rows.any((row) =>
+                              row.bill != null &&
+                              row.bill!.isCurrentAsOf(now) &&
+                              row.bill!.amountDue != null)
                           ? 'Outstanding on these cards'
                           : 'Tracked spend on these cards',
                       style: BambooFonts.ui(12, color: BambooInk.ink500),
@@ -3272,13 +3304,16 @@ class _HomeDueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final urgent = row.daysUntilDue <= 5;
     final name = row.card.nickname?.isNotEmpty == true
         ? row.card.nickname!
         : row.card.cardName;
     final bill = row.bill;
     final outstanding = bill?.outstanding;
     final showsBill = bill != null && bill.isCurrentAsOf(now);
+    final isPaid = bill?.isPaid == true;
+    final isOverdue = row.daysUntilDue < 0;
+    final urgent = !isPaid &&
+        ((row.daysUntilDue >= 0 && row.daysUntilDue <= 5) || isOverdue);
     return SizedBox(
       width: 236,
       child: Container(
@@ -3293,23 +3328,21 @@ class _HomeDueCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (product != null) ...[
-              SizedBox(
+            SizedBox(
+              width: double.infinity,
+              height: 58,
+              child: CardVisual(
+                product: product,
+                userCard: row.card,
                 width: double.infinity,
                 height: 58,
-                child: CardVisual(
-                  product: product!,
-                  userCard: row.card,
-                  width: double.infinity,
-                  height: 58,
-                  showProductName: false,
-                  effectiveBillingDay:
-                      row.bill?.statementDate.day ?? row.card.statementDay,
-                  effectiveDueDay: row.dueOn.day,
-                ),
+                showProductName: false,
+                effectiveBillingDay:
+                    row.bill?.statementDate.day ?? row.card.statementDay,
+                effectiveDueDay: row.dueOn.day,
               ),
-              const SizedBox(height: AppSpace.sm),
-            ],
+            ),
+            const SizedBox(height: AppSpace.sm),
             Row(
               children: [
                 Icon(
@@ -3321,7 +3354,9 @@ class _HomeDueCard extends StatelessWidget {
                 Text(
                   row.daysUntilDue == 0
                       ? 'Due today'
-                      : DateFormat('dd MMM').format(row.dueOn),
+                      : isOverdue
+                          ? 'Past due (${DateFormat('dd MMM').format(row.dueOn)})'
+                          : DateFormat('dd MMM').format(row.dueOn),
                   style: BambooFonts.ui(
                     12,
                     weight: FontWeight.w700,

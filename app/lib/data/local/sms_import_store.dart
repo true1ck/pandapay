@@ -564,7 +564,7 @@ class SmsImportStore {
         sourceKey: sourceKey,
         sender: item.sender,
         resolvedKind: 'dismissed',
-        title: 'Gemini dismissed · $topic',
+        title: 'AI dismissed · $topic',
         amountPaise: 0,
         sourceBody: item.body,
         occurredAt: item.receivedAt.toIso8601String(),
@@ -595,7 +595,11 @@ class SmsImportStore {
       );
     }
 
-    final assessment = assessSmsFacts(suggestions, item.body);
+    final assessment = assessSmsFacts(
+      suggestions,
+      item.body,
+      receivedAt: item.receivedAt,
+    );
     final effectiveScore = serverScore != null && serverScore.isFinite
         ? serverScore
         : assessment.composite;
@@ -620,6 +624,7 @@ class SmsImportStore {
     }
 
     if (effectiveScore >= kSmsAutoResolveThreshold &&
+        assessment.actionableFacts.length == 1 &&
         assessment.isComplete &&
         reviewRequired != true) {
       final resolved = _autoResolve(namespace, item, primary, effectiveScore);
@@ -790,6 +795,7 @@ class SmsImportStore {
       occurredAt: occurredAt.toIso8601String(),
       instrument: instrumentWire ?? instrument.wireValue,
       accountLast4: accountLast4,
+      sourceBody: item.body,
       confidence: score,
       autoResolvedAt: DateTime.now().millisecondsSinceEpoch,
     );
@@ -864,6 +870,7 @@ class SmsImportStore {
       instrument: payload['instrument'] as String?,
       accountLast4:
           payload['accountLast4'] as String? ?? payload['last4'] as String?,
+      sourceBody: item.body,
       confidence: score,
       autoResolvedAt: DateTime.now().millisecondsSinceEpoch,
     );
@@ -900,6 +907,7 @@ class SmsImportStore {
       instrument: payload['instrument'] as String?,
       accountLast4:
           payload['accountLast4'] as String? ?? payload['last4'] as String?,
+      sourceBody: item.body,
       confidence: score,
       autoResolvedAt: DateTime.now().millisecondsSinceEpoch,
     );

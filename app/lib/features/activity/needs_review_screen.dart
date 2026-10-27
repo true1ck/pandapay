@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,7 +6,6 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
-import '../../app/env.dart';
 import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -417,6 +414,78 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
   DateTimeRange? _customDateRange;
   _ReviewFilterCategory _selectedCategory = _ReviewFilterCategory.all;
   int _selectedTab = 0;
+  bool _retryingAiReviews = false;
+  bool _hasObservedAiReviewRun = false;
+  bool _showAiReviewCompleted = false;
+
+  bool _canRetryAiReview(NeedsReviewItem item) {
+    if (item.aiStatus != AiReviewStatus.unavailable) return false;
+    final reason = item.aiFailureReason?.toLowerCase() ?? '';
+    return !reason.contains('payload_refused_sensitive') &&
+        !reason.contains('invalid_source_key') &&
+        !reason.contains('malformed_payload');
+  }
+
+  Future<void> _retryFailedAiReviews(List<NeedsReviewItem> failedItems) async {
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null || _retryingAiReviews) return;
+    final namespace = ref.read(cacheNamespaceProvider);
+    final retryable = failedItems.where(_canRetryAiReview).toList();
+    if (retryable.isEmpty) return;
+    setState(() {
+      _retryingAiReviews = true;
+      _hasObservedAiReviewRun = true;
+      _showAiReviewCompleted = false;
+    });
+    var queued = 0;
+    for (final item in retryable) {
+      if (!mounted || ref.read(cacheNamespaceProvider) != namespace) break;
+      final sourceKey = _feedbackSourceKey(item.id);
+      try {
+        final jobId = await repo.submitAiJob(
+          sourceKey: sourceKey,
+          sender: item.sender,
+          body: item.body,
+          occurredAt: item.receivedAt,
+          retryFailed: true,
+        );
+        if (jobId == null) continue;
+        queued++;
+        await ref
+            .read(needsReviewRepositoryProvider)
+            .updateAiStatus(item.id, AiReviewStatus.queued);
+      } on Object catch (error) {
+        // Keep failed state visible for a later page-level retry. A lost
+        // response is safe to retry because the server deduplicates by source.
+        if (error is ApiException && error.statusCode != null) {
+          await ref
+              .read(needsReviewRepositoryProvider)
+              .updateAiStatus(
+                item.id,
+                AiReviewStatus.unavailable,
+                failureReason: error.errorCode ?? 'http_${error.statusCode}',
+              );
+        }
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _retryingAiReviews = false;
+        if (queued == 0) _hasObservedAiReviewRun = false;
+      });
+      ref.read(smsFlushTriggerProvider.notifier).state++;
+      ref.invalidate(needsReviewItemsProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            queued == 0
+                ? 'No failed AI reviews could be retried.'
+                : 'Retrying AI review for $queued message${queued == 1 ? '' : 's'}.',
+          ),
+        ),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -615,6 +684,11 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
             item.aiStatus == AiReviewStatus.queued ||
             item.aiStatus == AiReviewStatus.processing,
       );
+      if (hasActive) _hasObservedAiReviewRun = true;
+      if (hadActive && !hasActive && _hasObservedAiReviewRun) {
+        _hasObservedAiReviewRun = false;
+        setState(() => _showAiReviewCompleted = true);
+      }
       if (hasActive && !hadActive) {
         ref.read(smsFlushTriggerProvider.notifier).state++;
       }
@@ -622,6 +696,23 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
 
     final items = ref.watch(needsReviewItemsProvider);
     final pendingItems = items.valueOrNull ?? const <NeedsReviewItem>[];
+    final retryableAiCount = pendingItems.where(_canRetryAiReview).length;
+    final queuedAiCount = pendingItems
+        .where((item) => item.aiStatus == AiReviewStatus.queued)
+        .length;
+    final processingAiCount = pendingItems
+        .where((item) => item.aiStatus == AiReviewStatus.processing)
+        .length;
+    final activeAiCount = queuedAiCount + processingAiCount;
+    final failedAiCount = pendingItems
+        .where((item) => item.aiStatus == AiReviewStatus.unavailable)
+        .length;
+    final checkedNeedsReviewCount = pendingItems
+        .where((item) => item.aiStatus == AiReviewStatus.checked)
+        .length;
+    final notQueuedAiCount = pendingItems
+        .where((item) => item.aiStatus == AiReviewStatus.notChecked)
+        .length;
     final autoCount = ref.watch(autoResolvedCountProvider).valueOrNull ?? 0;
 
     final sortedList = List<NeedsReviewItem>.from(pendingItems)
@@ -718,6 +809,133 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
         child: Column(
           children: [
             _buildTabSelector(pendingItems.length, autoCount),
+            if (_selectedTab == 0 &&
+                (_retryingAiReviews || activeAiCount > 0 || failedAiCount > 0))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  0,
+                  AppSpace.lg,
+                  AppSpace.sm,
+                ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpace.sm),
+                  decoration: BoxDecoration(
+                    color: BambooInk.paper,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: BambooInk.hairlineOnPaper),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _retryingAiReviews
+                            ? 'Sending $retryableAiCount failed message${retryableAiCount == 1 ? '' : 's'} for AI review…'
+                            : activeAiCount > 0
+                                ? 'AI is reviewing $activeAiCount message${activeAiCount == 1 ? '' : 's'}'
+                                : 'AI review paused · ${pendingItems.length} need review',
+                        style: BambooFonts.ui(
+                          12.5,
+                          weight: FontWeight.w700,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                      if (!_retryingAiReviews) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '$queuedAiCount queued · $processingAiCount in progress · $failedAiCount failed',
+                          style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                        ),
+                        Text(
+                          '$checkedNeedsReviewCount checked, still need review · $notQueuedAiCount not queued',
+                          style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                        ),
+                      ],
+                      if (_retryingAiReviews || activeAiCount > 0) ...[
+                        const SizedBox(height: AppSpace.xs),
+                        const LinearProgressIndicator(minHeight: 3),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            if (_selectedTab == 0 &&
+                !_retryingAiReviews &&
+                activeAiCount == 0 &&
+                _showAiReviewCompleted)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  0,
+                  AppSpace.lg,
+                  AppSpace.sm,
+                ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.sm,
+                    vertical: AppSpace.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: BambooInk.paper,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: BambooInk.hairlineOnPaper),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.check_circle_outline_rounded,
+                        size: 17,
+                        color: BambooInk.jade,
+                      ),
+                      const SizedBox(width: AppSpace.xs),
+                      Expanded(
+                        child: Text(
+                          'AI review finished. Auto-resolved results are in Auto-Resolved; undecided messages remain here.',
+                          style: BambooFonts.ui(11.5, color: BambooInk.ink700),
+                        ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Dismiss status',
+                        onPressed: () =>
+                            setState(() => _showAiReviewCompleted = false),
+                        icon: const Icon(Icons.close_rounded, size: 17),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (_selectedTab == 0 && retryableAiCount > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  0,
+                  AppSpace.lg,
+                  AppSpace.sm,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _retryingAiReviews
+                        ? null
+                        : () => _retryFailedAiReviews(pendingItems),
+                    icon: _retryingAiReviews
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded),
+                    label: Text(
+                      _retryingAiReviews
+                          ? 'Retrying failed AI reviews…'
+                          : 'Retry failed AI reviews ($retryableAiCount)',
+                    ),
+                  ),
+                ),
+              ),
             Expanded(
               child: _selectedTab == 1
                   ? _buildAutoResolvedTab()
@@ -935,6 +1153,7 @@ class _AutoResolvedCard extends ConsumerStatefulWidget {
 
 class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
   bool _busy = false;
+  bool _showSourceSms = false;
 
   String _dateLabel(AutoResolvedHistoryEntry entry) {
     final showDue =
@@ -1029,6 +1248,43 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
     }
   }
 
+  Future<void> _editTransaction() async {
+    final result = await showModalBottomSheet<_AutoResolvedEditResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: BambooInk.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (_) => _AutoResolvedEditSheet(entry: widget.entry),
+    );
+    if (result == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(smsAutoResolutionControllerProvider)
+          .editTransaction(
+            widget.entry,
+            merchantName: result.merchantName,
+            amount: result.amount,
+            occurredAt: result.occurredAt,
+          );
+      ref.invalidate(autoResolvedHistoryProvider);
+      ref.invalidate(autoResolvedCountProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _moveToReview() async {
     setState(() => _busy = true);
     try {
@@ -1060,6 +1316,10 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
   Widget build(BuildContext context) {
     final entry = widget.entry;
     final isDismissed = entry.resolvedKind == 'dismissed';
+    final displayTitle = entry.title.replaceFirst(
+      RegExp(r'^gemini dismissed\s*·\s*', caseSensitive: false),
+      'AI dismissed · ',
+    );
     return Container(
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
@@ -1080,13 +1340,13 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      entry.title,
+                      displayTitle,
                       style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       isDismissed
-                          ? '✦ Gemini decision · Dismissed'
+                          ? '✦ AI decision · Dismissed'
                           : '✦ Auto-Categorized by AI · ${entry.categoryName}',
                       style: BambooFonts.ui(
                         12.5,
@@ -1110,11 +1370,71 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
                 ),
             ],
           ),
+          if (entry.sourceBody?.trim().isNotEmpty == true) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
+                ),
+                onPressed: () => setState(() {
+                  _showSourceSms = !_showSourceSms;
+                }),
+                icon: Icon(
+                  _showSourceSms
+                      ? Icons.expand_less_rounded
+                      : Icons.sms_outlined,
+                  size: 18,
+                ),
+                label: Text(
+                  _showSourceSms ? 'Hide original SMS' : 'View original SMS',
+                ),
+              ),
+            ),
+            if (_showSourceSms)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpace.md),
+                decoration: BoxDecoration(
+                  color: BambooInk.paperMuted,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SMS from ${entry.sender}',
+                      style: BambooFonts.ui(
+                        11.5,
+                        weight: FontWeight.w700,
+                        color: BambooInk.ink500,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpace.xs),
+                    Text(
+                      entry.sourceBody!,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+                    ),
+                  ],
+                ),
+              ),
+          ],
           const SizedBox(height: AppSpace.xs),
           Wrap(
             spacing: AppSpace.sm,
             runSpacing: AppSpace.xs,
             children: [
+              if (entry.resolvedKind == 'transaction')
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
+                  ),
+                  onPressed: _busy ? null : _editTransaction,
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text('Edit transaction'),
+                ),
               if (!isDismissed)
                 TextButton(
                   style: TextButton.styleFrom(
@@ -1140,6 +1460,145 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
       ),
     );
   }
+}
+
+class _AutoResolvedEditResult {
+  final String merchantName;
+  final Money amount;
+  final DateTime occurredAt;
+
+  const _AutoResolvedEditResult({
+    required this.merchantName,
+    required this.amount,
+    required this.occurredAt,
+  });
+}
+
+class _AutoResolvedEditSheet extends StatefulWidget {
+  final AutoResolvedHistoryEntry entry;
+
+  const _AutoResolvedEditSheet({required this.entry});
+
+  @override
+  State<_AutoResolvedEditSheet> createState() => _AutoResolvedEditSheetState();
+}
+
+class _AutoResolvedEditSheetState extends State<_AutoResolvedEditSheet> {
+  late final TextEditingController _merchantController;
+  late final TextEditingController _amountController;
+  late DateTime _occurredAt;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _merchantController = TextEditingController(text: widget.entry.title);
+    _amountController = TextEditingController(
+      text: widget.entry.amount.rupees.toStringAsFixed(2),
+    );
+    _occurredAt =
+        DateTime.tryParse(widget.entry.occurredAt)?.toLocal() ?? DateTime.now();
+  }
+
+  @override
+  void dispose() {
+    _merchantController.dispose();
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _chooseDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _occurredAt,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(now.year + 2),
+      helpText: 'Choose transaction date',
+    );
+    if (picked != null && mounted) setState(() => _occurredAt = picked);
+  }
+
+  void _save() {
+    final merchant = _merchantController.text.trim();
+    final amount = double.tryParse(_amountController.text.trim());
+    if (merchant.isEmpty) {
+      setState(() => _error = 'Enter a merchant or biller.');
+      return;
+    }
+    if (amount == null || !amount.isFinite || amount <= 0) {
+      setState(() => _error = 'Enter a valid amount greater than zero.');
+      return;
+    }
+    Navigator.of(context).pop(
+      _AutoResolvedEditResult(
+        merchantName: merchant,
+        amount: Money.fromRupees(amount),
+        occurredAt: _occurredAt,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.fromLTRB(
+      AppSpace.lg,
+      AppSpace.lg,
+      AppSpace.lg,
+      MediaQuery.viewInsetsOf(context).bottom + AppSpace.lg,
+    ),
+    child: SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Edit transaction', style: BambooFonts.heading(18)),
+          const SizedBox(height: AppSpace.md),
+          TextField(
+            controller: _merchantController,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Merchant or biller'),
+          ),
+          const SizedBox(height: AppSpace.sm),
+          TextField(
+            controller: _amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Amount (₹)'),
+          ),
+          const SizedBox(height: AppSpace.sm),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Transaction date'),
+            subtitle: Text(DateFormat('MMM d, yyyy').format(_occurredAt)),
+            trailing: const Icon(Icons.calendar_month_outlined),
+            onTap: _chooseDate,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: AppSpace.xs),
+            Text(_error!, style: BambooFonts.ui(12.5, color: Colors.red)),
+          ],
+          const SizedBox(height: AppSpace.md),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _save,
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _CommitmentNeedsReviewTile extends ConsumerStatefulWidget {
@@ -1361,7 +1820,9 @@ class _CommitmentNeedsReviewTileState
             style: BambooFonts.ui(12, color: BambooInk.ink500),
           ),
           if (item.aiSuggestions?.isNotEmpty == true ||
-              item.aiTopic?.trim().isNotEmpty == true) ...[
+              item.aiTopic?.trim().isNotEmpty == true ||
+              (item.aiDecision?['topic'] is String &&
+                  (item.aiDecision!['topic'] as String).trim().isNotEmpty)) ...[
             const SizedBox(height: AppSpace.xs),
             _AiBadge(summary: _aiSuggestedSummary(item)),
           ],
@@ -2235,76 +2696,6 @@ class _NeedsReviewTile extends ConsumerStatefulWidget {
 
 class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   bool _busy = false;
-  bool _showAiOutput = false;
-
-  String get _aiDecisionLabel {
-    if (widget.item.aiTopic?.trim().isNotEmpty == true) {
-      final topic = widget.item.aiTopic!.trim().replaceAll('_', ' ');
-      return '✦ AI decision · $topic';
-    }
-    return _aiSuggestedSummary(widget.item);
-  }
-
-  Future<void> _retryAiReview() async {
-    if (_busy) return;
-    final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null) return;
-    setState(() => _busy = true);
-    try {
-      final jobId = await repo.submitAiJob(
-        sourceKey: _feedbackSourceKey(widget.item.id),
-        sender: widget.item.sender,
-        body: widget.item.body,
-        occurredAt: widget.item.receivedAt,
-        retryFailed: true,
-      );
-      if (jobId == null) {
-        await ref
-            .read(needsReviewRepositoryProvider)
-            .updateAiStatus(widget.item.id, AiReviewStatus.unavailable);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Gemini could not retry this message.'),
-            ),
-          );
-        }
-        return;
-      }
-      await ref
-          .read(needsReviewRepositoryProvider)
-          .updateAiStatus(widget.item.id, AiReviewStatus.queued);
-      ref.read(smsFlushTriggerProvider.notifier).state++;
-      ref.invalidate(needsReviewItemsProvider);
-    } catch (error) {
-      if (error is ApiException && error.statusCode != null) {
-        await ref
-            .read(needsReviewRepositoryProvider)
-            .updateAiStatus(
-              widget.item.id,
-              AiReviewStatus.unavailable,
-              failureReason: error.errorCode ?? 'http_${error.statusCode}',
-            );
-        ref.invalidate(needsReviewItemsProvider);
-      }
-      if (mounted) {
-        final message =
-            error is ApiException && error.errorCode == 'daily_quota_exhausted'
-            ? 'Gemini review limit reached. Try again later.'
-            : error is ApiException && error.errorCode == 'ai_queue_disabled'
-            ? 'Gemini review is temporarily disabled.'
-            : error is ApiException &&
-                  error.errorCode == 'payload_refused_sensitive'
-            ? 'This message cannot be sent for AI review.'
-            : userFacingErrorMessage(error);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
 
   Future<void> _dismissNotATransaction() async {
     setState(() => _busy = true);
@@ -2898,50 +3289,6 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                   : BambooInk.ink500,
             ),
           ),
-          if (item.aiSuggestions?.isNotEmpty == true ||
-              item.aiTopic?.trim().isNotEmpty == true) ...[
-            const SizedBox(height: AppSpace.xs),
-            _AiBadge(summary: _aiDecisionLabel),
-          ],
-          const SizedBox(height: AppSpace.xs),
-          _AiStatusBadge(status: item.aiStatus, onRetry: _retryAiReview),
-          if (Env.isDev && item.aiStatus != AiReviewStatus.notChecked) ...[
-            const SizedBox(height: AppSpace.xs),
-            TextButton.icon(
-              onPressed: () => setState(() => _showAiOutput = !_showAiOutput),
-              icon: Icon(
-                _showAiOutput
-                    ? Icons.expand_less_rounded
-                    : Icons.data_object_rounded,
-                size: 18,
-              ),
-              label: Text(_showAiOutput ? 'Hide AI output' : 'View AI output'),
-            ),
-            if (_showAiOutput)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpace.sm),
-                decoration: BoxDecoration(
-                  color: BambooInk.paperMuted,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  border: Border.all(color: BambooInk.hairlineOnPaper),
-                ),
-                child: SelectableText(
-                  const JsonEncoder.withIndent('  ').convert({
-                    'status': item.aiStatus.name,
-                    if (item.aiFailureReason != null)
-                      'failureReason': item.aiFailureReason,
-                    if (item.aiTopic != null)
-                      'decision': {
-                        'topic': item.aiTopic,
-                        'action': 'keep_for_review',
-                      },
-                    'facts': item.aiSuggestions ?? const [],
-                  }),
-                  style: BambooFonts.ui(11.5, color: BambooInk.ink700),
-                ),
-              ),
-          ],
           if (item.aiSuggestions != null && item.aiSuggestions!.length > 1) ...[
             const SizedBox(height: AppSpace.sm),
             for (final suggestion in item.aiSuggestions!)
@@ -3686,105 +4033,6 @@ class _AiBadge extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AiStatusBadge extends ConsumerWidget {
-  final AiReviewStatus status;
-  final VoidCallback? onRetry;
-  const _AiStatusBadge({required this.status, this.onRetry});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final (label, icon, color) = switch (status) {
-      AiReviewStatus.notChecked => (
-        'AI review not started',
-        Icons.hourglass_empty,
-        BambooInk.ink500,
-      ),
-      AiReviewStatus.queued => (
-        'AI review queued · Checking...',
-        Icons.schedule,
-        BambooInk.jade,
-      ),
-      AiReviewStatus.processing => (
-        'AI review in progress',
-        Icons.autorenew_rounded,
-        BambooInk.jade,
-      ),
-      AiReviewStatus.checked => (
-        'AI review completed',
-        Icons.auto_awesome_rounded,
-        BambooInk.jade,
-      ),
-      AiReviewStatus.unavailable => (
-        onRetry == null
-            ? 'AI review could not complete · Review manually'
-            : 'AI review failed · Tap to retry',
-        Icons.cloud_off_outlined,
-        BambooInk.ink500,
-      ),
-    };
-    final isTappable =
-        status == AiReviewStatus.queued ||
-        (status == AiReviewStatus.unavailable && onRetry != null);
-    final showSpinner =
-        status == AiReviewStatus.queued || status == AiReviewStatus.processing;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Semantics(
-        label: label,
-        button: isTappable,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: isTappable
-              ? () {
-                  if (status == AiReviewStatus.unavailable) {
-                    onRetry?.call();
-                    return;
-                  }
-                  ref.read(smsFlushTriggerProvider.notifier).state++;
-                  ref.invalidate(needsReviewItemsProvider);
-                }
-              : null,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              border: Border.all(color: color.withValues(alpha: 0.24)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showSpinner) ...[
-                  SizedBox(
-                    width: 11,
-                    height: 11,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: color,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                ] else ...[
-                  Icon(icon, size: 12, color: color),
-                  const SizedBox(width: 4),
-                ],
-                Text(
-                  label,
-                  style: BambooFonts.ui(
-                    11.5,
-                    weight: FontWeight.w600,
-                    color: color,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

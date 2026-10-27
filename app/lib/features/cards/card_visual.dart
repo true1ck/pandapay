@@ -39,7 +39,7 @@ CardVisualSpec cardVisualSpecFor(CardProduct product) {
 /// a quick visual identifier: the same product always gets the same palette,
 /// network mark, chip and pattern across Home, Wallet and card detail screens.
 class CardVisual extends StatelessWidget {
-  final CardProduct product;
+  final CardProduct? product;
   final bool showProductName;
   final UserCard? userCard;
   final Money? cycleSpend;
@@ -51,7 +51,7 @@ class CardVisual extends StatelessWidget {
 
   const CardVisual({
     super.key,
-    required this.product,
+    this.product,
     this.showProductName = true,
     this.userCard,
     this.cycleSpend,
@@ -60,16 +60,14 @@ class CardVisual extends StatelessWidget {
     this.height,
     this.effectiveBillingDay,
     this.effectiveDueDay,
-  });
+  }) : assert(product != null || userCard != null, 'Either product or userCard must be provided');
 
   @override
   Widget build(BuildContext context) {
-    // Card colour is always derived from the catalogue product/issuer. There
-    // is intentionally no neutral/silver override: the same HDFC, Axis,
-    // Kotak, etc. palette must follow the card everywhere in the app.
-    final skin = _skinFor(product);
-    final palette = _paletteFor(product, skin);
-    final seed = _stableSeed('${product.id}:${product.name}');
+    // Card colour is always derived from the catalogue product/issuer or userCard.
+    final (skin, palette, seed, network, last4) =
+        _resolveCardVisualProps(product: product, userCard: userCard);
+    final customNetworkLabel = _networkOrIssuerLabel(network, userCard);
     return LayoutBuilder(
       builder: (context, constraints) {
         // Picker rows and capability headers intentionally use a tiny card
@@ -124,9 +122,10 @@ class CardVisual extends StatelessWidget {
                     top: 6,
                     right: 7,
                     child: _NetworkMark(
-                      network: product.network,
+                      network: network,
                       color: palette.foreground,
                       small: true,
+                      customLabel: customNetworkLabel,
                     ),
                   ),
                 ] else if (detailed) ...[
@@ -138,7 +137,7 @@ class CardVisual extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            _issuerLabel(product),
+                            _issuerLabel(product, userCard),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: BambooFonts.ui(
@@ -150,8 +149,9 @@ class CardVisual extends StatelessWidget {
                         ),
                         const SizedBox(width: 12),
                         _NetworkMark(
-                          network: product.network,
+                          network: network,
                           color: palette.foreground,
+                          customLabel: customNetworkLabel,
                         ),
                       ],
                     ),
@@ -162,8 +162,8 @@ class CardVisual extends StatelessWidget {
                     right: 20,
                     child: Text(
                       (userCard!.nickname?.trim().isNotEmpty == true
-                              ? userCard!.nickname
-                              : product.name)!
+                              ? userCard!.nickname!
+                              : (product?.name ?? userCard!.cardName))
                           .toUpperCase(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -187,7 +187,7 @@ class CardVisual extends StatelessWidget {
                     left: 20,
                     right: 20,
                     child: Text(
-                      _maskedNumber(userCard!.last4),
+                      _maskedNumber(last4),
                       maxLines: 1,
                       style: BambooFonts.ui(
                         17,
@@ -268,7 +268,7 @@ class CardVisual extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            _issuerLabel(product),
+                            _issuerLabel(product, userCard),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: BambooFonts.ui(
@@ -280,8 +280,9 @@ class CardVisual extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         _NetworkMark(
-                          network: product.network,
+                          network: network,
                           color: palette.foreground,
+                          customLabel: customNetworkLabel,
                         ),
                       ],
                     ),
@@ -306,7 +307,7 @@ class CardVisual extends StatelessWidget {
                               alignment: Alignment.centerLeft,
                               fit: BoxFit.scaleDown,
                               child: Text(
-                                product.name.toUpperCase(),
+                                (product?.name ?? userCard?.cardName ?? '').toUpperCase(),
                                 maxLines: 1,
                                 style: BambooFonts.ui(
                                   11,
@@ -346,7 +347,7 @@ class CardVisual extends StatelessWidget {
             : AspectRatio(aspectRatio: 1.586, child: card);
 
         return Semantics(
-          label: '${product.name} card visual',
+          label: '${product?.name ?? userCard?.cardName ?? 'Card'} card visual',
           image: true,
           child: sized,
         );
@@ -681,17 +682,39 @@ Color? _parseHexColor(String? raw) {
   return parsed == null ? null : Color(parsed);
 }
 
-String _issuerLabel(CardProduct product) {
-  final text = '${product.issuerName ?? ''} ${product.name}'.toLowerCase();
+String _issuerLabel(CardProduct? product, [UserCard? userCard]) {
+  if (product != null) {
+    final text = '${product.issuerName ?? ''} ${product.name}'.toLowerCase();
+    if (text.contains('swiggy')) return 'SWIGGY';
+    if (text.contains('icici')) return 'ICICI BANK';
+    if (text.contains('hdfc')) return 'HDFC BANK';
+    if (text.contains('sbi')) return 'SBI CARD';
+    if (text.contains('axis')) return 'AXIS BANK';
+    if (text.contains('kotak')) return 'KOTAK';
+    final issuer = product.issuerName?.trim();
+    if (issuer != null && issuer.isNotEmpty) return issuer.toUpperCase();
+    return product.name.toUpperCase();
+  }
+  final cardName = userCard?.cardName ?? 'Card';
+  final text = cardName.toLowerCase();
   if (text.contains('swiggy')) return 'SWIGGY';
   if (text.contains('icici')) return 'ICICI BANK';
   if (text.contains('hdfc')) return 'HDFC BANK';
   if (text.contains('sbi')) return 'SBI CARD';
   if (text.contains('axis')) return 'AXIS BANK';
   if (text.contains('kotak')) return 'KOTAK';
-  final issuer = product.issuerName?.trim();
-  if (issuer != null && issuer.isNotEmpty) return issuer.toUpperCase();
-  return product.name.toUpperCase();
+  return cardName.toUpperCase();
+}
+
+String? _networkOrIssuerLabel(CardNetwork net, UserCard? card) {
+  if (net != CardNetwork.unknown) return null;
+  final name = (card?.cardName ?? '').toLowerCase();
+  if (name.contains('hdfc')) return 'HDFC';
+  if (name.contains('sbi')) return 'SBI';
+  if (name.contains('icici')) return 'ICICI';
+  if (name.contains('axis')) return 'AXIS';
+  if (name.contains('kotak')) return 'KOTAK';
+  return null;
 }
 
 class _CardChip extends StatelessWidget {
@@ -726,11 +749,13 @@ class _NetworkMark extends StatelessWidget {
   final CardNetwork network;
   final Color color;
   final bool small;
+  final String? customLabel;
 
   const _NetworkMark({
     required this.network,
     required this.color,
     this.small = false,
+    this.customLabel,
   });
 
   @override
@@ -759,14 +784,15 @@ class _NetworkMark extends StatelessWidget {
         ),
       );
     }
-    final label = switch (network) {
-      CardNetwork.visa => 'VISA',
-      CardNetwork.rupay => 'RuPay',
-      CardNetwork.amex => 'AMEX',
-      CardNetwork.diners => 'DINERS',
-      CardNetwork.unknown => 'CARD',
-      CardNetwork.mastercard => 'MC',
-    };
+    final label = customLabel ??
+        switch (network) {
+          CardNetwork.visa => 'VISA',
+          CardNetwork.rupay => 'RuPay',
+          CardNetwork.amex => 'AMEX',
+          CardNetwork.diners => 'DINERS',
+          CardNetwork.unknown => 'CARD',
+          CardNetwork.mastercard => 'MC',
+        };
     return Text(
       label,
       style: BambooFonts.ui(
@@ -1142,46 +1168,52 @@ class MiniCardVisual extends StatelessWidget {
     );
   }
 
-  (_CardSkin, _CardPalette, int, CardNetwork, String?) _resolveVisualProps() {
-    if (product != null) {
-      final p = product!;
-      final skin = _skinFor(p);
-      final palette = _paletteFor(p, skin);
-      final seed = _stableSeed('${p.id}:${p.name}');
-      return (skin, palette, seed, p.network, userCard?.last4);
-    }
-    final name = (userCard?.nickname?.trim().isNotEmpty == true
-            ? userCard!.nickname
-            : userCard?.cardName) ??
-        'Card';
-    final text = name.toLowerCase();
-    final seed = _stableSeed('${userCard?.id ?? name}:$name');
-    final base = _issuerBaseColor(text);
-    final skin = _CardSkin.values[seed % _CardSkin.values.length];
-    final secondary = _secondaryColor(base, seed, skin);
-    final backgroundTone = Color.lerp(base, secondary, 0.42)!;
-    final foreground = backgroundTone.computeLuminance() > 0.58
-        ? BambooInk.ink900
-        : Colors.white;
-    final palette = _CardPalette(
-      primary: base,
-      secondary: secondary,
-      chip: base.computeLuminance() > 0.58
-          ? const Color(0xFFD8A83E)
-          : const Color(0xFFE6C46A),
-      chipInk: const Color(0xFF6D4E16),
-      foreground: foreground,
-      foregroundMuted: foreground.withValues(alpha: 0.72),
-    );
-    final network = text.contains('visa')
-        ? CardNetwork.visa
-        : text.contains('master')
-        ? CardNetwork.mastercard
-        : text.contains('rupay')
-        ? CardNetwork.rupay
-        : text.contains('amex')
-        ? CardNetwork.amex
-        : CardNetwork.unknown;
-    return (skin, palette, seed, network, userCard?.last4);
+  (_CardSkin, _CardPalette, int, CardNetwork, String?) _resolveVisualProps() =>
+      _resolveCardVisualProps(product: product, userCard: userCard);
+}
+
+(_CardSkin, _CardPalette, int, CardNetwork, String?) _resolveCardVisualProps({
+  CardProduct? product,
+  UserCard? userCard,
+}) {
+  if (product != null) {
+    final p = product;
+    final skin = _skinFor(p);
+    final palette = _paletteFor(p, skin);
+    final seed = _stableSeed('${p.id}:${p.name}');
+    return (skin, palette, seed, p.network, userCard?.last4);
   }
+  final name = (userCard?.nickname?.trim().isNotEmpty == true
+          ? userCard!.nickname
+          : userCard?.cardName) ??
+      'Card';
+  final text = name.toLowerCase();
+  final seed = _stableSeed('${userCard?.id ?? name}:$name');
+  final base = _issuerBaseColor(text);
+  final skin = _CardSkin.values[seed % _CardSkin.values.length];
+  final secondary = _secondaryColor(base, seed, skin);
+  final backgroundTone = Color.lerp(base, secondary, 0.42)!;
+  final foreground = backgroundTone.computeLuminance() > 0.58
+      ? BambooInk.ink900
+      : Colors.white;
+  final palette = _CardPalette(
+    primary: base,
+    secondary: secondary,
+    chip: base.computeLuminance() > 0.58
+        ? const Color(0xFFD8A83E)
+        : const Color(0xFFE6C46A),
+    chipInk: const Color(0xFF6D4E16),
+    foreground: foreground,
+    foregroundMuted: foreground.withValues(alpha: 0.72),
+  );
+  final network = text.contains('visa')
+      ? CardNetwork.visa
+      : text.contains('master')
+      ? CardNetwork.mastercard
+      : text.contains('rupay')
+      ? CardNetwork.rupay
+      : text.contains('amex')
+      ? CardNetwork.amex
+      : CardNetwork.unknown;
+  return (skin, palette, seed, network, userCard?.last4);
 }

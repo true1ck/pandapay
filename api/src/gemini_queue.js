@@ -2,7 +2,7 @@
  * SMS intelligence Phase 5: durable single-item AI queue logic.
  *
  * Enforced here, not in ad-hoc handlers: one job per (profile, source),
- * acceptance replay-safe before quota is consulted, lease with expiry and a
+ * acceptance replay-safe before insertion, lease with expiry and a
  * bounded attempt budget, per-item structured validation on the result path,
  * and a payload purge on completion or failure so raw bodies do not linger
  * server-side. AI results only fill fact slots that do not exist yet —
@@ -44,8 +44,8 @@ function redactBodyForAi(body) {
 
 /**
  * Accepts one source (or refuses). Order matters: a replayed source returns
- * `reused` before quota or inserts happen, so app retries, 429 retries and
- * double pushes never create a second job or burn a second quota unit.
+ * `reused` before inserts happen, so app retries, provider retries, and
+ * double pushes never create a second job for the same source.
  */
 async function acceptOneJob(client, profileId, {
   sourceKey, sender, body, occurredAt, retryFailed = false,
@@ -61,8 +61,7 @@ async function acceptOneJob(client, profileId, {
   );
   if (existing) {
     if (existing.status === 'failed' && retryFailed) {
-      // A failed job already consumed this source's daily admission. An
-      // explicit device retry reuses that row and must not spend another slot.
+      // An explicit device retry reuses the failed row and preserves its id.
       const smsFacts = require('./sms_facts');
       await client.query(
         `UPDATE ai_jobs
@@ -83,6 +82,36 @@ async function acceptOneJob(client, profileId, {
       );
       await recordEvent(client, existing.id, profileId, 'requeued', {
         reason: 'explicit_device_retry',
+      });
+      return { accepted: true, jobId: existing.id, reused: false };
+    }
+    if (existing.status === 'done' && retryFailed &&
+        Array.isArray(existing.result?.landed) && existing.result.landed.length === 0 &&
+        Array.isArray(existing.result?.factTypes) && existing.result.factTypes.length === 0) {
+      // An explicit retry may re-run a completed classification only when it
+      // produced no facts. This lets the user retry after a safe abstention
+      // while preserving idempotency for successful or partially successful
+      // results.
+      const smsFacts = require('./sms_facts');
+      await client.query(
+        `UPDATE ai_jobs
+            SET status = 'queued', payload = $2, result = NULL, attempts = 0,
+                lease_token = NULL, lease_expires_at = NULL,
+                next_attempt_at = now(), updated_at = now()
+          WHERE id = $1 AND status = 'done'`,
+        [
+          existing.id,
+          JSON.stringify({
+            sender,
+            body: redactBodyForAi(body),
+            bodyHash: smsFacts.bodyHashOf(sender, body),
+            occurredAt,
+            kind: 'classify_sms',
+          }),
+        ],
+      );
+      await recordEvent(client, existing.id, profileId, 'requeued', {
+        reason: 'explicit_device_retry_after_empty_result',
       });
       return { accepted: true, jobId: existing.id, reused: false };
     }
@@ -130,7 +159,7 @@ async function acceptOneJob(client, profileId, {
 
 async function findJobBySourceKey(client, profileId, sourceKey, lock = false) {
   const rows = await client.query(
-    `SELECT id, status FROM ai_jobs WHERE profile_id = $1 AND source_key = $2${lock ? ' FOR UPDATE' : ''}`,
+    `SELECT id, status, result FROM ai_jobs WHERE profile_id = $1 AND source_key = $2${lock ? ' FOR UPDATE' : ''}`,
     [profileId, sourceKey],
   );
   return rows.rows[0] || null;
@@ -247,7 +276,7 @@ async function completeJobWithResult(client, {
   // Composite confidence gate: reviewRequired is derived from the model facts
   // and the redacted body. An explicit boolean from the caller still wins
   // (e.g. a replayed job that was already triaged).
-  const assessment = aiFactScoring.assessFacts(facts, payload.body || '');
+  const assessment = aiFactScoring.assessFacts(facts, payload.body || '', payload.occurredAt || null);
   let effectiveReviewRequired = typeof reviewRequired === 'boolean'
     ? reviewRequired
     : assessment.reviewRequired;

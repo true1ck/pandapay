@@ -157,6 +157,29 @@ void main() {
   }
 
   test(
+    'does not resubmit a completed AI decision with no facts when its server job is missing',
+    () async {
+      final reviewRepo = container.read(needsReviewRepositoryProvider);
+      await reviewRepo.add(makeReviewItem(aiStatus: AiReviewStatus.checked));
+
+      final fetched = Completer<void>();
+      mockRepo.onFetchAiJobStatus = (sourceKey) {
+        if (!fetched.isCompleted) fetched.complete();
+        return Future.value(null);
+      };
+      container.read(smsFlushTriggerProvider.notifier).state++;
+      await fetched.future;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(mockRepo.submitJobCalls, 0);
+      expect(
+        (await reviewRepo.fetchAll()).single.aiStatus,
+        AiReviewStatus.checked,
+      );
+    },
+  );
+
+  test(
     'a transient network exception during fetchAiJobStatus does NOT mark review item as unavailable',
     () async {
       final reviewRepo = container.read(needsReviewRepositoryProvider);

@@ -248,10 +248,9 @@ void main() {
 
     expect(find.text('VM-HDFCBK'), findsOneWidget);
     expect(find.text('Rs.499 spent at AMAZON'), findsOneWidget);
-    expect(find.text('AI review not started'), findsOneWidget);
   });
 
-  testWidgets('shows completed AI check status beside its suggestions', (
+  testWidgets('keeps AI processing details out of the review card', (
     tester,
   ) async {
     await reviews.add(
@@ -272,12 +271,12 @@ void main() {
     );
     await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
-    expect(find.text('AI review completed'), findsOneWidget);
-    expect(find.textContaining('AI suggested'), findsOneWidget);
+    expect(find.textContaining('AI review'), findsNothing);
+    expect(find.textContaining('AI suggested'), findsNothing);
     expect(find.text('Review transaction'), findsOneWidget);
   });
 
-  testWidgets('surfaces Gemini decision category on review tile', (
+  testWidgets('does not expose raw AI topic or output in review card', (
     tester,
   ) async {
     await reviews.add(
@@ -293,39 +292,71 @@ void main() {
     );
     await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
-    expect(find.text('✦ AI decision · upi debit'), findsOneWidget);
+    expect(find.textContaining('AI decision'), findsNothing);
+    expect(find.text('View AI output'), findsNothing);
   });
 
   testWidgets(
-    'shows queued AI check status with spinner and allows tap to retry',
+    'successful empty-fact decision is cached and has no retry action',
     (tester) async {
+      final itemId = List.filled(64, 'e').join();
       await reviews.add(
         NeedsReviewItem(
-          id: '1',
+          id: itemId,
           sender: 'VM-HDFCBK',
-          body: 'Rs.499 spent at AMAZON',
+          body: 'Your payment of Rs 250 was completed successfully.',
+          reason: 'unparseable_amount',
           receivedAt: DateTime.now(),
-          aiStatus: AiReviewStatus.queued,
+          aiStatus: AiReviewStatus.checked,
+          aiDecision: const {
+            'topic': 'upi_debit',
+            'shouldConsider': true,
+            'rejectionReason': 'none',
+          },
+          aiSuggestions: const [],
         ),
       );
-      await _pump(
-        tester,
-        repo: _FakeUserCardsRepository(),
-        reviews: reviews,
-        settle: false,
+      final repo = _FakeUserCardsRepository();
+      await _pump(tester, repo: repo, reviews: reviews, settle: false);
+
+      expect(find.textContaining('AI decision'), findsNothing);
+      expect(find.text('View AI output'), findsNothing);
+      expect(find.textContaining('Retry failed AI reviews'), findsNothing);
+      expect(repo.aiJobSubmitted, isFalse);
+      expect(
+        (await reviews.fetchAll()).single.aiStatus,
+        AiReviewStatus.checked,
       );
-
-      expect(find.text('AI review queued · Checking...'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-
-      await tester.tap(find.text('AI review queued · Checking...'));
-      await tester.pump();
     },
   );
 
-  testWidgets('failed Gemini decision can be explicitly retried', (
+  testWidgets('shows page-level progress for queued AI reviews', (
     tester,
   ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: '1',
+        sender: 'VM-HDFCBK',
+        body: 'Rs.499 spent at AMAZON',
+        receivedAt: DateTime.now(),
+        aiStatus: AiReviewStatus.queued,
+      ),
+    );
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(),
+      reviews: reviews,
+      settle: false,
+    );
+
+    expect(find.text('AI is reviewing 1 message'), findsOneWidget);
+    expect(find.text('1 queued · 0 in progress · 0 failed'), findsOneWidget);
+    expect(find.text('0 checked, still need review · 0 not queued'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('page retry retries failed AI jobs only', (tester) async {
     final itemId = List.filled(64, 'f').join();
     await reviews.add(
       NeedsReviewItem(
@@ -337,27 +368,45 @@ void main() {
         aiFailureReason: 'worker_retry_limit',
       ),
     );
+    final completedId = List.filled(64, 'a').join();
+    await reviews.add(
+      NeedsReviewItem(
+        id: completedId,
+        sender: 'VM-HDFCBK',
+        body: 'INR 200 paid at BOOKSHOP',
+        receivedAt: DateTime.now(),
+        aiStatus: AiReviewStatus.checked,
+        aiSuggestions: const [],
+        aiDecision: const {
+          'topic': 'bill_payment_success',
+          'shouldConsider': true,
+        },
+      ),
+    );
     final repo = _FakeUserCardsRepository();
     await _pump(tester, repo: repo, reviews: reviews, settle: false);
 
-    expect(find.text('AI review failed · Tap to retry'), findsOneWidget);
-    await tester.tap(find.text('AI review failed · Tap to retry'));
+    expect(find.text('AI review paused · 2 need review'), findsOneWidget);
+    expect(find.text('0 queued · 0 in progress · 1 failed'), findsOneWidget);
+    expect(find.text('1 checked, still need review · 0 not queued'), findsOneWidget);
+    expect(find.text('Retry failed AI reviews (1)'), findsOneWidget);
+    expect(find.textContaining('AI review failed'), findsNothing);
+    await tester.tap(find.text('Retry failed AI reviews (1)'));
     // Queued state intentionally keeps its spinner animated, so settle would
     // time out even though the retry request completed.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.tap(find.text('View AI output'));
-    await tester.pump();
-    expect(find.textContaining('"status": "queued"'), findsOneWidget);
-    expect(find.textContaining('"sourceKey"'), findsNothing);
-
     expect(repo.lastAiJobArgs?['sourceKey'], itemId);
     expect(repo.lastAiJobArgs?['retryFailed'], isTrue);
-    expect((await reviews.fetchAll()).single.aiStatus, AiReviewStatus.queued);
+    final byId = {for (final item in await reviews.fetchAll()) item.id: item};
+    expect(byId[itemId]?.aiStatus, AiReviewStatus.queued);
+    expect(byId[completedId]?.aiStatus, AiReviewStatus.checked);
   });
 
-  testWidgets('shows in-progress AI check status with spinner', (tester) async {
+  testWidgets('hides in-progress AI state from individual review cards', (
+    tester,
+  ) async {
     await reviews.add(
       NeedsReviewItem(
         id: '1',
@@ -374,8 +423,9 @@ void main() {
       settle: false,
     );
 
-    expect(find.text('AI review in progress'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('AI is reviewing 1 message'), findsOneWidget);
+    expect(find.text('0 queued · 1 in progress · 0 failed'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
   testWidgets('Ignore message removes the item from the queue', (tester) async {
@@ -1369,7 +1419,7 @@ void main() {
     },
   );
 
-  testWidgets('Gemini dismissals stay in Auto-Resolved and can be reviewed', (
+  testWidgets('AI dismissals stay in Auto-Resolved and can be reviewed', (
     tester,
   ) async {
     final controller = _FakeSmsAutoResolutionController();
@@ -1391,7 +1441,12 @@ void main() {
     await tester.tap(find.text('Auto-Resolved (1)'));
     await tester.pumpAndSettle();
 
-    expect(find.text('✦ Gemini decision · Dismissed'), findsOneWidget);
+    expect(find.text('✦ AI decision · Dismissed'), findsOneWidget);
+    expect(
+      find.text('AI dismissed · generic promotional spam'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Gemini'), findsNothing);
     expect(find.text('Review this decision'), findsOneWidget);
     expect(find.text('Change Category'), findsNothing);
     expect(find.text('₹0.00'), findsNothing);
@@ -1400,35 +1455,34 @@ void main() {
     expect(controller.movedEntry?.id, dismissal.id);
   });
 
-  testWidgets(
-    'pending item with AI suggestions shows the suggested category badge',
-    (tester) async {
-      await reviews.add(
-        NeedsReviewItem(
-          id: 'ai-cat-1',
-          sender: 'VM-HDFCBK',
-          body: 'INR 499 spent at SWIGGY on card ending 1234.',
-          receivedAt: DateTime.now(),
-          aiSuggestions: const [
-            {
-              'factIndex': 0,
-              'factType': 'posted_movement',
-              'payload': {
-                'amountInr': 499,
-                'merchant': 'SWIGGY',
-                'category': 'dining',
-              },
+  testWidgets('pending item with AI suggestions keeps AI details private', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'ai-cat-1',
+        sender: 'VM-HDFCBK',
+        body: 'INR 499 spent at SWIGGY on card ending 1234.',
+        receivedAt: DateTime.now(),
+        aiSuggestions: const [
+          {
+            'factIndex': 0,
+            'factType': 'posted_movement',
+            'payload': {
+              'amountInr': 499,
+              'merchant': 'SWIGGY',
+              'category': 'dining',
             },
-          ],
-        ),
-      );
+          },
+        ],
+      ),
+    );
 
-      await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
-      expect(find.text('✦ AI suggested · Dining'), findsOneWidget);
-      expect(find.text('AI review not started'), findsOneWidget);
-    },
-  );
+    expect(find.textContaining('AI suggested'), findsNothing);
+    expect(find.textContaining('AI review'), findsNothing);
+  });
 
   testWidgets('Change Category calls the controller for the chosen category', (
     tester,

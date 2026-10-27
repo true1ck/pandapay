@@ -59,6 +59,7 @@ class NeedsReviewItem {
   final List<Map<String, dynamic>>? aiSuggestions;
   final AiReviewStatus aiStatus;
   final String? aiTopic;
+  final Map<String, dynamic>? aiDecision;
   final String? aiSummary;
   final String? aiFailureReason;
 
@@ -72,6 +73,7 @@ class NeedsReviewItem {
     this.aiSuggestions,
     this.aiStatus = AiReviewStatus.notChecked,
     this.aiTopic,
+    this.aiDecision,
     this.aiSummary,
     this.aiFailureReason,
   });
@@ -81,6 +83,7 @@ class NeedsReviewItem {
     List<Map<String, dynamic>>? aiSuggestions,
     AiReviewStatus? aiStatus,
     String? aiTopic,
+    Map<String, dynamic>? aiDecision,
     String? aiSummary,
     String? aiFailureReason,
     bool clearAiFailureReason = false,
@@ -94,6 +97,7 @@ class NeedsReviewItem {
     aiSuggestions: aiSuggestions ?? this.aiSuggestions,
     aiStatus: aiStatus ?? this.aiStatus,
     aiTopic: aiTopic ?? this.aiTopic,
+    aiDecision: aiDecision ?? this.aiDecision,
     aiSummary: aiSummary ?? this.aiSummary,
     aiFailureReason: clearAiFailureReason
         ? null
@@ -110,6 +114,7 @@ class NeedsReviewItem {
     if (aiSuggestions != null) 'aiSuggestions': aiSuggestions,
     'aiStatus': aiStatus.name,
     if (aiTopic != null) 'aiTopic': aiTopic,
+    if (aiDecision != null) 'aiDecision': aiDecision,
     if (aiSummary != null) 'aiSummary': aiSummary,
     if (aiFailureReason != null) 'aiFailureReason': aiFailureReason,
   };
@@ -137,6 +142,9 @@ class NeedsReviewItem {
         orElse: () => AiReviewStatus.notChecked,
       ),
       aiTopic: json['aiTopic'] as String?,
+      aiDecision: json['aiDecision'] is Map
+          ? Map<String, dynamic>.from(json['aiDecision'] as Map)
+          : null,
       aiSummary: json['aiSummary'] as String?,
       aiFailureReason: json['aiFailureReason'] as String?,
     );
@@ -1840,16 +1848,19 @@ class NeedsReviewRepository {
     String id,
     List<Map<String, dynamic>> suggestions, {
     String? aiTopic,
+    Map<String, dynamic>? aiDecision,
     String? aiSummary,
   }) async {
     final items = await fetchAll();
     final current = items.where((item) => item.id == id).firstOrNull;
     if (current == null) return false;
     final nextTopic = aiTopic ?? current.aiTopic;
+    final nextDecision = aiDecision ?? current.aiDecision;
     final nextSummary = aiSummary ?? current.aiSummary;
     if (jsonEncode(current.aiSuggestions ?? const []) ==
             jsonEncode(suggestions) &&
         current.aiTopic == nextTopic &&
+        jsonEncode(current.aiDecision) == jsonEncode(nextDecision) &&
         current.aiSummary == nextSummary) {
       return false;
     }
@@ -1858,6 +1869,7 @@ class NeedsReviewRepository {
           .copyWith(
             aiSuggestions: suggestions,
             aiTopic: nextTopic,
+            aiDecision: nextDecision,
             aiSummary: nextSummary,
           )
           .toJson(),

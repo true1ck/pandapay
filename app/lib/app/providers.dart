@@ -3771,11 +3771,19 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
   for (final obs
       in store?.entities(namespace, 'sms_observations') ?? const []) {
     if (obs['event_type'] != 'bill') continue;
+    final sourceId = obs['id'] as String?;
+    final correction = billAssignments[sourceId];
+    final selectedId = correction?['user_card_id'] as String?;
+    final chosenCardId = cards.any((card) => card.id == selectedId)
+        ? selectedId
+        : null;
     // Only admit observations with positive credit-card evidence into the
     // card-bill ledger. Bills delivered via aggregator senders (MYTNEU,
     // TNBPAY) also carry utility bills; sender-family alone is not enough.
     final hasCcEvidence =
-        obs['card_last4'] != null || _isCreditCardBillObs(obs);
+        chosenCardId != null ||
+        obs['card_last4'] != null ||
+        _isCreditCardBillObs(obs);
     if (!hasCcEvidence) continue;
     final parsedStatement = DateTime.tryParse(
       obs['statement_date'] as String? ?? '',
@@ -3786,12 +3794,6 @@ final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
         ? parsedStatement
         : (received ?? parsedStatement);
     if (anchor == null) continue;
-    final sourceId = obs['id'] as String?;
-    final correction = billAssignments[sourceId];
-    final selectedId = correction?['user_card_id'] as String?;
-    final chosenCardId = cards.any((card) => card.id == selectedId)
-        ? selectedId
-        : null;
     final correctedStatement = DateTime.tryParse(
       correction?['statement_date'] as String? ?? '',
     );
@@ -6180,8 +6182,24 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       try {
         final status = await repo.fetchAiJobStatus(cleanId);
         if (status == null) {
-          // The first submission may have been interrupted before acceptance.
-          // Retry only that gap under the same idempotent source key.
+          // Recover only the crash window where local capture persisted but
+          // the initial POST was never acknowledged. A completed/failed local
+          // result must never be re-submitted just because the server record
+          // is temporarily missing; successful empty-fact decisions are still
+          // completed decisions and should not spend provider tokens again.
+          if (item.aiStatus != AiReviewStatus.notChecked) {
+            if (item.aiStatus == AiReviewStatus.queued ||
+                item.aiStatus == AiReviewStatus.processing) {
+              changed =
+                  await reviewRepo.updateAiStatus(
+                    item.id,
+                    AiReviewStatus.unavailable,
+                    failureReason: 'job_not_found',
+                  ) ||
+                  changed;
+            }
+            continue;
+          }
           final jobId = await repo.submitAiJob(
             sourceKey: cleanId,
             sender: item.sender,
@@ -6261,6 +6279,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
                   item.id,
                   suggestions,
                   aiTopic: decision?['topic'] as String?,
+                  aiDecision: decision,
                 ) ||
                 changed;
             changed =
