@@ -1,16 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sms_import_store.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
-import 'package:pandapay/data/sms_gate_filter.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 import 'package:pandapay/data/user_cards_repository.dart'
-    show TransactionEntry, TxnEntryKind, TxnInstrument;
+    show TransactionEntry, TxnEntryKind;
 
 void main() {
   group('Real Device Union Bank & SBI / YONO Parsing Verification', () {

@@ -1,7 +1,7 @@
 -- Dismissed Need Review messages are represented as positive ignore_noise
 -- learning examples. Older installations created this CHECK before that
--- family was added to the application contract, and CREATE TABLE IF NOT
--- EXISTS does not update an existing CHECK constraint.
+-- family was added to the application contract, and a table-creation
+-- migration does not update an existing CHECK constraint.
 begin;
 
 alter table public.sms_learning_examples
