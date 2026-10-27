@@ -132,7 +132,9 @@ class LocalSmsParser {
   // learned from its own AutoPay message.
   // 15: Telecom carrier retention fees (Jio, Airtel airtime deductions) and loan cross-sells.
   // 16: Betting/gambling promotions and digital credit power / loan limit marketing.
-  static const version = 16;
+  // 17: Bank cautionary advisory warnings ("Never share OTP/PIN/CVV") do not drop valid transactions.
+  // 18: Disambiguate investment share vs advisory warnings, support YONO UPI, and dot-masked accounts.
+  static const version = 18;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -547,7 +549,8 @@ class LocalSmsParser {
   /// suffixes from insurance, demat, brokerage, investment, and card alerts
   /// must not create rows in Home's bank-account snapshot.
   static bool isBankAccountMessage(String body, [String sender = '']) {
-    final text = body.toLowerCase();
+    final cleaned = body.replaceAll(advisoryWarningRe, '');
+    final text = cleaned.toLowerCase();
     if (text.trim().isEmpty) return false;
     final senderText = sender.toLowerCase();
     // Axio is a Pay Later / lending account, not a deposit bank. Its sender
@@ -568,7 +571,7 @@ class LocalSmsParser {
       return false;
     }
     if (RegExp(
-      r'\b(?:lic|life\s+insurance|policy|premium|demat|trading|broker(?:age|ing)?|portfolio|holdings?|folio|dp\s*id|client\s*id|nav|units?|shares?|stocks?|equity|sip|mutual\s+fund|investment|zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money)\b',
+      r'\b(?:lic|life\s+insurance|policy|premium|demat|trading|broker(?:age|ing)?|portfolio|holdings?|folio|dp\s*id|client\s*id|nav|units?|shares|equity\s+shares?|stocks?|equity|sip|mutual\s+fund|investment|zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money)\b',
     ).hasMatch(text)) {
       return false;
     }
@@ -580,7 +583,7 @@ class LocalSmsParser {
           r'\b(?:bank|a\/?c\.?|savings|current|upi|imps|neft|rtgs|atm|co-?op(?:erative)?|sahakari|ucb)\b',
         ).hasMatch(text) ||
         RegExp(
-          r'(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb|gucb|cosmos|svc|tjsb|nkgsb|kccb|coop|ucb)',
+          r'(?:bank|bnk|bk|upi|sbi|yono|sbyono|sbiyon|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb|gucb|cosmos|svc|tjsb|nkgsb|kccb|coop|ucb)',
         ).hasMatch(senderText);
     final balanceMarker = RegExp(
       r'\b(?:(?:total\s+)?(?:available|avail|avl|current|closing|clr|new|remaining)\.?\s*(?:balance|bal)\b|bal(?:ance)?\.?\s*(?:is|:|-))',
@@ -601,7 +604,7 @@ class LocalSmsParser {
   ).hasMatch(body);
 
   static bool _accountToAccountTransfer(String body) => _re(
-    r'\bfrom\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}[\s\S]{0,100}\b(?:to|towards?)\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}\b|\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}[\s\S]{0,35}\b(?:debited|sent|transferred|paid)\b[\s\S]{0,100}\b(?:to|towards?)\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}\b',
+    r'\bfrom\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+(?:with|in))?|last\s*4)\s*)?[*xX.\s-]*\d{4}[\s\S]{0,100}\b(?:to|towards?)\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+(?:with|in))?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b|\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+(?:with|in))?|last\s*4)\s*)?[*xX.\s-]*\d{4}[\s\S]{0,35}\b(?:debited|sent|transferred|paid)\b[\s\S]{0,100}\b(?:to|towards?)\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+(?:with|in))?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b',
   ).hasMatch(body);
 
   static bool _walletLoad(String body) => _re(
@@ -700,7 +703,7 @@ class LocalSmsParser {
   /// remains narrow and does not change unrelated card or NEFT narratives.
   static String? _upiAccountRecipient(String body) {
     final match = _re(
-      r'\bfrom\s+(?:your\s+)?(?:a\/?c\.?|account)\s*(?:[xX*]{1,4}\s*)?\d{4}\s+to\s+([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+(?:via\s+)?upi\b|\s+on\b|\s+ref(?:erence)?\b|[.,;]|$)',
+      r'\bfrom\s+(?:your\s+)?(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX.\s-]*\d{4}[\s\S]{0,50}?\bto\s+([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+(?:by\s+upi|via\s+upi|via|on|ref(?:erence)?|avl|available|bal(?:ance)?)\b|[.,;]|$)',
     ).firstMatch(body);
     return match?.group(1)?.trim();
   }
@@ -711,7 +714,7 @@ class LocalSmsParser {
 
   static bool _earnedIncomeCredit(String body) =>
       !_re(
-        r'\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|investment|mutual\s+fund|shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
+        r'\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|investment|mutual\s+fund|shares|equity\s+shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
       ).hasMatch(body) &&
       !_re(r'\bsalary\s+advance\b').hasMatch(body) &&
       _re(
@@ -738,7 +741,7 @@ class LocalSmsParser {
         r'\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b',
       ).hasMatch(body) &&
       _re(
-        r'\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b',
+        r'\b(?:mutual\s+fund|sip|investment|shares|equity\s+shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b',
       ).hasMatch(body));
 
   static bool _cardCredit(String body) {
@@ -797,10 +800,18 @@ class LocalSmsParser {
     return null;
   }
 
-  static bool sensitive(String body) => RegExp(
-    r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin|passcode|secret code)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
+  static final advisoryWarningRe = RegExp(
+    r"\b(?:(?:do\s+not|don't|never)\s+share\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|passcode|details|secret|code)\b|(?:bank|sbi|union\s+bank)\s+(?:will\s+)?never\s+(?:call|ask)\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details)|bank\s+never\s+asks\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details))\b[^\n]*",
     caseSensitive: false,
-  ).hasMatch(body);
+  );
+
+  static bool sensitive(String body) {
+    final cleaned = body.replaceAll(advisoryWarningRe, '');
+    return RegExp(
+      r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin|passcode|secret code)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
+      caseSensitive: false,
+    ).hasMatch(cleaned);
+  }
   static RegExp _re(String s, {bool caseSensitive = false}) =>
       RegExp(s, caseSensitive: caseSensitive);
 
@@ -1873,7 +1884,7 @@ class LocalSmsParser {
                 _re(r'\b(?:purchase|purchased)\b').hasMatch(movementBody)) ||
             asbaOrIpoBlock ||
             _re(
-              r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred|deducted)\b[\s\S]{0,40}\b(?:successful|successfully|completed)\b',
+              r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred|deducted)\b[\s\S]{0,100}\b(?:successful|successfully|completed)\b',
             ).hasMatch(movementBody) ||
             _re(
               r'\b(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[*xX]*[\d,.]+\b',
@@ -2141,7 +2152,7 @@ class LocalSmsParser {
         !asbaOrIpoBlock &&
         !brokerSettlement &&
         !_re(
-          r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred|txn|transaction|deducted|deduct)\b',
+          r'\b(?:spent|debited|debit|paid|payment|purchase|purchased|charged|withdrawn|sent|transferred|txn|transaction|deducted|deduct)\b',
         ).hasMatch(body)) {
       return observation();
     }
@@ -2255,6 +2266,11 @@ class LocalSmsParser {
     final upiSlashMatch = _re(
       r'\bupi/(?:\d+/)?([a-zA-Z0-9 ._&@*\x27/-]{2,50}?)(?=[.,;\s]|$)',
     ).firstMatch(body);
+    final rawUpiSlashMatch = upiSlashMatch?.group(1)?.trim();
+    final effectiveUpiSlash = (rawUpiSlashMatch != null &&
+            !_re(r'^(?:yono(?:\s+user)?|upi(?:\s+user)?)$').hasMatch(rawUpiSlashMatch))
+        ? rawUpiSlashMatch
+        : null;
     final towardsMatchParse = _re(
       r'\b(?:towards?|in\s+fav(?:ou?r)?\s+of)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body);
@@ -2262,7 +2278,7 @@ class LocalSmsParser {
     var merchant =
         _upiAccountRecipient(body) ??
         fvgMatch?.group(1)?.trim() ??
-        upiSlashMatch?.group(1)?.trim() ??
+        effectiveUpiSlash ??
         towardsMatchParse?.group(1)?.trim();
 
     if (asbaOrIpoBlock && (merchant == null || merchant.isEmpty)) {
@@ -2287,7 +2303,7 @@ class LocalSmsParser {
 
     if (merchant == null || merchant.isEmpty) {
       final merchantMatch = _re(
-        r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+        r'\b(?:at|to|for|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:a\/?c\.?|account)\b|using\s+yono\b)([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
       ).firstMatch(body);
       merchant = merchantMatch?.group(1)?.trim();
     }
@@ -2295,15 +2311,22 @@ class LocalSmsParser {
     // Banking channels / currency tokens are not recipients.
     if (merchant != null &&
         (_re(
-              r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking|upi|imps|neft|rtgs)$',
+              r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking|upi|imps|neft|rtgs|yono|sbi|rinb|inb)$',
             ).hasMatch(merchant) ||
-            _re(r'^(?:rs\.?|inr|re\.?|\d+)$').hasMatch(merchant))) {
+            _re(r'^(?:rs\.?|inr|re\.?|\d+|vpa)$').hasMatch(merchant) ||
+            _re(r'^(?:a\/?c\.?|account)\b').hasMatch(merchant))) {
       merchant = fvgMatch?.group(1)?.trim();
     }
     if (isWalletDebit &&
         merchant != null &&
         _re(r'^(?:your\s+)?(?:\w+\s+)?wallet$').hasMatch(merchant)) {
       merchant = null;
+    }
+    if (merchant != null) {
+      merchant = merchant.replaceFirst(RegExp(r'^vpa[/ ]\s*', caseSensitive: false), '').trim();
+      if (_re(r'^(?:a\/?c\.?|account)\b').hasMatch(merchant)) {
+        merchant = null;
+      }
     }
     if (merchant != null) {
       final sanitized = IndianNarrationSanitizer.sanitize(merchant);

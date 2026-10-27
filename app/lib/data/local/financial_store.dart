@@ -50,6 +50,11 @@ const _bankTokenAliases = <String, String>{
   'unionb': 'union',
   'sbibnk': 'sbi',
   'sbibk': 'sbi',
+  'sbyono': 'sbi',
+  'sbiyon': 'sbi',
+  'yonosb': 'sbi',
+  'sbiinb': 'sbi',
+  'sbiupi': 'sbi',
   'axisbnk': 'axis',
   'axisb': 'axis',
   'idbibk': 'idbi',
@@ -90,6 +95,9 @@ const _bankCodePrefixes = [
 /// Human label per canonical bank code; unknown codes render capitalized.
 const _bankDisplayLabels = <String, String>{
   'sbi': 'SBI',
+  'sbyono': 'SBI',
+  'sbiyon': 'SBI',
+  'yonosb': 'SBI',
   'hdfc': 'HDFC Bank',
   'icici': 'ICICI Bank',
   'axis': 'Axis Bank',

@@ -6641,6 +6641,13 @@ class SmsAutoImportController {
       }
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    final lastScanVer = prefs.getInt('pandapay_app.sms_inbox_scanner_ver_${namespace}') ?? 0;
+    if (lastScanVer < LocalSmsParser.version) {
+      SmsInboxProgress(store.database).rewind(namespace, 300);
+      await prefs.setInt('pandapay_app.sms_inbox_scanner_ver_${namespace}', LocalSmsParser.version);
+    }
+
     final scanner = SmsInboxScanner(
       progress: SmsInboxProgress(store.database),
       head: _service.inboxHeadId,

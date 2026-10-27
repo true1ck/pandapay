@@ -12,7 +12,7 @@ const { brandFor } = require('./brand_catalog');
 const FINANCIAL_MOVEMENT_NAME = /\b(?:bank\s+transfer|transfer\s+to|transfer\s+between|cash\s+withdrawal|credit\s+card\s+bill\s+payment|investment\s+contribution|money\s+received|salary|refund|cashback|dividend|demat|trading|broker(?:age|ing)?|portfolio|mutual\s+fund|systematic\s+investment|sip|stocks?|shares?|equity|investment)\b/i;
 
 const FINANCIAL_PROVIDER = /\b(?:zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|demat|trading|broker(?:age|ing)?|portfolio)\b/i;
-const INVESTMENT_INTENT = /\b(?:sip|systematic\s+investment|mutual\s+fund|investment|invested|invest(?:ment)?\s+account|add(?:ing|ed)?\s+(?:money|funds?)|funds?\s+(?:added|credited|transferred|deposited)|top[ -]?up|fund(?:ed|ing)|buy|bought|purchase(?:d)?|units?|stocks?|shares?|equity)\b/i;
+const INVESTMENT_INTENT = /\b(?:sip|systematic\s+investment|mutual\s+fund|investment|invested|invest(?:ment)?\s+account|add(?:ing|ed)?\s+(?:money|funds?)|funds?\s+(?:added|credited|transferred|deposited)|top[ -]?up|fund(?:ed|ing)|buy|bought|purchase(?:d)?|units?|stocks?|shares|equity\s+shares?|equity)\b/i;
 const MOVEMENT_VERB = /\b(?:debit(?:ed)?|paid|sent|transferred|withdrawn|invested|purchased|bought|credited|received|deposited|add(?:ing|ed)?|funded|top[ -]?up)\b/i;
 const FEE_ONLY = /\b(?:fee|fees|charge|charges|commission|brokerage\s+fee|annual\s+maintenance)\b/i;
 
@@ -23,7 +23,8 @@ const FEE_ONLY = /\b(?:fee|fees|charge|charges|commission|brokerage\s+fee|annual
 // phrase "add funds back to your <broker> account" is an instruction about
 // the user's next step, not this transaction.
 function isBrokerSettlementMessage(value) {
-  const text = String(value || '');
+  const rawText = String(value || '');
+  const text = rawText.replace(/\b(?:(?:do\s+not|don't|never)\s+share\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|passcode|details|secret|code)\b|bank\s+never\s+asks\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details))\b[^\n]*/gi, '');
   return /\b(?:dhan|zerodha|groww|upstox|angel\s+one|5paisa|sharekhan|motilal\s+oswal|hdfc\s+securities|icici\s+direct|kotak\s+securities|paytm\s+money|iifl)\b/i.test(text)
     && /\b(?:running\s+account\s+settlement|quarterly\s+settlement|account\s+settlement|settlement\s+(?:payout|credit|dated)|payout|pay-?out|funds?\s+released)\b/i.test(text);
 }
@@ -41,7 +42,8 @@ function isInvestmentFolioAllotment(body) {
 }
 
 function isInvestmentFundingMessage(value) {
-  const text = String(value || '');
+  const rawText = String(value || '');
+  const text = rawText.replace(/\b(?:(?:do\s+not|don't|never)\s+share\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|passcode|details|secret|code)\b|bank\s+never\s+asks\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details))\b[^\n]*/gi, '');
   if (!text || !MOVEMENT_VERB.test(text)) return false;
   if (isInvestmentFolioAllotment(text)) return false;
   const explicitInvestment = INVESTMENT_INTENT.test(text);
@@ -60,7 +62,8 @@ function isInvestmentFundingMessage(value) {
 }
 
 function isInvestmentMandateMessage(value) {
-  const text = String(value || '');
+  const rawText = String(value || '');
+  const text = rawText.replace(/\b(?:(?:do\s+not|don't|never)\s+share\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|passcode|details|secret|code)\b|bank\s+never\s+asks\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details))\b[^\n]*/gi, '');
   return FINANCIAL_PROVIDER.test(text) &&
     /\b(?:autopay|auto[- ]?pay|mandate|standing\s+instruction|sip)\b/i.test(text) &&
     INVESTMENT_INTENT.test(text) &&

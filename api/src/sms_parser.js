@@ -25,9 +25,11 @@ const { isInvestmentFundingMessage, isBrokerSettlementMessage, isInvestmentFolio
 // ("txn", "INR", "card ending") but must never become spending records.
 // Keep this check before admin-configured patterns so a broad pattern cannot
 // accidentally turn an OTP into a transaction.
+const ADVISORY_WARNING_RE = /\b(?:(?:do\s+not|don't|never)\s+share\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|passcode|details|secret|code)\b|bank\s+never\s+asks\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details))\b[^\n]*/gi;
+
 function isSecurityOrOtpMessage(body) {
-  const text = String(body || '').toLowerCase();
-  return /\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b/.test(text)
+  const text = String(body || '').replace(ADVISORY_WARNING_RE, '').toLowerCase();
+  return /\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin|passcode|secret code)\b/.test(text)
     || /\b(?:do not|don't|never)\s+share\b/.test(text)
     || /\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b/.test(text);
 }
@@ -298,15 +300,15 @@ function parseBuiltInAccountTransfer(sms) {
   }
 
   const sourceMatch = body.match(
-    /\bfrom\b[\s\S]{0,80}?\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*\d{4}\b/i,
+    /\bfrom\b[\s\S]{0,80}?\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+(?:with|in))?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b/i,
   ) || body.match(
-    /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*\d{4}\b(?=[\s\S]{0,35}\b(?:debited|sent|transferred|paid)\b)/i,
+    /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+(?:with|in))?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b(?=[\s\S]{0,35}\b(?:debited|sent|transferred|paid)\b)/i,
   );
   if (!sourceMatch) return { ok: false, reason: 'no_transfer_source_account' };
 
   const afterSource = body.slice(sourceMatch.index + sourceMatch[0].length);
   const recipientMatch = afterSource.match(
-    /\b(?:to|towards?)\s+([A-Za-z][A-Za-z0-9 .&'\/-]{1,100}?)(?=\s+\b(?:on|ref(?:erence)?|txn(?:action)?|not\s+you|call|sms\s+block|via|upi)\b|\s+[*xX-]*\d{4}\b|[.,;]|$)/i,
+    /\b(?:to|towards?)\s+([A-Za-z][A-Za-z0-9 .&'\/-]{1,100}?)(?=\s+\b(?:on|ref(?:erence)?|txn(?:action)?|not\s+you|call|sms\s+block|via|upi|bal(?:ance)?|available|avl)\b|\s+[*xX-]*\d{4}\b|[.,;]|$)/i,
   );
   if (!recipientMatch && !/\bself[ -]?transfer\b/i.test(body)) {
     return { ok: false, reason: 'no_transfer_destination' };
@@ -402,10 +404,10 @@ function parseBuiltInAccountCredit(sms) {
     return { ok: false, reason: 'balance_only_alert' };
   }
 
-  const accountReferences = body.match(/\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*\d{4}\b/gi) || [];
+  const accountReferences = body.match(/\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+(?:with|in))?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b/gi) || [];
   const destinationAccount = body.match(/\bto\s+your\b[\s\S]{0,70}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*(\d{4})\b/i);
   const creditedAccount = body.match(/\b(?:credited|received|deposited)\b[\s\S]{0,70}\b(?:to|into|in)\s+(?:(?:your|the)\s+)?(?:[A-Za-z]+\s+){0,3}(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*(\d{4})\b/i);
-  const partyMatch = body.match(/\b(?:from|by|via)\s+([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80}?)(?=\s+(?:on|for|ref(?:erence)?|txn|utr|a\/?c\.?|account|bal(?:ance)?|avl|available)\b|[.,;]|$)/i);
+  const partyMatch = body.match(/\b(?:from|by|via)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80}?)(?=\s+(?:on|for|ref(?:erence)?|txn|utr|a\/?c\.?|account|bal(?:ance)?|avl|available)\b|[.,;]|$)/i);
   // Money received from the owner's own name is the other leg of a UPI/QR
   // self transfer — not earned income and not an unclassified credit.
   const ownTransfer = isExplicitOwnAccountTransfer(body)
@@ -416,7 +418,7 @@ function parseBuiltInAccountCredit(sms) {
   const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?|utr)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
   const lower = body.toLowerCase();
   const salaryCredit = /\bsalary\b/i.test(body);
-  const nonIncomeCredit = /\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|investment|mutual\s+fund|shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b/i.test(body);
+  const nonIncomeCredit = /\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|investment|mutual\s+fund|shares|equity\s+shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b/i.test(body);
   const earnedIncomeCredit = !nonIncomeCredit
     && !/\bsalary\s+advance\b/i.test(body)
     && /\b(?:salary|wages?|payroll|pension|interest|dividend|rent|commission|consulting|business\s+(?:receipt|income)|invoice\s+paid)\b/i.test(body);
@@ -475,6 +477,8 @@ function parseBuiltInAccountCredit(sms) {
     : incomingBankTransferCandidate
     ? 'incoming_bank_transfer_candidate'
     : 'unclassified_credit';
+  const rawParty = partyMatch?.[1]?.trim();
+  const partyIsBankingChannel = rawParty && /^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking|upi|imps|neft|rtgs|yono|rinb|inb|sbi|vpa|rs\.?|inr|re\.?|\d+)$/i.test(rawParty);
   const merchant = ownTransfer
     ? 'Transfer between own accounts'
     : brokerSettlement
@@ -501,7 +505,7 @@ function parseBuiltInAccountCredit(sms) {
     ? 'Bank transfer'
     : salaryCredit
     ? 'Salary'
-    : partyMatch?.[1]?.trim() || 'Money received';
+    : (!partyIsBankingChannel && rawParty) || 'Money received';
 
   return {
     ok: true,
@@ -981,9 +985,9 @@ function parseBuiltInUpiDebit(sms) {
   // UPI alerts commonly put the reference in parentheses immediately after
   // the payee ("to ekart (UPI Ref ...)"). Stop before that metadata so it
   // cannot become part of the merchant name.
-  const merchantMatch = body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|\s*\(|[.,;]|$|\r|\n)/i)
-    || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|\s*\(|[.,;]|$|\r|\n)/i)
-    || body.match(/\b(?:to|at|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|\s*\(|[.,]|$)/i);
+  const merchantMatch = body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,;]|$|\r|\n)/i)
+    || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,;]|$|\r|\n)/i)
+    || body.match(/\b(?:to|at|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,]|$)/i);
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:upi\s*)?(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
   const walletLoad = isWalletLoadMessage(body);

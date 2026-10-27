@@ -59,6 +59,7 @@ session_screenshots/
 
 # Local agent/audit artifacts and generated analysis caches
 .codex-tmp/
+.codex-runtime/
 outputs/
 **/graphify-out/
 **/.gradle/
