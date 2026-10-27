@@ -618,8 +618,12 @@ function registerSmsFactsRoutes(app, {
             };
           }
         } catch (learningError) {
-          console.warn('SMS dismissal learning feedback skipped:', learningError.message || learningError);
-          return { status: 503, error: 'dismissal_feedback_unavailable' };
+          // Keep SQL details and message bodies off the client, while exposing
+          // a stable code that makes a failed durable retry diagnosable.
+          const code = /^[0-9A-Z]{5}$/.test(String(learningError.code || ''))
+            ? learningError.code : 'unknown';
+          console.warn('SMS dismissal learning feedback skipped:', code, learningError.message || learningError);
+          return { status: 503, error: 'dismissal_feedback_unavailable', learningReason: `database_${code}` };
         }
 
         const learningErrors = Array.isArray(learningOutcome?.errors)
