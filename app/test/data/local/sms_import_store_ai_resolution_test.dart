@@ -666,6 +666,7 @@ void main() {
             )
             as Map<String, dynamic>;
     expect(payload['reason'], 'moved_from_auto_resolved');
+    expect(payload['aiStatus'], 'notChecked');
     expect(payload['sender'], 'HDFCBK');
     expect(payload['body'], contains('previously auto-categorized by AI'));
   });
@@ -704,5 +705,19 @@ void main() {
             as Map<String, dynamic>;
     expect(payload['reason'], 'moved_from_auto_resolved');
     expect(payload['kind'], 'commitment');
+  });
+
+  test('moveToReview removes an archived historical bill', () async {
+    final due = utcDayOffset(-7);
+    final item = reviewItem(body: billBody(due));
+    insertReviewRow(item);
+    importStore.resolveAiSuggestions(ns, item, [billSuggestion(due)]);
+    expect(PastBillReceiptRepository(db, namespace: ns).fetchAll(), hasLength(1));
+    final entry = AutoResolvedHistoryRepository(db, namespace: ns).fetchAll().single;
+
+    await controller().moveToReview(entry);
+
+    expect(PastBillReceiptRepository(db, namespace: ns).fetchAll(), isEmpty);
+    expect(reviewCount(), 1);
   });
 }

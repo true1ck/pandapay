@@ -4,6 +4,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../local_sms_parser.dart';
 import '../needs_review_repository.dart';
+import '../past_bill_receipts.dart';
 import 'app_database.dart';
 import 'auto_resolved_history_repository.dart';
 import 'financial_store.dart';
@@ -126,6 +127,10 @@ class SmsAutoResolutionController {
           'DELETE FROM local_commitments WHERE namespace=? AND id=?',
           [namespace, 'commitment:${entry.sourceKey}'],
         );
+        PastBillReceiptRepository(
+          database,
+          namespace: namespace,
+        ).delete('commitment:${entry.sourceKey}');
       }
       AutoResolvedHistoryRepository(
         database,

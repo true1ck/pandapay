@@ -6180,6 +6180,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     var changed = false;
     for (final item in items) {
       if (ref.read(cacheNamespaceProvider) != namespace) break;
+      // A user explicitly undid this AI decision. The existing server job is
+      // still done, so polling it again would immediately auto-file the SMS.
+      if (item.reason == 'moved_from_auto_resolved') continue;
       // A completed job returns its original fact list; do not restore facts
       // the user already resolved from a still-open multi-fact review item.
       if (item.aiSuggestions?.isNotEmpty == true) continue;
