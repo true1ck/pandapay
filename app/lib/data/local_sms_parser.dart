@@ -135,7 +135,7 @@ class LocalSmsParser {
   // 17: Bank cautionary advisory warnings ("Never share OTP/PIN/CVV") do not drop valid transactions.
   // 18: Disambiguate investment share vs advisory warnings, support YONO UPI, and dot-masked accounts.
   // 19: Allow scanner reprocessing of historical alerts on parser upgrade without lockout.
-  static const version = 19;
+  static const version = 20;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -728,8 +728,10 @@ class LocalSmsParser {
             r'\b(?:loan|personal\s+loan|home\s+loan|car\s+loan|education\s+loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|debited|repaid|repayment|deducted|transferred)\b',
           ).hasMatch(body) ||
           // "credited ... towards the payment of EMI" — verb before keyword.
+          // "received" only counts here, never keyword-first, because every
+          // disbursement alert says "loan ... received/credited".
           _re(
-            r'\b(?:payment|repayment|repaid)\b[\s\S]{0,60}\b(?:of|towards?|for)\b[\s\S]{0,20}\b(?:the\s+)?(?:loan|emi|equated\s+monthly\s+installment|instalment)\b',
+            r'\b(?:payment|repayment|repaid|received)\b[\s\S]{0,60}\b(?:of|towards?|for)\b[\s\S]{0,20}\b(?:the\s+)?(?:loan|emi|equated\s+monthly\s+installment|instalment)\b',
           ).hasMatch(body));
 
   static bool _feeCharge(String body) => _re(

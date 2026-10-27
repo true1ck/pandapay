@@ -247,6 +247,7 @@ void main() {
         'Dear Customer, your account no. XX3510 has been credited with Rs.6300 towards the payment of EMI on 04-10-2026. UCO Bank',
         'Dear Customer, your account no. XX2315 has been credited with Rs.9700 towards the payment of EMI on 04-10-2026. UCO Bank',
         'Loan EMI payment of Rs.5000 credited to your account ending 2626.',
+        'Your a/c XX4455 has been credited with Rs.8500. Equated Monthly Installment received towards home loan. SBI',
       ]) {
         final result = LocalSmsParser.parse(
           namespace: 'user:test',
