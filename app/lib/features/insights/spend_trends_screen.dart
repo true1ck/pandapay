@@ -10,6 +10,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
+import '../../data/merchant_identity.dart';
 import '../../data/spend_reports_repository.dart';
 import '../../data/spending_selection.dart';
 import '../../data/user_cards_repository.dart';
@@ -17,6 +18,120 @@ import '../../main.dart' show MoneyText;
 import '../cards/card_summary.dart';
 import '../import/data_transfer_screen.dart';
 import 'spending_visuals.dart';
+
+/// A merchant/payee label plus an optional readable UPI address.
+///
+/// The name is always the primary label. A VPA is only kept as secondary text
+/// when it is a real address, never when it is an opaque reference that would
+/// look like a merchant to the user.
+class _MerchantDisplay {
+  final String label;
+  final String? vpa;
+
+  const _MerchantDisplay({required this.label, this.vpa});
+}
+
+/// One payee group. [entries] stay attached so totals, expansion and
+/// transaction taps are computed from the same rows as before.
+class _PayeeGroup {
+  final String label;
+  final String? vpa;
+  final List<TransactionEntry> entries;
+
+  const _PayeeGroup({required this.label, required this.entries, this.vpa});
+
+  int get totalPaise =>
+      entries.fold(0, (sum, entry) => sum + entry.amount.paise);
+}
+
+/// A readable VPA has exactly one `@`, a real local part and a domain. Hash
+/// fragments and other reference noise are not shown as if they identified a
+/// person. [MerchantIdentity] deliberately treats every VPA as a weak *name*,
+/// so VPA shape is checked here before it is used as secondary text.
+String? _readableMerchantVpa(String? value) {
+  final vpa = value?.trim();
+  if (vpa == null || !RegExp(r'^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$').hasMatch(vpa)) return null;
+  final at = vpa.indexOf('@');
+  if (at <= 0 || at == vpa.length - 1) return null;
+  if (vpa.indexOf('@', at + 1) != -1) return null;
+  final local = vpa.substring(0, at);
+  final domain = vpa.substring(at + 1);
+  if (!RegExp(r'[A-Za-z]').hasMatch(domain)) return null;
+  if (RegExp(r'^[0-9a-fA-F]{8,}$').hasMatch(local) ||
+      MerchantIdentity.isWeakName(local) ||
+      RegExp(r'^(?:paytmqr|bharatpe)\d', caseSensitive: false).hasMatch(local)) return null;
+  return vpa;
+}
+
+// Opaque addresses still distinguish identities even when hidden in the UI.
+String _merchantGroupKey(TransactionEntry entry) {
+  final vpa = entry.merchantVpa?.trim();
+  if (vpa != null && vpa.isNotEmpty) return 'vpa:${SpendingSelection.normalize(vpa)}';
+  final name = MerchantIdentity.cleanName(entry.merchantName);
+  if (name != null) return 'name:${SpendingSelection.normalize(name)}';
+  return 'entry:${entry.id}';
+}
+
+/// Resolves the visible label for a group. Names observed on the rows win;
+/// [fallbackLabel] is only used by report rows before details arrive.
+_MerchantDisplay _merchantDisplayFor(
+  List<TransactionEntry> entries, {
+  required String unknownLabel,
+  String? fallbackLabel,
+}) {
+  final counts = <String, int>{};
+  final names = <String, String>{};
+  for (final entry in entries) {
+    final name = MerchantIdentity.cleanName(entry.merchantName);
+    if (name == null) continue;
+    final normalized = SpendingSelection.normalize(name);
+    counts[normalized] = (counts[normalized] ?? 0) + 1;
+    names.putIfAbsent(normalized, () => name);
+  }
+
+  String? name;
+  if (counts.isNotEmpty) {
+    final best = counts.entries.reduce((a, b) => b.value > a.value ? b : a);
+    name = names[best.key];
+  }
+  name ??= MerchantIdentity.cleanName(fallbackLabel);
+
+  final readableVpas = <String>{};
+  for (final entry in entries) {
+    final vpa = _readableMerchantVpa(entry.merchantVpa);
+    if (vpa != null) readableVpas.add(vpa);
+  }
+  final vpa = readableVpas.length == 1 ? readableVpas.single : null;
+
+  if (name != null) return _MerchantDisplay(label: name, vpa: vpa);
+  if (vpa != null) return _MerchantDisplay(label: vpa);
+  return _MerchantDisplay(label: unknownLabel);
+}
+
+/// Groups payments by counterparty, preserving existing ordering by amount.
+List<_PayeeGroup> _groupByPayee(
+  Iterable<TransactionEntry> entries, {
+  required String unknownLabel,
+}) {
+  final grouped = <String, List<TransactionEntry>>{};
+  for (final entry in entries) {
+    grouped.putIfAbsent(_merchantGroupKey(entry), () => []).add(entry);
+  }
+  return grouped.values
+      .map((group) {
+        final display = _merchantDisplayFor(
+          group,
+          unknownLabel: unknownLabel,
+        );
+        return _PayeeGroup(
+          label: display.label,
+          vpa: display.vpa,
+          entries: group,
+        );
+      })
+      .toList()
+    ..sort((a, b) => b.totalPaise.compareTo(a.totalPaise));
+}
 
 /// Rows for the same calendar period as the aggregate report. The report
 /// endpoint remains the source of truth for totals; this companion request
@@ -1927,29 +2042,8 @@ class _TagCategoryRow extends StatelessWidget {
     required this.onViewAll,
   });
 
-  List<MapEntry<String, List<TransactionEntry>>> _merchantGroups() {
-    final grouped = <String, List<TransactionEntry>>{};
-    for (final entry in entries) {
-      final merchant = entry.merchantName?.trim();
-      final label = merchant == null || merchant.isEmpty
-          ? 'Unknown merchant'
-          : merchant;
-      grouped.putIfAbsent(label, () => []).add(entry);
-    }
-    final result = grouped.entries.toList()
-      ..sort((a, b) {
-        final aTotal = a.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        final bTotal = b.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        return bTotal.compareTo(aTotal);
-      });
-    return result;
-  }
+  List<_PayeeGroup> _merchantGroups() =>
+      _groupByPayee(entries, unknownLabel: 'Unknown merchant');
 
   @override
   Widget build(BuildContext context) => ExpansionTile(
@@ -2019,7 +2113,11 @@ class _TagCategoryRow extends StatelessWidget {
         )
       else
         for (final group in _merchantGroups())
-          _MerchantGroup(merchant: group.key, entries: group.value),
+          _MerchantGroup(
+            merchant: group.label,
+            vpa: group.vpa,
+            entries: group.entries,
+          ),
       Align(
         alignment: AlignmentDirectional.centerEnd,
         child: TextButton.icon(
@@ -4214,33 +4312,8 @@ class _ExpandableCategoryRow extends StatelessWidget {
     this.initiallyExpanded = false,
   });
 
-  List<MapEntry<String, List<TransactionEntry>>> _merchantGroups() {
-    final grouped = <String, List<TransactionEntry>>{};
-    final unnamed = <MapEntry<String, List<TransactionEntry>>>[];
-    for (final entry in entries) {
-      final merchant = entry.merchantName?.trim();
-      if (merchant == null || merchant.isEmpty) {
-        // Missing names do not identify a shared merchant. Keep each payment
-        // separate so unrelated cards and dates cannot look like one shop.
-        unnamed.add(MapEntry('Merchant not captured', [entry]));
-        continue;
-      }
-      grouped.putIfAbsent(merchant, () => []).add(entry);
-    }
-    final result = [...grouped.entries, ...unnamed]
-      ..sort((a, b) {
-        final aTotal = a.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        final bTotal = b.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        return bTotal.compareTo(aTotal);
-      });
-    return result;
-  }
+  List<_PayeeGroup> _merchantGroups() =>
+      _groupByPayee(entries, unknownLabel: 'Merchant not captured');
 
   @override
   Widget build(BuildContext context) {
@@ -4331,7 +4404,11 @@ class _ExpandableCategoryRow extends StatelessWidget {
             )
           else
             for (final group in groups)
-              _MerchantGroup(merchant: group.key, entries: group.value),
+              _MerchantGroup(
+                merchant: group.label,
+                vpa: group.vpa,
+                entries: group.entries,
+              ),
         ],
       ),
     );
@@ -4354,19 +4431,8 @@ class _ExpandableInstrumentRow extends StatelessWidget {
     required this.detailsLoading,
   });
 
-  Map<String, List<TransactionEntry>> _recipientGroups() {
-    final isUpi = row.instrument == 'upi_bank';
-    final groups = <String, List<TransactionEntry>>{};
-    for (final entry in entries) {
-      final vpa = entry.merchantVpa?.trim();
-      final merchant = entry.merchantName?.trim();
-      final label = isUpi && vpa != null && vpa.isNotEmpty
-          ? vpa
-          : (merchant == null || merchant.isEmpty ? 'Unknown payee' : merchant);
-      groups.putIfAbsent(label, () => []).add(entry);
-    }
-    return groups;
-  }
+  List<_PayeeGroup> _recipientGroups() =>
+      _groupByPayee(entries, unknownLabel: 'Unknown payee');
 
   @override
   Widget build(BuildContext context) {
@@ -4374,18 +4440,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
     final ratio = total.isZero
         ? 0.0
         : (row.total.paise / total.paise).clamp(0.0, 1.0);
-    final groups = _recipientGroups().entries.toList()
-      ..sort((a, b) {
-        final aTotal = a.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        final bTotal = b.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        return bTotal.compareTo(aTotal);
-      });
+    final groups = _recipientGroups();
 
     return CardSummaryPanel(
       padding: EdgeInsets.zero,
@@ -4489,7 +4544,11 @@ class _ExpandableInstrumentRow extends StatelessWidget {
             )
           else
             for (final group in groups)
-              _MerchantGroup(merchant: group.key, entries: group.value),
+              _MerchantGroup(
+                merchant: group.label,
+                vpa: group.vpa,
+                entries: group.entries,
+              ),
         ],
       ),
     );
@@ -4517,6 +4576,11 @@ class _ExpandableMerchantRow extends StatelessWidget {
     final ratio = total.isZero
         ? 0.0
         : (row.total.paise / total.paise).clamp(0.0, 1.0);
+    final display = _merchantDisplayFor(
+      entries,
+      fallbackLabel: row.label,
+      unknownLabel: 'Unknown merchant',
+    );
 
     return CardSummaryPanel(
       padding: EdgeInsets.zero,
@@ -4548,7 +4612,7 @@ class _ExpandableMerchantRow extends StatelessWidget {
           children: [
             SpendingBreakdownHeader(
               label: Text(
-                row.label,
+                display.label,
                 style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -4602,7 +4666,8 @@ class _ExpandableMerchantRow extends StatelessWidget {
             )
           else
             _MerchantGroup(
-              merchant: row.label,
+              merchant: display.label,
+              vpa: display.vpa,
               entries: entries,
               isCollapsible: false,
             ),
@@ -4614,12 +4679,14 @@ class _ExpandableMerchantRow extends StatelessWidget {
 
 class _MerchantGroup extends StatelessWidget {
   final String merchant;
+  final String? vpa;
   final List<TransactionEntry> entries;
   final bool isCollapsible;
 
   const _MerchantGroup({
     required this.merchant,
     required this.entries,
+    this.vpa,
     this.isCollapsible = true,
   });
 
@@ -4658,10 +4725,7 @@ class _MerchantGroup extends StatelessWidget {
             ),
             subtitle: Text(
               [
-                if (entry.merchantName?.trim().isNotEmpty == true &&
-                    entry.merchantName!.trim().toLowerCase() !=
-                        merchant.toLowerCase())
-                  entry.merchantName!.trim(),
+                ?_secondaryMerchantName(entry),
                 if (entry.categoryName != null) entry.categoryLabel,
                 entry.cardDisplayName ?? _paymentLabel(entry),
               ].join('\n'),
@@ -4702,13 +4766,28 @@ class _MerchantGroup extends StatelessWidget {
                 ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
-                  child: Text(
-                    merchant,
-                    style: BambooFonts.ui(
-                      12.5,
-                      weight: FontWeight.w700,
-                      color: BambooInk.ink900,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        merchant,
+                        style: BambooFonts.ui(
+                          12.5,
+                          weight: FontWeight.w700,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                      if (vpa != null)
+                        Text(
+                          vpa!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: BambooFonts.ui(
+                            10.5,
+                            color: BambooInk.ink500,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 MoneyText(
@@ -4728,7 +4807,8 @@ class _MerchantGroup extends StatelessWidget {
               style: BambooFonts.ui(11, color: BambooInk.ink500),
             ),
             if (entries.every(
-              (entry) => entry.merchantName?.trim().isEmpty ?? true,
+              (entry) =>
+                  MerchantIdentity.cleanName(entry.merchantName) == null,
             ))
               Text(
                 'Tap the payment to add its merchant.',
@@ -4754,6 +4834,7 @@ class _MerchantGroup extends StatelessWidget {
         storageKey: groupStorageKey,
         initiallyExpanded: false,
         merchant: merchant,
+        vpa: vpa,
         amount: amount,
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -4763,7 +4844,8 @@ class _MerchantGroup extends StatelessWidget {
               style: BambooFonts.ui(11, color: BambooInk.ink500),
             ),
             if (entries.every(
-              (entry) => entry.merchantName?.trim().isEmpty ?? true,
+              (entry) =>
+                  MerchantIdentity.cleanName(entry.merchantName) == null,
             ))
               Text(
                 'Tap the payment to add its merchant.',
@@ -4779,6 +4861,17 @@ class _MerchantGroup extends StatelessWidget {
         children: transactionList,
       ),
     );
+  }
+
+  /// A transaction sometimes carries a more specific name than its group.
+  /// Show it only when it is a real, different name.
+  String? _secondaryMerchantName(TransactionEntry entry) {
+    final name = MerchantIdentity.cleanName(entry.merchantName);
+    if (name == null) return null;
+    return SpendingSelection.normalize(name) ==
+            SpendingSelection.normalize(merchant)
+        ? null
+        : name;
   }
 
   static String _shortDate(DateTime date) {
@@ -4802,6 +4895,7 @@ class _MerchantExpansionTile extends StatefulWidget {
   final String storageKey;
   final bool initiallyExpanded;
   final String merchant;
+  final String? vpa;
   final Money amount;
   final Widget subtitle;
   final List<Widget> children;
@@ -4813,6 +4907,7 @@ class _MerchantExpansionTile extends StatefulWidget {
     required this.amount,
     required this.subtitle,
     required this.children,
+    this.vpa,
   });
 
   @override
@@ -4854,16 +4949,34 @@ class _MerchantExpansionTileState extends State<_MerchantExpansionTile> {
       ),
       size: 30,
     ),
-    title: Text(
-      widget.merchant,
-      key: ValueKey<String>('spending-merchant-name-${widget.storageKey}'),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: BambooFonts.ui(
-        12.5,
-        weight: FontWeight.w700,
-        color: BambooInk.ink900,
-      ),
+    title: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          widget.merchant,
+          key: ValueKey<String>(
+            'spending-merchant-name-${widget.storageKey}',
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: BambooFonts.ui(
+            12.5,
+            weight: FontWeight.w700,
+            color: BambooInk.ink900,
+          ),
+        ),
+        if (widget.vpa != null)
+          Text(
+            widget.vpa!,
+            key: ValueKey<String>(
+              'spending-merchant-vpa-${widget.storageKey}',
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+          ),
+      ],
     ),
     subtitle: widget.subtitle,
     trailing: Row(
@@ -4926,23 +5039,8 @@ class _AccountRow extends StatelessWidget {
     required this.detailsLoading,
   });
 
-  Map<String, List<TransactionEntry>> _payeeGroups() {
-    final groups = <String, List<TransactionEntry>>{};
-    for (final entry in entries) {
-      final vpa = entry.merchantVpa?.trim();
-      final merchant = entry.merchantName?.trim();
-      final label =
-          entry.instrument == TxnInstrument.upiBank &&
-              vpa != null &&
-              vpa.isNotEmpty
-          ? vpa
-          : merchant == null || merchant.isEmpty
-          ? 'Unknown merchant'
-          : merchant;
-      groups.putIfAbsent(label, () => []).add(entry);
-    }
-    return groups;
-  }
+  List<_PayeeGroup> _payeeGroups() =>
+      _groupByPayee(entries, unknownLabel: 'Unknown merchant');
 
   @override
   Widget build(BuildContext context) {
@@ -4964,18 +5062,7 @@ class _AccountRow extends StatelessWidget {
           ? BambooChartColors.blue
           : BambooChartColors.violet,
     );
-    final groups = _payeeGroups().entries.toList()
-      ..sort((a, b) {
-        final aTotal = a.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        final bTotal = b.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        return bTotal.compareTo(aTotal);
-      });
+    final groups = _payeeGroups();
 
     return CardSummaryPanel(
       padding: EdgeInsets.zero,
@@ -5062,7 +5149,11 @@ class _AccountRow extends StatelessWidget {
             )
           else
             for (final group in groups)
-              _MerchantGroup(merchant: group.key, entries: group.value),
+              _MerchantGroup(
+                merchant: group.label,
+                vpa: group.vpa,
+                entries: group.entries,
+              ),
         ],
       ),
     );

@@ -6,6 +6,7 @@ import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/local/sms_rule_bundle.dart';
 import 'package:pandapay/data/user_cards_repository.dart'
     show TxnEntryKind, TxnInstrument;
+import 'package:pandapay/data/merchant_identity.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 
@@ -1821,6 +1822,103 @@ void main() {
 
       expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', realCredit), isFalse);
       expect(capturesFinancialSms(realCredit, sender: 'HDFCBK'), isTrue);
+    });
+  });
+
+  group('UPI narration payees', () {
+    const axisP2m = 'INR 12.00 debited\n'
+        'A/c no. XX2583\n'
+        '21-10-26, 22:41:20\n'
+        'UPI/P2M/**** 6977/MANYAM VISWANADA RE\n'
+        'Not you? SMS BLOCKUPI Cust ID to **** 0002\n'
+        'Axis Bank';
+
+    test('P2M merchant follows a masked reference and stops at the footer', () {
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'AD-AXISBK-S',
+        body: axisP2m,
+        receivedAt: DateTime(2026, 10, 21, 22, 41, 20),
+      );
+
+      final txn = parsed?.transaction;
+      expect(txn, isNotNull);
+      expect(txn!.amount.paise, 1200);
+      expect(txn.merchantName, 'MANYAM VISWANADA RE');
+      expect(txn.accountLast4, '2583');
+      expect(txn.entryKind, TxnEntryKind.spend);
+      expect(txn.instrument, TxnInstrument.upiBank);
+      expect(txn.occurredAt.year, 2026);
+      expect(txn.occurredAt.month, 10);
+      expect(txn.occurredAt.day, 21);
+    });
+
+    test('P2A narration keeps the person name without the trailing bank', () {
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'AD-AXISBK-S',
+        body: 'INR 500.00 debited\nA/c no. XX2583\n20-10-26, 10:00:00\n'
+            'UPI/P2A/123456789012/SUNALI MUNDRA/YESB\n'
+            'Not you? SMS BLOCKUPI Cust ID to **** 0002',
+        receivedAt: DateTime(2026, 10, 20, 10),
+      );
+
+      expect(parsed?.transaction?.merchantName, 'SUNALI MUNDRA');
+      expect(parsed?.transaction?.amount.paise, 50000);
+    });
+
+    test('P2M without a payee token leaves no fabricated merchant', () {
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'AD-AXISBK-S',
+        body: 'INR 12.00 debited\nA/c no. XX2583\n21-10-26, 22:41:20\n'
+            'UPI/P2M/**** 6977\nNot you? SMS BLOCKUPI Cust ID to **** 0002',
+        receivedAt: DateTime(2026, 10, 21, 22, 41, 20),
+      );
+
+      expect(parsed?.transaction?.amount.paise, 1200);
+      expect(
+        MerchantIdentity.isWeakName(parsed?.transaction?.merchantName),
+        isTrue,
+        reason: 'a routing-only narration must not become a merchant',
+      );
+    });
+
+    test('"debited towards X for INR" names X, not the opaqueness behind it', () {
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'AD-AXISBK-S',
+        body: 'Your A/c has been debited towards Google Play for INR 4999.00 '
+            'on 10-10-26. '
+            '9901e1edad8e46cd937da209ef0baf55@axl - Axis Bank',
+        receivedAt: DateTime(2026, 10, 10, 5, 30),
+      );
+
+      final txn = parsed?.transaction;
+      expect(txn, isNotNull);
+      expect(txn!.amount.paise, 499900);
+      expect(txn.merchantName, 'Google Play');
+      expect(txn.occurredAt.year, 2026);
+      expect(txn.occurredAt.month, 10);
+      expect(txn.occurredAt.day, 10);
+    });
+
+    test('an opaque VPA hash never becomes the merchant', () {
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'AD-AXISBK-S',
+        body: 'Your A/c has been debited towards INR 4999.00 on 10-10-26. '
+            '9901e1edad8e46cd937da209ef0baf55@axl - Axis Bank',
+        receivedAt: DateTime(2026, 10, 10, 5, 30),
+      );
+
+      final name = parsed?.transaction?.merchantName;
+      expect(
+        MerchantIdentity.isWeakName(name),
+        isTrue,
+        reason: 'without a readable payee the row must stay unlabelled, '
+            'never carry a hash VPA (got "$name")',
+      );
     });
   });
 }

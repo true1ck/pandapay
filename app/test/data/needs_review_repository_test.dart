@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/financial_store.dart';
+import 'package:pandapay/data/local/sync_queue.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/data/commitments_repository.dart';
 import 'package:pandapay/data/past_bill_receipts.dart';
@@ -15,6 +17,141 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+  });
+
+  group('receipt identity matching', () {
+    final at = DateTime(2026, 10, 24, 18, 51);
+    final receipt = NeedsReviewItem(
+      id: 'receipt-balaji',
+      sender: 'CP-MBILBK-S',
+      body: 'Hello, your payment of Rs. 700.0 to Balaji Sports has been recorded. '
+          'View the payment receipt here: https://mybillbook.in/cpp/?t=example - myBillBook',
+      receivedAt: at,
+    );
+    TransactionEntry spend(String id, {String? merchant, String? reference}) =>
+        TransactionEntry(
+          id: id,
+          amount: Money.fromPaise(70000),
+          occurredAt: at.subtract(const Duration(minutes: 5)),
+          merchantName: merchant,
+          instrument: TxnInstrument.upiBank,
+          source: 'sms',
+          status: 'active',
+          observations: [
+            if (reference != null)
+              TransactionObservation(source: 'sms', reference: reference),
+          ],
+        );
+
+    test('unknown amounts alone never link and ambiguity is order independent', () {
+      final unknown = spend('unknown');
+      final known = spend('known', merchant: 'Balaji Sports');
+      final duplicate = spend('duplicate', merchant: 'Balaji Sports');
+      expect(NeedsReviewRepository.matchingSpendTransactionInList(receipt, [unknown]), isNull);
+      expect(NeedsReviewRepository.matchingSpendTransactionInList(receipt, [known, duplicate]), isNull);
+      expect(NeedsReviewRepository.matchingSpendTransactionInList(receipt, [duplicate, known]), isNull);
+      expect(NeedsReviewRepository.matchingSpendTransactionInList(receipt, [unknown, known])?.id, 'known');
+      expect(NeedsReviewRepository.matchingSpendTransactionInList(receipt, [spend('other', merchant: 'Balaji Pharmacy')]), isNull);
+    });
+
+    test('exact reference can identify an unnamed payee but conflicting references cannot', () {
+      final referenced = NeedsReviewItem(
+        id: receipt.id,
+        sender: receipt.sender,
+        body: '${receipt.body} UPI Refno 665663775318.',
+        receivedAt: at,
+      );
+      final unknown = spend('unknown', reference: '665663775318');
+      final conflicting = spend('other', merchant: 'Balaji Sports', reference: '665663775319');
+      expect(NeedsReviewRepository.matchingSpendTransactionInList(referenced, [conflicting]), isNull);
+      expect(NeedsReviewRepository.matchingSpendTransactionInList(referenced, [conflicting, unknown])?.id, 'unknown');
+      expect(NeedsReviewRepository.matchingSpendTransactionInList(referenced, [unknown,
+        spend('duplicate', reference: '665663775318')]), isNull);
+    });
+
+    test('ambiguous receipts remain reviewable without inserting a payment', () {
+      final db = openInMemoryForTesting();
+      final store = FinancialStore(db);
+      addTearDown(() { store.dispose(); db.close(); });
+      store.saveTransactions('a', [spend('unknown')]);
+      addNeedsReviewSync(db, 'a', receipt);
+      expect(db.db.select("SELECT id FROM local_needs_review WHERE namespace='a'")
+          .map((r) => r['id']), contains(receipt.id));
+      expect(db.db.select("SELECT id FROM local_past_bill_receipts WHERE namespace='a'"), isEmpty);
+      expect(store.entities('a', 'transactions'), hasLength(1));
+    });
+
+    test('a referenced receipt enriches only the matching provisional name', () {
+      final db = openInMemoryForTesting();
+      final store = FinancialStore(db);
+      addTearDown(() { store.dispose(); db.close(); });
+      final original = TransactionEntry.fromJson({
+        ...spend('local-sms:evidence', reference: '665663775318').toJson(),
+        'source_key': 'evidence',
+      });
+      store.saveProvisional('a', original);
+      final referenced = NeedsReviewItem(
+        id: receipt.id, sender: receipt.sender, receivedAt: at,
+        body: '${receipt.body} UPI Refno 665663775318.',
+      );
+      addNeedsReviewSync(db, 'a', referenced);
+      final saved = store.entities('a', 'transactions').single;
+      expect(saved['merchant_name'], 'Balaji Sports');
+      expect({...saved, 'merchant_name': null}, original.toJson());
+      expect(db.db.select("SELECT id FROM local_needs_review WHERE namespace='a'"), isEmpty);
+      final archived = db.db.select("SELECT payload FROM local_past_bill_receipts WHERE namespace='a'");
+      expect(jsonDecode(archived.single['payload'] as String)['linkedTransactionId'], original.id);
+      expect(db.db.select('SELECT 1 FROM sync_pending_changes'), isEmpty);
+    });
+
+    test('Unicode receipts compare complete names, not shared syllables', () {
+      final unicodeReceipt = NeedsReviewItem(
+        id: 'unicode-receipt', sender: receipt.sender, receivedAt: at,
+        body: 'Your payment of Rs 700 to श्री गणेश स्टोर्स has been recorded. View the payment receipt.',
+      );
+      expect(NeedsReviewRepository.matchingSpendTransactionInList(unicodeReceipt,
+          [spend('matching', merchant: 'श्री गणेश स्टोर्स')])?.id, 'matching');
+      expect(NeedsReviewRepository.matchingSpendTransactionInList(unicodeReceipt,
+          [spend('other', merchant: 'श्री गणेश फार्मसी')]), isNull);
+    });
+
+    test('invalid persisted candidates cannot become unique receipt matches', () {
+      final db = openInMemoryForTesting();
+      final store = FinancialStore(db);
+      addTearDown(() { store.dispose(); db.close(); });
+      final one = spend('one', merchant: 'Balaji Sports');
+      store.saveTransactions('a', [one]);
+      db.db.execute(
+        "UPDATE financial_entities SET payload=? WHERE namespace='a' AND id='one'",
+        [jsonEncode({...one.toJson(), 'entry_kind': 'unsupported'})],
+      );
+      expect(NeedsReviewRepository.matchingSpendTransactionIdSync(
+        db, 'a', receipt, transactions: [one],
+      ), isNull);
+      db.db.execute(
+        "UPDATE financial_entities SET payload=? WHERE namespace='a' AND id='one'",
+        ['invalid-json'],
+      );
+      expect(NeedsReviewRepository.matchingSpendTransactionIdSync(
+        db, 'a', receipt, transactions: [one],
+      ), isNull);
+    });
+
+    test('SQLite candidates and pending edits override partial supplied snapshots', () {
+      final db = openInMemoryForTesting();
+      final store = FinancialStore(db);
+      addTearDown(() { store.dispose(); db.close(); });
+      final one = spend('one', merchant: 'Balaji Sports');
+      final two = spend('two', merchant: 'Balaji Sports');
+      store.saveTransactions('a', [one, two]);
+      store.saveTransactions('b', [spend('foreign', merchant: 'Balaji Sports')]);
+      expect(NeedsReviewRepository.matchingSpendTransactionIdSync(db, 'a', receipt, transactions: [one]), isNull);
+      final queue = SyncQueue(db, namespace: 'a');
+      queue.enqueueUpdate(entity: 'transactions', entityId: 'two', fields: {'status': 'ignored'});
+      expect(NeedsReviewRepository.matchingSpendTransactionIdSync(db, 'a', receipt, transactions: [one]), 'one');
+      queue.enqueueUpdate(entity: 'transactions', entityId: 'one', fields: {'merchant_name': 'Balaji Pharmacy'});
+      expect(NeedsReviewRepository.matchingSpendTransactionIdSync(db, 'a', receipt, transactions: [one]), isNull);
+    });
   });
 
   test('add then fetchAll round-trips an item, newest first', () async {
@@ -2559,8 +2696,7 @@ void main() {
       expect(remainingAfterSync, isNot(contains('spam-loan-limit')));
       expect(remainingAfterSync, isNot(contains('spam-betting')));
 
-      // Version is updated to 20
-      expect(prefs.getInt('pandapay.needs_review_noise_version'), 20);
+      expect(prefs.getInt('pandapay.needs_review_noise_version'), LocalSmsParser.version);
 
       db.close();
     },

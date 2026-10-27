@@ -246,6 +246,54 @@ void main() {
     expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
   });
 
+  for (final serverReviewFlag in <bool?>[null, false]) {
+    test('unsupported merchant stays reviewable with server flag $serverReviewFlag', () {
+      final item = reviewItem();
+      insertReviewRow(item);
+      final suggestion = swiggySuggestion();
+      (suggestion['payload'] as Map<String, dynamic>)['merchant'] = 'Balaji Sports';
+
+      final result = importStore.resolveAiSuggestions(
+        ns, item, [suggestion],
+        serverScore: 0.99,
+        reviewRequired: serverReviewFlag,
+      );
+
+      expect(result.outcome, SmsAiResolutionOutcome.needsReview);
+      expect(reviewCount(), 1);
+      expect(transactions(), isEmpty);
+      expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
+    });
+
+    test('receipt stays reviewable with server flag $serverReviewFlag', () {
+      final item = reviewItem(
+        body: 'Hello, your payment of Rs. 700.0 to Balaji Sports has been '
+            'recorded. View the payment receipt here: '
+            'https://mybillbook.in/cpp/?t=ljbffep4r - myBillBook '
+            'Paid by credit card on 24Oct2026.',
+      );
+      insertReviewRow(item);
+      final suggestion = swiggySuggestion();
+      final payload = suggestion['payload'] as Map<String, dynamic>;
+      payload['merchant'] = 'Balaji Sports';
+      payload['amountInr'] = 700.0;
+      payload['instrument'] = 'credit_card';
+      payload.remove('accountLast4');
+      payload.remove('issuerName');
+
+      final result = importStore.resolveAiSuggestions(
+        ns, item, [suggestion],
+        serverScore: 0.99,
+        reviewRequired: serverReviewFlag,
+      );
+
+      expect(result.outcome, SmsAiResolutionOutcome.needsReview);
+      expect(reviewCount(), 1);
+      expect(transactions(), isEmpty);
+      expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
+    });
+  }
+
   test('Tier 1 future bill writes local_commitments and history', () {
     final due = utcDayOffset(7);
     final item = reviewItem(body: billBody(due));

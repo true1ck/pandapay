@@ -1630,3 +1630,36 @@ test('Axio Amazon Pay Later drawdown parses as spend transaction with merchant A
     assert.equal(result.fields.accountLast4, 'Amazon Pay Later');
   }
 });
+
+test('Axis UPI P2M narration names the merchant after a masked reference', () => {
+  const body = 'INR 12.00 debited\n'
+    + 'A/c no. XX2583\n'
+    + '21-10-26, 22:41:20\n'
+    + 'UPI/P2M/**** 6977/MANYAM VISWANADA RE\n'
+    + 'Not you? SMS BLOCKUPI Cust ID to **** 0002\n'
+    + 'Axis Bank';
+  const result = parseSmsAgainstPatterns([], { sender: 'AD-AXISBK-S', body });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 12);
+  assert.equal(result.fields.merchant, 'MANYAM VISWANADA RE');
+});
+
+test('UPI P2M narration without a party token does not invent a merchant', () => {
+  const body = 'INR 12.00 debited\nA/c no. XX2583\n21-10-26, 22:41:20\n'
+    + 'UPI/P2M/**** 6977\nNot you? SMS BLOCKUPI Cust ID to **** 0002';
+  const result = parseSmsAgainstPatterns([], { sender: 'AD-AXISBK-S', body });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 12);
+  assert.ok(!result.fields.merchant || !/^P2M$/i.test(result.fields.merchant));
+});
+
+test('"debited towards X for INR" names X and never the VPA hash', () => {
+  const body = 'Your A/c has been debited towards Google Play for INR 4999.00 '
+    + 'on 10-10-26. '
+    + '9901e1edad8e46cd937da209ef0baf55@axl - Axis Bank';
+  const result = parseSmsAgainstPatterns([], { sender: 'AD-AXISBK-S', body });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 4999);
+  assert.equal(result.fields.merchant, 'Google Play');
+  assert.notEqual(result.fields.merchant, 'Bank transfer');
+});
