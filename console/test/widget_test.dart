@@ -641,6 +641,8 @@ void main() {
 
     await tester.tap(find.textContaining('Chai Corner (3×)'));
     await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Resolve'));
+    await tester.pumpAndSettle();
 
     expect(resolveCalled, isTrue);
   });
@@ -1008,5 +1010,493 @@ void main() {
 
     expect(isEnabled, isTrue);
     expect(find.textContaining(' · enabled'), findsOneWidget);
+  });
+
+  void useTallSurface(WidgetTester tester) {
+    tester.view.physicalSize = const Size(2400, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+  }
+
+  testWidgets('SMS AI Operations: overview shows queue health, active bundle and rollout flags',
+      (tester) async {
+    useTallSurface(tester);
+    Map<String, dynamic>? patchBody;
+    String? patchPath;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                final path = request.url.path;
+                if (path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (path.startsWith('/admin/sms-ai/rollout/') && request.method == 'PATCH') {
+                  patchPath = path;
+                  patchBody = jsonDecode(request.body) as Map<String, dynamic>;
+                  return http.Response(jsonEncode({'ok': true}), 200);
+                }
+                if (path == '/admin/sms-ai/summary') {
+                  return http.Response(
+                    jsonEncode({
+                      'statusCounts': {'queued': 3, 'leased': 1, 'done': 12, 'failed': 2},
+                      'oldestAgeSeconds': 42,
+                      'retryCount': 4,
+                      'doneToday': 9,
+                      'autoResolvedToday': 7,
+                      'reviewRequiredToday': 2,
+                      'failureCount24h': 2,
+                      'failureReasons24h': {'validation_failed': 2},
+                      'batchesToday': 3,
+                      'batchedJobsToday': 5,
+                      'providerCapacity': {
+                        'requestsLastMinute': 4,
+                        'requestsPerMinuteLimit': 60,
+                        'tokensLastMinute': 1000,
+                        'tokensPerMinuteLimit': 100000,
+                        'waitingLastMinute': 0,
+                        'permanentlyBlockedLastMinute': 0,
+                      },
+                    }),
+                    200,
+                  );
+                }
+                if (path == '/admin/sms-ai/rollout') {
+                  return http.Response(
+                    jsonEncode({
+                      'rollout': {
+                        'masterEnabled': true,
+                        'spendFamilyEnabled': true,
+                        'balanceFamilyEnabled': false,
+                        'billFamilyEnabled': false,
+                        'mandateFamilyEnabled': false,
+                        'aiQueueEnabled': true,
+                      },
+                      'flags': [
+                        {
+                          'key': 'sms_ai_master_enabled',
+                          'is_enabled': true,
+                          'rollout_percent': 100,
+                          'min_app_version': null,
+                          'platforms': ['android'],
+                          'updated_at': '2026-10-27T10:00:00Z',
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                if (path == '/admin/sms-learning/operations') {
+                  return http.Response(
+                    jsonEncode({
+                      'activeBundle': {
+                        'bundle_version': 3,
+                        'min_client_ver': '1.2.0',
+                        'published_at': '2026-10-26T10:00:00Z',
+                        'sha256': 'abcdef0123456789',
+                      },
+                      'worker': {
+                        'runs': [
+                          {
+                            'status': 'success',
+                            'started_at': '2026-10-27T09:00:00Z',
+                            'finished_at': '2026-10-27T09:00:05Z',
+                            'details': {'evaluated': 4},
+                          },
+                        ],
+                      },
+                      'candidates': [],
+                    }),
+                    200,
+                  );
+                }
+                if (path == '/admin/sms-ai/quota') {
+                  return http.Response(
+                    jsonEncode({
+                      'quota': [
+                        {'user_key': 'anon-1', 'day': '2026-10-27', 'jobs_used': 2, 'updated_at': '2026-10-27T09:00:00Z'},
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                if (path == '/admin/sms-ai/jobs') {
+                  return http.Response(jsonEncode({'jobs': []}), 200);
+                }
+                if (path == '/admin/sms-learning/candidates') {
+                  return http.Response(jsonEncode({'candidates': []}), 200);
+                }
+                if (path == '/admin/sms-rules/bundles') {
+                  return http.Response(jsonEncode({'bundles': []}), 200);
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100);
+    await tester.tap(find.text('SMS AI Operations'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Auto-resolved today'), findsOneWidget);
+    expect(find.text('7'), findsOneWidget);
+    expect(find.textContaining('validation_failed: 2'), findsOneWidget);
+    expect(find.textContaining('sms_ai_master_enabled'), findsOneWidget);
+    expect(find.textContaining('abcd'), findsOneWidget);
+    expect(find.text('success'), findsOneWidget);
+    expect(find.text('anon-1'), findsOneWidget);
+
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+
+    expect(patchPath, '/admin/sms-ai/rollout/sms_ai_master_enabled');
+    expect(patchBody?['isEnabled'], false);
+    expect(patchBody?['reason'], 'admin_console_toggle');
+  });
+
+  testWidgets('SMS AI Operations: failed jobs expose failure reason, decision and timeline',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                final path = request.url.path;
+                if (path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (path == '/admin/sms-ai/jobs') {
+                  return http.Response(
+                    jsonEncode({
+                      'jobs': [
+                        {
+                          'id': 'job-1',
+                          'status': 'failed',
+                          'attempts': 2,
+                          'source_key': 'a' * 64,
+                          'created_at': '2026-10-27T10:00:00Z',
+                          'updated_at': '2026-10-27T10:00:07Z',
+                          'decision': {
+                            'topic': 'spend',
+                            'shouldConsider': true,
+                            'confidence': 0.4,
+                            'rejectionReason': 'low_confidence',
+                          },
+                          'result': {
+                            'reviewRequired': true,
+                            'factTypes': ['spend'],
+                            'decision': {
+                              'topic': 'spend',
+                              'shouldConsider': true,
+                              'confidence': 0.4,
+                              'rejectionReason': 'low_confidence',
+                            },
+                          },
+                          'review_required': true,
+                          'fail_reason': 'validation_failed',
+                          'failure_details': ['field amount invalid'],
+                          'next_attempt_at': '2026-10-27T10:05:00Z',
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                if (path == '/admin/sms-ai/jobs/job-1/events') {
+                  return http.Response(
+                    jsonEncode({
+                      'events': [
+                        {
+                          'event_type': 'provider_retry',
+                          'created_at': '2026-10-27T10:00:04Z',
+                          'payload': {'reason': 'timeout', 'statusCode': 504},
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                if (path == '/admin/sms-ai/summary' || path == '/admin/sms-ai/quota') {
+                  return http.Response(jsonEncode({'quota': [], 'statusCounts': {}}), 200);
+                }
+                if (path == '/admin/sms-ai/rollout') {
+                  return http.Response(jsonEncode({'rollout': {}, 'flags': []}), 200);
+                }
+                if (path == '/admin/sms-learning/operations' || path == '/admin/sms-learning/candidates') {
+                  return http.Response(jsonEncode({'candidates': [], 'activeBundle': null}), 200);
+                }
+                if (path == '/admin/sms-rules/bundles') {
+                  return http.Response(jsonEncode({'bundles': []}), 200);
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100);
+    await tester.tap(find.text('SMS AI Operations'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Jobs'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('failed · attempts 2 · decision spend'), findsOneWidget);
+    await tester.tap(find.textContaining('failed · attempts 2 · decision spend'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Still needs user review'), findsOneWidget);
+    expect(find.textContaining('confidence: 0.4'), findsOneWidget);
+    expect(find.text('Failure: validation_failed'), findsOneWidget);
+    expect(find.textContaining('field amount invalid'), findsOneWidget);
+    expect(find.text('provider_retry'), findsOneWidget);
+    expect(find.textContaining('reason: timeout'), findsOneWidget);
+  });
+
+  testWidgets('SMS AI Operations: learning candidate pause and rules rollback are wired',
+      (tester) async {
+    useTallSurface(tester);
+    var pauseCalled = false;
+    var rollbackCalled = false;
+    String? rollbackReason;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                final path = request.url.path;
+                if (path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (path == '/admin/sms-learning/candidates/cand-1/pause' && request.method == 'POST') {
+                  pauseCalled = true;
+                  return http.Response(jsonEncode({'ok': true}), 200);
+                }
+                if (path == '/admin/sms-rules/3/rollback' && request.method == 'POST') {
+                  rollbackCalled = true;
+                  rollbackReason = (jsonDecode(request.body) as Map)['reason'] as String?;
+                  return http.Response(
+                    jsonEncode({
+                      'ok': true,
+                      'rolledBack': true,
+                      'bundleVersion': 3,
+                      'activeBundle': {'bundle_version': 2},
+                      'rolledBackCandidates': 1,
+                    }),
+                    200,
+                  );
+                }
+                if (path == '/admin/sms-learning/operations') {
+                  return http.Response(
+                    jsonEncode({
+                      'activeBundle': {'bundle_version': 3, 'min_client_ver': '1.2.0', 'sha256': 'abcdef012345'},
+                      'worker': {'runs': []},
+                      'candidates': [
+                        {
+                          'candidate_id': 'cand-1',
+                          'state': 'active',
+                          'family': 'spend',
+                          'issuer': 'HDFC',
+                          'bundle_version': 3,
+                          'confidence': 0.91,
+                          'exposures': 120,
+                          'comparisons': 110,
+                          'distinct_users': 8,
+                          'corrections': 1,
+                          'false_discards': 0,
+                          'stage_metrics': {},
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                if (path == '/admin/sms-learning/candidates') {
+                  return http.Response(jsonEncode({'candidates': []}), 200);
+                }
+                if (path == '/admin/sms-rules/bundles') {
+                  return http.Response(
+                    jsonEncode({
+                      'bundles': [
+                        {
+                          'bundle_version': 3,
+                          'is_active': true,
+                          'rule_count': 4,
+                          'min_client_ver': '1.2.0',
+                          'published_at': '2026-10-26T10:00:00Z',
+                          'sha256': 'abcdef0123456789',
+                        },
+                        {
+                          'bundle_version': 2,
+                          'is_active': false,
+                          'rule_count': 3,
+                          'min_client_ver': '1.1.0',
+                          'published_at': '2026-10-20T10:00:00Z',
+                          'sha256': '9876543210abcdef',
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                if (path == '/admin/sms-ai/summary' || path == '/admin/sms-ai/quota') {
+                  return http.Response(jsonEncode({'quota': [], 'statusCounts': {}}), 200);
+                }
+                if (path == '/admin/sms-ai/rollout') {
+                  return http.Response(jsonEncode({'rollout': {}, 'flags': []}), 200);
+                }
+                if (path == '/admin/sms-ai/jobs') {
+                  return http.Response(jsonEncode({'jobs': []}), 200);
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100);
+    await tester.tap(find.text('SMS AI Operations'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Learning'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pause'));
+    await tester.pumpAndSettle();
+    expect(pauseCalled, isTrue);
+    // Let the pause snackbar finish so the rollback snackbar is not queued.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Rules & rollout'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Roll back'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Roll back'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'bad regex in production');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Roll back'));
+    await tester.pump();
+
+    expect(rollbackCalled, isTrue);
+    expect(rollbackReason, 'bad regex in production');
+    expect(find.textContaining('Bundle v3 deactivated'), findsOneWidget);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('SMS AI Operations: dry run posts observations and renders redacted deltas',
+      (tester) async {
+    useTallSurface(tester);
+    var postedObservations = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                final path = request.url.path;
+                if (path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (path == '/admin/sms-ai/dry-run' && request.method == 'POST') {
+                  final body = jsonDecode(request.body) as Map<String, dynamic>;
+                  postedObservations = (body['observations'] as List).length;
+                  return http.Response(
+                    jsonEncode({
+                      'report': {
+                        'totalObservations': 1,
+                        'totalLegacySpendInr': 250,
+                        'totalNewSpendInr': 250,
+                        'netSpendDifferenceInr': 0,
+                        'equalSpendCount': 1,
+                        'spendReductionCount': 0,
+                        'nonSpendFactsExtracted': 0,
+                        'invalidFactSetsCount': 0,
+                        'deltas': [
+                          {
+                            'sourceKey': 'a' * 64,
+                            'legacySpendInr': 250,
+                            'newSpendInr': 250,
+                            'spendDifferenceInr': 0,
+                            'factsProduced': 1,
+                            'nonSpendTypes': [],
+                            'valid': true,
+                            'validationErrors': [],
+                          },
+                        ],
+                      },
+                    }),
+                    200,
+                  );
+                }
+                if (path == '/admin/sms-ai/summary' || path == '/admin/sms-ai/quota') {
+                  return http.Response(jsonEncode({'quota': [], 'statusCounts': {}}), 200);
+                }
+                if (path == '/admin/sms-ai/rollout') {
+                  return http.Response(jsonEncode({'rollout': {}, 'flags': []}), 200);
+                }
+                if (path == '/admin/sms-learning/operations' || path == '/admin/sms-learning/candidates') {
+                  return http.Response(jsonEncode({'candidates': [], 'activeBundle': null}), 200);
+                }
+                if (path == '/admin/sms-rules/bundles') {
+                  return http.Response(jsonEncode({'bundles': []}), 200);
+                }
+                if (path == '/admin/sms-ai/jobs') {
+                  return http.Response(jsonEncode({'jobs': []}), 200);
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100);
+    await tester.tap(find.text('SMS AI Operations'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Dry run'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Run dry run'));
+    await tester.pumpAndSettle();
+
+    expect(postedObservations, 1);
+    expect(find.text('Observations'), findsOneWidget);
+    expect(find.text('Equal spend rows'), findsOneWidget);
+    expect(find.text('yes'), findsOneWidget);
   });
 }

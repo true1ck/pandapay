@@ -256,6 +256,19 @@ final smsAiQuotaProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
   return api.fetchSmsAiQuota();
 });
 
+/// Resolved rollout booleans plus the raw feature-flag rows behind them.
+final smsRolloutProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const {};
+  return api.fetchSmsRolloutStatus();
+});
+
+final smsRuleBundlesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchSmsRuleBundles();
+});
+
 final smsAiJobTimelineProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, jobId) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];

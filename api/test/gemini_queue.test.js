@@ -1016,6 +1016,9 @@ function harness({ workerToken } = {}) {
     get(path, ...mws) {
       handlers.set(path, mws[mws.length - 1]);
     },
+    patch(path, ...mws) {
+      handlers.set(path, mws[mws.length - 1]);
+    },
   };
   const client = makeUserClient();
   aiQueueRoute.registerAiQueueRoutes(app, {

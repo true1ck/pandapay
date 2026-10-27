@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../widgets/confirm_dialog.dart';
 
 /// AD-6.3 conflict resolution queue + AD-6.4 abuse & quality controls, one
 /// screen (both are small, both are "the cases the automatic rule doesn't
@@ -60,6 +61,13 @@ class _ConflictTileState extends ConsumerState<_ConflictTile> {
   String? _error;
 
   Future<void> _resolve(String value) async {
+    final confirmed = await confirmAdminAction(
+      context,
+      title: 'Resolve this conflict?',
+      message: 'Set "${widget.conflict['field']}" to "$value"? Resolved conflicts leave the queue.',
+      confirmLabel: 'Resolve',
+    );
+    if (!confirmed || !mounted) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -153,6 +161,13 @@ class _AbuseSignalTileState extends ConsumerState<_AbuseSignalTile> {
   String? _error;
 
   Future<void> _block() async {
+    final confirmed = await confirmAdminAction(
+      context,
+      title: 'Block this device?',
+      message: 'Blocks every abuse signal for this device and reverts its merchant contributions. This is not reversible from the console.',
+      confirmLabel: 'Block device',
+    );
+    if (!confirmed || !mounted) return;
     setState(() {
       _busy = true;
       _error = null;

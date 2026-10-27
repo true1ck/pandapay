@@ -332,12 +332,65 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
     }
   });
 
+  // Admin bundle history. The device endpoint only returns the active bundle;
+  // operators need to see what was published, by whom, and which older
+  // versions remain active as rollback targets.
+  app.get('/admin/sms-rules/bundles', requireAdmin, async (req, res) => {
+    const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 50, 1), 200);
+    try {
+      const bundles = await withUserClient(req.userId, async (client) => {
+        const result = await client.query(
+          `SELECT bundle_version, sha256, is_active, min_client_ver, published_at,
+                  jsonb_array_length(rules) AS rule_count
+             FROM public.sms_rule_bundles
+            ORDER BY bundle_version DESC
+            LIMIT $1`,
+          [limit],
+        );
+        return result.rows;
+      });
+      res.status(200).json({ bundles });
+    } catch (error) {
+      console.error('GET /admin/sms-rules/bundles error', error.message || error);
+      res.status(500).json({ error: 'failed to fetch SMS rule bundles' });
+    }
+  });
+
+  app.get('/admin/sms-rules/bundles/:bundleVersion', requireAdmin, async (req, res) => {
+    const versionNum = Number.parseInt(req.params.bundleVersion, 10);
+    if (!Number.isInteger(versionNum) || versionNum < 1) {
+      return res.status(400).json({ error: 'bundleVersion must be a positive integer' });
+    }
+    try {
+      const bundle = await withUserClient(req.userId, async (client) => {
+        const result = await client.query(
+          `SELECT bundle_version, rules, sha256, is_active, min_client_ver, published_at
+             FROM public.sms_rule_bundles
+            WHERE bundle_version = $1`,
+          [versionNum],
+        );
+        return result.rows[0] || null;
+      });
+      if (!bundle) return res.status(404).json({ error: 'bundle version not found' });
+      res.status(200).json({ bundle });
+    } catch (error) {
+      console.error('GET /admin/sms-rules/bundles/:bundleVersion error', error.message || error);
+      res.status(500).json({ error: 'failed to fetch SMS rule bundle' });
+    }
+  });
+
   // Admin publishes evaluated, approved rule bundle
   app.post('/admin/sms-rules/publish', requireAdmin, async (req, res) => {
-    const { bundleVersion, rules, minClientVersion = '1.0.0' } = req.body || {};
+    const { bundleVersion, rules, minClientVersion = '1.0.0', reason } = req.body || {};
     const versionNum = Number.parseInt(bundleVersion, 10);
     if (!Number.isInteger(versionNum) || versionNum < 1) {
       return res.status(400).json({ error: 'bundleVersion must be a positive integer' });
+    }
+    if (typeof minClientVersion !== 'string' || minClientVersion.length < 1 || minClientVersion.length > 32) {
+      return res.status(400).json({ error: 'minClientVersion must be a short string' });
+    }
+    if (reason !== undefined && (typeof reason !== 'string' || reason.length > 500)) {
+      return res.status(400).json({ error: 'reason must be a short string' });
     }
     if (!Array.isArray(rules) || rules.length === 0) {
       return res.status(400).json({ error: 'rules must be a non-empty array' });
@@ -354,6 +407,22 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
 
     try {
       const outcome = await withUserClient(req.userId, async (client) => {
+        // Serialise admin publishes so two operators cannot both pass the
+        // version check and then race the INSERT.
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('sms_rule_bundle_admin_publish'))");
+        const latest = await client.query(
+          `SELECT coalesce(max(bundle_version), 0)::int AS version,
+                  coalesce(bool_or(bundle_version = $1), false) AS exists
+             FROM public.sms_rule_bundles`,
+          [versionNum],
+        );
+        const latestRow = latest.rows?.[0];
+        if (latestRow?.exists === true) {
+          return { conflict: true };
+        }
+        if (versionNum <= (latestRow?.version ?? 0)) {
+          return { staleVersion: true, currentVersion: latestRow?.version ?? 0 };
+        }
         // Enforce version immutability: cannot overwrite an existing version
         const insertRes = await client.query(
           `INSERT INTO public.sms_rule_bundles
@@ -363,10 +432,22 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
            RETURNING bundle_version`,
           [versionNum, JSON.stringify(rules), sha256, req.userId, minClientVersion],
         );
-        return insertRes.rowCount > 0;
+        if (insertRes.rowCount === 0) return { conflict: true };
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+           VALUES ($1, 'publish_sms_rule_bundle', 'sms_rule_bundles', NULL, $2, $3)`,
+          [req.userId, JSON.stringify({ bundleVersion: versionNum, sha256, minClientVersion, ruleCount: rules.length }), reason || null],
+        );
+        return { inserted: true };
       });
 
-      if (!outcome) {
+      if (outcome.staleVersion) {
+        return res.status(409).json({
+          error: 'bundle_version_not_newer',
+          currentVersion: outcome.currentVersion,
+        });
+      }
+      if (outcome.conflict) {
         return res.status(409).json({ error: 'bundle_version_already_exists' });
       }
 
@@ -383,20 +464,77 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
     if (!Number.isInteger(versionNum) || versionNum < 1) {
       return res.status(400).json({ error: 'bundleVersion must be a positive integer' });
     }
+    const { reason } = req.body || {};
+    if (reason !== undefined && (typeof reason !== 'string' || reason.length > 500)) {
+      return res.status(400).json({ error: 'reason must be a short string' });
+    }
     try {
-      const result = await withUserClient(req.userId, async (client) => {
-        return client.query(
+      const outcome = await withUserClient(req.userId, async (client) => {
+        const deactivated = await client.query(
           `UPDATE public.sms_rule_bundles
               SET is_active = false
-            WHERE bundle_version = $1
+            WHERE bundle_version = $1 AND is_active = true
             RETURNING bundle_version`,
           [versionNum],
         );
+        if (deactivated.rowCount === 0) {
+          const exists = await client.query(
+            'SELECT is_active FROM public.sms_rule_bundles WHERE bundle_version = $1',
+            [versionNum],
+          );
+          const found = (exists.rowCount ?? exists.rows?.length ?? 0) > 0;
+          return { found, alreadyInactive: found };
+        }
+        // Keep the human-driven rollback consistent with the autonomous
+        // worker: rules learned into this bundle must not keep reporting as
+        // active once the bundle is withdrawn.
+        const candidates = await client.query(
+          `UPDATE public.sms_rule_candidates
+              SET state = 'rolled_back',
+                  stage_version = stage_version + 1,
+                  stage_metrics = stage_metrics || jsonb_build_object(
+                    'rollback_reason', $2::text, 'rolled_back_at', now()),
+                  updated_at = now()
+            WHERE bundle_version = $1 AND state <> 'rolled_back'
+            RETURNING candidate_id`,
+          [versionNum, reason || 'admin_rollback'],
+        );
+        const nextActive = await client.query(
+          `SELECT bundle_version, sha256, min_client_ver, published_at
+             FROM public.sms_rule_bundles
+            WHERE is_active = true
+            ORDER BY bundle_version DESC
+            LIMIT 1`,
+        );
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+           VALUES ($1, 'rollback_sms_rule_bundle', 'sms_rule_bundles', NULL, $2, $3, $4)`,
+          [
+            req.userId,
+            JSON.stringify({ bundleVersion: versionNum, isActive: true }),
+            JSON.stringify({
+              bundleVersion: versionNum,
+              isActive: false,
+              rolledBackCandidates: candidates.rowCount,
+              activeBundleVersion: nextActive.rows[0]?.bundle_version ?? null,
+            }),
+            reason || null,
+          ],
+        );
+        return { rolledBack: true, activeBundle: nextActive.rows[0] || null, rolledBackCandidates: candidates.rowCount };
       });
-      if (result.rowCount === 0) {
-        return res.status(404).json({ error: 'bundle version not found' });
+      if (!outcome.rolledBack) {
+        return res.status(outcome.found ? 409 : 404).json({
+          error: outcome.found ? 'bundle_already_inactive' : 'bundle version not found',
+        });
       }
-      res.status(200).json({ ok: true, rolledBack: true, bundleVersion: versionNum });
+      res.status(200).json({
+        ok: true,
+        rolledBack: true,
+        bundleVersion: versionNum,
+        activeBundle: outcome.activeBundle,
+        rolledBackCandidates: outcome.rolledBackCandidates,
+      });
     } catch (error) {
       console.error('POST /admin/sms-rules/:bundleVersion/rollback error', error.message || error);
       res.status(500).json({ error: 'failed to rollback SMS rule bundle' });

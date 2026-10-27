@@ -14,9 +14,11 @@ const crypto = require('crypto');
 const MAX_LEASE_ATTEMPTS = 6;
 const LEASE_MINUTES = 10;
 
+const ADVISORY_WARNING_RE = /\b(?:(?:do\s+not|don\'t|never)\s+share\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|passcode|details|secret|code)\b|bank\s+never\s+asks\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details))\b[^\n]*/gi;
+
 /** Refusal predicate for the automatic sensitive-field check. */
 function payloadLooksSensitive(body) {
-  const lower = String(body || '').toLowerCase();
+  const lower = String(body || '').replace(ADVISORY_WARNING_RE, '').toLowerCase();
   return (
     /\botp\b/.test(lower) ||
     /\bpin\b/.test(lower) ||

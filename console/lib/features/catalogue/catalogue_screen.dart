@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../widgets/confirm_dialog.dart';
 
 /// AD-1.1.1 catalogue browse: card list with status + AD-1.1.4's
 /// draft->in_review->published->archived state machine (publish sets
@@ -59,6 +60,17 @@ class _CardEditorTileState extends ConsumerState<_CardEditorTile> {
   String? _statusError;
 
   Future<void> _changeStatus(String nextStatus) async {
+    if (nextStatus == 'published' || nextStatus == 'archived') {
+      final confirmed = await confirmAdminAction(
+        context,
+        title: nextStatus == 'published' ? 'Publish this card?' : 'Archive this card?',
+        message: nextStatus == 'published'
+            ? 'Publishing marks the card verified and makes it visible to users.'
+            : 'Archiving removes the card from circulation for users.',
+        confirmLabel: nextStatus == 'published' ? 'Verify & publish' : 'Archive',
+      );
+      if (!confirmed || !mounted) return;
+    }
     setState(() {
       _changingStatus = true;
       _statusError = null;

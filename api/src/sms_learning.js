@@ -349,10 +349,24 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
       return res.status(400).json({ error: 'decision must be manual_pattern_authoring or reject' });
     }
     try {
-      const result = await withUserClient(req.userId, (client) => client.query(
-        'SELECT pandapay.sms_learning_decide($1::uuid, $2, $3::uuid) AS outcome',
-        [req.params.id, decision, req.userId],
-      ));
+      const result = await withUserClient(req.userId, async (client) => {
+        const outcome = await client.query(
+          'SELECT pandapay.sms_learning_decide($1::uuid, $2, $3::uuid) AS outcome',
+          [req.params.id, decision, req.userId],
+        );
+        if (outcome.rows[0]?.outcome?.ok) {
+          await client.query(
+            `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+             VALUES ($1, 'decide_sms_learning_candidate', 'sms_learning_candidates', NULL, $2, $3)`,
+            [
+              req.userId,
+              JSON.stringify({ candidateId: req.params.id, decision }),
+              req.body?.reason || null,
+            ],
+          );
+        }
+        return outcome;
+      });
       const outcome = result.rows[0]?.outcome;
       if (!outcome?.ok) return res.status(outcome?.reason === 'not_eligible' ? 409 : 404).json({ error: outcome?.reason || 'candidate unavailable' });
       res.status(200).json({ ok: true, decision: outcome.decision });
@@ -363,6 +377,12 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
   });
 
   const autonomousCandidateId = (id) => typeof id === 'string' && /^[A-Za-z0-9._:-]{3,128}$/.test(id);
+
+  const auditCandidateChange = (client, adminId, action, candidate, reason) => client.query(
+    `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+     VALUES ($1, $2, 'sms_rule_candidates', NULL, $3, $4)`,
+    [adminId, action, JSON.stringify(candidate), reason],
+  );
 
   app.post('/admin/sms-learning/candidates/:id/pause', requireAdmin, async (req, res) => {
     if (!autonomousCandidateId(req.params.id)) return res.status(400).json({ error: 'invalid candidate id' });
@@ -380,7 +400,11 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
           RETURNING candidate_id, state`,
           [req.params.id],
         );
-        return result.rows?.[0] || null;
+        const candidate = result.rows?.[0] || null;
+        if (candidate) {
+          await auditCandidateChange(client, req.userId, 'pause_sms_learning_candidate', candidate, 'admin_paused');
+        }
+        return candidate;
       });
       if (!outcome) return res.status(404).json({ error: 'candidate not found or already terminal' });
       res.status(200).json({ ok: true, candidate: outcome });
@@ -407,7 +431,11 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
           RETURNING candidate_id, state`,
           [req.params.id],
         );
-        return result.rows?.[0] || null;
+        const candidate = result.rows?.[0] || null;
+        if (candidate) {
+          await auditCandidateChange(client, req.userId, 'resume_sms_learning_candidate', candidate, 'admin_resumed_shadow');
+        }
+        return candidate;
       });
       if (!outcome) return res.status(404).json({ error: 'paused candidate not found' });
       res.status(200).json({ ok: true, candidate: outcome });
