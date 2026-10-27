@@ -66,3 +66,11 @@ for service in "${SERVICES[@]}"; do
     *) wait_for_service "$service" '' ;;
   esac
 done
+
+# A green API health check alone does not prove that opted-in dismissal
+# feedback can be recorded. Keep the key private and check only its length.
+"${COMPOSE[@]}" exec -T api node -e \
+  "process.exit((process.env.SMS_LEARNING_HMAC_KEY || '').length >= 32 ? 0 : 1)" || {
+  echo 'FATAL: API started without a usable SMS learning feedback key'
+  exit 1
+}
