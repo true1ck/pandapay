@@ -6467,29 +6467,39 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
             final cache = await ref.read(responseCacheProvider.future);
             final candidates = cache.financialStore
                 .emiRepaymentReplayCandidates(emiNamespace);
+            var replayed = true;
             if (candidates.isNotEmpty) {
               for (var i = 0; i < candidates.length; i += 200) {
-                await repo.logTransactionsFromSmsBatch(
-                  messages: [
-                    for (final row in candidates.skip(i).take(200))
-                      SmsBatchMessage(
-                        userCardId: null,
-                        sender: row['sender'] as String,
-                        body: row['body'] as String,
-                        occurredAt: row['occurredAt'] as DateTime,
-                      ),
-                  ],
-                  backfill: true,
-                  captureLocally: false,
-                  notifyNewTransactions: false,
-                );
+                try {
+                  await repo.logTransactionsFromSmsBatch(
+                    messages: [
+                      for (final row in candidates.skip(i).take(200))
+                        SmsBatchMessage(
+                          userCardId: null,
+                          sender: row['sender'] as String,
+                          body: row['body'] as String,
+                          occurredAt: row['occurredAt'] as DateTime,
+                        ),
+                    ],
+                    backfill: true,
+                    captureLocally: false,
+                    notifyNewTransactions: false,
+                  );
+                } catch (_) {
+                  // A failed chunk leaves the flag unset so the next online
+                  // lifecycle pass retries it; replays are idempotent.
+                  replayed = false;
+                  break;
+                }
               }
               changed = true;
             }
-            await prefs.setInt(
-              emiReplayKey,
-              DateTime.now().millisecondsSinceEpoch,
-            );
+            if (replayed) {
+              await prefs.setInt(
+                emiReplayKey,
+                DateTime.now().millisecondsSinceEpoch,
+              );
+            }
           } catch (_) {
             // Retry the one-time replay when connectivity returns.
           }
