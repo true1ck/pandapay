@@ -1834,7 +1834,9 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
               !isNoise;
           if (isNoise || (outcome == 'unparsed' && !isFinancialCandidate)) {
             acknowledgements.add(() {
-              store.discardProvisional(namespace, key);
+              if (localEventByKey[key] != 'transaction') {
+                store.discardProvisional(namespace, key);
+              }
               intake.acknowledge(namespace, key);
             });
           } else {
@@ -1861,7 +1863,9 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
                   ),
                 );
             acknowledgements.add(() {
-              store.discardProvisional(namespace, key);
+              if (localEventByKey[key] != 'transaction') {
+                store.discardProvisional(namespace, key);
+              }
               intake.acknowledge(namespace, key);
             });
           }
@@ -6446,6 +6450,48 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
                 changed;
           } catch (_) {
             /* Retry the one-time migration after connectivity returns. */
+          }
+        }
+        // One-time replay of EMI-repayment bank credit alerts that older
+        // parser builds could only file under the generic 'Money received'
+        // label. The batch import is idempotent (same source key), so the
+        // replay never doubles a transaction; the updated parser re-classifies
+        // them as loan repayments and refreshes the stored merchant label.
+        final emiNamespace = ref.read(cacheNamespaceProvider);
+        final emiReplayKey =
+            'pandapay_app.emi_repayment_replayed_v1_$emiNamespace';
+        if (repo != null &&
+            prefs.getInt(emiReplayKey) == null &&
+            ref.read(isOnlineProvider).valueOrNull != false) {
+          try {
+            final cache = await ref.read(responseCacheProvider.future);
+            final candidates = cache.financialStore
+                .emiRepaymentReplayCandidates(emiNamespace);
+            if (candidates.isNotEmpty) {
+              for (var i = 0; i < candidates.length; i += 200) {
+                await repo.logTransactionsFromSmsBatch(
+                  messages: [
+                    for (final row in candidates.skip(i).take(200))
+                      SmsBatchMessage(
+                        userCardId: null,
+                        sender: row['sender'] as String,
+                        body: row['body'] as String,
+                        occurredAt: row['occurredAt'] as DateTime,
+                      ),
+                  ],
+                  backfill: true,
+                  captureLocally: false,
+                  notifyNewTransactions: false,
+                );
+              }
+              changed = true;
+            }
+            await prefs.setInt(
+              emiReplayKey,
+              DateTime.now().millisecondsSinceEpoch,
+            );
+          } catch (_) {
+            // Retry the one-time replay when connectivity returns.
           }
         }
         try {

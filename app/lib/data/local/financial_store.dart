@@ -543,7 +543,7 @@ class FinancialStore {
     // An inbox replay must never create a provisional copy of an already
     // reconciled transaction with the same stable SMS identity.
     if (database.db.select(
-      'SELECT 1 FROM financial_entities WHERE namespace=? AND source_key=?',
+      "SELECT 1 FROM financial_entities WHERE namespace=? AND source_key=? AND entity='transactions' AND pending=0",
       [ns, row.sourceKey],
     ).isNotEmpty) {
       return;
@@ -1269,6 +1269,57 @@ class FinancialStore {
         'confidence': obs.confidence,
       });
     }
+  }
+
+  /// Bank credit alerts that older parser builds could only label with the
+  /// generic 'Money received' fallback although they are EMI/loan
+  /// repayments ("... credited with Rs.X towards the payment of EMI ...").
+  /// The raw SMS bodies persist locally in sms_captured_messages; the caller
+  /// replays the (few) matches once through the normal idempotent batch
+  /// import so the updated server parser re-classes them and refreshes the
+  /// stored merchant label. Filter mirrors the parser's loan-repayment
+  /// credit branch, both word orders.
+  List<Map<String, Object?>> emiRepaymentReplayCandidates(String ns) {
+    final creditMarker = RegExp(
+      r'\b(?:credited|received|deposited)\b',
+      caseSensitive: false,
+    );
+    final keywordFirst = RegExp(
+      r'\b(?:loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|repaid|repayment)\b',
+      caseSensitive: false,
+    );
+    final paymentFirst = RegExp(
+      r'\b(?:payment|repayment|repaid)\b[\s\S]{0,60}\b(?:of|towards?|for)\b[\s\S]{0,20}\b(?:the\s+)?(?:loan|emi|equated\s+monthly\s+installment|instalment)\b',
+      caseSensitive: false,
+    );
+    final rows = <Map<String, Object?>>[];
+    try {
+      final messages = database.db.select(
+        'SELECT sender, body, received_at FROM sms_captured_messages WHERE namespace=?',
+        [ns],
+      );
+      for (final msg in messages) {
+        final body = msg['body'] as String;
+        if (!creditMarker.hasMatch(body)) continue;
+        if (!keywordFirst.hasMatch(body) && !paymentFirst.hasMatch(body)) {
+          continue;
+        }
+        final receivedMs = msg['received_at'];
+        final receivedAt = receivedMs is int
+            ? DateTime.fromMillisecondsSinceEpoch(receivedMs)
+            : DateTime.tryParse(receivedMs?.toString() ?? '');
+        if (receivedAt == null) continue;
+        rows.add({
+          'sender': msg['sender'] as String,
+          'body': body,
+          'occurredAt': receivedAt,
+        });
+      }
+    } catch (_) {
+      // The captures table may not exist on fresh installs; a missing
+      // replay must never block startup.
+    }
+    return rows;
   }
 
   void syncCardDatesFromObservations(String ns) {
