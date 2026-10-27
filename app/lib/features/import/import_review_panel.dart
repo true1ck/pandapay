@@ -129,6 +129,16 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
   Future<void> _submit() async {
     final repository = ref.read(importRepositoryProvider);
     if (repository == null || session.submitting) return;
+    final categories = ref.read(categoriesProvider).valueOrNull;
+    // Rows parsed from an export written by a different database can carry
+    // category ids this account's catalogue does not have. The row keeps its
+    // category hint, so dropping the stale id still classifies it instead of
+    // letting the server reject the entire batch.
+    if (categories != null && categories.isNotEmpty) {
+      session.dropUnknownCategoryIds({
+        for (final category in categories) category.id,
+      });
+    }
     setState(() => _error = null);
     try {
       final future = session.submit(
@@ -1329,10 +1339,11 @@ class _EditImportRowState extends State<_EditImportRow> {
     final selectedCategory = widget.categories
         .where((category) => category.id == _selectedCategoryId)
         .firstOrNull;
+    final description = _description.text.trim();
     final bankReference = _bankReference.text.trim();
     final row = ParsedStatementLine(
       date: date,
-      description: _description.text.trim(),
+      description: description,
       amount: Money.fromRupees(value),
       isCredit: _kind == 'income',
       isTransfer: _kind == 'transfer',
@@ -1357,6 +1368,10 @@ class _EditImportRowState extends State<_EditImportRow> {
       instrument: _instrument,
       rail: _rail,
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
+      status: widget.row?.status ?? 'active',
+      merchantNameMissing:
+          widget.row?.merchantNameMissing == true &&
+          description == widget.row!.description,
       sourceRowId: widget.row?.sourceRowId,
     );
     final error = validateImportedTransaction(row);

@@ -14,7 +14,8 @@ double? _numOrNull(dynamic v) {
 class StatementTransactionInput {
   final DateTime occurredAt;
   final Money amount;
-  final String merchantName;
+  final String? merchantName;
+  final String status;
   final String? importRowKey;
   final String? sourceAccount;
   final String? bankReference;
@@ -32,6 +33,7 @@ class StatementTransactionInput {
     required this.occurredAt,
     required this.amount,
     required this.merchantName,
+    this.status = 'active',
     this.entryKind = TxnEntryKind.spend,
     this.importRowKey,
     this.sourceAccount,
@@ -50,6 +52,7 @@ class StatementTransactionInput {
     'occurredAt': occurredAt.toUtc().toIso8601String(),
     'amountInr': amount.rupees,
     'merchantName': merchantName,
+    'status': status,
     'entryKind': entryKind.wireValue,
     if (instrument != null) 'instrument': instrument!.wireValue,
     if (importRowKey != null) 'importRowKey': importRowKey,

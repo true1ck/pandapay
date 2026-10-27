@@ -26,6 +26,13 @@ test('accepts each supported transaction type and rejects unknown types', () => 
   assert.match(validateStatementImport(body({ transactions: [{ ...body().transactions[0], entryKind: 'refund-ish' }] })), /entryKind/);
 });
 
+test('accepts exported statuses and nullable merchants but rejects unknown statuses', () => {
+  for (const status of ['active', 'ignored', 'deleted']) {
+    assert.equal(validateStatementImport(body({ transactions: [{ ...body().transactions[0], merchantName: null, status }] })), null);
+  }
+  assert.match(validateStatementImport(body({ transactions: [{ ...body().transactions[0], status: 'archived' }] })), /status/);
+});
+
 test('rejects invalid calendar dates, ranges, decimal precision, nonfinite values and malformed rows', () => {
   for (const value of [null, [], body({ statementFrom: '2026-02-30' }), body({ statementTo: '2026-10-01' }),
     body({ transactions: [] }), body({ importSource: 'xls' }), body({ transactions: [null] }),
@@ -75,7 +82,7 @@ function harness({ cardType = 'credit', owned = true, automatic = false, failOnI
       written.push(input);
       if (automatic) return {status:200, duplicateKind:'high_confidence', transaction:{id:'canonical', status:'active'}};
       if (rows.has(input.sourceKey)) return { status: 200, duplicateKind: 'exact_retry', transaction: rows.get(input.sourceKey) };
-      const transaction = { id: `row-${rows.size}`, status: input.merchantName === 'Possible duplicate' ? 'ignored' : 'active' }; rows.set(input.sourceKey, transaction);
+      const transaction = { id: `row-${rows.size}`, status: input.merchantName === 'Possible duplicate' ? 'ignored' : input.status || 'active' }; rows.set(input.sourceKey, transaction);
       return { status: 201, transaction, duplicatePending: input.merchantName === 'Possible duplicate' };
     }, logger: { error() {} },
   });
@@ -148,6 +155,14 @@ test('statement import forwards the transaction kind to the shared insert path',
   const run = harness();
   await run.call(body({ transactions: [{ ...body().transactions[0], entryKind: 'income' }] }));
   assert.equal(run.written[0].entryKind, 'income');
+});
+
+test('statement import preserves exported status and a missing merchant', async () => {
+  const run = harness();
+  const response = await run.call(body({ transactions: [{ ...body().transactions[0], merchantName: null, status: 'ignored' }] }));
+  assert.equal(run.written[0].merchantName, null);
+  assert.equal(run.written[0].status, 'ignored');
+  assert.equal(response.result.statementImport.reconciled_count, 0);
 });
 
 test('statement narration classification excludes settlements and preserves explicit kinds', () => {
