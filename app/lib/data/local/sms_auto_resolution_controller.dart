@@ -57,6 +57,7 @@ class SmsAutoResolutionController {
         entry,
         action: 'category_changed',
         correctedFields: {'categorySlug': slug},
+        correctionKind: 'misclassified_category',
         consentGrantedAt: smsLearningConsentGrantedAt,
       );
       _updateTransactionCategory(entry, slug);
@@ -109,6 +110,8 @@ class SmsAutoResolutionController {
         entry,
         action: 'edited',
         consentGrantedAt: smsLearningConsentGrantedAt,
+        correctionKind: _editCorrectionKind(entry, merchant, amount,
+            occurredAtUtc),
         correctedFields: {
           'merchant': merchant,
           'amountInr': amount.rupees,
@@ -138,6 +141,11 @@ class SmsAutoResolutionController {
         entry,
         action: 'moved_to_review',
         consentGrantedAt: smsLearningConsentGrantedAt,
+        // Restoring an AI dismissal says the message was financial; undoing a
+        // filed transaction says it was not. They are different claims.
+        correctionKind: entry.resolvedKind == 'dismissed'
+            ? 'false_dismissal'
+            : 'false_transaction',
       );
       if (entry.resolvedKind != 'dismissed') {
         database.db.execute(
@@ -201,6 +209,7 @@ class SmsAutoResolutionController {
     required String action,
     required DateTime? consentGrantedAt,
     Map<String, dynamic>? correctedFields,
+    String? correctionKind,
   }) {
     if (consentGrantedAt == null || entry.sourceKey.trim().isEmpty) return;
     final fields = <String, dynamic>{
@@ -218,10 +227,33 @@ class SmsAutoResolutionController {
       occurredAt: entry.occurredAt,
       consentGrantedAt: consentGrantedAt,
       sampleBody: entry.sourceBody,
-      originalDecision: {'kind': entry.resolvedKind, 'fields': fields},
+      // Every entry on this screen was filed by the AI pipeline; saying so
+      // lets a later correction name the decision it is correcting.
+      originalDecision: {
+        'kind': entry.resolvedKind,
+        'origin': 'ai',
+        'fields': fields,
+      },
       correctedFields: correctedFields,
+      correctionKind: correctionKind,
+      decisionOrigin: 'ai',
       reason: action == 'moved_to_review' ? 'user_disputed_ai_decision' : null,
     );
+  }
+
+  /// Names the field the user actually changed. An edit that touches nothing
+  /// the SMS decision produced is presentation-only and must not train.
+  String _editCorrectionKind(
+    AutoResolvedHistoryEntry entry,
+    String merchant,
+    Money amount,
+    DateTime occurredAtUtc,
+  ) {
+    if (amount.paise != entry.amountPaise) return 'wrong_amount';
+    if (merchant != entry.title) return 'wrong_merchant';
+    final original = DateTime.tryParse(entry.occurredAt)?.toUtc();
+    if (original != null && original != occurredAtUtc) return 'wrong_date';
+    return 'cosmetic';
   }
 
   void _updateTransactionCategory(AutoResolvedHistoryEntry entry, String slug) {

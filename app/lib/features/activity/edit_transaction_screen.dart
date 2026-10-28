@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +17,7 @@ import '../../data/merchant_category_rules_repository.dart';
 import '../../data/user_cards_repository.dart';
 import 'category_bulk_review_sheet.dart';
 import 'merchant_future_rule_sheet.dart';
+import 'sms_learning_capture.dart';
 
 /// D3 Edit Transaction (ui-spec Group D). All fields editable, explicit
 /// save/cancel; recomputes caps/milestones on save — that recompute is
@@ -123,7 +126,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           fallback: original?.tags ?? [],
         );
       }
-      if (financialChanged) await _submitEdit(amount);
+      if (financialChanged) {
+        await _submitEdit(amount);
+        unawaited(_recordSmsEditFeedback(amount));
+      }
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       ref.invalidate(transactionsProvider);
@@ -244,6 +250,59 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       entryKind: _entryKind,
       rail: _rail,
     );
+  }
+
+  /// Queues one typed correction when an SMS-backed transaction is edited from
+  /// Activity. Runs after the PATCH has committed, so a failed or offline save
+  /// never produces evidence, and never blocks or fails the user's edit.
+  Future<void> _recordSmsEditFeedback(double amount) async {
+    final original = _originalEntry;
+    if (original == null) return;
+    final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
+    String? slugFor(String? id) {
+      for (final category in categories) {
+        if (category.id == id) return category.slug;
+      }
+      return null;
+    }
+
+    final merchant = _merchantController.text.trim();
+    await queueSmsTransactionCorrection(
+      ref: ref,
+      original: original,
+      action: 'edited',
+      correctedFields: {
+        'amountInr': amount,
+        if (_occurredAt != null)
+          'occurredAt': _occurredAt!.toUtc().toIso8601String(),
+        if (merchant.isNotEmpty) 'merchant': merchant,
+        // A private custom category stays local: it is sent only when it maps
+        // to a canonical spend slug, so it can never enter shared learning.
+        if (slugFor(_categoryId) != null) 'categorySlug': slugFor(_categoryId),
+        if (_instrument != null) 'instrument': _instrument!.wireValue,
+        'entryKind': _entryKind.wireValue,
+      },
+      correctionKind: _smsEditCorrectionKind(original, amount),
+    );
+  }
+
+  String _smsEditCorrectionKind(TransactionEntry original, double amount) {
+    if (original.categoryId != _categoryId) return 'misclassified_category';
+    if (original.entryKind != _entryKind) return 'misclassified_kind';
+    if (original.amount != Money.fromRupees(amount)) return 'wrong_amount';
+    if ((original.merchantName ?? '') != _merchantController.text.trim()) {
+      return 'wrong_merchant';
+    }
+    if (original.occurredAt != _occurredAt) return 'wrong_date';
+    if (original.instrumentKnown &&
+        _instrument != null &&
+        original.instrument != _instrument) {
+      return 'wrong_instrument';
+    }
+    if (original.userCardId != _userCardId || original.rail != _rail) {
+      return 'wrong_account';
+    }
+    return 'cosmetic';
   }
 
   String _categoryLabel(String? id) {

@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:uuid/uuid.dart';
 
 import 'api_exception.dart';
+import 'consents_api.dart';
 import 'local/sms_dismissal_outbox.dart';
 import 'local/sms_feedback_outbox.dart';
 import 'local/sms_learning_privacy.dart';
@@ -2036,7 +2037,7 @@ class UserCardsRepository {
     if (entry.family != null) 'originalDecision': {'kind': entry.family},
     if (entry.reason != null) 'reason': entry.reason,
     'consentPurpose': 'sms_shared_learning',
-    'consentPolicyVersion': 'sms-shared-learning-v1',
+    'consentPolicyVersion': smsSharedLearningPolicyVersion,
     'consentGrantedAt': entry.consentGrantedAt.toUtc().toIso8601String(),
   };
 
@@ -2093,6 +2094,25 @@ class UserCardsRepository {
       // The explicit consent change remains successful; a future account
       // storage open will make the local purge retryable through provider.
     }
+  }
+
+  /// Whether any SMS shared-learning work is queued locally. Callers check
+  /// this before the consent lookup so an idle queue never costs a network
+  /// round-trip; offline that lookup can only fail, and the reconnect flush
+  /// owns the retry.
+  Future<bool> hasPendingSmsLearningWork() async {
+    if (_dismissalRetryQueue.isNotEmpty) return true;
+    try {
+      final dismissals = await dismissalOutbox?.call();
+      if (dismissals != null && dismissals.pending().isNotEmpty) return true;
+      final feedback = await feedbackOutbox?.call();
+      if (feedback != null && feedback.pending().isNotEmpty) return true;
+    } catch (_) {
+      // An unopenable account store is not proof the queues are empty, so fall
+      // back to the old behaviour and let the flush attempt happen.
+      return true;
+    }
+    return false;
   }
 
   /// Retries queued dismissals that previously failed due to offline/network issues.

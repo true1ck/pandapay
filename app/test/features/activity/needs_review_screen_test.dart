@@ -5,6 +5,7 @@ import 'package:http/testing.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/consents_api.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/auto_resolved_history_repository.dart';
@@ -185,6 +186,7 @@ Future<void> _pump(
   SmsAutoResolutionController? autoResolutionController,
   Size surfaceSize = const Size(1000, 1000),
   bool settle = true,
+  List<Override> overrides = const [],
 }) async {
   await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -205,6 +207,7 @@ Future<void> _pump(
         if (commitments != null)
           commitmentsRepositoryProvider.overrideWithValue(commitments),
         smsBackgroundFlushProvider.overrideWith((ref) {}),
+        ...overrides,
       ],
       child: const MaterialApp(home: NeedsReviewScreen()),
     ),
@@ -215,6 +218,34 @@ Future<void> _pump(
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
   }
+}
+
+NeedsReviewItem _balanceReviewItem(String id) => NeedsReviewItem(
+  id: id,
+  sender: 'HDFCBK',
+  body: 'Available balance in A/c 1234 is INR 12500.50',
+  receivedAt: DateTime(2026, 10, 10),
+  aiSuggestions: [
+    {
+      'factIndex': 0,
+      'factType': 'balance_snapshot',
+      'payload': {
+        'availableBalanceInr': 12500.50,
+        'accountLast4': '1234',
+        'asOfAt': '2026-10-10T12:00:00.000Z',
+      },
+    },
+  ],
+);
+
+/// Opens the balance review sheet and confirms it, which persists one
+/// fact-override correction.
+Future<void> _confirmBalance(WidgetTester tester) async {
+  expect(find.text('Confirm balance'), findsOneWidget);
+  await tester.tap(find.text('Confirm balance'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.widgetWithText(FilledButton, 'Confirm balance').last);
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -868,6 +899,65 @@ void main() {
         12500.50,
       );
       expect(await reviews.fetchAll(), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'fact-override upload carries SMS evidence under shared-learning consent',
+    (tester) async {
+      await reviews.add(_balanceReviewItem('b' * 64));
+      final repo = _FakeUserCardsRepository();
+      await _pump(
+        tester,
+        repo: repo,
+        reviews: reviews,
+        overrides: [
+          smsSharedLearningConsentProvider.overrideWith(
+            (ref) async => ConsentRecord(
+              purpose: 'sms_shared_learning',
+              granted: true,
+              grantedAt: DateTime(2026, 10, 1),
+              policyVersion: smsSharedLearningPolicyVersion,
+            ),
+          ),
+        ],
+      );
+      await _confirmBalance(tester);
+      expect(
+        repo.lastOverrideArgs!['sampleBody'],
+        'Available balance in A/c 1234 is INR 12500.50',
+        reason: 'consented captures may upload redacted SMS evidence',
+      );
+      expect(await reviews.fetchAll(), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'fact-override upload drops SMS evidence when shared-learning consent is off',
+    (tester) async {
+      await reviews.add(_balanceReviewItem('b' * 64));
+      final repo = _FakeUserCardsRepository();
+      await _pump(
+        tester,
+        repo: repo,
+        reviews: reviews,
+        overrides: [
+          smsSharedLearningConsentProvider.overrideWith((ref) async => null),
+        ],
+      );
+      await _confirmBalance(tester);
+      expect(repo.lastOverrideArgs, isNotNull);
+      expect(
+        (repo.lastOverrideArgs!['patch'] as Map)['availableBalanceInr'],
+        12500.50,
+        reason: 'the own-account fact fix is never blocked by consent',
+      );
+      expect(
+        repo.lastOverrideArgs!['sampleBody'],
+        isNull,
+        reason: 'SMS-derived evidence requires shared-learning consent',
+      );
+      expect(repo.lastOverrideArgs!['templateText'], isNull);
     },
   );
 

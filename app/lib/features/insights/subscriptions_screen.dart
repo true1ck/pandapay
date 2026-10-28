@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -9,6 +11,7 @@ import '../../data/api_exception.dart';
 import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/spend_reports_repository.dart';
+import '../activity/sms_learning_capture.dart';
 import 'central_bills_section.dart';
 import 'subscription_detail_screen.dart';
 import '../cards/card_summary.dart';
@@ -1945,6 +1948,15 @@ class _SeriesCard extends ConsumerWidget {
               nextExpectedOn: next!,
               autopayStatus: autopayStatus,
             );
+        unawaited(
+          _recordSubscriptionEditFeedback(
+            ref,
+            displayName: name.text.trim(),
+            amountInr: double.parse(amount.text),
+            cadenceDays: int.parse(cadence.text),
+            nextExpectedOn: next!,
+          ),
+        );
         if (!context.mounted) return;
         ref.invalidate(recurringReportProvider);
         ScaffoldMessenger.of(
@@ -1992,6 +2004,7 @@ class _SeriesCard extends ConsumerWidget {
       await ref
           .read(spendReportsRepositoryProvider)!
           .dismissRecurring(series.id);
+      unawaited(_recordSubscriptionDismissFeedback(ref));
       if (!context.mounted) return;
       ref.invalidate(recurringReportProvider);
       ScaffoldMessenger.of(
@@ -2004,6 +2017,82 @@ class _SeriesCard extends ConsumerWidget {
         ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
       }
     }
+  }
+
+  /// Queues one consented correction for an SMS-backed subscription after the
+  /// PATCH committed. Only a real change produces evidence. The service name
+  /// travels as `billerName` and is redacted server-side; a series without a
+  /// captured SMS on this device stays local.
+  Future<void> _recordSubscriptionEditFeedback(
+    WidgetRef ref, {
+    required String displayName,
+    required double amountInr,
+    required int cadenceDays,
+    required DateTime nextExpectedOn,
+  }) async {
+    final amountChanged = amountInr != series.typicalAmount.rupees;
+    final dateChanged =
+        series.nextExpectedOn != null &&
+        !nextExpectedOn.toUtc().isAtSameMomentAs(series.nextExpectedOn!.toUtc());
+    final nameChanged = displayName.trim() != series.displayName;
+    if (!amountChanged &&
+        !dateChanged &&
+        !nameChanged &&
+        cadenceDays == series.cadenceDays) {
+      return;
+    }
+    await queueSmsLearningEvent(
+      ref: ref,
+      sourceKey: series.sourceKey ?? '',
+      action: 'edited',
+      resolvedKind: 'bill',
+      occurredAtIso:
+          (series.lastSeenOn ?? DateTime.now()).toUtc().toIso8601String(),
+      originalDecision: {
+        'kind': 'bill_obligation',
+        'origin': 'parser',
+        'fields': {
+          'billerName': series.displayName,
+          'amountInr': series.typicalAmount.rupees,
+          'cadenceDays': series.cadenceDays,
+          if (series.nextExpectedOn != null)
+            'dueDate': series.nextExpectedOn!.toUtc().toIso8601String(),
+        },
+      },
+      correctedFields: {
+        'billerName': displayName.trim(),
+        'amountInr': amountInr,
+        'cadenceDays': cadenceDays,
+        'dueDate': nextExpectedOn.toUtc().toIso8601String(),
+      },
+      correctionKind: amountChanged
+          ? 'wrong_amount'
+          : dateChanged
+              ? 'wrong_date'
+              : 'wrong_bill_fields',
+    );
+  }
+
+  /// A subscription ignore is a tracking preference, not a claim that the
+  /// message was misclassified, so it is tagged `preference_only` and never
+  /// trains a shared rule.
+  Future<void> _recordSubscriptionDismissFeedback(WidgetRef ref) async {
+    await queueSmsLearningEvent(
+      ref: ref,
+      sourceKey: series.sourceKey ?? '',
+      action: 'dismissed',
+      resolvedKind: 'bill',
+      occurredAtIso:
+          (series.lastSeenOn ?? DateTime.now()).toUtc().toIso8601String(),
+      originalDecision: {
+        'kind': 'bill_obligation',
+        'origin': 'parser',
+        'fields': {'billerName': series.displayName},
+      },
+      correctedFields: const {},
+      correctionKind: 'preference_only',
+      reason: 'user_ignored_subscription',
+    );
   }
 }
 

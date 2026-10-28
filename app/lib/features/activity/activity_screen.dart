@@ -17,6 +17,7 @@ import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
 import 'deleted_transactions_screen.dart';
+import 'sms_learning_capture.dart';
 
 /// D1 Transaction List (ui-spec Group D, implementation-plan-group-c-d.md)
 /// — extends the original flat list (UA-3+/Chunk 18) with date grouping,
@@ -207,6 +208,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       await Future.wait(
         ids.map((id) => repo.editTransaction(id, categoryId: chosen)),
       );
+      unawaited(_recordSmsBulkCategoryFeedback(visible, chosen));
       if (mounted) {
         setState(() {
           _selectedIds.clear();
@@ -231,6 +233,39 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       }
     } finally {
       if (mounted) setState(() => _isBulkOperating = false);
+    }
+  }
+
+  /// Queues one consented category correction per SMS-backed transaction in a
+  /// bulk reassign, after every local edit has committed. Entries already in
+  /// the chosen category produce no evidence; a private custom category stays
+  /// local entirely. Bulk card reassignment queues nothing: a device-local
+  /// card id is not shareable evidence and the instrument does not change.
+  Future<void> _recordSmsBulkCategoryFeedback(
+    List<TransactionEntry> visible,
+    String chosenCategoryId,
+  ) async {
+    final selectedIds = _selectedIds.toSet();
+    final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
+    String? slugFor(String? id) {
+      for (final category in categories) {
+        if (category.id == id) return category.slug;
+      }
+      return null;
+    }
+
+    final correctedSlug = slugFor(chosenCategoryId);
+    if (correctedSlug == null) return;
+    for (final entry in visible) {
+      if (!selectedIds.contains(entry.id)) continue;
+      if (entry.categoryId == chosenCategoryId) continue;
+      await queueSmsTransactionCorrection(
+        ref: ref,
+        original: entry,
+        action: 'edited',
+        correctedFields: {'categorySlug': correctedSlug},
+        correctionKind: 'misclassified_category',
+      );
     }
   }
 

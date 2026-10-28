@@ -324,6 +324,10 @@ Future<void> _flushSmsLearningQueues(
   String namespace,
 ) async {
   if (ref.read(cacheNamespaceProvider) != namespace) return;
+  // Nothing queued means the consent lookup and both flushes would all be
+  // wasted work — offline they can only fail, and the reconnect flush owns
+  // the retry. The queue check is local, so it costs no network.
+  if (!await repository.hasPendingSmsLearningWork()) return;
   final consent = await _currentSmsSharedLearningConsent(ref);
   if (consent == null || ref.read(cacheNamespaceProvider) != namespace) return;
   await repository.flushDismissalQueue();
@@ -6386,6 +6390,61 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
                     ? (result['confidenceScore'] as num).toDouble()
                     : null,
               );
+          if (resolution.outcome == SmsAiResolutionOutcome.autoResolved &&
+              resolution.historyId != null) {
+            // An AI-only outcome is useful review evidence, never a user
+            // confirmation. The server keeps it as an admin proposal and
+            // excludes it from user-vote thresholds and parser training.
+            final consent = ref.read(smsSharedLearningConsentProvider).valueOrNull;
+            if (consent?.granted == true &&
+                consent?.policyVersion == smsSharedLearningPolicyVersion) {
+              final history = AutoResolvedHistoryRepository(
+                cache.financialStore.database,
+                namespace: namespace,
+              ).findById(resolution.historyId!);
+              if (history != null &&
+                  redactSmsLearningPattern(history.sourceBody) != null &&
+                  RegExp(r'^[0-9a-f]{64}$').hasMatch(history.sourceKey)) {
+                final factType = suggestions.isEmpty
+                    ? 'ignore_noise'
+                    : (suggestions.first['factType'] as String? ?? 'unresolved');
+                try {
+                  SmsFeedbackOutbox(
+                    cache.financialStore.database,
+                    namespace: namespace,
+                  ).enqueue(
+                    sourceKey: history.sourceKey,
+                    action: 'ai_auto_resolved',
+                    sender: history.sender,
+                    resolvedKind: history.resolvedKind,
+                    occurredAt: history.occurredAt,
+                    consentGrantedAt: consent!.grantedAt,
+                    sampleBody: history.sourceBody,
+                    originalDecision: {
+                      'kind': factType,
+                      'fields': {
+                        'merchant': history.title,
+                        'amountInr': history.amountPaise / 100,
+                        if (history.categorySlug != null)
+                          'categorySlug': history.categorySlug,
+                        'occurredAt': history.occurredAt,
+                        if (history.dueDate != null) 'dueDate': history.dueDate,
+                      },
+                    },
+                    reason: 'ai_auto_resolved_unconfirmed',
+                    aiConfidenceScore: history.confidence,
+                    decisionOrigin: 'gemini',
+                  );
+                  ref.read(userCardsRepositoryProvider)
+                      ?.flushSmsLearningFeedbackQueue()
+                      .ignore();
+                } catch (_) {
+                  // The already-saved AI decision remains available for user
+                  // review; learning sync must never undo it.
+                }
+              }
+            }
+          }
           if (resolution.outcome == SmsAiResolutionOutcome.needsReview) {
             changed =
                 await reviewRepo.updateAiSuggestions(

@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'api_exception.dart';
 
 const smsSharedLearningPurpose = 'sms_shared_learning';
-const smsSharedLearningPolicyVersion = 'sms-shared-learning-v1';
+const smsSharedLearningPolicyVersion = 'sms-shared-learning-v2';
 
 /// H4 Privacy & Permissions. Thin IO boundary over Task H-0's
 /// `user_consents` routes — mirrors ProfileApi's shape (app/lib/data/auth_api.dart):

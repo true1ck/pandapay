@@ -748,10 +748,22 @@ class SmsImportStore {
           payload['description'],
         ]) ??
         item.sender;
-    final categorySlug = _categorySlug(
-      payload,
-      fallback: factType == 'bill_payment' ? 'bills' : null,
-    );
+    // C5 local precedence: the user's latest correction for this merchant
+    // outranks the AI's proposed category. Without this, a merchant the user
+    // already re-labelled would be auto-filed under the old AI label again.
+    final categorySlug =
+        LocalSmsParser.userCategoryRuleSlug(
+          SmsLearningFeedback(
+            store.database,
+            namespace: namespace,
+          ).loadRulesSync(),
+          merchant,
+          item.sender,
+        ) ??
+        _categorySlug(
+          payload,
+          fallback: factType == 'bill_payment' ? 'bills' : null,
+        );
     final instrumentWire = payload['instrument'] as String?;
     final instrument = _txnInstrument(instrumentWire);
     final entryKind = _txnEntryKind(

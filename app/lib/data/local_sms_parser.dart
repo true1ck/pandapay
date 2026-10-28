@@ -142,7 +142,10 @@ class LocalSmsParser {
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
   /// rules cannot produce different categories across captures.
-  static String? _userCategoryRuleSlug(
+  ///
+  /// Public so the AI auto-resolution path can apply the user's latest
+  /// correction BEFORE the AI's own category decision (plan C5 precedence).
+  static String? userCategoryRuleSlug(
     Map<String, String>? rules,
     String? merchant,
     String sender,
@@ -2634,7 +2637,7 @@ class LocalSmsParser {
     // A user correction is authoritative: it outranks both the brand catalog
     // and the layout-specific fallbacks below. Confidence for a transaction
     // observation is already 1.0, so the learned field is fully trusted.
-    final userRuleSlug = _userCategoryRuleSlug(
+    final userRuleSlug = userCategoryRuleSlug(
       userCategoryRules,
       merchant,
       sender,
@@ -2828,7 +2831,7 @@ class LocalSmsParser {
         textForMatching,
       );
       final categorySlug =
-          _userCategoryRuleSlug(userCategoryRules, merchant, sender) ??
+          userCategoryRuleSlug(userCategoryRules, merchant, sender) ??
           _sharedCategoryRuleSlug(sharedCategoryRules, merchant) ??
           ftMatch?.category;
       final categoryName = categoryDisplayName(categorySlug);

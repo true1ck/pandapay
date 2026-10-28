@@ -3,6 +3,45 @@ import 'dart:convert';
 import 'package:uuid/uuid.dart';
 
 import 'app_database.dart';
+import '../consents_api.dart';
+
+/// Typed reasons a user can correct an SMS decision. Mirrors the allow-list in
+/// `api/src/sms_learning_feedback_route.js`; an unknown value is rejected there.
+const List<String> smsCorrectionKinds = [
+  'misclassified_category',
+  'misclassified_kind',
+  'wrong_amount',
+  'wrong_merchant',
+  'wrong_date',
+  'wrong_direction',
+  'wrong_instrument',
+  'wrong_account',
+  'wrong_bill_fields',
+  'false_transaction',
+  'false_dismissal',
+  'duplicate',
+  'already_paid',
+  'cosmetic',
+  'preference_only',
+];
+
+/// Kinds that make no claim about classification correctness, so they must not
+/// train a shared rule.
+const List<String> smsNonTrainingCorrectionKinds = [
+  'duplicate',
+  'already_paid',
+  'cosmetic',
+  'preference_only',
+];
+
+/// Where the corrected decision came from.
+const List<String> smsDecisionOrigins = [
+  'parser',
+  'downloaded_rule',
+  'shared_rule',
+  'ai',
+  'manual',
+];
 
 /// Durable queue for explicit SMS decision feedback. Events are immutable and
 /// keyed independently so retries cannot overwrite a later correction.
@@ -46,6 +85,12 @@ class SmsFeedbackOutbox {
     Map<String, dynamic>? originalDecision,
     Map<String, dynamic>? correctedFields,
     String? reason,
+    double? aiConfidenceScore,
+    String? decisionOrigin,
+    String? correctionKind,
+    String? decisionRuleId,
+    int factIndex = 0,
+    DateTime? messageAt,
   }) {
     if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sourceKey)) {
       throw ArgumentError.value(sourceKey, 'sourceKey', 'Expected SHA-256 hex');
@@ -56,11 +101,21 @@ class SmsFeedbackOutbox {
       'category_changed',
       'moved_to_review',
       'dismissed',
+      'ai_auto_resolved',
     };
     if (!actions.contains(action)) throw ArgumentError.value(action, 'action');
+    if (correctionKind != null && !smsCorrectionKinds.contains(correctionKind)) {
+      throw ArgumentError.value(correctionKind, 'correctionKind');
+    }
+    if (decisionOrigin != null && !smsDecisionOrigins.contains(decisionOrigin)) {
+      throw ArgumentError.value(decisionOrigin, 'decisionOrigin');
+    }
+    if (factIndex < 0 || factIndex > 31) {
+      throw ArgumentError.value(factIndex, 'factIndex');
+    }
     final eventId = const Uuid().v5(
       '6ba7b811-9dad-11d1-80b4-00c04fd430c8',
-      '$namespace:$sourceKey:$action:${jsonEncode(correctedFields ?? const {})}',
+      '$namespace:$sourceKey:$factIndex:$action:${jsonEncode(correctedFields ?? const {})}',
     );
     final payload = <String, dynamic>{
       'eventId': eventId,
@@ -70,12 +125,18 @@ class SmsFeedbackOutbox {
       'resolvedKind': resolvedKind,
       'occurredAt': DateTime.parse(occurredAt).toUtc().toIso8601String(),
       'consentPurpose': 'sms_shared_learning',
-      'consentPolicyVersion': 'sms-shared-learning-v1',
+      'consentPolicyVersion': smsSharedLearningPolicyVersion,
       'consentGrantedAt': consentGrantedAt.toUtc().toIso8601String(),
       'sampleBody': ?redactSmsLearningPattern(sampleBody),
       'originalDecision': ?originalDecision,
       'correctedFields': ?correctedFields,
       'reason': ?(reason?.trim().isNotEmpty == true ? reason!.trim() : null),
+      'aiConfidenceScore': ?aiConfidenceScore,
+      'decisionOrigin': ?decisionOrigin,
+      'correctionKind': ?correctionKind,
+      'decisionRuleId': ?decisionRuleId,
+      'factIndex': factIndex,
+      'messageAt': ?messageAt?.toUtc().toIso8601String(),
     };
     database.db.execute(
       '''INSERT INTO sms_learning_feedback_outbox
@@ -158,6 +219,18 @@ String? redactSmsLearningPattern(String? value) {
   text = text.replaceAll(
     RegExp(r'\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b'),
     '{email}',
+  );
+  text = text.replaceAll(
+    RegExp(
+      r'\b(?:Mr\.?|Mrs\.?|Ms\.?|Miss|Shri|Smt\.?|[Cc]ustomer|[Aa]ccount holder|[Cc]ardholder|[Bb]eneficiary|[Rr]ecipient)\s+(?:[Nn]ame\s*[:=-]?\s*)?[A-Z][a-z]{1,30}(?:\s+[A-Z][a-z]{1,30}){0,2}\b',
+    ),
+    '{name}',
+  );
+  text = text.replaceAll(
+    RegExp(
+      r'\b[A-Z][a-z]{2,30}(?:\s+[A-Z][a-z]{2,30}){0,2}\s*,?\s+(?=(?:your\b|you\b|has\b|have\b|payment\b|account\b|card\b|paid\b|spent\b|received\b|debited\b|credited\b|transferred\b|made\b))',
+    ),
+    '{name} ',
   );
   text = text.replaceAll(
     RegExp(r'(?<!\d)(?:\+?\d[\d\s().-]{7,}\d)(?!\d)'),

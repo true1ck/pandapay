@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -5,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../data/local/financial_store.dart';
+import '../activity/sms_learning_capture.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -1506,6 +1509,8 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
       ref.invalidate(paymentsDueProvider);
       ref.invalidate(cardBillReviewItemsProvider);
 
+      unawaited(_recordSmsBillEditFeedback(amountPaise, minPaise));
+
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1520,6 +1525,61 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
         });
       }
     }
+  }
+
+  /// Queues one consented correction against the detected statement SMS after
+  /// the local bill save committed. Only a real change against the detected
+  /// observation produces evidence; a purely manual bill stays local.
+  Future<void> _recordSmsBillEditFeedback(
+    int amountPaise,
+    int? minPaise,
+  ) async {
+    final obs = _detectedSmsObs;
+    if (obs == null) return;
+    final sourceKey = obs['id'] as String? ?? '';
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sourceKey)) return;
+    final originalAmountPaise = obs['amount_due_paise'] as num?;
+    final originalMinPaise = obs['minimum_due_paise'] as num?;
+    final originalDue =
+        DateTime.tryParse(obs['due_date'] as String? ?? '');
+    final amountChanged =
+        originalAmountPaise == null || originalAmountPaise != amountPaise;
+    final minChanged = (originalMinPaise ?? 0) != (minPaise ?? 0);
+    final dueChanged =
+        originalDue == null ||
+        !DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day)
+            .isAtSameMomentAs(
+              DateTime(originalDue.year, originalDue.month, originalDue.day),
+            );
+    if (!amountChanged && !minChanged && !dueChanged) return;
+    await queueSmsLearningEvent(
+      ref: ref,
+      sourceKey: sourceKey,
+      action: 'edited',
+      resolvedKind: 'bill',
+      occurredAtIso:
+          (obs['received_at'] as String? ?? DateTime.now().toIso8601String()),
+      originalDecision: {
+        'kind': 'bill_obligation',
+        'origin': 'parser',
+        'fields': {
+          if (originalAmountPaise != null)
+            'amountDueInr': originalAmountPaise / 100,
+          if (originalMinPaise != null) 'minimumDueInr': originalMinPaise / 100,
+          if (originalDue != null) 'dueDate': originalDue.toUtc().toIso8601String(),
+        },
+      },
+      correctedFields: {
+        'amountDueInr': amountPaise / 100,
+        if (minPaise != null) 'minimumDueInr': minPaise / 100,
+        'dueDate': _selectedDate.toUtc().toIso8601String(),
+      },
+      correctionKind: amountChanged
+          ? 'wrong_amount'
+          : dueChanged
+              ? 'wrong_date'
+              : 'wrong_bill_fields',
+    );
   }
 
   Future<void> _resetBill() async {

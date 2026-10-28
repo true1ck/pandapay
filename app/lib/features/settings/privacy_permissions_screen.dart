@@ -699,7 +699,7 @@ class _PurposeConsents extends ConsumerWidget {
                 style: BambooFonts.heading(14.5, color: BambooInk.ink900),
               ),
               subtitle: Text(
-                'If enabled, your future confirmations, edits, dismissals, and reversals may contribute generalized SMS patterns and the fields you confirm or change (transaction amount, date, merchant, category; bill amount and due date) to shared rules for other users. The full SMS, account/card identifiers, and exact transaction references are removed on this device. This choice is separate from merchant contributions and can be turned off any time.',
+                'If enabled, future AI auto-resolved SMS decisions and your confirmations, edits, dismissals, and reversals may contribute generalized message patterns and decision fields to admin-reviewed shared rules. An AI decision is labeled as unconfirmed until a person reviews it. The full SMS, account/card identifiers, and exact transaction references are removed on this device. This choice is separate from merchant contributions and can be turned off any time.',
                 style: BambooFonts.ui(12.5, color: BambooInk.ink500),
               ),
               activeTrackColor: BambooInk.jade,

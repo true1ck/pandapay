@@ -12,17 +12,16 @@ import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/commitments_repository.dart';
-import '../../data/consents_api.dart';
 import '../../data/local/auto_resolved_history_repository.dart';
 import '../../data/local/sms_facts_outbox.dart';
 import '../../data/local/sms_feedback_outbox.dart';
 import '../../data/local_sms_parser.dart';
 import '../../data/needs_review_repository.dart';
-import '../../data/local/response_cache.dart' show ResponseCache;
 import '../../data/sms_fact_contract.dart';
 import '../../data/user_cards_repository.dart'
-    show TxnEntryKind, TxnInstrument, UserCard, UserCardsRepository;
+    show TxnEntryKind, TxnInstrument, UserCard;
 import 'needs_review_clustering.dart';
+import 'sms_learning_capture.dart' as sms_learning_capture;
 
 String _feedbackSourceKey(String reviewId) {
   final commitment = RegExp(
@@ -278,13 +277,24 @@ Future<void> _persistSmsFactCorrection(
     return;
   }
   try {
+    // C3 fact-override consent gate. The override patch itself is the user's
+    // own-account fact fix: the server stores it per profile and re-applies it
+    // to the user's own facts without any consent check, so it always uploads.
+    // But the same route forwards sampleBody/templateText into cross-user
+    // learning examples, and that server-side gate only checks that the
+    // `sms_shared_learning` consent is granted — it does NOT verify the policy
+    // version. The device therefore enforces the full capture-time consent
+    // (granted AND current smsSharedLearningPolicyVersion) before SMS-derived
+    // evidence leaves the device. The redacted evidence stays in the local
+    // outbox either way, so a later consented flush can still upload it.
+    final consented = await sms_learning_capture.smsLearningConsentActiveAtCapture(ref);
     final accepted = await repository.overrideSmsFact(
       sourceKey: sourceKey,
       factIndex: factIndex,
       patch: patch,
       reason: reason,
-      sampleBody: sampleBody,
-      templateText: templateText,
+      sampleBody: consented ? sampleBody : null,
+      templateText: consented ? templateText : null,
     );
     if (accepted) {
       outbox.acknowledgeOverride(namespace, sourceKey, factIndex);
@@ -296,28 +306,13 @@ Future<void> _persistSmsFactCorrection(
   }
 }
 
-DateTime? _smsLearningConsentAtCapture(WidgetRef ref) {
-  final consent = ref.read(smsSharedLearningConsentProvider).valueOrNull;
-  if (consent?.granted != true ||
-      consent?.policyVersion != smsSharedLearningPolicyVersion) {
-    return null;
-  }
-  return consent!.grantedAt;
-}
+DateTime? _smsLearningConsentAtCapture(WidgetRef ref) =>
+    sms_learning_capture.smsLearningConsentAtCapture(ref);
 
-typedef _SmsLearningQueueContext = ({
-  Future<ResponseCache> cacheFuture,
-  String namespace,
-  UserCardsRepository? repository,
-  bool online,
-});
+typedef _SmsLearningQueueContext = sms_learning_capture.SmsLearningQueueContext;
 
-_SmsLearningQueueContext _captureSmsLearningQueueContext(WidgetRef ref) => (
-  cacheFuture: ref.read(responseCacheProvider.future),
-  namespace: ref.read(cacheNamespaceProvider),
-  repository: ref.read(userCardsRepositoryProvider),
-  online: ref.read(isOnlineProvider).valueOrNull != false,
-);
+_SmsLearningQueueContext _captureSmsLearningQueueContext(WidgetRef ref) =>
+    sms_learning_capture.captureSmsLearningQueueContext(ref);
 
 Future<void> _recordReviewedTransactionFeedback(
   _SmsLearningQueueContext queueContext, {
@@ -342,7 +337,11 @@ Future<void> _recordReviewedTransactionFeedback(
   ];
   final originalFields = <String, dynamic>{
     for (final key in safeOriginalFields)
-      if (payload[key] != null) key: payload[key],
+      if (payload[key] != null)
+        // The AI fact names its category field `category`; the feedback
+        // contract names it `categorySlug`. Without this mapping the previous
+        // label never reached the server and every correction looked new.
+        key == 'category' ? 'categorySlug' : key: payload[key],
   };
   final correctedFields = <String, dynamic>{
     'amountInr': amountInr,
@@ -381,9 +380,23 @@ Future<void> _recordReviewedTransactionFeedback(
     sampleBody: item.body,
     originalDecision: {
       'kind': 'posted_movement',
+      'origin': aiFact != null ? 'ai' : 'parser',
       'fields': originalFields,
     },
     correctedFields: correctedFields,
+    correctionKind: matches
+        ? null
+        : _reviewedTransactionCorrectionKind(
+            payload,
+            category: category,
+            amountInr: amountInr,
+            merchant: merchant,
+            occurredAt: occurredAt,
+            instrument: instrument,
+            entryKind: entryKind,
+          ),
+    decisionOrigin: aiFact != null ? 'ai' : 'parser',
+    messageAt: item.receivedAt,
     reason: matches ? null : 'user_saved_reviewed_transaction',
   );
   // The transaction has already been saved. Enqueue first, then let the
@@ -393,6 +406,42 @@ Future<void> _recordReviewedTransactionFeedback(
             Future<int>.value(0))
         .catchError((_) => 0),
   );
+}
+
+/// Names the field the reviewed save actually changed relative to the AI
+/// suggestion. Returns null when there was no prior suggestion to correct: a
+/// first manual classification is evidence, not a correction.
+String? _reviewedTransactionCorrectionKind(
+  Map<String, dynamic> payload, {
+  required String? category,
+  required double amountInr,
+  required String? merchant,
+  required DateTime occurredAt,
+  required TxnInstrument instrument,
+  required TxnEntryKind entryKind,
+}) {
+  if (payload.isEmpty) return null;
+  if (payload['category'] != category) return 'misclassified_category';
+  if (payload['amountInr'] is num &&
+      (payload['amountInr'] as num).toDouble() != amountInr) {
+    return 'wrong_amount';
+  }
+  if (payload['merchant'] is String &&
+      (payload['merchant'] as String).trim().toLowerCase() !=
+          (merchant ?? '').trim().toLowerCase()) {
+    return 'wrong_merchant';
+  }
+  final suggested = payload['occurredAt'] is String
+      ? DateTime.tryParse(payload['occurredAt'] as String)
+      : null;
+  if (suggested != null && suggested.toUtc() != occurredAt.toUtc()) {
+    return 'wrong_date';
+  }
+  if (payload['instrument'] != instrument.wireValue ||
+      payload['entryKind'] != entryKind.wireValue) {
+    return 'misclassified_kind';
+  }
+  return 'cosmetic';
 }
 
 Future<void> _recordReviewedBillFeedback(
@@ -442,12 +491,24 @@ Future<void> _recordReviewedBillFeedback(
     sampleBody: item.body,
     originalDecision: {
       'kind': 'bill_obligation',
+      'origin': suggestion != null ? 'ai' : 'parser',
       'fields': {
         for (final key in ['billerName', 'amountDueInr', 'dueDate', 'category'])
           if (payload[key] != null) key: payload[key],
       },
     },
     correctedFields: correctedFields,
+    correctionKind: matches
+        ? null
+        : (payload['category'] != result.category.name
+            ? 'misclassified_kind'
+            : !sameAmount
+                ? 'wrong_amount'
+                : !sameDate
+                    ? 'wrong_date'
+                    : 'wrong_bill_fields'),
+    decisionOrigin: suggestion != null ? 'ai' : 'parser',
+    messageAt: item.receivedAt,
     reason: matches ? null : 'user_saved_reviewed_bill',
   );
   unawaited(
@@ -592,13 +653,19 @@ Future<void> _persistReviewedSmsFactCorrection(
   if (repository == null || !queueContext.online) return;
   unawaited(() async {
     try {
+      // Same C3 consent gate as _persistSmsFactCorrection: the own-account
+      // override patch always uploads, but SMS-derived evidence (sampleBody/
+      // templateText) only leaves the device under the full shared-learning
+      // consent captured with this context (granted AND current policy
+      // version) — the server-side learning gate does not check the version.
+      final consented = await queueContext.smsLearningConsentActive;
       final accepted = await repository.overrideSmsFact(
         sourceKey: sourceKey,
         factIndex: factIndex,
         patch: patch,
         reason: reason,
-        sampleBody: sampleBody,
-        templateText: templateText,
+        sampleBody: consented ? sampleBody : null,
+        templateText: consented ? templateText : null,
       );
       if (accepted) {
         outbox.acknowledgeOverride(queueContext.namespace, sourceKey, factIndex);
@@ -2999,6 +3066,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
 
   Future<void> _resolveFactSuggestion(int factIndex) async {
     final current = widget.item.aiSuggestions ?? const [];
+    final fact = current
+        .where((s) => s['factIndex'] == factIndex)
+        .firstOrNull;
     final remaining = current
         .where((s) => s['factIndex'] != factIndex)
         .toList();
@@ -3011,6 +3081,53 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
     }
     ref.invalidate(needsReviewItemsProvider);
     ref.invalidate(needsReviewCountProvider);
+    // Rejecting one fact is a verdict on that fact alone; the other facts in
+    // the same SMS keep their own evidence via the fact index.
+    final factType = fact?['factType'];
+    if (factType is String && factType.isNotEmpty) {
+      final consentAt = _smsLearningConsentAtCapture(ref);
+      if (consentAt != null) {
+        final queueContext = _captureSmsLearningQueueContext(ref);
+        final cache = await queueContext.cacheFuture;
+        SmsFeedbackOutbox(
+          cache.financialStore.database,
+          namespace: queueContext.namespace,
+        ).enqueue(
+          sourceKey: _feedbackSourceKey(widget.item.id),
+          action: 'dismissed',
+          sender: widget.item.sender,
+          resolvedKind: switch (factType) {
+            'posted_movement' => 'transaction',
+            'bill_obligation' => 'bill',
+            'mandate_lifecycle' => 'mandate',
+            _ => 'unresolved',
+          },
+          occurredAt: widget.item.receivedAt.toUtc().toIso8601String(),
+          consentGrantedAt: consentAt,
+          sampleBody: widget.item.body,
+          originalDecision: {
+            'kind': factType,
+            'origin': 'ai',
+            if (fact?['payload'] is Map)
+              'fields': Map<String, dynamic>.from(fact!['payload'] as Map),
+          },
+          // Dropping a parsed movement claims the event is not real. Dropping
+          // a bill or mandate is often a tracking preference, so it must not
+          // train a parser negative example.
+          correctionKind: factType == 'posted_movement'
+              ? 'false_transaction'
+              : 'preference_only',
+          decisionOrigin: 'ai',
+          factIndex: factIndex,
+          messageAt: widget.item.receivedAt,
+        );
+        unawaited(
+          queueContext.repository
+              ?.flushSmsLearningFeedbackQueue()
+              .catchError((_) => 0),
+        );
+      }
+    }
   }
 
   Future<void> _reviewMovement([Map<String, dynamic>? movementFact]) async {
@@ -3195,6 +3312,8 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       ),
     );
     if (result == null || !mounted) return;
+    final consentAt = _smsLearningConsentAtCapture(ref);
+    final queueContext = _captureSmsLearningQueueContext(ref);
     setState(() => _busy = true);
     try {
       await ref
@@ -3213,6 +3332,18 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
               confidence: 1,
             ),
           );
+      // Same capture contract as the full-sheet bill save: feedback is queued
+      // only after the commitment has been persisted, and never blocks it.
+      if (consentAt != null) {
+        unawaited(
+          _recordReviewedBillFeedback(
+            queueContext,
+            item: widget.item,
+            consentGrantedAt: consentAt,
+            result: result,
+          ).catchError((_) {}),
+        );
+      }
       ref.invalidate(commitmentsProvider);
       if (widget.item.id.length == 64) {
         await _persistSmsFactCorrection(
