@@ -245,6 +245,15 @@ jobs:
           });
           NODE
 
+      - name: Show sanitized Google Places diagnostic
+        if: success()
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
+            'cd /home/ubuntu/apps/pandapay && docker compose --env-file .env -f docker-compose.prod.yml logs --tail=100 api | grep "Google Places failed:" | tail -n 1 || true'
+
       - name: Show sanitized API diagnostics
         if: failure()
         env:
