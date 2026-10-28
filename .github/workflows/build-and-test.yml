@@ -298,6 +298,9 @@ jobs:
       - name: Verify audited referral operator holds and status
         run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021143000_referral_operator_controls_test.sql
 
+      - name: Verify account data reset and permanent erasure
+        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261028150000_account_data_reset_test.sql
+
       - name: Smoke test
         run: python3 scripts/smoke_test.py
 
