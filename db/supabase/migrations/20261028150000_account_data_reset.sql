@@ -7,6 +7,18 @@
 -- SECURITY. Keep their purge/anonymization work in narrowly scoped definer
 -- functions owned by that role; the migration/admin role does not own those
 -- tables on every deployment target.
+-- PostgreSQL 16 gives a CREATEROLE login ADMIN membership in a role it
+-- creates, but its initial membership has SET FALSE. The earlier promotions
+-- migration created promotions_owner through that login, so enable its
+-- existing membership before assuming the role. A migration login without
+-- either SET or ADMIN rights still fails closed here.
+do $$
+begin
+  if not pg_has_role(current_user, 'promotions_owner', 'SET') then
+    execute 'grant promotions_owner to current_user with set true';
+  end if;
+end
+$$;
 set role promotions_owner;
 
 create or replace function promotions.reset_account_profile_data(p_profile uuid)
