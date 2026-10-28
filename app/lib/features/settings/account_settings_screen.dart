@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/router.dart' show AppRoute;
 import '../../app/providers.dart';
 import '../../data/account_api.dart';
 import '../../data/api_exception.dart';
@@ -292,7 +294,9 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
               const SizedBox(height: AppSpace.md),
               TextField(
                 controller: _confirmController,
-                decoration: const InputDecoration(labelText: 'Type DELETE to confirm'),
+                decoration: const InputDecoration(
+                  labelText: 'Type DELETE to confirm',
+                ),
                 onChanged: (_) => setDialogState(() {}),
               ),
             ],
@@ -306,7 +310,10 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
               onPressed: _confirmController.text.trim() == 'DELETE'
                   ? () => Navigator.of(dialogContext).pop(true)
                   : null,
-              child: const Text('Delete account', style: TextStyle(color: BambooInk.clay)),
+              child: const Text(
+                'Delete account',
+                style: TextStyle(color: BambooInk.clay),
+              ),
             ),
           ],
         ),
@@ -335,14 +342,15 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
       final cacheDirectory = await getApplicationCacheDirectory();
       await clearDirectoryContents(cacheDirectory);
       await _signOut(ref);
+      ref.invalidate(profileProvider);
       if (!mounted) return;
-      setState(() {
-        _cancelledThisSession = true;
-        _submitting = false;
-      });
+      context.go(AppRoute.welcome);
     } catch (err) {
       if (deletionCompletedRemotely) {
         await _signOut(ref);
+        ref.invalidate(profileProvider);
+        if (mounted) context.go(AppRoute.welcome);
+        return;
       }
       if (!mounted) return;
       setState(() {
