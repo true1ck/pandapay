@@ -356,13 +356,12 @@ class SmsSharedCategoryRule {
     'health',
     'entertainment',
     'rent',
-    'investments',
     'emi',
     'insurance',
     'education',
-    'income',
+    'government',
     'wallet',
-    'cash',
+    'other',
   };
   static const _genericMerchants = <String>{
     'UNKNOWN',
@@ -374,12 +373,18 @@ class SmsSharedCategoryRule {
   };
 
   final String merchantKey;
+  final String senderKey;
+  final String contextKey;
+  final String factFamily;
   final String categorySlug;
   final int supportCount;
   final int agreementBp;
 
   const SmsSharedCategoryRule({
     required this.merchantKey,
+    required this.senderKey,
+    required this.contextKey,
+    this.factFamily = 'posted_movement',
     required this.categorySlug,
     required this.supportCount,
     required this.agreementBp,
@@ -388,23 +393,79 @@ class SmsSharedCategoryRule {
   static String normalizeMerchant(String value) =>
       value.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
 
+  static const contextTokens = <String>{
+    'BROADBAND', 'CAB', 'DIESEL', 'DINING', 'EDUCATION', 'ELECTRICITY',
+    'EMI', 'ENTERTAINMENT', 'FLIGHT', 'FUEL', 'GROCERIES', 'GROCERY',
+    'HOSPITAL', 'HOTEL', 'INSURANCE', 'INVESTMENT', 'LOAN', 'MEDICAL',
+    'MOVIE', 'MUTUAL', 'PHARMACY', 'PETROL', 'RENEWAL', 'RENEWED', 'RENT',
+    'RESTAURANT', 'RIDE', 'SALARY', 'SCHOOL', 'SUBSCRIPTION', 'SUPERMARKET',
+    'TAX', 'TRAIN', 'TRAVEL', 'TUITION', 'UTILITY', 'WALLET',
+  };
+
+  static String contextKeyForBody(String body, {String? merchant}) {
+    var contextualBody = body;
+    if (merchant != null && merchant.trim().isNotEmpty) {
+      final normalized = normalizeMerchant(merchant);
+      contextualBody = contextualBody.replaceAll(
+        RegExp(RegExp.escape(normalized), caseSensitive: false),
+        ' ',
+      );
+    }
+    final words = RegExp(r'[A-Z0-9]+').allMatches(contextualBody.toUpperCase());
+    final normalizedMerchant = merchant == null
+        ? ''
+        : normalizeMerchant(merchant);
+    final compactMerchant = normalizedMerchant.replaceAll(
+      RegExp(r'[^A-Z0-9]'),
+      '',
+    );
+    final merchantTokens = contextTokens
+        .where(compactMerchant.contains)
+        .toSet();
+    final found = words
+        .map((match) => match.group(0)!)
+        .where((word) => contextTokens.contains(word) && !merchantTokens.contains(word))
+        .toSet()
+        .toList()
+      ..sort();
+    return found.join('|');
+  }
+
+  static String tupleKey({required String merchantKey, required String senderKey, required String contextKey, required String factFamily}) =>
+      jsonEncode([merchantKey, senderKey, contextKey, factFamily]);
+
   static SmsSharedCategoryRule? fromJson(Map<String, dynamic> json) {
     final merchant = json['merchantKey'];
+    final sender = json['senderKey'];
+    final context = json['contextKey'];
+    final family = json['factFamily'];
     final category = json['categorySlug'];
     final support = json['supportCount'];
     final agreement = json['agreementBp'];
     if (merchant is! String ||
+        sender is! String ||
+        context is! String ||
+        family != 'posted_movement' ||
         category is! String ||
-        support is! num ||
-        agreement is! num) {
+        support is! int ||
+        agreement is! int) {
       return null;
     }
     final key = normalizeMerchant(merchant);
+    final contextTokensInKey = context.isEmpty ? <String>[] : context.split('|');
+    final senderPattern = RegExp(r'^[A-Z]{2}-[A-Z0-9]{3,10}(?:-[A-Z])?$');
+    final validContext = contextTokensInKey.isNotEmpty &&
+        contextTokensInKey.length <= 8 &&
+        contextTokensInKey.toSet().length == contextTokensInKey.length &&
+        contextTokensInKey.every(contextTokens.contains) &&
+        (contextTokensInKey..sort()).join('|') == context;
     final slug = category.toLowerCase();
     if (key.length < 3 ||
         key.length > 80 ||
         _genericMerchants.contains(key) ||
         merchant != key ||
+        !senderPattern.hasMatch(sender) ||
+        !validContext ||
         !allowedCategories.contains(slug) ||
         support < 10 ||
         agreement < 9000 ||
@@ -413,6 +474,9 @@ class SmsSharedCategoryRule {
     }
     return SmsSharedCategoryRule(
       merchantKey: key,
+      senderKey: sender,
+      contextKey: context,
+      factFamily: 'posted_movement',
       categorySlug: slug,
       supportCount: support.toInt(),
       agreementBp: agreement.toInt(),
@@ -421,6 +485,9 @@ class SmsSharedCategoryRule {
 
   Map<String, dynamic> toJson() => {
     'merchantKey': merchantKey,
+    'senderKey': senderKey,
+    'contextKey': contextKey,
+    'factFamily': factFamily,
     'categorySlug': categorySlug,
     'supportCount': supportCount,
     'agreementBp': agreementBp,

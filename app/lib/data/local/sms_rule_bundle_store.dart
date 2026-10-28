@@ -168,14 +168,19 @@ class SmsRuleBundleStore {
     final sorted = [...rules]
       ..sort((a, b) {
         final merchant = a.merchantKey.compareTo(b.merchantKey);
-        return merchant != 0
-            ? merchant
-            : a.categorySlug.compareTo(b.categorySlug);
+        if (merchant != 0) return merchant;
+        final sender = a.senderKey.compareTo(b.senderKey);
+        if (sender != 0) return sender;
+        final context = a.contextKey.compareTo(b.contextKey);
+        if (context != 0) return context;
+        final family = a.factFamily.compareTo(b.factFamily);
+        if (family != 0) return family;
+        return a.categorySlug.compareTo(b.categorySlug);
       });
     final canonical = jsonEncode({
-      'categoryRulesVersion': version,
+      'categoryRulesV2Version': version,
       'minClientVersion': minClientVersion,
-      'categoryRules': sorted.map((rule) => rule.toJson()).toList(),
+      'categoryRulesV2': sorted.map((rule) => rule.toJson()).toList(),
     });
     return crypto.sha256.convert(utf8.encode(canonical)).toString();
   }
@@ -187,12 +192,12 @@ class SmsRuleBundleStore {
     String clientVersion = '1.0.0',
   }) async {
     try {
-      final version = json['categoryRulesVersion'];
-      final minimum = json['categoryRulesMinClientVersion'];
-      final sha = (json['categoryRulesSha256'] as String?)?.toLowerCase();
-      final raw = json['categoryRules'];
+      final version = json['categoryRulesV2Version'];
+      final minimum = json['categoryRulesV2MinClientVersion'];
+      final sha = (json['categoryRulesV2Sha256'] as String?)?.toLowerCase();
+      final raw = json['categoryRulesV2'];
       if (version is! int ||
-          version != 1 ||
+          version != 2 ||
           minimum is! String ||
           !_compatible(minimum, clientVersion) ||
           raw is! List ||
@@ -209,8 +214,13 @@ class SmsRuleBundleStore {
         if (parsed == null) return false;
         rules.add(parsed);
       }
-      final merchantKeys = rules.map((rule) => rule.merchantKey).toSet();
-      if (merchantKeys.length != rules.length) return false;
+      final tupleKeys = rules.map((rule) => SmsSharedCategoryRule.tupleKey(
+        merchantKey: rule.merchantKey,
+        senderKey: rule.senderKey,
+        contextKey: rule.contextKey,
+        factFamily: rule.factFamily,
+      )).toSet();
+      if (tupleKeys.length != rules.length) return false;
       final expected = computeSharedCategoryRulesSha256(
         version: version,
         minClientVersion: minimum,
@@ -248,7 +258,8 @@ class SmsRuleBundleStore {
       final row = rows.single;
       final version = row['version'] as int;
       final minimum = row['min_client_version'] as String;
-      if (version != 1 || !_compatible(minimum, clientVersion)) return const {};
+      // A persisted v1 merchant-only cache is unsafe, including while offline.
+      if (version != 2 || !_compatible(minimum, clientVersion)) return const {};
       final decoded = jsonDecode(row['raw_json'] as String);
       if (decoded is! List) return const {};
       final rules = <SmsSharedCategoryRule>[];
@@ -268,7 +279,15 @@ class SmsRuleBundleStore {
           ) !=
           row['sha256'])
         return const {};
-      return {for (final rule in rules) rule.merchantKey: rule.categorySlug};
+      return {
+        for (final rule in rules)
+          SmsSharedCategoryRule.tupleKey(
+            merchantKey: rule.merchantKey,
+            senderKey: rule.senderKey,
+            contextKey: rule.contextKey,
+            factFamily: rule.factFamily,
+          ): rule.categorySlug,
+      };
     } catch (_) {
       return const {};
     }
@@ -315,10 +334,10 @@ class SmsRuleBundleStore {
 
       final decoded = jsonDecode(res.body);
       if (decoded is! Map) return false;
-      if (decoded.containsKey('categoryRules') &&
-          decoded.containsKey('categoryRulesVersion') &&
-          decoded.containsKey('categoryRulesMinClientVersion') &&
-          decoded.containsKey('categoryRulesSha256')) {
+      if (decoded.containsKey('categoryRulesV2') &&
+          decoded.containsKey('categoryRulesV2Version') &&
+          decoded.containsKey('categoryRulesV2MinClientVersion') &&
+          decoded.containsKey('categoryRulesV2Sha256')) {
         await saveSharedCategoryRules(
           decoded.cast<String, dynamic>(),
           clientVersion: clientVersion,

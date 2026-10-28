@@ -1708,6 +1708,12 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
     },
     loadSmsSharedLearningConsent: () async =>
         (await _currentSmsSharedLearningConsent(ref))?.grantedAt,
+    isRepeatedSmsOccurrence: (sourceKey) async {
+      if (ref.read(cacheNamespaceProvider) != namespace) return true;
+      final cache = await ref.read(responseCacheProvider.future);
+      return SmsIntakeRepository(cache.financialStore.database)
+          .hasRepeatedOccurrence(namespace, sourceKey);
+    },
     onTransactionSaved: (mutationId, transactionId) {
       if (ref.read(cacheNamespaceProvider) != namespace) return;
       ref
@@ -6403,11 +6409,15 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
                 namespace: namespace,
               ).findById(resolution.historyId!);
               if (history != null &&
+                    !SmsIntakeRepository(cache.financialStore.database)
+                        .hasRepeatedOccurrence(namespace, history.sourceKey) &&
                   redactSmsLearningPattern(history.sourceBody) != null &&
                   RegExp(r'^[0-9a-f]{64}$').hasMatch(history.sourceKey)) {
-                final factType = suggestions.isEmpty
-                    ? 'ignore_noise'
-                    : (suggestions.first['factType'] as String? ?? 'unresolved');
+                // Use the exact fact family chosen by the resolver. The raw
+                // response may include non-actionable/secondary suggestions
+                // before the primary fact, so suggestions.first can describe
+                // something different from the record we just filed.
+                final factType = resolution.factFamily ?? 'unresolved';
                 try {
                   SmsFeedbackOutbox(
                     cache.financialStore.database,
@@ -6433,7 +6443,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
                     },
                     reason: 'ai_auto_resolved_unconfirmed',
                     aiConfidenceScore: history.confidence,
-                    decisionOrigin: 'gemini',
+                    decisionOrigin: 'ai',
                   );
                   ref.read(userCardsRepositoryProvider)
                       ?.flushSmsLearningFeedbackQueue()

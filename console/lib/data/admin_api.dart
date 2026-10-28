@@ -1181,6 +1181,9 @@ class AdminApi {
 
   Future<void> reviewSmsCategoryProposal({
     required String merchantKey,
+    required String senderKey,
+    required String contextKey,
+    required String factFamily,
     required String categorySlug,
     required String decision,
     required String reason,
@@ -1190,6 +1193,9 @@ class AdminApi {
       headers: _headers,
       body: jsonEncode({
         'merchantKey': merchantKey,
+        'senderKey': senderKey,
+        'contextKey': contextKey,
+        'factFamily': factFamily,
         'categorySlug': categorySlug,
         'decision': decision,
         'reason': reason,
@@ -1256,6 +1262,23 @@ class AdminApi {
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['correctionCases'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> reviewSmsCorrectionCase({
+    required String eventId,
+    required String decision,
+    required String reason,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/sms-learning/feedback-events/$eventId/review'),
+      headers: _headers,
+      body: jsonEncode({'decision': decision, 'reason': reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'Failed to review SMS correction case: ${response.statusCode} ${response.body}',
+      );
+    }
   }
 
   Future<void> reviewSmsAiProposal({

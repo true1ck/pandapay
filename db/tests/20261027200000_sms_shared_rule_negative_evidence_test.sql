@@ -92,6 +92,23 @@ begin
   end if;
 end $$;
 
+-- Duplicate and already-paid actions are also lifecycle outcomes, not proof
+-- that a shared parser rule classified the message incorrectly.
+do $$
+begin
+  perform pg_temp.c9_event('35000000-0000-0000-0000-000000000005',
+    lpad(to_hex(25), 64, '0'), 0, 'bundle-c9:r1', 'duplicate');
+  perform pg_temp.c9_event('35000000-0000-0000-0000-000000000006',
+    lpad(to_hex(26), 64, '0'), 0, 'bundle-c9:r1', 'already_paid');
+  if (select negative_evidence_count from pandapay.sms_rule_negative_evidence()
+       where decision_rule_id = 'bundle-c9:r1') <> 1 then
+    raise exception 'duplicate or already-paid feedback counted as negative evidence';
+  end if;
+  if pandapay.sms_shared_rule_paused('bundle-c9:r1') then
+    raise exception 'lifecycle feedback paused a shared rule';
+  end if;
+end $$;
+
 -- One user editing many facts of one message is still one reporting profile.
 do $$
 declare i integer;
@@ -206,6 +223,24 @@ begin
    where key = 'sms_shared_rule_negative_pause_threshold';
   if pandapay.sms_shared_rule_pause_threshold() <> 3 then
     raise exception 'an unparseable threshold did not fall back to the default';
+  end if;
+  update public.sms_learning_settings
+     set value = '0'::jsonb, updated_at = now()
+   where key = 'sms_shared_rule_negative_pause_threshold';
+  if pandapay.sms_shared_rule_pause_threshold() <> 3 then
+    raise exception 'a zero threshold did not fall back to the default';
+  end if;
+  update public.sms_learning_settings
+     set value = '-2'::jsonb, updated_at = now()
+   where key = 'sms_shared_rule_negative_pause_threshold';
+  if pandapay.sms_shared_rule_pause_threshold() <> 3 then
+    raise exception 'a negative threshold did not fall back to the default';
+  end if;
+  update public.sms_learning_settings
+     set value = '1001'::jsonb, updated_at = now()
+   where key = 'sms_shared_rule_negative_pause_threshold';
+  if pandapay.sms_shared_rule_pause_threshold() <> 3 then
+    raise exception 'an out-of-range threshold did not fall back to the default';
   end if;
   update public.sms_learning_settings
      set value = '3'::jsonb, updated_at = now()

@@ -15,6 +15,7 @@ class AutoResolvedHistoryEntry {
   final String id;
   final String namespace;
   final String sourceKey;
+  final int? factIndex;
   final String sender;
 
   /// 'transaction', 'bill' or 'mandate'.
@@ -41,6 +42,7 @@ class AutoResolvedHistoryEntry {
     required this.id,
     required this.namespace,
     required this.sourceKey,
+    this.factIndex,
     required this.sender,
     required this.resolvedKind,
     required this.title,
@@ -69,6 +71,7 @@ class AutoResolvedHistoryEntry {
     id: id,
     namespace: namespace,
     sourceKey: sourceKey,
+    factIndex: factIndex,
     sender: sender,
     resolvedKind: resolvedKind,
     title: title,
@@ -89,6 +92,7 @@ class AutoResolvedHistoryEntry {
     'id': id,
     'namespace': namespace,
     'sourceKey': sourceKey,
+    'factIndex': factIndex,
     'sender': sender,
     'resolvedKind': resolvedKind,
     'title': title,
@@ -110,6 +114,7 @@ class AutoResolvedHistoryEntry {
         id: json['id'] as String,
         namespace: json['namespace'] as String,
         sourceKey: json['sourceKey'] as String,
+        factIndex: (json['factIndex'] as num?)?.toInt(),
         sender: json['sender'] as String,
         resolvedKind: json['resolvedKind'] as String,
         title: json['title'] as String,
@@ -130,6 +135,7 @@ class AutoResolvedHistoryEntry {
     id: row['id'] as String,
     namespace: row['namespace'] as String,
     sourceKey: row['source_key'] as String,
+    factIndex: (row['fact_index'] as num?)?.toInt(),
     sender: row['sender'] as String,
     resolvedKind: row['resolved_kind'] as String,
     title: row['title'] as String,
@@ -207,15 +213,16 @@ class AutoResolvedHistoryRepository {
   void record(AutoResolvedHistoryEntry entry) {
     database.db.execute(
       '''INSERT OR REPLACE INTO local_auto_resolved_history
-         (id, namespace, source_key, sender, resolved_kind, title,
+         (id, namespace, source_key, fact_index, sender, resolved_kind, title,
           amount_paise, category_slug, due_date, occurred_at, instrument,
           account_last4, source_body, confidence, resolved_by, auto_resolved_at,
           is_user_modified)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
       [
         entry.id,
         namespace,
         entry.sourceKey,
+        entry.factIndex,
         entry.sender,
         entry.resolvedKind,
         entry.title,

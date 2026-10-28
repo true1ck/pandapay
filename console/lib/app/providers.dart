@@ -287,9 +287,9 @@ final smsAiProposalsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) 
   return api.fetchSmsAiProposals();
 });
 
-/// C7: explicit user-correction cases (typed correction envelope). Read-only —
-/// corrections are already applied on the user's device, and no admin review
-/// endpoint exists for them, so nothing here approves or rejects.
+/// C7: explicit user-correction cases (typed correction envelope). Admin
+/// review affects candidate eligibility only; final rule approval remains
+/// separate.
 final smsCorrectionCasesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];

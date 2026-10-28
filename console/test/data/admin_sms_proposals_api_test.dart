@@ -18,11 +18,16 @@ void main() {
           jsonEncode({
             'proposals': [
               {
-                'merchant_key': 'EXAMPLE CAFE',
-                'category_slug': 'food_dining',
+                'merchant_key': 'ACME SHOP',
+                'sender_key': 'AD-HDFCBK',
+                'context_key': 'GROCERY',
+                'fact_family': 'posted_movement',
+                'category_slug': 'groceries',
                 'support_count': 12,
                 'agreement_rate': 0.95,
                 'status': null,
+                'redacted_pattern': 'GROCERY purchase at {MERCHANT} for {AMOUNT}',
+                'redacted_samples': ['GROCERY purchase at {MERCHANT} for {AMOUNT}'],
               },
             ],
           }),
@@ -33,8 +38,15 @@ void main() {
 
     final rows = await api.fetchSmsCategoryProposals();
     expect(requested?.path, '/admin/sms-rules/category-proposals');
-    expect(rows.single['merchant_key'], 'EXAMPLE CAFE');
+    expect(rows.single['merchant_key'], 'ACME SHOP');
+    expect(rows.single['sender_key'], 'AD-HDFCBK');
+    expect(rows.single['context_key'], 'GROCERY');
+    expect(rows.single['fact_family'], 'posted_movement');
     expect(rows.single['support_count'], 12);
+    expect(rows.single['redacted_pattern'], 'GROCERY purchase at {MERCHANT} for {AMOUNT}');
+    expect(rows.single['redacted_samples'], [
+      'GROCERY purchase at {MERCHANT} for {AMOUNT}',
+    ]);
   });
 
   test('reviews category proposal with reason and decision', () async {
@@ -49,16 +61,22 @@ void main() {
     );
 
     await api.reviewSmsCategoryProposal(
-      merchantKey: 'EXAMPLE CAFE',
-      categorySlug: 'food_dining',
+      merchantKey: 'ACME SHOP',
+      senderKey: 'AD-HDFCBK',
+      contextKey: 'GROCERY',
+      factFamily: 'posted_movement',
+      categorySlug: 'groceries',
       decision: 'approved',
       reason: 'Evidence reviewed',
     );
     expect(sent?.url.path, '/admin/sms-rules/category-proposals/review');
     expect(sent?.headers['authorization'], 'Bearer admin-token');
     expect(jsonDecode(sent!.body), {
-      'merchantKey': 'EXAMPLE CAFE',
-      'categorySlug': 'food_dining',
+      'merchantKey': 'ACME SHOP',
+      'senderKey': 'AD-HDFCBK',
+      'contextKey': 'GROCERY',
+      'factFamily': 'posted_movement',
+      'categorySlug': 'groceries',
       'decision': 'approved',
       'reason': 'Evidence reviewed',
     });

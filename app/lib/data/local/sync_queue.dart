@@ -1,7 +1,12 @@
 import 'dart:convert';
 
+import 'package:uuid/uuid.dart';
+
+import '../sms_fact_contract.dart' show smsSpendCategories;
 import '../sync_api.dart';
 import 'app_database.dart';
+import 'sms_intake_repository.dart';
+import 'sms_learning_feedback.dart';
 
 /// Plan Phase 4 — the local half of the change queue.
 ///
@@ -31,6 +36,11 @@ class SyncQueue {
     _appDb.db.execute('''CREATE TABLE IF NOT EXISTS account_sync_state (
       namespace TEXT PRIMARY KEY, device_id TEXT, last_server_seq INTEGER NOT NULL DEFAULT 0,
       last_synced_at INTEGER)''');
+    _appDb.db.execute('''CREATE TABLE IF NOT EXISTS sms_learning_after_sync (
+      namespace TEXT NOT NULL, client_seq INTEGER NOT NULL, payload_json TEXT NOT NULL,
+      acknowledged INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL,
+      PRIMARY KEY(namespace, client_seq)
+    )''');
     _appDb.db.execute(
       'UPDATE sync_pending_changes SET in_flight=0 WHERE namespace=?',
       [namespace],
@@ -43,13 +53,14 @@ class SyncQueue {
   /// expects (the API's allowlist is the authority on which names are valid;
   /// anything else is silently dropped server-side rather than rejected, so
   /// a typo here shows up as "my edit didn't sync", not as an error).
-  void enqueueUpdate({
+  /// Returns 0 when [fields] is empty and no change was queued.
+  int enqueueUpdate({
     required String entity,
     required String entityId,
     required Map<String, Object?> fields,
     DateTime? at,
   }) {
-    if (fields.isEmpty) return;
+    if (fields.isEmpty) return 0;
     final clockMs = (at ?? DateTime.now()).millisecondsSinceEpoch;
 
     final existing = _appDb.db.select(
@@ -73,7 +84,8 @@ class SyncQueue {
         ],
       );
       onChanged?.call();
-      return;
+      return _appDb.db.select('SELECT last_insert_rowid() AS id').single['id']
+          as int;
     }
 
     // Merge into the queued change. Each field's clock is bumped to now, so a
@@ -93,6 +105,46 @@ class SyncQueue {
       [jsonEncode(payload), jsonEncode(clocks), row['client_seq']],
     );
     onChanged?.call();
+    return row['client_seq'] as int;
+  }
+
+  /// Persist the SMS-learning sidecar alongside a queued financial edit. It
+  /// cannot be uploaded until this client sequence is acknowledged.
+  void enqueueSmsLearningAfterSync({
+    required int clientSeq,
+    required Map<String, dynamic> payload,
+  }) {
+    final sidecar = Map<String, dynamic>.from(payload)
+      ..putIfAbsent('eventId', () => const Uuid().v4());
+    if (sidecar['correctionKind'] == 'misclassified_category') {
+      final sourceKey = sidecar['sourceKey'];
+      final corrected = sidecar['correctedFields'];
+      final original = sidecar['originalDecision'];
+      final slug = corrected is Map ? corrected['categorySlug'] : null;
+      final fields = original is Map ? original['fields'] : null;
+      final merchant = fields is Map ? fields['merchant'] : null;
+      if (sourceKey is String && slug is String &&
+          smsSpendCategories.contains(slug.trim().toLowerCase()) &&
+          merchant is String && merchant.trim().isNotEmpty) {
+        final captured = SmsIntakeRepository(_appDb)
+            .capturedById(namespace, sourceKey);
+        if (captured != null) {
+          SmsLearningFeedback(_appDb, namespace: namespace)
+              .recordCategoryCorrection(
+            merchantOrPattern: merchant,
+            categorySlug: slug,
+            sender: captured.message.sender,
+            sampleBody: captured.message.body,
+          );
+        }
+      }
+    }
+    _appDb.db.execute(
+      'INSERT OR REPLACE INTO sms_learning_after_sync '
+      '(namespace, client_seq, payload_json, acknowledged, created_at) '
+      'VALUES (?, ?, ?, 0, ?)',
+      [namespace, clientSeq, jsonEncode(sidecar), DateTime.now().millisecondsSinceEpoch],
+    );
   }
 
   /// Records a locally-created row. Inserts are intentionally not coalesced:
@@ -133,6 +185,11 @@ class SyncQueue {
     required String entityId,
     DateTime? at,
   }) {
+    _appDb.db.execute(
+      'DELETE FROM sms_learning_after_sync WHERE namespace=? AND client_seq IN '
+      '(SELECT client_seq FROM sync_pending_changes WHERE namespace=? AND entity=? AND entity_id=?)',
+      [namespace, namespace, entity, entityId],
+    );
     _appDb.db.execute(
       'DELETE FROM sync_pending_changes WHERE namespace = ? AND entity = ? AND entity_id = ? AND in_flight=0',
       [namespace, entity, entityId],

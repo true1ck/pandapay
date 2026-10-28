@@ -24,7 +24,7 @@ void main() {
   }
 
   Future<void> expand(WidgetTester tester, String title) async {
-    await tester.tap(find.text(title));
+    await tester.tap(find.text(title).first);
     await tester.pumpAndSettle();
   }
 
@@ -64,7 +64,8 @@ void main() {
     ]);
 
     expect(find.text('Misclassified category'), findsOneWidget);
-    await expand(tester, 'Misclassified category');
+    await tester.tap(find.text('Misclassified category').first);
+    await tester.pumpAndSettle();
 
     expect(find.textContaining('Spent {AMOUNT} at {MERCHANT}'), findsOneWidget);
     expect(find.textContaining('Category: travel → dining'), findsOneWidget);
@@ -78,9 +79,8 @@ void main() {
     expect(find.textContaining('categorySlug: travel → dining'),
         findsOneWidget);
     expect(find.textContaining('amountInr:'), findsNothing);
-    // A trainable case offers no invented review buttons.
-    expect(find.byType(FilledButton), findsNothing);
-    expect(find.byType(OutlinedButton), findsNothing);
+    expect(find.text('Approve evidence'), findsOneWidget);
+    expect(find.text('Reject evidence'), findsOneWidget);
   });
 
   testWidgets('labels non-training kinds and shows no trainable actions',
@@ -142,6 +142,45 @@ void main() {
         findsOneWidget);
     expect(find.textContaining('amountInr: 100.0 → 150.0'), findsOneWidget);
     expect(find.textContaining('rule: rule-42'), findsOneWidget);
+  });
+
+  testWidgets('approved correction can be revoked and rejected case is terminal',
+      (tester) async {
+    await pumpCases(tester, [
+      {
+        'eventId': 'approved-case',
+        'correctionKind': 'misclassified_category',
+        'reviewStatus': 'approved',
+        'decisionOrigin': 'shared_rule',
+        'redactedPattern': 'Paid at {MERCHANT}',
+        'originalDecision': {'kind': 'transaction', 'fields': {'categorySlug': 'travel'}},
+        'correctedFields': {'categorySlug': 'dining'},
+        'categorySlug': 'dining',
+        'originalCategorySlug': 'travel',
+        'support': {'users': 1, 'messages': 1},
+        'disagreement': {'users': 0},
+        'supersededAt': null,
+      },
+      {
+        'eventId': 'rejected-case',
+        'correctionKind': 'misclassified_category',
+        'reviewStatus': 'rejected',
+        'decisionOrigin': 'ai',
+        'redactedPattern': 'Paid at {MERCHANT}',
+        'originalDecision': {'kind': 'transaction', 'fields': {'categorySlug': 'travel'}},
+        'correctedFields': {'categorySlug': 'dining'},
+        'categorySlug': 'dining',
+        'originalCategorySlug': 'travel',
+        'support': {'users': 1, 'messages': 1},
+        'disagreement': {'users': 0},
+        'supersededAt': null,
+      },
+    ]);
+
+    await expand(tester, 'Misclassified category');
+    expect(find.text('Revoke approval'), findsOneWidget);
+    expect(find.text('Approve evidence'), findsNothing);
+    expect(find.text('Reject evidence'), findsNothing);
   });
 
   testWidgets('renders commitment categories on their own line and never '

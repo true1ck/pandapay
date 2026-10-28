@@ -263,7 +263,11 @@ class _ProposalTileState extends ConsumerState<_ProposalTile> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${widget.proposal['merchant_key']} → ${widget.proposal['category_slug']}'),
+              Text('Merchant: ${widget.proposal['merchant_key']}'),
+              Text('Sender: ${widget.proposal['sender_key']}'),
+              Text('Context: ${widget.proposal['context_key']}'),
+              Text('Fact family: ${widget.proposal['fact_family']}'),
+              Text('Category: ${widget.proposal['category_slug']}'),
               const SizedBox(height: 12),
               TextField(
                 controller: reasonController,
@@ -289,6 +293,9 @@ class _ProposalTileState extends ConsumerState<_ProposalTile> {
       setState(() => busy = true);
       await ref.read(adminApiProvider)!.reviewSmsCategoryProposal(
         merchantKey: widget.proposal['merchant_key'] as String,
+        senderKey: widget.proposal['sender_key'] as String,
+        contextKey: widget.proposal['context_key'] as String,
+        factFamily: widget.proposal['fact_family'] as String,
         categorySlug: widget.proposal['category_slug'] as String,
         decision: decision,
         reason: reason,
@@ -313,6 +320,8 @@ class _ProposalTileState extends ConsumerState<_ProposalTile> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${proposal['merchant_key']} → ${proposal['category_slug']}',
               style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text('Sender: ${proposal['sender_key']} · Context: ${proposal['context_key']} · Family: ${proposal['fact_family']}'),
           const SizedBox(height: 4),
           Text('${proposal['support_count']} users · ${agreement.toStringAsFixed(1)}% agreement · ${proposal['status'] ?? 'pending'}'),
           const SizedBox(height: 10),

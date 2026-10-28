@@ -3,6 +3,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'investment_classifier.dart';
 import 'user_cards_repository.dart';
 import 'local/sms_intake_repository.dart';
+import 'local/sms_learning_feedback.dart';
 import 'local/sms_rule_bundle.dart';
 import 'indian_narration_sanitizer.dart';
 import 'merchant_identity.dart';
@@ -149,16 +150,27 @@ class LocalSmsParser {
     Map<String, String>? rules,
     String? merchant,
     String sender,
+    [String? body]
   ) {
     if (rules == null || rules.isEmpty) return null;
     String normalize(String value) =>
         value.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
     final merchantText = normalize(merchant ?? '');
     final senderText = normalize(sender);
+    final contextualPrefix = 'CTX|$merchantText|';
+    final contextualRules = rules.entries.where(
+      (entry) => entry.key.startsWith(contextualPrefix),
+    );
+    if (contextualRules.isNotEmpty) {
+      if (body == null || merchantText.isEmpty) return null;
+      final exact = SmsLearningFeedback.contextPattern(merchantText, sender, body);
+      return rules[exact];
+    }
     String? matchedSlug;
     var matchedLength = -1;
     for (final entry in rules.entries) {
       final pattern = normalize(entry.key);
+      if (pattern.startsWith('CTX|')) continue;
       if (pattern.isEmpty) continue;
       final matched =
           (merchantText.isNotEmpty && merchantText.contains(pattern)) ||
@@ -174,12 +186,28 @@ class LocalSmsParser {
   static String? _sharedCategoryRuleSlug(
     Map<String, String>? rules,
     String? merchant,
+    String sender,
+    String body,
   ) {
     if (rules == null || merchant == null || merchant.trim().isEmpty) {
       return null;
     }
     final key = merchant.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
-    return rules[key];
+    final senderKey = sender.trim().toUpperCase();
+    if (!RegExp(r'^[A-Z]{2}-[A-Z0-9]{3,10}(?:-[A-Z])?$').hasMatch(senderKey)) {
+      return null;
+    }
+    final contextKey = SmsSharedCategoryRule.contextKeyForBody(
+      body,
+      merchant: merchant,
+    );
+    if (contextKey.isEmpty || contextKey.split('|').length > 8) return null;
+    return rules[SmsSharedCategoryRule.tupleKey(
+      merchantKey: key,
+      senderKey: senderKey,
+      contextKey: contextKey,
+      factFamily: 'posted_movement',
+    )];
   }
 
   static String? categoryDisplayName(String? slug) {
@@ -2641,23 +2669,24 @@ class LocalSmsParser {
       userCategoryRules,
       merchant,
       sender,
+      body,
     );
-    final categorySlug =
-        userRuleSlug ??
-        _sharedCategoryRuleSlug(sharedCategoryRules, merchant) ??
+    final sharedCategorySlug =
+        _sharedCategoryRuleSlug(sharedCategoryRules, merchant, sender, body);
+    final categorySlug = userRuleSlug ??
         (brokerSettlement || investmentProceeds || investmentDebit
             ? 'investments'
-            : ftMatch?.category ??
-                  (billPayment
-                      ? 'bills'
-                      : loanRepayment
-                      ? 'emi'
-                      : feeCharge
-                      ? 'bills'
-                      : credit && _re(r'\bsalary\b').hasMatch(body)
-                      ? 'income'
-                      : null));
-    final categoryName = categoryDisplayName(categorySlug);
+            : billPayment
+            ? 'bills'
+            : loanRepayment
+            ? 'emi'
+            : feeCharge
+            ? 'bills'
+            : credit && _re(r'\bsalary\b').hasMatch(body)
+            ? 'income'
+            : sharedCategorySlug ?? ftMatch?.category);
+    final resolvedCategorySlug = categorySlug;
+    final categoryName = categoryDisplayName(resolvedCategorySlug);
     return observation(
       TransactionEntry(
         id: 'local-sms:$key',
@@ -2665,7 +2694,7 @@ class LocalSmsParser {
         amount: amount,
         occurredAt: date,
         merchantName: merchant ?? ftMatch?.canonicalName,
-        categoryId: categorySlug,
+        categoryId: resolvedCategorySlug,
         categoryName: categoryName,
         userCardId: card?.id,
         cardDisplayName: card?.cardName,
@@ -2831,8 +2860,8 @@ class LocalSmsParser {
         textForMatching,
       );
       final categorySlug =
-          userCategoryRuleSlug(userCategoryRules, merchant, sender) ??
-          _sharedCategoryRuleSlug(sharedCategoryRules, merchant) ??
+          userCategoryRuleSlug(userCategoryRules, merchant, sender, body) ??
+          _sharedCategoryRuleSlug(sharedCategoryRules, merchant, sender, body) ??
           ftMatch?.category;
       final categoryName = categoryDisplayName(categorySlug);
       final txn = TransactionEntry(

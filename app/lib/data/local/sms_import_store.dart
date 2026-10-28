@@ -29,6 +29,11 @@ class SmsAiResolutionResult {
   final SmsAiResolutionOutcome outcome;
   final double score;
 
+  /// The exact normalized fact family applied by the resolver. This comes
+  /// from the same scored primary fact used to write the local record, so
+  /// downstream learning cannot accidentally label a secondary suggestion.
+  final String? factFamily;
+
   /// The auto-resolved receipt id, set only for [SmsAiResolutionOutcome.autoResolved].
   final String? historyId;
 
@@ -36,6 +41,7 @@ class SmsAiResolutionResult {
     required this.outcome,
     required this.score,
     this.historyId,
+    this.factFamily,
   });
 }
 
@@ -123,6 +129,28 @@ class SmsImportStore {
             parserVersion: LocalSmsParser.version,
           )) {
         intake.remember(namespace, message);
+        db.execute('RELEASE SAVEPOINT sms_capture');
+        return;
+      }
+
+      // An explicit private "not a financial transaction" correction is
+      // scoped to this sender/message layout and applies before any parser or
+      // AI request on later matching messages. Preference-only dismissals do
+      // not create this rule, and it is never uploaded from this local table.
+      if (SmsLearningFeedback(
+        store.database,
+        namespace: namespace,
+      ).matchesFalseTransactionRuleSync(sender: message.sender, body: message.body)) {
+        intake.recordDecision(
+          namespace,
+          sourceKey: sourceKey,
+          decision: 'user_corrected_not_financial',
+          state: 'final',
+          reasonCode: 'user_false_transaction_rule',
+          receivedAt: message.receivedAt.millisecondsSinceEpoch,
+          policyVersion: 'user-v1',
+        );
+        intake.forgetRaw(namespace, sourceKey);
         db.execute('RELEASE SAVEPOINT sms_capture');
         return;
       }
@@ -218,7 +246,9 @@ class SmsImportStore {
           sourceKey: key,
           stage: result.candidate.stage,
           matched: result.matched,
-          applied: result.candidate.mode == 'apply' && result.matched,
+          applied: appliedCandidate != null &&
+              result.candidate.candidateId ==
+                  appliedCandidate.candidate.candidateId,
           outcome: outcome,
           assignmentId: result.candidate.assignmentId,
           stageVersion: result.candidate.stageVersion,
@@ -585,6 +615,7 @@ class SmsImportStore {
         id: 'ai:$sourceKey',
         namespace: namespace,
         sourceKey: sourceKey,
+        factIndex: 0,
         sender: item.sender,
         resolvedKind: 'dismissed',
         title: 'AI dismissed · $topic',
@@ -615,6 +646,7 @@ class SmsImportStore {
         outcome: SmsAiResolutionOutcome.autoResolved,
         score: score,
         historyId: history.id,
+        factFamily: 'ignore_noise',
       );
     }
 
@@ -670,6 +702,10 @@ class SmsImportStore {
     if (factType == null) return null;
     final payload = smsFactPayload(fact);
     final sourceKey = _cleanSourceKey(item);
+    final rawFactIndex = fact['factIndex'];
+    final factIndex = rawFactIndex is int && rawFactIndex >= 0 && rawFactIndex <= 31
+        ? rawFactIndex
+        : null;
     AutoResolvedHistoryEntry? history;
 
     store.batch(() {
@@ -686,10 +722,13 @@ class SmsImportStore {
               sourceKey,
               factType,
               score,
+              factIndex,
             );
             break;
           case 'bill_obligation':
-            history = _fileBill(namespace, item, payload, sourceKey, score);
+            history = _fileBill(
+              namespace, item, payload, sourceKey, score, factIndex,
+            );
             break;
           case 'mandate_lifecycle':
             history = _recordMandate(
@@ -698,6 +737,7 @@ class SmsImportStore {
               payload,
               sourceKey,
               score,
+              factIndex,
             );
             break;
           default:
@@ -725,6 +765,7 @@ class SmsImportStore {
       outcome: SmsAiResolutionOutcome.autoResolved,
       score: score,
       historyId: recorded.id,
+      factFamily: factType,
     );
   }
 
@@ -735,6 +776,7 @@ class SmsImportStore {
     String sourceKey,
     String factType,
     double score,
+    int? factIndex,
   ) {
     final amountRupees = smsPostedAmountRupees(payload);
     if (amountRupees == null) return null;
@@ -759,6 +801,7 @@ class SmsImportStore {
           ).loadRulesSync(),
           merchant,
           item.sender,
+          item.body,
         ) ??
         _categorySlug(
           payload,
@@ -821,6 +864,7 @@ class SmsImportStore {
       id: 'ai:$sourceKey',
       namespace: namespace,
       sourceKey: sourceKey,
+      factIndex: factIndex,
       sender: item.sender,
       resolvedKind: 'transaction',
       title: merchant,
@@ -841,6 +885,7 @@ class SmsImportStore {
     Map<String, dynamic> payload,
     String sourceKey,
     double score,
+    int? factIndex,
   ) {
     final amountRupees = smsAmountDueRupees(payload);
     final due = _parseDate(payload['dueDate']);
@@ -894,6 +939,7 @@ class SmsImportStore {
       id: 'ai:$sourceKey',
       namespace: namespace,
       sourceKey: sourceKey,
+      factIndex: factIndex,
       sender: item.sender,
       resolvedKind: 'bill',
       title: title,
@@ -916,6 +962,7 @@ class SmsImportStore {
     Map<String, dynamic> payload,
     String sourceKey,
     double score,
+    int? factIndex,
   ) {
     // A mandate is an authorization, never a charge: record it so the user
     // can see and undo the auto-decision, but never fabricate a bill from a
@@ -931,6 +978,7 @@ class SmsImportStore {
       id: 'ai:$sourceKey',
       namespace: namespace,
       sourceKey: sourceKey,
+      factIndex: factIndex,
       sender: item.sender,
       resolvedKind: 'mandate',
       title: title,

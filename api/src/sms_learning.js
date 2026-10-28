@@ -10,6 +10,20 @@
 const crypto = require('crypto');
 const { deriveIssuerPrefix, synthesizeTemplate } = require('./sms_template_compiler');
 
+const RESIDUAL_CAPS_RUN = /\b[A-Z]{2,30}(?:\s+[A-Z]{2,30})+\b/;
+
+function safeAdminPattern(pattern) {
+  if (typeof pattern !== 'string' || !pattern.trim() || pattern.length > 250 || pattern.includes('@')) return null;
+  if (redactBody(pattern) !== pattern) return null;
+  const identifierCheckText = pattern.replace(/\{[A-Z_]+\}/g, ' ');
+  const letters = identifierCheckText.replace(/[^A-Za-z]/g, '');
+  if (letters) {
+    const upperRatio = letters.replace(/[^A-Z]/g, '').length / letters.length;
+    if (upperRatio < 0.8 && RESIDUAL_CAPS_RUN.test(identifierCheckText)) return null;
+  }
+  return pattern;
+}
+
 function getHmacKey(explicitKey) {
   if (explicitKey !== undefined && explicitKey !== null) {
     return (typeof explicitKey === 'string' && explicitKey.length >= 32) ? explicitKey : null;
@@ -458,7 +472,8 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
                     e.decision_rule_id, e.message_at, e.created_at,
                     e.original_decision, e.corrected_fields, e.category_slug,
                     e.original_category_slug, e.commitment_category,
-                    e.superseded_at, e.superseded_by_event_id, e.merchant_key
+                    e.superseded_at, e.superseded_by_event_id, e.merchant_key,
+                    e.review_status, e.reviewed_by, e.reviewed_at, e.review_reason, e.redacted_pattern
                from public.sms_learning_feedback_events e
               order by e.created_at desc
               limit $1
@@ -537,9 +552,14 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
               : { users: 0 },
             supersededAt: row.superseded_at ?? null,
             supersededByEventId: row.superseded_by_event_id ?? null,
-            redactedPattern: row.ai_redacted_pattern ?? null,
+            reviewStatus: row.review_status ?? 'pending',
+            reviewedBy: row.reviewed_by ?? null,
+            reviewedAt: row.reviewed_at ?? null,
+            reviewReason: row.review_reason ?? null,
+            redactedPattern: safeAdminPattern(row.redacted_pattern) ??
+              safeAdminPattern(row.ai_redacted_pattern),
             aiDiagnosis: row.ai_redacted_pattern == null ? null : {
-              redactedPattern: row.ai_redacted_pattern,
+              redactedPattern: safeAdminPattern(row.ai_redacted_pattern),
               proposedFields: row.ai_proposed_fields ?? {},
               score: row.ai_score == null ? null : Number(row.ai_score),
               proposalStatus: row.ai_status ?? null,
@@ -551,6 +571,32 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
     } catch (error) {
       console.error('GET /admin/sms-learning/feedback-events error', error.message || error);
       res.status(500).json({ error: 'failed to fetch SMS correction cases' });
+    }
+  });
+
+  app.post('/admin/sms-learning/feedback-events/:eventId/review', requireAdmin, async (req, res) => {
+    const { eventId } = req.params || {};
+    const { decision, reason } = req.body || {};
+    if (typeof eventId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId) ||
+        !['approved', 'rejected', 'revoked'].includes(decision) ||
+        typeof reason !== 'string' || reason.trim().length < 5 || reason.length > 500) {
+      return res.status(400).json({ error: 'invalid correction case review' });
+    }
+    try {
+      const result = await withUserClient(req.userId, (client) => client.query(
+        'SELECT pandapay.sms_review_correction_case($1::uuid, $2, $3::uuid, $4) AS outcome',
+        [eventId, decision, req.userId, reason.trim()],
+      ));
+      const outcome = result.rows?.[0]?.outcome || {};
+      if (!outcome.ok) {
+        const status = outcome.reason === 'not_found' ? 404 :
+          outcome.reason === 'invalid_review' ? 400 : 409;
+        return res.status(status).json({ error: outcome.reason || 'correction case unavailable' });
+      }
+      res.status(200).json({ ok: true, eventId, decision: outcome.decision });
+    } catch (error) {
+      console.error('POST /admin/sms-learning/feedback-events/:eventId/review error', error.message || error);
+      res.status(500).json({ error: 'failed to review SMS correction case' });
     }
   });
 
@@ -663,6 +709,7 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
 module.exports = {
   SAFE_FIELDS,
   ALLOWED_FAMILIES,
+  safeAdminPattern,
   getHmacKey,
   redactBody,
   senderFingerprint,

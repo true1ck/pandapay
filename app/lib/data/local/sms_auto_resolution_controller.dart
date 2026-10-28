@@ -8,6 +8,7 @@ import '../past_bill_receipts.dart';
 import 'app_database.dart';
 import 'auto_resolved_history_repository.dart';
 import 'financial_store.dart';
+import 'sms_intake_repository.dart';
 import 'sms_learning_feedback.dart';
 import 'sms_feedback_outbox.dart';
 
@@ -46,13 +47,22 @@ class SmsAutoResolutionController {
         database,
         namespace: namespace,
       ).updateCategory(entry.id, slug);
-      SmsLearningFeedback(
-        database,
-        namespace: namespace,
-      ).recordCategoryCorrection(
-        merchantOrPattern: entry.title,
-        categorySlug: slug,
-      );
+      final sourceBody = entry.sourceBody ??
+          SmsIntakeRepository(database)
+              .capturedById(namespace, entry.sourceKey)
+              ?.message
+              .body;
+      if (sourceBody != null && sourceBody.trim().isNotEmpty) {
+        SmsLearningFeedback(
+          database,
+          namespace: namespace,
+        ).recordCategoryCorrection(
+          merchantOrPattern: entry.title,
+          categorySlug: slug,
+          sender: entry.sender,
+          sampleBody: sourceBody,
+        );
+      }
       _recordFeedback(
         entry,
         action: 'category_changed',
@@ -136,60 +146,70 @@ class SmsAutoResolutionController {
   /// Undoes an auto-resolution: removes the auto-filed transaction (or bill),
   /// drops the receipt and puts the message back into Needs Review.
   Future<void> moveToReview(AutoResolvedHistoryEntry entry) async {
-    store.batch(() {
-      _recordFeedback(
-        entry,
-        action: 'moved_to_review',
-        consentGrantedAt: smsLearningConsentGrantedAt,
-        // Restoring an AI dismissal says the message was financial; undoing a
-        // filed transaction says it was not. They are different claims.
-        correctionKind: entry.resolvedKind == 'dismissed'
-            ? 'false_dismissal'
-            : 'false_transaction',
-      );
-      if (entry.resolvedKind != 'dismissed') {
-        database.db.execute(
-          "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' "
-          "AND (source_key=? OR id=?)",
-          [namespace, entry.sourceKey, 'local-ai:${entry.sourceKey}'],
+    final captured = SmsIntakeRepository(
+      database,
+    ).capturedById(namespace, entry.sourceKey)?.message;
+    final receivedAt = captured?.receivedAt ??
+        DateTime.tryParse(entry.occurredAt) ??
+        DateTime.now();
+    final id = entry.sourceKey.trim().isEmpty ? entry.id : entry.sourceKey;
+    final restored = NeedsReviewItem(
+      id: id,
+      sender: captured?.sender ?? entry.sender,
+      body: captured?.body ?? entry.sourceBody ?? _reviewBody(entry, receivedAt),
+      reason: 'moved_from_auto_resolved',
+      receivedAt: receivedAt,
+      kind: entry.resolvedKind == 'bill'
+          ? NeedsReviewKind.commitment
+          : NeedsReviewKind.transaction,
+    );
+    database.db.execute('SAVEPOINT undo_auto_resolution');
+    try {
+      store.batch(() {
+        _recordFeedback(
+          entry,
+          action: 'moved_to_review',
+          consentGrantedAt: smsLearningConsentGrantedAt,
+          // Restoring an AI dismissal says the message was financial; undoing
+          // a filed transaction says it was not.
+          correctionKind: entry.resolvedKind == 'dismissed'
+              ? 'false_dismissal'
+              : 'false_transaction',
         );
-      }
-      if (entry.resolvedKind == 'bill') {
-        database.db.execute(
-          'DELETE FROM local_commitments WHERE namespace=? AND id=?',
-          [namespace, 'commitment:${entry.sourceKey}'],
-        );
-        PastBillReceiptRepository(
+        if (entry.resolvedKind != 'dismissed') {
+          database.db.execute(
+            "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' "
+            "AND (source_key=? OR id=?)",
+            [namespace, entry.sourceKey, 'local-ai:${entry.sourceKey}'],
+          );
+        }
+        if (entry.resolvedKind == 'bill') {
+          database.db.execute(
+            'DELETE FROM local_commitments WHERE namespace=? AND id=?',
+            [namespace, 'commitment:${entry.sourceKey}'],
+          );
+          PastBillReceiptRepository(
+            database,
+            namespace: namespace,
+          ).delete('commitment:${entry.sourceKey}');
+        }
+        AutoResolvedHistoryRepository(
           database,
           namespace: namespace,
-        ).delete('commitment:${entry.sourceKey}');
-      }
-      AutoResolvedHistoryRepository(
-        database,
-        namespace: namespace,
-      ).delete(entry.id);
-      store.notifyPendingChange(namespace);
-    });
-    final receivedAt = DateTime.tryParse(entry.occurredAt) ?? DateTime.now();
-    final id = entry.sourceKey.trim().isEmpty ? entry.id : entry.sourceKey;
-    await reviewRepository.add(
-      NeedsReviewItem(
-        id: id,
-        sender: entry.sender,
-        // Keep the non-parsable review summary here. Feeding the original bill
-        // or mandate SMS back through NeedsReviewRepository.add() can
-        // immediately auto-file it again, defeating the user's undo action.
-        // The original SMS remains visible on the Auto-Resolved receipt.
-        body: entry.resolvedKind == 'dismissed' && entry.sourceBody != null
-            ? entry.sourceBody!
-            : _reviewBody(entry, receivedAt),
-        reason: 'moved_from_auto_resolved',
-        receivedAt: receivedAt,
-        kind: entry.resolvedKind == 'bill'
-            ? NeedsReviewKind.commitment
-            : NeedsReviewKind.transaction,
-      ),
-    );
+        ).delete(entry.id);
+        NeedsReviewRepository.restoreDisputedDecisionSync(
+          database,
+          namespace,
+          restored,
+        );
+        store.notifyPendingChange(namespace);
+      });
+      database.db.execute('RELEASE SAVEPOINT undo_auto_resolution');
+    } catch (_) {
+      database.db.execute('ROLLBACK TO SAVEPOINT undo_auto_resolution');
+      database.db.execute('RELEASE SAVEPOINT undo_auto_resolution');
+      rethrow;
+    }
   }
 
   /// A positive label is captured only after the user explicitly confirms the
@@ -211,7 +231,17 @@ class SmsAutoResolutionController {
     Map<String, dynamic>? correctedFields,
     String? correctionKind,
   }) {
-    if (consentGrantedAt == null || entry.sourceKey.trim().isEmpty) return;
+    if (consentGrantedAt == null ||
+        entry.sourceKey.trim().isEmpty ||
+        entry.factIndex == null) {
+      // Legacy receipts have no fact index. Keep their local action, but do
+      // not let an ambiguous fact-zero attribution enter shared learning.
+      return;
+    }
+    if (SmsIntakeRepository(database)
+        .hasRepeatedOccurrence(namespace, entry.sourceKey)) {
+      return;
+    }
     final fields = <String, dynamic>{
       'merchant': entry.title,
       'amountInr': entry.amountPaise / 100,
@@ -237,7 +267,12 @@ class SmsAutoResolutionController {
       correctedFields: correctedFields,
       correctionKind: correctionKind,
       decisionOrigin: 'ai',
+      factIndex: entry.factIndex!,
       reason: action == 'moved_to_review' ? 'user_disputed_ai_decision' : null,
+      messageAt: SmsIntakeRepository(database)
+          .capturedById(namespace, entry.sourceKey)
+          ?.message
+          .receivedAt,
     );
   }
 

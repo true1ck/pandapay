@@ -29,11 +29,64 @@ class SmsLearningFeedback {
 
   SmsLearningFeedback(this.database, {required this.namespace});
 
+  void recordFalseTransactionRule({
+    required String sender,
+    required String body,
+  }) {
+    final pattern = contextPattern('IGNORE', sender, body);
+    if (sender.trim().isEmpty || body.trim().isEmpty) return;
+    database.db.execute('''
+      CREATE TABLE IF NOT EXISTS user_sms_ignore_rules (
+        namespace TEXT NOT NULL,
+        context_pattern TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY(namespace, context_pattern)
+      )
+    ''');
+    database.db.execute(
+      'INSERT OR REPLACE INTO user_sms_ignore_rules(namespace,context_pattern,created_at) VALUES (?,?,?)',
+      [namespace, pattern, DateTime.now().millisecondsSinceEpoch],
+    );
+  }
+
+  bool matchesFalseTransactionRuleSync({
+    required String sender,
+    required String body,
+  }) {
+    if (sender.trim().isEmpty || body.trim().isEmpty) return false;
+    final tableExists = database.db.select(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_sms_ignore_rules' LIMIT 1",
+    );
+    if (tableExists.isEmpty) return false;
+    final pattern = contextPattern('IGNORE', sender, body);
+    return database.db.select(
+      'SELECT 1 FROM user_sms_ignore_rules WHERE namespace=? AND context_pattern=? LIMIT 1',
+      [namespace, pattern],
+    ).isNotEmpty;
+  }
+
   /// Deterministic so the same merchant always lands on the same primary key:
   /// trimmed, whitespace-collapsed, upper-cased. Never locale-aware, so a
   /// background isolate and the UI normalise identically.
   static String normalizePattern(String value) =>
       value.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+
+  /// A personal correction applies to the same message layout, not every
+  /// payment at the merchant. Amounts, dates and reference digits vary across
+  /// otherwise identical alerts; the remaining wording distinguishes, for
+  /// example, a booking from a subscription renewal.
+  static String contextPattern(
+    String merchant,
+    String sender,
+    String body,
+  ) {
+    final template = normalizePattern(body)
+        .replaceAll(RegExp(r'(?:RS\.?|INR|₹)\s*[\d,.]+'), ' AMOUNT ')
+        .replaceAll(RegExp(r'\d+'), '#')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return 'CTX|${normalizePattern(merchant)}|${normalizePattern(sender)}|$template';
+  }
 
   /// Upserts a user correction at full confidence. A later correction for the
   /// same pattern wins; `synced` resets to false because the server copy is
@@ -41,10 +94,14 @@ class SmsLearningFeedback {
   void recordCategoryCorrection({
     required String merchantOrPattern,
     required String categorySlug,
+    String? sender,
+    String? sampleBody,
     String source = 'user',
     bool synced = false,
   }) {
-    final pattern = normalizePattern(merchantOrPattern);
+    final pattern = sender != null && sampleBody != null && sampleBody.trim().isNotEmpty
+        ? contextPattern(merchantOrPattern, sender, sampleBody)
+        : normalizePattern(merchantOrPattern);
     final slug = categorySlug.trim().toLowerCase();
     if (pattern.isEmpty || slug.isEmpty) return;
     database.db.execute(

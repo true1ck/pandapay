@@ -34,7 +34,7 @@ create function pg_temp.c6_event(
     profile_id, event_id, source_key_hash, sender_fingerprint, action,
     resolved_kind, consent_policy_version, consent_granted_at,
     merchant_key, category_slug, original_category_slug,
-    correction_kind, decision_origin, fact_key
+    correction_kind, decision_origin, fact_key, review_status
   ) values (
     p_profile, p_event_id, p_source, repeat('c', 64), p_action,
     p_resolved, 'sms-shared-learning-v2',
@@ -42,7 +42,7 @@ create function pg_temp.c6_event(
       where profile_id = p_profile and purpose = 'sms_shared_learning'
       order by granted_at desc, id desc limit 1),
     p_merchant, p_slug, p_original, p_kind, 'ai',
-    p_source || ':' || p_fact_index::text
+    p_source || ':' || p_fact_index::text, 'approved'
   )
   returning event_id
 $$;

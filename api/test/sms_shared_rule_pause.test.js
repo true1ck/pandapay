@@ -80,7 +80,7 @@ function createDb({ priorAssignments = [], pausedRules = [PAUSED_ID, PAUSED_ASSI
         const rows = state.priorAssignments.map((candidateId) => ({ candidate_id: candidateId }));
         return { rows, rowCount: rows.length };
       }
-      if (q.includes('pandapay.sms_approved_category_rules()')) {
+      if (q.includes('pandapay.sms_approved_category_rules_v2()')) {
         return { rows: [], rowCount: 0 };
       }
       throw new Error(`unexpected statement: ${q.slice(0, 140)}`);
@@ -131,16 +131,16 @@ test('a paused shared rule is withheld from a user who never received it', async
     'a paused rule must not create a new assignment');
 });
 
-test('a paused rule keeps being served to a user who already received it', async () => {
+test('a paused rule is revoked on refresh for a user who already received it', async () => {
   const { call, state } = harness(createDb({ priorAssignments: [PAUSED_ASSIGNED_ID] }));
   const result = await call('/sms/rules/active');
   assert.equal(result.status, 200);
   const ids = result.body.candidateRules.map((rule) => rule.candidateId);
-  assert.ok(ids.includes(PAUSED_ASSIGNED_ID),
-    'the existing correcting user must keep their rule so the local override keeps winning');
+  assert.equal(ids.includes(PAUSED_ASSIGNED_ID), false,
+    'a paused rule must stop running for previously assigned users');
   assert.equal(ids.includes(PAUSED_ID), false);
-  assert.equal(result.body.revokedCandidateIds.includes(PAUSED_ASSIGNED_ID), false,
-    'a kept rule must not be revoked for its existing user');
+  assert.equal(result.body.revokedCandidateIds.includes(PAUSED_ASSIGNED_ID), true,
+    'a previously assigned paused rule must be removed from the device cache');
 });
 
 test('a pause-lookup outage keeps the previous serving behavior', async () => {

@@ -72,9 +72,20 @@ class SmsFeedbackOutbox {
       'CREATE INDEX IF NOT EXISTS idx_sms_feedback_pending '
       'ON sms_learning_feedback_outbox(namespace, next_attempt, queued_at)',
     );
+    database.db.execute('''
+      CREATE TABLE IF NOT EXISTS sms_learning_after_sync (
+        namespace TEXT NOT NULL,
+        client_seq INTEGER NOT NULL,
+        payload_json TEXT NOT NULL,
+        acknowledged INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY(namespace, client_seq)
+      )
+    ''');
   }
 
   String enqueue({
+    String? eventId,
     required String sourceKey,
     required String action,
     required String sender,
@@ -113,12 +124,21 @@ class SmsFeedbackOutbox {
     if (factIndex < 0 || factIndex > 31) {
       throw ArgumentError.value(factIndex, 'factIndex');
     }
-    final eventId = const Uuid().v5(
-      '6ba7b811-9dad-11d1-80b4-00c04fd430c8',
-      '$namespace:$sourceKey:$factIndex:$action:${jsonEncode(correctedFields ?? const {})}',
-    );
+    final resolvedEventId = eventId ??
+        const Uuid().v5(
+          '6ba7b811-9dad-11d1-80b4-00c04fd430c8',
+          '$namespace:$sourceKey:$factIndex:$action:${jsonEncode({
+            'originalDecision': originalDecision,
+            'correctedFields': correctedFields ?? const {},
+            'correctionKind': correctionKind,
+            'reason': reason?.trim().isNotEmpty == true
+                ? reason!.trim()
+                : null,
+            'messageAt': messageAt?.toUtc().toIso8601String(),
+          })}',
+        );
     final payload = <String, dynamic>{
-      'eventId': eventId,
+      'eventId': resolvedEventId,
       'sourceKey': sourceKey,
       'action': action,
       'sender': redactSmsLearningPattern(sender) ?? 'unknown_sender',
@@ -144,13 +164,13 @@ class SmsFeedbackOutbox {
          VALUES(?,?,?,?,?) ON CONFLICT(namespace,event_id) DO NOTHING''',
       [
         namespace,
-        eventId,
+        resolvedEventId,
         sourceKey,
         jsonEncode(payload),
         now().millisecondsSinceEpoch,
       ],
     );
-    return eventId;
+    return resolvedEventId;
   }
 
   List<SmsFeedbackOutboxEntry> pending({int limit = 50}) => database.db
@@ -186,9 +206,63 @@ class SmsFeedbackOutbox {
         ],
       );
 
-  void clear() => database.db.execute(
-    'DELETE FROM sms_learning_feedback_outbox WHERE namespace=?',
-    [namespace],
+  void clear() {
+    database.db.execute(
+      'DELETE FROM sms_learning_feedback_outbox WHERE namespace=?',
+      [namespace],
+    );
+    database.db.execute(
+      'DELETE FROM sms_learning_after_sync WHERE namespace=?',
+      [namespace],
+    );
+  }
+
+  /// Holds consented SMS correction metadata until its transaction update is
+  /// accepted by financial sync. The raw SMS stays in sms_captured_messages.
+  void enqueueAfterSync({
+    required int clientSeq,
+    required Map<String, dynamic> payload,
+  }) {
+    final sidecar = Map<String, dynamic>.from(payload)
+      ..putIfAbsent('eventId', () => const Uuid().v4());
+    database.db.execute(
+      'INSERT OR REPLACE INTO sms_learning_after_sync '
+      '(namespace, client_seq, payload_json, acknowledged, created_at) '
+      'VALUES (?, ?, ?, 0, ?)',
+      [
+        namespace,
+        clientSeq,
+        jsonEncode(sidecar),
+        now().millisecondsSinceEpoch,
+      ],
+    );
+  }
+
+  void acknowledgeAfterSync(int clientSeq) => database.db.execute(
+    'UPDATE sms_learning_after_sync SET acknowledged=1 '
+    'WHERE namespace=? AND client_seq=?',
+    [namespace, clientSeq],
+  );
+
+  List<({int clientSeq, Map<String, dynamic> payload})> pendingAfterSync() {
+    final rows = database.db.select(
+      'SELECT client_seq, payload_json FROM sms_learning_after_sync '
+      'WHERE namespace=? AND acknowledged=1 ORDER BY created_at',
+      [namespace],
+    );
+    return rows
+        .map((row) => (
+          clientSeq: row['client_seq'] as int,
+          payload: Map<String, dynamic>.from(
+            jsonDecode(row['payload_json'] as String) as Map,
+          ),
+        ))
+        .toList();
+  }
+
+  void removeAfterSync(int clientSeq) => database.db.execute(
+    'DELETE FROM sms_learning_after_sync WHERE namespace=? AND client_seq=?',
+    [namespace, clientSeq],
   );
 
   int count() =>
@@ -197,6 +271,45 @@ class SmsFeedbackOutbox {
             [namespace],
           ).single['count']
           as int;
+
+  /// Returns true when local persisted evidence shows this SMS produced more
+  /// than one actionable financial fact. Callers that have no exact fact index
+  /// must abstain from shared feedback in that case.
+  bool hasMultiplePersistedFacts(String sourceKey) {
+    var factCount = 0;
+    final hasFinancialEntities = database.db.select(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='financial_entities'",
+    ).isNotEmpty;
+    if (hasFinancialEntities) {
+      final storedRows = database.db.select(
+        'SELECT COUNT(*) AS count FROM financial_entities '
+        'WHERE namespace=? AND source_key=?',
+        [namespace, sourceKey],
+      );
+      factCount += storedRows.single['count'] as int;
+    }
+    if (factCount > 1) return true;
+
+    final hasFactsOutbox = database.db.select(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sms_facts_outbox'",
+    ).isNotEmpty;
+    if (hasFactsOutbox) {
+      final rows = database.db.select(
+        'SELECT facts FROM sms_facts_outbox WHERE namespace=? AND id=?',
+        [namespace, sourceKey],
+      );
+      for (final row in rows) {
+        try {
+          final envelope = jsonDecode(row['facts'] as String) as Map;
+          final facts = envelope['facts'];
+          if (facts is List) factCount += facts.length;
+        } catch (_) {
+          // Unknown persisted shape cannot establish multiplicity.
+        }
+      }
+    }
+    return factCount > 1;
+  }
 }
 
 /// Sends a generalized pattern, never the complete SMS. All numeric runs are

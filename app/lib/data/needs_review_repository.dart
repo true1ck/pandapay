@@ -361,6 +361,21 @@ class NeedsReviewRepository {
     _changes[database]?.add(FinancialChange(namespace, entity));
   }
 
+  /// Restore an explicitly disputed AI decision without re-running the SMS
+  /// classifier. Call this inside the same SQLite savepoint as the undo: the
+  /// original message must remain reviewable if the financial row is removed.
+  static void restoreDisputedDecisionSync(
+    AppDatabase database,
+    String namespace,
+    NeedsReviewItem item,
+  ) {
+    database.db.execute(
+      'INSERT OR REPLACE INTO local_needs_review(namespace,id,payload) VALUES (?,?,?)',
+      [namespace, item.id, jsonEncode(item.toJson())],
+    );
+    _notify(database, namespace, 'needs_review');
+  }
+
   final String namespace;
   final Future<AppDatabase> Function()? loadDatabase;
   final List<TransactionEntry>? existingTransactions;

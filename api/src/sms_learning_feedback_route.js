@@ -89,6 +89,49 @@ function merchantKey(originalFields, correctedFields) {
   return normalized;
 }
 
+// Keep this finite allowlist byte-for-byte aligned with
+// `SmsSharedCategoryRuleV2.contextTokens` in the app. Whole words only;
+// channel labels such as UPI/POS and ambiguous singletons are intentionally
+// excluded. A scope contains at most the first eight sorted unique matches.
+const CATEGORY_CONTEXT_TOKENS = new Set([
+  'BROADBAND', 'CAB', 'DIESEL', 'DINING', 'EDUCATION', 'ELECTRICITY', 'EMI',
+  'ENTERTAINMENT', 'FLIGHT', 'FUEL', 'GROCERIES', 'GROCERY', 'HOSPITAL',
+  'HOTEL', 'INSURANCE', 'INVESTMENT', 'LOAN', 'MEDICAL', 'MOVIE', 'MUTUAL',
+  'PHARMACY', 'PETROL', 'RENEWAL', 'RENEWED', 'RENT', 'RESTAURANT', 'RIDE',
+  'SALARY', 'SCHOOL', 'SUBSCRIPTION', 'SUPERMARKET', 'TAX', 'TRAIN', 'TRAVEL',
+  'TUITION', 'UTILITY', 'WALLET',
+]);
+const INSTITUTIONAL_SENDER_KEY = /^[A-Z]{2}-[A-Z0-9]{3,10}(?:-[A-Z])?$/;
+
+function institutionalSenderKey(sender) {
+  if (typeof sender !== 'string') return null;
+  const key = sender.trim().toUpperCase();
+  return INSTITUTIONAL_SENDER_KEY.test(key) ? key : null;
+}
+
+function categoryContextKey(body, merchant) {
+  let text = String(body || '').toUpperCase();
+  const normalizedMerchant = String(merchant || '')
+    .toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (typeof merchant === 'string' && merchant.trim()) {
+    const escaped = merchant.trim()
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    text = text.replace(new RegExp(escaped, 'gi'), ' ');
+  }
+  const matches = [...CATEGORY_CONTEXT_TOKENS].filter((token) =>
+    !normalizedMerchant.includes(token) &&
+    new RegExp(`(?:^|[^A-Z0-9])${token}(?:$|[^A-Z0-9])`).test(text));
+  return matches.length > 0 && matches.length <= 8 ? matches.sort().join('|') : null;
+}
+
+function validCategoryContextKey(value) {
+  if (typeof value !== 'string') return false;
+  const tokens = value.split('|');
+  return tokens.length >= 1 && tokens.length <= 8 &&
+    tokens.every((token) => CATEGORY_CONTEXT_TOKENS.has(token)) &&
+    [...new Set(tokens)].sort().join('|') === value;
+}
+
 function proposalPattern(value, merchant) {
   let pattern = String(value || '');
   if (typeof merchant === 'string' && merchant.trim()) {
@@ -280,6 +323,10 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
     };
     const categoryMerchant = action === 'category_changed'
       ? merchantKey(cleanOriginal.fields, cleanCorrected) : null;
+    const categorySenderKey = institutionalSenderKey(sender);
+    const categoryContext = categoryContextKey(redactedSample, categoryMerchant);
+    const categoryFamily = resolvedKind === 'transaction' && family === 'posted_movement'
+      ? 'posted_movement' : null;
     const fingerprint = smsLearning.senderFingerprint(sender);
     if (!fingerprint) {
       return res.status(503).json({ error: 'sms_learning_unavailable' });
@@ -313,6 +360,18 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
         if (sameGrant.rows?.[0]?.matches !== true) {
           return { acknowledged: true, recorded: false, learned: false, learningReason: 'consent_grant_mismatch' };
         }
+        // A caller-supplied rule id is only attribution metadata. Count it as
+        // negative evidence only when this profile has a server-recorded,
+        // applied exposure for this exact SMS and assigned candidate.
+        let verifiedDecisionRuleId = null;
+        const requestedRuleId = decisionRuleId ?? cleanOriginal.ruleId;
+        if (requestedRuleId) {
+          const exposure = await client.query(
+            'SELECT pandapay.sms_user_has_applied_rule_exposure($1, $2) AS verified',
+            [sourceKey, requestedRuleId],
+          );
+          if (exposure.rows?.[0]?.verified === true) verifiedDecisionRuleId = requestedRuleId;
+        }
         if (action === 'ai_auto_resolved') {
           if (consent.policy_version !== 'sms-shared-learning-v2') {
             return { acknowledged: true, recorded: false, learned: false,
@@ -345,6 +404,13 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
               learningReason: 'superseded_by_user_feedback' };
           }
           const template = aiTemplate(pattern, family);
+          const proposedCategory = categorySlug(cleanOriginal.fields?.categorySlug);
+          const v2SenderKey = family === 'posted_movement' && resolvedKind === 'transaction' &&
+            typeof cleanOriginal.fields?.merchant === 'string' &&
+            cleanOriginal.fields.merchant.trim().length >= 3 &&
+            SPEND_CATEGORY_SET.has(proposedCategory) ? categorySenderKey : null;
+          const v2ContextKey = v2SenderKey && SPEND_CATEGORY_SET.has(proposedCategory)
+            ? categoryContextKey(redactedSample, cleanOriginal.fields?.merchant) : null;
           const hmacKey = process.env.SMS_LEARNING_HMAC_KEY;
           const userHash = crypto.createHmac('sha256', hmacKey)
             .update(String(req.userId)).digest('hex');
@@ -353,14 +419,15 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
                (profile_id, event_id, source_key_hash, sender_fingerprint, user_hash,
                 issuer_prefix, sender_pattern, redacted_pattern, template_text,
                 synthetic_sample, fact_family, resolved_kind, proposed_fields, ai_score,
-                consent_policy_version, consent_granted_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16::timestamptz)
+                consent_policy_version, consent_granted_at, sender_key, context_key)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16::timestamptz,$17,$18)
              ON CONFLICT (profile_id, event_id) DO NOTHING RETURNING event_id`,
             [req.userId, eventId, sourceKey, fingerprint, userHash,
               deriveIssuerPrefix(sender), proposalPattern(sender), pattern, template,
               template ? smsLearning.anonymizedTrainingSample(template) : null,
               family, resolvedKind, JSON.stringify(proposalFields(cleanOriginal.fields)),
-              aiConfidenceScore ?? null, consent.policy_version, consentGrantedAt],
+              aiConfidenceScore ?? null, consent.policy_version, consentGrantedAt,
+              v2SenderKey, v2ContextKey],
           );
           return { acknowledged: true, recorded: inserted.rowCount === 1, learned: false,
             learningReason: inserted.rowCount === 1 ? 'admin_review_pending' : 'duplicate' };
@@ -478,17 +545,23 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
               category_slug, original_category_slug, resolved_kind,
               original_decision, corrected_fields, occurred_at, learned, learning_reason,
               redacted_pattern, correction_kind, decision_origin, decision_rule_id,
-              fact_key, message_at, commitment_category)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8::timestamptz,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23::timestamptz,$24)`,
+              fact_key, message_at, commitment_category, sender_key, context_key, fact_family)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8::timestamptz,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23::timestamptz,$24,$25,$26,$27)`,
           [req.userId, eventId, sourceKey, fingerprint, action, 'sms_shared_learning',
             consent.policy_version, consentGrantedAt, categoryMerchant, correctedCategory,
             originalCategory, resolvedKind, JSON.stringify(cleanOriginal),
             JSON.stringify(cleanCorrected), occurred, learned, learningReason,
             safePattern, correctionKind ?? null,
             decisionOrigin ?? cleanOriginal.origin ?? null,
-            decisionRuleId ?? cleanOriginal.ruleId ?? null,
+            verifiedDecisionRuleId,
             factKey, messageAt === undefined ? null : new Date(messageAt),
-            commitmentCategory],
+            commitmentCategory,
+            action === 'category_changed' && categoryMerchant && correctedCategory && originalCategory !== correctedCategory &&
+              categoryFamily ? categorySenderKey : null,
+            action === 'category_changed' && categoryMerchant && correctedCategory && originalCategory !== correctedCategory &&
+              categoryFamily && categorySenderKey ? categoryContext : null,
+            action === 'category_changed' && categoryMerchant && correctedCategory && originalCategory !== correctedCategory &&
+              categoryFamily && categorySenderKey && categoryContext ? categoryFamily : null],
         );
         // Accepted explicit feedback outranks any AI-only proposal for this SMS.
         // Runs in the same transaction as the event insert, so a proposal can
@@ -619,4 +692,7 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
   });
 }
 
-module.exports = { registerSmsLearningFeedbackRoute, sanitizeFields, merchantKey, categorySlug };
+module.exports = {
+  registerSmsLearningFeedbackRoute, sanitizeFields, merchantKey, categorySlug,
+  institutionalSenderKey, categoryContextKey, validCategoryContextKey,
+};

@@ -29,13 +29,14 @@ begin
       profile_id, event_id, source_key_hash, sender_fingerprint, action,
       resolved_kind, consent_policy_version, consent_granted_at,
       merchant_key, category_slug, original_category_slug,
-      correction_kind, decision_origin, fact_key, learned, learning_reason
+      correction_kind, decision_origin, fact_key, learned, learning_reason,
+      review_status
     ) values (
       pid, gen_random_uuid(), lpad(to_hex(seq), 64, '0'), repeat('b', 64),
       'category_changed', 'transaction', 'sms-shared-learning-v2', grant_time,
       'CONTRACT TEST SHOP', 'groceries', 'travel',
       'misclassified_category', 'ai', lpad(to_hex(seq), 64, '0') || ':0',
-      false, 'category_feedback_stored'
+      false, 'category_feedback_stored', 'approved'
     );
   end loop;
 end $$;
@@ -72,11 +73,13 @@ begin
     profile_id, event_id, source_key_hash, sender_fingerprint, action,
     resolved_kind, consent_policy_version, consent_granted_at,
     merchant_key, category_slug, original_category_slug,
-    correction_kind, decision_origin, fact_key, learned, learning_reason
+    correction_kind, decision_origin, fact_key, learned, learning_reason,
+    review_status
   ) values (
     v_profile, v_event, v_source, repeat('b', 64), 'category_changed', 'transaction',
     'sms-shared-learning-v2', now(), 'CONTRACT TEST SHOP', 'dining', 'travel',
-    'misclassified_category', 'ai', v_fact, false, 'category_feedback_stored'
+    'misclassified_category', 'ai', v_fact, false, 'category_feedback_stored',
+    'approved'
   );
 
   if not exists (select 1 from public.sms_learning_feedback_events
@@ -183,12 +186,12 @@ begin
         profile_id, event_id, source_key_hash, sender_fingerprint, action,
         resolved_kind, consent_policy_version, consent_granted_at,
         merchant_key, category_slug, original_category_slug,
-        correction_kind, fact_key
+        correction_kind, fact_key, review_status
       ) values (
         pid, gen_random_uuid(), lpad(to_hex(seq), 64, '0'), repeat('b', 64),
         'edited', 'transaction', 'sms-shared-learning-v2', grant_time,
         upper(kind) || ' TEST SHOP', 'groceries', 'travel',
-        kind, lpad(to_hex(seq), 64, '0') || ':0'
+        kind, lpad(to_hex(seq), 64, '0') || ':0', 'approved'
       );
     end loop;
   end loop;
@@ -222,24 +225,26 @@ begin
     insert into public.sms_learning_feedback_events (
       profile_id, event_id, source_key_hash, sender_fingerprint, action,
       resolved_kind, consent_policy_version, consent_granted_at,
-      merchant_key, category_slug, original_category_slug, correction_kind, fact_key
+      merchant_key, category_slug, original_category_slug, correction_kind,
+      fact_key, review_status
     ) values (
       pid, gen_random_uuid(), lpad(to_hex(seq), 64, '0'), repeat('b', 64),
       'edited', 'transaction', 'sms-shared-learning-v2', grant_time,
       'MANUAL SAVE SHOP', 'dining', 'travel', 'misclassified_category',
-      lpad(to_hex(seq), 64, '0') || ':0'
+      lpad(to_hex(seq), 64, '0') || ':0', 'approved'
     );
     -- A confirmation that keeps the same category must not vote.
     seq := seq + 1;
     insert into public.sms_learning_feedback_events (
       profile_id, event_id, source_key_hash, sender_fingerprint, action,
       resolved_kind, consent_policy_version, consent_granted_at,
-      merchant_key, category_slug, original_category_slug, correction_kind, fact_key
+      merchant_key, category_slug, original_category_slug, correction_kind,
+      fact_key, review_status
     ) values (
       pid, gen_random_uuid(), lpad(to_hex(seq), 64, '0'), repeat('b', 64),
       'confirmed', 'transaction', 'sms-shared-learning-v2', grant_time,
       'UNCHANGED SHOP', 'groceries', 'groceries', 'misclassified_category',
-      lpad(to_hex(seq), 64, '0') || ':0'
+      lpad(to_hex(seq), 64, '0') || ':0', 'approved'
     );
   end loop;
 end $$;
@@ -277,12 +282,13 @@ begin
       insert into public.sms_learning_feedback_events (
         profile_id, event_id, source_key_hash, sender_fingerprint, action,
         resolved_kind, consent_policy_version, consent_granted_at,
-        merchant_key, category_slug, original_category_slug, correction_kind, fact_key
+      merchant_key, category_slug, original_category_slug, correction_kind,
+      fact_key, review_status
       ) values (
         pid, gen_random_uuid(), lpad(to_hex(seq), 64, '0'), repeat('b', 64),
         'category_changed', 'transaction', 'sms-shared-learning-v2', grant_time,
         upper(slug) || ' SLUG SHOP', slug, 'travel', 'misclassified_category',
-        lpad(to_hex(seq), 64, '0') || ':0'
+        lpad(to_hex(seq), 64, '0') || ':0', 'approved'
       );
     end loop;
   end loop;

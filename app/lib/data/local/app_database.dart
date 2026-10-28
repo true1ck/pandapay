@@ -250,6 +250,7 @@ CREATE TABLE IF NOT EXISTS local_auto_resolved_history (
   id TEXT PRIMARY KEY,
   namespace TEXT NOT NULL,
   source_key TEXT NOT NULL,
+  fact_index INTEGER,
   sender TEXT NOT NULL,
   resolved_kind TEXT NOT NULL,
   title TEXT NOT NULL,
@@ -340,6 +341,11 @@ class AppDatabase {
     if (!columns.contains('source_body')) {
       db.execute(
         'ALTER TABLE local_auto_resolved_history ADD COLUMN source_body TEXT',
+      );
+    }
+    if (!columns.contains('fact_index')) {
+      db.execute(
+        'ALTER TABLE local_auto_resolved_history ADD COLUMN fact_index INTEGER',
       );
     }
   }

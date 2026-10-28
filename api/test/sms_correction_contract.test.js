@@ -13,7 +13,7 @@ const POLICY_V2 = 'sms-shared-learning-v2';
  * of issued statements so the test can prove the supersede runs before the
  * insert, and stores the exact column values the route writes.
  */
-function createDb() {
+function createDb({ verifiedRule = true } = {}) {
   const state = { events: [], examples: [], order: [], supersededFacts: [], dismissals: [] };
   const client = {
     async query(sql, params = []) {
@@ -26,6 +26,9 @@ function createDb() {
       }
       if (q.includes('FROM public.user_consents')) {
         return { rows: [{ granted: true, policy_version: POLICY_V2, granted_at: GRANTED_AT }], rowCount: 1 };
+      }
+      if (q.includes('sms_user_has_applied_rule_exposure')) {
+        return { rows: [{ verified: verifiedRule }], rowCount: 1 };
       }
       if (q.startsWith('SELECT 1 FROM public.sms_learning_feedback_events')) {
         const [profileId, sourceKeyHash] = params;
@@ -59,6 +62,7 @@ function createDb() {
           correction_kind: params[18], decision_origin: params[19],
           decision_rule_id: params[20], fact_key: params[21], message_at: params[22],
           commitment_category: params[23],
+          sender_key: params[24], context_key: params[25], fact_family: params[26],
         });
         return { rows: [], rowCount: 1 };
       }
@@ -70,8 +74,7 @@ function createDb() {
   return { state, client };
 }
 
-function harness() {
-  const db = createDb();
+function harness(db = createDb()) {
   const handlers = new Map();
   const app = {
     post: (path, ...chain) => handlers.set(`POST ${path}`, chain),
@@ -104,7 +107,7 @@ function base(overrides = {}) {
     sourceKey: SOURCE_KEY,
     action: 'category_changed',
     sender: 'AD-HDFCBK',
-    sampleBody: 'Rs.500 spent at AMAZON on your HDFC Bank Card.',
+    sampleBody: 'Rs.500 spent at AMAZON restaurant on your HDFC Bank Card.',
     resolvedKind: 'transaction',
     occurredAt: '2026-10-26T09:00:00.000Z',
     consentPurpose: 'sms_shared_learning',
@@ -163,6 +166,9 @@ test('stores one typed correction and supersedes the earlier fact first', async 
   assert.equal(row.fact_key, `${SOURCE_KEY}:2`);
   assert.equal(row.message_at.toISOString(), '2026-10-26T08:59:30.000Z');
   assert.equal(row.category_slug, 'dining');
+  assert.equal(row.sender_key, 'AD-HDFCBK');
+  assert.equal(row.context_key, 'RESTAURANT');
+  assert.equal(row.fact_family, 'posted_movement');
   // Legacy originalDecision.fields.category is still read as the prior label,
   // which the previous implementation dropped on the floor.
   assert.equal(row.original_category_slug, 'travel');
@@ -180,6 +186,19 @@ test('defaults the fact index to the first fact in the message', async () => {
   const { call, state } = harness();
   await call(base({ correctionKind: 'misclassified_category' }));
   assert.equal(state.events[0].fact_key, `${SOURCE_KEY}:0`);
+});
+
+test('unverified client rule id is not retained as negative-evidence attribution', async () => {
+  const { call, state } = harness(createDb({ verifiedRule: false }));
+  const result = await call(base({
+    correctionKind: 'misclassified_category',
+    decisionOrigin: 'shared_rule',
+    decisionRuleId: 'bundle-2026-10-21:r4',
+  }));
+  assert.equal(result.status, 200);
+  assert.equal(state.events.length, 1);
+  assert.equal(state.events[0].decision_rule_id, null);
+  assert.ok(state.order.some((q) => q.includes('sms_user_has_applied_rule_exposure')));
 });
 
 test('a cosmetic edit trains nothing and supersedes nothing', async () => {

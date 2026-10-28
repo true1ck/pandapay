@@ -40,7 +40,7 @@ void main() {
   /// captures of the same merchant.
   String spendBody(String merchant, {int amount = 349}) =>
       'Rs $amount.00 spent on HDFC Bank Card ending 1234 at $merchant on '
-      '20-Oct-26.';
+      '20-Oct-26 for groceries at supermarket.';
 
   /// Seeds one shared (cross-user) category rule with a contract-valid
   /// bundle hash, exactly as a downloaded bundle would arrive.
@@ -48,20 +48,22 @@ void main() {
     final rules = [
       SmsSharedCategoryRule(
         merchantKey: merchantKey,
+        senderKey: 'TX-MNTPRO-S',
+        contextKey: 'GROCERIES|SUPERMARKET',
         categorySlug: slug,
         supportCount: 25,
         agreementBp: 9800,
       ),
     ];
     final saved = await SmsRuleBundleStore(db).saveSharedCategoryRules({
-      'categoryRulesVersion': 1,
-      'categoryRulesMinClientVersion': '1.0.0',
-      'categoryRulesSha256': SmsRuleBundleStore.computeSharedCategoryRulesSha256(
-        version: 1,
+      'categoryRulesV2Version': 2,
+      'categoryRulesV2MinClientVersion': '1.0.0',
+      'categoryRulesV2Sha256': SmsRuleBundleStore.computeSharedCategoryRulesSha256(
+        version: 2,
         minClientVersion: '1.0.0',
         rules: rules,
       ),
-      'categoryRules': rules.map((rule) => rule.toJson()).toList(),
+      'categoryRulesV2': rules.map((rule) => rule.toJson()).toList(),
     });
     expect(saved, isTrue, reason: 'shared rule bundle must seed cleanly');
   }
@@ -72,7 +74,7 @@ void main() {
         namespace: ns,
       ).recordCategoryCorrection(merchantOrPattern: pattern, categorySlug: slug);
 
-  LocalSmsObservation? parse(String merchant, {String sender = 'HDFCBK'}) =>
+  LocalSmsObservation? parse(String merchant, {String sender = 'TX-MNTPRO-S'}) =>
       LocalSmsParser.parse(
         namespace: ns,
         sender: sender,
@@ -95,7 +97,7 @@ void main() {
     importStore.capture(
       ns,
       QueuedSms(
-        sender: 'HDFCBK',
+        sender: 'TX-MNTPRO-S',
         body: spendBody('BUNDL TECHNOLOGIES'),
         receivedAt: DateTime(2026, 10, 20, 9),
       ),
@@ -132,6 +134,35 @@ void main() {
       reason: 'the upsert keeps one rule per pattern with the latest label',
     );
     expect(parse('BUNDL TECHNOLOGIES')?.transaction?.categoryId, 'bills');
+  });
+
+  test('a contextual correction does not relabel a different SMS from the same merchant', () {
+    const merchant = 'BUNDL TECHNOLOGIES';
+    SmsLearningFeedback(db, namespace: ns).recordCategoryCorrection(
+      merchantOrPattern: merchant,
+      categorySlug: 'travel',
+      sender: 'HDFCBK',
+      sampleBody: 'Rs 500 spent at BUNDL TECHNOLOGIES for travel booking on 20-Oct-26',
+    );
+    final rules = SmsLearningFeedback(db, namespace: ns).loadRulesSync();
+    expect(
+      LocalSmsParser.userCategoryRuleSlug(
+        rules,
+        merchant,
+        'HDFCBK',
+        'Rs 750 spent at BUNDL TECHNOLOGIES for travel booking on 21-Oct-26',
+      ),
+      'travel',
+    );
+    expect(
+      LocalSmsParser.userCategoryRuleSlug(
+        rules,
+        merchant,
+        'HDFCBK',
+        'Rs 750 spent at BUNDL TECHNOLOGIES for subscription renewal on 21-Oct-26',
+      ),
+      isNull,
+    );
   });
 
   test('a mixed-context merchant is not blanket-categorised by one correction',

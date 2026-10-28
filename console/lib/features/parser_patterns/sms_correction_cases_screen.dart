@@ -14,10 +14,9 @@ import '../../app/providers.dart';
 /// appeared in a payload would be dropped, not displayed. `subscription` and
 /// the other commitment labels are never rendered as a spend category slug.
 ///
-/// These cases are read-only: the correction is already applied on the user's
-/// device, and no admin approval endpoint exists for explicit feedback events,
-/// so no approve/reject actions are offered (unlike the AI/parser/category
-/// proposal tabs).
+/// Admin review only admits eligible category corrections into the existing
+/// candidate aggregate. It never publishes a rule; the category/parser rule
+/// approval gates remain separate.
 
 /// Canonical 15 spend categories (app/lib/data/sms_fact_contract.dart, api and
 /// SQL agree). Anything outside this set is never displayed as a spend slug.
@@ -153,19 +152,80 @@ class SmsCorrectionCasesTab extends ConsumerWidget {
   }
 }
 
-class _CorrectionCaseTile extends StatelessWidget {
+class _CorrectionCaseTile extends ConsumerStatefulWidget {
   const _CorrectionCaseTile(this.caseRow);
 
   final Map<String, dynamic> caseRow;
+
+  @override
+  ConsumerState<_CorrectionCaseTile> createState() => _CorrectionCaseTileState();
+}
+
+class _CorrectionCaseTileState extends ConsumerState<_CorrectionCaseTile> {
+  bool busy = false;
+
+  Future<void> _review(String decision) async {
+    final reasonController = TextEditingController();
+    try {
+      final reason = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('${decision == 'revoked' ? 'Revoke' : decision == 'approved' ? 'Approve' : 'Reject'} correction evidence?'),
+          content: TextField(
+            controller: reasonController,
+            maxLength: 500,
+            decoration: const InputDecoration(labelText: 'Review reason (required)'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, reasonController.text.trim()),
+              child: const Text('Save decision'),
+            ),
+          ],
+        ),
+      );
+      if (reason == null) return;
+      if (reason.length < 5) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Enter a reason of at least 5 characters.')),
+          );
+        }
+        return;
+      }
+      setState(() => busy = true);
+      await ref.read(adminApiProvider)!.reviewSmsCorrectionCase(
+        eventId: widget.caseRow['eventId'] as String,
+        decision: decision,
+        reason: reason,
+      );
+      ref.invalidate(smsCorrectionCasesProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Correction evidence $decision')),
+        );
+      }
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+    } finally {
+      reasonController.dispose();
+      if (mounted) setState(() => busy = false);
+    }
+  }
 
   static String _display(Object? value) =>
       value == null ? '—' : value.toString();
 
   @override
   Widget build(BuildContext context) {
+    final caseRow = widget.caseRow;
     final kind = caseAware(caseRow, 'correctionKind', 'correction_kind') as String?;
     final nonTraining = isNonTrainingKind(kind);
     final supersededAt = caseAware(caseRow, 'supersededAt', 'superseded_at');
+    final reviewStatus = caseAware(caseRow, 'reviewStatus', 'review_status') as String? ?? 'pending';
+    final reviewedAt = caseAware(caseRow, 'reviewedAt', 'reviewed_at');
+    final reviewReason = caseAware(caseRow, 'reviewReason', 'review_reason');
     final supersededBy =
         caseAware(caseRow, 'supersededByEventId', 'superseded_by_event_id');
     final origin =
@@ -251,6 +311,9 @@ class _CorrectionCaseTile extends StatelessWidget {
                 'Support: ${_display(supportUsers)} users · '
                 '${_display(supportMessages)} matching SMS\n'
                 'Disagreement: ${_display(disagreementUsers)} users countered\n'
+                'Review: $reviewStatus'
+                '${reviewedAt == null ? '' : ' at $reviewedAt'}'
+                '${reviewReason == null ? '' : ' · $reviewReason'}\n'
                 'State: ${supersededAt == null
                     ? 'current'
                     : 'superseded at $supersededAt by event ${_display(supersededBy)}'}',
@@ -276,10 +339,30 @@ class _CorrectionCaseTile extends StatelessWidget {
               ],
               const SizedBox(height: 8),
               const Text(
-                'Explicit corrections are already applied on the user’s '
-                'device. This case is informational; shared-rule delivery '
-                'still requires the parser/category approval gates.',
+                'Approval only admits eligible category corrections into the '
+                'candidate process. A separate rule approval is required '
+                'before delivery.',
                 style: TextStyle(fontStyle: FontStyle.italic)),
+              if (!nonTraining && supersededAt == null) ...[
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, children: [
+                  if (reviewStatus == 'pending') ...[
+                    OutlinedButton(
+                      onPressed: busy ? null : () => _review('rejected'),
+                      child: const Text('Reject evidence'),
+                    ),
+                    FilledButton(
+                      onPressed: busy ? null : () => _review('approved'),
+                      child: const Text('Approve evidence'),
+                    ),
+                  ],
+                  if (reviewStatus == 'approved')
+                    OutlinedButton(
+                      onPressed: busy ? null : () => _review('revoked'),
+                      child: const Text('Revoke approval'),
+                    ),
+                ]),
+              ],
               const SizedBox(height: 12),
             ],
           ),
@@ -292,7 +375,7 @@ class _CorrectionCaseTile extends StatelessWidget {
   /// exists. Only the server-generalized pattern and sanitized proposal
   /// fields are shown, explicitly labelled advisory.
   List<Widget> _aiDiagnosisLines() {
-    final diagnosis = caseAware(caseRow, 'aiDiagnosis', 'ai_diagnosis');
+    final diagnosis = caseAware(widget.caseRow, 'aiDiagnosis', 'ai_diagnosis');
     if (diagnosis is! Map || diagnosis.isEmpty) return const [];
     final pattern = diagnosis['redactedPattern'] ?? diagnosis['redacted_pattern'];
     final score = diagnosis['score'] ?? diagnosis['ai_score'];

@@ -44,6 +44,7 @@ set search_path = pg_catalog, public, pandapay
 as $function$
 declare
   v_raw text;
+  v_threshold integer;
 begin
   select case when jsonb_typeof(value) in ('number', 'string')
               then value #>> '{}' end
@@ -51,7 +52,13 @@ begin
     from public.sms_learning_settings
    where key = 'sms_shared_rule_negative_pause_threshold';
   begin
-    return coalesce(v_raw::integer, 3);
+    v_threshold := coalesce(v_raw::integer, 3);
+    -- Zero or a negative threshold would pause every rule with any evidence;
+    -- an excessively large value is also treated as an invalid operator typo.
+    if v_threshold < 1 or v_threshold > 1000 then
+      return 3;
+    end if;
+    return v_threshold;
   exception
     when invalid_text_representation or numeric_value_out_of_range then
       return 3;
@@ -90,7 +97,7 @@ as $function$
    where e.decision_rule_id is not null
      and e.superseded_at is null
      and coalesce(e.correction_kind, 'misclassified_category') not in
-         ('cosmetic', 'preference_only')
+         ('cosmetic', 'preference_only', 'duplicate', 'already_paid')
      and (e.correction_kind is not null
           or e.category_slug is distinct from e.original_category_slug)
    group by e.decision_rule_id;
@@ -112,7 +119,7 @@ as $function$
      where e.decision_rule_id = p_rule_id
        and e.superseded_at is null
        and coalesce(e.correction_kind, 'misclassified_category') not in
-           ('cosmetic', 'preference_only')
+           ('cosmetic', 'preference_only', 'duplicate', 'already_paid')
        and (e.correction_kind is not null
             or e.category_slug is distinct from e.original_category_slug)
      group by e.decision_rule_id

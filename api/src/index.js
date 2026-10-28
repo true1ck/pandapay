@@ -3802,11 +3802,12 @@ function clientMutationSourceKey(userId, source, clientMutationId) {
 
 async function insertTransactionAndUpdateState(client, userId, {
   userCardId, amount, occurred, categoryId, userCategoryId, rail, merchantName, note, source,
-  merchantVpa, mcc, sourceKey, backfill, instrument, entryKind, accountLast4,
+  merchantVpa, mcc, sourceKey, backfill, instrument, entryKind, status, accountLast4,
   observationMetadata, observedAt,
 }) {
   const resolvedInstrument = instrument || 'credit_card';
   const resolvedEntryKind = entryKind || 'spend';
+  const resolvedStatus = ['active', 'ignored', 'deleted'].includes(status) ? status : 'active';
   const resolvedSource = source || 'manual';
   const resolvedAccountLast4 = /^\d{4}$/.test(String(accountLast4 || '').trim())
     ? String(accountLast4).trim()
@@ -3845,7 +3846,8 @@ async function insertTransactionAndUpdateState(client, userId, {
   // that card yet (or its last four digits are missing). Keep the payment
   // instrument as credit_card so reports do not silently relabel it as
   // "Other". Only card-state side effects require a concrete user_card row.
-  const movesCardState = resolvedInstrument === 'credit_card'
+  const movesCardState = resolvedStatus === 'active'
+    && resolvedInstrument === 'credit_card'
     && resolvedEntryKind === 'spend'
     && Boolean(userCardId);
 
@@ -3860,11 +3862,11 @@ async function insertTransactionAndUpdateState(client, userId, {
   // index only covers non-null keys.
   const txn = await client.query(
     `INSERT INTO transactions
-       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, merchant_vpa, mcc, category_id, user_category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill, source_account_last4)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'estimated', $13, $14, $15, false, $16, $17)
+       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, merchant_vpa, mcc, category_id, user_category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, status, state_applied, is_backfill, source_account_last4)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'estimated', $13, $14, $15, $16, false, $17, $18)
      ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
      RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
-    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, merchantVpa || null, mcc || null, categoryId || null, userCategoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, backfill === true, resolvedAccountLast4]
+    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, merchantVpa || null, mcc || null, categoryId || null, userCategoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, resolvedStatus, backfill === true, resolvedAccountLast4]
   );
 
   // Zero rows back means the unique index rejected it: this exact message
@@ -3984,6 +3986,9 @@ async function insertTransactionAndUpdateState(client, userId, {
     observedAt: observedAt || occurred,
     metadata: observationMetadata,
   });
+  if (resolvedStatus !== 'active') {
+    return { status: 201, transaction: txn.rows[0] };
+  }
   if (typeof pairTransferObservation === 'function') {
     await pairTransferObservation(client, userId, txn.rows[0].id);
   }
@@ -10602,8 +10607,10 @@ app.get('/admin/data-quality-dashboard', requireAdmin, async (req, res) => {
 /**
  * AD-9 Anonymization Audit Automation.
  *
- * `pandapay.run_anonymization_audit()` (the 6-check function itself) already
- * existed in db/supabase/migrations/0010_functions_and_views.sql — not
+ * `pandapay.run_anonymization_audit()` (12 checks — six over the crowdsourced
+ * merchant surface, six over SMS shared learning since
+ * 20261028100000_sms_learning_anonymization_audit.sql) already existed in
+ * db/supabase/migrations/0010_functions_and_views.sql — not
  * written this chunk. What's new here: exposing its run history to the
  * console (AD-9.1), and — separately, see .github/workflows/anonymization-
  * audit.yml added alongside this route — actually calling it from CI on

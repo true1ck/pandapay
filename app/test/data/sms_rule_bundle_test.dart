@@ -171,12 +171,87 @@ void main() {
       expect(afterRollback, isNull);
     });
 
+    test('shared category parser accepts safe contextual tuples and canonical spend categories', () {
+      Map<String, dynamic> rule(String category) => {
+        'merchantKey': 'BUNDL TECHNOLOGIES',
+        'senderKey': 'TX-MNTPRO-S',
+        'contextKey': 'GROCERIES|SUPERMARKET',
+        'factFamily': 'posted_movement',
+        'categorySlug': category,
+        'supportCount': 10,
+        'agreementBp': 10000,
+      };
+      for (final slug in ['government', 'other']) {
+        expect(SmsSharedCategoryRule.fromJson(rule(slug)), isNotNull);
+      }
+      for (final slug in ['investments', 'income', 'cash', 'subscription']) {
+        expect(SmsSharedCategoryRule.fromJson(rule(slug)), isNull);
+      }
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'senderKey': 'HDFCBK'}), isNull);
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': ''}), isNull);
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': 'NONCONTEXTUAL'}), isNull);
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': 'GROCERY|GROCERY'}), isNull);
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': 'CAB|DIESEL|DINING|EDUCATION|ELECTRICITY|EMI|ENTERTAINMENT|FLIGHT|FUEL'}), isNull);
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'factFamily': 'balance_snapshot'}), isNull);
+    });
+
+    test('context key uses allowlisted whole words and removes merchant tokens', () {
+      expect(
+        SmsSharedCategoryRule.contextKeyForBody(
+          'Paid TRAVELWORLD for petrol',
+          merchant: 'TRAVELWORLD',
+        ),
+        'PETROL',
+      );
+      expect(
+        SmsSharedCategoryRule.contextKeyForBody(
+          'Paid TRAVEL WORLD',
+          merchant: 'TRAVEL WORLD',
+        ),
+        isEmpty,
+      );
+      expect(
+        SmsSharedCategoryRule.contextKeyForBody(
+          'Paid at TRAVEL WORLD for groceries',
+          merchant: 'TRA-VEL WORLD',
+        ),
+        'GROCERIES',
+      );
+      expect(
+        SmsSharedCategoryRule.contextKeyForBody('Paid CabX'),
+        isEmpty,
+      );
+      expect(
+        SmsSharedCategoryRule.contextKeyForBody('Paid TRAVEL123'),
+        isEmpty,
+      );
+      expect(
+        SmsSharedCategoryRule.tupleKey(
+          merchantKey: 'A|B',
+          senderKey: 'TX-MNTPRO-S',
+          contextKey: 'GROCERY|TRAVEL',
+          factFamily: 'posted_movement',
+        ),
+        isNot(
+          SmsSharedCategoryRule.tupleKey(
+            merchantKey: 'A',
+            senderKey: 'B|TX-MNTPRO-S',
+            contextKey: 'GROCERY|TRAVEL',
+            factFamily: 'posted_movement',
+          ),
+        ),
+      );
+    });
+
     test(
       'verifies and syncs a shared category rule bundle independently',
       () async {
         const rawCategories = [
           {
             'merchantKey': 'BUNDL TECHNOLOGIES',
+            'senderKey': 'TX-MNTPRO-S',
+            'contextKey': 'GROCERIES|SUPERMARKET',
+            'factFamily': 'posted_movement',
             'categorySlug': 'groceries',
             'supportCount': 12,
             'agreementBp': 10000,
@@ -186,16 +261,16 @@ void main() {
           rawCategories.single,
         )!;
         final categorySha = SmsRuleBundleStore.computeSharedCategoryRulesSha256(
-          version: 1,
+          version: 2,
           minClientVersion: '1.0.0',
           rules: [categoryRule],
         );
         final response = {
           'upToDate': true,
-          'categoryRulesVersion': 1,
-          'categoryRulesMinClientVersion': '1.0.0',
-          'categoryRulesSha256': categorySha,
-          'categoryRules': rawCategories,
+          'categoryRulesV2Version': 2,
+          'categoryRulesV2MinClientVersion': '1.0.0',
+          'categoryRulesV2Sha256': categorySha,
+          'categoryRulesV2': rawCategories,
         };
         final client = MockClient(
           (_) async => http.Response(jsonEncode(response), 200),
@@ -209,7 +284,12 @@ void main() {
         );
 
         expect(store.loadSharedCategoryRulesSync(), {
-          'BUNDL TECHNOLOGIES': 'groceries',
+          SmsSharedCategoryRule.tupleKey(
+            merchantKey: 'BUNDL TECHNOLOGIES',
+            senderKey: 'TX-MNTPRO-S',
+            contextKey: 'GROCERIES|SUPERMARKET',
+            factFamily: 'posted_movement',
+          ): 'groceries',
         });
       },
     );
@@ -218,12 +298,15 @@ void main() {
       'rejects a shared category bundle with an invalid integrity hash',
       () async {
         final accepted = await store.saveSharedCategoryRules({
-          'categoryRulesVersion': 1,
-          'categoryRulesMinClientVersion': '1.0.0',
-          'categoryRulesSha256': List.filled(64, '0').join(),
-          'categoryRules': [
+          'categoryRulesV2Version': 2,
+          'categoryRulesV2MinClientVersion': '1.0.0',
+          'categoryRulesV2Sha256': List.filled(64, '0').join(),
+          'categoryRulesV2': [
             {
               'merchantKey': 'BUNDL TECHNOLOGIES',
+              'senderKey': 'TX-MNTPRO-S',
+              'contextKey': 'GROCERY',
+              'factFamily': 'posted_movement',
               'categorySlug': 'groceries',
               'supportCount': 12,
               'agreementBp': 10000,
@@ -235,24 +318,38 @@ void main() {
       },
     );
 
+    test('ignores a persisted v1 merchant-only cache while offline', () {
+      store.loadSharedCategoryRulesSync(); // creates the cache table
+      db.db.execute(
+        '''INSERT OR REPLACE INTO sms_shared_category_rule_bundles
+           (id, raw_json, sha256, version, min_client_version, cached_at)
+           VALUES (1, ?, ?, 1, ?, ?)''',
+        [jsonEncode([{'merchantKey': 'BUNDL TECHNOLOGIES', 'categorySlug': 'groceries', 'supportCount': 12, 'agreementBp': 10000}]), 'legacy-v1-hash', '1.0.0', DateTime.now().millisecondsSinceEpoch],
+      );
+      expect(store.loadSharedCategoryRulesSync(), isEmpty);
+    });
+
     test('an approved category rollback clears the cached rule set', () async {
       final rule = SmsSharedCategoryRule.fromJson({
         'merchantKey': 'BUNDL TECHNOLOGIES',
+        'senderKey': 'TX-MNTPRO-S',
+        'contextKey': 'GROCERY',
+        'factFamily': 'posted_movement',
         'categorySlug': 'groceries',
         'supportCount': 12,
         'agreementBp': 10000,
       })!;
       final populated = [rule];
       await store.saveSharedCategoryRules({
-        'categoryRulesVersion': 1,
-        'categoryRulesMinClientVersion': '1.0.0',
-        'categoryRulesSha256':
+        'categoryRulesV2Version': 2,
+        'categoryRulesV2MinClientVersion': '1.0.0',
+        'categoryRulesV2Sha256':
             SmsRuleBundleStore.computeSharedCategoryRulesSha256(
-              version: 1,
+              version: 2,
               minClientVersion: '1.0.0',
               rules: populated,
             ),
-        'categoryRules': populated.map((item) => item.toJson()).toList(),
+        'categoryRulesV2': populated.map((item) => item.toJson()).toList(),
       });
       expect(store.loadSharedCategoryRulesSync(), isNotEmpty);
 
@@ -262,15 +359,15 @@ void main() {
         'bundleVersion': 0,
         'rules': <Object>[],
         'sha256': '',
-        'categoryRulesVersion': 1,
-        'categoryRulesMinClientVersion': '1.0.0',
-        'categoryRulesSha256':
+        'categoryRulesV2Version': 2,
+        'categoryRulesV2MinClientVersion': '1.0.0',
+        'categoryRulesV2Sha256':
             SmsRuleBundleStore.computeSharedCategoryRulesSha256(
-              version: 1,
+              version: 2,
               minClientVersion: '1.0.0',
               rules: emptyRules,
             ),
-        'categoryRules': <Object>[],
+        'categoryRulesV2': <Object>[],
       };
       await store.syncRules(
         MockClient((_) async => http.Response(jsonEncode(rollback), 200)),

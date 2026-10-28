@@ -75,6 +75,7 @@ class SmsIntakeRepository {
       CREATE TABLE IF NOT EXISTS sms_captured_messages (
         namespace TEXT NOT NULL, id TEXT NOT NULL, sender TEXT NOT NULL,
         body TEXT NOT NULL, received_at INTEGER NOT NULL,
+        repeated_occurrence INTEGER NOT NULL DEFAULT 0,
         processed INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY(namespace, id)
       );
@@ -94,6 +95,13 @@ class SmsIntakeRepository {
         PRIMARY KEY(namespace, source_key)
       );
     ''');
+    if (!database.db
+        .select('PRAGMA table_info(sms_captured_messages)')
+        .any((column) => column['name'] == 'repeated_occurrence')) {
+      database.db.execute(
+        'ALTER TABLE sms_captured_messages ADD COLUMN repeated_occurrence INTEGER NOT NULL DEFAULT 0',
+      );
+    }
     if (!database.db
         .select('PRAGMA table_info(sms_intake)')
         .any((column) => column['name'] == 'next_attempt')) {
@@ -188,16 +196,26 @@ class SmsIntakeRepository {
     return id;
   }
 
-  void remember(String namespace, QueuedSms sms) => database.db.execute(
-    'INSERT OR IGNORE INTO sms_captured_messages(namespace,id,sender,body,received_at) VALUES (?,?,?,?,?)',
-    [
-      namespace,
-      smsSourceKey(namespace, sms.sender, sms.body),
-      sms.sender,
-      sms.body,
-      sms.receivedAt.millisecondsSinceEpoch,
-    ],
-  );
+  void remember(String namespace, QueuedSms sms) {
+    final sourceKey = smsSourceKey(namespace, sms.sender, sms.body);
+    final receivedAt = sms.receivedAt.millisecondsSinceEpoch;
+    database.db.execute(
+      'INSERT INTO sms_captured_messages(namespace,id,sender,body,received_at,repeated_occurrence) VALUES (?,?,?,?,?,0) '
+      'ON CONFLICT(namespace,id) DO UPDATE SET repeated_occurrence='
+      'CASE WHEN sms_captured_messages.received_at <> excluded.received_at '
+      'THEN 1 ELSE sms_captured_messages.repeated_occurrence END',
+      [namespace, sourceKey, sms.sender, sms.body, receivedAt],
+    );
+  }
+
+  /// True when this deduplicated source key was observed with another delivery
+  /// timestamp. Its local record remains deduplicated, but it is unsafe to
+  /// attribute a later correction to one particular SMS occurrence.
+  bool hasRepeatedOccurrence(String namespace, String sourceKey) =>
+      database.db.select(
+        'SELECT 1 FROM sms_captured_messages WHERE namespace=? AND id=? AND repeated_occurrence=1 LIMIT 1',
+        [namespace, sourceKey],
+      ).isNotEmpty;
 
   /// Returns the original SMS captured on this device for a source key.
   /// Raw text never leaves the device through this read path.

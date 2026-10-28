@@ -1,8 +1,31 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sms_feedback_outbox.dart';
 
 void main() {
+  test('detects multiple persisted facts before shared attribution', () {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    FinancialStore(database);
+    final outbox = SmsFeedbackOutbox(database, namespace: 'account-a');
+    final sourceKey = List<String>.filled(64, 'd').join();
+
+    database.db.execute(
+      'INSERT INTO financial_entities(namespace,entity,id,payload,observed_at,pending,source_key) '
+      'VALUES(?,?,?,?,?,?,?)',
+      ['account-a', 'transactions', 'txn-1', '{}', 1, 0, sourceKey],
+    );
+    expect(outbox.hasMultiplePersistedFacts(sourceKey), isFalse);
+
+    database.db.execute(
+      'INSERT INTO financial_entities(namespace,entity,id,payload,observed_at,pending,source_key) '
+      'VALUES(?,?,?,?,?,?,?)',
+      ['account-a', 'transactions', 'txn-2', '{}', 2, 0, sourceKey],
+    );
+    expect(outbox.hasMultiplePersistedFacts(sourceKey), isTrue);
+  });
+
   test(
     'stores generalized sample patterns and consented structured corrections',
     () {
@@ -69,6 +92,99 @@ void main() {
 
     expect(first, second);
     expect(outbox.count(), 1);
+  });
+
+  test('a revised dismissal kind or reason gets a distinct stable event', () {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final outbox = SmsFeedbackOutbox(database, namespace: 'account-a');
+
+    String record(String kind, String reason) => outbox.enqueue(
+      sourceKey: 'f' * 64,
+      action: 'dismissed',
+      sender: 'HDFCBK',
+      resolvedKind: 'transaction',
+      occurredAt: '2026-10-27T10:00:00Z',
+      consentGrantedAt: DateTime.utc(2026, 10, 27),
+      originalDecision: {'kind': 'posted_movement'},
+      correctionKind: kind,
+      reason: reason,
+    );
+
+    final classification = record('false_transaction', 'not_financial');
+    final preference = record('preference_only', 'do_not_track');
+
+    expect(classification, isNot(preference));
+    expect(record('preference_only', 'do_not_track'), preference);
+    expect(outbox.count(), 2);
+  });
+
+  test('changed-back corrections and distinct message occurrences stay distinct', () {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final outbox = SmsFeedbackOutbox(database, namespace: 'account-a');
+    String record({
+      required String priorMerchant,
+      required DateTime messageAt,
+      String? eventId,
+    }) =>
+        outbox.enqueue(
+          eventId: eventId,
+          sourceKey: 'b' * 64,
+          action: 'edited',
+          sender: 'HDFCBK',
+          resolvedKind: 'transaction',
+          occurredAt: '2026-10-27T10:00:00Z',
+          consentGrantedAt: DateTime.utc(2026, 10, 27),
+          originalDecision: {'fields': {'merchant': priorMerchant}},
+          correctedFields: {'merchant': 'Store A'},
+          messageAt: messageAt,
+        );
+
+    final first = record(
+      priorMerchant: 'Store A',
+      messageAt: DateTime.utc(2026, 10, 27, 10),
+    );
+    final changedAway = record(
+      priorMerchant: 'Store B',
+      messageAt: DateTime.utc(2026, 10, 27, 10),
+    );
+    final changedBack = record(
+      priorMerchant: 'Store A',
+      messageAt: DateTime.utc(2026, 10, 28, 10),
+    );
+    final retry = record(
+      priorMerchant: 'Store A',
+      messageAt: DateTime.utc(2026, 10, 27, 10),
+      eventId: first,
+    );
+
+    expect({first, changedAway, changedBack}, hasLength(3));
+    expect(retry, first);
+    expect(outbox.count(), 3);
+  });
+
+  test('offline correction waits for sync ack and clear removes it', () {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final outbox = SmsFeedbackOutbox(database, namespace: 'account-a');
+    outbox.enqueueAfterSync(
+      clientSeq: 12,
+      payload: {
+        'sourceKey': 'e' * 64,
+        'action': 'edited',
+        'consentGrantedAt': DateTime.utc(2026, 10, 27).toIso8601String(),
+      },
+    );
+
+    expect(outbox.pendingAfterSync(), isEmpty);
+    outbox.acknowledgeAfterSync(12);
+    final acknowledged = outbox.pendingAfterSync();
+    expect(acknowledged, hasLength(1));
+    final retryId = acknowledged.single.payload['eventId'];
+    expect(retryId, isA<String>());
+    outbox.clear();
+    expect(outbox.pendingAfterSync(), isEmpty);
   });
 
   test('generalized SMS evidence masks personal names outside greetings', () {
@@ -162,5 +278,13 @@ void main() {
     expect(outbox.count(), 2);
     expect(enqueue(1), second);
     expect(outbox.count(), 2);
+    expect(
+      outbox.pending().map((event) => event.payload['factIndex']).toSet(),
+      {0, 1},
+    );
+    expect(
+      outbox.pending().map((event) => event.eventId).toSet(),
+      {first, second},
+    );
   });
 }

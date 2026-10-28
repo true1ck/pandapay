@@ -29,6 +29,24 @@ const ALLOWED_FIELDS = new Set([
 
 const FINANCIAL_KEYWORDS = /\b(?:debited|credited|paid|spent|transferred|withdrawn|received|due date|amount due|available bal|avail bal)\b/i;
 
+// Match Dart String.compareTo's deterministic lexicographic ordering. Locale
+// sorting varies by host and would produce different canonical bundle hashes.
+function compareOrdinal(left, right) {
+  const a = String(left);
+  const b = String(right);
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function compareCategoryRulesV2(a, b) {
+  for (const field of [
+    'merchantKey', 'senderKey', 'contextKey', 'factFamily', 'categorySlug',
+  ]) {
+    const order = compareOrdinal(a[field], b[field]);
+    if (order !== 0) return order;
+  }
+  return 0;
+}
+
 function countCaptureGroups(regexStr) {
   try {
     const re = new RegExp(`(?:${regexStr})|^$`);
@@ -214,17 +232,20 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
         // signed-in devices. Consent gates contributions and experiments, not
         // access to already evaluated shared product improvements.
         const categoryResult = await client.query(
-          `SELECT merchant_key, category_slug, support_count, agreement_rate
-             FROM pandapay.sms_approved_category_rules()
-            ORDER BY merchant_key, category_slug`,
+          `SELECT merchant_key, sender_key, context_key, fact_family, category_slug,
+                  support_count, agreement_rate
+             FROM pandapay.sms_approved_category_rules_v2()
+            ORDER BY merchant_key, sender_key, context_key, fact_family, category_slug`,
         );
-        const categoryRules = (categoryResult.rows || []).map((item) => ({
+        const categoryRulesV2 = (categoryResult.rows || []).map((item) => ({
           merchantKey: item.merchant_key,
+          senderKey: item.sender_key,
+          contextKey: item.context_key,
+          factFamily: item.fact_family,
           categorySlug: item.category_slug,
           supportCount: Number(item.support_count),
           agreementBp: Math.round(Number(item.agreement_rate) * 10000),
-        })).sort((a, b) => a.merchantKey.localeCompare(b.merchantKey) ||
-          a.categorySlug.localeCompare(b.categorySlug));
+        })).sort(compareCategoryRulesV2);
         if (!smsLearningConsent) {
           let revokedCandidateIds = candidates.rows.map((row) => row.candidate_id);
           try {
@@ -244,19 +265,17 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           return {
             active,
             candidateRules: [],
-            categoryRules,
+            categoryRulesV2,
             revokedCandidateIds,
           };
         }
 
-        // C9: a shared rule whose negative evidence (current explicit
-        // corrections naming the rule) reaches the pause threshold stops being
-        // served to NEW users. Profiles that already received the rule keep it
-        // — their on-device correction remains the winning local override, and
-        // pausing never modifies correction data. The static active bundle is
-        // hash-verified by devices, so it is not per-user filtered here.
+        // C9: withhold a paused candidate from every device on refresh.
+        // Previously assigned devices receive its id in revokedCandidateIds
+        // below, so a known-bad candidate cannot remain active in their cache.
+        // This does not change any user's own correction data. The static
+        // active bundle is hash-verified and is not per-user filtered here.
         let pausedRuleIds = new Set();
-        let priorAssignmentIds = new Set();
         try {
           const paused = await client.query(
             'SELECT decision_rule_id FROM pandapay.sms_rule_negative_evidence() WHERE paused',
@@ -267,23 +286,11 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           // serving behavior instead of withholding every candidate rule.
           console.warn('SMS rule pause lookup unavailable:', error.message || error);
         }
-        try {
-          const issued = await client.query(
-            `SELECT DISTINCT candidate_id
-               FROM public.sms_rule_candidate_assignments
-              WHERE profile_id = $1`,
-            [req.userId],
-          );
-          priorAssignmentIds = new Set((issued.rows || []).map((row) => row.candidate_id));
-        } catch (error) {
-          console.warn('SMS prior candidate assignment lookup unavailable:', error.message || error);
-        }
-
         const candidateRules = [];
         for (const row of candidates.rows) {
           const delivery = candidateDelivery(row, req.userId);
           if (!delivery || delivery.sha256 !== row.approved_sha256) continue;
-          if (pausedRuleIds.has(row.candidate_id) && !priorAssignmentIds.has(row.candidate_id)) continue;
+          if (pausedRuleIds.has(row.candidate_id)) continue;
           let assignment;
           try {
             assignment = await client.query(
@@ -338,13 +345,15 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           // guess which cached candidate rules are safe to remove.
           console.warn('SMS candidate revocation lookup unavailable:', error.message || error);
         }
-        return { active, candidateRules, categoryRules, revokedCandidateIds };
+        return { active, candidateRules, categoryRulesV2, revokedCandidateIds };
       });
       const row = result.active.rows?.[0];
       const candidateRules = result.candidateRules || [];
       const categoryRulesVersion = 1;
       const categoryRulesMinClientVersion = '1.0.0';
-      const categoryRules = result.categoryRules || [];
+      // Never serve legacy merchant-only mappings. A valid empty v1 bundle
+      // clears existing v1 client caches; v2 is separately hashed and scoped.
+      const categoryRules = [];
       const categoryRulesSha256 = crypto.createHash('sha256')
         .update(JSON.stringify({
           categoryRulesVersion,
@@ -352,6 +361,26 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           categoryRules,
         }))
         .digest('hex');
+      const categoryRulesV2Version = 2;
+      const categoryRulesV2MinClientVersion = '1.0.0';
+      const categoryRulesV2 = result.categoryRulesV2 || [];
+      const categoryRulesV2Sha256 = crypto.createHash('sha256')
+        .update(JSON.stringify({
+          categoryRulesV2Version: 2,
+          minClientVersion: categoryRulesV2MinClientVersion,
+          categoryRulesV2,
+        }))
+        .digest('hex');
+      const categoryRulePayload = {
+        categoryRulesVersion,
+        categoryRulesMinClientVersion,
+        categoryRules,
+        categoryRulesSha256,
+        categoryRulesV2Version,
+        categoryRulesV2MinClientVersion,
+        categoryRulesV2,
+        categoryRulesV2Sha256,
+      };
       if (!row) {
         // No active bundles: tell device to roll back to version 0
         return res.status(200).json({
@@ -360,10 +389,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           sha256: '',
           rolledBack: true,
           candidateRules,
-          categoryRulesVersion,
-          categoryRulesMinClientVersion,
-          categoryRules,
-          categoryRulesSha256,
+          ...categoryRulePayload,
           revokedCandidateIds: result.revokedCandidateIds || [],
         });
       }
@@ -374,10 +400,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           upToDate: true,
           bundleVersion: row.bundle_version,
           candidateRules,
-          categoryRulesVersion,
-          categoryRulesMinClientVersion,
-          categoryRules,
-          categoryRulesSha256,
+          ...categoryRulePayload,
           revokedCandidateIds: result.revokedCandidateIds || [],
         });
       }
@@ -392,10 +415,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
         minClientVersion: row.min_client_ver,
         rolledBack: Number.isInteger(sinceVersion) && sinceVersion > row.bundle_version,
         candidateRules,
-        categoryRulesVersion,
-        categoryRulesMinClientVersion,
-        categoryRules,
-        categoryRulesSha256,
+        ...categoryRulePayload,
         revokedCandidateIds: result.revokedCandidateIds || [],
       });
     } catch (error) {
@@ -409,25 +429,46 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
     try {
       const proposals = await withUserClient(req.userId, async (client) => {
         const result = await client.query(
-          `SELECT c.merchant_key, c.category_slug, c.support_count,
+          `SELECT c.merchant_key, c.sender_key, c.context_key, c.fact_family,
+                  c.category_slug, c.support_count,
                   c.agreement_rate,
                   CASE WHEN a.category_slug = c.category_slug THEN a.status END AS status,
                   CASE WHEN a.category_slug = c.category_slug THEN a.reviewed_at END AS reviewed_at,
                   CASE WHEN a.category_slug = c.category_slug THEN a.reason END AS reason,
                   evidence.redacted_pattern
-             FROM pandapay.sms_shared_category_rules() c
-             LEFT JOIN public.sms_category_rule_approvals a
+             FROM pandapay.sms_shared_category_rules_v2() c
+             LEFT JOIN public.sms_category_rule_v2_approvals a
                ON a.merchant_key = c.merchant_key
-             LEFT JOIN pandapay.sms_admin_category_evidence() evidence
+              AND a.sender_key = c.sender_key
+              AND a.context_key = c.context_key
+              AND a.fact_family = c.fact_family
+             LEFT JOIN pandapay.sms_admin_category_evidence_v2() evidence
                ON evidence.merchant_key = c.merchant_key
-            ORDER BY c.merchant_key, c.category_slug LIMIT 500`,
+              AND evidence.sender_key = c.sender_key
+              AND evidence.context_key = c.context_key
+              AND evidence.fact_family = c.fact_family
+              AND evidence.category_slug = c.category_slug
+            ORDER BY c.merchant_key, c.sender_key, c.context_key, c.fact_family,
+                     c.category_slug LIMIT 500`,
         );
-        return result.rows.map((row) => ({
-          ...row,
-          origin: 'user_category_corrections',
-          evidence_strength: 'multi_user_confirmed',
-          proposed_rule: { merchantKey: row.merchant_key, categorySlug: row.category_slug },
-        }));
+        return result.rows.map((row) => {
+          const { safeAdminPattern } = require('./sms_learning');
+          const redactedPattern = safeAdminPattern(row.redacted_pattern);
+          return {
+            ...row,
+            redacted_pattern: redactedPattern,
+            redacted_samples: redactedPattern ? [redactedPattern] : [],
+            origin: 'user_category_corrections',
+            evidence_strength: 'multi_user_confirmed',
+            proposed_rule: {
+              merchantKey: row.merchant_key,
+              senderKey: row.sender_key,
+              contextKey: row.context_key,
+              factFamily: row.fact_family,
+              categorySlug: row.category_slug,
+            },
+          };
+        });
       });
       res.status(200).json({ proposals });
     } catch (error) {
@@ -437,8 +478,11 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
   });
 
   app.post('/admin/sms-rules/category-proposals/review', requireAdmin, async (req, res) => {
-    const { merchantKey, categorySlug, decision, reason } = req.body || {};
+    const { merchantKey, senderKey, contextKey, factFamily, categorySlug, decision, reason } = req.body || {};
     if (typeof merchantKey !== 'string' || merchantKey.length < 3 || merchantKey.length > 80 ||
+        typeof senderKey !== 'string' || !/^[A-Z]{2}-[A-Z0-9]{3,10}(?:-[A-Z])?$/.test(senderKey) ||
+        !require('./sms_learning_feedback_route').validCategoryContextKey(contextKey) ||
+        factFamily !== 'posted_movement' ||
         typeof categorySlug !== 'string' || !/^[a-z0-9_-]{1,64}$/.test(categorySlug) ||
         !['approved', 'rejected'].includes(decision) ||
         typeof reason !== 'string' || reason.trim().length < 5 || reason.length > 500) {
@@ -446,39 +490,44 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
     }
     try {
       const result = await withUserClient(req.userId, async (client) => {
-        await client.query("SELECT pg_advisory_xact_lock(hashtext('sms_category_rule_approval'))");
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+          [`sms_category_rule_v2_approval:${merchantKey}:${senderKey}:${contextKey}:${factFamily}`]);
         const eligible = await client.query(
-          `SELECT merchant_key, category_slug, support_count, agreement_rate
-             FROM pandapay.sms_shared_category_rules()
-            WHERE merchant_key = $1 AND category_slug = $2`,
-          [merchantKey, categorySlug],
+          `SELECT merchant_key, sender_key, context_key, fact_family,
+                  category_slug, support_count, agreement_rate
+             FROM pandapay.sms_shared_category_rules_v2()
+            WHERE merchant_key = $1 AND sender_key = $2 AND context_key = $3
+              AND fact_family = $4 AND category_slug = $5`,
+          [merchantKey, senderKey, contextKey, factFamily, categorySlug],
         );
         const proposal = eligible.rows?.[0];
         if (!proposal) return { stale: true };
         await client.query(
-          `INSERT INTO public.sms_category_rule_approvals
-             (merchant_key, category_slug, status, reviewed_by, reason,
+          `INSERT INTO public.sms_category_rule_v2_approvals
+             (merchant_key, sender_key, context_key, fact_family, category_slug,
+              status, reviewed_by, reason,
               support_count_at_review, agreement_rate_at_review)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)
-           ON CONFLICT (merchant_key) DO UPDATE SET
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+           ON CONFLICT (merchant_key, sender_key, context_key, fact_family) DO UPDATE SET
              category_slug=excluded.category_slug, status=excluded.status,
              reviewed_by=excluded.reviewed_by, reviewed_at=now(),
              reason=excluded.reason,
              support_count_at_review=excluded.support_count_at_review,
              agreement_rate_at_review=excluded.agreement_rate_at_review`,
-          [merchantKey, categorySlug, decision, req.userId, reason.trim(),
+          [merchantKey, senderKey, contextKey, factFamily, categorySlug,
+            decision, req.userId, reason.trim(),
             proposal.support_count, proposal.agreement_rate],
         );
         await client.query(
           `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
-           VALUES ($1, 'review_sms_category_rule', 'sms_category_rule_approvals', NULL, $2, $3)`,
-          [req.userId, JSON.stringify({ merchantKey, categorySlug, decision,
+           VALUES ($1, 'review_sms_category_rule_v2', 'sms_category_rule_v2_approvals', NULL, $2, $3)`,
+          [req.userId, JSON.stringify({ merchantKey, senderKey, contextKey, factFamily, categorySlug, decision,
             supportCount: proposal.support_count, agreementRate: proposal.agreement_rate }), reason.trim()],
         );
         return { stale: false };
       });
       if (result.stale) return res.status(409).json({ error: 'proposal_no_longer_eligible' });
-      res.status(200).json({ ok: true, merchantKey, categorySlug, decision });
+      res.status(200).json({ ok: true, merchantKey, senderKey, contextKey, factFamily, categorySlug, decision });
     } catch (error) {
       console.error('POST /admin/sms-rules/category-proposals/review error', error.message || error);
       res.status(500).json({ error: 'failed to review category proposal' });
@@ -785,5 +834,7 @@ module.exports = {
   countCaptureGroups,
   isSafeRegex,
   candidateDelivery,
+  compareOrdinal,
+  compareCategoryRulesV2,
   registerSmsRuleBundleRoutes,
 };

@@ -206,15 +206,21 @@ test('AI auto-resolution creates only an admin proposal under v2 consent', async
     const response = await api.call(event({
       action: 'ai_auto_resolved',
       consentPolicyVersion: 'sms-shared-learning-v2',
-      sampleBody: 'Rs. {n} paid at Cafe on {n}-{n}-{n}',
+      sampleBody: 'Rs. {n} paid at Cafe restaurant on {n}-{n}-{n}',
+      originalDecision: {
+        kind: 'posted_movement',
+        fields: { merchant: 'Cafe', categorySlug: 'dining' },
+      },
       aiConfidenceScore: 0.96,
     }));
     assert.equal(response.status, 200);
     assert.equal(response.body.learningReason, 'admin_review_pending');
     const proposal = api.queries.find(({ sql }) => sql.includes('INSERT INTO public.sms_ai_learning_proposals'));
     assert.ok(proposal);
-    assert.equal(proposal.params[7], 'Rs. {n} paid at {MERCHANT} on {n}-{n}-{n}');
-    assert.equal(proposal.params[8], '{AMOUNT} paid at {MERCHANT} on {DATE}');
+    assert.equal(proposal.params[7], 'Rs. {n} paid at {MERCHANT} restaurant on {n}-{n}-{n}');
+    assert.equal(proposal.params[8], '{AMOUNT} paid at {MERCHANT} restaurant on {DATE}');
+    assert.equal(proposal.params[16], 'AD-HDFCBK');
+    assert.equal(proposal.params[17], 'RESTAURANT');
     assert.equal(api.queries.some(({ sql }) => sql.includes('INSERT INTO public.sms_learning_examples')), false);
   } finally {
     if (previous === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;

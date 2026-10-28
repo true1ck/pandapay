@@ -39,6 +39,24 @@ test('automatic ingestion links source alias and never applies card state', asyn
   assert.ok(writes.some(({sql})=>sql.includes("status = 'ignored'")));
 });
 
+test('non-active imports preserve status without entering duplicate detection', async () => {
+  let duplicateChecks=0;
+  const writes=[];
+  const writer=new Function('recordTransactionObservation','detectDuplicates','loadUserCardForState','applyTransactionState','transactionTags',`${extract('insertTransactionAndUpdateState','importParsedMessage')} return insertTransactionAndUpdateState;`)(
+    async()=>{},async()=>{duplicateChecks++;return {};},async()=>null,async()=>{throw Error('must not apply state');},
+    {mergeTransactionTags:async()=>{throw Error('must not merge tags');}});
+  const client={query:async(sql,params)=>{
+    writes.push({sql,params});
+    if(sql.includes('INSERT INTO transactions'))return {rowCount:1,rows:[{id:'ignored',status:'ignored'}]};
+    return {rows:[]};
+  }};
+  const result=await writer(client,'profile',{...incoming,status:'ignored',sourceKey:'ignored-key',backfill:true});
+  assert.equal(result.transaction.status,'ignored');
+  assert.equal(duplicateChecks,0);
+  const insert=writes.find(({sql})=>sql.includes('INSERT INTO transactions'));
+  assert.equal(insert.params[15],'ignored');
+});
+
 test('replaying an EMI-repayment credit replaces the stale generic merchant label', async () => {
   const observations=[];
   const legacy = {

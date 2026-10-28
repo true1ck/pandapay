@@ -19,7 +19,12 @@ const appUrl = process.env.PANDAPAY_E2E_APP_DATABASE_URL;
 const MERCHANT = 'Supersede Grocers';
 const MERCHANT_KEY = 'SUPERSEDE GROCERS';
 const UNAPPROVED_KEY = 'E2E UNAPPROVED SHOP';
+const REVIEWED_KEY = 'E2E REVIEWED SHOP';
+const REJECTED_KEY = 'E2E REJECTED SHOP';
 const CATEGORY = 'groceries';
+const SENDER_KEY = 'AD-E2EBNK';
+const CONTEXT_KEY = 'GROCERY';
+const FACT_FAMILY = 'posted_movement';
 const POLICY = 'sms-shared-learning-v2';
 const GRANTED_AT = '2026-10-26T10:00:00.000Z';
 const HMAC_KEY = 'e2e_shared_learning_key_0123456789abcdef';
@@ -51,6 +56,7 @@ test('end-to-end: AI evidence, explicit correction, and device delivery gates',
     process.env.SMS_LEARNING_HMAC_KEY = HMAC_KEY;
     const { withUserClient, pool } = require('../src/db');
     const { registerSmsLearningFeedbackRoute } = require('../src/sms_learning_feedback_route');
+    const { registerSmsLearningAdminRoutes } = require('../src/sms_learning');
     const { registerSmsRuleBundleRoutes } = require('../src/sms_rule_bundle');
 
     const appRole = await withUserClient(null, async (client) => (
@@ -83,10 +89,15 @@ test('end-to-end: AI evidence, explicit correction, and device delivery gates',
       return next();
     };
     registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, withUserClient });
+    registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient });
     registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserClient });
 
     const call = async (method, path, userId, body = {}, query = {}) => {
-      const chain = handlers.get(`${method} ${path}`);
+      const dynamicCorrectionReview = path.match(/^\/admin\/sms-learning\/feedback-events\/([0-9a-f-]{36})\/review$/i);
+      const routeKey = dynamicCorrectionReview
+        ? `${method} /admin/sms-learning/feedback-events/:eventId/review`
+        : `${method} ${path}`;
+      const chain = handlers.get(routeKey);
       assert.ok(chain, `route ${method} ${path} was registered`);
       let status = 200;
       let responseBody;
@@ -95,7 +106,8 @@ test('end-to-end: AI evidence, explicit correction, and device delivery gates',
         status(code) { status = code; return this; },
         json(value) { responseBody = value; responded = true; return this; },
       };
-      const req = { userId, body, query };
+      const req = { userId, body, query,
+        params: dynamicCorrectionReview ? { eventId: dynamicCorrectionReview[1] } : {} };
       // Walk the chain the way Express does. A guard that answers the request
       // never calls next(), so the handler below it must not run.
       for (const middleware of chain.slice(0, -1)) {
@@ -126,8 +138,8 @@ test('end-to-end: AI evidence, explicit correction, and device delivery gates',
       await admin.query(
         `DELETE FROM public.admin_audit_log WHERE admin_id = ANY($1::uuid[])`, [allProfiles]);
       await admin.query(
-        `DELETE FROM public.sms_category_rule_approvals WHERE merchant_key = ANY($1::text[])`,
-        [[MERCHANT_KEY, UNAPPROVED_KEY]]);
+        `DELETE FROM public.sms_category_rule_v2_approvals WHERE merchant_key = ANY($1::text[])`,
+        [[MERCHANT_KEY, UNAPPROVED_KEY, REVIEWED_KEY, REJECTED_KEY]]);
       await admin.query(`DELETE FROM public.user_consents WHERE profile_id = ANY($1::uuid[])`,
         [allProfiles]);
       await admin.query(`DELETE FROM public.admin_users WHERE id = ANY($1::uuid[])`, [allProfiles]);
@@ -157,7 +169,7 @@ test('end-to-end: AI evidence, explicit correction, and device delivery gates',
         sourceKey: sourceA,
         action: 'ai_auto_resolved',
         sender: 'AD-E2EBNK',
-        sampleBody: `Rs. 250 paid at ${MERCHANT} on 25-10-2026`,
+        sampleBody: `Rs. 250 grocery purchase paid at ${MERCHANT} on 25-10-2026`,
         resolvedKind: 'transaction',
         originalDecision: {
           kind: 'posted_movement',
@@ -204,22 +216,23 @@ test('end-to-end: AI evidence, explicit correction, and device delivery gates',
       });
       assert.equal(approve.status, 200, `approve failed: ${JSON.stringify(approve.body)}`);
 
-      // Nine more approved proposals from other users reach the ten-user,
-      // ninety-percent agreement floor that sms_shared_category_rules() enforces.
+      // Nine more consented, reviewed proposals from other users reach the
+      // ten-user, ninety-percent floor for this exact sender/context tuple.
       for (const filler of fillers) {
         await admin.query(
           `INSERT INTO public.sms_ai_learning_proposals
              (profile_id, event_id, source_key_hash, sender_fingerprint, user_hash,
               issuer_prefix, sender_pattern, redacted_pattern, template_text,
               fact_family, resolved_kind, proposed_fields, ai_score, status,
-              reviewed_by, reviewed_at, consent_policy_version, consent_granted_at)
+              reviewed_by, reviewed_at, consent_policy_version, consent_granted_at,
+              sender_key, context_key)
            VALUES ($1,$2,$3,$4,$5,'E2E','AD-E2EBNK',$6,$7,'posted_movement','transaction',
-                   $8::jsonb,0.95,'approved',$9,now(),$10,$11)`,
+                   $8::jsonb,0.95,'approved',$9,now(),$10,$11,$12,$13)`,
           [filler, crypto.randomUUID(), hex64(`e2e-filler-${filler}`), hex64('e2e-fp'),
             hex64(`e2e-user-${filler}`), 'Rs. {n} paid at {MERCHANT}',
             '{AMOUNT} paid at {MERCHANT}',
             JSON.stringify({ merchant: MERCHANT, categorySlug: CATEGORY, amountInr: 123.45 }),
-            adminUser, POLICY, GRANTED_AT]);
+            adminUser, POLICY, GRANTED_AT, SENDER_KEY, CONTEXT_KEY]);
       }
       // A second merchant whose proposals stay pending: no rule approval, no
       // ten-user support. It must never reach a device.
@@ -228,27 +241,34 @@ test('end-to-end: AI evidence, explicit correction, and device delivery gates',
            (profile_id, event_id, source_key_hash, sender_fingerprint, user_hash,
             issuer_prefix, sender_pattern, redacted_pattern, template_text,
             fact_family, resolved_kind, proposed_fields, ai_score, status,
-            consent_policy_version, consent_granted_at)
+            consent_policy_version, consent_granted_at, sender_key, context_key)
          VALUES ($1,$2,$3,$4,$5,'E2E','AD-E2EBNK','Rs. {n} paid at {MERCHANT}',
                  '{AMOUNT} paid at {MERCHANT}','posted_movement','transaction',$6::jsonb,
-                 0.95,'pending',$7,$8)`,
+                 0.95,'pending',$7,$8,$9,$10)`,
         [fillers[0], crypto.randomUUID(), sourceUnapproved, hex64('e2e-fp'),
           hex64(`e2e-user-${fillers[0]}`),
           JSON.stringify({ merchant: UNAPPROVED_KEY, categorySlug: CATEGORY, amountInr: 123.45 }),
-          POLICY, GRANTED_AT]);
-      await admin.query(
-        `INSERT INTO public.sms_category_rule_approvals
-           (merchant_key, category_slug, status, reviewed_by, reason,
-            support_count_at_review, agreement_rate_at_review)
-         VALUES ($1, $2, 'approved', $3, 'E2E fixture', 10, 1.0)`,
-        [MERCHANT_KEY, CATEGORY, adminUser]);
+          POLICY, GRANTED_AT, SENDER_KEY, CONTEXT_KEY]);
+      const categoryReview = await call('POST', '/admin/sms-rules/category-proposals/review', adminUser, {
+        merchantKey: MERCHANT_KEY,
+        senderKey: SENDER_KEY,
+        contextKey: CONTEXT_KEY,
+        factFamily: FACT_FAMILY,
+        categorySlug: CATEGORY,
+        decision: 'approved',
+        reason: 'E2E: scoped evidence verified',
+      });
+      assert.equal(categoryReview.status, 200,
+        `scoped category approval failed: ${JSON.stringify(categoryReview.body)}`);
 
       const before = await deviceSync(userB);
       assert.equal(before.status, 200);
-      const beforeKeys = before.body.categoryRules.map((rule) => rule.merchantKey);
-      assert.ok(beforeKeys.includes(MERCHANT_KEY),
+      const beforeRules = before.body.categoryRulesV2;
+      assert.ok(beforeRules.some((rule) => rule.merchantKey === MERCHANT_KEY &&
+        rule.senderKey === SENDER_KEY && rule.contextKey === CONTEXT_KEY &&
+        rule.factFamily === FACT_FAMILY && rule.categorySlug === CATEGORY),
         'an approved, threshold-meeting category rule is delivered to a second account');
-      assert.ok(!beforeKeys.includes(UNAPPROVED_KEY),
+      assert.ok(!beforeRules.some((rule) => rule.merchantKey === UNAPPROVED_KEY),
         'a pending proposal with no rule approval must never reach a device');
       assert.deepEqual(before.body.candidateRules, [],
         'approving AI evidence alone must not publish a parser rule to devices');
@@ -260,7 +280,7 @@ test('end-to-end: AI evidence, explicit correction, and device delivery gates',
         sourceKey: sourceA,
         action: 'edited',
         sender: 'AD-E2EBNK',
-        sampleBody: `Rs. 250 paid at ${MERCHANT} on 25-10-2026`,
+        sampleBody: `Rs. 250 grocery purchase paid at ${MERCHANT} on 25-10-2026`,
         resolvedKind: 'transaction',
         originalDecision: {
           kind: 'posted_movement',
@@ -310,7 +330,7 @@ test('end-to-end: AI evidence, explicit correction, and device delivery gates',
         sourceKey: sourceA,
         action: 'ai_auto_resolved',
         sender: 'AD-E2EBNK',
-        sampleBody: `Rs. 250 paid at ${MERCHANT} on 25-10-2026`,
+        sampleBody: `Rs. 250 grocery purchase paid at ${MERCHANT} on 25-10-2026`,
         resolvedKind: 'transaction',
         originalDecision: {
           kind: 'posted_movement',
@@ -350,10 +370,10 @@ test('end-to-end: AI evidence, explicit correction, and device delivery gates',
       // ---- 6. the shared rule disappears for every device ----------------
       const after = await deviceSync(userB);
       assert.equal(after.status, 200);
-      const afterKeys = after.body.categoryRules.map((rule) => rule.merchantKey);
-      assert.ok(!afterKeys.includes(MERCHANT_KEY),
+      const afterRules = after.body.categoryRulesV2;
+      assert.ok(!afterRules.some((rule) => rule.merchantKey === MERCHANT_KEY),
         'a superseded proposal stops voting, so the rule leaves device delivery');
-      assert.ok(!afterKeys.includes(UNAPPROVED_KEY));
+      assert.ok(!afterRules.some((rule) => rule.merchantKey === UNAPPROVED_KEY));
 
       const workerView = await admin.query(
         `SELECT count(*)::int AS n FROM public.sms_ai_learning_proposals
@@ -361,6 +381,103 @@ test('end-to-end: AI evidence, explicit correction, and device delivery gates',
             AND proposed_fields->>'merchant' = $1`, [MERCHANT]);
       assert.equal(workerView.rows[0].n, 9,
         'candidate synthesis sees nine approved proposals, not ten');
+
+      // ---- 6b. explicit correction cases enter the existing candidate gate
+      const correctionProfiles = [userA, userB, ...fillers.slice(0, 8)];
+      const correctionIds = correctionProfiles.map(() => crypto.randomUUID());
+      const makeCorrection = async (profileId, eventId, merchant, merchantKey) => {
+        const source = hex64(`review-case-${eventId}`);
+        await admin.query(
+          `INSERT INTO public.sms_learning_feedback_events
+             (profile_id, event_id, source_key_hash, sender_fingerprint, action,
+              resolved_kind, consent_policy_version, consent_granted_at,
+              merchant_key, category_slug, original_category_slug,
+              original_decision, corrected_fields, correction_kind, decision_origin,
+              fact_key, message_at, sender_key, context_key, fact_family)
+           VALUES ($1,$2,$3,$4,'category_changed','transaction',$5,$6,$7,'groceries','travel',
+                   $8::jsonb,$9::jsonb,'misclassified_category','ai',$10,now(),$11,$12,$13)`,
+          [profileId, eventId, source, hex64('review-case-sender'), POLICY, GRANTED_AT,
+            merchantKey,
+            JSON.stringify({ kind: 'posted_movement', origin: 'ai',
+              fields: { merchant, categorySlug: 'travel' } }),
+            JSON.stringify({ merchant, categorySlug: 'groceries' }), `${source}:0`,
+            SENDER_KEY, CONTEXT_KEY, FACT_FAMILY]);
+        return eventId;
+      };
+      const rejectedId = await makeCorrection(userA, crypto.randomUUID(), REJECTED_KEY, REJECTED_KEY);
+      const rejectedReview = await call('POST',
+        `/admin/sms-learning/feedback-events/${rejectedId}/review`, adminUser,
+        { decision: 'rejected', reason: 'Evidence does not support a stable correction' });
+      assert.equal(rejectedReview.status, 200);
+      const rejectedAggregate = await withUserClient(adminUser, (client) => client.query(
+        `SELECT 1 FROM pandapay.sms_shared_category_rules_v2()
+          WHERE merchant_key = $1 AND sender_key = $2 AND context_key = $3
+            AND fact_family = $4`, [REJECTED_KEY, SENDER_KEY, CONTEXT_KEY, FACT_FAMILY]));
+      assert.equal(rejectedAggregate.rowCount, 0,
+        'rejected correction evidence never enters the category candidate aggregate');
+
+      const reviewCaseIds = [];
+      for (let i = 0; i < correctionIds.length; i++) {
+        reviewCaseIds.push(await makeCorrection(correctionProfiles[i], correctionIds[i], REVIEWED_KEY, REVIEWED_KEY));
+      }
+      const firstCorrectionApproval = await call('POST',
+        `/admin/sms-learning/feedback-events/${reviewCaseIds[0]}/review`, adminUser,
+        { decision: 'approved', reason: 'Evidence is tied to a valid user correction' });
+      assert.equal(firstCorrectionApproval.status, 200);
+      const earlyAggregate = await withUserClient(adminUser, (client) => client.query(
+        `SELECT 1 FROM pandapay.sms_shared_category_rules_v2()
+          WHERE merchant_key = $1 AND sender_key = $2 AND context_key = $3
+            AND fact_family = $4`, [REVIEWED_KEY, SENDER_KEY, CONTEXT_KEY, FACT_FAMILY]));
+      assert.equal(earlyAggregate.rowCount, 0,
+        'one approved correction does not bypass the existing ten-user consensus gate');
+      const beforeRuleApproval = await deviceSync(userB);
+      assert.ok(!beforeRuleApproval.body.categoryRulesV2.some((rule) => rule.merchantKey === REVIEWED_KEY),
+        'approval of one correction case does not deliver a rule');
+
+      for (const eventId of reviewCaseIds.slice(1)) {
+        const review = await call('POST',
+          `/admin/sms-learning/feedback-events/${eventId}/review`, adminUser,
+          { decision: 'approved', reason: 'Evidence is tied to a valid user correction' });
+        assert.equal(review.status, 200);
+      }
+      const approvedAggregate = await withUserClient(adminUser, (client) => client.query(
+        `SELECT support_count FROM pandapay.sms_shared_category_rules_v2()
+          WHERE merchant_key = $1 AND sender_key = $2 AND context_key = $3
+            AND fact_family = $4`, [REVIEWED_KEY, SENDER_KEY, CONTEXT_KEY, FACT_FAMILY]));
+      assert.equal(approvedAggregate.rows[0].support_count, 10,
+        'ten approved users create an eligible category candidate');
+      const beforeFinalApproval = await deviceSync(userB);
+      assert.ok(!beforeFinalApproval.body.categoryRulesV2.some((rule) => rule.merchantKey === REVIEWED_KEY),
+        'candidate eligibility alone does not deliver a rule before final rule approval');
+      const finalCategoryApproval = await call('POST', '/admin/sms-rules/category-proposals/review', adminUser, {
+        merchantKey: REVIEWED_KEY,
+        senderKey: SENDER_KEY,
+        contextKey: CONTEXT_KEY,
+        factFamily: FACT_FAMILY,
+        categorySlug: CATEGORY,
+        decision: 'approved',
+        reason: 'E2E: scoped correction evidence verified',
+      });
+      assert.equal(finalCategoryApproval.status, 200,
+        `scoped correction rule approval failed: ${JSON.stringify(finalCategoryApproval.body)}`);
+      const afterFinalApproval = await deviceSync(userB);
+      assert.ok(afterFinalApproval.body.categoryRulesV2.some((rule) => rule.merchantKey === REVIEWED_KEY &&
+        rule.senderKey === SENDER_KEY && rule.contextKey === CONTEXT_KEY &&
+        rule.factFamily === FACT_FAMILY && rule.categorySlug === CATEGORY),
+        'delivery starts only after the existing final category-rule approval');
+
+      const revoked = await call('POST',
+        `/admin/sms-learning/feedback-events/${reviewCaseIds[0]}/review`, adminUser,
+        { decision: 'revoked', reason: 'Later review withdrew this evidence approval' });
+      assert.equal(revoked.status, 200);
+      const afterRevocation = await deviceSync(userB);
+      assert.ok(!afterRevocation.body.categoryRulesV2.some((rule) => rule.merchantKey === REVIEWED_KEY),
+        'revoking one vote drops support below threshold and removes the rule from delivery');
+      const reviewAudit = await admin.query(
+        `SELECT action, before_value, after_value FROM public.admin_audit_log
+          WHERE entity = 'sms_learning_feedback_events' AND entity_id = $1
+          ORDER BY created_at`, [reviewCaseIds[0]]);
+      assert.deepEqual(reviewAudit.rows.map((row) => row.after_value.reviewStatus), ['approved', 'revoked']);
 
       // ---- 7. opt-out removes both pending and approved evidence ---------
       await withUserClient(fillers[1], async (client) => {

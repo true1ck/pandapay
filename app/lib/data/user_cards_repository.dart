@@ -927,6 +927,8 @@ class DismissalQueueEntry {
   final String? templateText;
   final String? sampleBody;
   final String? family;
+  final String? correctionKind;
+  final String resolvedKind;
   final DateTime consentGrantedAt;
   final DateTime queuedAt;
 
@@ -938,6 +940,8 @@ class DismissalQueueEntry {
     this.templateText,
     this.sampleBody,
     this.family,
+    this.correctionKind,
+    this.resolvedKind = 'unresolved',
     required this.consentGrantedAt,
     required this.queuedAt,
   });
@@ -950,6 +954,8 @@ class DismissalQueueEntry {
     if (templateText != null) 'templateText': templateText,
     if (sampleBody != null) 'sampleBody': sampleBody,
     if (family != null) 'family': family,
+    if (correctionKind != null) 'correctionKind': correctionKind,
+    'resolvedKind': resolvedKind,
     'queuedAt': queuedAt.toUtc().toIso8601String(),
     'consentGrantedAt': consentGrantedAt.toUtc().toIso8601String(),
   };
@@ -1349,6 +1355,7 @@ class UserCardsRepository {
   final Future<SmsDismissalOutbox> Function()? dismissalOutbox;
   final Future<SmsFeedbackOutbox> Function()? feedbackOutbox;
   final Future<DateTime?> Function()? loadSmsSharedLearningConsent;
+  final Future<bool> Function(String sourceKey)? isRepeatedSmsOccurrence;
 
   List<DismissalQueueEntry> get dismissalRetryQueue =>
       List.unmodifiable(_dismissalRetryQueue);
@@ -1380,6 +1387,7 @@ class UserCardsRepository {
     this.dismissalOutbox,
     this.feedbackOutbox,
     this.loadSmsSharedLearningConsent,
+    this.isRepeatedSmsOccurrence,
   }) : _client = client ?? http.Client();
   Future<void> captureSmsMessages(List<SmsBatchMessage> messages) async {
     if (onSmsBatchCaptured != null) {
@@ -1969,9 +1977,12 @@ class UserCardsRepository {
     String? templateText,
     String? sampleBody,
     String? family,
+    String correctionKind = 'preference_only',
+    String resolvedKind = 'unresolved',
   }) async {
     final consentGrantedAt = await loadSmsSharedLearningConsent?.call();
     if (consentGrantedAt == null) return true;
+    if (await _shouldAbstainFromSmsLearning(sourceKey)) return true;
     final safeTemplate = redactSmsLearningPattern(templateText);
     final safeSample = redactSmsLearningPattern(sampleBody);
     // A credential-bearing message has no safe learning evidence. The user's
@@ -1989,6 +2000,8 @@ class UserCardsRepository {
       templateText: safeTemplate,
       sampleBody: safeSample,
       family: family,
+      correctionKind: correctionKind,
+      resolvedKind: resolvedKind,
       queuedAt: DateTime.now(),
     );
     final payload = entry.toJson();
@@ -2026,15 +2039,25 @@ class UserCardsRepository {
     }
   }
 
+  Future<bool> _shouldAbstainFromSmsLearning(String sourceKey) async {
+    try {
+      return await isRepeatedSmsOccurrence?.call(sourceKey) ?? false;
+    } catch (_) {
+      // A failed local provenance lookup must not upload ambiguous evidence.
+      return true;
+    }
+  }
+
   Map<String, dynamic> _dismissalFeedbackPayload(DismissalQueueEntry entry) => {
     'eventId': entry.eventId,
     'sourceKey': entry.sourceKey,
     'action': 'dismissed',
     if (entry.sender != null) 'sender': entry.sender,
-    'resolvedKind': 'unresolved',
+    'resolvedKind': entry.resolvedKind,
     'occurredAt': entry.queuedAt.toUtc().toIso8601String(),
     if (entry.sampleBody != null) 'sampleBody': entry.sampleBody,
     if (entry.family != null) 'originalDecision': {'kind': entry.family},
+    if (entry.correctionKind != null) 'correctionKind': entry.correctionKind,
     if (entry.reason != null) 'reason': entry.reason,
     'consentPurpose': 'sms_shared_learning',
     'consentPolicyVersion': smsSharedLearningPolicyVersion,
@@ -2062,6 +2085,12 @@ class UserCardsRepository {
     var acknowledged = 0;
     for (final entry in durable.pending()) {
       try {
+        final sourceKey = entry.payload['sourceKey'] as String? ?? '';
+        if (sourceKey.isEmpty ||
+            await _shouldAbstainFromSmsLearning(sourceKey)) {
+          durable.acknowledge(entry.eventId);
+          continue;
+        }
         final response = await _client
             .post(
               Uri.parse('$apiBaseUrl/sms/learning-feedback'),
@@ -2144,6 +2173,8 @@ class UserCardsRepository {
           templateText: payload['templateText'] as String?,
           sampleBody: payload['sampleBody'] as String?,
           family: payload['family'] as String?,
+          correctionKind: payload['correctionKind'] as String?,
+          resolvedKind: payload['resolvedKind'] as String? ?? 'unresolved',
           queuedAt:
               DateTime.tryParse(payload['queuedAt'] as String? ?? '') ??
               DateTime.now(),
@@ -2154,6 +2185,11 @@ class UserCardsRepository {
     var succeeded = 0;
     for (final entry in toRetry) {
       try {
+        if (await _shouldAbstainFromSmsLearning(entry.sourceKey)) {
+          durable?.acknowledge(entry.sourceKey, eventId: entry.eventId);
+          _dismissalRetryQueue.removeWhere((e) => e.eventId == entry.eventId);
+          continue;
+        }
         final response = await _client
             .post(
               Uri.parse('$apiBaseUrl/sms/learning-feedback'),
