@@ -1224,6 +1224,40 @@ class AdminApi {
         .cast<Map<String, dynamic>>();
   }
 
+  /// C7: explicit user-correction cases from the typed correction envelope in
+  /// `sms_learning_feedback_events` (migration 20261027190000). Targets
+  /// GET /admin/sms-learning/feedback-events and mirrors the camelCase shape
+  /// of the ai-proposals route. Each case is privacy-safe by contract: the
+  /// message evidence is only ever the server-generalized `redactedPattern`,
+  /// never a raw SMS body, account/reference number, or OTP. The console
+  /// renders only an allow-list of decision field keys on top of that.
+  ///
+  /// Case shape:
+  ///   eventId, factKey, action, resolvedKind,
+  ///   correctionKind (15 typed kinds; cosmetic/preference_only/duplicate/
+  ///     already_paid never train rules),
+  ///   decisionOrigin (parser|downloaded_rule|shared_rule|ai|manual),
+  ///   decisionRuleId, messageAt, createdAt,
+  ///   originalDecision {kind, origin, ruleId, fields},
+  ///   correctedFields {…},
+  ///   categorySlug (canonical spend slug or null),
+  ///   originalCategorySlug, commitmentCategory (commitment taxonomy or null),
+  ///   support {users, messages}, disagreement {users},
+  ///   supersededAt, supersededByEventId.
+  Future<List<Map<String, dynamic>>> fetchSmsCorrectionCases({int limit = 100}) async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/sms-learning/feedback-events?limit=$limit'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'Failed to load SMS correction cases: ${response.statusCode} ${response.body}',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['correctionCases'] as List).cast<Map<String, dynamic>>();
+  }
+
   Future<void> reviewSmsAiProposal({
     required String proposalId,
     required String decision,

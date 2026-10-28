@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import 'sms_correction_cases_screen.dart';
 
 /// Only aggregate merchant/category evidence is shown; no user's SMS or
 /// transaction fields are returned to the console.
@@ -14,7 +15,7 @@ class SmsCategoryProposalsScreen extends ConsumerWidget {
     final parserProposals = ref.watch(smsParserProposalsProvider);
     final aiProposals = ref.watch(smsAiProposalsProvider);
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
       appBar: AppBar(
         title: const Text('SMS rule approvals'),
@@ -22,6 +23,7 @@ class SmsCategoryProposalsScreen extends ConsumerWidget {
           Tab(text: 'Categories'),
           Tab(text: 'Parser rules'),
           Tab(text: 'AI decisions'),
+          Tab(text: 'Corrections'),
         ]),
       ),
       body: TabBarView(children: [proposals.when(
@@ -51,7 +53,10 @@ class SmsCategoryProposalsScreen extends ConsumerWidget {
                 itemCount: rows.length,
                 itemBuilder: (context, index) => _AiProposalTile(rows[index]),
               ),
-      )]),
+      ),
+      // C7: explicit user-correction cases — read-only, privacy-safe.
+      const SmsCorrectionCasesTab(),
+      ]),
       ),
     );
   }
@@ -89,8 +94,11 @@ class _AiProposalTileState extends ConsumerState<_AiProposalTile> {
       );
       if (reason == null) return;
       if (reason.length < 5) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a reason of at least 5 characters.')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Enter a reason of at least 5 characters.')),
+          );
+        }
         return;
       }
       setState(() => busy = true);
