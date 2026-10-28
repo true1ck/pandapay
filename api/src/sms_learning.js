@@ -156,7 +156,7 @@ async function getSmsSharedLearningConsent(client, profileId) {
   const consent = await client.query(
     `SELECT granted, policy_version, granted_at FROM public.user_consents
       WHERE profile_id = $1 AND purpose = 'sms_shared_learning'
-      ORDER BY granted_at DESC, id DESC LIMIT 1`,
+      ORDER BY granted_at DESC, granted ASC, id DESC LIMIT 1`,
     [profileId],
   );
   return consent.rows?.[0] || null;
@@ -402,6 +402,155 @@ function registerSmsLearningAdminRoutes(app, { requireAdmin, withUserClient }) {
     } catch (error) {
       console.error('GET /admin/sms-learning/candidates error', error.message || error);
       res.status(500).json({ error: 'failed to fetch SMS learning candidates' });
+    }
+  });
+
+  // C9: per-rule negative evidence from current explicit corrections. Counts
+  // only — no message text, sender, or per-profile rows leave the database.
+  app.get('/admin/sms-learning/rule-negative-evidence', requireAdmin, async (req, res) => {
+    try {
+      const result = await withUserClient(req.userId, async (client) => {
+        const rules = await client.query(
+          `SELECT decision_rule_id, negative_evidence_count,
+                  distinct_reporting_profiles, paused
+             FROM pandapay.sms_rule_negative_evidence()
+            ORDER BY negative_evidence_count DESC, decision_rule_id ASC
+            LIMIT 500`,
+        );
+        const threshold = await client.query(
+          'SELECT pandapay.sms_shared_rule_pause_threshold() AS threshold',
+        );
+        return {
+          rules: rules.rows || [],
+          pauseThreshold: threshold.rows?.[0]?.threshold ?? null,
+        };
+      });
+      res.status(200).json({
+        rules: (result.rules || []).map((row) => ({
+          decisionRuleId: row.decision_rule_id,
+          negativeEvidenceCount: Number(row.negative_evidence_count),
+          distinctReportingProfiles: Number(row.distinct_reporting_profiles),
+          paused: row.paused === true,
+        })),
+        pauseThreshold: result.pauseThreshold,
+      });
+    } catch (error) {
+      console.error('GET /admin/sms-learning/rule-negative-evidence error', error.message || error);
+      res.status(500).json({ error: 'failed to fetch rule negative evidence' });
+    }
+  });
+
+  // C7/L14: admin-readable explicit correction cases. The stored decision
+  // objects were sanitized at write time and only counts leave here; the one
+  // message-shaped field is the AI proposal's server-generalized redacted
+  // pattern, attached strictly as advisory diagnosis for the reviewing admin.
+  const NON_TRAINING_CORRECTION_KINDS = new Set([
+    'cosmetic', 'preference_only', 'duplicate', 'already_paid',
+  ]);
+  app.get('/admin/sms-learning/feedback-events', requireAdmin, async (req, res) => {
+    const limit = Math.min(200, Math.max(1, Number.parseInt(req.query?.limit, 10) || 100));
+    try {
+      const result = await withUserClient(req.userId, (client) =>
+        client.query(
+          `with page as (
+             select e.event_id, e.source_key_hash, e.fact_key, e.action,
+                    e.resolved_kind, e.correction_kind, e.decision_origin,
+                    e.decision_rule_id, e.message_at, e.created_at,
+                    e.original_decision, e.corrected_fields, e.category_slug,
+                    e.original_category_slug, e.commitment_category,
+                    e.superseded_at, e.superseded_by_event_id, e.merchant_key
+               from public.sms_learning_feedback_events e
+              order by e.created_at desc
+              limit $1
+           )
+           select p.*,
+                  coalesce(s.support_users, 0)::int as support_users,
+                  coalesce(s.support_messages, 0)::int as support_messages,
+                  coalesce(d.disagree_users, 0)::int as disagree_users,
+                  a.redacted_pattern as ai_redacted_pattern,
+                  a.proposed_fields as ai_proposed_fields,
+                  a.ai_score as ai_score,
+                  a.status as ai_status
+             from page p
+             left join lateral (
+               select count(distinct e2.profile_id)::int as support_users,
+                      count(*)::int as support_messages
+                 from public.sms_learning_feedback_events e2
+                where e2.merchant_key is not distinct from p.merchant_key
+                  and e2.category_slug is not distinct from p.category_slug
+                  and e2.superseded_at is null
+                  and coalesce(e2.correction_kind, 'misclassified_category') not in
+                      ('preference_only', 'cosmetic', 'duplicate', 'already_paid')
+                  and e2.category_slug is not null
+                  and e2.category_slug is distinct from e2.original_category_slug
+             ) s on true
+             left join lateral (
+               select count(distinct e3.profile_id)::int as disagree_users
+                 from public.sms_learning_feedback_events e3
+                where e3.merchant_key is not distinct from p.merchant_key
+                  and e3.category_slug is not null
+                  and e3.category_slug is distinct from p.category_slug
+                  and e3.superseded_at is null
+                  and coalesce(e3.correction_kind, 'misclassified_category') not in
+                      ('preference_only', 'cosmetic', 'duplicate', 'already_paid')
+             ) d on true
+             left join lateral (
+               select a2.redacted_pattern, a2.proposed_fields, a2.ai_score, a2.status
+                 from public.sms_ai_learning_proposals a2
+                where a2.source_key_hash = p.source_key_hash
+                order by a2.created_at desc
+                limit 1
+             ) a on true
+            order by p.created_at desc`,
+          [limit],
+        ));
+      res.status(200).json({
+        correctionCases: (result.rows || []).map((row) => {
+          const decision = row.original_decision && typeof row.original_decision === 'object'
+            ? row.original_decision : {};
+          const trains = !NON_TRAINING_CORRECTION_KINDS.has(row.correction_kind);
+          return {
+            eventId: row.event_id,
+            factKey: row.fact_key ?? null,
+            action: row.action,
+            resolvedKind: row.resolved_kind,
+            correctionKind: row.correction_kind ?? null,
+            decisionOrigin: row.decision_origin ?? null,
+            decisionRuleId: row.decision_rule_id ?? null,
+            messageAt: row.message_at ?? null,
+            createdAt: row.created_at,
+            originalDecision: {
+              kind: decision.kind ?? null,
+              origin: decision.origin ?? null,
+              ruleId: decision.ruleId ?? decision.rule_id ?? null,
+              fields: decision.fields ?? {},
+            },
+            correctedFields: row.corrected_fields ?? {},
+            categorySlug: row.category_slug ?? null,
+            originalCategorySlug: row.original_category_slug ?? null,
+            commitmentCategory: row.commitment_category ?? null,
+            support: trains
+              ? { users: Number(row.support_users), messages: Number(row.support_messages) }
+              : { users: 0, messages: 0 },
+            disagreement: trains
+              ? { users: Number(row.disagree_users) }
+              : { users: 0 },
+            supersededAt: row.superseded_at ?? null,
+            supersededByEventId: row.superseded_by_event_id ?? null,
+            redactedPattern: row.ai_redacted_pattern ?? null,
+            aiDiagnosis: row.ai_redacted_pattern == null ? null : {
+              redactedPattern: row.ai_redacted_pattern,
+              proposedFields: row.ai_proposed_fields ?? {},
+              score: row.ai_score == null ? null : Number(row.ai_score),
+              proposalStatus: row.ai_status ?? null,
+              advisory: true,
+            },
+          };
+        }),
+      });
+    } catch (error) {
+      console.error('GET /admin/sms-learning/feedback-events error', error.message || error);
+      res.status(500).json({ error: 'failed to fetch SMS correction cases' });
     }
   });
 

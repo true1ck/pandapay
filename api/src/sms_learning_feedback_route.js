@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const smsLearning = require('./sms_learning');
 const { compileTemplate, deriveIssuerPrefix } = require('./sms_template_compiler');
+const { SPEND_CATEGORIES } = require('./sms_facts');
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -12,11 +13,31 @@ const FAMILY_BY_KIND = {
   mandate: 'mandate_lifecycle',
   dismissed: 'ignore_noise',
 };
+// Commitments use their own taxonomy (CommitmentCategory on the device); a
+// subscription is a commitment kind, never a spend category.
+const COMMITMENT_CATEGORIES = new Set([
+  'utility', 'telecom', 'insurance', 'loanOrEmi', 'rent',
+  'education', 'tax', 'subscription', 'other',
+]);
+const SPEND_CATEGORY_SET = new Set(SPEND_CATEGORIES);
+// Mirrors the check constraint on sms_learning_feedback_events.
+const CORRECTION_KINDS = new Set([
+  'misclassified_category', 'misclassified_kind', 'wrong_amount',
+  'wrong_merchant', 'wrong_date', 'wrong_direction', 'wrong_instrument',
+  'wrong_account', 'wrong_bill_fields', 'false_transaction', 'false_dismissal',
+  'duplicate', 'already_paid', 'cosmetic', 'preference_only',
+]);
+// A claim about correctness. Everything else is either presentation-only or a
+// preference, and must not train a shared classification rule.
+const NON_TRAINING_KINDS = new Set(['cosmetic', 'preference_only', 'duplicate', 'already_paid']);
+const DECISION_ORIGINS = new Set(['parser', 'downloaded_rule', 'shared_rule', 'ai', 'manual']);
+const RULE_ID = /^[A-Za-z0-9:._-]{1,120}$/;
 const SAFE_FIELDS = new Set([
   'entryKind', 'instrument', 'amountInr', 'availableBalanceInr',
   'currentBalanceInr', 'amountDueInr', 'minimumDueInr', 'amountRole',
   'dueDate', 'statementDate', 'asOfAt', 'mandateStatus', 'merchant',
   'cadenceDays', 'limitInr', 'currency', 'categorySlug', 'occurredAt',
+  'commitmentCategory', 'billerName',
 ]);
 const TRAINING_FIELDS = new Set([...SAFE_FIELDS].filter((field) => field !== 'categorySlug'));
 const FIELD_MAX_LENGTH = 120;
@@ -145,6 +166,7 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
       eventId, sourceKey, action, sender, sampleBody, resolvedKind,
       originalDecision, correctedFields, occurredAt, reason,
       consentPurpose, consentPolicyVersion, consentGrantedAt, aiConfidenceScore,
+      correctionKind, decisionOrigin, decisionRuleId, factIndex, messageAt,
     } = body;
     if (typeof eventId !== 'string' || !UUID.test(eventId)) {
       return res.status(400).json({ error: 'eventId must be a UUID' });
@@ -188,6 +210,24 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
            aiConfidenceScore < 0 || aiConfidenceScore > 1)))) {
       return res.status(400).json({ error: 'invalid AI proposal evidence or consent policy' });
     }
+    if (correctionKind !== undefined && !CORRECTION_KINDS.has(correctionKind)) {
+      return res.status(400).json({ error: 'invalid correctionKind' });
+    }
+    if (decisionOrigin !== undefined && !DECISION_ORIGINS.has(decisionOrigin)) {
+      return res.status(400).json({ error: 'invalid decisionOrigin' });
+    }
+    if (decisionRuleId !== undefined &&
+        (typeof decisionRuleId !== 'string' || !RULE_ID.test(decisionRuleId))) {
+      return res.status(400).json({ error: 'invalid decisionRuleId' });
+    }
+    if (factIndex !== undefined &&
+        (!Number.isInteger(factIndex) || factIndex < 0 || factIndex > 31)) {
+      return res.status(400).json({ error: 'factIndex must be 0 to 31' });
+    }
+    if (messageAt !== undefined &&
+        (typeof messageAt !== 'string' || Number.isNaN(Date.parse(messageAt)))) {
+      return res.status(400).json({ error: 'messageAt must be a valid timestamp' });
+    }
     const occurred = occurredAt === undefined ? null : new Date(occurredAt);
     if (occurred && Number.isNaN(occurred.getTime())) {
       return res.status(400).json({ error: 'occurredAt must be a valid timestamp' });
@@ -205,16 +245,39 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
     const cleanOriginal = plainObject(originalDecision) ? {
       kind: typeof originalDecision.kind === 'string'
         ? originalDecision.kind.slice(0, 80) : null,
+      origin: DECISION_ORIGINS.has(originalDecision.origin) ? originalDecision.origin : null,
+      ruleId: typeof originalDecision.ruleId === 'string' && RULE_ID.test(originalDecision.ruleId)
+        ? originalDecision.ruleId : null,
       fields: sanitizeFields(originalDecision.fields),
     } : {};
-    const cleanCorrected = sanitizeFields(correctedFields);
     const family = familyFor({ action, resolvedKind, originalDecision: cleanOriginal });
+    const cleanCorrected = sanitizeFields(correctedFields);
+    // Spend and commitment categories are different taxonomies. Only a
+    // canonical spend slug reaches category_slug, so a commitment kind such as
+    // "subscription" can never enter the spend aggregate, and an unsupported
+    // slug makes the event abstain instead of inventing one.
+    const isCommitmentFamily = family === 'bill_obligation' ||
+      family === 'bill_payment' || family === 'mandate_lifecycle';
+    const rawSpend = categorySlug(cleanCorrected.categorySlug);
+    const rawCommitment = categorySlug(cleanCorrected.commitmentCategory);
+    const correctedCategory = !isCommitmentFamily && SPEND_CATEGORY_SET.has(rawSpend)
+      ? rawSpend : null;
+    const commitmentCategory = isCommitmentFamily
+      ? (COMMITMENT_CATEGORIES.has(rawCommitment) ? rawCommitment
+        : (COMMITMENT_CATEGORIES.has(rawSpend) ? rawSpend : null))
+      : null;
+    delete cleanCorrected.categorySlug;
+    delete cleanCorrected.commitmentCategory;
+    if (correctedCategory) cleanCorrected.categorySlug = correctedCategory;
+    if (commitmentCategory) cleanCorrected.commitmentCategory = commitmentCategory;
+    const originalRaw = originalDecision?.fields?.categorySlug ?? originalDecision?.fields?.category;
+    const originalCategory = isCommitmentFamily
+      ? (COMMITMENT_CATEGORIES.has(categorySlug(originalRaw)) ? categorySlug(originalRaw) : null)
+      : (SPEND_CATEGORY_SET.has(categorySlug(originalRaw)) ? categorySlug(originalRaw) : null);
     const trainingFields = {
       ...sanitizeFields(cleanOriginal.fields, { training: true }),
       ...sanitizeFields(cleanCorrected, { training: true }),
     };
-    const correctedCategory = categorySlug(cleanCorrected.categorySlug);
-    const originalCategory = categorySlug(cleanOriginal.fields?.categorySlug);
     const categoryMerchant = action === 'category_changed'
       ? merchantKey(cleanOriginal.fields, cleanCorrected) : null;
     const fingerprint = smsLearning.senderFingerprint(sender);
@@ -302,6 +365,13 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
           return { acknowledged: true, recorded: inserted.rowCount === 1, learned: false,
             learningReason: inserted.rowCount === 1 ? 'admin_review_pending' : 'duplicate' };
         }
+        if (correctionKind === 'cosmetic') {
+          // A presentation-only edit makes no claim about the SMS decision, so
+          // it neither trains nor supersedes an AI proposal.
+          return { acknowledged: true, recorded: false, learned: false,
+            learningReason: 'cosmetic_no_training' };
+        }
+        const trains = correctionKind === undefined || !NON_TRAINING_KINDS.has(correctionKind);
         const lockKey = `sms-feedback:${req.userId}:${eventId}`;
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [lockKey]);
         const existing = await client.query(
@@ -324,7 +394,7 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
           : (typeof body.template === 'string' ? smsLearning.redactBody(body.template).slice(0, 250) : undefined);
         const exampleFields = action === 'confirmed' || action === 'edited'
           ? trainingFields : {};
-        const canLearnFinancial = (action === 'confirmed' || action === 'edited') &&
+        const canLearnFinancial = trains && (action === 'confirmed' || action === 'edited') &&
           family && family !== 'ignore_noise' && Object.keys(exampleFields).length > 0;
 
         if (canLearnFinancial) {
@@ -339,7 +409,7 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
           if (example.error) throw Object.assign(new Error('learning example insert failed'), { code: 'SMS_LEARNING_EXAMPLE_FAILED' });
           learned = example.recorded === 1 || example.exampleId === null;
           learningReason = learned ? (example.recorded ? 'recorded' : 'duplicate') : 'insufficient_correction';
-        } else if (action === 'confirmed' && family === 'ignore_noise') {
+        } else if (trains && action === 'confirmed' && family === 'ignore_noise') {
           const example = await smsLearning.recordLearningExample(client, {
             profileId: req.userId,
             sender,
@@ -351,7 +421,7 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
           if (example.error) throw Object.assign(new Error('learning example insert failed'), { code: 'SMS_LEARNING_EXAMPLE_FAILED' });
           learned = example.recorded === 1 || example.exampleId === null;
           learningReason = learned ? (example.recorded ? 'recorded' : 'duplicate') : 'insufficient_correction';
-        } else if (action === 'dismissed') {
+        } else if (trains && action === 'dismissed') {
           const outcome = await smsLearning.recordReviewDismissal(client, {
             profileId: req.userId,
             sender,
@@ -362,7 +432,7 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
           if (outcome.errors?.length) throw Object.assign(new Error('dismissal learning insert failed'), { code: 'SMS_LEARNING_EXAMPLE_FAILED' });
           learned = (outcome.examples?.length || 0) > 0;
           learningReason = learned ? (outcome.recorded > 0 ? 'recorded' : 'duplicate') : 'insufficient_correction';
-        } else if (action === 'moved_to_review' && family && family !== 'ignore_noise') {
+        } else if (trains && action === 'moved_to_review' && family && family !== 'ignore_noise') {
           const example = await smsLearning.recordLearningExample(client, {
             profileId: req.userId,
             sender,
@@ -377,9 +447,13 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
           learned = example.recorded === 1 || example.exampleId === null;
           learningReason = learned ? (example.recorded ? 'recorded' : 'duplicate') : 'insufficient_correction';
         } else if (action === 'category_changed') {
-          // Category corrections are retained for the next category-rule
-          // compiler; the current SMS regex learner only emits parse fields.
-          learningReason = 'category_feedback_stored_no_shared_category_rule';
+          // Category corrections feed the aggregate vote, not the regex
+          // learner. A non-canonical or commitment-only label abstains here.
+          learningReason = correctedCategory
+            ? 'category_feedback_stored'
+            : 'category_feedback_unsupported_slug';
+        } else if (!trains) {
+          learningReason = `${correctionKind}_no_training`;
         }
 
         // Withhold the generalized message text when a name or handle survived
@@ -388,19 +462,33 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
         const patternEvidence = sampleBody ? proposalPattern(sampleBody) : null;
         const safePattern = patternEvidence && !residualIdentifierRisk(patternEvidence)
           ? patternEvidence : null;
+        // One current correction per fact. The newer explicit state replaces
+        // the older one in this transaction, and the older row is retained as
+        // superseded audit history rather than deleted. The per-profile lock
+        // above means two concurrent corrections cannot both insert as current.
+        const factKey = `${sourceKey}:${factIndex ?? 0}`;
+        await client.query(
+          'SELECT pandapay.sms_supersede_corrections($1, $2, $3) AS superseded_count',
+          [sourceKey, factKey, eventId],
+        );
         await client.query(
           `INSERT INTO public.sms_learning_feedback_events
              (profile_id, event_id, source_key_hash, sender_fingerprint, action,
               consent_purpose, consent_policy_version, consent_granted_at, merchant_key,
               category_slug, original_category_slug, resolved_kind,
               original_decision, corrected_fields, occurred_at, learned, learning_reason,
-              redacted_pattern)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8::timestamptz,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18)`,
+              redacted_pattern, correction_kind, decision_origin, decision_rule_id,
+              fact_key, message_at, commitment_category)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8::timestamptz,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23::timestamptz,$24)`,
           [req.userId, eventId, sourceKey, fingerprint, action, 'sms_shared_learning',
             consent.policy_version, consentGrantedAt, categoryMerchant, correctedCategory,
             originalCategory, resolvedKind, JSON.stringify(cleanOriginal),
             JSON.stringify(cleanCorrected), occurred, learned, learningReason,
-            safePattern],
+            safePattern, correctionKind ?? null,
+            decisionOrigin ?? cleanOriginal.origin ?? null,
+            decisionRuleId ?? cleanOriginal.ruleId ?? null,
+            factKey, messageAt === undefined ? null : new Date(messageAt),
+            commitmentCategory],
         );
         // Accepted explicit feedback outranks any AI-only proposal for this SMS.
         // Runs in the same transaction as the event insert, so a proposal can
@@ -500,7 +588,7 @@ function registerSmsLearningFeedbackRoute(app, { requireAuth, requireAdmin, with
           return { stale: true };
         }
         const hasCategoryEvidence = typeof row.proposed_fields?.merchant === 'string' &&
-          categorySlug(row.proposed_fields?.categorySlug) !== null;
+          SPEND_CATEGORY_SET.has(categorySlug(row.proposed_fields?.categorySlug));
         if (decision === 'approved' && !row.template_text && !hasCategoryEvidence) {
           return { noSafeTemplate: true };
         }

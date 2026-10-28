@@ -189,7 +189,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           `SELECT granted
              FROM public.user_consents
             WHERE profile_id = $1 AND purpose = 'sms_shared_learning'
-            ORDER BY granted_at DESC, id DESC LIMIT 1`,
+            ORDER BY granted_at DESC, granted ASC, id DESC LIMIT 1`,
           [req.userId],
         );
         const smsLearningConsent = consent.rows?.[0]?.granted === true;
@@ -249,10 +249,41 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           };
         }
 
+        // C9: a shared rule whose negative evidence (current explicit
+        // corrections naming the rule) reaches the pause threshold stops being
+        // served to NEW users. Profiles that already received the rule keep it
+        // — their on-device correction remains the winning local override, and
+        // pausing never modifies correction data. The static active bundle is
+        // hash-verified by devices, so it is not per-user filtered here.
+        let pausedRuleIds = new Set();
+        let priorAssignmentIds = new Set();
+        try {
+          const paused = await client.query(
+            'SELECT decision_rule_id FROM pandapay.sms_rule_negative_evidence() WHERE paused',
+          );
+          pausedRuleIds = new Set((paused.rows || []).map((row) => row.decision_rule_id));
+        } catch (error) {
+          // Additive migration: during a staggered deploy keep the previous
+          // serving behavior instead of withholding every candidate rule.
+          console.warn('SMS rule pause lookup unavailable:', error.message || error);
+        }
+        try {
+          const issued = await client.query(
+            `SELECT DISTINCT candidate_id
+               FROM public.sms_rule_candidate_assignments
+              WHERE profile_id = $1`,
+            [req.userId],
+          );
+          priorAssignmentIds = new Set((issued.rows || []).map((row) => row.candidate_id));
+        } catch (error) {
+          console.warn('SMS prior candidate assignment lookup unavailable:', error.message || error);
+        }
+
         const candidateRules = [];
         for (const row of candidates.rows) {
           const delivery = candidateDelivery(row, req.userId);
           if (!delivery || delivery.sha256 !== row.approved_sha256) continue;
+          if (pausedRuleIds.has(row.candidate_id) && !priorAssignmentIds.has(row.candidate_id)) continue;
           let assignment;
           try {
             assignment = await client.query(

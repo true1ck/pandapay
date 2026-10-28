@@ -7401,7 +7401,7 @@ app.post('/transactions/category-bulk-apply', requireAuth, async (req, res) => {
   }
 });
 
-const IGNORE_REASONS = ['refund', 'reversal', 'transfer'];
+const IGNORE_REASONS = ['refund', 'reversal', 'transfer', 'wrong_transaction'];
 
 /**
  * PATCH /transactions/:id/note — design 18 "Add a note".

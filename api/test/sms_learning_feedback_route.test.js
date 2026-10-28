@@ -165,14 +165,33 @@ test('category correction stores a normalized merchant/category event for shared
     const ctx = setup();
     const response = await ctx.call(event({
       action: 'category_changed',
-      correctedFields: { categorySlug: 'Food_Dining', merchant: 'Cafe  Central' },
+      correctedFields: { categorySlug: 'Dining', merchant: 'Cafe  Central' },
     }));
     assert.equal(response.body.learned, false);
     const storedEvent = ctx.queries.find(({ sql }) => sql.includes('INSERT INTO public.sms_learning_feedback_events'));
     assert.ok(storedEvent);
     assert.equal(storedEvent.params[8], 'CAFE CENTRAL');
-    assert.equal(storedEvent.params[9], 'food_dining');
+    assert.equal(storedEvent.params[9], 'dining');
     assert.equal(ctx.queries.some(({ sql }) => sql.includes('INSERT INTO public.sms_learning_examples')), false);
+  } finally {
+    if (prior === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;
+    else process.env.SMS_LEARNING_HMAC_KEY = prior;
+  }
+});
+
+test('a spend category outside the canonical taxonomy abstains instead of being stored', async () => {
+  const prior = process.env.SMS_LEARNING_HMAC_KEY;
+  process.env.SMS_LEARNING_HMAC_KEY = 'x'.repeat(48);
+  try {
+    const ctx = setup();
+    const response = await ctx.call(event({
+      action: 'category_changed',
+      correctedFields: { categorySlug: 'Food_Dining', merchant: 'Cafe  Central' },
+    }));
+    assert.equal(response.status, 200);
+    assert.equal(response.body.learningReason, 'category_feedback_unsupported_slug');
+    const storedEvent = ctx.queries.find(({ sql }) => sql.includes('INSERT INTO public.sms_learning_feedback_events'));
+    assert.equal(storedEvent.params[9], null);
   } finally {
     if (prior === undefined) delete process.env.SMS_LEARNING_HMAC_KEY;
     else process.env.SMS_LEARNING_HMAC_KEY = prior;
