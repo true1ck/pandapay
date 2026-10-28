@@ -9680,6 +9680,32 @@ app.delete('/account/delete-request', requireAuth, async (req, res) => {
   }
 });
 
+/** POST /account/data-reset — erases personal product data but keeps login. */
+app.post('/account/data-reset', requireAuth, async (req, res) => {
+  try {
+    await withUserClient(req.userId, (client) =>
+      client.query('SELECT pandapay.reset_account_data($1::uuid)', [req.userId])
+    );
+    res.json({ reset: true });
+  } catch (err) {
+    console.error('POST /account/data-reset error', err);
+    res.status(500).json({ error: 'data_reset_failed' });
+  }
+});
+
+/** POST /account/erase — permanently erases product data before auth removal. */
+app.post('/account/erase', requireAuth, async (req, res) => {
+  try {
+    await withUserClient(req.userId, (client) =>
+      client.query('SELECT pandapay.execute_account_deletion($1::uuid)', [req.userId])
+    );
+    res.json({ erased: true });
+  } catch (err) {
+    console.error('POST /account/erase error', err);
+    res.status(500).json({ error: 'account_erasure_failed' });
+  }
+});
+
 const SUPPORT_TICKET_KINDS = ['bug', 'wrong_card_data', 'card_request', 'general'];
 
 /**

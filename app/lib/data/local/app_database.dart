@@ -323,6 +323,36 @@ class AppDatabase {
     }
   }
 
+  /// Drops persisted rows scoped to the account namespace after the server
+  /// has confirmed a data reset. Sync queues and outboxes are namespace
+  /// scoped too, so they are cleared in the same SQLite transaction.
+  Future<void> clearAccountNamespace(String namespace) async {
+    if (namespace.isEmpty || namespace == 'signed-out') {
+      throw ArgumentError.value(namespace, 'namespace');
+    }
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      final tables = db.select(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+      );
+      for (final row in tables) {
+        final table = row['name'] as String;
+        final escaped = table.replaceAll('"', '""');
+        final columns = db.select('PRAGMA table_info("$escaped")');
+        if (!columns.any((column) => column['name'] == 'namespace')) continue;
+        db.execute(
+          'DELETE FROM "$escaped" WHERE namespace IN (?, ?)',
+          [namespace, 'legacy'],
+        );
+      }
+      db.execute('DELETE FROM transaction_attachments');
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
   void _ensureLocalUserCardsSchema() {
     final columns = db
         .select('PRAGMA table_info(local_user_cards)')

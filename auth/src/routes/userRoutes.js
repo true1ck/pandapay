@@ -516,5 +516,55 @@ router.put(
 // NOTE: Location management is out of scope for this identity service.
 // Auth service only handles authentication, sessions, and basic profile
 
+// POST /users/me/deletion-check — validate OTP step-up before the product
+// database is purged. DELETE /users/me repeats this check at commit time.
+router.post('/me/deletion-check', auth, userRateLimitSensitive, requireRecentOtpOrReauth, (req, res) => {
+  return res.json({ authorized: true });
+});
+
+// DELETE /users/me — permanent account removal after OTP step-up. Cascades
+// device sessions, refresh tokens, and linked OAuth identities; auth audit
+// rows retain their operation metadata with user_id set to null.
+router.delete('/me', auth, userRateLimitSensitive, requireRecentOtpOrReauth, async (req, res) => {
+  try {
+    const identityResult = await db.query(
+      'SELECT phone_number, phone_lookup_hash, email FROM users WHERE id = $1 AND deleted = FALSE',
+      [req.user.id],
+      db.createContextFromRequest(req),
+    );
+    if (identityResult.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const identity = identityResult.rows[0];
+    const phone = identity.phone_number
+      ? decryptPhoneNumber(identity.phone_number)
+      : null;
+    if (identity.phone_lookup_hash || identity.email) {
+      await db.query(
+        `DELETE FROM otp_requests
+          WHERE ($1::text IS NOT NULL AND phone_lookup_hash = $1)
+             OR ($2::text IS NOT NULL AND lower(email) = lower($2))`,
+        [identity.phone_lookup_hash, identity.email],
+        db.createContextFromRequest(req),
+      );
+    }
+    if (phone) {
+      await db.query('DELETE FROM otp_codes WHERE phone_number = $1', [phone]);
+    }
+    const result = await db.query(
+      'DELETE FROM users WHERE id = $1 RETURNING id',
+      [req.user.id],
+      db.createContextFromRequest(req),
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    return res.json({ deleted: true });
+  } catch (err) {
+    console.error('delete me error', err);
+    return res.status(500).json({ error: 'Account deletion failed' });
+  }
+});
+
 module.exports = router;
 
