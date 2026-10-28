@@ -86,6 +86,29 @@ test('uses OSM fallback when Google Places API fails or quota exceeded', async (
   assert.deepEqual(result.merchants, [candidate]);
 });
 
+test('retains sanitized Google error status when both providers fail', async () => {
+  await assert.rejects(discoverNearby({
+    ...input,
+    googleApiKey: 'test-google-key',
+    fetchImpl: async () => ({
+      ok: false,
+      status: 403,
+      json: async () => ({ error: {
+        status: 'PERMISSION_DENIED',
+        message: 'Do not log this provider message or the API key',
+        details: [{ reason: 'API_KEY_SERVICE_BLOCKED' }],
+      } }),
+    }),
+    fallbackDiscover: async () => { throw new Error('fallback unavailable'); },
+  }), (error) => {
+    assert.equal(error.googleFailure.providerHttpStatus, 403);
+    assert.equal(error.googleFailure.providerStatus, 'PERMISSION_DENIED');
+    assert.equal(error.googleFailure.providerReason, 'API_KEY_SERVICE_BLOCKED');
+    assert.equal(error.googleFailure.message, 'Google Places API returned 403');
+    return true;
+  });
+});
+
 test('uses OSM fallback when Google Places API returns no places', async () => {
   const candidate = { merchant_id: 'osm:node:99', source: 'osm_candidate' };
   const result = await discoverNearby({

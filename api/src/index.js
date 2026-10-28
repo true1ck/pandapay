@@ -1294,6 +1294,10 @@ app.post('/merchants/nearby/google', requireValidJwt, async (req, res) => {
     console.warn('POST /merchants/nearby/google unavailable', {
       requestId: req.requestId,
       googleFailure: err.googleFailure?.name || 'unavailable',
+      googleKeyConfigured: Boolean(googleApiKey),
+      googleHttpStatus: err.googleFailure?.providerHttpStatus || null,
+      googleStatus: err.googleFailure?.providerStatus || null,
+      googleReason: err.googleFailure?.providerReason || null,
       fallbackFailure: err.cause?.name || 'unavailable',
     });
     res.status(503).json({

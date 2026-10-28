@@ -109,7 +109,23 @@ async function fetchGooglePlacesNearby({
   });
 
   if (!response.ok) {
-    throw new Error(`Google Places API returned ${response.status}`);
+    const error = new Error(`Google Places API returned ${response.status}`);
+    error.providerHttpStatus = response.status;
+    try {
+      const payload = await response.json();
+      const status = payload?.error?.status;
+      if (typeof status === 'string' && /^[A-Z_]{1,64}$/.test(status)) {
+        error.providerStatus = status;
+      }
+      const reason = payload?.error?.details?.find((item) =>
+        typeof item?.reason === 'string')?.reason;
+      if (typeof reason === 'string' && /^[A-Z_]{1,64}$/.test(reason)) {
+        error.providerReason = reason;
+      }
+    } catch (_) {
+      // Keep the HTTP status when the provider returns a non-JSON error.
+    }
+    throw error;
   }
 
   const payload = await response.json();
