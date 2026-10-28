@@ -224,6 +224,15 @@ jobs:
               error: payload.error || null,
               detail: payload.detail || null,
             }));
+            // External Places/OSM availability is not a deployment health
+            // signal. Keep the outage visible without marking a healthy API
+            // deployment as failed.
+            if (response.status === 503
+              && payload.error === 'nearby_discovery_unavailable'
+              && payload.unavailable === true) {
+              console.log('::warning::Nearby providers are unavailable; API health and Gemini checks passed.');
+              return;
+            }
             if (!response.ok || count < 0
               || !['google_places', 'google_maps', 'openstreetmap_fallback'].includes(payload.source)) {
               process.exitCode = 1;
