@@ -30,8 +30,16 @@ function fakeDbClient({ contributionsOptIn = true } = {}) {
     learningFeedback,
     publishedBundles,
     async query(sql, params = []) {
-      if (sql.includes('SELECT contributions_opt_in FROM profiles')) {
-        return { rows: [{ contributions_opt_in: contributionsOptIn }] };
+      // Shared learning is gated by the user_consents audit log (latest row
+      // per purpose), not the legacy profiles.contributions_opt_in column.
+      if (sql.includes("purpose = 'sms_shared_learning'")) {
+        return {
+          rows: [{
+            granted: contributionsOptIn,
+            policy_version: 'sms-shared-learning-v1',
+            granted_at: '2026-10-20T10:00:00.000Z',
+          }],
+        };
       }
       if (sql.startsWith('INSERT INTO sms_sources')) {
         const key = `${params[0]}|${params[1]}`;
@@ -407,7 +415,7 @@ test('Scenario 9: Privacy opt-out prevents learning feedback collection', async 
     fields: ['merchant'],
   });
 
-  assert.equal(res.recorded, 0, 'No feedback recorded when user contributions_opt_in is false');
+  assert.equal(res.recorded, 0, 'No feedback recorded when sms_shared_learning consent is false');
   assert.equal(res.disabled, true);
   assert.equal(optingOutClient.learningFeedback.length, 0);
 

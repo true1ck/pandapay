@@ -4475,23 +4475,62 @@ final transactionTagsProvider =
 
 /// Reactive entity commits, independent of token rotation and screen-specific
 /// invalidation lists. No initial event: opening a store is not a data change.
+///
+/// The store listener attaches before the review/financial pipeline finishes
+/// booting and holds any commit seen in that window, then emits it once the
+/// revision stream is live. A fast provider (the card-bill ledger reads only
+/// local rows) can finish its first build before the old `await for` started
+/// listening, dropping the very commit that should have refreshed it.
 final financialStoreRevisionProvider = StreamProvider.family<int, String>((
   ref,
   entity,
-) async* {
+) {
   final namespace = ref.watch(cacheNamespaceProvider);
   final notificationsReady = ref.watch(_reviewFinancialChangesProvider.future);
   final cacheFuture = _cacheOrNull(ref);
-  await notificationsReady;
-  final cache = await cacheFuture;
-  if (cache == null) return;
+  final controller = StreamController<int>();
+  StreamSubscription<FinancialChange>? subscription;
   var version = 0;
-  await for (final changed in cache.financialStore.changes) {
-    if (changed.namespace == namespace &&
-        (changed.entity == entity || changed.entity == 'all')) {
-      yield ++version;
+  var started = false;
+  var live = false;
+  var missed = false;
+  var disposed = false;
+
+  Future<void> start() async {
+    final cache = await cacheFuture;
+    if (disposed) return;
+    if (cache == null) {
+      await controller.close();
+      return;
     }
+    subscription = cache.financialStore.changes.listen((changed) {
+      if (changed.namespace != namespace ||
+          (changed.entity != entity && changed.entity != 'all')) {
+        return;
+      }
+      if (!live) {
+        missed = true;
+        return;
+      }
+      controller.add(++version);
+    });
+    await notificationsReady;
+    if (disposed) return;
+    live = true;
+    if (missed) controller.add(++version);
   }
+
+  controller.onListen = () {
+    if (started) return;
+    started = true;
+    unawaited(start());
+  };
+  ref.onDispose(() {
+    disposed = true;
+    subscription?.cancel();
+    controller.close();
+  });
+  return controller.stream;
 });
 
 void Function() _financialChanges(Ref ref, String entity) {
@@ -7075,7 +7114,18 @@ class SmsAutoImportController {
           factsOutbox.failed(namespace, entry.id);
         }
       }
-      for (final correction in factsOutbox.pendingOverrides(namespace)) {
+      // C3 fact-override consent gate: the stored patch is the user's
+      // own-account fact fix and always syncs, but the server forwards
+      // sampleBody/templateText into cross-user learning examples under a
+      // consent check that does not verify the policy version. Only let
+      // SMS-derived evidence ride the upload while the full capture-time
+      // consent (granted AND current policy version) is in force.
+      final pendingOverrides = factsOutbox.pendingOverrides(namespace);
+      final smsLearningConsented =
+          pendingOverrides.isNotEmpty &&
+          _ref.read(isOnlineProvider).valueOrNull != false &&
+          await _currentSmsSharedLearningConsent(_ref) != null;
+      for (final correction in pendingOverrides) {
         if (_ref.read(cacheNamespaceProvider) != namespace) break;
         if (_ref.read(isOnlineProvider).valueOrNull == false) break;
         final accepted = await repo.overrideSmsFact(
@@ -7083,8 +7133,8 @@ class SmsAutoImportController {
           factIndex: correction.factIndex,
           patch: correction.patch,
           reason: correction.reason,
-          sampleBody: correction.sampleBody,
-          templateText: correction.templateText,
+          sampleBody: smsLearningConsented ? correction.sampleBody : null,
+          templateText: smsLearningConsented ? correction.templateText : null,
         );
         if (accepted) {
           factsOutbox.acknowledgeOverride(
