@@ -73,10 +73,12 @@ test('returns Google Places API (New) results when googleApiKey is configured', 
 
 test('uses OSM fallback when Google Places API fails or quota exceeded', async () => {
   const candidate = { merchant_id: 'osm:node:99', source: 'osm_candidate' };
+  let diagnostic;
   const result = await discoverNearby({
     ...input,
     googleApiKey: 'test-google-key',
     fetchImpl: async () => ({ ok: false, status: 403 }),
+    onGoogleFailure: (failure) => { diagnostic = failure; },
     fallbackDiscover: async () => [candidate],
   });
 
@@ -84,6 +86,13 @@ test('uses OSM fallback when Google Places API fails or quota exceeded', async (
   assert.equal(result.degraded, true);
   assert.equal(result.fallback_reason, 'google_unavailable');
   assert.deepEqual(result.merchants, [candidate]);
+  assert.deepEqual(diagnostic, {
+    keyConfigured: true,
+    httpStatus: 403,
+    status: null,
+    reason: null,
+    errorName: 'Error',
+  });
 });
 
 test('retains sanitized Google error status when both providers fail', async () => {

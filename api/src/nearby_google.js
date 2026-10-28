@@ -166,6 +166,7 @@ async function discoverNearby({
   googleApiKey = process.env.GOOGLE_PLACES_API_KEY,
   fetchImpl = globalThis.fetch,
   fallbackDiscover,
+  onGoogleFailure,
   timeoutMs = GOOGLE_LOOKUP_TIMEOUT_MS,
   ttlMs = GOOGLE_CACHE_TTL_MS,
   cache = defaultCache,
@@ -277,6 +278,16 @@ async function discoverNearby({
       }
     } else {
       googleFailure = new Error('Google Places API key is not configured');
+    }
+
+    if (typeof onGoogleFailure === 'function') {
+      onGoogleFailure({
+        keyConfigured: Boolean(googleApiKey),
+        httpStatus: googleFailure.providerHttpStatus || null,
+        status: googleFailure.providerStatus || null,
+        reason: googleFailure.providerReason || null,
+        errorName: googleFailure.name,
+      });
     }
 
     try {

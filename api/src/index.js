@@ -1282,6 +1282,10 @@ app.post('/merchants/nearby/google', requireValidJwt, async (req, res) => {
       lng,
       radiusM,
       googleApiKey,
+      onGoogleFailure: (failure) => console.warn('POST /merchants/nearby/google Google Places failed', {
+        requestId: req.requestId,
+        ...failure,
+      }),
       fallbackDiscover: (params) => nearbyGoogleFallback.discover(params),
     });
     if (result.degraded) {
