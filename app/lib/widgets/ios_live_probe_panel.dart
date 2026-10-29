@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/ios_live_probe_session.dart';
 
-/// Diagnostic metadata only until shared intake confirms a non-sensitive record.
+/// Process-local diagnostics for inspecting the exact live Shortcut handoff.
 class IosLiveProbePanel extends StatelessWidget {
   final Map<Object?, Object?> snapshot;
   final IosLiveProbeSession session;
@@ -28,7 +28,7 @@ class IosLiveProbePanel extends StatelessWidget {
     'processing_error' => 'Shared intake failed → pending retry',
     'retained_new' => 'Processed → newly retained',
     'retained_existing' => 'Processed → already retained',
-    'ignored' => 'Processed → ignored nonfinancial/promotion',
+    'ignored' => 'Processed → not retained',
     'native_duplicate' => 'Rejected duplicate handoff',
     'sensitive' ||
     'rejected_sensitive' => 'Rejected sensitive/security content',
@@ -75,7 +75,7 @@ class IosLiveProbePanel extends StatelessWidget {
                 'Newly retained: ${count('retained_new')} · Already retained: ${count('retained_existing')} · Native duplicates: ${count('native_duplicate')}',
               ),
               Text(
-                'Ignored nonfinancial/promotion: ${count('ignored')} · Sensitive rejected: ${count('sensitive') + count('rejected_sensitive')}',
+                'Not retained: ${count('ignored')} · Sensitive rejected: ${count('sensitive') + count('rejected_sensitive')}',
               ),
               Text(
                 'Invalid/empty/oversized: ${count('invalid') + count('rejected_invalid')} · Capacity rejected: ${count('capacity_rejected')}',
@@ -107,6 +107,9 @@ class IosLiveProbePanel extends StatelessWidget {
             const Text(
               'Process-local only. Installing, restarting or clearing the probe resets this diagnostic. Original SMS receive time is separate from handler/import and processing times.',
             ),
+            const Text(
+              'Recent event details include the exact incoming message and may contain sensitive information. They stay in memory on this device and are cleared when the probe session ends.',
+            ),
             if (error != null)
               Text(error!, style: const TextStyle(color: Colors.red)),
             OutlinedButton(
@@ -118,13 +121,65 @@ class IosLiveProbePanel extends StatelessWidget {
                 title: const Text('Recent live events (up to 30)'),
                 children: [
                   for (final event in events)
-                    ListTile(
+                    ExpansionTile(
                       title: Text(state(event['state'])),
                       subtitle: Text(
                         'Action: ${actionTitle(event['handler'])} (${event['handler']})\nInvoked/imported: ${date(event['invokedAt'])}\n'
                         'Original received: ${date(event['receivedAt'])} · Processed: ${date(event['processedAt'])}\n'
                         'Date missing: ${event['missingDate'] == true} · Sender missing: ${event['missingSender'] == true} · Inferred: ${event['senderInferred'] == true}',
                       ),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Input received from Shortcut'),
+                              SelectableText(
+                                'Sender: ${event['inputSender'] ?? 'Unavailable'}',
+                              ),
+                              SelectableText(
+                                'Sender type: ${event['senderEvidence'] ?? 'Unavailable'}',
+                              ),
+                              SelectableText(
+                                'Date supplied: ${date(event['inputDate'])}',
+                              ),
+                              const Text('Message body:'),
+                              SelectableText(
+                                event['inputBody'] as String? ??
+                                    'No body supplied',
+                              ),
+                              const SizedBox(height: 12),
+                              const Text('Processing'),
+                              Text(
+                                'Receiver: ${actionTitle(event['handler'])}',
+                              ),
+                              if (event['effectiveSender'] != null)
+                                SelectableText(
+                                  'Sender used: ${event['effectiveSender']}',
+                                ),
+                              if (event['triageKind'] != null)
+                                Text(
+                                  'Triage: ${event['triageKind']} · Reason: ${event['triageReason']}',
+                                ),
+                              if (event['intakeDecision'] != null)
+                                Text(
+                                  'Intake decision: ${event['intakeDecision']} · Reason: ${event['intakeReason']}',
+                                ),
+                              if (event['transactionsAdded'] != null)
+                                Text(
+                                  'New transactions: ${event['transactionsAdded']}',
+                                ),
+                              if (event['parserOutput']
+                                  case final String output) ...[
+                                const Text('Transaction output:'),
+                                SelectableText(output),
+                              ],
+                              Text('Outcome: ${state(event['state'])}'),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                 ],
               ),

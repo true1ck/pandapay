@@ -139,7 +139,7 @@ class LocalSmsParser {
   // 18: Disambiguate investment share vs advisory warnings, support YONO UPI, and dot-masked accounts.
   // 19: Allow scanner reprocessing of historical alerts on parser upgrade without lockout.
   // 21: Named payees for UPI narrations and "towards X for INR" debits, weak-name rejection.
-  static const version = 21;
+  static const version = 22;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -150,9 +150,9 @@ class LocalSmsParser {
   static String? userCategoryRuleSlug(
     Map<String, String>? rules,
     String? merchant,
-    String sender,
-    [String? body]
-  ) {
+    String sender, [
+    String? body,
+  ]) {
     if (rules == null || rules.isEmpty) return null;
     String normalize(String value) =>
         value.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
@@ -164,7 +164,11 @@ class LocalSmsParser {
     );
     if (contextualRules.isNotEmpty) {
       if (body == null || merchantText.isEmpty) return null;
-      final exact = SmsLearningFeedback.contextPattern(merchantText, sender, body);
+      final exact = SmsLearningFeedback.contextPattern(
+        merchantText,
+        sender,
+        body,
+      );
       return rules[exact];
     }
     String? matchedSlug;
@@ -250,8 +254,8 @@ class LocalSmsParser {
   static bool isMerchantReceiptOrEbill(String body) {
     final text = body.toLowerCase();
     return RegExp(
-      r'\b(?:view\s+(?:the\s+)?(?:payment\s+)?(?:e[- ]?bill|bill|invoice|tax\s+invoice|receipt)|e[- ]?bill\s+of\b|view\s+bill\s+of\b|payment\s+receipt\b|thanks?\s+for\s+(?:your\s+)?payment\s+of\s+(?:rs\.?|inr)|thank\s+you\s+for\s+your\s+purchase\b[\s\S]{0,240}\b(?:download|view)\b[\s\S]{0,80}\b(?:bill|invoice|receipt)\b)',
-    ).hasMatch(text) ||
+          r'\b(?:view\s+(?:the\s+)?(?:payment\s+)?(?:e[- ]?bill|bill|invoice|tax\s+invoice|receipt)|e[- ]?bill\s+of\b|view\s+bill\s+of\b|payment\s+receipt\b|thanks?\s+for\s+(?:your\s+)?payment\s+of\s+(?:rs\.?|inr)|thank\s+you\s+for\s+your\s+purchase\b[\s\S]{0,240}\b(?:download|view)\b[\s\S]{0,80}\b(?:bill|invoice|receipt)\b)',
+        ).hasMatch(text) ||
         // Arbitrary named-shop receipts, e.g. "your payment of Rs. 700.0 to
         // Balaji Sports has been recorded". The payee is not hardcoded: only
         // the recorded/received sentence shape identifies a receipt.
@@ -276,12 +280,8 @@ class LocalSmsParser {
       _re(
         r'\b(?:purchase|order)\s*(?:@|at|from|with)\s+([^.!?\n]{2,60}?)(?=[.!?,]|\s+for\b|\s+has\b|$)',
       ),
-      _re(
-        r'(?:^|\s)@\s*([^.!?\n]{2,60}?)(?=[.!?,]|\s+for\b|\s+has\b|$)',
-      ),
-      _re(
-        r'\breceipt\s+(?:from|for)\s+([^.!?\n]{2,80}?)(?=[.!?\n]|$)',
-      ),
+      _re(r'(?:^|\s)@\s*([^.!?\n]{2,60}?)(?=[.!?,]|\s+for\b|\s+has\b|$)'),
+      _re(r'\breceipt\s+(?:from|for)\s+([^.!?\n]{2,80}?)(?=[.!?\n]|$)'),
       _re(
         r'\b(?:thank\s+you|thanks)\s+for\s+(?:choosing|visiting|shopping\s+(?:at|with))\s+([^.!?\n]{2,80}?)(?=[.!?\n]|\s+(?:view|download)\b|$)',
       ),
@@ -1164,7 +1164,7 @@ class LocalSmsParser {
   ) {
     if (parsedDate == null) return null;
     final match = _re(
-      r'\b(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s+IST\b',
+      r'\b(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?(?![\d:])(?:\s*(AM|PM)\b)?(?:\s*(IST|UTC|GMT|Z|[+-]\d{2}:?\d{2})\b)?',
     ).firstMatch(body);
     if (match == null) return parsedDate;
     final printedDate = parseDate(match.group(1)!);
@@ -1174,18 +1174,47 @@ class LocalSmsParser {
         printedDate.day != parsedDate.day) {
       return parsedDate;
     }
-    final hour = int.parse(match.group(2)!);
+    var hour = int.parse(match.group(2)!);
     final minute = int.parse(match.group(3)!);
     final second = int.parse(match.group(4) ?? '0');
     if (hour > 23 || minute > 59 || second > 59) return parsedDate;
-    final timestamp = DateTime.utc(
-      printedDate.year,
-      printedDate.month,
-      printedDate.day,
-      hour,
-      minute,
-      second,
-    ).subtract(const Duration(minutes: 330)).toLocal();
+    final meridiem = match.group(5)?.toUpperCase();
+    if (meridiem != null) {
+      if (hour < 1 || hour > 12) return parsedDate;
+      hour = hour % 12 + (meridiem == 'PM' ? 12 : 0);
+    }
+    final zone = match.group(6)?.toUpperCase();
+    // A timestamp without a zone follows the existing date-only convention:
+    // device-local calendar time. Explicit offsets must remain absolute.
+    final DateTime timestamp;
+    if (zone == null) {
+      timestamp = DateTime(
+        printedDate.year,
+        printedDate.month,
+        printedDate.day,
+        hour,
+        minute,
+        second,
+      );
+    } else {
+      var offsetMinutes = zone == 'IST' ? 330 : 0;
+      if (zone.startsWith('+') || zone.startsWith('-')) {
+        final offset = zone.substring(1).replaceAll(':', '');
+        final hours = int.parse(offset.substring(0, 2));
+        final minutes = int.parse(offset.substring(2));
+        if (hours > 23 || minutes > 59) return parsedDate;
+        offsetMinutes =
+            (hours * 60 + minutes) * (zone.startsWith('-') ? -1 : 1);
+      }
+      timestamp = DateTime.utc(
+        printedDate.year,
+        printedDate.month,
+        printedDate.day,
+        hour,
+        minute,
+        second,
+      ).subtract(Duration(minutes: offsetMinutes)).toLocal();
+    }
     return timestamp.isAfter(receivedAt.add(const Duration(days: 1)))
         ? parsedDate
         : timestamp;
@@ -1622,6 +1651,7 @@ class LocalSmsParser {
               sourceKey: key,
               amount: amount,
               occurredAt: receivedAt,
+              smsReceivedAt: receivedAt,
               merchantName: merchant ?? 'Investment',
               categoryId: 'investments',
               categoryName: 'Investments',
@@ -1701,6 +1731,7 @@ class LocalSmsParser {
             sourceKey: key,
             amount: Money.fromRupees(amountVal),
             occurredAt: receivedAt,
+            smsReceivedAt: receivedAt,
             merchantName: 'Amazon Pay Later',
             instrument: TxnInstrument.other,
             instrumentKnown: true,
@@ -2164,7 +2195,9 @@ class LocalSmsParser {
     // A merchant receipt is enrichment, not an independent posted bank spend.
     // With no named instrument the bank alert (if any) remains the spend
     // source, so this row stays in review instead of double-counting.
-    if (isReceipt && !isPayLaterBill && !_receiptHasSettlementInstrument(body)) {
+    if (isReceipt &&
+        !isPayLaterBill &&
+        !_receiptHasSettlementInstrument(body)) {
       return LocalSmsObservation(
         eventType: LocalSmsEventType.unknown,
         disposition: LocalSmsDisposition.review,
@@ -2666,9 +2699,14 @@ class LocalSmsParser {
       sender,
       body,
     );
-    final sharedCategorySlug =
-        _sharedCategoryRuleSlug(sharedCategoryRules, merchant, sender, body);
-    final categorySlug = userRuleSlug ??
+    final sharedCategorySlug = _sharedCategoryRuleSlug(
+      sharedCategoryRules,
+      merchant,
+      sender,
+      body,
+    );
+    final categorySlug =
+        userRuleSlug ??
         (brokerSettlement || investmentProceeds || investmentDebit
             ? 'investments'
             : billPayment
@@ -2688,6 +2726,7 @@ class LocalSmsParser {
         sourceKey: key,
         amount: amount,
         occurredAt: date,
+        smsReceivedAt: receivedAt,
         merchantName: merchant ?? ftMatch?.canonicalName,
         categoryId: resolvedCategorySlug,
         categoryName: categoryName,
@@ -2856,7 +2895,12 @@ class LocalSmsParser {
       );
       final categorySlug =
           userCategoryRuleSlug(userCategoryRules, merchant, sender, body) ??
-          _sharedCategoryRuleSlug(sharedCategoryRules, merchant, sender, body) ??
+          _sharedCategoryRuleSlug(
+            sharedCategoryRules,
+            merchant,
+            sender,
+            body,
+          ) ??
           ftMatch?.category;
       final categoryName = categoryDisplayName(categorySlug);
       final txn = TransactionEntry(
@@ -2868,6 +2912,7 @@ class LocalSmsParser {
         categoryId: categorySlug,
         categoryName: categoryName,
         occurredAt: receivedAt,
+        smsReceivedAt: receivedAt,
         instrument: instrument,
         instrumentKnown: instrumentKnown,
         entryKind: entryKind,

@@ -40,6 +40,13 @@ while pending:
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(text)
 
+# Make the disposable wrapper safe to build without an explicit --target.
+# Otherwise flutter create's counter demo remains the default app entry point.
+(target / 'lib/main.dart').write_text(
+    "import 'main_ios_history_device_probe.dart' as probe;\n\n"
+    "void main() => probe.main();\n"
+)
+
 (target / 'pubspec.yaml').write_text(f'''name: pandapay
 publish_to: none
 version: 1.0.0+1

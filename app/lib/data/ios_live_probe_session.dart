@@ -1,5 +1,10 @@
+import 'dart:convert';
+
 import 'ios_device_probe_session.dart';
+import '../features/sms_import/ios_shortcut_sms.dart';
+import '../features/sms_import/sms_text_hint.dart';
 import 'local/app_database.dart';
+import 'local/sms_intake_repository.dart';
 
 /// Live intake has its own disposable DB so history/self-check traffic cannot
 /// inflate its results. Successful outcomes survive acknowledgement retries.
@@ -31,6 +36,8 @@ class IosLiveProbeSession {
       final beforeDate = intake.missingDate;
       final beforeSender = intake.missingSender;
       final beforeExisting = intake.runs['live']?.existing ?? 0;
+      final beforeTransactions = intake.transactions;
+      final batch = IosShortcutSmsBatch.fromRows([row]);
       _capture([
         {...row, 'runId': 'live'},
       ]);
@@ -45,12 +52,49 @@ class IosLiveProbeSession {
           : (intake.runs['live']?.existing ?? 0) > beforeExisting
           ? 'retained_existing'
           : 'ignored';
+      final diagnostic = <String, Object?>{};
+      if (batch.messages.isNotEmpty) {
+        final message = batch.messages.single;
+        final triage = classifySmsTriage(message.sender, message.body);
+        final key = smsSourceKey(
+          IosDeviceProbeSession.namespace,
+          message.sender,
+          message.body,
+        );
+        final decision = SmsIntakeRepository(
+          intake.database,
+        ).decision(IosDeviceProbeSession.namespace, key);
+        diagnostic.addAll({
+          'effectiveSender': message.sender,
+          'triageKind': triage.kind.name,
+          'triageReason': triage.reasonCode,
+          if (decision != null) 'intakeDecision': decision.decision,
+          if (decision != null) 'intakeReason': decision.reasonCode,
+          'transactionsAdded': intake.transactions - beforeTransactions,
+        });
+        final matching = intake.transactionList
+            .where(
+              (transaction) =>
+                  intake.sourceKeysForTransaction(transaction).contains(key),
+            )
+            .toList();
+        if (matching.isNotEmpty) {
+          try {
+            diagnostic['parserOutput'] = const JsonEncoder.withIndent(
+              '  ',
+            ).convert(matching);
+          } on JsonUnsupportedObjectError {
+            diagnostic['parserOutput'] =
+                'Transaction output could not be displayed.';
+          }
+        }
+      }
       return _outcomes[id] = {
         'id': id,
         'outcome': outcome,
+        ...diagnostic,
         'senderInferred':
-            intake.missingSender > beforeSender &&
-            (outcome == 'retained_new' || outcome == 'retained_existing'),
+            intake.missingSender > beforeSender && batch.messages.isNotEmpty,
       };
     } catch (_) {
       // Do not acknowledge or cache failure. No exception/raw payload is logged.

@@ -3,9 +3,63 @@ import 'package:pandapay/data/ios_device_probe_session.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sms_import_store.dart';
+import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 
 void main() {
+  test(
+    'bank and personal senders keep identical shared decisions on both acquisition paths',
+    () {
+      final iosDb = openInMemoryForTesting();
+      final androidDb = openInMemoryForTesting();
+      final ios = IosDeviceProbeSession(iosDb);
+      final androidStore = FinancialStore(androidDb);
+      addTearDown(() {
+        ios.dispose();
+        androidStore.dispose();
+        androidDb.close();
+      });
+      const body =
+          'Union Bank of India A/c *1234 Debited Rs:25.00 on '
+          '21-10-2026 01:26:04 by Mob Bk ref no SYNTHETIC, '
+          'Fvg: TEST SHOP Avl Bal Rs:1000.00';
+      final received = DateTime.utc(2026, 10, 29, 17);
+      const cases = [
+        ('VM-UBINBK', body, 'financial_auto', 'financial_evidence'),
+        ('+919000000001', body, 'ignored_unrelated', 'p2p_mobile_number'),
+        ('123456', body, 'ignored_promotion', 'numeric_promotional_sender'),
+        ('VM-UBINBK', 'Hi there', 'ignored_unrelated', 'no_financial_signal'),
+      ];
+      for (var index = 0; index < cases.length; index++) {
+        final (sender, text, expectedDecision, expectedReason) = cases[index];
+        final message = QueuedSms(
+          sender: sender,
+          body: text,
+          receivedAt: received,
+        );
+        ios.accept([
+          {'id': 'case-$index', ...message.toJson(), 'senderEvidence': 'text'},
+        ]);
+        SmsImportStore(
+          androidStore,
+        ).captureBatch(IosDeviceProbeSession.namespace, [message]);
+        final key = smsSourceKey(IosDeviceProbeSession.namespace, sender, text);
+        for (final db in [iosDb, androidDb]) {
+          final decision = SmsIntakeRepository(
+            db,
+          ).decision(IosDeviceProbeSession.namespace, key)!;
+          expect(decision.decision, expectedDecision);
+          expect(decision.reasonCode, expectedReason);
+        }
+      }
+      expect(ios.transactions, 1);
+      expect(
+        androidStore.entities(IosDeviceProbeSession.namespace, 'transactions'),
+        ios.transactionList,
+      );
+      expect(ios.missingSender, 0);
+    },
+  );
   test('Shortcut acquisition produces the same shared records as Android', () {
     final iosDb = openInMemoryForTesting();
     final androidDb = openInMemoryForTesting();

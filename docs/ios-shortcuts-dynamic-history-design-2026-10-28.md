@@ -2,6 +2,8 @@
 
 Status: design for a separate prototype; monthly automation and complete history coverage have not yet been verified on the device. Scope is iPhone acquisition and the existing PandaPay SMS processing path. No backend changes are required for the proposed design.
 
+Update, 29 October 2026: the user requires selectable history onboarding in the **main iPhone app**, supporting at least two years and custom dates, with the app launching one reusable Shortcut for each calendar window. The [monthly onboarding specification](ios-monthly-history-onboarding-spec-2026-10-29.md) is the current production design for scheduling, durable progress and retry; it supersedes this earlier proposal's Shortcut-owned month loop. This file remains the historical prototype design and device-investigation reference, not an assertion that monthly automation is implemented.
+
 ## Current Shortcut baseline screenshots
 
 The following original screenshots were supplied by the user on 28 October as a record of the current flow. They are local workspace files and may contain message-preview content. They show the configuration at that moment; successful execution and complete metadata should be verified independently.

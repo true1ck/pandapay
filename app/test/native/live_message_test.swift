@@ -28,13 +28,15 @@ let rows = inbox.snapshot()["records"] as! [[String: Any]]
 expect(rows.count == 2 && rows[0]["origin"] as? String == "live", "live traffic labelled")
 expect(rows[0]["receivedAt"] as? String != rows[0]["capturedAt"] as? String, "receive/import times distinct")
 let report = inbox.snapshot()["events"] as! [[String: Any]]
-expect(report.allSatisfy { $0["body"] == nil && $0["sender"] == nil }, "no raw text in event metadata")
-expect(!String(describing: inbox.snapshot()).contains("OTP 123456"), "sensitive content never retained")
+expect(report.contains { $0["inputBody"] as? String == "OTP 123456. Do not share." && $0["state"] as? String == "sensitive" }, "sensitive input visible in process-local diagnostic")
+expect(!String(describing: rows).contains("OTP 123456"), "sensitive input never enters processing queue")
 let id = rows[0]["id"] as! String
 inbox.complete([["id": id, "outcome": "processing_error"]])
 expect(counts()["pending"] == 2 && counts()["processed"] == nil && counts()["processing_errors"] == 1, "failure retains pending")
 expect((inbox.snapshot()["events"] as! [[String: Any]]).first(where: { $0["id"] as? String == id })!["state"] as? String == "processing_error", "failure state visible")
-inbox.complete([["id": id, "outcome": "retained_new", "senderInferred": true]])
+inbox.complete([["id": id, "outcome": "retained_new", "senderInferred": true, "triageKind": "financialCandidate", "triageReason": "financial", "parserOutput": "synthetic result"]])
+let completedEvent = (inbox.snapshot()["events"] as! [[String: Any]]).first(where: { $0["id"] as? String == id })!
+expect(completedEvent["triageKind"] as? String == "financialCandidate" && completedEvent["parserOutput"] as? String == "synthetic result", "processing details are visible with the original event")
 inbox.complete([["id": id, "outcome": "retained_new", "senderInferred": true]])
 expect(counts()["pending"] == 1 && counts()["processed"] == 1 && counts()["retained_new"] == 1 && counts()["sender_inferred"] == 1, "retry acknowledgement idempotent")
 let id2 = rows[1]["id"] as! String
@@ -44,9 +46,20 @@ inbox.complete([["id": id2, "outcome": "ignored"]])
 expect(counts()["pending"] == 0 && counts()["processed"] == 2 && counts()["ignored"] == 1, "ignored tracked separately")
 let limited = DeviceLiveMessageInbox(limit: 1, eventLimit: 2)
 expect(limited.capture(body: "a", sender: "TEST", receivedAt: received, evidence: "text", handler: "text_sender", allowedBundle: false) == "wrong_probe_bundle", "bundle gate")
+expect((limited.snapshot()["events"] as! [[String: Any]])[0]["inputBody"] == nil, "other bundles do not expose diagnostic input")
 _ = limited.capture(body: "a", sender: "TEST", receivedAt: received, evidence: "text", handler: "text_sender", allowedBundle: true)
 expect(limited.capture(body: "b", sender: "TEST", receivedAt: received, evidence: "text", handler: "text_sender", allowedBundle: true) == "capacity_rejected", "capacity explicit")
 expect((limited.snapshot()["events"] as! [[String: Any]]).count == 2, "recent list bounded")
 limited.clear()
 expect((limited.snapshot()["counts"] as! [String: Int])["calls"] == nil && (limited.snapshot()["records"] as! [[String: Any]]).isEmpty, "explicit session reset")
+let senderInbox = DeviceLiveMessageInbox()
+for sender in ["VM-UBINBK", "AD-SLICE-S", "123456", "+919000000001", "", "  "] {
+  let state = senderInbox.capture(body: "Synthetic sender test", sender: sender, receivedAt: received,
+    evidence: sender.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "missing_text" : "text",
+    handler: "person_sender", allowedBundle: true)
+  expect(state == "pending", "plain text and missing senders do not require contacts")
+  let event = (senderInbox.snapshot()["events"] as! [[String: Any]])[0]
+  expect(event["inputSender"] as? String == sender, "sender input preserved without conversion or invention")
+  expect(event["missingSender"] as? Bool == sender.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "missing sender explicit")
+}
 print("PASS: native live attempts, both handlers, privacy, date/size rejection, history separation, retry, completion, bounded metadata")

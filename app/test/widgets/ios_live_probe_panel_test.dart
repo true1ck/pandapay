@@ -8,6 +8,58 @@ import 'package:pandapay/widgets/ios_live_probe_panel.dart';
 import '../data/ios_live_probe_session_test.dart' show liveRow;
 
 void main() {
+  testWidgets('ignored event exposes its input and processing reason', (
+    tester,
+  ) async {
+    final live = IosLiveProbeSession(openInMemoryForTesting());
+    addTearDown(live.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: IosLiveProbePanel(
+              snapshot: {
+                'counts': {'calls': 1},
+                'events': [
+                  {
+                    'state': 'ignored',
+                    'handler': 'person_sender',
+                    'inputSender': '',
+                    'inputBody': 'Hi there',
+                    'senderEvidence': 'missing_person',
+                    'effectiveSender': 'VM-BANK',
+                    'senderInferred': true,
+                    'triageKind': 'unrelated',
+                    'triageReason': 'no_financial_signal',
+                    'intakeDecision': 'ignored_unrelated',
+                    'intakeReason': 'no_financial_signal',
+                  },
+                ],
+              },
+              session: live,
+              onRefresh: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.ensureVisible(find.text('Recent live events (up to 30)'));
+    await tester.tap(find.text('Recent live events (up to 30)'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Processed → not retained'));
+    await tester.tap(find.text('Processed → not retained'));
+    await tester.pumpAndSettle();
+    expect(find.text('Hi there'), findsOneWidget);
+    expect(
+      find.textContaining('Triage: unrelated · Reason: no_financial_signal'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Intake decision: ignored_unrelated'),
+      findsOneWidget,
+    );
+    expect(find.text('Sender used: VM-BANK'), findsOneWidget);
+  });
   testWidgets(
     'idle live panel is above history and does not claim trigger failure',
     (tester) async {

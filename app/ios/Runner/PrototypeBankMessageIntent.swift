@@ -419,39 +419,22 @@ struct InspectDeviceFinancialMessageIntent: AppIntent {
   }
 }
 
-/// Shortcuts represents a Message's Sender as a person rather than plain text
-/// on some iOS versions. This separate action tests that typed handoff without
-/// changing the working text-only diagnostic or any backend contract.
+/// Keep the published action and parameter identifiers for saved Shortcuts.
+/// Sender is text: bank headers are not necessarily contacts, phone numbers or
+/// email addresses. A person parameter made Shortcuts fail before perform().
 @available(iOS 16.0, *)
 struct InspectDeviceFinancialMessagePersonIntent: AppIntent {
   static var title: LocalizedStringResource = "Inspect Financial Message With Sender"
-  static var description = IntentDescription("Record a live single-message handoff with optional sender person and original date. Missing input and rejection outcomes are reported locally; no account or backend is used.")
+  static var description = IntentDescription("Record a live single-message handoff with optional sender text and original date. Select the incoming Message's Sender property; bank sender IDs do not need to be contacts. Missing input and rejection outcomes are reported locally; no account or backend is used.")
   static var openAppWhenRun = false
 
   @Parameter(title: "Message body") var body: String?
-  @Parameter(title: "Sender as person", mode: .emailOrPhone) var senderPerson: IntentPerson?
+  @Parameter(title: "Sender (text)") var senderPerson: String?
   @Parameter(title: "Original receive date") var receivedAt: Date?
 
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
-    let sender: String
-    let senderKind: String
-    if let handle = senderPerson?.handle {
-      switch handle.value {
-      case .phoneNumber(let value), .emailAddress(let value), .applicationDefined(let value):
-        sender = value
-      }
-      senderKind = "handle"
-    } else if let person = senderPerson {
-      switch person.name {
-      case .displayName(let value): sender = value
-      case .components(let value): sender = PersonNameComponentsFormatter.localizedString(from: value, style: .default)
-      case .unknown: sender = ""
-      }
-      senderKind = sender.isEmpty ? "empty_person" : "name"
-    } else {
-      sender = ""
-      senderKind = "missing_person"
-    }
+    let sender = senderPerson ?? ""
+    let senderKind = sender.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "missing_text" : "text"
     let result = DeviceLiveMessageInbox.shared.capture(body: body, sender: sender, receivedAt: receivedAt, evidence: senderKind, handler: "person_sender", allowedBundle: Bundle.main.bundleIdentifier == "app.pandapay.iosimportprobe")
     DeviceHistoryProbeBridge.notifyReady()
     let counts: [String: Any] = [

@@ -1,4 +1,4 @@
-// Live single-message diagnostics only. No disk, network, or raw rejection log.
+// Live single-message diagnostics only. Recent inputs remain in memory only.
 import Foundation
 import CryptoKit
 
@@ -24,7 +24,7 @@ final class DeviceLiveMessageInbox {
 
   /// Called by BOTH single-message perform() implementations. Invocation is
   /// recorded even when an optional input is absent. Conversion failures before
-  /// perform() remain unobservable. Events never contain sender or body text.
+  /// perform() remain unobservable. Recent events are process-local diagnostics.
   func capture(body: String?, sender: String, receivedAt: Date?, evidence: String,
                handler: String, allowedBundle: Bool) -> String {
     lock.lock(); defer { lock.unlock() }
@@ -42,6 +42,11 @@ final class DeviceLiveMessageInbox {
       "bodyPresent": body != nil, "bodyCharacters": body?.utf16.count ?? 0,
       "senderEvidence": evidence,
     ]
+    if allowedBundle {
+      if let body { event["inputBody"] = body }
+      event["inputSender"] = sender
+      if let receivedAt { event["inputDate"] = stamp(receivedAt) }
+    }
     func finish(_ state: String) -> String {
       counts[state, default: 0] += 1
       event["state"] = state
@@ -87,11 +92,14 @@ final class DeviceLiveMessageInbox {
         pending.removeAll { $0["id"] as? String == id }
         counts["processed", default: 0] += 1
         counts[state, default: 0] += 1
-        if outcome["senderInferred"] as? Bool == true { counts["sender_inferred", default: 0] += 1 }
+        if outcome["senderInferred"] as? Bool == true && (state == "retained_new" || state == "retained_existing") { counts["sender_inferred", default: 0] += 1 }
       }
       if let i = events.firstIndex(where: { $0["id"] as? String == id }) {
         events[i]["state"] = state
         events[i]["senderInferred"] = outcome["senderInferred"] as? Bool ?? false
+        for key in ["effectiveSender", "triageKind", "triageReason", "intakeDecision", "intakeReason", "transactionsAdded", "parserOutput"] {
+          if let value = outcome[key] { events[i][key] = value }
+        }
         if terminal.contains(state) { events[i]["processedAt"] = stamp(now()) }
       }
     }
