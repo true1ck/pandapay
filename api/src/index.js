@@ -6077,11 +6077,16 @@ app.post('/transactions/autopay-bill-correction', requireAuth, async (req, res) 
   try {
     const result = await withUserClient(req.userId, async (client) => {
       const row = await client.query(
-        `SELECT id, merchant_name, source_account_last4
-           FROM transactions
-          WHERE id=$1 AND profile_id=$2 AND source IN ('sms','sms_bulk')
-            AND status='active' AND round(amount_inr * 100)::bigint=$3
-          FOR UPDATE`,
+        `SELECT t.id, t.merchant_name, t.source_account_last4
+           FROM transactions t
+          WHERE t.id=$1 AND t.profile_id=$2 AND t.source IN ('sms','sms_bulk')
+            AND t.status='active' AND round(t.amount_inr * 100)::bigint=$3
+            AND NOT EXISTS (
+              SELECT 1 FROM transaction_observations o
+               WHERE o.profile_id=t.profile_id AND o.transaction_id=t.id
+                 AND o.metadata->>'merchantLocked'='true'
+            )
+          FOR UPDATE OF t`,
         [transactionId, req.userId, amountPaise],
       );
       if (row.rows.length !== 1) return { status: 404, body: { error: 'transaction_not_found' } };
