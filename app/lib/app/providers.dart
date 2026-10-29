@@ -85,6 +85,7 @@ import '../features/sms_import/sms_listener_service.dart';
 import '../features/sms_import/sms_inbox_scanner.dart';
 import '../features/sms_import/sms_capture_worker.dart';
 import '../features/sms_import/sms_background_queue.dart';
+import '../features/sms_import/ios_shortcut_sms.dart';
 import '../features/sms_import/sms_text_hint.dart';
 import '../features/settings/settings_sync.dart';
 import '../features/sync/sync_engine.dart';
@@ -6589,6 +6590,30 @@ class SmsAutoImportController {
   SmsCaptureWorker? _captureWorker;
 
   void setCardOverride(String? userCardId) => _userCardIdOverride = userCardId;
+
+  /// iOS supplies the evidence through Shortcuts; everything after validation
+  /// joins the same account-scoped capture owner as the Android inbox.
+  Future<IosShortcutSmsBatch> captureShortcutMessages({
+    required String expectedNamespace,
+    required List<Map<Object?, Object?>> records,
+  }) => AccountRecoveryOperationGate.process.run(() async {
+    void checkAccount() {
+      if (_disposed ||
+          expectedNamespace == 'signed-out' ||
+          _ref.read(cacheNamespaceProvider) != expectedNamespace) {
+        throw StateError('Account changed during Shortcut SMS capture');
+      }
+    }
+
+    checkAccount();
+    final batch = IosShortcutSmsBatch.fromRows(records);
+    if (batch.messages.isEmpty) return batch;
+    final cache = await _ref.read(responseCacheProvider.future);
+    checkAccount();
+    await _captureMessages(expectedNamespace, cache, batch.messages);
+    checkAccount();
+    return batch;
+  });
 
   Future<void> start() =>
       _starting ??= _start().whenComplete(() => _starting = null);

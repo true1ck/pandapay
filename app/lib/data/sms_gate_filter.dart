@@ -1,4 +1,5 @@
 import 'local_sms_parser.dart';
+import 'sms_security_policy.dart';
 
 enum SmsGateAction { pass, drop }
 
@@ -41,9 +42,9 @@ class SmsGateFilter {
     r'^(?:\+?91[\-\s]?|0)?(?:140\d{7}|[6-9]\d{9})$|^(?:[A-Za-z]{2}-)?\d{6}(?:-[A-Za-z])?$',
   );
 
-  // Gate 2: Fast OTP & Security Veto
-  static final _otpSecurityRe = RegExp(
-    r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin|passcode|secret code)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b|\bregistration\s+alert\s*:\s*device\s+name\b",
+  // Device registration remains an independent security veto.
+  static final _registrationSecurityRe = RegExp(
+    r'\bregistration\s+alert\s*:\s*device\s+name\b',
     caseSensitive: false,
   );
 
@@ -104,7 +105,8 @@ class SmsGateFilter {
     final trimmedSender = sender.trim();
 
     // Gate 2: Security & OTP veto (never persists or processes security secrets)
-    if (_otpSecurityRe.hasMatch(body)) {
+    if (SmsSecurityPolicy.sensitive(body) ||
+        _registrationSecurityRe.hasMatch(body)) {
       return const SmsGateVerdict.drop(SmsGateDropReason.otpOrSecurity);
     }
 

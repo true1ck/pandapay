@@ -1,0 +1,152 @@
+[
+  {
+    "id": "safe-credit-0",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": false
+  },
+  {
+    "id": "safe-credit-1",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.NeverShareOTP/PIN/CVV",
+    "sensitive": false
+  },
+  {
+    "id": "safe-credit-2",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Never Share OTP / PIN / CVV.",
+    "sensitive": false
+  },
+  {
+    "id": "safe-credit-3",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Do not share OTP,PIN,CVV - Fable Bank",
+    "sensitive": false
+  },
+  {
+    "id": "safe-credit-4",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Don't share your OTP/PIN/CVV.",
+    "sensitive": false
+  },
+  {
+    "id": "safe-debit",
+    "body": "INR 83.27 spent on ICICI Bank Card XX5936 at FICTIONAL CAFE on 17-10-2026.Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": false
+  },
+  {
+    "id": "safe-balance",
+    "body": "Fable Bank available balance is Rs.6847.23.Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": false
+  },
+  {
+    "id": "security-0",
+    "body": "Your OTP is 572904 for login.",
+    "sensitive": true
+  },
+  {
+    "id": "security-1",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.OTP=572904. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-2",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.PIN7391. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-3",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.CVV:619. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-4",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Your password is fictionalSecret. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-5",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Use one-time code 572904 to authorize. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-6",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Your authentication code is 572904. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-7",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Verification code: 572904. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-8",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Reset code: FAKE-ABCD. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-9",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Code 572904 expires in 3 minutes. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-10",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Regenerate your code to authenticate. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-11",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.572904 is valid for 3 minutes. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-12",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Never Share OTP/PIN/CVV 572904",
+    "sensitive": true
+  },
+  {
+    "id": "security-13",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Never Share OTP/PIN/CVV:572904",
+    "sensitive": true
+  },
+  {
+    "id": "security-14",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Never Share OTP/PIN/CVV-Fable Bank OTP572904",
+    "sensitive": true
+  },
+  {
+    "id": "security-15",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Never Share OTP/PIN/CVV-Fable Bank. Password: FAKE",
+    "sensitive": true
+  },
+  {
+    "id": "security-16",
+    "body": "Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-17",
+    "body": "Meet for lunch. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "security-18",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Do not share this with anyone.",
+    "sensitive": true
+  },
+  {
+    "id": "security-19",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Never Share OTP/PIN/CVV. Call us for help with code 572904.",
+    "sensitive": true
+  },
+  {
+    "id": "auth-context-0",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.572904 is your login credential. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "auth-context-1",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Enter code FAKE-QZX to confirm. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  },
+  {
+    "id": "auth-context-2",
+    "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Use 572904 to authorize this transaction. Never Share OTP/PIN/CVV-Fable Bank",
+    "sensitive": true
+  }
+]

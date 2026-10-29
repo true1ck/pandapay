@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6A170510A000000000000002 /* PrototypeBankMessageIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A170510A000000000000001 /* PrototypeBankMessageIntent.swift */; };
 		11F4C98781A7A37A08B361F9 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A727245A7F7D6F31060EC9C8 /* WidgetKit.framework */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		294C04F1E5D14B21C9293881 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FD13A236836C34DC4CB5CA29 /* Pods_Runner.framework */; };
@@ -70,6 +71,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		6A170510A000000000000001 /* PrototypeBankMessageIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrototypeBankMessageIntent.swift; sourceTree = "<group>"; };
 		0EAB7E146FE0942E30BFA32E /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
@@ -230,6 +232,7 @@
 				A1B2C3D4E5F60718293A4B5A /* SimulatorPluginRegistrant.h */,
 				A1B2C3D4E5F60718293A4B5B /* SimulatorPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
+				6A170510A000000000000001 /* PrototypeBankMessageIntent.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				84557CB133CFF929ADC34BF4 /* Runner.entitlements */,
@@ -530,6 +533,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
+				6A170510A000000000000002 /* PrototypeBankMessageIntent.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				A1B2C3D4E5F60718293A4B5C /* SimulatorPluginRegistrant.m in Sources */,

@@ -11,10 +11,18 @@ import UIKit
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-#if !targetEnvironment(simulator)
+#if PANDAPAY_DEVICE_IMPORT_PROBE
+    DeviceHistoryProbeBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
+#elseif !targetEnvironment(simulator)
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
 #else
     SimulatorPluginRegistrant.register(with: engineBridge.pluginRegistry)
+#if DEBUG
+    PrototypeBankMessageBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
+    if #available(iOS 16.0, *) {
+      PrototypeBankMessageShortcuts.updateAppShortcutParameters()
+    }
+#endif
 #endif
   }
 }

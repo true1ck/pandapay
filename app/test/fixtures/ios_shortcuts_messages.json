@@ -1,0 +1,6 @@
+[
+  {"id":"debit","sender":"VM-HDFCBK","receivedAt":"2026-10-26T09:30:00Z","capturedAt":"2026-10-26T10:00:00Z","body":"Rs 349.00 spent on HDFC Bank Card ending 1234 at BUNDL TECHNOLOGIES on 26-Oct-26. [PANDAPAY_TEST]"},
+  {"id":"credit","sender":"VM-HDFCBK","receivedAt":"2026-10-26T09:31:00Z","capturedAt":"2026-10-26T10:00:00Z","body":"Rs.5000.0 credited to your HDFC Bank A/C *9080 from SAMPLE PERSON on 26-10-26. Ref 99887765. [PANDAPAY_TEST]"},
+  {"id":"bill","sender":"VM-HDFCBK","receivedAt":"2026-10-26T09:32:00Z","capturedAt":"2026-10-26T10:00:00Z","body":"Your HDFC Bank MoneyBack+ Credit Card statement is ready. Total due Rs 900. Payment due date of your card is 30/10/2026. [PANDAPAY_TEST]"},
+  {"id":"otp","sender":"VM-HDFCBK","receivedAt":"2026-10-26T09:33:00Z","capturedAt":"2026-10-26T10:00:00Z","body":"OTP 000000 for Rs 349 purchase. Do not share. [PANDAPAY_TEST]"}
+]

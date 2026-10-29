@@ -1,6 +1,7 @@
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'investment_classifier.dart';
+import 'sms_security_policy.dart';
 import 'user_cards_repository.dart';
 import 'local/sms_intake_repository.dart';
 import 'local/sms_rule_bundle.dart';
@@ -797,10 +798,7 @@ class LocalSmsParser {
     return null;
   }
 
-  static bool sensitive(String body) => RegExp(
-    r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin|passcode|secret code)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
-    caseSensitive: false,
-  ).hasMatch(body);
+  static bool sensitive(String body) => SmsSecurityPolicy.sensitive(body);
   static RegExp _re(String s, {bool caseSensitive = false}) =>
       RegExp(s, caseSensitive: caseSensitive);
 

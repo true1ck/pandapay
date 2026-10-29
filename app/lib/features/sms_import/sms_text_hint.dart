@@ -20,6 +20,7 @@ library;
 
 import '../../data/local_sms_parser.dart';
 import '../../data/sms_gate_filter.dart';
+import '../../data/sms_security_policy.dart';
 
 /// Returns a bare 4-digit string if [smsBody] contains a "ending NNNN" /
 /// "XXNNNN" / "card NNNN" style last-4 mention, else null. Deliberately
@@ -57,15 +58,7 @@ String? extractLast4Hint(String smsBody) {
 
 /// OTP and security alerts must never be persisted or uploaded — they often
 /// contain "txn", "INR", and a card suffix that would read like spend.
-bool _looksOtpOrSecurity(String lower) {
-  return RegExp(
-        r'\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b',
-      ).hasMatch(lower) ||
-      RegExp(r"\b(?:do not|don't|never)\s+share\b").hasMatch(lower) ||
-      RegExp(
-        r'\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b',
-      ).hasMatch(lower);
-}
+bool _looksOtpOrSecurity(String lower) => SmsSecurityPolicy.sensitive(lower);
 
 const _promoWords = [
   'apply now',
