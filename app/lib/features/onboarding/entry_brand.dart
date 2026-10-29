@@ -149,13 +149,20 @@ class EntryButton extends StatelessWidget {
       ),
       backgroundColor: WidgetStateProperty.resolveWith((states) {
         if (secondary) return Colors.white.withValues(alpha: .85);
-        return states.contains(WidgetState.disabled)
+        if (!states.contains(WidgetState.disabled)) return BambooInk.slate;
+        // A busy button keeps its faded slate fill so the lime spinner stays
+        // legible; an inert button (form not yet complete) reads as light so
+        // "not ready yet" is obvious at a glance.
+        return loading
             ? BambooInk.slate.withValues(alpha: .5)
-            : BambooInk.slate;
+            : BambooInk.ink900.withValues(alpha: .08);
       }),
-      foregroundColor: WidgetStatePropertyAll(
-        secondary ? BambooInk.ink900 : BambooInk.lime,
-      ),
+      foregroundColor: WidgetStateProperty.resolveWith((states) {
+        if (secondary) return BambooInk.ink900;
+        return states.contains(WidgetState.disabled) && !loading
+            ? BambooInk.ink500
+            : BambooInk.lime;
+      }),
       side: WidgetStatePropertyAll(
         secondary
             ? const BorderSide(color: BambooInk.hairlineOnPaper)

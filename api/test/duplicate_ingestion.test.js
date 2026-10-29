@@ -91,7 +91,8 @@ test('replaying an EMI-repayment credit replaces the stale generic merchant labe
   const refreshed=writes.find(({sql})=>sql.includes('UPDATE transactions t'));
   assert.ok(refreshed, 'replay must refresh the existing row');
   assert.equal(refreshed.params[7],'Loan or EMI repayment');
-  assert.ok(/WHEN t\.merchant_name = 'Money received'/.test(refreshed.sql));
+  assert.match(refreshed.sql, /t\.merchant_name IS NULL OR t\.merchant_name IN/);
+  assert.equal(refreshed.params[8], false);
   assert.equal(result.transaction.merchant_name,'Loan or EMI repayment');
   // The retry observation keeps classification metadata current for later
   // read-time repairs.

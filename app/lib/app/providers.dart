@@ -4867,6 +4867,9 @@ String? _namedServiceAutoPayName(String? raw) {
     'openai',
     'openaillc',
     'chatgpt',
+    'chatgptplus',
+    'gemini',
+    'googlegemini',
     'netflix',
     'spotify',
     'amazonprime',
@@ -4885,11 +4888,15 @@ String? _namedServiceAutoPayName(String? raw) {
     'dropbox',
     'linkedinpremium',
     'microsoft365',
+    'microsoft',
+    'office365',
     'apple',
     'claude',
     'anthropic',
+    'perplexity',
     'midjourney',
     'cursor',
+    'anysphere',
     'github',
   ];
   if (!serviceTokens.any(normalized.contains)) return null;
@@ -4900,6 +4907,18 @@ String? _namedServiceAutoPayName(String? raw) {
     return 'OpenAI';
   }
   if (normalized.contains('chatgpt')) return 'ChatGPT';
+  if (normalized.contains('gemini')) return 'Google Gemini';
+  if (normalized.contains('claude') || normalized.contains('anthropic')) {
+    return 'Claude';
+  }
+  if (normalized.contains('microsoft') || normalized.contains('office365')) {
+    return 'Microsoft 365';
+  }
+  if (normalized.contains('cursor') || normalized.contains('anysphere')) {
+    return 'Cursor';
+  }
+  if (normalized.contains('netflix')) return 'Netflix';
+  if (normalized.contains('spotify')) return 'Spotify';
   if (normalized.contains('googleplay')) return 'Google Play';
   if (normalized.contains('googleone')) return 'Google One';
   return name;
@@ -4913,6 +4932,7 @@ RecurringSeries _normalizeLegacyServiceMandate(RecurringSeries item) {
   final service = _namedServiceAutoPayName(item.displayName);
   if (service == null) return item;
   final lifecycle = item.lifecycleStatus.trim().toLowerCase();
+
   return RecurringSeries(
     id: item.id,
     displayName: service,
@@ -5367,25 +5387,33 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
   final groups = <String, List<TransactionEntry>>{};
   for (final row in rows) {
     final merchant = row.merchantName?.trim();
-    final category = row.categoryName?.toLowerCase() ?? '';
     // Repeated transfers to a person are not subscriptions. Without a
     // subscription-like category, cadence alone is insufficient evidence.
-    final serviceCategory = const [
-      'subscription',
-      'streaming',
-      'entertainment',
-      'software',
-      'membership',
-      'telecom',
-      'utilities',
-      'insurance',
-    ].any(category.contains);
     if (row.status != 'active' ||
         row.entryKind != TxnEntryKind.spend ||
         row.amount.paise <= 0 ||
-        !serviceCategory ||
         merchant == null ||
         merchant.isEmpty) {
+      continue;
+    }
+    final merchantLower = merchant.toLowerCase();
+    if (RegExp(
+      r'\b(?:zerodha|groww|upstox|angel\s*one|dhan|paytm\s*money|indmoney|5paisa|motilal\s*oswal|icici\s*direct|hdfc\s*securities|hdfc\s*sky|kotak\s*securities|sharekhan|iifl|geojit|axis\s*direct|demat|trading|broker|portfolio|mutual\s*fund|sip|equity|investment|transfer)\b',
+      caseSensitive: false,
+    ).hasMatch(merchantLower)) {
+      continue;
+    }
+    if (RegExp(
+      r'\b(petroleum|petrol|fuel|gas\s*station|oil\s*co|hpcl|bpcl|iocl)\b',
+      caseSensitive: false,
+    ).hasMatch(merchantLower)) {
+      continue;
+    }
+    if (RegExp(
+          r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic)\b',
+          caseSensitive: false,
+        ).hasMatch(merchantLower) &&
+        !isSubscriptionAutoPay(merchant)) {
       continue;
     }
     final key = merchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ');
@@ -5405,7 +5433,11 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
       gaps.add((gap.inHours / 24).round());
     }
     final cadence = _medianInt(gaps);
-    if (cadence < 6 || cadence > 370) continue;
+    final serviceName = _namedServiceAutoPayName(items.last.merchantName);
+    final isKnownBrand =
+        serviceName != null || isSubscriptionAutoPay(items.last.merchantName);
+    final minCadence = isKnownBrand ? 6 : 20;
+    if (cadence < minCadence || cadence > 370) continue;
     final minGap = (cadence * 0.55).round();
     final maxGap = (cadence * 1.45).round();
     if (gaps.any((gap) => gap < minGap || gap > maxGap)) continue;
@@ -5428,7 +5460,7 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
     series.add(
       RecurringSeries(
         id: 'local-recurring:${entry.key}',
-        displayName: latest.merchantName!.trim(),
+        displayName: serviceName ?? latest.merchantName!.trim(),
         typicalAmount: typical,
         cadenceDays: cadence,
         occurrenceCount: items.length,
@@ -5440,6 +5472,7 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
         cardName: latest.cardDisplayName,
         paymentMethod: latest.instrumentKnown ? latest.instrument.label : null,
         detectionSource: 'local_cache',
+        reviewCandidate: true,
       ),
     );
   }
@@ -5457,30 +5490,66 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
       item.displayName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), ''),
   };
   for (final observation in observations) {
-    if (observation['event_type'] != 'autopay' ||
-        observation['is_autopay'] != true) {
+    final isAutopay =
+        observation['is_autopay'] == true ||
+        observation['event_type'] == 'autopay' ||
+        (observation['reason_codes'] is List &&
+            (observation['reason_codes'] as List).contains('autopay_setup'));
+    if (!isAutopay) {
       continue;
     }
-    final service = _namedServiceAutoPayName(
-      observation['biller_name'] as String?,
-    );
+    final rawBiller = observation['biller_name'] as String?;
+    final service =
+        _namedServiceAutoPayName(rawBiller) ??
+        (isSubscriptionAutoPay(rawBiller) ? rawBiller : null);
     if (service == null) continue;
     final key = service.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
     if (!existing.add(key)) continue;
+    final reasonCodes = observation['reason_codes'];
+    final explicitService = reasonCodes is List &&
+        reasonCodes.contains('explicit_subscription_service');
+    final statedPaise = explicitService
+        ? (observation['amount_due_paise'] as num?)?.round()
+        : null;
+    final amountKnown = statedPaise != null && statedPaise > 0;
+    final cadence = explicitService
+        ? switch (observation['cadence_hint']) {
+            'weekly' => 7,
+            'monthly' => 30,
+            'quarterly' => 91,
+            'halfYearly' => 182,
+            'annual' || 'yearly' => 365,
+            _ => 0,
+          }
+        : 0;
+    final statedAmount = amountKnown
+        ? Money.fromPaise(statedPaise)
+        : Money.zero();
     series.add(
       RecurringSeries(
         id: 'local-setup:${observation['id'] ?? key}',
         sourceKey: observation['id'] as String?,
         displayName: service,
-        typicalAmount: Money.zero(),
-        amountKnown: false,
-        cadenceDays: 0,
-        occurrenceCount: 0,
-        annualCost: Money.zero(),
-        detectionSource: 'local_setup',
+        typicalAmount: statedAmount,
+        amountKnown: amountKnown,
+        cadenceDays: cadence,
+        occurrenceCount: explicitService ? 1 : 0,
+        annualCost: amountKnown && cadence > 0
+            ? Money.fromPaise(
+                (statedPaise * _chargesPerYear(cadence)).round(),
+              )
+            : Money.zero(),
+        nextExpectedOn: explicitService
+            ? DateTime.tryParse(observation['due_date'] as String? ?? '')
+            : null,
+        detectionSource: explicitService ? 'local_explicit' : 'local_setup',
         setupConfirmed: true,
-        cadenceConfirmed: false,
-        engineStatus: 'candidate',
+        cadenceConfirmed: cadence > 0,
+        engineStatus: explicitService && cadence > 0 && amountKnown
+            ? 'confirmed'
+            : 'candidate',
+        lifecycleStatus: 'active',
+        reviewCandidate: false,
       ),
     );
   }
@@ -5522,10 +5591,18 @@ Future<RecurringReport> _mergeLocalSetupSeries(
     additions.add(item);
   }
   if (additions.isEmpty) return normalizedReport;
-  return RecurringReport(
-    series: [...normalizedReport.series, ...additions],
-    totalAnnual: normalizedReport.totalAnnual,
-  );
+  final allSeries = [...normalizedReport.series, ...additions];
+  final calculatedTotal = allSeries
+      .where(
+        (s) =>
+            !s.reviewCandidate &&
+            (s.status == 'confirmed' || s.engineStatus == 'confirmed'),
+      )
+      .fold<Money>(Money.zero(), (total, s) => total + s.annualCost);
+  final total = calculatedTotal.paise > normalizedReport.totalAnnual.paise
+      ? calculatedTotal
+      : normalizedReport.totalAnnual;
+  return RecurringReport(series: allSeries, totalAnnual: total);
 }
 
 String _recurringServiceKey(String name) {
@@ -6635,6 +6712,51 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         // replay never doubles a transaction; the updated parser re-classifies
         // them as loan repayments and refreshes the stored merchant label.
         final emiNamespace = ref.read(cacheNamespaceProvider);
+        final recipientReplayKey =
+            'pandapay_app.recipient_replayed_v1_$emiNamespace';
+        if (repo != null &&
+            prefs.getInt(recipientReplayKey) == null &&
+            ref.read(isOnlineProvider).valueOrNull != false) {
+          try {
+            final reconciliation = await repo.reconcileSmsHistory();
+            if (reconciliation.reconciliationVersion >= 3) {
+              final cache = await ref.read(responseCacheProvider.future);
+              final candidates = cache.financialStore
+                  .recipientReplayCandidates(emiNamespace);
+              var replayed = true;
+              for (var i = 0; i < candidates.length; i += 200) {
+                try {
+                  await repo.logTransactionsFromSmsBatch(
+                    messages: [
+                      for (final row in candidates.skip(i).take(200))
+                        SmsBatchMessage(
+                          userCardId: null,
+                          sender: row['sender'] as String,
+                          body: row['body'] as String,
+                          occurredAt: row['occurredAt'] as DateTime,
+                        ),
+                    ],
+                    backfill: true,
+                    captureLocally: false,
+                    notifyNewTransactions: false,
+                  );
+                } catch (_) {
+                  replayed = false;
+                  break;
+                }
+              }
+              if (replayed) {
+                await prefs.setInt(
+                  recipientReplayKey,
+                  DateTime.now().millisecondsSinceEpoch,
+                );
+                changed = candidates.isNotEmpty || changed;
+              }
+            }
+          } catch (_) {
+            // Retry when the matching API version and network are available.
+          }
+        }
         final emiReplayKey =
             'pandapay_app.emi_repayment_replayed_v1_$emiNamespace';
         if (repo != null &&

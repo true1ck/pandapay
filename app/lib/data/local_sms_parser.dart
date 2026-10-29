@@ -139,7 +139,9 @@ class LocalSmsParser {
   // 18: Disambiguate investment share vs advisory warnings, support YONO UPI, and dot-masked accounts.
   // 19: Allow scanner reprocessing of historical alerts on parser upgrade without lockout.
   // 21: Named payees for UPI narrations and "towards X for INR" debits, weak-name rejection.
-  static const version = 22;
+  // 22: Unicode-masked UPI references precede the named recipient.
+  // 23: Merge UPI recipient improvements with receive-time and zoned timestamp preservation.
+  static const version = 23;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -878,7 +880,7 @@ class LocalSmsParser {
       index += 1;
     }
     while (index < segments.length &&
-        _re(r'^(?:[Xx*#]{2,}\s*)?\d{4,}$').hasMatch(segments[index])) {
+        _re(r'^(?:[Xx*#•●·.\-]{2,}\s*)?\d{4,}$').hasMatch(segments[index])) {
       index += 1;
     }
     if (index >= segments.length) return null;
@@ -2189,6 +2191,51 @@ class LocalSmsParser {
     );
     // Reminders and offers are observations, never purchases.
     final futureDebit = _hasFutureDebitWording(body);
+    // A service renewal notice can carry explicit plan terms without a bank
+    // debit. Preserve it as a service observation for typed facts rather than
+    // leaving it in generic review or treating its price as posted spending.
+    final serviceRenewal = _re(
+      r'\b(?:subscription|membership)\s+(?:for|to|with)\s+[A-Za-z][A-Za-z0-9 .&-]{2,60}?\s+(?:renewed|renewal|renews|expires|monthly|yearly|annual)\b',
+    ).hasMatch(body);
+    if (serviceRenewal) {
+      final service = _re(
+        r'\b(?:subscription|membership)\s+(?:for|to|with)\s+([A-Za-z][A-Za-z0-9 .&-]{2,60}?)(?=\s+(?:renewed|renewal|renews|expires|monthly|yearly|annual)\b|[.,;]|$)',
+      ).firstMatch(body)?.group(1)?.trim();
+      if (service != null && service.length >= 3) {
+        final nextDateToken = _re(
+          r'\b(?:next\s+(?:renewal|payment)|renews?\s+on)\s*(?:is|on|:)?\s*(' +
+              dateToken +
+              r')',
+        ).firstMatch(body)?.group(1);
+        final statedAmountToken =
+            _re(
+              r'\b(?:monthly|quarterly|yearly|annual)\s+(?:plan\s+)?(?:payment|price|amount|charge|fee)?\s*(?:of|is|:)?\s*(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)',
+            ).firstMatch(body)?.group(1) ??
+            _re(
+              r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:paid|debited|charged|renewed)',
+            ).firstMatch(body)?.group(1);
+        final statedAmount = statedAmountToken == null
+            ? null
+            : Money.fromPaise(
+                (double.parse(statedAmountToken.replaceAll(',', '')) * 100)
+                    .round(),
+              );
+        final finalAmt = statedAmount ?? amountDue ?? billAmount;
+        return LocalSmsObservation(
+          billerName: service,
+          cadenceHint: cadenceHint,
+          dueDate: nextDateToken == null ? due : parseDate(nextDateToken),
+          amountDue: finalAmt,
+          autopayLimit: null,
+          amount: finalAmt,
+          eventType: LocalSmsEventType.autopay,
+          disposition: LocalSmsDisposition.localIgnore,
+          reasonCodes: const ['explicit_subscription_service'],
+          confidence: 0.95,
+          isAutopay: true,
+        );
+      }
+    }
     final isReceipt = isMerchantReceiptOrEbill(body);
     final receiptMerchant = isReceipt ? extractReceiptMerchant(body) : null;
     final receiptAmount = isReceipt ? extractReceiptAmount(body) : null;
@@ -2364,8 +2411,11 @@ class LocalSmsParser {
     final billPaymentCandidate = _re(
       r'\b(?:payment|paid|debited|debit|amount)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\b(?:your\s+)?credit\s+card\b|\bcredit\s+card\s+(?:bill|payment)\b[\s\S]{0,90}\b(?:received|credited|debited|paid|successful|completed)\b|\b(?:paid|payment|debited)\b[\s\S]{0,90}\b(?:to|for)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card(?:\s+bill)?\b|\bbill\b[\s\S]{0,60}\b(?:for|on|of)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card\b[\s\S]{0,90}\b(?:paid|received|successful|completed)\b|\b(?:card\s+bill\s*(?:payment|pmt)|cc\s*(?:bill\s*)?(?:payment|pmt)|card\s+bill\s+pay)\b[\s\S]{0,90}\b(?:paid|received|debited|successful|completed|credited)\b|\b(?:payment|paid|debited|debit|transferred)\b[\s\S]{0,90}\b(?:towards?|for|to)\s+(?:your\s+)?(?:card|cc)\b|\b(?:imps|neft|upi)\b[\s\S]{0,80}\b(?:cc|credit\s+card)\s*(?:bill\s*)?(?:pmt|payment)\b',
     ).hasMatch(body);
+    final processedCardBill = _re(
+      r'\b([A-Za-z][A-Za-z ]{1,35})\s+credit\s+card\s+bill\s*[-:]?\s*of\s+(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?\s+has\s+been\s+successfully\s+processed\b',
+    ).firstMatch(body);
     final billPayment =
-        billPaymentCandidate &&
+        (billPaymentCandidate || processedCardBill != null) &&
         (!_re(
               r'\b(?:payment|amount|minimum)\s+due\b|\bdue\s+on\b',
             ).hasMatch(body) ||
@@ -2597,7 +2647,9 @@ class LocalSmsParser {
         ownUserName != null &&
         _isOwnPersonName(merchant, ownUserName);
     if (billPayment) {
-      merchant = 'Credit card bill payment';
+      merchant = processedCardBill == null
+          ? 'Credit card bill payment'
+          : '${processedCardBill.group(1)!.trim()} credit card bill';
     } else if (ownNameTransfer) {
       merchant = 'Transfer between own accounts';
     } else if (brokerSettlement) {

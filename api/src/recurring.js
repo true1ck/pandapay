@@ -9,7 +9,7 @@ const { brandFor } = require('./brand_catalog');
 // SIP-like bank debit is spend the user may want surfaced. Investment
 // WORDING is still blocked, and message-level funding checks
 // (isInvestmentFundingMessage) still guard at ingestion.
-const FINANCIAL_MOVEMENT_NAME = /\b(?:bank\s+transfer|transfer\s+to|transfer\s+between|cash\s+withdrawal|credit\s+card\s+bill\s+payment|investment\s+contribution|money\s+received|salary|refund|cashback|dividend|demat|trading|broker(?:age|ing)?|portfolio|mutual\s+fund|systematic\s+investment|sip|stocks?|shares?|equity|investment)\b/i;
+const FINANCIAL_MOVEMENT_NAME = /\b(?:bank\s+transfer|transfer\s+to|transfer\s+between|cash\s+withdrawal|credit\s+card\s+bill\s+payment|investment\s+contribution|money\s+received|salary|refund|cashback|dividend|demat|trading|broker(?:age|ing)?|portfolio|mutual\s+fund|systematic\s+investment|sip|stocks?|shares?|equity|investment|deposit|funding|add\s*funds?|top-?up)\b/i;
 
 const FINANCIAL_PROVIDER = /\b(?:zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|demat|trading|broker(?:age|ing)?|portfolio)\b/i;
 const INVESTMENT_INTENT = /\b(?:sip|systematic\s+investment|mutual\s+fund|investment|invested|invest(?:ment)?\s+account|add(?:ing|ed)?\s+(?:money|funds?)|funds?\s+(?:added|credited|transferred|deposited)|top[ -]?up|fund(?:ed|ing)|buy|bought|purchase(?:d)?|units?|stocks?|shares|equity\s+shares?|equity)\b/i;
@@ -150,6 +150,16 @@ function isUsableSubscriptionName(name) {
     return false;
   }
 
+  // Ordinary retail stores, supermarkets, grocery shops, food/dining, cafes, and tea stalls are everyday spends, not subscriptions
+  if (
+    !brandFor(value) &&
+    /\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|canteen|sweets|pharmacy|chemist|medical|hospital|clinic)\b/i.test(
+      value
+    )
+  ) {
+    return false;
+  }
+
   const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   if (
     /^(?:daily|weekly|fortnightly|monthly|quarterly|half yearly|yearly|annual)(?:\s+(?:payment|charge|debit|subscription|mandate|autopay|plan))?$/.test(
@@ -217,11 +227,13 @@ function isDisplayableSubscriptionRecord(record) {
 function merchantSeriesKey(name) {
   const raw = String(name || '').trim();
   if (!raw) return '';
+  const brand = brandFor(raw);
+  if (brand?.name) return normalizeMerchant(brand.name);
   // Cut at the first real separator or at a run of digits, whichever is
   // earlier. Digits in a descriptor are an order/date reference, never part
   // of the brand.
-  const brand = raw.split(/[*.#/\\|]|\d{2,}/)[0];
-  return normalizeMerchant(brand) || normalizeMerchant(raw);
+  const brandSegment = raw.split(/[*.#/\\|]|\d{2,}/)[0];
+  return normalizeMerchant(brandSegment) || normalizeMerchant(raw);
 }
 
 function median(values) {
@@ -565,7 +577,8 @@ function detectRecurringSeries(rows, { now = new Date() } = {}) {
     if (gaps.length === 0) continue;
 
     const cadence = median(gaps);
-    if (cadence < MIN_CADENCE_DAYS || cadence > MAX_CADENCE_DAYS) continue;
+    const minCadence = brand ? MIN_CADENCE_DAYS : 20;
+    if (cadence < minCadence || cadence > MAX_CADENCE_DAYS) continue;
 
     // Every gap has to be near the median. A merchant charged on the 1st,
     // the 3rd, and then eight months later is not a subscription, even
@@ -585,6 +598,9 @@ function detectRecurringSeries(rows, { now = new Date() } = {}) {
       detectionSource: 'observed',
       evidenceSource: 'historical_posted_payment',
       subscriptionEvidence: 'posted_payment_pattern',
+      // A repeated debit only identifies a possible recurring merchant
+      // pattern. It does not prove that the user bought a subscription.
+      reviewCandidate: true,
       // The canonical catalog name when the merchant matches a known brand
       // ('OPENAILLC' → 'OpenAI'), otherwise the most recent spelling: the
       // one the user will recognise on their statement.

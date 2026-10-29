@@ -3852,6 +3852,13 @@ async function insertTransactionAndUpdateState(client, userId, {
       [userId, old.id],
     );
     const classificationLocked = lockResult.rows[0]?.locked === true;
+    const merchantLockResult = await client.query(
+      `SELECT COALESCE(bool_or(metadata->>'merchantLocked' = 'true'), false) AS locked
+         FROM transaction_observations
+        WHERE profile_id = $1 AND transaction_id = $2`,
+      [userId, old.id],
+    );
+    const merchantLocked = merchantLockResult.rows[0]?.locked === true;
     const oldMovesCardState = old.instrument === 'credit_card'
       && old.entry_kind === 'spend'
       && Boolean(old.user_card_id);
@@ -3873,9 +3880,15 @@ async function insertTransactionAndUpdateState(client, userId, {
     const refreshed = await client.query(
       `UPDATE transactions t
           SET merchant_name = CASE
-                -- Parser upgrade: replace only the stale generic credit label.
-                WHEN t.merchant_name = 'Money received'
-                     AND $8::text IS NOT NULL AND $8::text <> 'Money received'
+                -- Parser upgrade: fill only missing or known generic labels.
+                WHEN $9::boolean = false
+                     AND (t.merchant_name IS NULL OR t.merchant_name IN
+                       ('Money received', 'Bank debit', 'Credit card bill payment',
+                        'Unknown', 'Unknown merchant', 'Unknown payee',
+                        'Merchant not captured'))
+                     AND $8::text IS NOT NULL
+                     AND $8::text NOT IN ('Money received', 'Bank debit', 'Credit card bill payment',
+                       'Unknown', 'Unknown merchant', 'Unknown payee', 'Merchant not captured')
                   THEN $8::text
                 ELSE t.merchant_name
               END,
@@ -3898,7 +3911,7 @@ async function insertTransactionAndUpdateState(client, userId, {
               END
         WHERE t.id = $1 AND t.profile_id = $2
       RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
-      [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify), merchantName || null]
+      [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify), merchantName || null, merchantLocked]
     );
     if (shouldReclassify && refreshedMovesCardState && !old.is_backfill) {
       const card = oldCard || (userCardId ? await loadUserCardForState(client, userId, userCardId) : null);
@@ -5985,10 +5998,59 @@ app.post('/transactions/reconcile-sms', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       repairSmsHistory(client, req.userId, { reviewCrossSource: true }));
-    res.json({ ...result, reconciliationVersion: 2 });
+    res.json({ ...result, reconciliationVersion: 3 });
   } catch (err) {
     console.error('POST /transactions/reconcile-sms error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * A device that retained the original SMS can correct a confirmed legacy
+ * AutoPay card-bill row. Only structured fields cross the wire; the raw SMS
+ * stays on the phone. User edits and non-SMS transactions are never replaced.
+ */
+app.post('/transactions/autopay-bill-correction', requireAuth, async (req, res) => {
+  const { transactionId, merchantName, accountLast4, amountPaise } = req.body || {};
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(transactionId || '')) ||
+      !/^[A-Za-z][A-Za-z .&-]{2,70} Credit Card [0-9]{4}$/.test(String(merchantName || '')) ||
+      !/^[0-9]{4}$/.test(String(accountLast4 || '')) ||
+      !Number.isSafeInteger(amountPaise) || amountPaise <= 0) {
+    return res.status(400).json({ error: 'invalid_correction' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const row = await client.query(
+        `SELECT t.id, t.merchant_name, t.source_account_last4
+           FROM transactions t
+          WHERE t.id=$1 AND t.profile_id=$2 AND t.source IN ('sms','sms_bulk')
+            AND t.status='active' AND round(t.amount_inr * 100)::bigint=$3
+            AND NOT EXISTS (
+              SELECT 1 FROM transaction_observations o
+               WHERE o.profile_id=t.profile_id AND o.transaction_id=t.id
+                 AND o.metadata->>'merchantLocked'='true'
+            )
+          FOR UPDATE OF t`,
+        [transactionId, req.userId, amountPaise],
+      );
+      if (row.rows.length !== 1) return { status: 404, body: { error: 'transaction_not_found' } };
+      const current = row.rows[0];
+      const generic = current.merchant_name == null ||
+        ['Unknown', 'Unknown merchant', 'Merchant not captured'].includes(current.merchant_name);
+      if (!generic) return { status: 200, body: { updated: false } };
+      const updated = await client.query(
+        `UPDATE transactions SET merchant_name=$3,
+            source_account_last4=COALESCE(source_account_last4,$4)
+          WHERE id=$1 AND profile_id=$2
+          RETURNING id`,
+        [transactionId, req.userId, merchantName, accountLast4],
+      );
+      return { status: 200, body: { updated: updated.rowCount === 1 } };
+    });
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    console.error('POST /transactions/autopay-bill-correction error', error);
+    return res.status(500).json({ error: 'internal_error' });
   }
 });
 
@@ -6856,6 +6918,14 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         await client.query(
           `UPDATE transaction_observations
               SET metadata = metadata || '{"classificationLocked":true,"classificationSource":"user"}'::jsonb
+            WHERE profile_id = $1 AND transaction_id = $2`,
+          [req.userId, old.id],
+        );
+      }
+      if (merchantName !== undefined) {
+        await client.query(
+          `UPDATE transaction_observations
+              SET metadata = metadata || '{"merchantLocked":true,"merchantSource":"user"}'::jsonb
             WHERE profile_id = $1 AND transaction_id = $2`,
           [req.userId, old.id],
         );
@@ -8353,6 +8423,8 @@ app.get('/recurring', requireAuth, async (req, res) => {
       const legacyMandateRows = stored.rows
         .map((row) => centralProjection.legacyMandateSetupRow(row))
         .filter(Boolean);
+      // Historical transaction patterns are surfaced as review candidates.
+      // They must not share the confirmed-service projection or annual total.
       const validRows = stored.rows.filter(isDisplayableSubscriptionRecord).concat(legacyMandateRows);
       const now = new Date();
       const series = validRows.map((r) => {
@@ -8436,6 +8508,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
           paymentMethod: r.payment_method,
           cardName: r.card_nickname || r.card_name,
           detectionSource: r.detection_source || 'observed',
+          reviewCandidate: r.detection_source === 'observed' && !r.user_edited,
           isMandate: r.detection_source === 'mandate',
           isUserEdited: r.user_edited,
           lifecycleStatus: r.lifecycle_status || 'active',
@@ -8505,7 +8578,9 @@ app.get('/recurring', requireAuth, async (req, res) => {
           cadenceConfirmed: cadenceKnown,
           setupConfirmed: projection.setupConfirmed === true,
           engineStatus: status === 'active' && (oneTime || cadenceKnown) ? 'confirmed' : status,
-          annualCostInr: oneTime || !cadenceKnown || amount === null ? 0 : amount * (365 / cadence),
+          annualCostInr: oneTime || !cadenceKnown || amount === null
+            ? 0
+            : annualCost({ typicalAmountInr: amount, cadenceDays: cadence }),
         });
         existingServiceKeys.add(serviceKey);
       }
@@ -8521,7 +8596,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
         // and still billing. Guesses (needs_cadence), unused mandates and
         // possibly-stopped series don't belong in "your recurring spend".
         totalAnnualInr: series
-          .filter((s) => s.engineStatus === 'confirmed')
+          .filter((s) => s.engineStatus === 'confirmed' && !s.reviewCandidate)
           .reduce((sum, s) => sum + s.annualCostInr, 0),
       };
     });

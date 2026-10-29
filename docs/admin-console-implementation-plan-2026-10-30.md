@@ -2,7 +2,20 @@
 
 Date: 30 October 2026. Status: implementation specification; no security feature or production deployment described here is complete merely because this document exists.
 
-This is the implementation companion to the [reviewed design](admin-console-local-only-design-2026-10-30.md). Use the [Luna coordinator handoff](admin-console-luna-handoff-2026-10-30.md) to assign the work. Source baseline for the review: commit `78651cf` on `codex/ios-shortcuts-prototype`. Re-read the current branch before implementation.
+This is the implementation companion to the [reviewed design](admin-console-local-only-design-2026-10-30.md). Use the [Luna coordinator handoff](admin-console-luna-handoff-2026-10-30.md) to assign the work. The original review used commit `78651cf`; implementation preparation subsequently merged master through `32ed071` into `codex/ios-shortcuts-prototype`. Re-read the current merged branch before implementation; never implement against the pre-merge snapshot.
+
+### Master synchronization review
+
+Master added 11 commits after the previous shared base, covering guarded AutoPay correction, subscription projection/review, locked merchant corrections, historical SMS repair, card scanning, recovery phone masking and customer auth/support UI. None implements the private admin identity, MFA, route isolation or safe provisioning required here, so the selected admin architecture remains applicable.
+
+- Preserve the customer `POST /transactions/autopay-bill-correction` endpoint's existing session, ownership, amount, source and locked-merchant checks. It is a customer correction route, not an admin endpoint to move to the private listener.
+- Preserve reconciliation version 3, user merchant locks and the distinction between observed subscription review candidates and confirmed recurring services. Private admin route extraction must not alter those shared business helpers or start their background workers.
+- Preserve `maskPhonePrefix` behavior for recovery-scoped responses. An admin login cannot use recovery-only proof as full account verification or privileged MFA; do not broaden the user/recovery response to expose full phone data.
+- Keep raw message diagnostics out of ordinary customer support/feedback views and out of administrative audit/report output. Prototype-only device diagnostics do not authorize logging that data on the backend.
+- The merge retains both branches' parser improvements. Its local parser version is 23 so devices already processed with either branch's version 22 can replay the combined grammar; preserve receive-time/explicit-zone behavior and Unicode-masked recipient matching.
+- All package dispatches must start from this merged tree. Coordinator ownership still covers the newly changed `api/src/index.js`; workers must extract its current admin handlers without replacing it with a pre-merge copy.
+
+Regression coverage must include recovery prefix masking and capacity checks, customer correction authorization/merchant locks, SMS parser timestamp/recipient behavior, subscription review/annual totals, card matching and customer login/support behavior. Targeted merge checks do not establish production acceptance or replace the full implementation verification matrix below.
 
 ## 1. Required outcome and boundaries
 

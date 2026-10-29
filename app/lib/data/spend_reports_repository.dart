@@ -840,6 +840,10 @@ class RecurringSeries {
   /// A named service AutoPay setup was confirmed without proving a charge or
   /// recurring terms. Such a row is presence only and has no paid estimate.
   final bool setupConfirmed;
+
+  /// A transaction pattern without service evidence is a prompt for review,
+  /// never proof that the merchant sells a subscription.
+  final bool reviewCandidate;
   final Money annualCost;
 
   /// One honest state computed by the detection engine:
@@ -872,6 +876,7 @@ class RecurringSeries {
     this.sourceKey,
     this.cadenceConfirmed = true,
     this.setupConfirmed = false,
+    this.reviewCandidate = false,
     this.engineStatus,
   });
 
@@ -1011,6 +1016,7 @@ class RecurringSeries {
       sourceKey: json['sourceKey'] as String?,
       cadenceConfirmed: cadenceConfirmed,
       setupConfirmed: setupConfirmed,
+      reviewCandidate: json['reviewCandidate'] == true,
       engineStatus: engine,
     );
   }
@@ -1038,6 +1044,7 @@ class RecurringSeries {
     'sourceKey': sourceKey,
     'cadenceConfirmed': cadenceConfirmed,
     'setupConfirmed': setupConfirmed,
+    'reviewCandidate': reviewCandidate,
     if (engineStatus != null) 'engineStatus': engineStatus,
   };
 }

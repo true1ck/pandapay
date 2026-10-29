@@ -102,6 +102,8 @@ void main() {
       );
       await tester.enterText(find.byType(TextField).at(0), 'sujay@example.com');
       await tester.enterText(find.byType(TextField).at(1), '9876543210');
+      // Send code only enables once the fields validate on the next frame.
+      await tester.pump();
       await tester.tap(find.text('Send code'));
       await tester.pumpAndSettle();
 
@@ -121,7 +123,7 @@ void main() {
   );
 
   testWidgets(
-    'Send code is a no-op and shows a validation message when Terms is unchecked',
+    'Send verification code stays disabled until Terms is checked',
     (tester) async {
       var otpRequested = false;
       final authApi = AuthApi(
@@ -141,13 +143,68 @@ void main() {
         'newuser@example.com',
       );
       await tester.enterText(find.byType(TextField).at(1), '9876543210');
-      // Terms checkbox left unchecked deliberately.
-      await tester.ensureVisible(find.text('Send verification code'));
-      await tester.tap(find.text('Send verification code'));
-      await tester.pumpAndSettle();
+      await tester.pump();
 
+      final submit = find.widgetWithText(
+        FilledButton,
+        'Send verification code',
+      );
+      // Email and phone are valid, but the required Terms box is unchecked —
+      // the button must read as inert, not just reject the tap.
+      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      await tester.ensureVisible(submit);
+      await tester.tap(submit, warnIfMissed: false);
+      await tester.pumpAndSettle();
       expect(otpRequested, isFalse);
-      expect(find.textContaining('accept the Terms'), findsOneWidget);
+
+      await tester.ensureVisible(find.byType(CheckboxListTile).at(0));
+      await tester.tap(find.byType(CheckboxListTile).at(0)); // required Terms
+      await tester.pump();
+      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(otpRequested, isTrue);
+    },
+  );
+
+  testWidgets(
+    'Send code on the sign-in form is disabled until email and phone are valid',
+    (tester) async {
+      var otpRequested = false;
+      final authApi = AuthApi(
+        authBaseUrl: 'http://auth.test',
+        client: MockClient((req) async {
+          otpRequested = true;
+          return http.Response('{}', 200);
+        }),
+      );
+
+      await tester.pumpWidget(
+        wrap(
+          mode: AuthMode.logIn,
+          overrides: [authApiProvider.overrideWithValue(authApi)],
+        ),
+      );
+
+      final submit = find.widgetWithText(FilledButton, 'Send code');
+      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+
+      await tester.enterText(find.byType(TextField).at(0), 'sujay@example.com');
+      await tester.pump();
+      expect(
+        tester.widget<FilledButton>(submit).onPressed,
+        isNull,
+        reason: 'phone still empty',
+      );
+
+      await tester.enterText(find.byType(TextField).at(1), '9876543210');
+      await tester.pump();
+      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(otpRequested, isTrue);
     },
   );
 

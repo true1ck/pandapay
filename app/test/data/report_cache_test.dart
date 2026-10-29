@@ -162,6 +162,48 @@ void main() {
     expect(afterSync.series.where((item) => item.setupConfirmed), hasLength(1));
   });
 
+  test('explicit local renewal retains its stated price and next date', () async {
+    final db = openInMemoryForTesting();
+    final cache = ResponseCache(db);
+    final client = MockClient((_) async => throw http.ClientException('offline'));
+    const namespace = 'user:subscription-test';
+    final container = ProviderContainer(overrides: [
+      cacheNamespaceProvider.overrideWithValue(namespace),
+      responseCacheProvider.overrideWith((ref) async => cache),
+      transactionsProvider.overrideWith((ref) async => []),
+      spendReportsRepositoryProvider.overrideWithValue(SpendReportsRepository(
+        apiBaseUrl: 'http://api.test', accessToken: 'test', client: client,
+      )),
+    ]);
+    addTearDown(() {
+      container.dispose();
+      client.close();
+      cache.financialStore.dispose();
+      db.close();
+    });
+    await cache.put(
+      '$namespace:recurring_report',
+      jsonEncode(const RecurringReport(series: [], totalAnnual: Money.zero()).toJson()),
+    );
+    cache.financialStore.saveObservation(namespace, 'notion-renewal', {
+      'id': 'notion-renewal',
+      'event_type': 'autopay',
+      'biller_name': 'Notion Plus',
+      'is_autopay': true,
+      'reason_codes': ['explicit_subscription_service'],
+      'amount_due_paise': 79900,
+      'cadence_hint': 'monthly',
+      'due_date': '2026-11-29T00:00:00.000',
+      'received_at': '2026-10-29T00:00:00.000Z',
+    });
+    final report = await container.read(recurringReportProvider.future);
+    final notion = report!.series.singleWhere((item) => item.displayName == 'Notion Plus');
+    expect(notion.typicalAmount, Money.fromRupees(799));
+    expect(notion.cadenceDays, 30);
+    expect(notion.nextExpectedOn, DateTime(2026, 11, 29));
+    expect(notion.reviewCandidate, isFalse);
+  });
+
   test(
     'pending local patterns do not resurrect dismissed server series',
     () async {

@@ -116,11 +116,15 @@ enum CommitmentCategory {
         has('LINKEDIN') ||
         has('MICROSOFT 365') ||
         has('MICROSOFT365') ||
+        has('MICROSOFT') ||
         has('OPENAI') ||
         s.contains('OPENAI') ||
         s.contains('CHATGPT') ||
+        s.contains('GEMINI') ||
+        s.contains('GOOGLE GEMINI') ||
         s.contains('CLAUDE') ||
         s.contains('ANTHROPIC') ||
+        s.contains('PERPLEXITY') ||
         s.contains('MIDJOURNEY') ||
         s.contains('CURSOR') ||
         s.contains('GITHUB')) {
@@ -172,6 +176,14 @@ bool isSubscriptionAutoPay(String? name) {
   final lower = raw.toLowerCase();
   final normalized = lower.replaceAll(RegExp(r'[^a-z0-9]'), '');
 
+  // 0. Explicitly return false for demat, broker, investment, trading, mutual funds, SIPs
+  if (RegExp(
+    r'\b(?:zerodha|groww|upstox|angel\s*one|dhan|paytm\s*money|indmoney|5paisa|motilal\s*oswal|icici\s*direct|hdfc\s*securities|hdfc\s*sky|kotak\s*securities|sharekhan|iifl|geojit|axis\s*direct|demat|trading|broker|portfolio|mutual\s*fund|sip|equity|investment|transfer)\b',
+    caseSensitive: false,
+  ).hasMatch(lower)) {
+    return false;
+  }
+
   // 1. Explicitly return false for credit card bills and statements
   if (RegExp(
         r'\b(?:credit|debit)?\s*card\b|\bbill\b|\bstatement\b',
@@ -217,10 +229,20 @@ bool isSubscriptionAutoPay(String? name) {
     'openai',
     'openaillc',
     'chatgpt',
+    'chatgptplus',
+    'gemini',
+    'googlegemini',
     'googleplay',
     'googleone',
-    'google',
+    'googleworkspace',
     'netflix',
+    'cultfit',
+    'tataplay',
+    'swiggyone',
+    'zomatogold',
+    'audible',
+    'theken',
+    'morningcontext',
     'spotify',
     'amazonprime',
     'primevideo',
@@ -236,11 +258,15 @@ bool isSubscriptionAutoPay(String? name) {
     'linkedinpremium',
     'linkedin',
     'microsoft365',
+    'microsoft',
+    'office365',
     'apple',
     'claude',
     'anthropic',
+    'perplexity',
     'midjourney',
     'cursor',
+    'anysphere',
     'github',
   ];
 

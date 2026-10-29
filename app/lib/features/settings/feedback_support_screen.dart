@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -75,7 +74,6 @@ class _FeedbackForm extends ConsumerStatefulWidget {
 class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
   late String _kind;
   late final TextEditingController _messageController;
-  bool _showDiagnostics = false;
   bool _submitting = false;
   String? _error;
 
@@ -236,12 +234,6 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
             ),
           ),
         ),
-        const SizedBox(height: AppSpace.xl),
-        _DiagnosticsPreview(
-          expanded: _showDiagnostics,
-          onToggle: () => setState(() => _showDiagnostics = !_showDiagnostics),
-          diagnosticsJson: _packageInfo == null ? null : jsonEncode(_diagnostics),
-        ),
         if (_error != null) ...[
           const SizedBox(height: AppSpace.lg),
           Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
@@ -265,65 +257,6 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
               : const Text('Send'),
         ),
       ],
-    );
-  }
-}
-
-/// "Show what we'll send" — collapsed by default, shows the exact JSON
-/// diagnostics payload before submit. This is a literal spec requirement
-/// ("shown to user before sending"), not a nice-to-have — the Submit button
-/// above sends precisely this map, nothing more.
-class _DiagnosticsPreview extends StatelessWidget {
-  final bool expanded;
-  final VoidCallback onToggle;
-  final String? diagnosticsJson;
-
-  const _DiagnosticsPreview({required this.expanded, required this.onToggle, required this.diagnosticsJson});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: onToggle,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpace.md),
-              child: Row(
-                children: [
-                  const Icon(Icons.data_object_rounded, size: 18, color: BambooInk.ink500),
-                  const SizedBox(width: AppSpace.sm),
-                  Expanded(
-                    child: Text(
-                      'Show what we\'ll send',
-                      style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900),
-                    ),
-                  ),
-                  Icon(
-                    expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                    color: BambooInk.ink500,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (expanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpace.md, 0, AppSpace.md, AppSpace.md),
-              child: Text(
-                diagnosticsJson ?? 'Loading…',
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13, color: BambooInk.ink900),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }

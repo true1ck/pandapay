@@ -2,6 +2,8 @@
 
 Use the [implementation plan](admin-console-implementation-plan-2026-10-30.md) as the authoritative implementation and deployment contract. The [original design](admin-console-local-only-design-2026-10-30.md) contains the initial findings. This handoff does not authorize production changes.
 
+Master has been synchronized through `32ed071` into the current branch. Start every worker from the resulting merged tree and read the implementation plan's **Master synchronization review**. In particular, preserve the new customer AutoPay correction route, recovery masking, merchant locks, subscription review behavior and combined parser version 23. The earlier admin security gaps remain open; none of the master commits supplies the planned private admin controls.
+
 ## Copyable coordinator task
 
 > Implement the PandaPay local-only admin console described in docs/admin-console-implementation-plan-2026-10-30.md. Start by reading that complete document, repository instructions, current Git status and the referenced source. Keep all final work on the current branch, codex/ios-shortcuts-prototype, unless the human explicitly changes the target. Preserve unrelated work and do not merge or push other branches.

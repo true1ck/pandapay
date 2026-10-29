@@ -768,7 +768,7 @@ void main() {
       final rows = store.entities(ns, 'transactions');
 
       expect(rows, hasLength(1));
-      expect(rows.single['merchant_name'], 'Unknown');
+      expect(rows.single['merchant_name'], 'Balaji Sports');
       expect(rawTransaction(db, ns, confirmed.id), before);
     });
 
@@ -995,6 +995,19 @@ void main() {
         isFalse,
       );
       expect(rawTransaction(db, ns, confirmed.id), before);
+    });
+
+    test('confirmed weak recipient is selected for safe source-key replay', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      captureMerchantRepairSms(db, ns);
+      store.saveTransactions(ns, [provisionalSms(key)]);
+
+      final candidates = store.recipientReplayCandidates(ns);
+      expect(candidates, hasLength(1));
+      expect(candidates.single['body'], _merchantRepairBody);
+      expect(store.entities(ns, 'transactions').single['merchant_name'],
+          'Balaji Sports');
     });
   });
 }

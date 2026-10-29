@@ -168,7 +168,7 @@ void main() {
       expect(facts.single.payload['limitInr'], 2000.0);
       expect(facts.single.payload['merchant'], 'NETFLIX');
       expect(facts.single.payload['serviceName'], 'NETFLIX');
-      expect(facts.single.payload['subscriptionEvidence'], 'historical');
+      expect(facts.single.payload['subscriptionEvidence'], 'brand_prior');
       expect(facts.single.payload['targetKind'], 'service_merchant');
       expect(validateSmsFact(facts.single).valid, isTrue);
     });

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
 const express = require('express');
-const { maskEmail, maskPhone } = require('../src/utils/recoveryContacts');
+const { maskEmail, maskPhone, maskPhonePrefix } = require('../src/utils/recoveryContacts');
 const { OtpCapacityError, BUSY_CODE } = require('../src/services/otpWorkAdmission');
 const {
   RateLimitStorageError,
@@ -154,6 +154,7 @@ async function harness(t, { requestBudgetLimit = Infinity, verifyBudgetLimit = I
 test('linked contacts are masked in recognisable form', () => {
   assert.equal(maskEmail('chandresh@gmail.com'), 'c•••@gmail.com');
   assert.equal(maskPhone('+919876541234'), '+91 •••• 1234');
+  assert.equal(maskPhonePrefix('+919876541234'), '+91 98••••••••');
 });
 
 test('recovery contact availability follows active-only reuse policy for email and phone', async t => {

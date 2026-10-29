@@ -19,7 +19,7 @@ const { sendOtpSms } = require('../services/smsService');
 const { OtpCapacityError, BUSY_CODE, respondOtpCapacityUnavailable } = require('../services/otpWorkAdmission');
 const { encryptPhoneNumber, decryptPhoneNumber } = require('../utils/fieldEncryption');
 const { preparePhoneSearchParams, phoneLookupHash } = require('../utils/encryptedPhoneSearch');
-const { maskEmail, maskPhone } = require('../utils/recoveryContacts');
+const { maskEmail, maskPhone, maskPhonePrefix } = require('../utils/recoveryContacts');
 
 const router = express.Router();
 const fingerprint = value => createHash('sha256').update(value || '').digest('hex');
@@ -233,7 +233,7 @@ async function verifyReplacement(req, res, versioned = false) {
       has_backup_channel: phoneVerified && emailVerified,
       missing_channel: phoneVerified && emailVerified ? null : phoneVerified ? 'email' : 'phone',
       email_hint: maskEmail(user.email),
-      phone_hint: maskPhone(decryptPhoneNumber(user.phone_number)),
+      phone_hint: req.user?.recovery_channel ? maskPhonePrefix(decryptPhoneNumber(user.phone_number)) : maskPhone(decryptPhoneNumber(user.phone_number)),
     });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ error: 'This contact cannot be linked. Use another contact.' });

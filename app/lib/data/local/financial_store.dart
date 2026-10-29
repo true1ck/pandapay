@@ -438,7 +438,75 @@ class FinancialStore {
         };
       }
     }
+    if (entity == 'transactions') {
+      _enrichDisplayedRecipients(ns, rows, edits);
+    }
     return rows;
+  }
+
+  /// Show a recipient from the original device SMS while a confirmed server
+  /// row awaits the versioned replay. This changes only returned snapshots.
+  void _enrichDisplayedRecipients(
+    String ns,
+    List<Map<String, dynamic>> rows,
+    List<Map<String, Object?>> edits,
+  ) {
+    final editedIds = edits.map((edit) => edit['entity_id']).toSet();
+    for (final row in rows) {
+      try {
+        if (editedIds.contains(row['id']) ||
+            row['source'] != 'sms' ||
+            row['status'] != 'active' ||
+            !MerchantIdentity.isWeakName(row['merchant_name'] as String?)) {
+          continue;
+        }
+        final sourceKey = row['source_key'] as String?;
+        if (sourceKey == null) {
+          continue;
+        }
+        final stored = database.db.select(
+          "SELECT pending FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=? LIMIT 1",
+          [ns, row['id']],
+        );
+        if (stored.isEmpty || stored.single['pending'] != 0) continue;
+        if (database.db.select(
+          'SELECT 1 FROM local_auto_resolved_history '
+          'WHERE namespace=? AND source_key=? AND is_user_modified=1 LIMIT 1',
+          [ns, sourceKey],
+        ).isNotEmpty) continue;
+        final captures = database.db.select(
+          'SELECT sender, body, received_at FROM sms_captured_messages '
+          'WHERE namespace=? AND id=? LIMIT 1',
+          [ns, sourceKey],
+        );
+        if (captures.isEmpty) continue;
+        final capture = captures.single;
+        final receivedMs = capture['received_at'];
+        final receivedAt = receivedMs is int
+            ? DateTime.fromMillisecondsSinceEpoch(receivedMs)
+            : DateTime.tryParse(receivedMs?.toString() ?? '');
+        if (receivedAt == null) continue;
+        final parsed = LocalSmsParser.parse(
+          namespace: ns,
+          sender: capture['sender'] as String,
+          body: capture['body'] as String,
+          receivedAt: receivedAt,
+        );
+        final proposed = parsed?.transaction;
+        final name = MerchantIdentity.cleanName(proposed?.merchantName);
+        if (proposed == null ||
+            proposed.sourceKey != sourceKey ||
+            name == null ||
+            proposed.entryKind.wireValue != row['entry_kind'] ||
+            proposed.amount.paise !=
+                Money.fromRupees(row['amount_inr'] as num).paise) {
+          continue;
+        }
+        row['merchant_name'] = name;
+      } catch (_) {
+        // A malformed historical row must not interrupt transaction reads.
+      }
+    }
   }
 
   static const _provisionalMerchantRepairPrefix = 'local-sms:';
@@ -1575,6 +1643,57 @@ class FinancialStore {
       // replay must never block startup.
     }
     return rows;
+  }
+
+  /// Re-import only captured SMS whose confirmed transaction still lacks a
+  /// useful recipient. Source-key identity makes this replay idempotent.
+  List<Map<String, Object?>> recipientReplayCandidates(String ns) {
+    final result = <Map<String, Object?>>[];
+    final rows = database.db.select(
+      'SELECT e.payload, e.source_key, m.sender, m.body, m.received_at '
+      'FROM financial_entities e JOIN sms_captured_messages m '
+      'ON m.namespace=e.namespace AND m.id=e.source_key '
+      "WHERE e.namespace=? AND e.entity='transactions' AND e.pending=0",
+      [ns],
+    );
+    for (final row in rows) {
+      try {
+        final payload = jsonDecode(row['payload'] as String);
+        if (payload is! Map<String, dynamic> ||
+            payload['source'] != 'sms' ||
+            payload['status'] != 'active' ||
+            !MerchantIdentity.isWeakName(payload['merchant_name'] as String?)) {
+          continue;
+        }
+        final receivedMs = row['received_at'];
+        final receivedAt = receivedMs is int
+            ? DateTime.fromMillisecondsSinceEpoch(receivedMs)
+            : DateTime.tryParse(receivedMs?.toString() ?? '');
+        if (receivedAt == null) continue;
+        final parsed = LocalSmsParser.parse(
+          namespace: ns,
+          sender: row['sender'] as String,
+          body: row['body'] as String,
+          receivedAt: receivedAt,
+        );
+        final parsedTransaction = parsed?.transaction;
+        if (parsedTransaction == null ||
+            parsedTransaction.sourceKey != row['source_key'] ||
+            MerchantIdentity.cleanName(parsedTransaction.merchantName) == null ||
+            parsedTransaction.amount.paise !=
+                Money.fromRupees(payload['amount_inr'] as num).paise) {
+          continue;
+        }
+        result.add({
+          'sender': row['sender'] as String,
+          'body': row['body'] as String,
+          'occurredAt': receivedAt,
+        });
+      } catch (_) {
+        // A malformed historical capture must not block the remaining rows.
+      }
+    }
+    return result;
   }
 
   void syncCardDatesFromObservations(String ns) {

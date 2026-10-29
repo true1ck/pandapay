@@ -11,6 +11,19 @@ import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 
 void main() {
+  test('explicit service renewal keeps stated amount and next date', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'test',
+      sender: '5550101',
+      body:
+          'Subscription for ChatGPT Plus renewed. Monthly plan payment Rs.499 paid on 29-Oct-2026. Next renewal 29-Nov-2026.',
+      receivedAt: DateTime.utc(2026, 10, 29),
+    );
+    expect(result?.eventType, LocalSmsEventType.autopay);
+    expect(result?.billerName, 'ChatGPT Plus');
+    expect(result?.amountDue?.rupees, 499);
+    expect(result?.dueDate, DateTime(2026, 11, 29));
+  });
   test(
     'purchase confirmation with downloadable bill is classified as receipt',
     () {
@@ -1865,6 +1878,32 @@ void main() {
 
       expect(parsed?.transaction?.merchantName, 'SUNALI MUNDRA');
       expect(parsed?.transaction?.amount.paise, 50000);
+    });
+
+    test('Unicode-masked P2A reference keeps the actual recipient', () {
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'AX-AXISBK-S',
+        body: 'INR 9000.00 debited\nA/c no. XX2583\n'
+            '04-10-26, 21:49:33\nUPI/P2A/•••• 2120/AANCHAL YADU\n'
+            'Not you? SMS BLOCKUPI Cust ID to •••• 0002\nAxis Bank',
+        receivedAt: DateTime(2026, 10, 4, 21, 49, 36),
+      );
+      expect(parsed?.transaction?.merchantName, 'AANCHAL YADU');
+      expect(parsed?.transaction?.entryKind, TxnEntryKind.spend);
+    });
+
+    test('processed ICICI card bill is a named transfer', () {
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VM-SBYONO-S',
+        body: 'ICICI Credit card bill - of Rs.94567.00 has been '
+            'successfully processed from SBI A/C-0208. Your B-connect '
+            'Txn id is xxxxKvEe -YONO SBI',
+        receivedAt: DateTime(2026, 10, 22, 22, 7, 7),
+      );
+      expect(parsed?.transaction?.merchantName, 'ICICI credit card bill');
+      expect(parsed?.transaction?.entryKind, TxnEntryKind.transfer);
     });
 
     test('P2M without a payee token leaves no fabricated merchant', () {
