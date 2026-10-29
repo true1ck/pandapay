@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../widgets/confirm_dialog.dart';
 
 /// UA-5.3/AD-4.3 follow-up (Chunk 35): admin CRUD for `parser_patterns`,
 /// the table `sms_parser.js` (Chunk 31) reads at parse time to turn a raw
@@ -112,7 +113,16 @@ class _PatternTileState extends ConsumerState<_PatternTile> {
                     OutlinedButton(
                       onPressed: _busy
                           ? null
-                          : () => _act(() => ref.read(adminApiProvider)!.deleteParserPattern(p['id'] as String)),
+                          : () async {
+                              final confirmed = await confirmAdminAction(
+                                context,
+                                title: 'Delete this parser pattern?',
+                                message: 'New SMS messages will no longer be parsed with this pattern. This cannot be undone from the console.',
+                                confirmLabel: 'Delete',
+                              );
+                              if (!confirmed || !mounted) return;
+                              await _act(() => ref.read(adminApiProvider)!.deleteParserPattern(p['id'] as String));
+                            },
                       style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
                       child: const Text('Delete'),
                     ),

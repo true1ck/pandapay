@@ -209,60 +209,15 @@ test('a candidate waits for post-creation holdout examples instead of being reje
   assert.equal(updates.length, 0);
 });
 
-test('sms_autonomous_worker: publishActiveBundle compiles hash and publishes bundle', async () => {
-  const activeCandidates = [
-    {
-      candidate_id: 'cand_active_01',
-      family: 'posted_movement',
-      issuer: 'HDFCBK',
-      sender_pattern: 'HDFCBK',
-      template: 'debited by {AMOUNT}',
-      compiled_regex: 'debited by (?:(?:₹|Rs\\.?|INR)\\s*([0-9,]+(?:\\.[0-9]{1,2})?))',
-      field_map: { amount: 1 },
-      default_fields: {},
-      confidence: 0.99,
-    },
-  ];
-
-  let publishedCall = null;
-  let candidateUpdate = null;
-
-  const mockDb = {
-    async query(sql, params) {
-      if (sql.includes('pg_try_advisory_lock')) return { rows: [{ locked: true }] };
-      if (sql.includes('SELECT') && sql.includes("WHERE state = 'active'")) {
-        return { rows: activeCandidates };
-      }
-      if (sql.includes('coalesce(max(bundle_version), 0) + 1')) {
-        return { rows: [{ next_version: 4 }] };
-      }
-      if (sql.includes('pandapay.sms_publish_bundle')) {
-        publishedCall = params;
-        return { rows: [{ published: true }] };
-      }
-      if (sql.includes('UPDATE public.sms_rule_candidates') && sql.includes('SET bundle_version = $1')) {
-        candidateUpdate = params;
-        return { rowCount: 1 };
-      }
-      return { rows: [], rowCount: 0 };
-    },
-  };
-
+test('sms_autonomous_worker: global bundle publication is reserved for admin approval', async () => {
+  let queries = 0;
+  const mockDb = { async query() { queries += 1; return { rows: [] }; } };
   const result = await publishActiveBundle(mockDb, '1.2.0');
-  assert.equal(result.published, true);
-  assert.equal(result.bundleVersion, 4);
-  assert.equal(result.ruleCount, 1);
-  assert.ok(result.sha256);
-
-  assert.equal(publishedCall[0], 4);
-  assert.equal(publishedCall[2], result.sha256);
-  assert.equal(publishedCall[3], '1.2.0');
-
-  assert.equal(candidateUpdate[0], 4);
-  assert.deepEqual(candidateUpdate[1], ['cand_active_01']);
+  assert.deepEqual(result, { published: false, reason: 'admin_approval_required' });
+  assert.equal(queries, 0);
 });
 
-test('sms_autonomous_worker: publishActiveBundle returns early if no active candidates', async () => {
+test('sms_autonomous_worker: publication stays blocked even when no candidates exist', async () => {
   const mockDb = {
     async query(sql) {
       if (sql.includes('pg_try_advisory_lock')) return { rows: [{ locked: true }] };
@@ -272,23 +227,17 @@ test('sms_autonomous_worker: publishActiveBundle returns early if no active cand
 
   const result = await publishActiveBundle(mockDb);
   assert.equal(result.published, false);
-  assert.equal(result.reason, 'no_active_candidates');
+  assert.equal(result.reason, 'admin_approval_required');
 });
 
-test('sms_autonomous_worker: rollbackRegressedBundle calls pandapay.sms_rollback_bundle and marks rolled_back', async () => {
-  let rollbackCall = null;
+test('sms_autonomous_worker: regression withdraws candidates without rolling back a global bundle', async () => {
   let updateCall = null;
 
   const mockDb = {
     async query(sql, params) {
-      if (sql.includes('pg_try_advisory_lock')) return { rows: [{ locked: true }] };
-      if (sql.includes('pandapay.sms_rollback_bundle')) {
-        rollbackCall = params;
-        return { rows: [{ rolled_back: true }] };
-      }
       if (sql.includes('UPDATE public.sms_rule_candidates') && sql.includes("SET state = 'rolled_back'")) {
         updateCall = params;
-        return { rowCount: 2 };
+        return { rowCount: 1, rows: [{ candidate_id: 'cand_regressed' }] };
       }
       return { rows: [], rowCount: 0 };
     },
@@ -297,15 +246,13 @@ test('sms_autonomous_worker: rollbackRegressedBundle calls pandapay.sms_rollback
   const result = await rollbackRegressedBundle(mockDb, 4);
   assert.equal(result.rolledBack, true);
   assert.equal(result.bundleVersion, 4);
-  assert.equal(rollbackCall[0], 4);
   assert.equal(updateCall[0], 4);
 });
 
-test('sms_autonomous_worker: rollbackRegressedBundle handles invalid version or inactive bundle', async () => {
+test('sms_autonomous_worker: candidate withdrawal handles invalid version and missing candidates', async () => {
   const mockDb = {
-    async query(sql) {
-      if (sql.includes('pg_try_advisory_lock')) return { rows: [{ locked: true }] };
-      return { rows: [{ rolled_back: false }] };
+    async query() {
+      return { rows: [], rowCount: 0 };
     },
   };
 
@@ -315,7 +262,7 @@ test('sms_autonomous_worker: rollbackRegressedBundle handles invalid version or 
 
   const notFoundRes = await rollbackRegressedBundle(mockDb, 999);
   assert.equal(notFoundRes.rolledBack, false);
-  assert.equal(notFoundRes.reason, 'bundle_not_found_or_already_inactive');
+  assert.equal(notFoundRes.reason, 'no_active_worker_candidates');
 });
 
 test('sms_autonomous_worker: startAutonomousWorker and stopAutonomousWorker lifecycle', async () => {
@@ -345,8 +292,8 @@ test('sms_autonomous_worker: capability check requires the dedicated role and co
         can_read_exposures: true,
         can_read_bundles: true,
         can_write_worker_runs: true,
-        can_publish: true,
-        can_rollback: true,
+        can_publish: false,
+        can_rollback: false,
       }] };
     },
   };
@@ -364,8 +311,8 @@ test('sms_autonomous_worker: capability check requires the dedicated role and co
         can_read_exposures: true,
         can_read_bundles: true,
         can_write_worker_runs: true,
-        can_publish: true,
-        can_rollback: true,
+        can_publish: false,
+        can_rollback: false,
       }] };
     },
   };
@@ -385,8 +332,8 @@ test('sms_autonomous_worker: capability check requires the dedicated role and co
         can_read_exposures: true,
         can_read_bundles: false,
         can_write_worker_runs: true,
-        can_publish: true,
-        can_rollback: true,
+        can_publish: false,
+        can_rollback: false,
       }] };
     },
   };

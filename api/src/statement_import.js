@@ -3,6 +3,7 @@ const SOURCES = new Set(['statement', 'screenshot', 'csv', 'xlsx', 'json']);
 const RAILS = new Set(['upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown']);
 const ENTRY_KINDS = new Set(['spend', 'income', 'investment', 'transfer']);
 const INSTRUMENTS = new Set(['credit_card', 'debit_card', 'cash', 'upi_bank', 'wallet', 'other']);
+const STATUSES = new Set(['active', 'ignored', 'deleted']);
 function maskAccount(value) { return value?.replace(/\d{6,}/g, (digits) => `****${digits.slice(-4)}`) || null; }
 const HASH = /^[a-f0-9]{64}$/i;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -111,6 +112,7 @@ function validateStatementImport(body, { receiptsEnabled = false } = {}) {
     if (row.tagNames != null && (!Array.isArray(row.tagNames) || row.tagNames.length > 30 || row.tagNames.some((name) => typeof name !== 'string' || !name.trim() || name.trim().length > 60))) return `${prefix}.tagNames is invalid`;
     if (row.entryKind != null && !ENTRY_KINDS.has(row.entryKind)) return `${prefix}.entryKind is invalid`;
     if (row.instrument != null && !INSTRUMENTS.has(row.instrument)) return `${prefix}.instrument is invalid`;
+    if (row.status != null && !STATUSES.has(row.status)) return `${prefix}.status is invalid`;
     if (!money(row.amountInr) || row.amountInr <= 0) return `${prefix}.amountInr must be positive INR with at most two decimals`;
     if (!timestamp(row.occurredAt)) return `${prefix}.occurredAt must be a valid ISO timestamp with timezone`;
     // The app's date range is in the device's accounting timezone. Allow the
@@ -354,7 +356,7 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
               categoryHint: transaction.categoryHint,
               subcategoryHint: transaction.subcategoryHint,
               entryKind: inferStatementEntryKind(transaction),
-              status: 'active',
+              status: transaction.status || 'active',
             })
           : {
               categoryId: await importResolvers.resolveCategoryForImport(client, req.userId, {
@@ -362,7 +364,7 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
                 vpa: merchantVpa,
                 mcc: merchantMcc,
                 entryKind: inferStatementEntryKind(transaction),
-                status: 'active',
+                status: transaction.status || 'active',
               }),
               userCategoryId: null,
             });
@@ -376,6 +378,7 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
           instrument: userCardId ? instrument : (transaction.instrument || instrument),
           amount: Number(transaction.amountInr),
           entryKind: inferStatementEntryKind(transaction),
+          status: transaction.status || 'active',
           occurred,
           categoryId: classification.categoryId,
           userCategoryId: classification.userCategoryId,
@@ -400,7 +403,10 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
         }
         else {
           if (outcome.duplicatePending) pendingDuplicates += 1;
-          else { imported += 1; reconciled += 1; }
+          else {
+            imported += 1;
+            if (outcome.transaction?.status === 'active') reconciled += 1;
+          }
           await client.query(
             `UPDATE transactions
                 SET statement_import_id = $1,

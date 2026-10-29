@@ -53,6 +53,7 @@ const applyTransactionSync = createSyncTransactionApplier({
 const centralProjection = require('./central_financial_projection');
 const { registerBillsProjectionRoutes } = require('./bills_projection_route');
 const smsFactsRoute = require('./sms_facts_route');
+const smsLearningFeedbackRoute = require('./sms_learning_feedback_route');
 const smsRuleBundleRoute = require('./sms_rule_bundle');
 const smsLearning = require('./sms_learning');
 const { testImapLogin } = require('./imap_test');
@@ -1326,6 +1327,10 @@ app.post('/merchants/nearby/google', requireValidJwt, async (req, res) => {
       lng,
       radiusM,
       googleApiKey,
+      onGoogleFailure: (failure) => console.warn('Google Places failed:', JSON.stringify({
+        requestId: req.requestId,
+        ...failure,
+      })),
       fallbackDiscover: (params) => nearbyGoogleFallback.discover(params),
     });
     if (result.degraded) {
@@ -1338,6 +1343,10 @@ app.post('/merchants/nearby/google', requireValidJwt, async (req, res) => {
     console.warn('POST /merchants/nearby/google unavailable', {
       requestId: req.requestId,
       googleFailure: safeErrorCode(err.googleFailure),
+      googleKeyConfigured: Boolean(googleApiKey),
+      googleHttpStatus: err.googleFailure?.providerHttpStatus || null,
+      googleStatus: err.googleFailure?.providerStatus || null,
+      googleReason: err.googleFailure?.providerReason || null,
       fallbackFailure: safeErrorCode(err.cause),
     });
     res.status(503).json({
@@ -3745,11 +3754,12 @@ function clientMutationSourceKey(userId, source, clientMutationId) {
 
 async function insertTransactionAndUpdateState(client, userId, {
   userCardId, amount, occurred, categoryId, userCategoryId, rail, merchantName, note, source,
-  merchantVpa, mcc, sourceKey, backfill, instrument, entryKind, accountLast4,
+  merchantVpa, mcc, sourceKey, backfill, instrument, entryKind, status, accountLast4,
   observationMetadata, observedAt,
 }) {
   const resolvedInstrument = instrument || 'credit_card';
   const resolvedEntryKind = entryKind || 'spend';
+  const resolvedStatus = ['active', 'ignored', 'deleted'].includes(status) ? status : 'active';
   const resolvedSource = source || 'manual';
   const resolvedAccountLast4 = /^\d{4}$/.test(String(accountLast4 || '').trim())
     ? String(accountLast4).trim()
@@ -3788,7 +3798,8 @@ async function insertTransactionAndUpdateState(client, userId, {
   // that card yet (or its last four digits are missing). Keep the payment
   // instrument as credit_card so reports do not silently relabel it as
   // "Other". Only card-state side effects require a concrete user_card row.
-  const movesCardState = resolvedInstrument === 'credit_card'
+  const movesCardState = resolvedStatus === 'active'
+    && resolvedInstrument === 'credit_card'
     && resolvedEntryKind === 'spend'
     && Boolean(userCardId);
 
@@ -3803,11 +3814,11 @@ async function insertTransactionAndUpdateState(client, userId, {
   // index only covers non-null keys.
   const txn = await client.query(
     `INSERT INTO transactions
-       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, merchant_vpa, mcc, category_id, user_category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill, source_account_last4)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'estimated', $13, $14, $15, false, $16, $17)
+       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, merchant_vpa, mcc, category_id, user_category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, status, state_applied, is_backfill, source_account_last4)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'estimated', $13, $14, $15, $16, false, $17, $18)
      ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
      RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
-    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, merchantVpa || null, mcc || null, categoryId || null, userCategoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, backfill === true, resolvedAccountLast4]
+    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, merchantVpa || null, mcc || null, categoryId || null, userCategoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, resolvedStatus, backfill === true, resolvedAccountLast4]
   );
 
   // Zero rows back means the unique index rejected it: this exact message
@@ -3820,7 +3831,10 @@ async function insertTransactionAndUpdateState(client, userId, {
     // an unmatched credit-card alert to `other`. The source key correctly
     // prevents a second ledger row, but returning the stale attribution would
     // make the bug permanent. Refresh only stronger parser evidence here:
-    // never alter amount/date/merchant and never replace an existing card.
+    // never alter amount/date, and never replace a named merchant — except
+    // the stale generic `Money received` fallback, which a parser upgrade
+    // may now name precisely (e.g. EMI repayments previously mislabelled as
+    // generic credits). Amount/merchant are otherwise immutable on retries.
     const existing = await client.query(
       `SELECT t.*
          FROM transactions t
@@ -3858,7 +3872,14 @@ async function insertTransactionAndUpdateState(client, userId, {
       && Boolean(old.user_card_id || userCardId);
     const refreshed = await client.query(
       `UPDATE transactions t
-          SET instrument = CASE
+          SET merchant_name = CASE
+                -- Parser upgrade: replace only the stale generic credit label.
+                WHEN t.merchant_name = 'Money received'
+                     AND $8::text IS NOT NULL AND $8::text <> 'Money received'
+                  THEN $8::text
+                ELSE t.merchant_name
+              END,
+              instrument = CASE
                 WHEN t.instrument::text IN ('other', '')
                  AND $3::text IN ('credit_card', 'debit_card', 'upi_bank', 'wallet')
                   THEN $3::txn_instrument
@@ -3877,7 +3898,7 @@ async function insertTransactionAndUpdateState(client, userId, {
               END
         WHERE t.id = $1 AND t.profile_id = $2
       RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
-      [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify)]
+      [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify), merchantName || null]
     );
     if (shouldReclassify && refreshedMovesCardState && !old.is_backfill) {
       const card = oldCard || (userCardId ? await loadUserCardForState(client, userId, userCardId) : null);
@@ -3917,6 +3938,9 @@ async function insertTransactionAndUpdateState(client, userId, {
     observedAt: observedAt || occurred,
     metadata: observationMetadata,
   });
+  if (resolvedStatus !== 'active') {
+    return { status: 201, transaction: txn.rows[0] };
+  }
   if (typeof pairTransferObservation === 'function') {
     await pairTransferObservation(client, userId, txn.rows[0].id);
   }
@@ -5442,6 +5466,11 @@ smsFactsRoute.registerSmsFactsRoutes(app, {
   requireAdmin,
   withUserClient,
   persistSubscriptionMandate,
+});
+smsLearningFeedbackRoute.registerSmsLearningFeedbackRoute(app, {
+  requireAuth,
+  requireAdmin,
+  withUserClient,
 });
 registerBillsProjectionRoutes(app, { requireAuth, withUserClient });
 // The versioned rule bundle the device downloads and applies locally, so a
@@ -7329,7 +7358,7 @@ app.post('/transactions/category-bulk-apply', requireAuth, async (req, res) => {
   }
 });
 
-const IGNORE_REASONS = ['refund', 'reversal', 'transfer'];
+const IGNORE_REASONS = ['refund', 'reversal', 'transfer', 'wrong_transaction'];
 
 /**
  * PATCH /transactions/:id/note — design 18 "Add a note".
@@ -9106,6 +9135,7 @@ const CONSENT_PURPOSES = [
   'marketing',
   'aggregate_insights',
   'partner_sharing',
+  'sms_shared_learning',
 ];
 
 /**
@@ -9173,14 +9203,30 @@ app.post('/consents', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'policyVersion is required' });
   }
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
+    const result = await withUserClient(req.userId, async (client) => {
+      if (purpose === 'sms_shared_learning') {
+        // Match the feedback route's lock so revocation/purge cannot race an
+        // in-flight contribution write under the previous grant.
+        await client.query(
+          'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
+          [`sms-shared-learning-consent:${req.userId}`],
+        );
+      }
+      const inserted = await client.query(
         `INSERT INTO user_consents (profile_id, purpose, policy_version, granted, source_screen)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING purpose, granted, granted_at, policy_version, source_screen`,
         [req.userId, purpose, policyVersion, granted, sourceScreen || null]
-      )
-    );
+      );
+      if (purpose === 'sms_shared_learning' && !granted) {
+        await smsLearning.deleteLearningExamplesForUser(client, req.userId);
+        await client.query(
+          'DELETE FROM public.sms_ai_learning_proposals WHERE profile_id = $1',
+          [req.userId],
+        );
+      }
+      return inserted;
+    });
     res.status(201).json({ consent: result.rows[0] });
   } catch (err) {
     console.error('POST /consents error', safeErrorCode(err));
@@ -9443,6 +9489,32 @@ app.put('/user-settings', requireAuth, async (req, res) => {
 const accountLifecycleHandlers=require('./account_lifecycle_routes').createAccountLifecycleHandlers({withUserClient,enabled:config.accountLifecycleEnabled});
 app.post('/account/delete-request',requireAuth,accountLifecycleHandlers.requestDeletion);
 app.delete('/account/delete-request',requireAuth,accountLifecycleHandlers.cancelDeletion);
+
+/** POST /account/data-reset — erases personal product data but keeps login. */
+app.post('/account/data-reset', requireAuth, async (req, res) => {
+  try {
+    await withUserClient(req.userId, (client) =>
+      client.query('SELECT pandapay.reset_account_data($1::uuid)', [req.userId])
+    );
+    res.json({ reset: true });
+  } catch (err) {
+    console.error('POST /account/data-reset error', safeErrorCode(err));
+    res.status(500).json({ error: 'data_reset_failed' });
+  }
+});
+
+/** POST /account/erase — permanently erases product data before auth removal. */
+app.post('/account/erase', requireAuth, async (req, res) => {
+  try {
+    await withUserClient(req.userId, (client) =>
+      client.query('SELECT pandapay.execute_account_deletion($1::uuid)', [req.userId])
+    );
+    res.json({ erased: true });
+  } catch (err) {
+    console.error('POST /account/erase error', safeErrorCode(err));
+    res.status(500).json({ error: 'account_erasure_failed' });
+  }
+});
 
 // Keep the deliberately public signed-out feedback flow (used for OTP help),
 // while bounding user-controlled text/diagnostics before any database write.
@@ -10351,8 +10423,10 @@ app.get('/admin/data-quality-dashboard', requireAdmin, async (req, res) => {
 /**
  * AD-9 Anonymization Audit Automation.
  *
- * `pandapay.run_anonymization_audit()` (the 6-check function itself) already
- * existed in db/supabase/migrations/0010_functions_and_views.sql — not
+ * `pandapay.run_anonymization_audit()` (12 checks — six over the crowdsourced
+ * merchant surface, six over SMS shared learning since
+ * 20261028100000_sms_learning_anonymization_audit.sql) already existed in
+ * db/supabase/migrations/0010_functions_and_views.sql — not
  * written this chunk. What's new here: exposing its run history to the
  * console (AD-9.1), and — separately, see .github/workflows/anonymization-
  * audit.yml added alongside this route — actually calling it from CI on

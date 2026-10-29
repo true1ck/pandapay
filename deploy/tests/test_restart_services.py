@@ -120,6 +120,17 @@ class SequentialRolloutTest(unittest.TestCase):
                             for name, args, _ in commands if name == "docker"))
         self.assertNotIn("synthetic-worker-password", " ".join(map(str, commands)))
 
+    def test_api_feedback_key_alone_keeps_shared_worker_disabled(self):
+        result, commands = self.rollout(
+            ENV_CONTENT="SMS_LEARNING_HMAC_KEY=synthetic-feedback-key-over-32-characters\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any("sms-learning-worker" in args and
+                             ("build" in args or "up" in args)
+                             for name, args, _ in commands if name == "docker"))
+        self.assertTrue(any("sms-learning-worker" in args and "stop" in args
+                            for name, args, _ in commands if name == "docker"))
+
     def test_partial_sms_learning_configuration_fails_before_docker_calls(self):
         result, commands = self.rollout(ENV_CONTENT="SMS_LEARNING_DATABASE_URL=postgres://synthetic/db\n")
         self.assertNotEqual(result.returncode, 0)

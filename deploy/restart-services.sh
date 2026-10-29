@@ -23,8 +23,9 @@ fi
 unset AI_WORKER_TOKEN_VALUE
 
 # SMS learning is an opt-in database writer. Its dedicated login URL, HMAC
-# key, and bootstrap password must all be present before starting it. A fully
-# disabled configuration stops a worker left by an earlier opt-in deploy.
+# key, and bootstrap password must all be present before starting it. The API
+# feedback key can exist independently while the cross-user worker stays off.
+# A disabled worker configuration stops a previously opted-in worker.
 SMS_LEARNING_DATABASE_URL_VALUE=""
 SMS_LEARNING_HMAC_KEY_VALUE=""
 SMS_LEARNING_WORKER_DB_PASSWORD_VALUE=""
@@ -33,7 +34,7 @@ if [ -r .env ]; then
   SMS_LEARNING_HMAC_KEY_VALUE="$(sed -n 's/^SMS_LEARNING_HMAC_KEY=//p' .env | sed 's/^"//; s/"$//')"
   SMS_LEARNING_WORKER_DB_PASSWORD_VALUE="$(sed -n 's/^SMS_LEARNING_WORKER_DB_PASSWORD=//p' .env | sed 's/^"//; s/"$//')"
 fi
-if { [ -n "$SMS_LEARNING_DATABASE_URL_VALUE" ] || [ -n "$SMS_LEARNING_HMAC_KEY_VALUE" ] \
+if { [ -n "$SMS_LEARNING_DATABASE_URL_VALUE" ] \
      || [ -n "$SMS_LEARNING_WORKER_DB_PASSWORD_VALUE" ]; } \
    && { [ -z "$SMS_LEARNING_DATABASE_URL_VALUE" ] || [ -z "$SMS_LEARNING_HMAC_KEY_VALUE" ] \
         || [ -z "$SMS_LEARNING_WORKER_DB_PASSWORD_VALUE" ]; }; then
@@ -101,3 +102,11 @@ for service in "${SERVICES[@]}"; do
     *) wait_for_service "$service" '' ;;
   esac
 done
+
+# A green API health check alone does not prove that opted-in dismissal
+# feedback can be recorded. Keep the key private and check only its length.
+"${COMPOSE[@]}" exec -T api node -e \
+  "process.exit((process.env.SMS_LEARNING_HMAC_KEY || '').length >= 32 ? 0 : 1)" || {
+  echo 'FATAL: API started without a usable SMS learning feedback key'
+  exit 1
+}

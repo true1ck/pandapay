@@ -148,5 +148,25 @@
     "id": "auth-context-2",
     "body": "A/c *4827 Credited for Rs:2963.41 on 17-10-2026 10:41:22 by Mob Bk ref no 735091246803 Avl Bal Rs:6847.23.Use 572904 to authorize this transaction. Never Share OTP/PIN/CVV-Fable Bank",
     "sensitive": true
+  },
+  {
+    "id": "safe-statement-instruction",
+    "body": "Your SIP Purchase in Folio 00000000/00 under FICTIONAL Test Fund for Rs. 73.19 has been processed on 16-Oct-2026. Enter your PAN as the password. Statement ready.",
+    "sensitive": false
+  },
+  {
+    "id": "statement-with-actual-password",
+    "body": "Your SIP Purchase in Folio 00000000/00 under FICTIONAL Test Fund for Rs. 73.19 has been processed on 16-Oct-2026. Enter your PAN as the password. Password: FAKE-TEMP-SECRET",
+    "sensitive": true
+  },
+  {
+    "id": "statement-with-actual-code",
+    "body": "Your SIP Purchase in Folio 00000000/00 under FICTIONAL Test Fund for Rs. 73.19 has been processed on 16-Oct-2026. Enter your PAN as the password. OTP 527391",
+    "sensitive": true
+  },
+  {
+    "id": "statement-instruction-with-assignment",
+    "body": "Your SIP Purchase in Folio 00000000/00 under FICTIONAL Test Fund for Rs. 73.19 has been processed on 16-Oct-2026. Enter your PAN as the password: FAKE-TEMP-SECRET",
+    "sensitive": true
   }
 ]

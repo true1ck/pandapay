@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +14,7 @@ import 'features/dashboard/anonymization_audit_screen.dart';
 import 'features/dashboard/data_quality_dashboard_screen.dart';
 import 'features/dashboard/sms_ai_operations_screen.dart';
 import 'features/parser_patterns/parser_patterns_screen.dart';
+import 'features/parser_patterns/sms_category_proposals_screen.dart';
 import 'features/queues/card_requests_screen.dart';
 import 'features/queues/error_reports_screen.dart';
 import 'features/queues/support_tickets_screen.dart';
@@ -48,11 +51,53 @@ class PandaPayConsoleApp extends StatelessWidget {
   }
 }
 
-class _AuthGate extends ConsumerWidget {
+class _AuthGate extends ConsumerStatefulWidget {
   const _AuthGate();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends ConsumerState<_AuthGate> {
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Access tokens live for an hour. Refreshing well before expiry keeps an
+    // open dashboard usable instead of turning every panel into a 401 error
+    // that only a full page reload could fix.
+    _refreshTimer = Timer.periodic(const Duration(minutes: 10), (_) => _refreshSession());
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshSession() async {
+    final store = await ref.read(tokenStoreProvider.future);
+    final refreshToken = store.refreshToken;
+    if (refreshToken == null) return;
+    try {
+      final tokens = await ref.read(authApiProvider).refresh(refreshToken);
+      await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+      if (mounted) ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
+    } catch (_) {
+      // Keep the current session on a transient network failure; the next
+      // attempt or an explicit API 401 will surface a real expiry.
+    }
+  }
+
+  Future<void> _signOut() async {
+    final store = await ref.read(tokenStoreProvider.future);
+    await store.clear();
+    ref.read(accessTokenProvider.notifier).state = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // Chunk 10: wait for a stored refresh token to resolve (or fail) before
     // deciding — otherwise a valid session flashes the login screen first
     // on every reload while sessionInitProvider is still in flight.
@@ -72,12 +117,39 @@ class _AuthGate extends ConsumerWidget {
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, _) => Scaffold(
-        body: Center(child: Text('Failed to verify admin access: $err')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Failed to verify admin access: $err'),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                children: [
+                  FilledButton(
+                    onPressed: () => ref.invalidate(isAdminProvider),
+                    child: const Text('Retry'),
+                  ),
+                  TextButton(onPressed: _signOut, child: const Text('Sign out')),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
       data: (admin) {
         if (!admin) {
-          return const Scaffold(
-            body: Center(child: Text('This console is internal-only.')),
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('This console is internal-only.'),
+                  const SizedBox(height: 12),
+                  TextButton(onPressed: _signOut, child: const Text('Sign out')),
+                ],
+              ),
+            ),
           );
         }
         return const _ConsoleHome();
@@ -126,6 +198,12 @@ class _ConsoleHome extends StatefulWidget {
 class _ConsoleHomeState extends State<_ConsoleHome> {
   int _selected = 0;
 
+  /// Screens are built lazily and then kept alive in the IndexedStack. Building
+  /// all 15 upfront would fire every provider's request on login; rebuilding
+  /// only the selected child would discard scroll position, filters and
+  /// half-filled forms on every tab switch.
+  final Set<int> _visited = {0};
+
   static const _destinations = [
     (label: 'Catalogue', screen: CatalogueScreen()),
     (label: 'Card Requests', screen: CardRequestsScreen()),
@@ -139,6 +217,7 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
     (label: 'SMS AI Operations', screen: SmsAiOperationsScreen()),
     (label: 'Anonymization Audit', screen: AnonymizationAuditScreen()),
     (label: 'Parser Patterns', screen: ParserPatternsScreen()),
+    (label: 'SMS Rule Approvals', screen: SmsCategoryProposalsScreen()),
     (label: 'Sources', screen: SourcesScreen()),
     (label: 'Scrape Diff Review', screen: ScrapeDiffReviewScreen()),
     (label: 'Referral Operations', screen: ReferralOperationsScreen()),
@@ -165,8 +244,10 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
                   child: IntrinsicHeight(
                     child: NavigationRail(
                       selectedIndex: _selected,
-                      onDestinationSelected: (i) =>
-                          setState(() => _selected = i),
+                      onDestinationSelected: (i) => setState(() {
+                        _selected = i;
+                        _visited.add(i);
+                      }),
                       labelType: NavigationRailLabelType.all,
                       destinations: [
                         for (final d in _destinations)
@@ -210,7 +291,15 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
             ],
           ),
           const VerticalDivider(width: 1),
-          Expanded(child: _destinations[_selected].screen),
+          Expanded(
+            child: IndexedStack(
+              index: _selected,
+              children: [
+                for (var i = 0; i < _destinations.length; i++)
+                  _visited.contains(i) ? _destinations[i].screen : const SizedBox.shrink(),
+              ],
+            ),
+          ),
         ],
       ),
     );

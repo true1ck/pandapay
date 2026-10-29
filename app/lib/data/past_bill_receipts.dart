@@ -137,6 +137,14 @@ class PastBillReceiptRepository {
     _changes.add(namespace);
   }
 
+  void delete(String id) {
+    database.db.execute(
+      'DELETE FROM local_past_bill_receipts WHERE namespace = ? AND id = ?',
+      [namespace, id],
+    );
+    _changes.add(namespace);
+  }
+
   /// Archives a completed merchant e-bill/receipt without creating spending.
   /// The existing transaction remains the accounting source of truth.
   void archiveReceipt({

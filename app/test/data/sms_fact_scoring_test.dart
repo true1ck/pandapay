@@ -10,6 +10,11 @@ const swiggyBody =
     'Sent Rs.420.00 from HDFC Bank A/C **1797 to SWIGGY UPI on 24-10-26. '
     'UPI Ref 429812345678. Avail Bal: Rs.45,120.50';
 
+const balajiReceiptBody =
+    'Hello, your payment of Rs. 700.0 to Balaji Sports has been recorded. '
+    'View the payment receipt here: https://mybillbook.in/cpp/?t=ljbffep4r '
+    '- myBillBook';
+
 Map<String, dynamic> swiggyFact({
   bool isComplete = true,
   double confidence = 0.98,
@@ -345,7 +350,7 @@ void main() {
 
   test('promotional footers do not disqualify completion evidence', () {
     const body =
-        'Rs 500.00 debited from A/c XX1234 on 24-Oct-26. '
+        'Rs 500.00 debited from A/c XX1234 at SOME STORE on 24-Oct-26. '
         'You are eligible for a personal loan of Rs 5 Lakh.';
     expect(smsHasCompletionEvidence(body), isTrue);
     final assessment = assessSmsFacts([
@@ -366,6 +371,129 @@ void main() {
     expect(assessment.autoResolvable, isTrue);
   });
 
+  test('SBI currencyless transfer keeps name, compact date and reference', () {
+    const body =
+        'Dear UPI User A/C X5121 debited by 50.00 on date 17Oct26 trf to '
+        'Sunali Mundra Refno 665663775318 If not u? call-1800111109 for other '
+        'services-18001234-SBI';
+    final receivedAt = DateTime.utc(2026, 10, 17, 8);
+    final transfer = fact('posted_movement', {
+      'amountRole': 'posted',
+      'amountInr': 50.0,
+      'occurredAt': '2026-10-17T00:00:00.000Z',
+      'entryKind': 'spend',
+      'instrument': 'upi_bank',
+      'accountLast4': '5121',
+      'merchant': 'Transfer to Sunali Mundra',
+      'transferParty': 'Sunali Mundra',
+      'reference': '665663775318',
+      'category': 'other',
+      'isComplete': true,
+      'confidence': 0.95,
+    });
+    expect(smsDateAppears(body, '2026-10-17T00:00:00.000Z'), isTrue);
+    final assessment = assessSmsFacts([transfer], body, receivedAt: receivedAt);
+    expect(assessment.facts.single.evidence, greaterThan(0.8));
+    expect(assessment.autoResolvable, isTrue);
+  });
+
+  test('merchant receipt is completion evidence but not an independent ledger entry', () {
+    const body =
+        'Hello, your payment of Rs. 700.0 to Balaji Sports has been recorded. '
+        'View the payment receipt here: https://mybillbook.in/cpp/?t=ljbffep4r '
+        '- myBillBook';
+    final receivedAt = DateTime.utc(2026, 10, 27, 9);
+    expect(smsIsReceiptOnlyMessage(body), isTrue);
+    expect(smsHasReceiptCompletion(body), isTrue);
+    final receipt = fact('posted_movement', {
+      'amountRole': 'posted',
+      'amountInr': 700.0,
+      'occurredAt': receivedAt.toIso8601String(),
+      'entryKind': 'spend',
+      'instrument': 'upi_bank',
+      'merchant': 'Balaji Sports',
+      'category': 'other',
+      'isComplete': true,
+      'confidence': 0.95,
+    });
+    final assessment = assessSmsFacts(
+      [receipt],
+      body,
+      receivedAt: receivedAt,
+    );
+    expect(assessment.facts.single.merchantEvidenced, isTrue);
+    expect(assessment.facts.single.receiptOnly, isTrue);
+    expect(assessment.facts.single.receiptCompletion, isTrue);
+    expect(assessment.autoResolvable, isFalse);
+  });
+
+  test('absent or hash-like merchants cannot auto-accept a spend', () {
+    const body =
+        'A/c XX5121 debited by 50.00 on 17Oct26. Ref 665663775318. '
+        'Avail Bal: 1,200.00.';
+    Map<String, dynamic> spend(String merchant) => fact('posted_movement', {
+      'amountRole': 'posted',
+      'amountInr': 50.0,
+      'occurredAt': '2026-10-17T00:00:00.000Z',
+      'entryKind': 'spend',
+      'instrument': 'upi_bank',
+      'accountLast4': '5121',
+      'merchant': merchant,
+      'category': 'other',
+      'isComplete': true,
+      'confidence': 0.99,
+    });
+    for (final merchant in ['Phantom Bazaar', 'ljbffep4r', '665663775318']) {
+      final assessment = assessSmsFacts([spend(merchant)], body);
+      expect(
+        assessment.facts.single.merchantEvidenced,
+        isFalse,
+        reason: merchant,
+      );
+      expect(assessment.autoResolvable, isFalse, reason: merchant);
+    }
+    expect(smsIsWeakMerchantName('X5121'), isTrue);
+  });
+
+  test('canonical, short, numeric and Unicode merchant names stay valid', () {
+    for (final merchant in [
+      'Refund',
+      'Reward or cashback',
+      'Transfer between own accounts',
+      'Transfer to Sunali Mundra',
+      '7-Eleven',
+      '99acres',
+      '3M',
+      'Café Müller',
+      'सुजय स्टोर्स',
+    ]) {
+      expect(
+        smsIsWeakMerchantName(merchant),
+        isFalse,
+        reason: '$merchant should be a valid identity',
+      );
+    }
+    expect(smsCleanMerchantName('Balaji Sports'), 'Balaji Sports');
+    expect(smsCleanMerchantName('ljbffep4r'), isNull);
+  });
+
+  test('future, failed and downloaded notices never complete a spend', () {
+    for (final body in [
+      'Your payment of Rs 700 to Balaji Sports will be recorded tomorrow.',
+      'Your payment of Rs 700 to Balaji Sports failed.',
+      'Your payment receipt has been downloaded.',
+      'Rs 700 will be debited on 17Oct26.',
+    ]) {
+      expect(smsHasCompletionEvidence(body), isFalse, reason: body);
+    }
+    expect(
+      smsHasReceiptCompletion(
+        'Your payment of Rs 700 to Balaji Sports has been recorded.',
+      ),
+      isTrue,
+    );
+  });
+
   test('completion verbs cover disbursement and investment families', () {
     expect(
       smsHasCompletionEvidence('Loan of Rs 2,00,000 disbursed to A/c XX1234.'),
@@ -383,5 +511,145 @@ void main() {
       smsHasCompletionEvidence('Rs 500 will be debited on 24-Oct-26.'),
       isFalse,
     );
+  });
+
+  test('receipt with only a payment-method mention or card digits stays receipt-only', () {
+    const body =
+        'Hello, your payment of Rs. 700.0 to Balaji Sports has been recorded. '
+        'View the payment receipt here: https://mybillbook.in/cpp/?t=ljbffep4r '
+        '- myBillBook Paid by credit card on 17Oct2026.';
+    expect(smsIsReceiptOnlyMessage(body), isTrue);
+    final receipt = fact('posted_movement', {
+      'amountRole': 'posted',
+      'amountInr': 700.0,
+      'occurredAt': '2026-10-17T00:00:00.000Z',
+      'entryKind': 'spend',
+      'instrument': 'upi_bank',
+      'merchant': 'Balaji Sports',
+      'category': 'other',
+      'isComplete': true,
+      'confidence': 0.95,
+    });
+    final assessment = assessSmsFacts([receipt], body);
+    expect(assessment.facts.single.receiptOnly, isTrue);
+    expect(assessment.facts.single.autoResolveEligible, isFalse);
+    expect(assessment.autoResolvable, isFalse);
+
+    // A receipt linked to an actual instrument debit is independent evidence.
+    expect(
+      smsIsReceiptOnlyMessage(
+        'A/c X5121 debited by 700.00 to Balaji Sports on 17-10-26. '
+        'View the payment receipt here: https://mybillbook.in/cpp/?t=x',
+      ),
+      isFalse,
+    );
+    expect(
+      smsIsReceiptOnlyMessage(
+        'Your card ending 1234 was charged Rs. 700.00 at Balaji Sports on '
+        '17-10-26. View the payment receipt here: https://mybillbook.in/cpp/?t=x',
+      ),
+      isFalse,
+    );
+  });
+
+  test('canonical aliases require their own transaction context', () {
+    Map<String, dynamic> movement(String merchant) => fact('posted_movement', {
+      'amountRole': 'posted',
+      'amountInr': 420.0,
+      'occurredAt': '2026-10-24T00:00:00.000Z',
+      'entryKind': 'spend',
+      'instrument': 'upi_bank',
+      'merchant': merchant,
+      'category': 'other',
+      'isComplete': true,
+      'confidence': 0.95,
+    });
+    bool grounded(String merchant, String body) => assessSmsFacts(
+      [movement(merchant)],
+      body,
+    ).facts.single.merchantEvidenced;
+
+    const swiggyDebit =
+        'Sent Rs.420.00 from HDFC Bank A/C **1797 to SWIGGY UPI on 24-10-26. '
+        'UPI Ref 429812345678. Avail Bal: Rs.45,120.50';
+    const cardPurchase =
+        'Rs 420.00 debited from your Credit Card XX1234 at Swiggy on 24-10-26.';
+    const cashback = 'Rs 50 cashback credited on 24-10-26.';
+    const amazonPurchase = 'Rs 500 debited for Amazon purchase on 24-10-26.';
+    for (final entry in [
+      ['Bank transfer', swiggyDebit],
+      ['Credit card bill payment', cardPurchase],
+      ['Card statement adjustment', cardPurchase],
+      ['Amazon Pay Later', amazonPurchase],
+      ['Refund', cashback],
+      ['Reversal', cashback],
+    ]) {
+      expect(
+        grounded(entry[0], entry[1]),
+        isFalse,
+        reason: '${entry[0]} on ${entry[1]}',
+      );
+    }
+
+    for (final entry in [
+      [
+        'Bank transfer',
+        'Rs 5,000 credited from HDFC Bank A/c XX1234 via NEFT transfer on '
+            '24-10-26.',
+      ],
+      [
+        'Credit card bill payment',
+        'Payment of Rs 5,000 towards your HDFC Credit Card bill on 24-10-26.',
+      ],
+      [
+        'Card statement adjustment',
+        'Rs 500 credited to your HDFC Credit Card on 24-10-26.',
+      ],
+      ['Amazon Pay Later', 'Availing Pay Later credit of Rs 500 on 24-10-26.'],
+      ['Refund', 'Refund of Rs 200 credited on 24-10-26.'],
+      ['Reversal', 'Reversal of Rs 200 credited on 24-10-26.'],
+      ['Reward or cashback', 'Rs 50 cashback credited on 24-10-26.'],
+      ['Wallet load', 'Wallet loaded with Rs 500 on 24-10-26.'],
+    ]) {
+      expect(
+        grounded(entry[0], entry[1]),
+        isTrue,
+        reason: '${entry[0]} on ${entry[1]}',
+      );
+    }
+  });
+
+  test('processing fees complete while pending-processing wording stays tentative', () {
+    expect(
+      smsHasCompletionEvidence(
+        'Processing fee of Rs 199 debited from A/c XX1234 on 24-10-26.',
+      ),
+      isTrue,
+    );
+    for (final body in [
+      'Your payment of Rs 200 to Swiggy is currently processing. '
+          'Amount debited from A/c XX1234.',
+      'Your payment of Rs 200 to Swiggy is being processed after the debit.',
+      'Your payment is still in progress.',
+      'Your payment of Rs 200 to Swiggy is pending.',
+      'Rs 500 shall be debited on 24-Oct-26.',
+      'Rs 500 would be debited on 24-Oct-26.',
+    ]) {
+      expect(smsHasCompletionEvidence(body), isFalse, reason: body);
+    }
+  });
+
+  test('receipt-only messages gate every actionable fact, not only ledger facts', () {
+    final bill = fact('bill_obligation', {
+      'amountRole': 'due_total',
+      'amountDueInr': 700.0,
+      'billerName': 'Balaji Sports',
+      'isComplete': true,
+      'confidence': 0.99,
+    });
+    final scored = assessSmsFacts([bill], balajiReceiptBody);
+    expect(scored.facts.single.receiptOnly, isTrue);
+    expect(scored.facts.single.autoResolveEligible, isFalse);
+    expect(scored.autoResolvable, isFalse);
   });
 }

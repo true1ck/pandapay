@@ -99,6 +99,8 @@ class ParsedStatementLine {
   final TxnInstrument? instrument;
   final String? rail;
   final String? note;
+  final String status;
+  final bool merchantNameMissing;
   final bool isTransfer;
   final bool isInvestment;
   final String? sourceRowId;
@@ -118,6 +120,8 @@ class ParsedStatementLine {
     this.instrument,
     this.rail,
     this.note,
+    this.status = 'active',
+    this.merchantNameMissing = false,
     this.isTransfer = false,
     this.isInvestment = false,
     this.sourceRowId,
@@ -152,6 +156,8 @@ class ParsedStatementLine {
     instrument: instrument,
     rail: rail,
     note: note,
+    status: status,
+    merchantNameMissing: description == null ? merchantNameMissing : false,
     sourceRowId: sourceRowId ?? this.sourceRowId,
     reviewReasons: const [],
   );
@@ -197,6 +203,9 @@ String? validateImportedTransaction(ParsedStatementLine row) {
   }
   if ((row.note?.length ?? 0) > 500) {
     return 'Note must be 500 characters or fewer.';
+  }
+  if (!const {'active', 'ignored', 'deleted'}.contains(row.status)) {
+    return 'Transaction status is not supported.';
   }
   if (row.tagNames.length > 30 || row.tagNames.any((name) => name.trim().isEmpty || name.length > 60)) {
     return 'Use up to 30 tags, each with 1–60 characters.';

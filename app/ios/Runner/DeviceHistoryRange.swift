@@ -152,6 +152,7 @@ enum SmsSecurityPolicy {
   private static let money = #"(?i)(?:\b(?:inr|rs\.?)|₹)\s*[:.]?\s*[0-9]"#
   private static let financial = #"(?i)\b(?:credited|debited|spent|paid|charged|withdrawn|deposited|received|transferred|(?:available|current|closing)\s+(?:balance|limit)|avl\.?\s*bal(?:ance)?)\b"#
   private static let authenticationContext = #"(?i)\b(?:log[\s-]*in|sign[\s-]*in|authenticat\w*|authori[sz]\w*|reset\w*|regenerat\w*|(?:use|enter|confirm|validate)\s+(?:your\s+)?(?:code|credential|password))\b"#
+  private static let nonCredentialStatementInstruction = #"(?i)\benter\s+your\s+pan\s+as\s+the\s+password[.!](?=\s|$)"#
   private static let security = #"(?i)\b(?:otp|pin|cvv|passcode|password|secret\s*code|one[-\s]*time\s*(?:password|code)|verification\s*(?:code|number)|security\s*code|access\s*code|login\s*code|authentication\s*code|auth\s*code|authori[sz]ation\s*code|reset\s*(?:code|link))(?![a-z])|\b(?:do\s*not|don't|never)\s*share\b|\b[0-9]{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+[0-9]+\s*(?:minutes?|mins?|seconds?|secs?)\b|\b(?:code|credential)\b[\s\S]{0,40}\b(?:expires?|expiry|expiration|valid|regenerat\w*)\b|\b(?:regenerat\w*|generat\w*)\b[\s\S]{0,30}\b(?:code|credential)\b"#
   static func sensitive(_ body: String) -> Bool {
     var evidence = body
@@ -168,6 +169,7 @@ enum SmsSecurityPolicy {
         break
       }
     }
-    return evidence.range(of: security, options: .regularExpression) != nil
+    let checked = evidence.replacingOccurrences(of: nonCredentialStatementInstruction, with: " ", options: .regularExpression)
+    return checked.range(of: security, options: .regularExpression) != nil
   }
 }

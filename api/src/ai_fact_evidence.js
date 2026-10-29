@@ -6,6 +6,52 @@ const MONEY_FIELDS = [
   'limitInr', 'proposedAmountInr', 'availableBalanceInr',
 ];
 const { extractDueDate } = require('./due_date_parser');
+const {
+  cleanMerchantName,
+  isWeakMerchantName,
+  merchantEvidence,
+} = require('./merchant_identity');
+
+const MERCHANT_FIELDS = ['merchant', 'transferParty', 'billerName', 'serviceName'];
+
+// A merchant billing app's receipt proves the shop recorded a payment. It is
+// completion evidence, but not an independent bank/card ledger entry: there is
+// no account suffix or debit verb, so auto-posting it would duplicate the real
+// debit and invent an instrument.
+const RECEIPT_ONLY_MARKER = /\b(?:payment\s+receipt|view\s+(?:the\s+)?(?:payment\s+)?receipt|download\s+(?:the\s+)?(?:payment\s+)?receipt|e[-\s]?bill|my\s*bill\s*book|mybillbook|khatabook|okcredit|vyapar)\b/i;
+const RECEIPT_COMPLETION = /\byour\s+payment\s+of\s+(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?\s+to\s+[^.;]{1,100}?\s+(?:has|have|was|were)\s+(?:been\s+)?(?:successfully\s+)?(?:recorded|completed|processed|confirmed)\b/i;
+
+// A receipt is independent ledger evidence only when it names the instrument
+// that actually moved money ("A/c ... debited", "card ... charged"). A
+// payment-method mention ("Paid by credit card"), a 4-digit year or card digits
+// without a debit verb are not ledger entries. Mirrors the device parser's
+// receipt settlement check.
+const RECEIPT_SETTLEMENT_EVIDENCE = /\b(?:a\/?c\.?|account|card|wallet)\b[^.!?\n]{0,45}\b(?:debited|deducted|charged|withdrawn)\b|\b(?:debited|deducted|charged|withdrawn)\s+(?:from|to|on|using)\s+(?:your\s+)?(?:credit\s+|debit\s+|bank\s+)?(?:a\/?c\.?|account|card|wallet)\b/i;
+
+function isReceiptOnlyMessage(body) {
+  const text = String(body || '');
+  if (!RECEIPT_ONLY_MARKER.test(text)) return false;
+  return !RECEIPT_SETTLEMENT_EVIDENCE.test(text);
+}
+
+function hasReceiptCompletion(body) {
+  return RECEIPT_COMPLETION.test(String(body || ''));
+}
+
+/**
+ * Currencyless movement amounts: "debited by 50.00" is a printed amount even
+ * when the issuer omits Rs/INR. Keep this separate from moneyInMessage so
+ * bill/limit parsing never starts treating dates or account suffixes as money.
+ */
+function currencylessMovementAmounts(body) {
+  const values = [];
+  const pattern = /\b(?:debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred|sent)\s+(?:by|with|for|of)\s+([\d,]+(?:\.\d{1,2})?)\b/gi;
+  for (const match of String(body || '').matchAll(pattern)) {
+    const amount = Number(match[1].replace(/,/g, ''));
+    if (Number.isFinite(amount)) values.push(amount);
+  }
+  return values;
+}
 
 /**
  * Verbs that prove money actually moved. Expanded beyond the original card /
@@ -16,7 +62,7 @@ const MOVEMENT_VERBS = /\b(debited|deducted|spent|paid|credited|received|refunde
 // Payment processors often say "payment ... was completed successfully"
 // instead of using "paid" or "debited". Treat that explicit confirmation as
 // movement evidence while requiring a transaction noun before "completed".
-const COMPLETED_TRANSACTION = /\b(?:payment|transaction|transfer|purchase)\b[\s\S]{0,100}\bcompleted(?:\s+successfully)?\b/i;
+const COMPLETED_TRANSACTION = /\b(?:payment|transaction|transfer|purchase)\b[\s\S]{0,100}\b(?:completed(?:\s+successfully)?|recorded)\b/i;
 
 /**
  * Marketing / operational footers appended to genuine bank alerts. Everything
@@ -27,7 +73,22 @@ const COMPLETED_TRANSACTION = /\b(?:payment|transaction|transfer|purchase)\b[\s\
 const FOOTER_MARKERS = /\b(?:you are eligible|avail loan|get flat|apply for|offer valid|terms and conditions|t&c|scheduled maintenance|maintenance window)\b/i;
 
 /** Failure / tentative language that only disqualifies the core clause. */
-const FAILURE_OR_TENTATIVE = /\b(?:failed|declined|unsuccessful|reversed|cancelled|will be|to be|is scheduled|scheduled for)\b/i;
+const FAILURE_OR_TENTATIVE = /\b(?:failed|declined|unsuccessful|reversed|cancelled|pending|in\s+progress|under\s+process|is\s+scheduled|scheduled\s+for)\b/i;
+
+/**
+ * Future framing. "will be debited" is a promise, not a completed movement;
+ * "shall"/"would" previously slipped through because only "will be" was
+ * listed. Restricted to movement/completion verbs so a genuine debit whose
+ * footer says "limit will be revised" still counts.
+ */
+const FUTURE_OR_TENTATIVE = /\b(?:will|would|shall|should)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged|withdrawn|paid|transferred|sent|credited|completed|recorded|processed|confirmed)\b|\b(?:will|would|shall|should)\s+(?:auto[- ]?)?(?:debit|deduct|charge|withdraw)\b|\bto\s+be\s+(?:debited|deducted|charged|withdrawn|paid|transferred)\b|\bis\s+scheduled\s+(?:to|for)\b/i;
+
+/**
+ * "Processing" is tentative only as a pending-payment predicate ("payment is
+ * processing", "is being processed", "under process"). As a noun it is a
+ * completed fee debit ("processing fee ... debited"), which must still count.
+ */
+const PENDING_PROCESSING = /\b(?:is|are|being|still|currently)\s+(?:currently\s+|still\s+)?(?:being\s+)?processing\b|\b(?:is|are|was|were)\s+being\s+processed\b|\bunder\s+process(?:ing)?\b/i;
 
 function moneyInMessage(body) {
   const values = [];
@@ -61,7 +122,43 @@ function evidencedUtilityBiller(body) {
 }
 
 function hasPrintedCalendarDate(body) {
-  return /\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}[ -](?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[ -]\d{2,4})?|20\d{2}-\d{2}-\d{2})\b/i.test(String(body || ''));
+  return /\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}[ -](?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[ -]\d{2,4})?|\d{1,2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\d{2,4}|20\d{2}-\d{2}-\d{2})\b/i.test(String(body || ''));
+}
+
+/** Repairs display noise and drops values with no merchant identity left. */
+function normalizePartyFields(payload) {
+  for (const field of MERCHANT_FIELDS) {
+    if (payload[field] === null || payload[field] === undefined) continue;
+    const cleaned = cleanMerchantName(payload[field]);
+    if (cleaned) payload[field] = cleaned;
+    else delete payload[field];
+  }
+}
+
+/**
+ * Grounds every party name carried by a fact. Returns the fields that are
+ * present but weak/absent so callers can reject the fact before acceptance.
+ */
+function partyEvidenceErrors(payload, body, index, factType) {
+  const errors = [];
+  const requiresGrounding = new Set(['merchant', 'transferParty']);
+  if (factType === 'bill_payment') requiresGrounding.add('billerName');
+  for (const field of MERCHANT_FIELDS) {
+    if (payload[field] === null || payload[field] === undefined) continue;
+    if (isWeakMerchantName(payload[field])) {
+      errors.push(`facts[${index}].${field}: invalid merchant identity`);
+      continue;
+    }
+    // A bill obligation's biller is sometimes composed from the issuer and
+    // card ("HDFC credit card") rather than copied verbatim. Its identity
+    // shape is still checked above; posted payees must be literal evidence.
+    if (!requiresGrounding.has(field)) continue;
+    const evidence = merchantEvidence(payload[field], body);
+    if (!evidence.ok) {
+      errors.push(`facts[${index}].${field}: merchant is not evidenced by SMS`);
+    }
+  }
+  return errors;
 }
 
 /**
@@ -73,6 +170,7 @@ function normalizeModelFacts(facts, message) {
   const body = String(message?.body || '');
   return (Array.isArray(facts) ? facts : []).map((fact) => {
     const payload = { ...(fact?.payload || {}) };
+    normalizePartyFields(payload);
     const normalized = { ...fact, payload };
     if (fact?.factType === 'posted_movement' && payload.amountInr == null) {
       payload.amountInr = extractAmountInPostedTransaction(body) ?? undefined;
@@ -85,12 +183,10 @@ function normalizeModelFacts(facts, message) {
     }
     if (fact?.factType === 'posted_movement') {
       const namedParty = payload.merchant || payload.transferParty;
-      const normalizedParty = String(namedParty || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const normalizedBody = body.toLowerCase().replace(/[^a-z0-9]/g, '');
       const hasRequiredEvidence = typeof payload.amountInr === 'number' &&
         amountInPostedTransaction(body, payload.amountInr) &&
         Boolean(payload.occurredAt && movementTimestampSupported(body, payload.occurredAt, message)) &&
-        Boolean(normalizedParty.length >= 3 && normalizedBody.includes(normalizedParty)) &&
+        Boolean(namedParty && merchantEvidence(namedParty, body).ok) &&
         Boolean(payload.entryKind && payload.instrument && payload.category);
       if (hasRequiredEvidence && payload.isComplete !== false) {
         payload.isComplete = true;
@@ -112,6 +208,7 @@ function normalizeModelFacts(facts, message) {
       const hasRequiredEvidence = Boolean(
         amountField && typeof payload[amountField] === 'number' && payload.dueDate && payload.billerName,
       ) && dateAppearsInMessage(body, payload.dueDate) &&
+        Boolean(merchantEvidence(payload.billerName, body).ok) &&
         amountInBillObligation(body, payload.amountRole, payload[amountField]);
       if (hasRequiredEvidence && payload.isComplete !== false) {
         payload.isComplete = true;
@@ -129,7 +226,7 @@ function normalizeModelFacts(facts, message) {
       const hasRequiredEvidence = typeof payload.amountInr === 'number' &&
         amountInCompletedTransaction(body, payload.amountInr) &&
         Boolean(payload.occurredAt && movementTimestampSupported(body, payload.occurredAt, message)) &&
-        Boolean(payload.billerName && String(body).toLowerCase().includes(payload.billerName.toLowerCase()));
+        Boolean(payload.billerName && merchantEvidence(payload.billerName, body).ok);
       if (hasRequiredEvidence && payload.isComplete !== false) {
         payload.isComplete = true;
         if (typeof payload.confidence !== 'number') payload.confidence = 0.9;
@@ -193,6 +290,7 @@ function dateAppearsInMessage(body, value) {
       `${day}-${monthNumber}-${shortYear}`, `${day}/${monthNumber}/${shortYear}`,
       `${day} ${month} ${year}`, `${day}-${month}-${year}`, `${day} ${month} ${shortYear}`,
       `${day}-${month}-${shortYear}`, `${day} ${month}`, `${day}-${month}`,
+      `${day}${month}${year}`, `${day}${month}${shortYear}`,
     );
   }
   const lower = String(body || '').toLowerCase();
@@ -203,7 +301,7 @@ function movementTimestampSupported(body, timestamp, payload) {
   if (dateAppearsInMessage(body, timestamp)) return true;
   // If the SMS prints a calendar date and it does not match the model's
   // timestamp, do not replace that conflicting evidence with receipt time.
-  if (/\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}[ -](?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[ -]\d{2,4})?|20\d{2}-\d{2}-\d{2})\b/i.test(body)) return false;
+  if (/\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}[ -](?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[ -]\d{2,4})?|\d{1,2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\d{2,4}|20\d{2}-\d{2}-\d{2})\b/i.test(body)) return false;
   // The phone receipt timestamp is an allowed deterministic fallback only
   // when the SMS itself does not print an event date.
   const receipt = payload?.occurredAt || payload?.receivedAt;
@@ -224,7 +322,11 @@ function amountInPostedTransaction(body, amount) {
   const balanceLabel = /\b(?:available|avail\.?|current|closing|remaining|ledger)\s*(?:account\s*)?(?:bal(?:ance)?|balance\s+after)\b|\b(?:bal(?:ance)?|balance\s+after)\s*(?:is|after|now|:|=)?/i;
   for (const clause of clauses) {
     if (!MOVEMENT_VERBS.test(clause) && !COMPLETED_TRANSACTION.test(clause)) continue;
-    const matches = [...clause.matchAll(/(?:₹|\b(?:rs\.?|inr)\s*)[:\s]*([\d,]+(?:\.\d{1,2})?)/gi)];
+    const matches = [
+      ...clause.matchAll(/(?:₹|\b(?:rs\.?|inr)\s*)[:\s]*([\d,]+(?:\.\d{1,2})?)/gi),
+      // Indian issuers often print "debited by 50.00" without Rs/INR.
+      ...clause.matchAll(/\b(?:debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred|sent)\s+(?:by|with|for|of)\s+([\d,]+(?:\.\d{1,2})?)\b/gi),
+    ];
     for (const match of matches) {
       if (Math.abs(Number(match[1].replace(/,/g, '')) - amount) >= 0.005) continue;
       const start = match.index || 0;
@@ -243,7 +345,8 @@ function amountInPostedTransaction(body, amount) {
 }
 
 function extractAmountInPostedTransaction(body) {
-  const unique = [...new Set(moneyInMessage(body)
+  const printed = [...moneyInMessage(body), ...currencylessMovementAmounts(body)];
+  const unique = [...new Set(printed
     .filter((amount) => amountInPostedTransaction(body, amount))
     .map((amount) => Math.round(amount * 100) / 100))];
   return unique.length === 1 ? unique[0] : null;
@@ -267,14 +370,17 @@ function hasCompletionEvidence(body) {
   const core = coreTransactionClause(body);
   if (!core) return false;
   if (!MOVEMENT_VERBS.test(core) && !COMPLETED_TRANSACTION.test(core)) return false;
-  if (FAILURE_OR_TENTATIVE.test(core)) return false;
+  if (FAILURE_OR_TENTATIVE.test(core) || FUTURE_OR_TENTATIVE.test(core) || PENDING_PROCESSING.test(core)) {
+    return false;
+  }
   return true;
 }
 
 function verifyModelFacts(facts, payload) {
   const body = String(payload?.body || '');
   const lower = body.toLowerCase();
-  const printedAmounts = moneyInMessage(body);
+  const printedAmounts = [...moneyInMessage(body), ...currencylessMovementAmounts(body)];
+  const receiptOnly = isReceiptOnlyMessage(body);
   const errors = [];
   for (const [index, fact] of facts.entries()) {
     const value = fact.payload || {};
@@ -284,6 +390,7 @@ function verifyModelFacts(facts, payload) {
         errors.push(`facts[${index}].${field}: amount absent from SMS`);
       }
     }
+    errors.push(...partyEvidenceErrors(value, body, index, fact.factType));
     for (const field of ['last4', 'accountLast4']) {
       if (value[field] && !body.includes(value[field])) {
         errors.push(`facts[${index}].${field}: suffix absent from SMS`);
@@ -295,6 +402,12 @@ function verifyModelFacts(facts, payload) {
     if (fact.factType === 'posted_movement') {
       if (!hasCompletionEvidence(body)) {
         errors.push(`facts[${index}]: posted movement lacks unambiguous completion`);
+      }
+      if (receiptOnly) {
+        // The merchant confirms a payment was recorded, but the SMS carries no
+        // bank/card ledger identity. Filing it as a posted movement would
+        // duplicate the real debit and require an invented instrument.
+        errors.push(`facts[${index}]: receipt-only payment is not an independent ledger entry`);
       }
       if (!amountInPostedTransaction(body, value.amountInr)) {
         errors.push(`facts[${index}].amountInr: amount is not tied to completed movement`);
@@ -360,4 +473,7 @@ module.exports = {
   COMPLETED_TRANSACTION,
   coreTransactionClause,
   hasCompletionEvidence,
+  currencylessMovementAmounts,
+  isReceiptOnlyMessage,
+  hasReceiptCompletion,
 };

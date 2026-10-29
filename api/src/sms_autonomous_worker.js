@@ -9,7 +9,6 @@ const crypto = require('crypto');
 const { safeErrorCode } = require('./safeErrorCode');
 const { compileTemplate, deriveSenderPattern } = require('./sms_template_compiler');
 const { evaluateCandidate, evaluateCanaryMetrics, ACTION_THRESHOLDS } = require('./sms_evaluator');
-const { computeBundleHash, validateRule } = require('./sms_rule_bundle');
 
 const AUTONOMOUS_WORKER_ADVISORY_LOCK_ID = 749281;
 const DEFAULT_SMS_LEARNING_WORKER_ROLE = 'sms_learning_worker';
@@ -27,6 +26,16 @@ async function proposeCandidates(dbClient, options = {}) {
   const minUsers = Number.isInteger(options.minDistinctUsers) ? options.minDistinctUsers : 5;
 
   const clusterQuery = `
+    WITH eligible_examples AS (
+      SELECT sender_fingerprint, fact_family, template_text, issuer_prefix, user_hash
+        FROM public.sms_learning_examples
+       WHERE is_negative = false
+      UNION ALL
+      SELECT p.sender_fingerprint, p.fact_family, p.template_text,
+             p.issuer_prefix, p.user_hash
+        FROM public.sms_ai_learning_proposals p
+       WHERE p.status = 'approved' AND p.template_text IS NOT NULL
+    )
     SELECT
       sender_fingerprint,
       fact_family,
@@ -34,9 +43,8 @@ async function proposeCandidates(dbClient, options = {}) {
       coalesce(issuer_prefix, 'UNKNOWN') AS issuer,
       count(distinct user_hash)::int AS distinct_users,
       count(*)::int AS example_count
-    FROM public.sms_learning_examples
-    WHERE is_negative = false
-      AND fact_family IN ('posted_movement', 'balance_snapshot', 'bill_obligation', 'mandate_lifecycle', 'ignore_noise')
+    FROM eligible_examples
+    WHERE fact_family IN ('posted_movement', 'balance_snapshot', 'bill_obligation', 'bill_payment', 'mandate_lifecycle', 'ignore_noise')
     GROUP BY sender_fingerprint, fact_family, template_text, coalesce(issuer_prefix, 'UNKNOWN')
     HAVING count(distinct user_hash) >= $1
     ORDER BY count(distinct user_hash) DESC
@@ -504,125 +512,22 @@ async function advanceCandidatePipelines(dbClient, options = {}) {
 }
 
 /**
- * Validates and publishes active candidates as a new immutable versioned rule bundle.
- * Concurrency-safe: protected by PostgreSQL advisory lock (pg_try_advisory_lock).
- * Idempotent: does not publish if bundle contents are identical to the latest active bundle.
+ * Autonomous worker publication of global parser bundles is disabled. The
+ * admin API owns global publication; candidates remain eligible for approved
+ * consented cohort delivery.
  *
- * @param {object} dbClient - PostgreSQL client or pool
- * @param {string} [minClientVer='1.0.0']
- * @returns {Promise<{ published: boolean, bundleVersion?: number, sha256?: string, ruleCount?: number, reason?: string, upToDate?: boolean }>}
+ * @returns {Promise<{ published: false, reason: string }>}
  */
-async function publishActiveBundle(dbClient, minClientVer = '1.0.0') {
-  // Publication must use a pinned pg Client, never pool.query: advisory locks
-  // are session-scoped. A failed lock check must fail closed.
-  const lockRes = await dbClient.query(
-    'SELECT pg_try_advisory_lock($1) AS locked',
-    [AUTONOMOUS_WORKER_ADVISORY_LOCK_ID],
-  );
-  const locked = lockRes.rows?.[0]?.locked === true;
-  if (!locked) {
-    return { published: false, reason: 'concurrency_lock_held' };
-  }
-
-  try {
-    const activeRes = await dbClient.query(
-      `SELECT candidate_id, family, issuer, sender_pattern, template,
-              compiled_regex, field_map, default_fields, confidence
-         FROM public.sms_rule_candidates
-        WHERE state = 'active'
-        ORDER BY candidate_id ASC`,
-    );
-
-    const activeCandidates = activeRes.rows || [];
-    if (activeCandidates.length === 0) {
-      return { published: false, reason: 'no_active_candidates' };
-    }
-
-    const rules = activeCandidates.map((c) => ({
-      id: c.candidate_id,
-      family: c.family,
-      senderPattern: c.sender_pattern,
-      regex: c.compiled_regex,
-      fieldMap: c.field_map,
-      defaultFields: c.default_fields || {},
-      confidence: Number(c.confidence) || 0.98,
-    }));
-
-    // 2. Validate every rule against the strict bundle specification before publishing
-    for (let i = 0; i < rules.length; i++) {
-      const validation = validateRule(rules[i]);
-      if (!validation.valid) {
-        return { published: false, reason: `rule_${rules[i].id}_invalid: ${validation.reason}` };
-      }
-    }
-
-    const verRes = await dbClient.query(
-      `SELECT coalesce(max(bundle_version), 0) + 1 AS next_version,
-              (SELECT rules FROM public.sms_rule_bundles WHERE is_active = true ORDER BY bundle_version DESC LIMIT 1) AS latest_rules,
-              (SELECT sha256 FROM public.sms_rule_bundles WHERE is_active = true ORDER BY bundle_version DESC LIMIT 1) AS latest_sha256,
-              (SELECT bundle_version FROM public.sms_rule_bundles WHERE is_active = true ORDER BY bundle_version DESC LIMIT 1) AS latest_version
-         FROM public.sms_rule_bundles`,
-    );
-    const nextVersion = Number(verRes.rows?.[0]?.next_version) || 1;
-    const latestRules = verRes.rows?.[0]?.latest_rules;
-    const latestSha256 = verRes.rows?.[0]?.latest_sha256;
-    const latestVersion = Number(verRes.rows?.[0]?.latest_version);
-
-    // Idempotency: if active rules produce the identical rules payload as latest bundle, don't create duplicate versions
-    if (latestRules && JSON.stringify(latestRules) === JSON.stringify(rules)) {
-      return {
-        published: false,
-        upToDate: true,
-        bundleVersion: latestVersion,
-        sha256: latestSha256,
-        ruleCount: rules.length,
-      };
-    }
-
-    const sha256 = computeBundleHash({
-      bundleVersion: nextVersion,
-      rules,
-      minClientVersion: minClientVer,
-    });
-
-    const publishRes = await dbClient.query(
-      `SELECT pandapay.sms_publish_bundle($1, $2::jsonb, $3, $4) AS published`,
-      [nextVersion, JSON.stringify(rules), sha256, minClientVer],
-    );
-
-    const isPublished = publishRes.rows?.[0]?.published === true;
-    if (!isPublished) {
-      return { published: false, reason: 'publish_bundle_failed' };
-    }
-
-    const candidateIds = activeCandidates.map((c) => c.candidate_id);
-    await dbClient.query(
-      `UPDATE public.sms_rule_candidates
-          SET bundle_version = $1,
-              state = 'active',
-              updated_at = now()
-        WHERE candidate_id = ANY($2::text[])`,
-      [nextVersion, candidateIds],
-    );
-
-    return {
-      published: true,
-      bundleVersion: nextVersion,
-      sha256,
-      ruleCount: rules.length,
-    };
-  } finally {
-    // Release advisory lock
-    await dbClient.query(
-      'SELECT pg_advisory_unlock($1)',
-      [AUTONOMOUS_WORKER_ADVISORY_LOCK_ID],
-    ).catch(() => {});
-  }
+async function publishActiveBundle() {
+  // Parser candidates may run only through the individually approved,
+  // consented cohort endpoint. A global immutable bundle is a separate
+  // publication surface and requires an operator action via the admin API.
+  return { published: false, reason: 'admin_approval_required' };
 }
 
 /**
- * Rolls back a regressed bundle version using pandapay.sms_rollback_bundle
- * and updates candidate states to 'rolled_back'.
+ * Withdraws regressed worker candidates without mutating global bundles.
+ * Global bundle rollback is reserved for the admin API.
  *
  * @param {object} dbClient - PostgreSQL client or pool
  * @param {number|string} bundleVersion
@@ -635,46 +540,20 @@ async function rollbackRegressedBundle(dbClient, bundleVersion, reason = 'regres
     return { rolledBack: false, reason: 'invalid_bundle_version' };
   }
 
-  const lockRes = await dbClient.query(
-    'SELECT pg_try_advisory_lock($1) AS locked',
-    [AUTONOMOUS_WORKER_ADVISORY_LOCK_ID],
+  const result = await dbClient.query(
+    `UPDATE public.sms_rule_candidates
+        SET state = 'rolled_back',
+            stage_version = stage_version + 1,
+            stage_metrics = stage_metrics || jsonb_build_object('rollback_reason', $2::text, 'rolled_back_at', now()),
+            updated_at = now()
+      WHERE bundle_version = $1 AND state = 'active'
+      RETURNING candidate_id`,
+    [versionNum, reason],
   );
-  const locked = lockRes.rows?.[0]?.locked === true;
-  if (!locked) {
-    return { rolledBack: false, reason: 'concurrency_lock_held' };
+  if ((result.rowCount ?? result.rows?.length ?? 0) === 0) {
+    return { rolledBack: false, reason: 'no_active_worker_candidates' };
   }
-
-  try {
-    const rollbackRes = await dbClient.query(
-      `SELECT pandapay.sms_rollback_bundle($1) AS rolled_back`,
-      [versionNum],
-    );
-
-    const isRolledBack = rollbackRes.rows?.[0]?.rolled_back === true;
-    if (!isRolledBack) {
-      return { rolledBack: false, reason: 'bundle_not_found_or_already_inactive' };
-    }
-
-    await dbClient.query(
-      `UPDATE public.sms_rule_candidates
-          SET state = 'rolled_back',
-              stage_version = stage_version + 1,
-              stage_metrics = stage_metrics || jsonb_build_object('rollback_reason', $2::text, 'rolled_back_at', now()),
-              updated_at = now()
-        WHERE bundle_version = $1`,
-      [versionNum, reason],
-    );
-
-    return {
-      rolledBack: true,
-      bundleVersion: versionNum,
-    };
-  } finally {
-    await dbClient.query(
-      'SELECT pg_advisory_unlock($1)',
-      [AUTONOMOUS_WORKER_ADVISORY_LOCK_ID],
-    ).catch(() => {});
-  }
+  return { rolledBack: true, bundleVersion: versionNum };
 }
 
 /**
@@ -733,7 +612,7 @@ async function verifyWorkerCapabilities(client, configuredRole) {
     row.can_read_examples === true && row.can_write_candidates === true &&
     row.can_read_exposures === true && row.can_read_bundles === true &&
     row.can_write_worker_runs === true &&
-    row.can_publish === true && row.can_rollback === true;
+    row.can_publish === false && row.can_rollback === false;
   if (!allowed) {
     throw new Error('SMS learning worker database role lacks required capabilities');
   }

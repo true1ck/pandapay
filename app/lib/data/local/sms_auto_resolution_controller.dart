@@ -4,10 +4,13 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../local_sms_parser.dart';
 import '../needs_review_repository.dart';
+import '../past_bill_receipts.dart';
 import 'app_database.dart';
 import 'auto_resolved_history_repository.dart';
 import 'financial_store.dart';
+import 'sms_intake_repository.dart';
 import 'sms_learning_feedback.dart';
+import 'sms_feedback_outbox.dart';
 
 /// User actions on a Tier-1 auto-resolution receipt.
 ///
@@ -20,12 +23,14 @@ class SmsAutoResolutionController {
   final FinancialStore store;
   final NeedsReviewRepository reviewRepository;
   final String namespace;
+  final DateTime? smsLearningConsentGrantedAt;
 
   SmsAutoResolutionController({
     required this.database,
     required this.store,
     required this.reviewRepository,
     required this.namespace,
+    this.smsLearningConsentGrantedAt,
   });
 
   /// Corrects the category of an auto-filed transaction and teaches the local
@@ -42,12 +47,28 @@ class SmsAutoResolutionController {
         database,
         namespace: namespace,
       ).updateCategory(entry.id, slug);
-      SmsLearningFeedback(
-        database,
-        namespace: namespace,
-      ).recordCategoryCorrection(
-        merchantOrPattern: entry.title,
-        categorySlug: slug,
+      final sourceBody = entry.sourceBody ??
+          SmsIntakeRepository(database)
+              .capturedById(namespace, entry.sourceKey)
+              ?.message
+              .body;
+      if (sourceBody != null && sourceBody.trim().isNotEmpty) {
+        SmsLearningFeedback(
+          database,
+          namespace: namespace,
+        ).recordCategoryCorrection(
+          merchantOrPattern: entry.title,
+          categorySlug: slug,
+          sender: entry.sender,
+          sampleBody: sourceBody,
+        );
+      }
+      _recordFeedback(
+        entry,
+        action: 'category_changed',
+        correctedFields: {'categorySlug': slug},
+        correctionKind: 'misclassified_category',
+        consentGrantedAt: smsLearningConsentGrantedAt,
       );
       _updateTransactionCategory(entry, slug);
       store.notifyPendingChange(namespace);
@@ -70,6 +91,7 @@ class SmsAutoResolutionController {
     final merchant = merchantName.trim();
     if (merchant.isEmpty) throw ArgumentError('Merchant is required.');
     if (amount.paise <= 0) throw ArgumentError('Amount must be positive.');
+    final occurredAtUtc = occurredAt.toUtc();
 
     store.batch(() {
       final rows = database.db.select(
@@ -86,7 +108,6 @@ class SmsAutoResolutionController {
       final payload =
           jsonDecode(row['payload'] as String) as Map<String, dynamic>;
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final occurredAtUtc = occurredAt.toUtc();
       payload['amount_inr'] = amount.rupees;
       payload['merchant_name'] = merchant;
       payload['occurred_at'] = occurredAtUtc.toIso8601String();
@@ -94,6 +115,18 @@ class SmsAutoResolutionController {
         "UPDATE financial_entities SET payload=?, observed_at=? "
         "WHERE namespace=? AND entity='transactions' AND id=?",
         [jsonEncode(payload), timestamp, namespace, row['id']],
+      );
+      _recordFeedback(
+        entry,
+        action: 'edited',
+        consentGrantedAt: smsLearningConsentGrantedAt,
+        correctionKind: _editCorrectionKind(entry, merchant, amount,
+            occurredAtUtc),
+        correctedFields: {
+          'merchant': merchant,
+          'amountInr': amount.rupees,
+          'occurredAt': occurredAtUtc.toIso8601String(),
+        },
       );
       database.db.execute(
         'UPDATE local_auto_resolved_history SET title=?, amount_paise=?, '
@@ -113,46 +146,149 @@ class SmsAutoResolutionController {
   /// Undoes an auto-resolution: removes the auto-filed transaction (or bill),
   /// drops the receipt and puts the message back into Needs Review.
   Future<void> moveToReview(AutoResolvedHistoryEntry entry) async {
-    store.batch(() {
-      if (entry.resolvedKind != 'dismissed') {
-        database.db.execute(
-          "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' "
-          "AND (source_key=? OR id=?)",
-          [namespace, entry.sourceKey, 'local-ai:${entry.sourceKey}'],
-        );
-      }
-      if (entry.resolvedKind == 'bill') {
-        database.db.execute(
-          'DELETE FROM local_commitments WHERE namespace=? AND id=?',
-          [namespace, 'commitment:${entry.sourceKey}'],
-        );
-      }
-      AutoResolvedHistoryRepository(
-        database,
-        namespace: namespace,
-      ).delete(entry.id);
-      store.notifyPendingChange(namespace);
-    });
-    final receivedAt = DateTime.tryParse(entry.occurredAt) ?? DateTime.now();
+    final captured = SmsIntakeRepository(
+      database,
+    ).capturedById(namespace, entry.sourceKey)?.message;
+    final receivedAt = captured?.receivedAt ??
+        DateTime.tryParse(entry.occurredAt) ??
+        DateTime.now();
     final id = entry.sourceKey.trim().isEmpty ? entry.id : entry.sourceKey;
-    await reviewRepository.add(
-      NeedsReviewItem(
-        id: id,
-        sender: entry.sender,
-        // Keep the non-parsable review summary here. Feeding the original bill
-        // or mandate SMS back through NeedsReviewRepository.add() can
-        // immediately auto-file it again, defeating the user's undo action.
-        // The original SMS remains visible on the Auto-Resolved receipt.
-        body: entry.resolvedKind == 'dismissed' && entry.sourceBody != null
-            ? entry.sourceBody!
-            : _reviewBody(entry, receivedAt),
-        reason: 'moved_from_auto_resolved',
-        receivedAt: receivedAt,
-        kind: entry.resolvedKind == 'bill'
-            ? NeedsReviewKind.commitment
-            : NeedsReviewKind.transaction,
+    final restored = NeedsReviewItem(
+      id: id,
+      sender: captured?.sender ?? entry.sender,
+      body: captured?.body ?? entry.sourceBody ?? _reviewBody(entry, receivedAt),
+      reason: 'moved_from_auto_resolved',
+      receivedAt: receivedAt,
+      kind: entry.resolvedKind == 'bill'
+          ? NeedsReviewKind.commitment
+          : NeedsReviewKind.transaction,
+    );
+    database.db.execute('SAVEPOINT undo_auto_resolution');
+    try {
+      store.batch(() {
+        _recordFeedback(
+          entry,
+          action: 'moved_to_review',
+          consentGrantedAt: smsLearningConsentGrantedAt,
+          // Restoring an AI dismissal says the message was financial; undoing
+          // a filed transaction says it was not.
+          correctionKind: entry.resolvedKind == 'dismissed'
+              ? 'false_dismissal'
+              : 'false_transaction',
+        );
+        if (entry.resolvedKind != 'dismissed') {
+          database.db.execute(
+            "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' "
+            "AND (source_key=? OR id=?)",
+            [namespace, entry.sourceKey, 'local-ai:${entry.sourceKey}'],
+          );
+        }
+        if (entry.resolvedKind == 'bill') {
+          database.db.execute(
+            'DELETE FROM local_commitments WHERE namespace=? AND id=?',
+            [namespace, 'commitment:${entry.sourceKey}'],
+          );
+          PastBillReceiptRepository(
+            database,
+            namespace: namespace,
+          ).delete('commitment:${entry.sourceKey}');
+        }
+        AutoResolvedHistoryRepository(
+          database,
+          namespace: namespace,
+        ).delete(entry.id);
+        NeedsReviewRepository.restoreDisputedDecisionSync(
+          database,
+          namespace,
+          restored,
+        );
+        store.notifyPendingChange(namespace);
+      });
+      database.db.execute('RELEASE SAVEPOINT undo_auto_resolution');
+    } catch (_) {
+      database.db.execute('ROLLBACK TO SAVEPOINT undo_auto_resolution');
+      database.db.execute('RELEASE SAVEPOINT undo_auto_resolution');
+      rethrow;
+    }
+  }
+
+  /// A positive label is captured only after the user explicitly confirms the
+  /// saved AI decision. Repeated taps are idempotent by source and action.
+  void confirmDecision(AutoResolvedHistoryEntry entry) {
+    store.batch(
+      () => _recordFeedback(
+        entry,
+        action: 'confirmed',
+        consentGrantedAt: smsLearningConsentGrantedAt,
       ),
     );
+  }
+
+  void _recordFeedback(
+    AutoResolvedHistoryEntry entry, {
+    required String action,
+    required DateTime? consentGrantedAt,
+    Map<String, dynamic>? correctedFields,
+    String? correctionKind,
+  }) {
+    if (consentGrantedAt == null ||
+        entry.sourceKey.trim().isEmpty ||
+        entry.factIndex == null) {
+      // Legacy receipts have no fact index. Keep their local action, but do
+      // not let an ambiguous fact-zero attribution enter shared learning.
+      return;
+    }
+    if (SmsIntakeRepository(database)
+        .hasRepeatedOccurrence(namespace, entry.sourceKey)) {
+      return;
+    }
+    final fields = <String, dynamic>{
+      'merchant': entry.title,
+      'amountInr': entry.amountPaise / 100,
+      if (entry.categorySlug != null) 'categorySlug': entry.categorySlug,
+      'occurredAt': entry.occurredAt,
+      if (entry.dueDate != null) 'dueDate': entry.dueDate,
+    };
+    SmsFeedbackOutbox(database, namespace: namespace).enqueue(
+      sourceKey: entry.sourceKey,
+      action: action,
+      sender: entry.sender,
+      resolvedKind: entry.resolvedKind,
+      occurredAt: entry.occurredAt,
+      consentGrantedAt: consentGrantedAt,
+      sampleBody: entry.sourceBody,
+      // Every entry on this screen was filed by the AI pipeline; saying so
+      // lets a later correction name the decision it is correcting.
+      originalDecision: {
+        'kind': entry.resolvedKind,
+        'origin': 'ai',
+        'fields': fields,
+      },
+      correctedFields: correctedFields,
+      correctionKind: correctionKind,
+      decisionOrigin: 'ai',
+      factIndex: entry.factIndex!,
+      reason: action == 'moved_to_review' ? 'user_disputed_ai_decision' : null,
+      messageAt: SmsIntakeRepository(database)
+          .capturedById(namespace, entry.sourceKey)
+          ?.message
+          .receivedAt,
+    );
+  }
+
+  /// Names the field the user actually changed. An edit that touches nothing
+  /// the SMS decision produced is presentation-only and must not train.
+  String _editCorrectionKind(
+    AutoResolvedHistoryEntry entry,
+    String merchant,
+    Money amount,
+    DateTime occurredAtUtc,
+  ) {
+    if (amount.paise != entry.amountPaise) return 'wrong_amount';
+    if (merchant != entry.title) return 'wrong_merchant';
+    final original = DateTime.tryParse(entry.occurredAt)?.toUtc();
+    if (original != null && original != occurredAtUtc) return 'wrong_date';
+    return 'cosmetic';
   }
 
   void _updateTransactionCategory(AutoResolvedHistoryEntry entry, String slug) {

@@ -30,6 +30,24 @@ const ALLOWED_FIELDS = new Set([
 
 const FINANCIAL_KEYWORDS = /\b(?:debited|credited|paid|spent|transferred|withdrawn|received|due date|amount due|available bal|avail bal)\b/i;
 
+// Match Dart String.compareTo's deterministic lexicographic ordering. Locale
+// sorting varies by host and would produce different canonical bundle hashes.
+function compareOrdinal(left, right) {
+  const a = String(left);
+  const b = String(right);
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function compareCategoryRulesV2(a, b) {
+  for (const field of [
+    'merchantKey', 'senderKey', 'contextKey', 'factFamily', 'categorySlug',
+  ]) {
+    const order = compareOrdinal(a[field], b[field]);
+    if (order !== 0) return order;
+  }
+  return 0;
+}
+
 function countCaptureGroups(regexStr) {
   try {
     const re = new RegExp(`(?:${regexStr})|^$`);
@@ -187,28 +205,49 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
     try {
       const result = await withUserClient(req.userId, async (client) => {
         const consent = await client.query(
-          `SELECT contributions_opt_in
-             FROM public.profiles
-            WHERE id = $1`,
+          `SELECT granted
+             FROM public.user_consents
+            WHERE profile_id = $1 AND purpose = 'sms_shared_learning'
+            ORDER BY granted_at DESC, granted ASC, id DESC LIMIT 1`,
           [req.userId],
         );
-        const contributionsOptIn = consent.rows?.[0]?.contributions_opt_in === true;
+        const smsLearningConsent = consent.rows?.[0]?.granted === true;
         const active = await client.query(
           `SELECT bundle_version, rules, sha256, published_at, min_client_ver
              FROM public.sms_rule_bundles
-            WHERE is_active = true
+            WHERE is_active = true AND published_by IS NOT NULL
             ORDER BY bundle_version DESC
             LIMIT 1`,
         );
         const candidates = await client.query(
-          `SELECT candidate_id, family, sender_pattern, compiled_regex,
-                  field_map, default_fields, confidence, state, bundle_version,
-                  min_client_ver, stage_version
-             FROM public.sms_rule_candidates
-            WHERE state IN ('shadow', 'limited', 'expanded', 'active')
+          `SELECT c.candidate_id, c.family, c.sender_pattern, c.template, c.compiled_regex,
+                  c.field_map, c.default_fields, c.confidence, c.state, c.bundle_version,
+                  c.min_client_ver, c.stage_version, a.rule_sha256 AS approved_sha256
+             FROM public.sms_rule_candidates c
+             JOIN public.sms_parser_candidate_approvals a
+               ON a.candidate_id = c.candidate_id AND a.status = 'approved'
+            WHERE c.state IN ('shadow', 'limited', 'expanded', 'active')
             ORDER BY candidate_id ASC`,
         );
-        if (!contributionsOptIn) {
+        // Published generalized parser/category rules can be consumed by all
+        // signed-in devices. Consent gates contributions and experiments, not
+        // access to already evaluated shared product improvements.
+        const categoryResult = await client.query(
+          `SELECT merchant_key, sender_key, context_key, fact_family, category_slug,
+                  support_count, agreement_rate
+             FROM pandapay.sms_approved_category_rules_v2()
+            ORDER BY merchant_key, sender_key, context_key, fact_family, category_slug`,
+        );
+        const categoryRulesV2 = (categoryResult.rows || []).map((item) => ({
+          merchantKey: item.merchant_key,
+          senderKey: item.sender_key,
+          contextKey: item.context_key,
+          factFamily: item.fact_family,
+          categorySlug: item.category_slug,
+          supportCount: Number(item.support_count),
+          agreementBp: Math.round(Number(item.agreement_rate) * 10000),
+        })).sort(compareCategoryRulesV2);
+        if (!smsLearningConsent) {
           let revokedCandidateIds = candidates.rows.map((row) => row.candidate_id);
           try {
             const issued = await client.query(
@@ -227,14 +266,32 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           return {
             active,
             candidateRules: [],
+            categoryRulesV2,
             revokedCandidateIds,
           };
         }
 
+        // C9: withhold a paused candidate from every device on refresh.
+        // Previously assigned devices receive its id in revokedCandidateIds
+        // below, so a known-bad candidate cannot remain active in their cache.
+        // This does not change any user's own correction data. The static
+        // active bundle is hash-verified and is not per-user filtered here.
+        let pausedRuleIds = new Set();
+        try {
+          const paused = await client.query(
+            'SELECT decision_rule_id FROM pandapay.sms_rule_negative_evidence() WHERE paused',
+          );
+          pausedRuleIds = new Set((paused.rows || []).map((row) => row.decision_rule_id));
+        } catch (error) {
+          // Additive migration: during a staggered deploy keep the previous
+          // serving behavior instead of withholding every candidate rule.
+          console.warn('SMS rule pause lookup unavailable:', error.message || error);
+        }
         const candidateRules = [];
         for (const row of candidates.rows) {
           const delivery = candidateDelivery(row, req.userId);
-          if (!delivery) continue;
+          if (!delivery || delivery.sha256 !== row.approved_sha256) continue;
+          if (pausedRuleIds.has(row.candidate_id)) continue;
           let assignment;
           try {
             assignment = await client.query(
@@ -289,10 +346,42 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           // guess which cached candidate rules are safe to remove.
           console.warn('SMS candidate revocation lookup unavailable:', safeErrorCode(error));
         }
-        return { active, candidateRules, revokedCandidateIds };
+        return { active, candidateRules, categoryRulesV2, revokedCandidateIds };
       });
       const row = result.active.rows?.[0];
       const candidateRules = result.candidateRules || [];
+      const categoryRulesVersion = 1;
+      const categoryRulesMinClientVersion = '1.0.0';
+      // Never serve legacy merchant-only mappings. A valid empty v1 bundle
+      // clears existing v1 client caches; v2 is separately hashed and scoped.
+      const categoryRules = [];
+      const categoryRulesSha256 = crypto.createHash('sha256')
+        .update(JSON.stringify({
+          categoryRulesVersion,
+          minClientVersion: categoryRulesMinClientVersion,
+          categoryRules,
+        }))
+        .digest('hex');
+      const categoryRulesV2Version = 2;
+      const categoryRulesV2MinClientVersion = '1.0.0';
+      const categoryRulesV2 = result.categoryRulesV2 || [];
+      const categoryRulesV2Sha256 = crypto.createHash('sha256')
+        .update(JSON.stringify({
+          categoryRulesV2Version: 2,
+          minClientVersion: categoryRulesV2MinClientVersion,
+          categoryRulesV2,
+        }))
+        .digest('hex');
+      const categoryRulePayload = {
+        categoryRulesVersion,
+        categoryRulesMinClientVersion,
+        categoryRules,
+        categoryRulesSha256,
+        categoryRulesV2Version,
+        categoryRulesV2MinClientVersion,
+        categoryRulesV2,
+        categoryRulesV2Sha256,
+      };
       if (!row) {
         // No active bundles: tell device to roll back to version 0
         return res.status(200).json({
@@ -301,6 +390,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           sha256: '',
           rolledBack: true,
           candidateRules,
+          ...categoryRulePayload,
           revokedCandidateIds: result.revokedCandidateIds || [],
         });
       }
@@ -311,6 +401,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
           upToDate: true,
           bundleVersion: row.bundle_version,
           candidateRules,
+          ...categoryRulePayload,
           revokedCandidateIds: result.revokedCandidateIds || [],
         });
       }
@@ -325,6 +416,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
         minClientVersion: row.min_client_ver,
         rolledBack: Number.isInteger(sinceVersion) && sinceVersion > row.bundle_version,
         candidateRules,
+        ...categoryRulePayload,
         revokedCandidateIds: result.revokedCandidateIds || [],
       });
     } catch (error) {
@@ -333,12 +425,257 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
     }
   });
 
+  // Eligible category rules are proposals until an operator reviews them.
+  app.get('/admin/sms-rules/category-proposals', requireAdmin, async (req, res) => {
+    try {
+      const proposals = await withUserClient(req.userId, async (client) => {
+        const result = await client.query(
+          `SELECT c.merchant_key, c.sender_key, c.context_key, c.fact_family,
+                  c.category_slug, c.support_count,
+                  c.agreement_rate,
+                  CASE WHEN a.category_slug = c.category_slug THEN a.status END AS status,
+                  CASE WHEN a.category_slug = c.category_slug THEN a.reviewed_at END AS reviewed_at,
+                  CASE WHEN a.category_slug = c.category_slug THEN a.reason END AS reason,
+                  evidence.redacted_pattern
+             FROM pandapay.sms_shared_category_rules_v2() c
+             LEFT JOIN public.sms_category_rule_v2_approvals a
+               ON a.merchant_key = c.merchant_key
+              AND a.sender_key = c.sender_key
+              AND a.context_key = c.context_key
+              AND a.fact_family = c.fact_family
+             LEFT JOIN pandapay.sms_admin_category_evidence_v2() evidence
+               ON evidence.merchant_key = c.merchant_key
+              AND evidence.sender_key = c.sender_key
+              AND evidence.context_key = c.context_key
+              AND evidence.fact_family = c.fact_family
+              AND evidence.category_slug = c.category_slug
+            ORDER BY c.merchant_key, c.sender_key, c.context_key, c.fact_family,
+                     c.category_slug LIMIT 500`,
+        );
+        return result.rows.map((row) => {
+          const { safeAdminPattern } = require('./sms_learning');
+          const redactedPattern = safeAdminPattern(row.redacted_pattern);
+          return {
+            ...row,
+            redacted_pattern: redactedPattern,
+            redacted_samples: redactedPattern ? [redactedPattern] : [],
+            origin: 'user_category_corrections',
+            evidence_strength: 'multi_user_confirmed',
+            proposed_rule: {
+              merchantKey: row.merchant_key,
+              senderKey: row.sender_key,
+              contextKey: row.context_key,
+              factFamily: row.fact_family,
+              categorySlug: row.category_slug,
+            },
+          };
+        });
+      });
+      res.status(200).json({ proposals });
+    } catch (error) {
+      console.error('GET /admin/sms-rules/category-proposals error', error.message || error);
+      res.status(500).json({ error: 'failed to fetch category proposals' });
+    }
+  });
+
+  app.post('/admin/sms-rules/category-proposals/review', requireAdmin, async (req, res) => {
+    const { merchantKey, senderKey, contextKey, factFamily, categorySlug, decision, reason } = req.body || {};
+    if (typeof merchantKey !== 'string' || merchantKey.length < 3 || merchantKey.length > 80 ||
+        typeof senderKey !== 'string' || !/^[A-Z]{2}-[A-Z0-9]{3,10}(?:-[A-Z])?$/.test(senderKey) ||
+        !require('./sms_learning_feedback_route').validCategoryContextKey(contextKey) ||
+        factFamily !== 'posted_movement' ||
+        typeof categorySlug !== 'string' || !/^[a-z0-9_-]{1,64}$/.test(categorySlug) ||
+        !['approved', 'rejected'].includes(decision) ||
+        typeof reason !== 'string' || reason.trim().length < 5 || reason.length > 500) {
+      return res.status(400).json({ error: 'invalid review request' });
+    }
+    try {
+      const result = await withUserClient(req.userId, async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+          [`sms_category_rule_v2_approval:${merchantKey}:${senderKey}:${contextKey}:${factFamily}`]);
+        const eligible = await client.query(
+          `SELECT merchant_key, sender_key, context_key, fact_family,
+                  category_slug, support_count, agreement_rate
+             FROM pandapay.sms_shared_category_rules_v2()
+            WHERE merchant_key = $1 AND sender_key = $2 AND context_key = $3
+              AND fact_family = $4 AND category_slug = $5`,
+          [merchantKey, senderKey, contextKey, factFamily, categorySlug],
+        );
+        const proposal = eligible.rows?.[0];
+        if (!proposal) return { stale: true };
+        await client.query(
+          `INSERT INTO public.sms_category_rule_v2_approvals
+             (merchant_key, sender_key, context_key, fact_family, category_slug,
+              status, reviewed_by, reason,
+              support_count_at_review, agreement_rate_at_review)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+           ON CONFLICT (merchant_key, sender_key, context_key, fact_family) DO UPDATE SET
+             category_slug=excluded.category_slug, status=excluded.status,
+             reviewed_by=excluded.reviewed_by, reviewed_at=now(),
+             reason=excluded.reason,
+             support_count_at_review=excluded.support_count_at_review,
+             agreement_rate_at_review=excluded.agreement_rate_at_review`,
+          [merchantKey, senderKey, contextKey, factFamily, categorySlug,
+            decision, req.userId, reason.trim(),
+            proposal.support_count, proposal.agreement_rate],
+        );
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+           VALUES ($1, 'review_sms_category_rule_v2', 'sms_category_rule_v2_approvals', NULL, $2, $3)`,
+          [req.userId, JSON.stringify({ merchantKey, senderKey, contextKey, factFamily, categorySlug, decision,
+            supportCount: proposal.support_count, agreementRate: proposal.agreement_rate }), reason.trim()],
+        );
+        return { stale: false };
+      });
+      if (result.stale) return res.status(409).json({ error: 'proposal_no_longer_eligible' });
+      res.status(200).json({ ok: true, merchantKey, senderKey, contextKey, factFamily, categorySlug, decision });
+    } catch (error) {
+      console.error('POST /admin/sms-rules/category-proposals/review error', error.message || error);
+      res.status(500).json({ error: 'failed to review category proposal' });
+    }
+  });
+
+  app.get('/admin/sms-rules/parser-proposals', requireAdmin, async (req, res) => {
+    try {
+      const proposals = await withUserClient(req.userId, async (client) => {
+        const rows = await client.query(
+          `SELECT c.candidate_id, c.family, c.sender_pattern, c.compiled_regex,
+                  c.field_map, c.default_fields, c.confidence, c.state,
+                  c.bundle_version, c.min_client_ver, c.stage_version,
+                  c.stage_metrics, a.status, a.rule_sha256 AS approved_sha256,
+                  a.reviewed_at, a.reason
+             FROM public.sms_rule_candidates c
+             LEFT JOIN public.sms_parser_candidate_approvals a
+               ON a.candidate_id = c.candidate_id
+            WHERE c.state IN ('evaluated', 'shadow', 'limited', 'expanded', 'active')
+            ORDER BY c.created_at DESC LIMIT 200`,
+        );
+        return rows.rows.map((row) => ({
+          candidateId: row.candidate_id, family: row.family,
+          senderPattern: row.sender_pattern, regex: row.compiled_regex,
+          fieldMap: row.field_map, defaultFields: row.default_fields,
+          confidence: row.confidence, state: row.state,
+          redactedPattern: String(row.template || '').replace(/\d+/g, '{n}').slice(0, 250),
+          origin: 'learning_examples', evidenceStrength: 'multi_user_candidate',
+          proposedRule: { family: row.family, senderPattern: row.sender_pattern,
+            regex: row.compiled_regex, fieldMap: row.field_map },
+          stageMetrics: row.stage_metrics, status: row.status || 'pending',
+          reviewedAt: row.reviewed_at, reason: row.reason,
+          currentRuleSha256: candidateDelivery({ ...row, state: 'shadow' }, req.userId)?.sha256,
+          approvedSha256: row.approved_sha256,
+        }));
+      });
+      res.status(200).json({ proposals });
+    } catch (error) {
+      console.error('GET /admin/sms-rules/parser-proposals error', error.message || error);
+      res.status(500).json({ error: 'failed to fetch parser proposals' });
+    }
+  });
+
+  app.post('/admin/sms-rules/parser-proposals/review', requireAdmin, async (req, res) => {
+    const { candidateId, decision, reason, ruleSha256 } = req.body || {};
+    if (typeof candidateId !== 'string' || candidateId.length < 1 || candidateId.length > 120 ||
+        !['approved', 'rejected'].includes(decision) ||
+        typeof reason !== 'string' || reason.trim().length < 5 || reason.length > 500 ||
+        typeof ruleSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(ruleSha256)) {
+      return res.status(400).json({ error: 'invalid review request' });
+    }
+    try {
+      const outcome = await withUserClient(req.userId, async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('sms_parser_candidate_approval'))");
+        const result = await client.query(
+          `SELECT candidate_id, family, sender_pattern, compiled_regex,
+                  field_map, default_fields, confidence, state, bundle_version,
+                  min_client_ver, stage_version
+             FROM public.sms_rule_candidates WHERE candidate_id = $1`,
+          [candidateId],
+        );
+        const row = result.rows?.[0];
+        const currentHash = row ? candidateDelivery({ ...row, state: 'shadow' }, req.userId)?.sha256 : null;
+        if (!currentHash || currentHash !== ruleSha256) return { stale: true };
+        await client.query(
+          `INSERT INTO public.sms_parser_candidate_approvals
+             (candidate_id, status, reviewed_by, reason, rule_sha256)
+           VALUES ($1,$2,$3,$4,$5)
+           ON CONFLICT (candidate_id) DO UPDATE SET status=excluded.status,
+             reviewed_by=excluded.reviewed_by, reviewed_at=now(),
+             reason=excluded.reason, rule_sha256=excluded.rule_sha256`,
+          [candidateId, decision, req.userId, reason.trim(), currentHash],
+        );
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+           VALUES ($1, 'review_sms_parser_candidate', 'sms_parser_candidate_approvals', NULL, $2, $3)`,
+          [req.userId, JSON.stringify({ candidateId, decision, ruleSha256: currentHash }), reason.trim()],
+        );
+        return { stale: false };
+      });
+      if (outcome.stale) return res.status(409).json({ error: 'proposal_changed' });
+      res.status(200).json({ ok: true, candidateId, decision });
+    } catch (error) {
+      console.error('POST /admin/sms-rules/parser-proposals/review error', error.message || error);
+      res.status(500).json({ error: 'failed to review parser proposal' });
+    }
+  });
+
+  // Admin bundle history. The device endpoint only returns the active bundle;
+  // operators need to see what was published, by whom, and which older
+  // versions remain active as rollback targets.
+  app.get('/admin/sms-rules/bundles', requireAdmin, async (req, res) => {
+    const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 50, 1), 200);
+    try {
+      const bundles = await withUserClient(req.userId, async (client) => {
+        const result = await client.query(
+          `SELECT bundle_version, sha256, is_active, min_client_ver, published_at,
+                  jsonb_array_length(rules) AS rule_count
+             FROM public.sms_rule_bundles
+            ORDER BY bundle_version DESC
+            LIMIT $1`,
+          [limit],
+        );
+        return result.rows;
+      });
+      res.status(200).json({ bundles });
+    } catch (error) {
+      console.error('GET /admin/sms-rules/bundles error', error.message || error);
+      res.status(500).json({ error: 'failed to fetch SMS rule bundles' });
+    }
+  });
+
+  app.get('/admin/sms-rules/bundles/:bundleVersion', requireAdmin, async (req, res) => {
+    const versionNum = Number.parseInt(req.params.bundleVersion, 10);
+    if (!Number.isInteger(versionNum) || versionNum < 1) {
+      return res.status(400).json({ error: 'bundleVersion must be a positive integer' });
+    }
+    try {
+      const bundle = await withUserClient(req.userId, async (client) => {
+        const result = await client.query(
+          `SELECT bundle_version, rules, sha256, is_active, min_client_ver, published_at
+             FROM public.sms_rule_bundles
+            WHERE bundle_version = $1`,
+          [versionNum],
+        );
+        return result.rows[0] || null;
+      });
+      if (!bundle) return res.status(404).json({ error: 'bundle version not found' });
+      res.status(200).json({ bundle });
+    } catch (error) {
+      console.error('GET /admin/sms-rules/bundles/:bundleVersion error', error.message || error);
+      res.status(500).json({ error: 'failed to fetch SMS rule bundle' });
+    }
+  });
+
   // Admin publishes evaluated, approved rule bundle
   app.post('/admin/sms-rules/publish', requireAdmin, async (req, res) => {
-    const { bundleVersion, rules, minClientVersion = '1.0.0' } = req.body || {};
+    const { bundleVersion, rules, minClientVersion = '1.0.0', reason } = req.body || {};
     const versionNum = Number.parseInt(bundleVersion, 10);
     if (!Number.isInteger(versionNum) || versionNum < 1) {
       return res.status(400).json({ error: 'bundleVersion must be a positive integer' });
+    }
+    if (typeof minClientVersion !== 'string' || minClientVersion.length < 1 || minClientVersion.length > 32) {
+      return res.status(400).json({ error: 'minClientVersion must be a short string' });
+    }
+    if (reason !== undefined && (typeof reason !== 'string' || reason.length > 500)) {
+      return res.status(400).json({ error: 'reason must be a short string' });
     }
     if (!Array.isArray(rules) || rules.length === 0) {
       return res.status(400).json({ error: 'rules must be a non-empty array' });
@@ -355,6 +692,22 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
 
     try {
       const outcome = await withUserClient(req.userId, async (client) => {
+        // Serialise admin publishes so two operators cannot both pass the
+        // version check and then race the INSERT.
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('sms_rule_bundle_admin_publish'))");
+        const latest = await client.query(
+          `SELECT coalesce(max(bundle_version), 0)::int AS version,
+                  coalesce(bool_or(bundle_version = $1), false) AS exists
+             FROM public.sms_rule_bundles`,
+          [versionNum],
+        );
+        const latestRow = latest.rows?.[0];
+        if (latestRow?.exists === true) {
+          return { conflict: true };
+        }
+        if (versionNum <= (latestRow?.version ?? 0)) {
+          return { staleVersion: true, currentVersion: latestRow?.version ?? 0 };
+        }
         // Enforce version immutability: cannot overwrite an existing version
         const insertRes = await client.query(
           `INSERT INTO public.sms_rule_bundles
@@ -364,10 +717,22 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
            RETURNING bundle_version`,
           [versionNum, JSON.stringify(rules), sha256, req.userId, minClientVersion],
         );
-        return insertRes.rowCount > 0;
+        if (insertRes.rowCount === 0) return { conflict: true };
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+           VALUES ($1, 'publish_sms_rule_bundle', 'sms_rule_bundles', NULL, $2, $3)`,
+          [req.userId, JSON.stringify({ bundleVersion: versionNum, sha256, minClientVersion, ruleCount: rules.length }), reason || null],
+        );
+        return { inserted: true };
       });
 
-      if (!outcome) {
+      if (outcome.staleVersion) {
+        return res.status(409).json({
+          error: 'bundle_version_not_newer',
+          currentVersion: outcome.currentVersion,
+        });
+      }
+      if (outcome.conflict) {
         return res.status(409).json({ error: 'bundle_version_already_exists' });
       }
 
@@ -384,20 +749,77 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
     if (!Number.isInteger(versionNum) || versionNum < 1) {
       return res.status(400).json({ error: 'bundleVersion must be a positive integer' });
     }
+    const { reason } = req.body || {};
+    if (reason !== undefined && (typeof reason !== 'string' || reason.length > 500)) {
+      return res.status(400).json({ error: 'reason must be a short string' });
+    }
     try {
-      const result = await withUserClient(req.userId, async (client) => {
-        return client.query(
+      const outcome = await withUserClient(req.userId, async (client) => {
+        const deactivated = await client.query(
           `UPDATE public.sms_rule_bundles
               SET is_active = false
-            WHERE bundle_version = $1
+            WHERE bundle_version = $1 AND is_active = true
             RETURNING bundle_version`,
           [versionNum],
         );
+        if (deactivated.rowCount === 0) {
+          const exists = await client.query(
+            'SELECT is_active FROM public.sms_rule_bundles WHERE bundle_version = $1',
+            [versionNum],
+          );
+          const found = (exists.rowCount ?? exists.rows?.length ?? 0) > 0;
+          return { found, alreadyInactive: found };
+        }
+        // Keep the human-driven rollback consistent with the autonomous
+        // worker: rules learned into this bundle must not keep reporting as
+        // active once the bundle is withdrawn.
+        const candidates = await client.query(
+          `UPDATE public.sms_rule_candidates
+              SET state = 'rolled_back',
+                  stage_version = stage_version + 1,
+                  stage_metrics = stage_metrics || jsonb_build_object(
+                    'rollback_reason', $2::text, 'rolled_back_at', now()),
+                  updated_at = now()
+            WHERE bundle_version = $1 AND state <> 'rolled_back'
+            RETURNING candidate_id`,
+          [versionNum, reason || 'admin_rollback'],
+        );
+        const nextActive = await client.query(
+          `SELECT bundle_version, sha256, min_client_ver, published_at
+             FROM public.sms_rule_bundles
+            WHERE is_active = true
+            ORDER BY bundle_version DESC
+            LIMIT 1`,
+        );
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+           VALUES ($1, 'rollback_sms_rule_bundle', 'sms_rule_bundles', NULL, $2, $3, $4)`,
+          [
+            req.userId,
+            JSON.stringify({ bundleVersion: versionNum, isActive: true }),
+            JSON.stringify({
+              bundleVersion: versionNum,
+              isActive: false,
+              rolledBackCandidates: candidates.rowCount,
+              activeBundleVersion: nextActive.rows[0]?.bundle_version ?? null,
+            }),
+            reason || null,
+          ],
+        );
+        return { rolledBack: true, activeBundle: nextActive.rows[0] || null, rolledBackCandidates: candidates.rowCount };
       });
-      if (result.rowCount === 0) {
-        return res.status(404).json({ error: 'bundle version not found' });
+      if (!outcome.rolledBack) {
+        return res.status(outcome.found ? 409 : 404).json({
+          error: outcome.found ? 'bundle_already_inactive' : 'bundle version not found',
+        });
       }
-      res.status(200).json({ ok: true, rolledBack: true, bundleVersion: versionNum });
+      res.status(200).json({
+        ok: true,
+        rolledBack: true,
+        bundleVersion: versionNum,
+        activeBundle: outcome.activeBundle,
+        rolledBackCandidates: outcome.rolledBackCandidates,
+      });
     } catch (error) {
       console.error('POST /admin/sms-rules/:bundleVersion/rollback error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to rollback SMS rule bundle' });
@@ -413,5 +835,7 @@ module.exports = {
   countCaptureGroups,
   isSafeRegex,
   candidateDelivery,
+  compareOrdinal,
+  compareCategoryRulesV2,
   registerSmsRuleBundleRoutes,
 };

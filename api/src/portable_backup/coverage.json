@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "label": "portable-backup-table-coverage-v1",
-  "updated": "2026-10-26",
+  "updated": "2026-10-29",
   "comment": "Schema-aware inventory of PostgreSQL CREATE TABLE objects in db/supabase/migrations. Public-schema keys remain unqualified for contract compatibility; non-public schemas are qualified. This registry covers server migration tables only, not SQLite tables or individual fields, and is not a full database disaster-recovery manifest. Portable export and restore services have separate device, integration and recovery acceptance gates; excluded user-linked rows remain explicit coverage gaps.",
   "tables": {
     "maintenance.jobs": {
@@ -588,6 +588,30 @@
     "notification_delivery.worker_status": {
       "disposition": "platform_ops",
       "reason": "Bounded worker heartbeat and aggregate delivery counters migrate in full PostgreSQL recovery. They contain no customer identifiers/payload and are not account portable-export data. Recovered heartbeats are stale until a real worker reports again."
+    },
+    "sms_learning_settings": {
+      "disposition": "platform_ops",
+      "reason": "Global SMS learning rollout controls are operational state; account-scoped portable restore must not replace them. Complete PostgreSQL recovery preserves them."
+    },
+    "sms_category_rule_approvals": {
+      "disposition": "platform_ops",
+      "reason": "Admin-reviewed shared category approvals govern all accounts and cannot be restored from a single account archive; complete PostgreSQL recovery preserves the review records."
+    },
+    "sms_category_rule_v2_approvals": {
+      "disposition": "platform_ops",
+      "reason": "Shared context-specific category approvals and admin attribution are platform review state, preserved by complete PostgreSQL recovery rather than per-account restore."
+    },
+    "sms_parser_candidate_approvals": {
+      "disposition": "platform_ops",
+      "reason": "Admin parser-candidate approval gates are global operational state and remain outside account-scoped portable restore; complete PostgreSQL recovery preserves them."
+    },
+    "sms_ai_learning_proposals": {
+      "disposition": "excluded_with_intent",
+      "reason": "Account-linked opt-in AI learning proposals are not exported in portable v1. Their consent, moderation and cross-user eligibility cannot be replayed by a personal archive; complete paired PostgreSQL backups preserve this explicit coverage gap."
+    },
+    "sms_learning_feedback_events": {
+      "disposition": "excluded_with_intent",
+      "reason": "Account-linked opt-in correction evidence and its source hashes are not exported in portable v1. Shared-learning consent and moderation require their own lifecycle; complete paired PostgreSQL recovery preserves these rows."
     }
   }
 }

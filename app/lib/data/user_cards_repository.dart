@@ -5,7 +5,9 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:uuid/uuid.dart';
 
 import 'api_exception.dart';
+import 'consents_api.dart';
 import 'local/sms_dismissal_outbox.dart';
+import 'local/sms_feedback_outbox.dart';
 import 'local/sms_learning_privacy.dart';
 
 // A report screen must never remain in a loading state because a mobile
@@ -919,31 +921,43 @@ class CardDiscoveryResult {
 
 class DismissalQueueEntry {
   final String sourceKey;
+  final String eventId;
   final String? sender;
   final String? reason;
   final String? templateText;
   final String? sampleBody;
   final String? family;
+  final String? correctionKind;
+  final String resolvedKind;
+  final DateTime consentGrantedAt;
   final DateTime queuedAt;
 
   const DismissalQueueEntry({
     required this.sourceKey,
+    required this.eventId,
     this.sender,
     this.reason,
     this.templateText,
     this.sampleBody,
     this.family,
+    this.correctionKind,
+    this.resolvedKind = 'unresolved',
+    required this.consentGrantedAt,
     required this.queuedAt,
   });
 
   Map<String, dynamic> toJson() => {
+    'eventId': eventId,
     'sourceKey': sourceKey,
     if (sender != null) 'sender': sender,
     if (reason != null) 'reason': reason,
     if (templateText != null) 'templateText': templateText,
     if (sampleBody != null) 'sampleBody': sampleBody,
     if (family != null) 'family': family,
+    if (correctionKind != null) 'correctionKind': correctionKind,
+    'resolvedKind': resolvedKind,
     'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'consentGrantedAt': consentGrantedAt.toUtc().toIso8601String(),
   };
 }
 
@@ -1339,6 +1353,9 @@ DateTime? _optionalDateTime(Map<String, dynamic> json, List<String> keys) {
 class UserCardsRepository {
   final List<DismissalQueueEntry> _dismissalRetryQueue = [];
   final Future<SmsDismissalOutbox> Function()? dismissalOutbox;
+  final Future<SmsFeedbackOutbox> Function()? feedbackOutbox;
+  final Future<DateTime?> Function()? loadSmsSharedLearningConsent;
+  final Future<bool> Function(String sourceKey)? isRepeatedSmsOccurrence;
 
   List<DismissalQueueEntry> get dismissalRetryQueue =>
       List.unmodifiable(_dismissalRetryQueue);
@@ -1368,6 +1385,9 @@ class UserCardsRepository {
     this.onSmsBatchCaptured,
     this.onSmsUploaded,
     this.dismissalOutbox,
+    this.feedbackOutbox,
+    this.loadSmsSharedLearningConsent,
+    this.isRepeatedSmsOccurrence,
   }) : _client = client ?? http.Client();
   Future<void> captureSmsMessages(List<SmsBatchMessage> messages) async {
     if (onSmsBatchCaptured != null) {
@@ -1957,9 +1977,14 @@ class UserCardsRepository {
     String? templateText,
     String? sampleBody,
     String? family,
+    String correctionKind = 'preference_only',
+    String resolvedKind = 'unresolved',
   }) async {
-    final safeTemplate = redactSmsLearningText(templateText);
-    final safeSample = redactSmsLearningText(sampleBody);
+    final consentGrantedAt = await loadSmsSharedLearningConsent?.call();
+    if (consentGrantedAt == null) return true;
+    if (await _shouldAbstainFromSmsLearning(sourceKey)) return true;
+    final safeTemplate = redactSmsLearningPattern(templateText);
+    final safeSample = redactSmsLearningPattern(sampleBody);
     // A credential-bearing message has no safe learning evidence. The user's
     // local dismissal is already complete, so don't enqueue or transmit it.
     final hadEvidence =
@@ -1968,11 +1993,15 @@ class UserCardsRepository {
     if (hadEvidence && safeTemplate == null && safeSample == null) return true;
     final entry = DismissalQueueEntry(
       sourceKey: sourceKey,
+      eventId: const Uuid().v4(),
+      consentGrantedAt: consentGrantedAt,
       sender: sender,
       reason: reason,
       templateText: safeTemplate,
       sampleBody: safeSample,
       family: family,
+      correctionKind: correctionKind,
+      resolvedKind: resolvedKind,
       queuedAt: DateTime.now(),
     );
     final payload = entry.toJson();
@@ -1987,38 +2016,137 @@ class UserCardsRepository {
     try {
       final response = await _client
           .post(
-            Uri.parse('$apiBaseUrl/sms/dismiss'),
+            Uri.parse('$apiBaseUrl/sms/learning-feedback'),
             headers: _headers,
-            body: jsonEncode({
-              'sourceKey': sourceKey,
-              'sender': ?sender,
-              'reason': ?reason,
-              'templateText': ?safeTemplate,
-              'sampleBody': ?safeSample,
-              'family': ?family,
-            }),
+            body: jsonEncode(_dismissalFeedbackPayload(entry)),
           )
           .timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        durable?.acknowledge(sourceKey);
-        _dismissalRetryQueue.removeWhere((e) => e.sourceKey == sourceKey);
+      if (response.statusCode == 200 && _feedbackAcknowledged(response.body)) {
+        durable?.acknowledge(sourceKey, eventId: entry.eventId);
+        _dismissalRetryQueue.removeWhere((e) => e.eventId == entry.eventId);
         return true;
       }
-      if (!_dismissalRetryQueue.any((e) => e.sourceKey == sourceKey)) {
+      if (!_dismissalRetryQueue.any((e) => e.eventId == entry.eventId)) {
         _dismissalRetryQueue.add(entry);
       }
       return false;
     } catch (_) {
       // Offline / network failure: record to retry queue so user experience is not disrupted.
-      if (!_dismissalRetryQueue.any((e) => e.sourceKey == sourceKey)) {
+      if (!_dismissalRetryQueue.any((e) => e.eventId == entry.eventId)) {
         _dismissalRetryQueue.add(entry);
       }
       return false;
     }
   }
 
+  Future<bool> _shouldAbstainFromSmsLearning(String sourceKey) async {
+    try {
+      return await isRepeatedSmsOccurrence?.call(sourceKey) ?? false;
+    } catch (_) {
+      // A failed local provenance lookup must not upload ambiguous evidence.
+      return true;
+    }
+  }
+
+  Map<String, dynamic> _dismissalFeedbackPayload(DismissalQueueEntry entry) => {
+    'eventId': entry.eventId,
+    'sourceKey': entry.sourceKey,
+    'action': 'dismissed',
+    if (entry.sender != null) 'sender': entry.sender,
+    'resolvedKind': entry.resolvedKind,
+    'occurredAt': entry.queuedAt.toUtc().toIso8601String(),
+    if (entry.sampleBody != null) 'sampleBody': entry.sampleBody,
+    if (entry.family != null) 'originalDecision': {'kind': entry.family},
+    if (entry.correctionKind != null) 'correctionKind': entry.correctionKind,
+    if (entry.reason != null) 'reason': entry.reason,
+    'consentPurpose': 'sms_shared_learning',
+    'consentPolicyVersion': smsSharedLearningPolicyVersion,
+    'consentGrantedAt': entry.consentGrantedAt.toUtc().toIso8601String(),
+  };
+
+  bool _feedbackAcknowledged(String responseBody) {
+    try {
+      final body = jsonDecode(responseBody);
+      return body is Map && body['acknowledged'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Syncs durable user actions from Auto-Resolved. Consent is checked by the
+  /// caller before this method is invoked and again by the server endpoint.
+  Future<int> flushSmsLearningFeedbackQueue() async {
+    if (await loadSmsSharedLearningConsent?.call() == null) return 0;
+    SmsFeedbackOutbox? durable;
+    try {
+      durable = await feedbackOutbox?.call();
+    } catch (_) {}
+    if (durable == null) return 0;
+    var acknowledged = 0;
+    for (final entry in durable.pending()) {
+      try {
+        final sourceKey = entry.payload['sourceKey'] as String? ?? '';
+        if (sourceKey.isEmpty ||
+            await _shouldAbstainFromSmsLearning(sourceKey)) {
+          durable.acknowledge(entry.eventId);
+          continue;
+        }
+        final response = await _client
+            .post(
+              Uri.parse('$apiBaseUrl/sms/learning-feedback'),
+              headers: _headers,
+              body: jsonEncode(entry.payload),
+            )
+            .timeout(const Duration(seconds: 10));
+        if (response.statusCode == 200 &&
+            _feedbackAcknowledged(response.body)) {
+          durable.acknowledge(entry.eventId);
+          acknowledged++;
+        } else {
+          durable.failed(entry.eventId);
+        }
+      } catch (_) {
+        durable.failed(entry.eventId);
+      }
+    }
+    return acknowledged;
+  }
+
+  Future<void> clearSmsLearningFeedbackQueues() async {
+    _dismissalRetryQueue.clear();
+    try {
+      final dismissals = await dismissalOutbox?.call();
+      dismissals?.clear();
+      final feedback = await feedbackOutbox?.call();
+      feedback?.clear();
+    } catch (_) {
+      // The explicit consent change remains successful; a future account
+      // storage open will make the local purge retryable through provider.
+    }
+  }
+
+  /// Whether any SMS shared-learning work is queued locally. Callers check
+  /// this before the consent lookup so an idle queue never costs a network
+  /// round-trip; offline that lookup can only fail, and the reconnect flush
+  /// owns the retry.
+  Future<bool> hasPendingSmsLearningWork() async {
+    if (_dismissalRetryQueue.isNotEmpty) return true;
+    try {
+      final dismissals = await dismissalOutbox?.call();
+      if (dismissals != null && dismissals.pending().isNotEmpty) return true;
+      final feedback = await feedbackOutbox?.call();
+      if (feedback != null && feedback.pending().isNotEmpty) return true;
+    } catch (_) {
+      // An unopenable account store is not proof the queues are empty, so fall
+      // back to the old behaviour and let the flush attempt happen.
+      return true;
+    }
+    return false;
+  }
+
   /// Retries queued dismissals that previously failed due to offline/network issues.
   Future<int> flushDismissalQueue() async {
+    if (await loadSmsSharedLearningConsent?.call() == null) return 0;
     SmsDismissalOutbox? durable;
     try {
       durable = await dismissalOutbox?.call();
@@ -2027,16 +2155,26 @@ class UserCardsRepository {
     for (final payload
         in durable?.pending() ?? const <Map<String, dynamic>>[]) {
       final sourceKey = payload['sourceKey'] as String?;
-      if (sourceKey == null || toRetry.any((e) => e.sourceKey == sourceKey))
+      final eventId = payload['eventId'] as String?;
+      if (sourceKey == null ||
+          eventId == null ||
+          toRetry.any((e) => e.eventId == eventId)) {
         continue;
+      }
       toRetry.add(
         DismissalQueueEntry(
           sourceKey: sourceKey,
+          eventId: eventId,
+          consentGrantedAt:
+              DateTime.tryParse(payload['consentGrantedAt'] as String? ?? '') ??
+              DateTime.now(),
           sender: payload['sender'] as String?,
           reason: payload['reason'] as String?,
           templateText: payload['templateText'] as String?,
           sampleBody: payload['sampleBody'] as String?,
           family: payload['family'] as String?,
+          correctionKind: payload['correctionKind'] as String?,
+          resolvedKind: payload['resolvedKind'] as String? ?? 'unresolved',
           queuedAt:
               DateTime.tryParse(payload['queuedAt'] as String? ?? '') ??
               DateTime.now(),
@@ -2047,30 +2185,26 @@ class UserCardsRepository {
     var succeeded = 0;
     for (final entry in toRetry) {
       try {
+        if (await _shouldAbstainFromSmsLearning(entry.sourceKey)) {
+          durable?.acknowledge(entry.sourceKey, eventId: entry.eventId);
+          _dismissalRetryQueue.removeWhere((e) => e.eventId == entry.eventId);
+          continue;
+        }
         final response = await _client
             .post(
-              Uri.parse('$apiBaseUrl/sms/dismiss'),
+              Uri.parse('$apiBaseUrl/sms/learning-feedback'),
               headers: _headers,
-              body: jsonEncode({
-                'sourceKey': entry.sourceKey,
-                if (entry.sender != null) 'sender': entry.sender,
-                if (entry.reason != null) 'reason': entry.reason,
-                if (entry.templateText != null)
-                  'templateText': entry.templateText,
-                if (entry.sampleBody != null) 'sampleBody': entry.sampleBody,
-                if (entry.family != null) 'family': entry.family,
-              }),
+              body: jsonEncode(_dismissalFeedbackPayload(entry)),
             )
             .timeout(const Duration(seconds: 10));
-        if (response.statusCode == 200) {
-          durable?.acknowledge(entry.sourceKey);
-          _dismissalRetryQueue.removeWhere(
-            (e) => e.sourceKey == entry.sourceKey,
-          );
+        if (response.statusCode == 200 &&
+            _feedbackAcknowledged(response.body)) {
+          durable?.acknowledge(entry.sourceKey, eventId: entry.eventId);
+          _dismissalRetryQueue.removeWhere((e) => e.eventId == entry.eventId);
           succeeded++;
         }
       } catch (_) {
-        // Keep in queue for next retry
+        // Keep in queue for next retry.
       }
     }
     return succeeded;

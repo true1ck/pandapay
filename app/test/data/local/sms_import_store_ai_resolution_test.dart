@@ -6,9 +6,11 @@ import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/auto_resolved_history_repository.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sms_auto_resolution_controller.dart';
+import 'package:pandapay/data/local/sms_feedback_outbox.dart';
 import 'package:pandapay/data/local/sms_import_store.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/local/sms_learning_feedback.dart';
+import 'package:pandapay/data/local/sms_rule_bundle.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/data/past_bill_receipts.dart';
@@ -137,12 +139,20 @@ void main() {
       insertReviewRow(item);
 
       final result = importStore.resolveAiSuggestions(ns, item, [
-        swiggySuggestion(),
+        // Informational facts may precede the one actionable fact in the
+        // provider response. Learning must describe the fact actually filed.
+        {
+          'factIndex': 0,
+          'factType': 'balance_snapshot',
+          'payload': {'currentBalanceInr': 45120.50, 'confidence': 0.99},
+        },
+        {...swiggySuggestion(), 'factIndex': 9},
       ]);
 
       expect(result.outcome, SmsAiResolutionOutcome.autoResolved);
       expect(result.score, greaterThanOrEqualTo(0.85));
       expect(result.historyId, 'ai:$sourceKey');
+      expect(result.factFamily, 'posted_movement');
       expect(reviewCount(), 0);
 
       final rows = transactions();
@@ -164,6 +174,7 @@ void main() {
       expect(history, hasLength(1));
       final entry = history.single;
       expect(entry.id, 'ai:$sourceKey');
+      expect(entry.factIndex, 9);
       expect(entry.resolvedKind, 'transaction');
       expect(entry.title, 'Swiggy');
       expect(entry.amountPaise, 42000);
@@ -245,6 +256,54 @@ void main() {
     expect(transactions(), isEmpty);
     expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
   });
+
+  for (final serverReviewFlag in <bool?>[null, false]) {
+    test('unsupported merchant stays reviewable with server flag $serverReviewFlag', () {
+      final item = reviewItem();
+      insertReviewRow(item);
+      final suggestion = swiggySuggestion();
+      (suggestion['payload'] as Map<String, dynamic>)['merchant'] = 'Balaji Sports';
+
+      final result = importStore.resolveAiSuggestions(
+        ns, item, [suggestion],
+        serverScore: 0.99,
+        reviewRequired: serverReviewFlag,
+      );
+
+      expect(result.outcome, SmsAiResolutionOutcome.needsReview);
+      expect(reviewCount(), 1);
+      expect(transactions(), isEmpty);
+      expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
+    });
+
+    test('receipt stays reviewable with server flag $serverReviewFlag', () {
+      final item = reviewItem(
+        body: 'Hello, your payment of Rs. 700.0 to Balaji Sports has been '
+            'recorded. View the payment receipt here: '
+            'https://mybillbook.in/cpp/?t=ljbffep4r - myBillBook '
+            'Paid by credit card on 24Oct2026.',
+      );
+      insertReviewRow(item);
+      final suggestion = swiggySuggestion();
+      final payload = suggestion['payload'] as Map<String, dynamic>;
+      payload['merchant'] = 'Balaji Sports';
+      payload['amountInr'] = 700.0;
+      payload['instrument'] = 'credit_card';
+      payload.remove('accountLast4');
+      payload.remove('issuerName');
+
+      final result = importStore.resolveAiSuggestions(
+        ns, item, [suggestion],
+        serverScore: 0.99,
+        reviewRequired: serverReviewFlag,
+      );
+
+      expect(result.outcome, SmsAiResolutionOutcome.needsReview);
+      expect(reviewCount(), 1);
+      expect(transactions(), isEmpty);
+      expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 0);
+    });
+  }
 
   test('Tier 1 future bill writes local_commitments and history', () {
     final due = utcDayOffset(7);
@@ -419,6 +478,7 @@ void main() {
 
       expect(result.outcome, SmsAiResolutionOutcome.autoResolved);
       expect(result.score, 0.0);
+      expect(result.factFamily, 'ignore_noise');
       expect(reviewCount(), 0);
       expect(transactions(), isEmpty);
       final history = AutoResolvedHistoryRepository(
@@ -560,7 +620,87 @@ void main() {
     expect(corrected?.transaction?.amount.paise, 34900);
   });
 
-  SmsAutoResolutionController controller() => SmsAutoResolutionController(
+  test('shared category mapping requires exact merchant sender and narrative context', () {
+    const body =
+        'Rs 349.00 spent on HDFC Bank Card ending 1234 at BUNDL '
+        'TECHNOLOGIES for supermarket groceries on 20-Oct-26.';
+    const sender = 'TX-MNTPRO-S';
+    final rules = {
+      SmsSharedCategoryRule.tupleKey(
+        merchantKey: 'BUNDL TECHNOLOGIES',
+        senderKey: 'TX-MNTPRO-S',
+        contextKey: 'GROCERIES|SUPERMARKET',
+        factFamily: 'posted_movement',
+      ): 'groceries',
+      SmsSharedCategoryRule.tupleKey(
+        merchantKey: 'BUNDL TECHNOLOGIES',
+        senderKey: 'TX-MNTPRO-S',
+        contextKey: 'RENEWAL|SUBSCRIPTION',
+        factFamily: 'posted_movement',
+      ): 'bills',
+    };
+    final exact = LocalSmsParser.parse(
+      namespace: ns,
+      sender: sender,
+      body: body,
+      receivedAt: DateTime(2026, 10, 20),
+      sharedCategoryRules: rules,
+    );
+    expect(exact?.transaction?.categoryId, 'groceries');
+    final normalizedSender = LocalSmsParser.parse(
+      namespace: ns,
+      sender: ' tx-mntpro-s ',
+      body: body,
+      receivedAt: DateTime(2026, 10, 20),
+      sharedCategoryRules: rules,
+    );
+    expect(normalizedSender?.transaction?.categoryId, 'groceries');
+
+    final otherContext = LocalSmsParser.parse(
+      namespace: ns,
+      sender: sender,
+      body:
+          'Rs 349.00 spent on HDFC Bank Card ending 1234 at BUNDL '
+          'TECHNOLOGIES for annual subscription renewal on 20-Oct-26.',
+      receivedAt: DateTime(2026, 10, 20),
+      sharedCategoryRules: rules,
+    );
+    expect(otherContext?.transaction?.categoryId, 'bills');
+
+    final unmatchedContext = LocalSmsParser.parse(
+      namespace: ns,
+      sender: sender,
+      body:
+          'Rs 349.00 spent on HDFC Bank Card ending 1234 at BUNDL '
+          'TECHNOLOGIES for cab ride on 20-Oct-26.',
+      receivedAt: DateTime(2026, 10, 20),
+      sharedCategoryRules: rules,
+    );
+    expect(
+      ['groceries', 'bills'],
+      isNot(contains(unmatchedContext?.transaction?.categoryId)),
+    );
+
+    final wrongSender = LocalSmsParser.parse(
+      namespace: ns,
+      sender: 'HDFCBK',
+      body: body,
+      receivedAt: DateTime(2026, 10, 20),
+      sharedCategoryRules: rules,
+    );
+    expect(wrongSender?.transaction?.categoryId, isNot('groceries'));
+
+    final merchantOnlyCache = LocalSmsParser.parse(
+      namespace: ns,
+      sender: sender,
+      body: body,
+      receivedAt: DateTime(2026, 10, 20),
+      sharedCategoryRules: const {'BUNDL TECHNOLOGIES': 'groceries'},
+    );
+    expect(merchantOnlyCache?.transaction?.categoryId, isNot('groceries'));
+  });
+
+  SmsAutoResolutionController controller({DateTime? consent}) => SmsAutoResolutionController(
     database: db,
     store: store,
     reviewRepository: NeedsReviewRepository(
@@ -568,6 +708,7 @@ void main() {
       loadDatabase: () async => db,
     ),
     namespace: ns,
+    smsLearningConsentGrantedAt: consent,
   );
 
   test(
@@ -575,13 +716,17 @@ void main() {
     () async {
       final item = reviewItem();
       insertReviewRow(item);
-      importStore.resolveAiSuggestions(ns, item, [swiggySuggestion()]);
+      importStore.resolveAiSuggestions(ns, item, [
+        {...swiggySuggestion(), 'factIndex': 9},
+      ]);
       final entry = AutoResolvedHistoryRepository(
         db,
         namespace: ns,
       ).fetchAll().single;
 
-      await controller().changeCategory(entry, 'groceries');
+      await controller(
+        consent: DateTime(2026, 10, 1),
+      ).changeCategory(entry, 'groceries');
 
       final updated = AutoResolvedHistoryRepository(
         db,
@@ -590,6 +735,9 @@ void main() {
       expect(updated.categorySlug, 'groceries');
       expect(updated.categoryName, 'Groceries');
       expect(updated.isUserModified, isTrue);
+      final feedback = SmsFeedbackOutbox(db, namespace: ns).pending();
+      expect(feedback, hasLength(1));
+      expect(feedback.single.payload['factIndex'], 9);
 
       final rows = transactions();
       expect(rows, hasLength(1));
@@ -598,7 +746,11 @@ void main() {
       expect(rows.single['amount_inr'], 420.0);
 
       expect(SmsLearningFeedback(db, namespace: ns).loadRulesSync(), {
-        'SWIGGY': 'groceries',
+        SmsLearningFeedback.contextPattern(
+          'SWIGGY',
+          entry.sender,
+          entry.sourceBody ?? item.body,
+        ): 'groceries',
       });
     },
   );
@@ -640,6 +792,41 @@ void main() {
     },
   );
 
+  test(
+    'legacy null fact index keeps local edit and abstains from shared feedback',
+    () async {
+      final item = reviewItem();
+      insertReviewRow(item);
+      importStore.resolveAiSuggestions(ns, item, [swiggySuggestion()]);
+      db.db.execute(
+        'UPDATE local_auto_resolved_history SET fact_index=NULL WHERE namespace=? AND id=?',
+        [ns, 'ai:$sourceKey'],
+      );
+      final entry = AutoResolvedHistoryRepository(
+        db,
+        namespace: ns,
+      ).fetchAll().single;
+      expect(entry.factIndex, isNull);
+
+      await controller(consent: DateTime(2026, 10, 1)).editTransaction(
+        entry,
+        merchantName: 'Swiggy Instamart',
+        amount: Money.fromRupees(515.25),
+        occurredAt: DateTime(2026, 10, 23, 14, 30),
+      );
+
+      expect(transactions().single['amount_inr'], 515.25);
+      expect(
+        AutoResolvedHistoryRepository(db, namespace: ns)
+            .fetchAll()
+            .single
+            .title,
+        'Swiggy Instamart',
+      );
+      expect(SmsFeedbackOutbox(db, namespace: ns).count(), 0);
+    },
+  );
+
   test('moveToReview deletes the auto-filed row and reopens review', () async {
     final item = reviewItem();
     insertReviewRow(item);
@@ -666,8 +853,32 @@ void main() {
             )
             as Map<String, dynamic>;
     expect(payload['reason'], 'moved_from_auto_resolved');
+    expect(payload['aiStatus'], 'notChecked');
     expect(payload['sender'], 'HDFCBK');
-    expect(payload['body'], contains('previously auto-categorized by AI'));
+    expect(payload['body'], item.body);
+  });
+
+  test('failed review restore rolls back the AI undo and feedback', () async {
+    final item = reviewItem();
+    insertReviewRow(item);
+    importStore.resolveAiSuggestions(ns, item, [swiggySuggestion()]);
+    final entry = AutoResolvedHistoryRepository(
+      db,
+      namespace: ns,
+    ).fetchAll().single;
+    expect(transactions(), hasLength(1));
+    expect(reviewCount(), 0);
+    db.db.execute('''
+      CREATE TRIGGER fail_auto_review_restore
+      BEFORE INSERT ON local_needs_review
+      BEGIN SELECT RAISE(ABORT, 'restore failed'); END
+    ''');
+
+    await expectLater(controller().moveToReview(entry), throwsA(isA<Exception>()));
+
+    expect(transactions(), hasLength(1));
+    expect(AutoResolvedHistoryRepository(db, namespace: ns).count(), 1);
+    expect(reviewCount(), 0);
   });
 
   test('moveToReview removes a bill commitment and reopens review', () async {
@@ -704,5 +915,51 @@ void main() {
             as Map<String, dynamic>;
     expect(payload['reason'], 'moved_from_auto_resolved');
     expect(payload['kind'], 'commitment');
+  });
+
+  test('moveToReview removes an archived historical bill', () async {
+    final due = utcDayOffset(-7);
+    final item = reviewItem(body: billBody(due));
+    insertReviewRow(item);
+    importStore.resolveAiSuggestions(ns, item, [billSuggestion(due)]);
+    expect(
+      PastBillReceiptRepository(db, namespace: ns).fetchAll(),
+      hasLength(1),
+    );
+    final entry = AutoResolvedHistoryRepository(
+      db,
+      namespace: ns,
+    ).fetchAll().single;
+
+    await controller().moveToReview(entry);
+
+    expect(PastBillReceiptRepository(db, namespace: ns).fetchAll(), isEmpty);
+    expect(reviewCount(), 1);
+  });
+
+  test('explicit local false-transaction correction prevents parser and AI intake for matching layout', () {
+    const sender = 'VM-HDFCBK';
+    const original = 'Debited Rs. 500.00 at ACME STORE. Ref 123456';
+    const repeated = 'Debited Rs. 700.00 at ACME STORE. Ref 987654';
+    SmsLearningFeedback(db, namespace: ns).recordFalseTransactionRule(
+      sender: sender,
+      body: original,
+    );
+
+    final repeatedKey = smsSourceKey(ns, sender, repeated);
+    importStore.capture(
+      ns,
+      QueuedSms(
+        sender: sender,
+        body: repeated,
+        receivedAt: DateTime(2026, 10, 25, 10),
+      ),
+    );
+
+    final decision = SmsIntakeRepository(db).decision(ns, repeatedKey);
+    expect(decision?.decision, 'user_corrected_not_financial');
+    expect(decision?.state, 'final');
+    expect(SmsIntakeRepository(db).pending(ns), isEmpty);
+    expect(reviewCount(), 0);
   });
 }

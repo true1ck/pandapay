@@ -10,6 +10,8 @@ import '../../app/device_permissions.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/consents_api.dart';
+import '../../data/local/sms_dismissal_outbox.dart';
+import '../../data/local/sms_feedback_outbox.dart';
 import '../../app/env.dart';
 import '../import/gmail_connect_service.dart';
 
@@ -396,15 +398,25 @@ class _GmailConnectionRow extends ConsumerWidget {
           Container(
             width: 40,
             height: 40,
-            decoration: const BoxDecoration(color: BambooInk.paperMuted, shape: BoxShape.circle),
-            child: const Icon(Icons.mark_email_read_outlined, size: 20, color: BambooInk.ink900),
+            decoration: const BoxDecoration(
+              color: BambooInk.paperMuted,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.mark_email_read_outlined,
+              size: 20,
+              color: BambooInk.ink900,
+            ),
           ),
           const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Gmail', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                Text(
+                  'Gmail',
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   'read-only, used on-device to find cards from bank emails',
@@ -412,8 +424,14 @@ class _GmailConnectionRow extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 conn.when(
-                  loading: () => Text('Checking…', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                  error: (_, _) => Text('Not connected', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  loading: () => Text(
+                    'Checking…',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
+                  error: (_, _) => Text(
+                    'Not connected',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
                   data: (c) => Text(
                     c == null ? 'Not connected' : 'Connected — ${c.email}',
                     style: BambooFonts.ui(
@@ -430,10 +448,16 @@ class _GmailConnectionRow extends ConsumerWidget {
             TextButton(
               style: TextButton.styleFrom(foregroundColor: BambooInk.clay),
               onPressed: () async {
-                await ref.read(gmailConnectControllerProvider.notifier).disconnect();
+                await ref
+                    .read(gmailConnectControllerProvider.notifier)
+                    .disconnect();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Gmail disconnected. Access has been revoked.')),
+                    const SnackBar(
+                      content: Text(
+                        'Gmail disconnected. Access has been revoked.',
+                      ),
+                    ),
                   );
                 }
               },
@@ -462,7 +486,10 @@ class _DataHandlingSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+          Text(
+            title,
+            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+          ),
           const SizedBox(height: AppSpace.sm),
           for (final b in bullets)
             Padding(
@@ -470,9 +497,15 @@ class _DataHandlingSection extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('•  ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  Text(
+                    '•  ',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
                   Expanded(
-                    child: Text(b, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                    child: Text(
+                      b,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
                   ),
                 ],
               ),
@@ -503,7 +536,10 @@ class _ContributionToggle extends ConsumerWidget {
       padding: const EdgeInsets.all(AppSpace.lg),
       child: SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: Text('Share what you see', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+        title: Text(
+          'Share what you see',
+          style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+        ),
         subtitle: Text(
           'Anonymously log a merchant name/MCC/rough location (never an amount, exact time, or '
           'your identity) to help other users\' recommendations.',
@@ -520,7 +556,9 @@ class _ContributionToggle extends ConsumerWidget {
             ref.invalidate(profileProvider);
           } catch (e) {
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(userFacingErrorMessage(e))),
+              );
             }
           }
         },
@@ -533,27 +571,20 @@ class _ContributionToggle extends ConsumerWidget {
 /// 0031, each independently grantable and revocable, both off unless the user
 /// has said otherwise.
 ///
-/// Separate from the "Share what you see" toggle above it, and that
-/// separation is the entire point. That one is `profiles.contributions_opt_in`
-/// and governs the crowdsourced merchant graph, which the app honestly
-/// describes as helping other cardholders. These two govern something
-/// materially different — aggregated statistics PandaPay may publish or
-/// license, and any sharing with a named commercial partner — and India's
-/// DPDP Act requires consent to be specific to a purpose. Rolling them into
-/// one switch, or into acceptance of the Terms, would be reading a permission
-/// into words that don't contain it.
+/// SMS shared learning is a separate purpose from "Share what you see" and
+/// from aggregated or partner sharing. It can include corrected transaction
+/// fields, so it has its own explicit, default-off choice and policy version.
 ///
-/// Neither gates any live pipeline today, deliberately: there isn't one, and
-/// there can't lawfully be one while the Terms and Privacy Policy are still
-/// the draft placeholder text `legal_screen.dart` ships. The copy below
-/// therefore says "may" and describes what would happen, rather than implying
-/// something already does.
-final _latestConsentsProvider = FutureProvider.autoDispose<Map<String, bool>>((ref) async {
-  final api = ref.watch(_consentsApiProvider);
-  if (api == null) return const {};
-  final latest = await api.fetchLatest();
-  return {for (final c in latest) c.purpose: c.granted};
-});
+/// The other purpose toggles are recorded independently. Production SMS
+/// collection must not be enabled until its purpose-specific policy has been
+/// reviewed.
+final _latestConsentsProvider =
+    FutureProvider.autoDispose<Map<String, ConsentRecord>>((ref) async {
+      final api = ref.watch(_consentsApiProvider);
+      if (api == null) return const {};
+      final latest = await api.fetchLatest();
+      return {for (final c in latest) c.purpose: c};
+    });
 
 class _PurposeConsents extends ConsumerWidget {
   const _PurposeConsents();
@@ -576,10 +607,27 @@ class _PurposeConsents extends ConsumerWidget {
           // "this person agreed to something older" rather than silently
           // inheriting agreement. 'draft-0' is honest about what they'd be
           // agreeing to right now — see the class doc comment.
-          policyVersion: _policyVersion,
+          policyVersion: purpose == smsSharedLearningPurpose
+              ? smsSharedLearningPolicyVersion
+              : _policyVersion,
           sourceScreen: 'privacy_permissions',
         );
+        if (purpose == smsSharedLearningPurpose && !granted) {
+          final cache = await ref.read(responseCacheProvider.future);
+          final namespace = ref.read(cacheNamespaceProvider);
+          SmsFeedbackOutbox(
+            cache.financialStore.database,
+            namespace: namespace,
+          ).clear();
+          SmsDismissalOutbox(cache.financialStore.database, namespace).clear();
+          await ref
+              .read(userCardsRepositoryProvider)
+              ?.clearSmsLearningFeedbackQueues();
+        }
         ref.invalidate(_latestConsentsProvider);
+        if (purpose == smsSharedLearningPurpose) {
+          ref.invalidate(smsSharedLearningConsentProvider);
+        }
         ref.invalidate(_consentHistoryProvider);
       } catch (e) {
         if (context.mounted) {
@@ -618,10 +666,13 @@ class _PurposeConsents extends ConsumerWidget {
                 style: BambooFonts.ui(12.5, color: BambooInk.ink500),
               ),
               activeTrackColor: BambooInk.jade,
-              value: granted['aggregate_insights'] ?? false,
+              value: granted['aggregate_insights']?.granted ?? false,
               onChanged: (v) => set('aggregate_insights', v),
             ),
-            const Divider(height: AppSpace.lg, color: BambooInk.hairlineOnPaper),
+            const Divider(
+              height: AppSpace.lg,
+              color: BambooInk.hairlineOnPaper,
+            ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(
@@ -634,14 +685,42 @@ class _PurposeConsents extends ConsumerWidget {
                 style: BambooFonts.ui(12.5, color: BambooInk.ink500),
               ),
               activeTrackColor: BambooInk.jade,
-              value: granted['partner_sharing'] ?? false,
+              value: granted['partner_sharing']?.granted ?? false,
               onChanged: (v) => set('partner_sharing', v),
+            ),
+            const Divider(
+              height: AppSpace.lg,
+              color: BambooInk.hairlineOnPaper,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                'Improve shared SMS decisions',
+                style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+              ),
+              subtitle: Text(
+                'If enabled, future AI auto-resolved SMS decisions and your confirmations, edits, dismissals, and reversals may contribute generalized message patterns and decision fields to admin-reviewed shared rules. An AI decision is labeled as unconfirmed until a person reviews it. The full SMS, account/card identifiers, and exact transaction references are removed on this device. This choice is separate from merchant contributions and can be turned off any time.',
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
+              activeTrackColor: BambooInk.jade,
+              value:
+                  granted[smsSharedLearningPurpose]?.granted == true &&
+                  granted[smsSharedLearningPurpose]?.policyVersion ==
+                      smsSharedLearningPolicyVersion,
+              onChanged: (v) => set(smsSharedLearningPurpose, v),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'The SMS learning policy needs review before collection is enabled in a production release.',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Neither is used by anything today — we\'re asking first, not after.',
+                'Aggregate insights and partner sharing remain separate purposes.',
                 style: BambooFonts.ui(11.5, color: BambooInk.ink500),
               ),
             ),
@@ -670,7 +749,10 @@ class _ConsentHistoryList extends ConsumerWidget {
       ),
       data: (records) {
         if (records.isEmpty) {
-          return const EmptyState(icon: Icons.history_outlined, title: 'No consent records yet');
+          return const EmptyState(
+            icon: Icons.history_outlined,
+            title: 'No consent records yet',
+          );
         }
         return Column(
           children: [
@@ -682,7 +764,10 @@ class _ConsentHistoryList extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   border: Border.all(color: BambooInk.hairlineOnPaper),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.lg,
+                  vertical: AppSpace.md,
+                ),
                 child: Text(
                   '${_purposeLabel(r.purpose)} — ${r.granted ? 'accepted' : 'declined'} ${_formatDate(r.grantedAt)}',
                   style: BambooFonts.ui(13.5, color: BambooInk.ink900),
@@ -711,7 +796,20 @@ class _ConsentHistoryList extends ConsumerWidget {
     }
   }
 
-  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  static const _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
 
   String _formatDate(DateTime d) {
     return '${d.day} ${_months[d.month - 1]} ${d.year}';

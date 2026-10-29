@@ -23,6 +23,12 @@ class SmsSecurityPolicy {
     r'\b(?:log[\s-]*in|sign[\s-]*in|authenticat\w*|authori[sz]\w*|reset\w*|regenerat\w*|(?:use|enter|confirm|validate)\s+(?:your\s+)?(?:code|credential|password))\b',
     caseSensitive: false,
   );
+  // This exact instruction conveys no credential value. Keep any additional
+  // password/code text under the security veto (including text after it).
+  static final _nonCredentialStatementInstruction = RegExp(
+    r'\benter\s+your\s+pan\s+as\s+the\s+password[.!](?=\s|$)',
+    caseSensitive: false,
+  );
   static final _security = RegExp(
     r"\b(?:otp|pin|cvv|passcode|password|secret\s*code|one[-\s]*time\s*(?:password|code)|verification\s*(?:code|number)|security\s*code|access\s*code|login\s*code|authentication\s*code|auth\s*code|authori[sz]ation\s*code|reset\s*(?:code|link))(?![a-z])"
     r"|\b(?:do\s*not|don't|never)\s*share\b"
@@ -47,6 +53,8 @@ class SmsSecurityPolicy {
         break;
       }
     }
-    return _security.hasMatch(evidence);
+    return _security.hasMatch(
+      evidence.replaceAll(_nonCredentialStatementInstruction, ' '),
+    );
   }
 }

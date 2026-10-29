@@ -93,7 +93,7 @@ void main() {
           transactions: [
             ParsedStatementLine(
               date: DateTime(2026, 10, 2),
-              description: 'Cafe',
+              description: 'Unknown merchant',
               amount: Money.fromRupees(250),
               sourceAccount: 'HDFC Credit Card',
               bankReference: 'ABC123456',
@@ -101,6 +101,8 @@ void main() {
               note: 'Team lunch',
               instrument: TxnInstrument.creditCard,
               rail: 'online',
+              status: 'ignored',
+              merchantNameMissing: true,
             ),
           ],
         ),
@@ -189,6 +191,9 @@ void main() {
       expect(session.rows.single.categoryHint, 'Groceries');
       expect(session.rows.single.note, 'Weekly shop');
       expect(session.rows.single.bankReference, 'XYZ987654');
+      expect(session.rows.single.status, 'ignored');
+      expect(session.rows.single.merchantNameMissing, isTrue);
+      expect(session.inputFor(0).merchantName, isNull);
       expect(session.inputFor(0).categoryId, 'grocery-id');
       expect(session.inputFor(0).instrument, TxnInstrument.creditCard);
       expect(session.inputFor(0).rail, 'online');

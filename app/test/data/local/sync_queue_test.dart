@@ -32,6 +32,35 @@ void main() {
     expect(pending.single.fieldClocks, {'note': 1000});
   });
 
+  test('SMS learning sidecar follows a coalesced edit and keeps one event id', () {
+    final firstSeq = queue.enqueueUpdate(
+      entity: 'transactions',
+      entityId: 'sms-txn',
+      fields: {'category_id': 'travel'},
+    );
+    queue.enqueueSmsLearningAfterSync(
+      clientSeq: firstSeq,
+      payload: {'sourceKey': List.filled(64, 'a').join(), 'correctedFields': {'categorySlug': 'travel'}},
+    );
+    final secondSeq = queue.enqueueUpdate(
+      entity: 'transactions',
+      entityId: 'sms-txn',
+      fields: {'category_id': 'dining'},
+    );
+    expect(secondSeq, firstSeq);
+    queue.enqueueSmsLearningAfterSync(
+      clientSeq: secondSeq,
+      payload: {'sourceKey': List.filled(64, 'a').join(), 'correctedFields': {'categorySlug': 'dining'}},
+    );
+    final rows = appDb.db.select(
+      'SELECT payload_json FROM sms_learning_after_sync WHERE client_seq=?',
+      [firstSeq],
+    );
+    expect(rows, hasLength(1));
+    expect(rows.single['payload_json'], contains('dining'));
+    expect(rows.single['payload_json'], contains('eventId'));
+  });
+
   test('repeated edits to the same field coalesce to the latest value', () {
     // A user retyping a note produces one edit per keystroke. Queueing each
     // would push dozens of changes describing the same final state, and each
@@ -121,7 +150,14 @@ void main() {
   });
 
   test('an empty field map queues nothing', () {
-    queue.enqueueUpdate(entity: 'transactions', entityId: 'txn-1', fields: {});
+    expect(
+      queue.enqueueUpdate(
+        entity: 'transactions',
+        entityId: 'txn-1',
+        fields: {},
+      ),
+      0,
+    );
     expect(queue.pending(), isEmpty);
   });
 

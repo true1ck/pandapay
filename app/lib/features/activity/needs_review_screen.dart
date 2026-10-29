@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -12,12 +14,16 @@ import '../../data/api_exception.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/local/auto_resolved_history_repository.dart';
 import '../../data/local/sms_facts_outbox.dart';
+import '../../data/local/sms_feedback_outbox.dart';
+import '../../data/local/sms_intake_repository.dart';
+import '../../data/local/sms_learning_feedback.dart';
 import '../../data/local_sms_parser.dart';
 import '../../data/needs_review_repository.dart';
 import '../../data/sms_fact_contract.dart';
 import '../../data/user_cards_repository.dart'
     show TxnEntryKind, TxnInstrument, UserCard;
 import 'needs_review_clustering.dart';
+import 'sms_learning_capture.dart' as sms_learning_capture;
 
 String _feedbackSourceKey(String reviewId) {
   final commitment = RegExp(
@@ -273,13 +279,24 @@ Future<void> _persistSmsFactCorrection(
     return;
   }
   try {
+    // C3 fact-override consent gate. The override patch itself is the user's
+    // own-account fact fix: the server stores it per profile and re-applies it
+    // to the user's own facts without any consent check, so it always uploads.
+    // But the same route forwards sampleBody/templateText into cross-user
+    // learning examples, and that server-side gate only checks that the
+    // `sms_shared_learning` consent is granted — it does NOT verify the policy
+    // version. The device therefore enforces the full capture-time consent
+    // (granted AND current smsSharedLearningPolicyVersion) before SMS-derived
+    // evidence leaves the device. The redacted evidence stays in the local
+    // outbox either way, so a later consented flush can still upload it.
+    final consented = await sms_learning_capture.smsLearningConsentActiveAtCapture(ref);
     final accepted = await repository.overrideSmsFact(
       sourceKey: sourceKey,
       factIndex: factIndex,
       patch: patch,
       reason: reason,
-      sampleBody: sampleBody,
-      templateText: templateText,
+      sampleBody: consented ? sampleBody : null,
+      templateText: consented ? templateText : null,
     );
     if (accepted) {
       outbox.acknowledgeOverride(namespace, sourceKey, factIndex);
@@ -289,6 +306,259 @@ Future<void> _persistSmsFactCorrection(
   } catch (_) {
     outbox.failedOverride(namespace, sourceKey, factIndex);
   }
+}
+
+Future<DateTime?> _smsLearningConsentAtCapture(WidgetRef ref) =>
+    sms_learning_capture.smsLearningConsentGrantAtCapture(ref);
+
+typedef _SmsLearningQueueContext = sms_learning_capture.SmsLearningQueueContext;
+
+_SmsLearningQueueContext _captureSmsLearningQueueContext(WidgetRef ref) =>
+    sms_learning_capture.captureSmsLearningQueueContext(ref);
+
+Future<void> _recordReviewedTransactionFeedback(
+  _SmsLearningQueueContext queueContext, {
+  required NeedsReviewItem item,
+  required DateTime consentGrantedAt,
+  required Map<String, dynamic>? aiFact,
+  required int factIndex,
+  required double amountInr,
+  required String? merchant,
+  required String? category,
+  required DateTime occurredAt,
+  required TxnInstrument instrument,
+  required TxnEntryKind entryKind,
+}) async {
+  const actionableTypes = {
+    'posted_movement',
+    'balance_snapshot',
+    'bill_obligation',
+    'bill_payment',
+    'mandate_lifecycle',
+    'pending_or_failed_attempt',
+  };
+  final actionableFacts = (item.aiSuggestions ?? const [])
+      .where((suggestion) => actionableTypes.contains(suggestion['factType']))
+      .toList(growable: false);
+  final factIndexIsPresent = aiFact?['factIndex'] is int &&
+      (aiFact!['factIndex'] as int) >= 0;
+  if (!factIndexIsPresent && actionableFacts.length > 1) return;
+  final sourceKey = _feedbackSourceKey(item.id);
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sourceKey)) return;
+  final rawPayload = aiFact?['payload'];
+  final payload = rawPayload is Map
+      ? Map<String, dynamic>.from(rawPayload)
+      : <String, dynamic>{};
+  const safeOriginalFields = [
+    'amountInr', 'merchant', 'category', 'occurredAt', 'instrument', 'entryKind',
+  ];
+  final originalFields = <String, dynamic>{
+    for (final key in safeOriginalFields)
+      if (payload[key] != null)
+        // The AI fact names its category field `category`; the feedback
+        // contract names it `categorySlug`. Without this mapping the previous
+        // label never reached the server and every correction looked new.
+        key == 'category' ? 'categorySlug' : key: payload[key],
+  };
+  final correctedFields = <String, dynamic>{
+    'amountInr': amountInr,
+    if (merchant != null && merchant.trim().isNotEmpty)
+      'merchant': merchant.trim(),
+    if (category != null && category.trim().isNotEmpty)
+      'categorySlug': category.trim(),
+    'occurredAt': occurredAt.toUtc().toIso8601String(),
+    'instrument': instrument.wireValue,
+    'entryKind': entryKind.wireValue,
+  };
+  final normalizedCategory = category?.trim().toLowerCase();
+  final priorCategory = payload['category'];
+  final changedToValidCategory = normalizedCategory != null &&
+      smsSpendCategories.contains(normalizedCategory) &&
+      priorCategory != normalizedCategory;
+  bool sameDate(dynamic raw) {
+    final suggested = raw is String ? DateTime.tryParse(raw) : null;
+    return suggested != null && suggested.toUtc() == occurredAt.toUtc();
+  }
+  final matches = payload['amountInr'] is num &&
+      (payload['amountInr'] as num).toDouble() == amountInr &&
+      payload['merchant'] is String &&
+      (payload['merchant'] as String).trim().toLowerCase() ==
+          (merchant ?? '').trim().toLowerCase() &&
+      payload['category'] == category &&
+      sameDate(payload['occurredAt']) &&
+      payload['instrument'] == instrument.wireValue &&
+      payload['entryKind'] == entryKind.wireValue;
+
+  final cache = await queueContext.cacheFuture;
+  if (SmsIntakeRepository(cache.financialStore.database)
+      .hasRepeatedOccurrence(queueContext.namespace, sourceKey)) {
+    return;
+  }
+  SmsFeedbackOutbox(cache.financialStore.database,
+    namespace: queueContext.namespace,
+  ).enqueue(
+    sourceKey: sourceKey,
+    action: changedToValidCategory
+        ? 'category_changed'
+        : matches
+        ? 'confirmed'
+        : 'edited',
+    sender: item.sender,
+    resolvedKind: 'transaction',
+    occurredAt: item.receivedAt.toUtc().toIso8601String(),
+    consentGrantedAt: consentGrantedAt,
+    sampleBody: item.body,
+    originalDecision: {
+      'kind': 'posted_movement',
+      'origin': aiFact != null ? 'ai' : 'parser',
+      'fields': originalFields,
+    },
+    correctedFields: correctedFields,
+    correctionKind: matches
+        ? null
+        : _reviewedTransactionCorrectionKind(
+            payload,
+            category: category,
+            amountInr: amountInr,
+            merchant: merchant,
+            occurredAt: occurredAt,
+            instrument: instrument,
+            entryKind: entryKind,
+          ),
+    decisionOrigin: aiFact != null ? 'ai' : 'parser',
+    messageAt: item.receivedAt,
+    reason: matches ? null : 'user_saved_reviewed_transaction',
+    factIndex: factIndex,
+  );
+  // The transaction has already been saved. Enqueue first, then let the
+  // repository retry the upload without delaying the user's review action.
+  unawaited(
+    (queueContext.repository?.flushSmsLearningFeedbackQueue() ??
+            Future<int>.value(0))
+        .catchError((_) => 0),
+  );
+}
+
+/// Names the field the reviewed save actually changed relative to the AI
+/// suggestion. Returns null when there was no prior suggestion to correct: a
+/// first manual classification is evidence, not a correction.
+String? _reviewedTransactionCorrectionKind(
+  Map<String, dynamic> payload, {
+  required String? category,
+  required double amountInr,
+  required String? merchant,
+  required DateTime occurredAt,
+  required TxnInstrument instrument,
+  required TxnEntryKind entryKind,
+}) {
+  if (payload.isEmpty) return null;
+  final priorCategory = payload['category'];
+  if (priorCategory is String &&
+      priorCategory.trim().isNotEmpty &&
+      priorCategory != category) {
+    return 'misclassified_category';
+  }
+  if (payload['amountInr'] is num &&
+      (payload['amountInr'] as num).toDouble() != amountInr) {
+    return 'wrong_amount';
+  }
+  if (payload['merchant'] is String &&
+      (payload['merchant'] as String).trim().toLowerCase() !=
+          (merchant ?? '').trim().toLowerCase()) {
+    return 'wrong_merchant';
+  }
+  final suggested = payload['occurredAt'] is String
+      ? DateTime.tryParse(payload['occurredAt'] as String)
+      : null;
+  if (suggested != null && suggested.toUtc() != occurredAt.toUtc()) {
+    return 'wrong_date';
+  }
+  if (payload['instrument'] != instrument.wireValue ||
+      payload['entryKind'] != entryKind.wireValue) {
+    return 'misclassified_kind';
+  }
+  // A first manual category assignment has no prior label to call wrong. If
+  // there was no prior category and no other field changed, leave the reason
+  // unset while still allowing the category_changed vote to be recorded.
+  return priorCategory == null ? null : 'cosmetic';
+}
+
+Future<void> _recordReviewedBillFeedback(
+  _SmsLearningQueueContext queueContext, {
+  required NeedsReviewItem item,
+  required DateTime consentGrantedAt,
+  required _BillReviewResult result,
+}) async {
+  final sourceKey = _feedbackSourceKey(item.id);
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sourceKey)) return;
+  final suggestion = item.aiSuggestions
+      ?.where((fact) => fact['factType'] == 'bill_obligation')
+      .firstOrNull;
+  final rawPayload = suggestion?['payload'];
+  final payload = rawPayload is Map
+      ? Map<String, dynamic>.from(rawPayload)
+      : <String, dynamic>{};
+  final dueDate = result.dueOn.toUtc().toIso8601String();
+  final correctedFields = <String, dynamic>{
+    'billerName': result.title,
+    if (result.amount != null) 'amountDueInr': result.amount!.rupees,
+    'dueDate': dueDate,
+    'categorySlug': result.category.name,
+  };
+  final sameAmount = result.amount == null
+      ? payload['amountDueInr'] == null
+      : payload['amountDueInr'] is num &&
+          (payload['amountDueInr'] as num).toDouble() ==
+              result.amount!.rupees;
+  final sameDate = DateTime.tryParse('${payload['dueDate'] ?? ''}')?.toUtc() ==
+      result.dueOn.toUtc();
+  final matches = payload['billerName'] == result.title &&
+      sameAmount &&
+      sameDate &&
+      payload['category'] == result.category.name;
+  final cache = await queueContext.cacheFuture;
+  if (SmsIntakeRepository(cache.financialStore.database)
+      .hasRepeatedOccurrence(queueContext.namespace, sourceKey)) {
+    return;
+  }
+  SmsFeedbackOutbox(
+    cache.financialStore.database,
+    namespace: queueContext.namespace,
+  ).enqueue(
+    sourceKey: sourceKey,
+    action: matches ? 'confirmed' : 'edited',
+    sender: item.sender,
+    resolvedKind: 'bill',
+    occurredAt: item.receivedAt.toUtc().toIso8601String(),
+    consentGrantedAt: consentGrantedAt,
+    sampleBody: item.body,
+    originalDecision: {
+      'kind': 'bill_obligation',
+      'origin': suggestion != null ? 'ai' : 'parser',
+      'fields': {
+        for (final key in ['billerName', 'amountDueInr', 'dueDate', 'category'])
+          if (payload[key] != null) key: payload[key],
+      },
+    },
+    correctedFields: correctedFields,
+    correctionKind: matches
+        ? null
+        : (payload['category'] != result.category.name
+            ? 'misclassified_kind'
+            : !sameAmount
+                ? 'wrong_amount'
+                : !sameDate
+                    ? 'wrong_date'
+                    : 'wrong_bill_fields'),
+    decisionOrigin: suggestion != null ? 'ai' : 'parser',
+    messageAt: item.receivedAt,
+    reason: matches ? null : 'user_saved_reviewed_bill',
+  );
+  unawaited(
+    (queueContext.repository?.flushSmsLearningFeedbackQueue() ??
+            Future<int>.value(0))
+        .catchError((_) => 0),
+  );
 }
 
 typedef _BillReviewResult = ({
@@ -399,6 +669,56 @@ class _FilterChip extends StatelessWidget {
       materialTapTargetSize: MaterialTapTargetSize.padded,
     );
   }
+}
+
+Future<void> _persistReviewedSmsFactCorrection(
+  _SmsLearningQueueContext queueContext, {
+  required String sourceKey,
+  required int factIndex,
+  required Map<String, dynamic> patch,
+  required String reason,
+  String? sampleBody,
+  String? templateText,
+}) async {
+  final cache = await queueContext.cacheFuture;
+  final outbox = SmsFactsOutbox(cache.financialStore.database);
+  outbox.enqueueOverride(
+    queueContext.namespace,
+    sourceKey: sourceKey,
+    factIndex: factIndex,
+    patch: patch,
+    reason: reason,
+    sampleBody: sampleBody,
+    templateText: templateText,
+  );
+
+  final repository = queueContext.repository;
+  if (repository == null || !queueContext.online) return;
+  unawaited(() async {
+    try {
+      // Same C3 consent gate as _persistSmsFactCorrection: the own-account
+      // override patch always uploads, but SMS-derived evidence (sampleBody/
+      // templateText) only leaves the device under the full shared-learning
+      // consent captured with this context (granted AND current policy
+      // version) — the server-side learning gate does not check the version.
+      final consented = await queueContext.smsLearningConsentActive;
+      final accepted = await repository.overrideSmsFact(
+        sourceKey: sourceKey,
+        factIndex: factIndex,
+        patch: patch,
+        reason: reason,
+        sampleBody: consented ? sampleBody : null,
+        templateText: consented ? templateText : null,
+      );
+      if (accepted) {
+        outbox.acknowledgeOverride(queueContext.namespace, sourceKey, factIndex);
+      } else {
+        outbox.failedOverride(queueContext.namespace, sourceKey, factIndex);
+      }
+    } catch (_) {
+      outbox.failedOverride(queueContext.namespace, sourceKey, factIndex);
+    }
+  }());
 }
 
 class NeedsReviewScreen extends ConsumerStatefulWidget {
@@ -653,6 +973,7 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
               sampleBody: item.body,
               reason: 'user_dismissed',
               family: 'ignore_noise',
+              correctionKind: 'preference_only',
             )
             .ignore();
       }
@@ -833,8 +1154,8 @@ class _NeedsReviewScreenState extends ConsumerState<NeedsReviewScreen> {
                         _retryingAiReviews
                             ? 'Sending $retryableAiCount failed message${retryableAiCount == 1 ? '' : 's'} for AI review…'
                             : activeAiCount > 0
-                                ? 'AI is reviewing $activeAiCount message${activeAiCount == 1 ? '' : 's'}'
-                                : 'AI review paused · ${pendingItems.length} need review',
+                            ? 'AI is reviewing $activeAiCount message${activeAiCount == 1 ? '' : 's'}'
+                            : 'AI review paused · ${pendingItems.length} need review',
                         style: BambooFonts.ui(
                           12.5,
                           weight: FontWeight.w700,
@@ -1154,6 +1475,30 @@ class _AutoResolvedCard extends ConsumerStatefulWidget {
 class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
   bool _busy = false;
   bool _showSourceSms = false;
+  bool _confirmedThisSession = false;
+
+  Future<void> _confirmDecision() async {
+    if (_busy || _confirmedThisSession) return;
+    setState(() => _busy = true);
+    try {
+      ref
+          .read(smsAutoResolutionControllerProvider)
+          .confirmDecision(widget.entry);
+      ref
+          .read(userCardsRepositoryProvider)
+          ?.flushSmsLearningFeedbackQueue()
+          .ignore();
+      if (mounted) setState(() => _confirmedThisSession = true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   String _dateLabel(AutoResolvedHistoryEntry entry) {
     final showDue =
@@ -1235,6 +1580,10 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
       await ref
           .read(smsAutoResolutionControllerProvider)
           .changeCategory(widget.entry, slug);
+      ref
+          .read(userCardsRepositoryProvider)
+          ?.flushSmsLearningFeedbackQueue()
+          .ignore();
       ref.invalidate(autoResolvedHistoryProvider);
       ref.invalidate(autoResolvedCountProvider);
     } catch (error) {
@@ -1270,6 +1619,10 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
             amount: result.amount,
             occurredAt: result.occurredAt,
           );
+      ref
+          .read(userCardsRepositoryProvider)
+          ?.flushSmsLearningFeedbackQueue()
+          .ignore();
       ref.invalidate(autoResolvedHistoryProvider);
       ref.invalidate(autoResolvedCountProvider);
       ref.invalidate(transactionsProvider);
@@ -1291,6 +1644,10 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
       await ref
           .read(smsAutoResolutionControllerProvider)
           .moveToReview(widget.entry);
+      ref
+          .read(userCardsRepositoryProvider)
+          ?.flushSmsLearningFeedbackQueue()
+          .ignore();
       ref.invalidate(autoResolvedHistoryProvider);
       ref.invalidate(autoResolvedCountProvider);
       ref.invalidate(needsReviewItemsProvider);
@@ -1425,6 +1782,19 @@ class _AutoResolvedCardState extends ConsumerState<_AutoResolvedCard> {
             spacing: AppSpace.sm,
             runSpacing: AppSpace.xs,
             children: [
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
+                ),
+                onPressed: _busy || _confirmedThisSession
+                    ? null
+                    : _confirmDecision,
+                icon: const Icon(Icons.check_circle_outline, size: 16),
+                label: Text(
+                  _confirmedThisSession ? 'Confirmed' : 'Looks right',
+                ),
+              ),
               if (entry.resolvedKind == 'transaction')
                 TextButton.icon(
                   style: TextButton.styleFrom(
@@ -1639,6 +2009,7 @@ class _CommitmentNeedsReviewTileState
               sampleBody: widget.item.body,
               reason: 'user_dismissed',
               family: 'ignore_noise',
+              correctionKind: 'preference_only',
             )
             .ignore();
       }
@@ -1654,6 +2025,8 @@ class _CommitmentNeedsReviewTileState
   }
 
   Future<void> _saveCommitment(_BillReviewResult result) async {
+    final consentAt = await _smsLearningConsentAtCapture(ref);
+    final queueContext = _captureSmsLearningQueueContext(ref);
     setState(() => _busy = true);
     try {
       await ref
@@ -1672,6 +2045,16 @@ class _CommitmentNeedsReviewTileState
               confidence: 1,
             ),
           );
+      if (consentAt != null) {
+        unawaited(
+          _recordReviewedBillFeedback(
+            queueContext,
+            item: widget.item,
+            consentGrantedAt: consentAt,
+            result: result,
+          ).catchError((_) {}),
+        );
+      }
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(commitmentsProvider);
       ref.invalidate(needsReviewItemsProvider);
@@ -1681,7 +2064,7 @@ class _CommitmentNeedsReviewTileState
       // raw text) makes the server's bill projection agree with the user
       // even if a later replay re-uploads the parser-derived payload — the
       // read path always applies user corrections first.
-      await _overrideConfirmedBillFacts(ref, result);
+      await _overrideConfirmedBillFacts(queueContext, result);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -1718,7 +2101,7 @@ class _CommitmentNeedsReviewTileState
   /// (facts are not on the server yet) or any network failure leaves the
   /// correction for a future sync — the local decision is already durable.
   Future<void> _overrideConfirmedBillFacts(
-    WidgetRef ref,
+    _SmsLearningQueueContext queueContext,
     _BillReviewResult result,
   ) async {
     if (!widget.item.id.startsWith('commitment:')) return;
@@ -1739,14 +2122,13 @@ class _CommitmentNeedsReviewTileState
       'dueDate': result.dueOn.toUtc().toIso8601String(),
       if (result.amount != null) 'amountDueInr': result.amount!.rupees,
     };
-    await _persistSmsFactCorrection(
-      ref,
+    await _persistReviewedSmsFactCorrection(
+      queueContext,
       sourceKey: sourceKey,
       factIndex: billFact.factIndex ?? 0,
       patch: patch,
       reason: 'confirmed in needs review',
     );
-    ref.invalidate(needsReviewItemsProvider);
   }
 
   Future<void> _reviewAndSaveCommitment() async {
@@ -2698,8 +3080,72 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   bool _busy = false;
 
   Future<void> _dismissNotATransaction() async {
-    setState(() => _busy = true);
     try {
+      final correctionKind = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Why are you dismissing this SMS?'),
+          content: const Text(
+            'Your choice helps distinguish a wrong classification from a message you simply do not want to track.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('preference_only'),
+              child: const Text('Don’t track this SMS'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop('false_transaction'),
+              child: const Text('Not a financial transaction'),
+            ),
+          ],
+        ),
+      );
+      if (correctionKind == null || !mounted) return;
+      setState(() => _busy = true);
+      final suggestedFact = (widget.item.aiSuggestions ?? const [])
+          .where((fact) => const {
+            'posted_movement',
+            'bill_obligation',
+            'mandate_lifecycle',
+          }.contains(fact['factType']))
+          .firstOrNull;
+      final suggestedType = suggestedFact?['factType'];
+      final family = switch (suggestedType) {
+        'bill_obligation' => 'bill_obligation',
+        'mandate_lifecycle' => 'mandate_lifecycle',
+        'posted_movement' => 'posted_movement',
+        _ => correctionKind == 'false_transaction'
+            ? 'posted_movement'
+            : 'ignore_noise',
+      };
+      final resolvedKind = switch (family) {
+        'bill_obligation' => 'bill',
+        'mandate_lifecycle' => 'mandate',
+        'posted_movement' => 'transaction',
+        _ => 'unresolved',
+      };
+      final typedCorrection = correctionKind == 'preference_only'
+          ? correctionKind
+          : family == 'posted_movement'
+          ? 'false_transaction'
+          : 'misclassified_kind';
+      if (typedCorrection != 'preference_only' &&
+          !LocalSmsParser.sensitive(widget.item.body)) {
+        try {
+          final queueContext = _captureSmsLearningQueueContext(ref);
+          final cache = await queueContext.cacheFuture;
+          SmsLearningFeedback(
+            cache.financialStore.database,
+            namespace: queueContext.namespace,
+          ).recordFalseTransactionRule(
+            sender: widget.item.sender,
+            body: widget.item.body,
+          );
+        } catch (_) {
+          // The local user action must remain available if personal learning
+          // storage is temporarily unavailable.
+        }
+      }
       // Immediate optimistic UI dismissal: remove and invalidate before background sync
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(needsReviewItemsProvider);
@@ -2711,8 +3157,12 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
               sourceKey: _feedbackSourceKey(widget.item.id),
               sender: widget.item.sender,
               sampleBody: widget.item.body,
-              reason: 'user_dismissed',
-              family: 'ignore_noise',
+              reason: typedCorrection == 'preference_only'
+                  ? 'user_dismissed'
+                  : 'user_marked_wrong_financial_kind',
+              family: family,
+              correctionKind: typedCorrection,
+              resolvedKind: resolvedKind,
             )
             .ignore();
       }
@@ -2743,6 +3193,71 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
     ref.invalidate(needsReviewCountProvider);
   }
 
+  /// Records a user's explicit rejection of one AI fact before removing it.
+  /// Successful review/save actions call [_resolveFactSuggestion] only and
+  /// must never be mistaken for negative feedback.
+  Future<void> _rejectFactSuggestion(
+    int factIndex, {
+    required String correctionKind,
+  }) async {
+    final fact = (widget.item.aiSuggestions ?? const [])
+        .where((s) => s['factIndex'] == factIndex)
+        .firstOrNull;
+    final factType = fact?['factType'];
+    if (factType is String && factType.isNotEmpty) {
+      final consentAt = await _smsLearningConsentAtCapture(ref);
+      if (consentAt != null) {
+        try {
+          final queueContext = _captureSmsLearningQueueContext(ref);
+          final cache = await queueContext.cacheFuture;
+          final sourceKey = _feedbackSourceKey(widget.item.id);
+          if (SmsIntakeRepository(cache.financialStore.database)
+              .hasRepeatedOccurrence(queueContext.namespace, sourceKey)) {
+            await _resolveFactSuggestion(factIndex);
+            return;
+          }
+          SmsFeedbackOutbox(
+            cache.financialStore.database,
+            namespace: queueContext.namespace,
+          ).enqueue(
+            sourceKey: sourceKey,
+            action: 'dismissed',
+            sender: widget.item.sender,
+            resolvedKind: switch (factType) {
+              'posted_movement' => 'transaction',
+              'bill_obligation' => 'bill',
+              'mandate_lifecycle' => 'mandate',
+              _ => 'unresolved',
+            },
+            occurredAt: widget.item.receivedAt.toUtc().toIso8601String(),
+            consentGrantedAt: consentAt,
+            sampleBody: widget.item.body,
+            originalDecision: {
+              'kind': factType,
+              'origin': 'ai',
+              if (fact?['payload'] is Map)
+                'fields': Map<String, dynamic>.from(fact!['payload'] as Map),
+            },
+            correctionKind: correctionKind,
+            decisionOrigin: 'ai',
+            factIndex: factIndex,
+            messageAt: widget.item.receivedAt,
+          );
+          unawaited(
+            queueContext.repository
+                ?.flushSmsLearningFeedbackQueue()
+                .catchError((_) => 0),
+          );
+        } catch (_) {
+          // Learning is best effort; never prevent the user's local decision.
+        }
+      }
+    }
+    // Rejecting one fact is a verdict on that fact alone; the other facts in
+    // the same SMS keep their own evidence via the fact index.
+    await _resolveFactSuggestion(factIndex);
+  }
+
   Future<void> _reviewMovement([Map<String, dynamic>? movementFact]) async {
     final fact =
         movementFact ??
@@ -2767,6 +3282,12 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
               _FillFieldsSheet(item: widget.item, suggestionFact: fact),
         );
     if (result == null || !mounted) return;
+    final consentAt = await _smsLearningConsentAtCapture(ref);
+    final queueContext = _captureSmsLearningQueueContext(ref);
+    final suggestedIndex = fact?['factIndex'];
+    final factIndex = suggestedIndex is int && suggestedIndex >= 0
+        ? suggestedIndex
+        : 0;
     setState(() => _busy = true);
     try {
       await ref
@@ -2780,13 +3301,27 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             instrument: result.instrument,
             entryKind: result.entryKind,
           );
-      final suggestedIndex = fact?['factIndex'];
-      final factIdx = suggestedIndex is int && suggestedIndex >= 0
-          ? suggestedIndex
-          : 0;
+      if (consentAt != null) {
+        unawaited(
+          _recordReviewedTransactionFeedback(
+            queueContext,
+            item: widget.item,
+            consentGrantedAt: consentAt,
+            aiFact: fact,
+            factIndex: factIndex,
+            amountInr: result.amount,
+            merchant: result.merchantName,
+            category: result.categoryId,
+            occurredAt: result.occurredAt,
+            instrument: result.instrument,
+            entryKind: result.entryKind,
+          ).catchError((_) {}),
+        );
+      }
+      final factIdx = factIndex;
       if (widget.item.id.length == 64) {
-        await _persistSmsFactCorrection(
-          ref,
+        await _persistReviewedSmsFactCorrection(
+          queueContext,
           sourceKey: widget.item.id,
           factIndex: factIdx,
           patch: {
@@ -2902,11 +3437,16 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
         item: widget.item,
         suggestionFact: fact,
         onDiscard: () async {
-          await _resolveFactSuggestion(factIdx);
+          await _rejectFactSuggestion(
+            factIdx,
+            correctionKind: 'misclassified_kind',
+          );
         },
       ),
     );
     if (result == null || !mounted) return;
+    final consentAt = await _smsLearningConsentAtCapture(ref);
+    final queueContext = _captureSmsLearningQueueContext(ref);
     setState(() => _busy = true);
     try {
       await ref
@@ -2925,6 +3465,18 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
               confidence: 1,
             ),
           );
+      // Same capture contract as the full-sheet bill save: feedback is queued
+      // only after the commitment has been persisted, and never blocks it.
+      if (consentAt != null) {
+        unawaited(
+          _recordReviewedBillFeedback(
+            queueContext,
+            item: widget.item,
+            consentGrantedAt: consentAt,
+            result: result,
+          ).catchError((_) {}),
+        );
+      }
       ref.invalidate(commitmentsProvider);
       if (widget.item.id.length == 64) {
         await _persistSmsFactCorrection(
@@ -3012,6 +3564,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   }
 
   Future<void> _addPayLaterSpend() async {
+    final fact = widget.item.aiSuggestions
+        ?.where((suggestion) => suggestion['factType'] == 'posted_movement')
+        .firstOrNull;
     final m = RegExp(
       r'\bavail(?:ing|ed)\s+(?:(?:amazon\s+)?pay\s+later\s+)?credit\s+of\s+(?:Rs\.?\s*)(\d+(?:\.\d+)?)',
       caseSensitive: false,
@@ -3028,6 +3583,10 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
     }
 
     setState(() => _busy = true);
+    final consentAt = await _smsLearningConsentAtCapture(ref);
+    final queueContext = consentAt == null
+        ? null
+        : _captureSmsLearningQueueContext(ref);
     try {
       final userCardsRepo = ref.read(userCardsRepositoryProvider);
       if (userCardsRepo != null) {
@@ -3038,6 +3597,25 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           instrument: TxnInstrument.other,
           entryKind: TxnEntryKind.spend,
         );
+        if (consentAt != null && queueContext != null) {
+          unawaited(
+            _recordReviewedTransactionFeedback(
+              queueContext,
+              item: widget.item,
+              consentGrantedAt: consentAt,
+              aiFact: fact,
+              factIndex: fact?['factIndex'] is int
+                  ? fact!['factIndex'] as int
+                  : 0,
+              amountInr: amount,
+              merchant: 'Amazon Pay Later',
+              category: null,
+              occurredAt: widget.item.receivedAt,
+              instrument: TxnInstrument.other,
+              entryKind: TxnEntryKind.spend,
+            ).catchError((_) {}),
+          );
+        }
       }
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
       ref.invalidate(needsReviewItemsProvider);

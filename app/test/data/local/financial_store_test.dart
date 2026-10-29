@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
+import 'package:pandapay/data/local/sms_import_store.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -20,6 +21,66 @@ TransactionEntry row(String id, {int day = 15, String? key, String? note}) =>
       status: 'active',
       note: note,
     );
+
+const _merchantRepairSender = 'AX-SBIUPI-S';
+const _merchantRepairBody =
+    'Rs 700.0 debited from A/c XX5121 to Balaji Sports on 17Oct26. '
+    'Your payment of Rs. 700.0 to Balaji Sports has been recorded. '
+    'View the payment receipt here: https://mybillbook.in/cpp/?t=ljbffep4r '
+    '- myBillBook';
+const _googlePlaySender = 'AD-AXISBK-S';
+const _googlePlayBody =
+    'Your A/c has been debited towards Google Play for INR 4999.00 '
+    'on 10-10-26. '
+    '9901e1edad8e46cd937da209ef0baf55@axl - Axis Bank';
+
+TransactionEntry provisionalSms(
+  String key, {
+  String? merchant = 'Unknown',
+  int amountPaise = 70000,
+  TxnInstrument instrument = TxnInstrument.upiBank,
+  TxnEntryKind entryKind = TxnEntryKind.spend,
+}) => TransactionEntry(
+  id: 'local-sms:$key',
+  sourceKey: key,
+  amount: Money.fromPaise(amountPaise),
+  occurredAt: DateTime(2026, 10, 17),
+  merchantName: merchant,
+  instrument: instrument,
+  instrumentKnown: true,
+  entryKind: entryKind,
+  source: 'sms',
+  status: 'active',
+  rewardState: 'estimated',
+);
+
+void captureMerchantRepairSms(AppDatabase db, String namespace) {
+  SmsIntakeRepository(db).remember(
+    namespace,
+    QueuedSms(
+      sender: _merchantRepairSender,
+      body: _merchantRepairBody,
+      receivedAt: DateTime(2026, 10, 17),
+    ),
+  );
+}
+
+Map<String, Object?> rawTransaction(AppDatabase db, String namespace, String id) {
+  final row = db.db
+      .select(
+        'SELECT payload, observed_at, pending, source_key '
+        "FROM financial_entities WHERE namespace=? AND entity='transactions' "
+        'AND id=?',
+        [namespace, id],
+      )
+      .single;
+  return {
+    'payload': jsonDecode(row['payload'] as String),
+    'observed_at': row['observed_at'],
+    'pending': row['pending'],
+    'source_key': row['source_key'],
+  };
+}
 
 void main() {
   late AppDatabase db;
@@ -665,4 +726,275 @@ void main() {
       );
     },
   );
+
+  group('provisional SMS merchant repair', () {
+    test('weak provisional merchant is repaired without changing money', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      captureMerchantRepairSms(db, ns);
+      final original = provisionalSms(key);
+      store.saveProvisional(ns, original);
+      final before = rawTransaction(db, ns, original.id);
+
+      final rows = store.entities(ns, 'transactions');
+
+      expect(rows, hasLength(1));
+      expect(rows.single['merchant_name'], 'Balaji Sports');
+      final after = rawTransaction(db, ns, original.id);
+      expect(after['pending'], 1);
+      expect(after['observed_at'], before['observed_at']);
+      expect(after['source_key'], key);
+      final beforePayload = before['payload'] as Map<String, dynamic>;
+      final afterPayload = after['payload'] as Map<String, dynamic>;
+      expect(afterPayload['merchant_name'], 'Balaji Sports');
+      expect(
+        {...afterPayload, 'merchant_name': beforePayload['merchant_name']},
+        equals(beforePayload),
+      );
+      expect(
+        db.db.select('SELECT 1 FROM sync_pending_changes'),
+        isEmpty,
+      );
+    });
+
+    test('confirmed SMS row is never rewritten or duplicated', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      captureMerchantRepairSms(db, ns);
+      final confirmed = provisionalSms(key);
+      store.saveTransactions(ns, [confirmed]);
+      final before = rawTransaction(db, ns, confirmed.id);
+
+      final rows = store.entities(ns, 'transactions');
+
+      expect(rows, hasLength(1));
+      expect(rows.single['merchant_name'], 'Unknown');
+      expect(rawTransaction(db, ns, confirmed.id), before);
+    });
+
+    test('legacy generic name on a named-payee debit is repaired', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _googlePlaySender, _googlePlayBody);
+      SmsIntakeRepository(db).remember(
+        ns,
+        QueuedSms(
+          sender: _googlePlaySender,
+          body: _googlePlayBody,
+          receivedAt: DateTime(2026, 10, 10, 5, 30),
+        ),
+      );
+      store.saveProvisional(
+        ns,
+        provisionalSms(
+          key,
+          merchant: 'Bank transfer',
+          amountPaise: 499900,
+        ),
+      );
+
+      final rows = store.entities(ns, 'transactions');
+
+      expect(rows, hasLength(1));
+      expect(rows.single['merchant_name'], 'Google Play');
+      final after = rawTransaction(db, ns, 'local-sms:$key');
+      expect(after['pending'], 1);
+      expect((after['payload'] as Map<String, dynamic>)['amount_inr'], 4999);
+    });
+
+    test('a first capture of a named-payee debit stores the merchant', () {
+      const ns = 'a';
+      SmsImportStore(store).capture(
+        ns,
+        QueuedSms(
+          sender: _googlePlaySender,
+          body: _googlePlayBody,
+          receivedAt: DateTime(2026, 10, 10, 5, 30),
+        ),
+      );
+
+      final rows = store.entities(ns, 'transactions');
+
+      expect(rows, hasLength(1));
+      expect(rows.single['merchant_name'], 'Google Play');
+      expect(rows.single['amount_inr'], 4999);
+      expect(rows.single['entry_kind'], 'spend');
+    });
+
+    test('repair is scoped to the captured namespace', () {
+      const ns = 'a';
+      final keyA = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      final keyB = smsSourceKey('b', _merchantRepairSender, _merchantRepairBody);
+      captureMerchantRepairSms(db, ns);
+      store.saveProvisional(ns, provisionalSms(keyA));
+      store.saveProvisional('b', provisionalSms(keyB));
+      final beforeB = rawTransaction(db, 'b', 'local-sms:$keyB');
+
+      store.entities(ns, 'transactions');
+
+      expect(store.entities(ns, 'transactions').single['merchant_name'],
+          'Balaji Sports');
+      expect(store.entities('b', 'transactions').single['merchant_name'],
+          'Unknown');
+      expect(rawTransaction(db, 'b', 'local-sms:$keyB'), beforeB);
+    });
+
+    test('pending manual correction is never replaced', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      captureMerchantRepairSms(db, ns);
+      final original = provisionalSms(key);
+      store.saveProvisional(ns, original);
+      SyncQueue(db, namespace: ns).enqueueUpdate(
+        entity: 'transactions',
+        entityId: original.id,
+        fields: {'merchant_name': 'Corner Shop'},
+      );
+
+      final visible = store.entities(ns, 'transactions').single;
+
+      expect(visible['merchant_name'], 'Corner Shop');
+      final raw = rawTransaction(db, ns, original.id);
+      expect(
+        (raw['payload'] as Map<String, dynamic>)['merchant_name'],
+        'Unknown',
+      );
+    });
+
+    test('a real provisional merchant is preserved', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      captureMerchantRepairSms(db, ns);
+      store.saveProvisional(ns, provisionalSms(key, merchant: 'Corner Shop'));
+
+      expect(store.entities(ns, 'transactions').single['merchant_name'],
+          'Corner Shop');
+    });
+
+    test('a mismatched amount keeps the provisional merchant', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      captureMerchantRepairSms(db, ns);
+      final original = provisionalSms(key, amountPaise: 12345);
+      store.saveProvisional(ns, original);
+      final before = rawTransaction(db, ns, original.id);
+
+      expect(store.entities(ns, 'transactions').single['merchant_name'],
+          'Unknown');
+      expect(rawTransaction(db, ns, original.id), before);
+    });
+
+    test('mismatched instrument or entry kind keeps the provisional merchant',
+        () {
+      for (final (suffix, rowFor) in [
+        ('instrument', (String key) =>
+            provisionalSms(key, instrument: TxnInstrument.wallet)),
+        ('kind', (String key) =>
+            provisionalSms(key, entryKind: TxnEntryKind.transfer)),
+      ]) {
+        final ns = 'a-$suffix';
+        final key = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+        captureMerchantRepairSms(db, ns);
+        store.saveProvisional(ns, rowFor(key));
+
+        expect(store.entities(ns, 'transactions').single['merchant_name'],
+            'Unknown');
+      }
+    });
+
+    test('a source receipt blocks provisional merchant repair', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      captureMerchantRepairSms(db, ns);
+      final original = provisionalSms(key);
+      store.saveProvisional(ns, original);
+      db.db.execute(
+        'INSERT OR REPLACE INTO financial_source_receipts VALUES (?,?,?)',
+        [ns, key, 'server-id'],
+      );
+
+      expect(store.entities(ns, 'transactions').single['merchant_name'],
+          'Unknown');
+    });
+
+    test('user-modified auto-resolution history blocks repair', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      captureMerchantRepairSms(db, ns);
+      final original = provisionalSms(key);
+      store.saveProvisional(ns, original);
+      db.db.execute(
+        'INSERT INTO local_auto_resolved_history (id, namespace, source_key, '
+        'sender, resolved_kind, title, amount_paise, occurred_at, confidence, '
+        'auto_resolved_at, is_user_modified) '
+        'VALUES (?,?,?,?,?,?,?,?,?,?,1)',
+        [
+          'ai:$key',
+          ns,
+          key,
+          _merchantRepairSender,
+          'transaction',
+          'Manual Shop',
+          70000,
+          '2026-10-17T00:00:00.000',
+          1.0,
+          DateTime(2026, 10, 17).millisecondsSinceEpoch,
+        ],
+      );
+
+      expect(store.entities(ns, 'transactions').single['merchant_name'],
+          'Unknown');
+    });
+
+    test('receipt enrichment edits only a weak provisional merchant', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      final original = provisionalSms(key);
+      store.saveProvisional(ns, original);
+      final before = rawTransaction(db, ns, original.id);
+
+      expect(
+        FinancialStore.enrichProvisionalReceiptMerchant(
+          db,
+          ns,
+          original.id,
+          'Balaji Sports',
+        ),
+        isTrue,
+      );
+
+      final after = rawTransaction(db, ns, original.id);
+      expect(after['pending'], 1);
+      expect(after['observed_at'], before['observed_at']);
+      final beforePayload = before['payload'] as Map<String, dynamic>;
+      final afterPayload = after['payload'] as Map<String, dynamic>;
+      expect(afterPayload['merchant_name'], 'Balaji Sports');
+      expect(
+        {...afterPayload, 'merchant_name': beforePayload['merchant_name']},
+        equals(beforePayload),
+      );
+      expect(
+        db.db.select('SELECT 1 FROM sync_pending_changes'),
+        isEmpty,
+      );
+    });
+
+    test('receipt enrichment never edits a confirmed row', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      final confirmed = provisionalSms(key);
+      store.saveTransactions(ns, [confirmed]);
+      final before = rawTransaction(db, ns, confirmed.id);
+
+      expect(
+        FinancialStore.enrichProvisionalReceiptMerchant(
+          db,
+          ns,
+          confirmed.id,
+          'Balaji Sports',
+        ),
+        isFalse,
+      );
+      expect(rawTransaction(db, ns, confirmed.id), before);
+    });
+  });
 }

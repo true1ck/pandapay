@@ -5,9 +5,14 @@ import 'package:http/testing.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/consents_api.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
+import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/auto_resolved_history_repository.dart';
+import 'package:pandapay/data/local/response_cache.dart';
+import 'package:pandapay/data/local/sms_feedback_outbox.dart';
+import 'package:pandapay/data/local/sms_learning_feedback.dart';
 import 'package:pandapay/data/local/sms_auto_resolution_controller.dart';
 import 'package:pandapay/data/commitments_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -73,6 +78,9 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   final List<Map<String, dynamic>> allOverrideArgs = [];
   Map<String, dynamic>? lastAiJobArgs;
   bool aiJobSubmitted = false;
+
+  @override
+  Future<int> flushSmsLearningFeedbackQueue() async => 0;
 
   @override
   Future<String> logTransaction({
@@ -156,6 +164,8 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     String? templateText,
     String? sampleBody,
     String? family,
+    String correctionKind = 'preference_only',
+    String resolvedKind = 'unresolved',
   }) async {
     lastDismissArgs = {
       'sourceKey': sourceKey,
@@ -164,6 +174,8 @@ class _FakeUserCardsRepository implements UserCardsRepository {
       'templateText': templateText,
       'sampleBody': sampleBody,
       'family': family,
+      'correctionKind': correctionKind,
+      'resolvedKind': resolvedKind,
     };
     allDismissArgs.add(lastDismissArgs!);
     return true;
@@ -182,6 +194,7 @@ Future<void> _pump(
   SmsAutoResolutionController? autoResolutionController,
   Size surfaceSize = const Size(1000, 1000),
   bool settle = true,
+  List<Override> overrides = const [],
 }) async {
   await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -202,6 +215,7 @@ Future<void> _pump(
         if (commitments != null)
           commitmentsRepositoryProvider.overrideWithValue(commitments),
         smsBackgroundFlushProvider.overrideWith((ref) {}),
+        ...overrides,
       ],
       child: const MaterialApp(home: NeedsReviewScreen()),
     ),
@@ -212,6 +226,34 @@ Future<void> _pump(
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
   }
+}
+
+NeedsReviewItem _balanceReviewItem(String id) => NeedsReviewItem(
+  id: id,
+  sender: 'HDFCBK',
+  body: 'Available balance in A/c 1234 is INR 12500.50',
+  receivedAt: DateTime(2026, 10, 10),
+  aiSuggestions: [
+    {
+      'factIndex': 0,
+      'factType': 'balance_snapshot',
+      'payload': {
+        'availableBalanceInr': 12500.50,
+        'accountLast4': '1234',
+        'asOfAt': '2026-10-10T12:00:00.000Z',
+      },
+    },
+  ],
+);
+
+/// Opens the balance review sheet and confirms it, which persists one
+/// fact-override correction.
+Future<void> _confirmBalance(WidgetTester tester) async {
+  expect(find.text('Confirm balance'), findsOneWidget);
+  await tester.tap(find.text('Confirm balance'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.widgetWithText(FilledButton, 'Confirm balance').last);
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -351,7 +393,10 @@ void main() {
 
     expect(find.text('AI is reviewing 1 message'), findsOneWidget);
     expect(find.text('1 queued · 0 in progress · 0 failed'), findsOneWidget);
-    expect(find.text('0 checked, still need review · 0 not queued'), findsOneWidget);
+    expect(
+      find.text('0 checked, still need review · 0 not queued'),
+      findsOneWidget,
+    );
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
@@ -388,7 +433,10 @@ void main() {
 
     expect(find.text('AI review paused · 2 need review'), findsOneWidget);
     expect(find.text('0 queued · 0 in progress · 1 failed'), findsOneWidget);
-    expect(find.text('1 checked, still need review · 0 not queued'), findsOneWidget);
+    expect(
+      find.text('1 checked, still need review · 0 not queued'),
+      findsOneWidget,
+    );
     expect(find.text('Retry failed AI reviews (1)'), findsOneWidget);
     expect(find.textContaining('AI review failed'), findsNothing);
     await tester.tap(find.text('Retry failed AI reviews (1)'));
@@ -440,6 +488,8 @@ void main() {
     await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
     await tester.tap(find.text('Ignore message'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Not a financial transaction'));
     await tester.pumpAndSettle();
 
     expect(find.text('Nothing needs review'), findsOneWidget);
@@ -590,6 +640,12 @@ void main() {
       expect(repo.allDismissArgs, hasLength(3));
       expect(
         repo.allDismissArgs.every((a) => a['reason'] == 'bundle_dismissed'),
+        isTrue,
+      );
+      expect(
+        repo.allDismissArgs.every(
+          (a) => a['correctionKind'] == 'preference_only',
+        ),
         isTrue,
       );
     },
@@ -863,6 +919,65 @@ void main() {
   );
 
   testWidgets(
+    'fact-override upload carries SMS evidence under shared-learning consent',
+    (tester) async {
+      await reviews.add(_balanceReviewItem('b' * 64));
+      final repo = _FakeUserCardsRepository();
+      await _pump(
+        tester,
+        repo: repo,
+        reviews: reviews,
+        overrides: [
+          smsSharedLearningConsentProvider.overrideWith(
+            (ref) async => ConsentRecord(
+              purpose: 'sms_shared_learning',
+              granted: true,
+              grantedAt: DateTime(2026, 10, 1),
+              policyVersion: smsSharedLearningPolicyVersion,
+            ),
+          ),
+        ],
+      );
+      await _confirmBalance(tester);
+      expect(
+        repo.lastOverrideArgs!['sampleBody'],
+        'Available balance in A/c 1234 is INR 12500.50',
+        reason: 'consented captures may upload redacted SMS evidence',
+      );
+      expect(await reviews.fetchAll(), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'fact-override upload drops SMS evidence when shared-learning consent is off',
+    (tester) async {
+      await reviews.add(_balanceReviewItem('b' * 64));
+      final repo = _FakeUserCardsRepository();
+      await _pump(
+        tester,
+        repo: repo,
+        reviews: reviews,
+        overrides: [
+          smsSharedLearningConsentProvider.overrideWith((ref) async => null),
+        ],
+      );
+      await _confirmBalance(tester);
+      expect(repo.lastOverrideArgs, isNotNull);
+      expect(
+        (repo.lastOverrideArgs!['patch'] as Map)['availableBalanceInr'],
+        12500.50,
+        reason: 'the own-account fact fix is never blocked by consent',
+      );
+      expect(
+        repo.lastOverrideArgs!['sampleBody'],
+        isNull,
+        reason: 'SMS-derived evidence requires shared-learning consent',
+      );
+      expect(repo.lastOverrideArgs!['templateText'], isNull);
+    },
+  );
+
+  testWidgets(
     'bill_obligation with complete bill evidence bypasses stale AI review UI',
     (tester) async {
       final key = 'c' * 64;
@@ -911,14 +1026,150 @@ void main() {
   );
 
   testWidgets(
-    'multi-fact SMS resolves individual facts sequentially without dropping remaining ones',
+    'explicit not-a-bill rejection records one fact-scoped kind correction',
     (tester) async {
-      final key = 'd' * 64;
+      final key = 'f' * 64;
+      await reviews.add(
+        NeedsReviewItem(
+          id: key,
+          sender: 'AIRTEL',
+          body: 'Your Airtel bill is ready for review',
+          receivedAt: DateTime(2026, 10, 10),
+          aiSuggestions: [
+            {
+              'factIndex': 2,
+              'factType': 'bill_obligation',
+              'payload': {'billerName': 'Airtel'},
+            },
+          ],
+        ),
+      );
+      final repo = _FakeUserCardsRepository();
+      final commitments = CommitmentsRepository(
+        namespace: 'user:test',
+        loadDatabase: () async => db,
+      );
+      await _pump(
+        tester,
+        repo: repo,
+        reviews: reviews,
+        commitments: commitments,
+        overrides: [
+          cacheNamespaceProvider.overrideWithValue('user:test'),
+          responseCacheProvider.overrideWith((ref) async => ResponseCache(db)),
+          smsSharedLearningConsentProvider.overrideWith(
+            (ref) async => ConsentRecord(
+              purpose: 'sms_shared_learning',
+              granted: true,
+              grantedAt: DateTime(2026, 10, 1),
+              policyVersion: smsSharedLearningPolicyVersion,
+            ),
+          ),
+        ],
+      );
+
+      await tester.tap(find.text('Review bill'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Discard message — not a bill'));
+      await tester.pumpAndSettle();
+
+      final feedback = SmsFeedbackOutbox(db, namespace: 'user:test').pending();
+      expect(feedback, hasLength(1));
+      expect(feedback.single.payload['action'], 'dismissed');
+      expect(feedback.single.payload['correctionKind'], 'misclassified_kind');
+      expect(feedback.single.payload['factIndex'], 2);
+      expect(await reviews.fetchAll(), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'reviewed AI transaction category change queues a category vote',
+    (tester) async {
+      final key = 'a' * 64;
       await reviews.add(
         NeedsReviewItem(
           id: key,
           sender: 'HDFCBK',
-          body: 'Rs.499.00 spent at SWIGGY. Avail Bal INR 12500.50 in A/c 1234',
+          body: 'Rs.499.00 spent at SWIGGY',
+          receivedAt: DateTime(2026, 10, 10),
+          aiSuggestions: [
+            {
+              'factIndex': 0,
+              'factType': 'posted_movement',
+              'payload': {
+                'amountInr': 499.00,
+                'merchant': 'SWIGGY',
+                'category': 'dining',
+                'instrument': 'upi_bank',
+                'entryKind': 'spend',
+              },
+            },
+          ],
+        ),
+      );
+      final repo = _FakeUserCardsRepository();
+      await _pump(
+        tester,
+        repo: repo,
+        reviews: reviews,
+        overrides: [
+          cacheNamespaceProvider.overrideWithValue('user:test'),
+          responseCacheProvider.overrideWith((ref) async => ResponseCache(db)),
+          categoriesProvider.overrideWith(
+            (ref) async => const [
+              SpendCategory(id: 'dining', slug: 'dining', name: 'Dining'),
+              SpendCategory(
+                id: 'groceries',
+                slug: 'groceries',
+                name: 'Groceries',
+              ),
+            ],
+          ),
+          smsSharedLearningConsentProvider.overrideWith(
+            (ref) async => ConsentRecord(
+              purpose: 'sms_shared_learning',
+              granted: true,
+              grantedAt: DateTime(2026, 10, 1),
+              policyVersion: smsSharedLearningPolicyVersion,
+            ),
+          ),
+        ],
+      );
+
+      await tester.tap(find.text('Review transaction'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Groceries').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save transaction'));
+      await tester.pumpAndSettle();
+
+      final feedback = SmsFeedbackOutbox(db, namespace: 'user:test').pending();
+      expect(feedback, hasLength(1));
+      expect(feedback.single.payload['action'], 'category_changed');
+      expect(feedback.single.payload['correctionKind'], 'misclassified_category');
+      expect(
+        (feedback.single.payload['originalDecision'] as Map)['fields']
+            ['categorySlug'],
+        'dining',
+      );
+      expect(
+        (feedback.single.payload['correctedFields'] as Map)['categorySlug'],
+        'groceries',
+      );
+    },
+  );
+
+  testWidgets(
+    'first manual category assignment queues category vote with null correction kind',
+    (tester) async {
+      final key = 'b' * 64;
+      await reviews.add(
+        NeedsReviewItem(
+          id: key,
+          sender: 'HDFCBK',
+          body: 'Rs.499.00 spent at SWIGGY',
           receivedAt: DateTime(2026, 10, 10),
           aiSuggestions: [
             {
@@ -931,8 +1182,82 @@ void main() {
                 'entryKind': 'spend',
               },
             },
+          ],
+        ),
+      );
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(),
+        reviews: reviews,
+        overrides: [
+          cacheNamespaceProvider.overrideWithValue('user:test'),
+          responseCacheProvider.overrideWith((ref) async => ResponseCache(db)),
+          categoriesProvider.overrideWith(
+            (ref) async => const [
+              SpendCategory(
+                id: 'groceries',
+                slug: 'groceries',
+                name: 'Groceries',
+              ),
+            ],
+          ),
+          smsSharedLearningConsentProvider.overrideWith(
+            (ref) async => ConsentRecord(
+              purpose: 'sms_shared_learning',
+              granted: true,
+              grantedAt: DateTime(2026, 10, 1),
+              policyVersion: smsSharedLearningPolicyVersion,
+            ),
+          ),
+        ],
+      );
+
+      await tester.tap(find.text('Review transaction'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Groceries').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save transaction'));
+      await tester.pumpAndSettle();
+
+      final feedback = SmsFeedbackOutbox(db, namespace: 'user:test').pending();
+      expect(feedback, hasLength(1));
+      expect(feedback.single.payload['action'], 'category_changed');
+      expect(feedback.single.payload['correctionKind'], isNull);
+      final originalFields =
+          (feedback.single.payload['originalDecision'] as Map)['fields'] as Map;
+      expect(originalFields.containsKey('categorySlug'), isFalse);
+      expect(
+        (feedback.single.payload['correctedFields'] as Map)['categorySlug'],
+        'groceries',
+      );
+    },
+  );
+
+  testWidgets(
+    'multi-fact SMS resolves individual facts sequentially without dropping remaining ones',
+    (tester) async {
+      final key = 'd' * 64;
+      await reviews.add(
+        NeedsReviewItem(
+          id: key,
+          sender: 'HDFCBK',
+          body: 'Rs.499.00 spent at SWIGGY. Avail Bal INR 12500.50 in A/c 1234',
+          receivedAt: DateTime(2026, 10, 10),
+          aiSuggestions: [
             {
-              'factIndex': 1,
+              'factIndex': 7,
+              'factType': 'posted_movement',
+              'payload': {
+                'amountInr': 499.00,
+                'merchant': 'SWIGGY',
+                'instrument': 'upi_bank',
+                'entryKind': 'spend',
+              },
+            },
+            {
+              'factIndex': 8,
               'factType': 'balance_snapshot',
               'payload': {
                 'availableBalanceInr': 12500.50,
@@ -944,7 +1269,23 @@ void main() {
         ),
       );
       final repo = _FakeUserCardsRepository();
-      await _pump(tester, repo: repo, reviews: reviews);
+      await _pump(
+        tester,
+        repo: repo,
+        reviews: reviews,
+        overrides: [
+          cacheNamespaceProvider.overrideWithValue('user:test'),
+          responseCacheProvider.overrideWith((ref) async => ResponseCache(db)),
+          smsSharedLearningConsentProvider.overrideWith(
+            (ref) async => ConsentRecord(
+              purpose: 'sms_shared_learning',
+              granted: true,
+              grantedAt: DateTime(2026, 10, 1),
+              policyVersion: smsSharedLearningPolicyVersion,
+            ),
+          ),
+        ],
+      );
 
       // Both suggestions should be visible in multi-suggestion mode
       expect(find.text('Transaction: ₹499.00'), findsOneWidget);
@@ -959,9 +1300,14 @@ void main() {
       await tester.tap(find.text('Save transaction'));
       await tester.pumpAndSettle();
 
-      // Transaction override recorded for fact 0
+      // The selected transaction fact keeps its original index in feedback.
       expect(repo.allOverrideArgs, hasLength(1));
-      expect(repo.allOverrideArgs[0]['factIndex'], 0);
+      expect(repo.allOverrideArgs[0]['factIndex'], 7);
+      final feedback = SmsFeedbackOutbox(db, namespace: 'user:test').pending();
+      expect(feedback, hasLength(1));
+      expect(feedback.single.payload['action'], 'edited');
+      expect(feedback.single.payload['factIndex'], 7);
+      expect(feedback.single.payload['correctionKind'], isNot('false_transaction'));
 
       // Item must NOT be removed from queue; it now has 1 remaining suggestion (balance)
       final remainingItems = await reviews.fetchAll();
@@ -987,7 +1333,7 @@ void main() {
 
       // Balance override recorded for fact 1
       expect(repo.allOverrideArgs, hasLength(2));
-      expect(repo.allOverrideArgs[1]['factIndex'], 1);
+      expect(repo.allOverrideArgs[1]['factIndex'], 8);
 
       // Now all facts resolved, review queue is empty
       expect(await reviews.fetchAll(), isEmpty);
@@ -1053,12 +1399,23 @@ void main() {
           receivedAt: DateTime(2026, 10, 22),
         ),
       );
-      await _pump(tester, repo: repo, reviews: reviews);
+      await _pump(
+        tester,
+        repo: repo,
+        reviews: reviews,
+        overrides: [
+          cacheNamespaceProvider.overrideWithValue('user:test'),
+          responseCacheProvider.overrideWith((ref) async => ResponseCache(db)),
+        ],
+      );
 
       expect(find.text('Debited Rs. 500 at Store'), findsOneWidget);
 
       // Tap Ignore message (_dismissNotATransaction)
       await tester.tap(find.text('Ignore message'));
+      await tester.pumpAndSettle();
+      expect(find.text('Why are you dismissing this SMS?'), findsOneWidget);
+      await tester.tap(find.text('Not a financial transaction'));
       await tester.pumpAndSettle();
 
       // 1. Immediate optimistic UI dismissal: item is gone immediately
@@ -1070,8 +1427,18 @@ void main() {
       expect(repo.lastDismissArgs, isNotNull);
       expect(repo.lastDismissArgs!['sourceKey'], 'txn-item-123');
       expect(repo.lastDismissArgs!['sender'], 'VM-HDFCBK');
-      expect(repo.lastDismissArgs!['reason'], 'user_dismissed');
-      expect(repo.lastDismissArgs!['family'], 'ignore_noise');
+      expect(repo.lastDismissArgs!['reason'], 'user_marked_wrong_financial_kind');
+      expect(repo.lastDismissArgs!['family'], 'posted_movement');
+      expect(repo.lastDismissArgs!['correctionKind'], 'false_transaction');
+      expect(repo.lastDismissArgs!['resolvedKind'], 'transaction');
+      expect(
+        SmsLearningFeedback(db, namespace: 'user:test')
+            .matchesFalseTransactionRuleSync(
+              sender: 'VM-HDFCBK',
+              body: 'Debited Rs. 500 at Store',
+            ),
+        isTrue,
+      );
     },
   );
 
@@ -1108,6 +1475,31 @@ void main() {
       expect(await commitments.fetchAll(), hasLength(1));
       expect(find.byTooltip('Dismiss message'), findsNothing);
       expect(repo.lastDismissArgs, isNull);
+    },
+  );
+
+  testWidgets(
+    'do not track dismissal remains preference-only and does not train a transaction rule',
+    (tester) async {
+      final repo = _FakeUserCardsRepository();
+      await reviews.add(
+        NeedsReviewItem(
+          id: 'txn-item-preference',
+          sender: 'VM-HDFCBK',
+          body: 'Debited Rs. 500 at Store',
+          receivedAt: DateTime(2026, 10, 22),
+        ),
+      );
+      await _pump(tester, repo: repo, reviews: reviews);
+
+      await tester.tap(find.text('Ignore message'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Don’t track this SMS'));
+      await tester.pumpAndSettle();
+
+      expect(repo.lastDismissArgs!['correctionKind'], 'preference_only');
+      expect(repo.lastDismissArgs!['family'], 'ignore_noise');
+      expect(repo.lastDismissArgs!['resolvedKind'], 'unresolved');
     },
   );
 
@@ -1159,6 +1551,7 @@ void main() {
         apiBaseUrl: 'https://api.pandapay.test',
         accessToken: 'test-token',
         client: failingClient,
+        loadSmsSharedLearningConsent: () async => DateTime.utc(2026, 10, 27),
       );
 
       expect(repo.dismissalRetryQueue, isEmpty);
@@ -1191,13 +1584,14 @@ void main() {
         if (!isOnline) {
           throw http.ClientException('Connection reset');
         }
-        return http.Response(jsonEncode({'ok': true}), 200);
+        return http.Response(jsonEncode({'acknowledged': true}), 200);
       });
 
       final repo = UserCardsRepository(
         apiBaseUrl: 'https://api.pandapay.test',
         accessToken: 'test-token',
         client: mockClient,
+        loadSmsSharedLearningConsent: () async => DateTime.utc(2026, 10, 27),
       );
 
       // Initially offline

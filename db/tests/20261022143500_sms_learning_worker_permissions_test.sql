@@ -49,19 +49,15 @@ begin
      or not has_table_privilege('sms_learning_worker', 'public.sms_rule_bundles', 'SELECT')
      or not has_table_privilege('sms_learning_worker', 'public.sms_learning_worker_runs', 'SELECT')
      or not has_table_privilege('sms_learning_worker', 'public.sms_learning_worker_runs', 'INSERT')
-     or not has_function_privilege(
-       'sms_learning_worker',
-       'pandapay.sms_publish_bundle(integer,jsonb,text,text)',
-       'EXECUTE'
-     )
-     or not has_function_privilege(
-       'sms_learning_worker',
-       'pandapay.sms_rollback_bundle(integer)',
-       'EXECUTE'
-     ) then
+     then
     raise exception 'sms_learning_worker is missing a required cycle capability';
   end if;
 
+  -- Global publication and autonomous rollback belong to the authenticated
+  -- admin API, not to the cross-user learning cycle. 20261027160000_sms_
+  -- category_rule_approval.sql revokes both, and sms_autonomous_worker.js
+  -- refuses to start unless they are absent, so holding them is a privilege
+  -- beyond the cycle rather than a required capability.
   if has_table_privilege('sms_learning_worker', 'public.profiles', 'SELECT')
      or has_table_privilege('sms_learning_worker', 'public.sms_learning_examples', 'INSERT')
      or has_table_privilege('sms_learning_worker', 'public.sms_learning_examples', 'UPDATE')
@@ -73,7 +69,17 @@ begin
      or has_table_privilege('sms_learning_worker', 'public.sms_rule_bundles', 'UPDATE')
      or has_table_privilege('sms_learning_worker', 'public.sms_rule_bundles', 'DELETE')
      or has_table_privilege('sms_learning_worker', 'public.sms_learning_worker_runs', 'UPDATE')
-     or has_table_privilege('sms_learning_worker', 'public.sms_learning_worker_runs', 'DELETE') then
+     or has_table_privilege('sms_learning_worker', 'public.sms_learning_worker_runs', 'DELETE')
+     or has_function_privilege(
+       'sms_learning_worker',
+       'pandapay.sms_publish_bundle(integer,jsonb,text,text)',
+       'EXECUTE'
+     )
+     or has_function_privilege(
+       'sms_learning_worker',
+       'pandapay.sms_rollback_bundle(integer)',
+       'EXECUTE'
+     ) then
     raise exception 'sms_learning_worker has privileges beyond the autonomous cycle';
   end if;
 end $$;

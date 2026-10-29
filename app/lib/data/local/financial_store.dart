@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../user_cards_repository.dart';
 import 'app_database.dart';
 import '../local_sms_parser.dart';
+import '../merchant_identity.dart';
 import '../commitments_repository.dart';
 
 /// DLT SMS sender IDs split one bank's alerts across channel variants
@@ -50,6 +51,11 @@ const _bankTokenAliases = <String, String>{
   'unionb': 'union',
   'sbibnk': 'sbi',
   'sbibk': 'sbi',
+  'sbyono': 'sbi',
+  'sbiyon': 'sbi',
+  'yonosb': 'sbi',
+  'sbiinb': 'sbi',
+  'sbiupi': 'sbi',
   'axisbnk': 'axis',
   'axisb': 'axis',
   'idbibk': 'idbi',
@@ -90,6 +96,9 @@ const _bankCodePrefixes = [
 /// Human label per canonical bank code; unknown codes render capitalized.
 const _bankDisplayLabels = <String, String>{
   'sbi': 'SBI',
+  'sbyono': 'SBI',
+  'sbiyon': 'SBI',
+  'yonosb': 'SBI',
   'hdfc': 'HDFC Bank',
   'icici': 'ICICI Bank',
   'axis': 'Axis Bank',
@@ -372,6 +381,7 @@ class FinancialStore {
     String? id,
   }) {
     repairAutoPayArtifacts(ns);
+    if (entity == 'transactions') _repairProvisionalMerchantNames(ns);
     final args = <Object?>[ns, entity];
     var range = '';
     if (id != null) {
@@ -430,6 +440,259 @@ class FinancialStore {
     }
     return rows;
   }
+
+  static const _provisionalMerchantRepairPrefix = 'local-sms:';
+
+  // Confirmed names lack reliable manual-edit provenance and must not be rewritten.
+  void _repairProvisionalMerchantNames(String ns) {
+    try {
+      final hasCaptures = database.db
+          .select(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='sms_captured_messages'",
+          )
+          .isNotEmpty;
+      if (!hasCaptures) return;
+      _ensureLocalRepairsTable();
+      final hasAutoResolution = database.db
+          .select(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='local_auto_resolved_history'",
+          )
+          .isNotEmpty;
+      final rows = database.db.select(
+        'SELECT e.id, e.payload, e.source_key, m.sender, m.body, '
+        'm.received_at FROM financial_entities e '
+        'JOIN sms_captured_messages m '
+        'ON m.namespace=e.namespace AND m.id=e.source_key '
+        "WHERE e.namespace=? AND e.entity='transactions' AND e.pending=1 "
+        "AND e.id LIKE 'local-sms:%'",
+        [ns],
+      );
+      for (final row in rows) {
+        final id = row['id'] as String;
+        final sourceKey = row['source_key'] as String?;
+        if (sourceKey == null ||
+            id != '$_provisionalMerchantRepairPrefix$sourceKey') {
+          continue;
+        }
+        final marker = _provisionalMerchantRepairMarker(sourceKey);
+        if (database.db.select(
+          'SELECT 1 FROM local_repairs WHERE namespace=? AND repair_key=?',
+          [ns, marker],
+        ).isNotEmpty) {
+          continue;
+        }
+        final decoded = jsonDecode(row['payload'] as String);
+        if (decoded is! Map<String, dynamic>) continue;
+        if (!_isEligibleWeakProvisionalMerchant(
+          database,
+          ns,
+          id,
+          sourceKey,
+          decoded,
+          hasAutoResolution: hasAutoResolution,
+        )) {
+          continue;
+        }
+        try {
+          final receivedMs = row['received_at'];
+          final receivedAt = receivedMs is int
+              ? DateTime.fromMillisecondsSinceEpoch(receivedMs)
+              : DateTime.tryParse(receivedMs?.toString() ?? '');
+          if (receivedAt == null) continue;
+          final parsed = LocalSmsParser.parse(
+            namespace: ns,
+            sender: row['sender'] as String,
+            body: row['body'] as String,
+            receivedAt: receivedAt,
+          );
+          final transaction = parsed?.transaction;
+          final amount = decoded['amount_inr'];
+          if (transaction == null ||
+              amount is! num ||
+              transaction.id != id ||
+              transaction.sourceKey != sourceKey ||
+              transaction.amount.paise != Money.fromRupees(amount).paise ||
+              decoded['instrument'] != transaction.instrument.wireValue ||
+              decoded['entry_kind'] != transaction.entryKind.wireValue) {
+            _markProvisionalMerchantRepair(ns, marker);
+            continue;
+          }
+          final cleaned = MerchantIdentity.cleanName(
+            transaction.merchantName,
+          );
+          if (cleaned == null || MerchantIdentity.isWeakName(cleaned)) {
+            _markProvisionalMerchantRepair(ns, marker);
+            continue;
+          }
+          if (_updateProvisionalMerchant(
+            database,
+            ns,
+            id,
+            sourceKey,
+            decoded,
+            cleaned,
+          )) {
+            _markProvisionalMerchantRepair(ns, marker);
+          }
+        } catch (_) {
+          // One malformed capture must not stop the rest of the pass.
+        }
+      }
+    } catch (_) {
+      // Best-effort local repair; reading must never fail because of it.
+    }
+  }
+
+  static bool enrichProvisionalReceiptMerchant(
+    AppDatabase database,
+    String namespace,
+    String transactionId,
+    String merchantName,
+  ) {
+    try {
+      final cleaned = MerchantIdentity.cleanName(merchantName);
+      if (cleaned == null || MerchantIdentity.isWeakName(cleaned)) {
+        return false;
+      }
+      final rows = database.db.select(
+        'SELECT id, payload, source_key FROM financial_entities '
+        "WHERE namespace=? AND entity='transactions' AND id=? AND pending=1",
+        [namespace, transactionId],
+      );
+      if (rows.length != 1) return false;
+      final row = rows.single;
+      final id = row['id'] as String;
+      final sourceKey = row['source_key'] as String?;
+      if (sourceKey == null ||
+          id != '$_provisionalMerchantRepairPrefix$sourceKey') {
+        return false;
+      }
+      final decoded = jsonDecode(row['payload'] as String);
+      if (decoded is! Map<String, dynamic>) return false;
+      final hasAutoResolution = database.db
+          .select(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='local_auto_resolved_history'",
+          )
+          .isNotEmpty;
+      if (!_isEligibleWeakProvisionalMerchant(
+        database,
+        namespace,
+        id,
+        sourceKey,
+        decoded,
+        hasAutoResolution: hasAutoResolution,
+      )) {
+        return false;
+      }
+      return _updateProvisionalMerchant(
+        database,
+        namespace,
+        id,
+        sourceKey,
+        decoded,
+        cleaned,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool _updateProvisionalMerchant(
+    AppDatabase database,
+    String ns,
+    String id,
+    String sourceKey,
+    Map<String, dynamic> payload,
+    String merchantName,
+  ) {
+    database.db.execute(
+      "UPDATE financial_entities SET payload=? "
+      "WHERE namespace=? AND entity='transactions' AND id=? "
+      'AND pending=1 AND source_key=? AND payload=? '
+      'AND NOT EXISTS (SELECT 1 FROM sync_pending_changes p '
+      "WHERE p.namespace=? AND p.entity='transactions' AND p.entity_id=?) "
+      'AND NOT EXISTS (SELECT 1 FROM financial_source_receipts r '
+      'WHERE r.namespace=? AND r.source_key=?)',
+      [
+        jsonEncode({...payload, 'merchant_name': merchantName}),
+        ns,
+        id,
+        sourceKey,
+        jsonEncode(payload),
+        ns,
+        id,
+        ns,
+        sourceKey,
+      ],
+    );
+    return database.db.updatedRows > 0;
+  }
+
+  static bool _isEligibleWeakProvisionalMerchant(
+    AppDatabase database,
+    String ns,
+    String id,
+    String sourceKey,
+    Map<String, dynamic> payload, {
+    required bool hasAutoResolution,
+  }) {
+    if (payload['id'] != id ||
+        payload['source_key'] != sourceKey ||
+        payload['source'] != 'sms' ||
+        payload['status'] != 'active') {
+      return false;
+    }
+    final currentName = payload['merchant_name'];
+    if (currentName is String) {
+      if (!MerchantIdentity.isWeakName(currentName)) return false;
+    } else if (currentName != null) {
+      return false;
+    }
+    if (database.db.select(
+      'SELECT 1 FROM financial_source_receipts '
+      'WHERE namespace=? AND source_key=? LIMIT 1',
+      [ns, sourceKey],
+    ).isNotEmpty) {
+      return false;
+    }
+    if (database.db.select(
+      "SELECT 1 FROM sync_pending_changes WHERE namespace=? "
+      "AND entity='transactions' AND entity_id=? LIMIT 1",
+      [ns, id],
+    ).isNotEmpty) {
+      return false;
+    }
+    if (hasAutoResolution &&
+        database.db.select(
+          'SELECT 1 FROM local_auto_resolved_history '
+          'WHERE namespace=? AND source_key=? AND is_user_modified=1 LIMIT 1',
+          [ns, sourceKey],
+        ).isNotEmpty) {
+      return false;
+    }
+    return true;
+  }
+
+  static String _provisionalMerchantRepairMarker(String sourceKey) =>
+      'provisional_merchant_v1:${LocalSmsParser.version}:$sourceKey';
+
+  void _markProvisionalMerchantRepair(String ns, String marker) {
+    database.db.execute(
+      'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
+      [ns, marker],
+    );
+  }
+
+  void _ensureLocalRepairsTable() => database.db.execute('''
+        CREATE TABLE IF NOT EXISTS local_repairs (
+          namespace TEXT NOT NULL,
+          repair_key TEXT NOT NULL,
+          PRIMARY KEY(namespace, repair_key)
+        );
+      ''');
 
   static bool _isDisplayable(TransactionEntry r) =>
       r.status == 'active' ||
@@ -535,7 +798,7 @@ class FinancialStore {
     // An inbox replay must never create a provisional copy of an already
     // reconciled transaction with the same stable SMS identity.
     if (database.db.select(
-      'SELECT 1 FROM financial_entities WHERE namespace=? AND source_key=?',
+      "SELECT 1 FROM financial_entities WHERE namespace=? AND source_key=? AND entity='transactions' AND pending=0",
       [ns, row.sourceKey],
     ).isNotEmpty) {
       return;
@@ -1261,6 +1524,57 @@ class FinancialStore {
         'confidence': obs.confidence,
       });
     }
+  }
+
+  /// Bank credit alerts that older parser builds could only label with the
+  /// generic 'Money received' fallback although they are EMI/loan
+  /// repayments ("... credited with Rs.X towards the payment of EMI ...").
+  /// The raw SMS bodies persist locally in sms_captured_messages; the caller
+  /// replays the (few) matches once through the normal idempotent batch
+  /// import so the updated server parser re-classes them and refreshes the
+  /// stored merchant label. Filter mirrors the parser's loan-repayment
+  /// credit branch, both word orders.
+  List<Map<String, Object?>> emiRepaymentReplayCandidates(String ns) {
+    final creditMarker = RegExp(
+      r'\b(?:credited|received|deposited)\b',
+      caseSensitive: false,
+    );
+    final keywordFirst = RegExp(
+      r'\b(?:loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|repaid|repayment)\b',
+      caseSensitive: false,
+    );
+    final paymentFirst = RegExp(
+      r'\b(?:payment|repayment|repaid)\b[\s\S]{0,60}\b(?:of|towards?|for)\b[\s\S]{0,20}\b(?:the\s+)?(?:loan|emi|equated\s+monthly\s+installment|instalment)\b',
+      caseSensitive: false,
+    );
+    final rows = <Map<String, Object?>>[];
+    try {
+      final messages = database.db.select(
+        'SELECT sender, body, received_at FROM sms_captured_messages WHERE namespace=?',
+        [ns],
+      );
+      for (final msg in messages) {
+        final body = msg['body'] as String;
+        if (!creditMarker.hasMatch(body)) continue;
+        if (!keywordFirst.hasMatch(body) && !paymentFirst.hasMatch(body)) {
+          continue;
+        }
+        final receivedMs = msg['received_at'];
+        final receivedAt = receivedMs is int
+            ? DateTime.fromMillisecondsSinceEpoch(receivedMs)
+            : DateTime.tryParse(receivedMs?.toString() ?? '');
+        if (receivedAt == null) continue;
+        rows.add({
+          'sender': msg['sender'] as String,
+          'body': body,
+          'occurredAt': receivedAt,
+        });
+      }
+    } catch (_) {
+      // The captures table may not exist on fresh installs; a missing
+      // replay must never block startup.
+    }
+    return rows;
   }
 
   void syncCardDatesFromObservations(String ns) {

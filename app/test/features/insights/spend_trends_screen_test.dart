@@ -1205,7 +1205,6 @@ void main() {
       await tester.tap(find.text('Credit cards'));
       await tester.pumpAndSettle();
 
-      // Both merchants are shown collapsed inside Credit cards
       expect(find.text('FLIPKART IN'), findsOneWidget);
       expect(find.text('AMAZON INDIA'), findsOneWidget);
       expect(
@@ -1221,20 +1220,20 @@ void main() {
       expect(find.textContaining('16/10/2026'), findsNothing);
       expect(find.textContaining('14/10/2026'), findsNothing);
 
-      // Expanding FLIPKART IN reveals only its transactions
+      // Expanding FLIPKART reveals only its transactions
       await tester.tap(find.text('FLIPKART IN'));
       await tester.pumpAndSettle();
       expect(find.textContaining('16/10/2026'), findsNWidgets(2));
       expect(find.textContaining('14/10/2026'), findsNothing);
 
-      // Expanding AMAZON INDIA reveals its transactions
+      // Expanding AMAZON reveals its transactions
       await tester.ensureVisible(find.text('AMAZON INDIA'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('AMAZON INDIA'));
       await tester.pumpAndSettle();
       expect(find.textContaining('14/10/2026'), findsOneWidget);
 
-      // Collapsing FLIPKART IN hides its transactions again
+      // Collapsing FLIPKART hides its transactions again
       await tester.ensureVisible(find.text('FLIPKART IN'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('FLIPKART IN'));
@@ -1365,7 +1364,9 @@ void main() {
     expect(find.textContaining('13/08/2026'), findsOneWidget);
   });
 
-  testWidgets('UPI payment method expands into VPA groups', (tester) async {
+  testWidgets('UPI payees use the merchant name with the VPA as secondary', (
+    tester,
+  ) async {
     await _pump(
       tester,
       _report(
@@ -1416,13 +1417,13 @@ void main() {
     await tester.tap(find.text('UPI from bank account'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Raja Das'), findsOneWidget);
     expect(find.text('raja@upi'), findsOneWidget);
-    expect(find.textContaining('Raja Das'), findsNothing);
+    expect(find.textContaining('Raja Das'), findsOneWidget);
 
-    await tester.tap(find.text('raja@upi'));
+    await tester.tap(find.text('Raja Das'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Raja Das'), findsNWidgets(2));
     final firstPayment = tester.widget<ListTile>(
       find.byKey(const ValueKey('spending-transaction-upi-txn-1')),
     );
@@ -1493,14 +1494,201 @@ void main() {
     await tester.tap(find.text('HDFC Bank ••1234'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Raja Das'), findsOneWidget);
     expect(find.text('raja@upi'), findsOneWidget);
     expect(find.textContaining('12/08/2026'), findsNothing);
 
-    await tester.tap(find.text('raja@upi'));
+    await tester.tap(find.text('Raja Das'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('12/08/2026'), findsOneWidget);
     expect(find.textContaining('13/08/2026'), findsOneWidget);
+  });
+
+  testWidgets('a known payee name wins over an opaque UPI reference', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _report(
+        spend: 200,
+        byInstrument: [
+          InstrumentSpendRow(
+            instrument: 'upi_bank',
+            total: Money.fromRupees(200),
+            txnCount: 1,
+          ),
+        ],
+      ),
+      transactions: [
+        _detailEntry(
+          id: 'opaque-txn-1',
+          merchant: 'Swiggy',
+          merchantVpa: '6c123479ee47ab9012',
+          amount: 200,
+          categoryId: 'dining',
+          categoryName: 'Dining',
+          occurredAt: DateTime(2026, 8, 12),
+          instrument: TxnInstrument.upiBank,
+          cardDisplayName: null,
+          userCardId: null,
+        ),
+      ],
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('UPI from bank account'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('UPI from bank account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Swiggy'), findsOneWidget);
+    expect(find.textContaining('6c123479'), findsNothing);
+    expect(find.text('Unknown payee'), findsNothing);
+
+    await tester.tap(find.text('Swiggy'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('12/08/2026'), findsOneWidget);
+    expect(find.textContaining('6c123479'), findsNothing);
+  });
+
+  testWidgets('unknown payees never merge or expose their opaque references', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _report(
+        spend: 200,
+        byInstrument: [
+          InstrumentSpendRow(
+            instrument: 'upi_bank',
+            total: Money.fromRupees(200),
+            txnCount: 2,
+          ),
+        ],
+      ),
+      transactions: [
+        _detailEntry(
+          id: 'opaque-txn-1',
+          merchant: null,
+          merchantVpa: '6c123479ee47ab9012',
+          amount: 125,
+          categoryId: 'other',
+          categoryName: 'Other',
+          occurredAt: DateTime(2026, 8, 12),
+          instrument: TxnInstrument.upiBank,
+          cardDisplayName: null,
+          userCardId: null,
+        ),
+        _detailEntry(
+          id: 'opaque-txn-2',
+          merchant: null,
+          merchantVpa: '9901e1edad8e12ab34',
+          amount: 75,
+          categoryId: 'other',
+          categoryName: 'Other',
+          occurredAt: DateTime(2026, 8, 13),
+          instrument: TxnInstrument.upiBank,
+          cardDisplayName: null,
+          userCardId: null,
+        ),
+      ],
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('UPI from bank account'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('UPI from bank account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unknown payee'), findsNWidgets(2));
+    expect(
+      find.text('Tap the payment to add its merchant.'),
+      findsNWidgets(2),
+    );
+    expect(find.textContaining('6c123479'), findsNothing);
+    expect(find.textContaining('9901e1edad'), findsNothing);
+
+    await tester.tap(find.text('Unknown payee').first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('12/08/2026'), findsOneWidget);
+    expect(find.textContaining('13/08/2026'), findsNothing);
+  });
+
+  testWidgets('equal names retain distinct payment identities', (tester) async {
+    await _pump(tester, _report(spend: 300, byInstrument: [
+      InstrumentSpendRow(instrument: 'upi_bank', total: Money.fromRupees(300), txnCount: 2),
+    ]), transactions: [
+      for (final (id, vpa, amount) in [
+        ('first', '6c123479ee47ab9012', 200.0),
+        ('second', '9901e1edad8e12ab34', 100.0),
+      ])
+        _detailEntry(id: id, merchant: 'Balaji Sports', merchantVpa: vpa,
+          amount: amount, categoryId: 'other', categoryName: 'Other',
+          occurredAt: DateTime(2026, 8, 12), instrument: TxnInstrument.upiBank,
+          cardDisplayName: null, userCardId: null),
+    ]);
+    await tester.scrollUntilVisible(find.text('UPI from bank account'), 300,
+      scrollable: find.byType(Scrollable).last);
+    await tester.tap(find.text('UPI from bank account'));
+    await tester.pumpAndSettle();
+    expect(find.text('Balaji Sports'), findsNWidgets(2));
+    expect(find.textContaining('6c123479'), findsNothing);
+    await tester.tap(find.text('Balaji Sports').first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('spending-transaction-first')), findsOneWidget);
+    expect(find.byKey(const ValueKey('spending-transaction-second')), findsNothing);
+  });
+
+  testWidgets('city and Unicode merchant names stay readable', (tester) async {
+    await _pump(
+      tester,
+      _report(
+        spend: 300,
+        byCategory: [
+          SpendBreakdownRow(
+            label: 'Online Shopping',
+            total: Money.fromRupees(300),
+            txnCount: 2,
+            categoryId: 'online',
+          ),
+        ],
+      ),
+      transactions: [
+        _detailEntry(
+          id: 'city-txn-1',
+          merchant: 'Mumbai',
+          amount: 100,
+          categoryId: 'online',
+          categoryName: 'Online Shopping',
+          occurredAt: DateTime(2026, 8, 12),
+        ),
+        _detailEntry(
+          id: 'city-txn-2',
+          merchant: 'Café Mylapore',
+          amount: 200,
+          categoryId: 'online',
+          categoryName: 'Online Shopping',
+          occurredAt: DateTime(2026, 8, 13),
+        ),
+      ],
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('Online Shopping'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Online Shopping'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mumbai'), findsOneWidget);
+    expect(find.text('Café Mylapore'), findsOneWidget);
+    expect(find.text('Unknown merchant'), findsNothing);
   });
 
   testWidgets('omits the long trend chart from the spending summary', (
@@ -1552,15 +1740,63 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final chart = find.descendant(
-      of: find.ancestor(
-        of: find.text('Monthly comparison'),
-        matching: find.byType(CardSummaryPanel),
-      ),
-      matching: find.byType(CustomPaint),
-    );
+    final chart = find.byKey(const ValueKey('monthly-comparison-chart'));
     expect(chart, findsOneWidget);
     expect(tester.getSize(chart).width, greaterThan(0));
+
+    final scrollable = find.descendant(
+      of: chart,
+      matching: find.byType(Scrollable),
+    );
+    final position = tester.state<ScrollableState>(scrollable).position;
+    // Three months fit inside a tablet-width card, so nothing scrolls.
+    expect(position.maxScrollExtent, 0);
+  });
+
+  testWidgets('monthly chart scrolls sideways when months stop fitting', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => SpendReportQuery.custom(
+              from: DateTime(2026, 1, 1),
+              to: DateTime(2026, 12, 31),
+            ),
+          ),
+          spendReportProvider.overrideWith((ref, query) async => _report()),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => const [],
+          ),
+        ],
+        child: const MaterialApp(home: SpendTrendsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final chart = find.byKey(const ValueKey('monthly-comparison-chart'));
+    expect(chart, findsOneWidget);
+    final scrollable = find.descendant(
+      of: chart,
+      matching: find.byType(Scrollable),
+    );
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.maxScrollExtent, greaterThan(0));
+    // Opens on the latest month rather than the oldest.
+    expect(position.pixels, greaterThan(0));
+    expect(find.text('Dec 2026'), findsOneWidget);
+
+    await tester.ensureVisible(chart);
+    await tester.pumpAndSettle();
+    final rect = tester.getRect(chart);
+    await tester.tapAt(Offset(rect.left + 56, rect.center.dy));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dec 2026'), findsNothing);
   });
 
   testWidgets('an empty period shows an explicit zero-spending state', (

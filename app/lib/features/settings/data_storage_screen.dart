@@ -5,15 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/env.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/account_api.dart';
 import 'storage_util.dart';
 
-/// H5 Data & Storage. Entirely local-device work — no new backend routes
-/// (per the plan's own audit: "Storage-used/cache-clear/record-counts are
-/// device-local concerns ... no new backend needed"). Reached via a plain
-/// `Navigator.push` from the settings hub, same pattern as
-/// `tools/tools_hub_screen.dart`'s leaf screens.
+/// H5 Data & Storage. Cache management stays device-local; account reset uses
+/// the authenticated account API. Reached from Settings & security.
 ///
 /// Providers below are deliberately defined in this file (not
 /// `app/providers.dart`) — this screen is being built in parallel with
@@ -55,7 +54,10 @@ class DataStorageScreen extends ConsumerWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Data & Storage', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Data & Storage',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: ListView(
@@ -70,7 +72,10 @@ class DataStorageScreen extends ConsumerWidget {
             if (!signedIn)
               const _InfoCard(text: 'Sign in to see your record counts')
             else
-              _RecordCountsCard(cardsAsync: cardsAsync, txnCountAsync: txnCountAsync),
+              _RecordCountsCard(
+                cardsAsync: cardsAsync,
+                txnCountAsync: txnCountAsync,
+              ),
             const SizedBox(height: AppSpace.xl),
             _SectionLabel('Manage'),
             const SizedBox(height: AppSpace.sm),
@@ -92,10 +97,20 @@ class DataStorageScreen extends ConsumerWidget {
             const SizedBox(height: AppSpace.sm),
             _ActionTile(
               icon: Icons.restart_alt_rounded,
-              title: 'Reset all data',
-              subtitle: 'Clears local cache and preferences — does not sign you out',
+              title: 'Reset device preferences and cache',
+              subtitle:
+                  'Clears this device’s preferences and temporary files only',
               destructive: true,
               onTap: () => _confirmResetAllData(context, ref),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _ActionTile(
+              icon: Icons.delete_sweep_outlined,
+              title: 'Erase my data and start fresh',
+              subtitle:
+                  'Deletes your saved records from the account and this device; keeps your login',
+              destructive: true,
+              onTap: () => _confirmEraseUserData(context, ref),
             ),
           ],
         ),
@@ -116,19 +131,28 @@ class DataStorageScreen extends ConsumerWidget {
       await clearDirectoryContents(dir);
       ref.invalidate(_cacheSizeProvider);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cache cleared')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Cache cleared')));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
     }
   }
 
-  Future<void> _redownloadBundledData(BuildContext context, WidgetRef ref) async {
+  Future<void> _redownloadBundledData(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     // Nothing here is actually awaited — invalidate() is synchronous, the
     // providers refetch on their own — so there is no I/O to fail. Kept
     // free of a try/catch on purpose rather than adding one that could
     // never trigger.
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Refreshing bundled data...')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Refreshing bundled data...')));
     ref.invalidate(catalogueProvider);
     ref.invalidate(nearbyMerchantsRepositoryProvider);
   }
@@ -137,13 +161,16 @@ class DataStorageScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Reset all data?'),
+        title: const Text('Reset device preferences and cache?'),
         content: const Text(
           'This clears local cache and app preferences only — your account, cards, and transaction '
           'history are untouched. This does not sign you out.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Reset', style: TextStyle(color: BambooInk.clay)),
@@ -165,12 +192,119 @@ class DataStorageScreen extends ConsumerWidget {
       ref.invalidate(_cacheSizeProvider);
 
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Local data reset')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Local data reset')));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
     }
   }
+
+  Future<void> _confirmEraseUserData(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    if (ref.read(accessTokenProvider) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to erase account data')),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _EraseUserDataDialog(),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      final token = ref.read(accessTokenProvider)!;
+      await AccountApi(
+        apiBaseUrl: Env.apiBaseUrl,
+        authBaseUrl: Env.authBaseUrl,
+        accessToken: token,
+        client: ref.read(authenticatedHttpClientProvider),
+      ).resetUserData();
+
+      final namespace = ref.read(cacheNamespaceProvider);
+      final database = await ref.read(appDatabaseProvider.future);
+      await database.clearAccountNamespace(namespace);
+      final prefs = await SharedPreferences.getInstance();
+      await clearPreferencesExceptPrefixes(prefs, const ['pandapay_app.']);
+      final cacheDirectory = await getApplicationCacheDirectory();
+      await clearDirectoryContents(cacheDirectory);
+      ref.invalidate(userCardsProvider);
+      ref.invalidate(profileProvider);
+      ref.invalidate(_transactionCountProvider);
+      ref.invalidate(_cacheSizeProvider);
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account data erased. You can start fresh.'),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+    }
+  }
+}
+
+class _EraseUserDataDialog extends StatefulWidget {
+  const _EraseUserDataDialog();
+
+  @override
+  State<_EraseUserDataDialog> createState() => _EraseUserDataDialogState();
+}
+
+class _EraseUserDataDialogState extends State<_EraseUserDataDialog> {
+  final _phraseController = TextEditingController();
+
+  @override
+  void dispose() {
+    _phraseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Erase your data and start fresh?'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'This permanently removes your saved cards, transactions, imports, rules, and other account data from the server and this device. Your login stays active. You can import data again afterward.',
+        ),
+        const SizedBox(height: AppSpace.md),
+        TextField(
+          controller: _phraseController,
+          decoration: const InputDecoration(labelText: 'Type ERASE to confirm'),
+          onChanged: (_) => setState(() {}),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(false),
+        child: const Text('Cancel'),
+      ),
+      TextButton(
+        onPressed: _phraseController.text.trim() == 'ERASE'
+            ? () => Navigator.of(context).pop(true)
+            : null,
+        child: const Text(
+          'Erase data',
+          style: TextStyle(color: BambooInk.clay),
+        ),
+      ),
+    ],
+  );
 }
 
 class _SectionLabel extends StatelessWidget {
@@ -222,17 +356,30 @@ class _StorageRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.sd_storage_outlined, size: 20, color: BambooInk.ink900),
+          const Icon(
+            Icons.sd_storage_outlined,
+            size: 20,
+            color: BambooInk.ink900,
+          ),
           const SizedBox(width: AppSpace.md),
           Expanded(
-            child: Text('Cache size', style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+            child: Text(
+              'Cache size',
+              style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+            ),
           ),
           cacheSize.when(
-            data: (bytes) =>
-                Text(formatBytes(bytes), style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
-            loading: () =>
-                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-            error: (_, _) => Text('—', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+            data: (bytes) => Text(
+              formatBytes(bytes),
+              style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+            ),
+            loading: () => const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            error: (_, _) =>
+                Text('—', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
           ),
         ],
       ),
@@ -243,7 +390,10 @@ class _StorageRow extends StatelessWidget {
 class _RecordCountsCard extends StatelessWidget {
   final AsyncValue<List<dynamic>> cardsAsync;
   final AsyncValue<int> txnCountAsync;
-  const _RecordCountsCard({required this.cardsAsync, required this.txnCountAsync});
+  const _RecordCountsCard({
+    required this.cardsAsync,
+    required this.txnCountAsync,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -316,7 +466,9 @@ class _ActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = destructive ? BambooInk.clay : BambooInk.ink900;
     return Material(
-      color: destructive ? BambooInk.clay.withValues(alpha: 0.1) : BambooInk.glassFillOnPaper,
+      color: destructive
+          ? BambooInk.clay.withValues(alpha: 0.1)
+          : BambooInk.glassFillOnPaper,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -325,7 +477,9 @@ class _ActionTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(
-              color: destructive ? BambooInk.clay.withValues(alpha: 0.3) : BambooInk.hairlineOnPaper,
+              color: destructive
+                  ? BambooInk.clay.withValues(alpha: 0.3)
+                  : BambooInk.hairlineOnPaper,
             ),
           ),
           padding: const EdgeInsets.all(AppSpace.lg),
@@ -339,7 +493,10 @@ class _ActionTile extends StatelessWidget {
                   children: [
                     Text(title, style: BambooFonts.heading(14.5, color: color)),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                    Text(
+                      subtitle,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
                   ],
                 ),
               ),

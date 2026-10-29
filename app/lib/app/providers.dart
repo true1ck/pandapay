@@ -41,6 +41,7 @@ import '../data/local/sms_rule_bundle.dart';
 import '../data/local/sms_rule_bundle_store.dart';
 import '../data/local/sms_facts_outbox.dart';
 import '../data/local/sms_dismissal_outbox.dart';
+import '../data/local/sms_feedback_outbox.dart';
 import '../data/local/sms_rule_exposure_outbox.dart';
 import '../data/local/sms_intake_repository.dart';
 import '../data/local/sms_import_store.dart';
@@ -309,6 +310,50 @@ final consentsApiProvider = Provider<ConsentsApi?>((ref) {
     client: ref.read(authenticatedHttpClientProvider),
   );
 });
+
+Future<ConsentRecord?> _currentSmsSharedLearningConsent(Ref ref) async {
+  final cached = ref.read(smsSharedLearningConsentProvider).valueOrNull;
+  if (cached != null) return cached;
+  try {
+    return await ref.read(smsSharedLearningConsentProvider.future);
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> _flushSmsLearningQueues(
+  Ref ref,
+  UserCardsRepository repository,
+  String namespace,
+) async {
+  if (ref.read(cacheNamespaceProvider) != namespace) return;
+  // Nothing queued means the consent lookup and both flushes would all be
+  // wasted work — offline they can only fail, and the reconnect flush owns
+  // the retry. The queue check is local, so it costs no network.
+  if (!await repository.hasPendingSmsLearningWork()) return;
+  final consent = await _currentSmsSharedLearningConsent(ref);
+  if (consent == null || ref.read(cacheNamespaceProvider) != namespace) return;
+  await repository.flushDismissalQueue();
+  await repository.flushSmsLearningFeedbackQueue();
+}
+
+/// Latest explicit SMS shared-learning permission. It is separate from
+/// merchant contributions consent because SMS feedback may include financial
+/// fields such as amount, merchant, date, and category.
+final smsSharedLearningConsentProvider =
+    FutureProvider.autoDispose<ConsentRecord?>((ref) async {
+      final api = ref.watch(consentsApiProvider);
+      if (api == null) return null;
+      final records = await api.fetchLatest();
+      for (final record in records) {
+        if (record.purpose == smsSharedLearningPurpose &&
+            record.granted &&
+            record.policyVersion == smsSharedLearningPolicyVersion) {
+          return record;
+        }
+      }
+      return null;
+    });
 
 /// Plan Phase 2.3 — attributed outbound "Apply" links. Null when signed out:
 /// a click has to belong to a profile for the attribution to mean anything.
@@ -1167,11 +1212,17 @@ final smsAutoResolutionControllerProvider =
           'to be initialized before it is read',
         );
       }
+      final consent = ref.watch(smsSharedLearningConsentProvider).valueOrNull;
       return SmsAutoResolutionController(
         database: cache.financialStore.database,
         store: cache.financialStore,
         reviewRepository: ref.watch(needsReviewRepositoryProvider),
         namespace: ref.watch(cacheNamespaceProvider),
+        smsLearningConsentGrantedAt:
+            consent?.policyVersion == smsSharedLearningPolicyVersion &&
+                consent?.granted == true
+            ? consent!.grantedAt
+            : null,
       );
     });
 
@@ -1645,6 +1696,24 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       final cache = await ref.read(responseCacheProvider.future);
       return SmsDismissalOutbox(cache.financialStore.database, namespace);
     },
+    feedbackOutbox: () async {
+      if (ref.read(cacheNamespaceProvider) != namespace) {
+        throw StateError('Account changed before SMS feedback sync');
+      }
+      final cache = await ref.read(responseCacheProvider.future);
+      return SmsFeedbackOutbox(
+        cache.financialStore.database,
+        namespace: namespace,
+      );
+    },
+    loadSmsSharedLearningConsent: () async =>
+        (await _currentSmsSharedLearningConsent(ref))?.grantedAt,
+    isRepeatedSmsOccurrence: (sourceKey) async {
+      if (ref.read(cacheNamespaceProvider) != namespace) return true;
+      final cache = await ref.read(responseCacheProvider.future);
+      return SmsIntakeRepository(cache.financialStore.database)
+          .hasRepeatedOccurrence(namespace, sourceKey);
+    },
     onTransactionSaved: (mutationId, transactionId) {
       if (ref.read(cacheNamespaceProvider) != namespace) return;
       ref
@@ -1799,17 +1868,23 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
             outcome == 'duplicate' ||
             store.hasReceipt(namespace, key)) {
           acknowledgements.add(() {
-            store.discardProvisional(
-              namespace,
-              key,
-              confirmedId: matched.isNotEmpty
-                  ? matched.first.id
-                  : inactive
-                  ? serverId
-                  : outcome == 'imported'
-                  ? serverId
-                  : null,
-            );
+            if (matched.isNotEmpty ||
+                inactive ||
+                outcome == 'imported' ||
+                outcome == 'duplicate' ||
+                localEventByKey[key] != 'transaction') {
+              store.discardProvisional(
+                namespace,
+                key,
+                confirmedId: matched.isNotEmpty
+                    ? matched.first.id
+                    : inactive
+                    ? serverId
+                    : outcome == 'imported'
+                    ? serverId
+                    : null,
+              );
+            }
             intake.acknowledge(namespace, key);
           });
         } else if (localEventByKey[key] == 'bill') {
@@ -1834,7 +1909,9 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
               !isNoise;
           if (isNoise || (outcome == 'unparsed' && !isFinancialCandidate)) {
             acknowledgements.add(() {
-              store.discardProvisional(namespace, key);
+              if (localEventByKey[key] != 'transaction') {
+                store.discardProvisional(namespace, key);
+              }
               intake.acknowledge(namespace, key);
             });
           } else {
@@ -1861,7 +1938,9 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
                   ),
                 );
             acknowledgements.add(() {
-              store.discardProvisional(namespace, key);
+              if (localEventByKey[key] != 'transaction') {
+                store.discardProvisional(namespace, key);
+              }
               intake.acknowledge(namespace, key);
             });
           }
@@ -1878,7 +1957,7 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       }
     },
   );
-  repository.flushDismissalQueue().ignore();
+  _flushSmsLearningQueues(ref, repository, namespace).ignore();
   return repository;
 });
 
@@ -2791,6 +2870,7 @@ final outboxFlushProvider = Provider<void>((ref) {
         duplicateResolutionOutboxRepositoryProvider.future,
       );
       final duplicateSent = await duplicateOutbox.flush(repo);
+      await _flushSmsLearningQueues(ref, repo, namespace);
       if (!disposed &&
           ref.read(cacheNamespaceProvider) == namespace &&
           (sent > 0 || duplicateSent > 0)) {
@@ -4405,23 +4485,62 @@ final transactionTagsProvider =
 
 /// Reactive entity commits, independent of token rotation and screen-specific
 /// invalidation lists. No initial event: opening a store is not a data change.
+///
+/// The store listener attaches before the review/financial pipeline finishes
+/// booting and holds any commit seen in that window, then emits it once the
+/// revision stream is live. A fast provider (the card-bill ledger reads only
+/// local rows) can finish its first build before the old `await for` started
+/// listening, dropping the very commit that should have refreshed it.
 final financialStoreRevisionProvider = StreamProvider.family<int, String>((
   ref,
   entity,
-) async* {
+) {
   final namespace = ref.watch(cacheNamespaceProvider);
   final notificationsReady = ref.watch(_reviewFinancialChangesProvider.future);
   final cacheFuture = _cacheOrNull(ref);
-  await notificationsReady;
-  final cache = await cacheFuture;
-  if (cache == null) return;
+  final controller = StreamController<int>();
+  StreamSubscription<FinancialChange>? subscription;
   var version = 0;
-  await for (final changed in cache.financialStore.changes) {
-    if (changed.namespace == namespace &&
-        (changed.entity == entity || changed.entity == 'all')) {
-      yield ++version;
+  var started = false;
+  var live = false;
+  var missed = false;
+  var disposed = false;
+
+  Future<void> start() async {
+    final cache = await cacheFuture;
+    if (disposed) return;
+    if (cache == null) {
+      await controller.close();
+      return;
     }
+    subscription = cache.financialStore.changes.listen((changed) {
+      if (changed.namespace != namespace ||
+          (changed.entity != entity && changed.entity != 'all')) {
+        return;
+      }
+      if (!live) {
+        missed = true;
+        return;
+      }
+      controller.add(++version);
+    });
+    await notificationsReady;
+    if (disposed) return;
+    live = true;
+    if (missed) controller.add(++version);
   }
+
+  controller.onListen = () {
+    if (started) return;
+    started = true;
+    unawaited(start());
+  };
+  ref.onDispose(() {
+    disposed = true;
+    subscription?.cancel();
+    controller.close();
+  });
+  return controller.stream;
 });
 
 void Function() _financialChanges(Ref ref, String entity) {
@@ -6170,6 +6289,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     var changed = false;
     for (final item in items) {
       if (ref.read(cacheNamespaceProvider) != namespace) break;
+      // A user explicitly undid this AI decision. The existing server job is
+      // still done, so polling it again would immediately auto-file the SMS.
+      if (item.reason == 'moved_from_auto_resolved') continue;
       // A completed job returns its original fact list; do not restore facts
       // the user already resolved from a still-open multi-fact review item.
       if (item.aiSuggestions?.isNotEmpty == true) continue;
@@ -6274,6 +6396,65 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
                     ? (result['confidenceScore'] as num).toDouble()
                     : null,
               );
+          if (resolution.outcome == SmsAiResolutionOutcome.autoResolved &&
+              resolution.historyId != null) {
+            // An AI-only outcome is useful review evidence, never a user
+            // confirmation. The server keeps it as an admin proposal and
+            // excludes it from user-vote thresholds and parser training.
+            final consent = ref.read(smsSharedLearningConsentProvider).valueOrNull;
+            if (consent?.granted == true &&
+                consent?.policyVersion == smsSharedLearningPolicyVersion) {
+              final history = AutoResolvedHistoryRepository(
+                cache.financialStore.database,
+                namespace: namespace,
+              ).findById(resolution.historyId!);
+              if (history != null &&
+                    !SmsIntakeRepository(cache.financialStore.database)
+                        .hasRepeatedOccurrence(namespace, history.sourceKey) &&
+                  redactSmsLearningPattern(history.sourceBody) != null &&
+                  RegExp(r'^[0-9a-f]{64}$').hasMatch(history.sourceKey)) {
+                // Use the exact fact family chosen by the resolver. The raw
+                // response may include non-actionable/secondary suggestions
+                // before the primary fact, so suggestions.first can describe
+                // something different from the record we just filed.
+                final factType = resolution.factFamily ?? 'unresolved';
+                try {
+                  SmsFeedbackOutbox(
+                    cache.financialStore.database,
+                    namespace: namespace,
+                  ).enqueue(
+                    sourceKey: history.sourceKey,
+                    action: 'ai_auto_resolved',
+                    sender: history.sender,
+                    resolvedKind: history.resolvedKind,
+                    occurredAt: history.occurredAt,
+                    consentGrantedAt: consent!.grantedAt,
+                    sampleBody: history.sourceBody,
+                    originalDecision: {
+                      'kind': factType,
+                      'fields': {
+                        'merchant': history.title,
+                        'amountInr': history.amountPaise / 100,
+                        if (history.categorySlug != null)
+                          'categorySlug': history.categorySlug,
+                        'occurredAt': history.occurredAt,
+                        if (history.dueDate != null) 'dueDate': history.dueDate,
+                      },
+                    },
+                    reason: 'ai_auto_resolved_unconfirmed',
+                    aiConfidenceScore: history.confidence,
+                    decisionOrigin: 'ai',
+                  );
+                  ref.read(userCardsRepositoryProvider)
+                      ?.flushSmsLearningFeedbackQueue()
+                      .ignore();
+                } catch (_) {
+                  // The already-saved AI decision remains available for user
+                  // review; learning sync must never undo it.
+                }
+              }
+            }
+          }
           if (resolution.outcome == SmsAiResolutionOutcome.needsReview) {
             changed =
                 await reviewRepo.updateAiSuggestions(
@@ -6446,6 +6627,58 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
                 changed;
           } catch (_) {
             /* Retry the one-time migration after connectivity returns. */
+          }
+        }
+        // One-time replay of EMI-repayment bank credit alerts that older
+        // parser builds could only file under the generic 'Money received'
+        // label. The batch import is idempotent (same source key), so the
+        // replay never doubles a transaction; the updated parser re-classifies
+        // them as loan repayments and refreshes the stored merchant label.
+        final emiNamespace = ref.read(cacheNamespaceProvider);
+        final emiReplayKey =
+            'pandapay_app.emi_repayment_replayed_v1_$emiNamespace';
+        if (repo != null &&
+            prefs.getInt(emiReplayKey) == null &&
+            ref.read(isOnlineProvider).valueOrNull != false) {
+          try {
+            final cache = await ref.read(responseCacheProvider.future);
+            final candidates = cache.financialStore
+                .emiRepaymentReplayCandidates(emiNamespace);
+            var replayed = true;
+            if (candidates.isNotEmpty) {
+              for (var i = 0; i < candidates.length; i += 200) {
+                try {
+                  await repo.logTransactionsFromSmsBatch(
+                    messages: [
+                      for (final row in candidates.skip(i).take(200))
+                        SmsBatchMessage(
+                          userCardId: null,
+                          sender: row['sender'] as String,
+                          body: row['body'] as String,
+                          occurredAt: row['occurredAt'] as DateTime,
+                        ),
+                    ],
+                    backfill: true,
+                    captureLocally: false,
+                    notifyNewTransactions: false,
+                  );
+                } catch (_) {
+                  // A failed chunk leaves the flag unset so the next online
+                  // lifecycle pass retries it; replays are idempotent.
+                  replayed = false;
+                  break;
+                }
+              }
+              changed = true;
+            }
+            if (replayed) {
+              await prefs.setInt(
+                emiReplayKey,
+                DateTime.now().millisecondsSinceEpoch,
+              );
+            }
+          } catch (_) {
+            // Retry the one-time replay when connectivity returns.
           }
         }
         try {
@@ -6674,6 +6907,17 @@ class SmsAutoImportController {
       if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
         throw StateError('Account changed during SMS capture');
       }
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final lastScanVer =
+        prefs.getInt('pandapay_app.sms_inbox_scanner_ver_${namespace}') ?? 0;
+    if (lastScanVer < LocalSmsParser.version) {
+      SmsInboxProgress(store.database).rewind(namespace, 300);
+      await prefs.setInt(
+        'pandapay_app.sms_inbox_scanner_ver_${namespace}',
+        LocalSmsParser.version,
+      );
     }
 
     final scanner = SmsInboxScanner(
@@ -6978,7 +7222,18 @@ class SmsAutoImportController {
           factsOutbox.failed(namespace, entry.id);
         }
       }
-      for (final correction in factsOutbox.pendingOverrides(namespace)) {
+      // C3 fact-override consent gate: the stored patch is the user's
+      // own-account fact fix and always syncs, but the server forwards
+      // sampleBody/templateText into cross-user learning examples under a
+      // consent check that does not verify the policy version. Only let
+      // SMS-derived evidence ride the upload while the full capture-time
+      // consent (granted AND current policy version) is in force.
+      final pendingOverrides = factsOutbox.pendingOverrides(namespace);
+      final smsLearningConsented =
+          pendingOverrides.isNotEmpty &&
+          _ref.read(isOnlineProvider).valueOrNull != false &&
+          await _currentSmsSharedLearningConsent(_ref) != null;
+      for (final correction in pendingOverrides) {
         if (_ref.read(cacheNamespaceProvider) != namespace) break;
         if (_ref.read(isOnlineProvider).valueOrNull == false) break;
         final accepted = await repo.overrideSmsFact(
@@ -6986,8 +7241,8 @@ class SmsAutoImportController {
           factIndex: correction.factIndex,
           patch: correction.patch,
           reason: correction.reason,
-          sampleBody: correction.sampleBody,
-          templateText: correction.templateText,
+          sampleBody: smsLearningConsented ? correction.sampleBody : null,
+          templateText: smsLearningConsented ? correction.templateText : null,
         );
         if (accepted) {
           factsOutbox.acknowledgeOverride(

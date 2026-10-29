@@ -412,10 +412,18 @@ async function writeSmsFactOverride(
   { sourceId, factIndex, patch, reason },
 ) {
   await client.query(
+    // Merge at the top level instead of replacing: a category-only correction
+    // must not drop an earlier merchant correction. jsonb || keeps the newest
+    // value for conflicting keys while preserving explicit JSON nulls, and the
+    // profile predicate keeps a conflict from crossing tenant ownership.
     `INSERT INTO fact_overrides (profile_id, source_id, fact_index, patch, reason)
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (source_id, fact_index)
-     DO UPDATE SET patch = EXCLUDED.patch, reason = EXCLUDED.reason, applied_at = now()`,
+     DO UPDATE SET
+       patch = COALESCE(fact_overrides.patch, '{}'::jsonb) || COALESCE(EXCLUDED.patch, '{}'::jsonb),
+       reason = EXCLUDED.reason,
+       applied_at = now()
+     WHERE fact_overrides.profile_id = EXCLUDED.profile_id`,
     [profileId, sourceId, factIndex, JSON.stringify(patch), reason || null],
   );
 }

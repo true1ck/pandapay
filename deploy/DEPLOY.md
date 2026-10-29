@@ -149,10 +149,15 @@ the separate `rewards_worker_login`. Both target `pandapay`; only the latter
 can assume the narrow worker role. `AUTH_DATABASE_URL` targets the separate
 `pandapay_auth` database.
 
-Autonomous SMS learning is opt-in. Leave `SMS_LEARNING_WORKER_DB_PASSWORD`,
-`SMS_LEARNING_DATABASE_URL`, and `SMS_LEARNING_HMAC_KEY` blank (all three —
-the deploy script enforces the pairing) and no `sms_learning_worker` login is
-bootstrapped at all. When enabling the worker, set
+SMS dismissal feedback needs a stable `SMS_LEARNING_HMAC_KEY`. If it is blank,
+the deploy script generates a 64-character key in the host-only `.env` on the
+first deployment and keeps it on later deployments. A missing key causes
+opted-in dismissal feedback to remain in the phone's retry queue. The key is
+required even when the autonomous rule worker is disabled.
+
+Autonomous cross-user rule learning remains opt-in. Leave
+`SMS_LEARNING_WORKER_DB_PASSWORD` and `SMS_LEARNING_DATABASE_URL` blank to
+keep the `sms_learning_worker` login and process disabled. When enabling the worker, set
 `SMS_LEARNING_DATABASE_URL` to the `sms_learning_worker` login that
 `SMS_LEARNING_WORKER_DB_PASSWORD` bootstraps with a distinct generated
 password; never reuse `API_DATABASE_URL`. The worker startup check rejects

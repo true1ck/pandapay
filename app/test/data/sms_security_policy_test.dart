@@ -33,7 +33,9 @@ void main() {
         classifySmsTriage('VM-FABLEBK', body).kind == SmsTriageKind.sensitive,
         sensitive,
       );
-      if (!sensitive && row['id'] != 'safe-balance') {
+      if (!sensitive &&
+          row['id'] != 'safe-balance' &&
+          row['id'] != 'safe-statement-instruction') {
         expect(looksLikeTransactionSms(body), isTrue);
       }
       final batch = IosShortcutSmsBatch.fromRows([

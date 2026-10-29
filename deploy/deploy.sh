@@ -260,10 +260,17 @@ if [ -n "$AI_WORKER_TOKEN_VALUE" ] && [ "${#AI_WORKER_TOKEN_VALUE}" -lt 32 ]; th
 fi
 SMS_LEARNING_DATABASE_URL_VALUE="$(sed -n 's/^SMS_LEARNING_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
 SMS_LEARNING_HMAC_KEY_VALUE="$(sed -n 's/^SMS_LEARNING_HMAC_KEY=//p' .env | sed 's/^"//; s/"$//')"
-if { [ -n "$SMS_LEARNING_DATABASE_URL_VALUE" ] && [ -z "$SMS_LEARNING_HMAC_KEY_VALUE" ]; } \
-  || { [ -z "$SMS_LEARNING_DATABASE_URL_VALUE" ] && [ -n "$SMS_LEARNING_HMAC_KEY_VALUE" ]; }; then
-  echo "FATAL: SMS_LEARNING_DATABASE_URL and SMS_LEARNING_HMAC_KEY must both be set or both be blank"
-  exit 1
+if [ -z "$SMS_LEARNING_HMAC_KEY_VALUE" ]; then
+  # Feedback collection runs in the API even when the optional cross-user
+  # rule worker is off. Generate this once on the host so previously queued
+  # dismissals can be stored; never rotate it on routine deployments.
+  command -v openssl >/dev/null 2>&1 || {
+    echo 'FATAL: openssl is required to provision the SMS learning key'
+    exit 1
+  }
+  SMS_LEARNING_HMAC_KEY_VALUE="$(openssl rand -hex 32)"
+  upsert_env_value SMS_LEARNING_HMAC_KEY "$SMS_LEARNING_HMAC_KEY_VALUE"
+  echo '    SMS learning feedback key provisioned'
 fi
 if [ -n "$SMS_LEARNING_HMAC_KEY_VALUE" ] && [ "${#SMS_LEARNING_HMAC_KEY_VALUE}" -lt 32 ]; then
   echo "FATAL: SMS_LEARNING_HMAC_KEY must contain at least 32 characters"

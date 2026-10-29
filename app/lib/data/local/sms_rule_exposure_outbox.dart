@@ -26,6 +26,14 @@ class SmsRuleExposureOutbox {
         PRIMARY KEY(namespace, candidate_id, source_key, stage, stage_version)
       );
     ''');
+    database.db.execute('''
+      CREATE TABLE IF NOT EXISTS sms_rule_source_attribution (
+        namespace TEXT NOT NULL,
+        source_key TEXT NOT NULL,
+        candidate_id TEXT NOT NULL,
+        PRIMARY KEY(namespace, source_key)
+      )
+    ''');
     for (final statement in [
       'ALTER TABLE sms_rule_exposure_outbox ADD COLUMN stage_version INTEGER NOT NULL DEFAULT 1',
       'ALTER TABLE sms_rule_exposure_outbox ADD COLUMN assignment_id TEXT',
@@ -77,6 +85,37 @@ class SmsRuleExposureOutbox {
         exactFieldsEqual == null ? null : (exactFieldsEqual ? 1 : 0),
         factValid == null ? null : (factValid ? 1 : 0), invariantBreach ? 1 : 0],
     );
+    if (applied && matched) {
+      database.db.execute(
+        'INSERT OR REPLACE INTO sms_rule_source_attribution '
+        '(namespace, source_key, candidate_id) VALUES (?,?,?)',
+        [namespace, sourceKey, candidateId],
+      );
+    }
+  }
+
+  /// The candidate whose observation actually produced this SMS's decision,
+  /// but only when that candidate produced the fact being corrected.
+  ///
+  /// Attribution is stored per message while corrections are per fact, so
+  /// without [family] a two-fact message would blame one candidate for both.
+  /// A null [family] (or one the candidate did not produce, such as a
+  /// `dismissed` correction) returns null: no attribution is safer than a
+  /// wrong one, because the server turns this into negative evidence against
+  /// the rule.
+  String? appliedCandidateForFact(
+    String namespace,
+    String sourceKey, {
+    required String? family,
+  }) {
+    if (family == null) return null;
+    final rows = database.db.select(
+      'SELECT candidate_id FROM sms_rule_exposure_outbox '
+      'WHERE namespace=? AND source_key=? AND applied=1 AND matched=1 '
+      'AND candidate_family=? LIMIT 1',
+      [namespace, sourceKey, family],
+    );
+    return rows.isEmpty ? null : rows.first['candidate_id'] as String;
   }
 
   List<Map<String, dynamic>> pending(String namespace, {int limit = 100}) => database.db
@@ -118,8 +157,14 @@ class SmsRuleExposureOutbox {
     );
   }
 
-  void clear(String namespace) => database.db.execute(
-        'DELETE FROM sms_rule_exposure_outbox WHERE namespace=?',
-        [namespace],
-      );
+  void clear(String namespace) {
+    database.db.execute(
+      'DELETE FROM sms_rule_exposure_outbox WHERE namespace=?',
+      [namespace],
+    );
+    database.db.execute(
+      'DELETE FROM sms_rule_source_attribution WHERE namespace=?',
+      [namespace],
+    );
+  }
 }

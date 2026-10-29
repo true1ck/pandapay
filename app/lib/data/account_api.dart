@@ -4,26 +4,79 @@ import 'package:http/http.dart' as http;
 
 import 'api_exception.dart';
 
-/// H2 Account (real) — thin client for api/'s account-deletion endpoints.
+/// Client for account reset and erasure endpoints across API and auth.
 /// Mirrors `ProfileApi`'s exact constructor/method shape (auth_api.dart) so
 /// this reads as the same family of API client, not a new pattern.
 ///
-/// Both routes only schedule/cancel deletion (`profiles.deletion_requested_at`
-/// / `deletion_due_at`) — neither calls `pandapay.execute_account_deletion()`
-/// directly. Actually executing the deletion once `deletion_due_at` passes
-/// needs a scheduled sweep job, which is out of this screen's scope.
+/// The legacy request/cancel methods remain for users with an older pending
+/// deletion request. New deletion requests erase the product and auth records.
 class AccountApi {
   final String apiBaseUrl;
+  final String authBaseUrl;
   final String accessToken;
   final http.Client _client;
 
-  AccountApi({required this.apiBaseUrl, required this.accessToken, http.Client? client})
+  AccountApi({required this.apiBaseUrl, required this.authBaseUrl, required this.accessToken, http.Client? client})
     : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
     'Authorization': 'Bearer $accessToken',
     'Content-Type': 'application/json',
   };
+
+  /// Erases account-owned product rows while retaining the login identity.
+  Future<void> resetUserData() async {
+    final authorization = await _client.post(
+      Uri.parse('$authBaseUrl/users/me/deletion-check'),
+      headers: _headers,
+    );
+    if (authorization.statusCode != 200) {
+      throw ApiException(
+        'POST /users/me/deletion-check failed: ${authorization.statusCode} ${authorization.body}',
+      );
+    }
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/account/data-reset'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'POST /account/data-reset failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
+  /// Erases product records first, then removes the auth identity. If auth
+  /// deletion fails, the server-side product purge is safe to retry.
+  Future<void> deleteAccountPermanently() async {
+    final preflight = await _client.post(
+      Uri.parse('$authBaseUrl/users/me/deletion-check'),
+      headers: _headers,
+    );
+    if (preflight.statusCode != 200) {
+      throw ApiException(
+        'POST /users/me/deletion-check failed: ${preflight.statusCode} ${preflight.body}',
+      );
+    }
+    final erase = await _client.post(
+      Uri.parse('$apiBaseUrl/account/erase'),
+      headers: _headers,
+    );
+    if (erase.statusCode != 200) {
+      throw ApiException(
+        'POST /account/erase failed: ${erase.statusCode} ${erase.body}',
+      );
+    }
+    final deletion = await _client.delete(
+      Uri.parse('$authBaseUrl/users/me'),
+      headers: _headers,
+    );
+    if (deletion.statusCode != 200) {
+      throw ApiException(
+        'DELETE /users/me failed: ${deletion.statusCode} ${deletion.body}',
+      );
+    }
+  }
 
   /// Schedules deletion 30 days out. Returns the `deletion_due_at` the
   /// server computed (never trust a client-computed date for this).
