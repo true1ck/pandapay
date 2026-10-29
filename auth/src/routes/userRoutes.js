@@ -4,7 +4,7 @@ const db = require('../db');
 const auth = require('../middleware/authMiddleware');
 // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
 const { decryptPhoneNumber } = require('../utils/fieldEncryption');
-const { maskEmail, maskPhone } = require('../utils/recoveryContacts');
+const { maskEmail, maskPhone, maskPhonePrefix } = require('../utils/recoveryContacts');
 
 // === SECURITY HARDENING: STEP-UP AUTH ===
 const { requireRecentOtpOrReauth } = require('../middleware/stepUpAuth');
@@ -127,7 +127,7 @@ router.get('/me/recovery-status', auth, userRateLimitRead, async (req, res) => {
       // `phoneVerified` — because the Email & phone screen needs to show "we
       // have this number, it just isn't proven" as a distinct state from "no
       // number". `phone_verified` above is what the UI keys the badge off.
-      phone_hint: phonePlain ? maskPhone(phonePlain) : null,
+      phone_hint: phonePlain ? (req.user?.recovery_channel ? maskPhonePrefix(phonePlain) : maskPhone(phonePlain)) : null,
     });
   } catch (err) {
     console.error('recovery status error', err);

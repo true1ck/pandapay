@@ -20,7 +20,7 @@ void main() {
     'email_verified': true,
     'has_backup_channel': true,
     'email_hint': email,
-    'phone_hint': '+91 •••• 1234',
+    'phone_hint': '+91 98••••••••',
   };
 
   http.Response jsonResponse(Object body, [int status = 200]) =>
@@ -85,7 +85,7 @@ void main() {
   });
 
   testWidgets(
-    'verified email shows masked phone without activating a session',
+    'verified email prompts for linked phone without activating a session',
     (tester) async {
       await mountRecovery(
         tester,
@@ -115,7 +115,8 @@ void main() {
       );
       expect(find.text('Return to sign in'), findsNothing);
       await verify(tester);
-      expect(find.text('+91 •••• 1234'), findsOneWidget);
+      expect(find.text('+91 98••••••••'), findsOneWidget);
+      expect(find.text('Linked phone number:'), findsOneWidget);
       expect(find.text('Return to sign in'), findsOneWidget);
       expect(find.text('Last 4 letters or digits'), findsOneWidget);
       expect(find.text('Continue signing in'), findsNothing);
@@ -158,13 +159,14 @@ void main() {
       await tester.tap(find.text('Show linked contact'));
       await tester.pumpAndSettle();
       expect(verifications, 1);
-      expect(find.text('+91 •••• 1234'), findsOneWidget);
+      expect(find.text('+91 98••••••••'), findsOneWidget);
+      expect(find.text('Linked phone number:'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
 
   testWidgets(
-    'phone recovery shows masked email and replaces it only after a new code',
+    'phone recovery prompts for linked email and replaces it only after a new code',
     (tester) async {
       var saves = 0;
       await mountRecovery(
@@ -197,6 +199,7 @@ void main() {
       );
       await verify(tester);
       expect(find.text('o•••@gmail.com'), findsOneWidget);
+      expect(find.text('Linked email:'), findsOneWidget);
       await tester.ensureVisible(find.text('I can’t access this email'));
       await tester.tap(find.text('I can’t access this email'));
       await tester.pumpAndSettle();
@@ -209,6 +212,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(saves, 1);
       expect(find.text('n•••@gmail.com'), findsOneWidget);
+      expect(find.text('Return to sign in'), findsOneWidget);
       expect(
         ProviderScope.containerOf(
           tester.element(find.byType(AccountRecoveryScreen)),

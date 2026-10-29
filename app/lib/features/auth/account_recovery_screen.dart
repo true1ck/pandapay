@@ -377,12 +377,21 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
     );
   }
 
+  String? _formatRecoveryHint(String? hint) {
+    if (hint == null) return null;
+    if (!_identifierIsEmail) return hint;
+    if (!hint.contains(RegExp(r'\d$'))) return hint;
+    final country = RegExp(r'^(\+\d{1,3}\s*)').firstMatch(hint)?.group(1) ?? '';
+    return '${country}••••••••';
+  }
+
   @override
   Widget build(BuildContext context) {
     final identifier = _identifierController.text.trim();
-    final hint = _identifierIsEmail
+    final rawHint = _identifierIsEmail
         ? _recoveryStatus?.phoneHint
         : _recoveryStatus?.emailHint;
+    final hint = _formatRecoveryHint(rawHint);
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -416,60 +425,68 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppSpace.sm),
-                Text(
-                  hint == null
-                      ? 'You verified $identifier. No ${_identifierIsEmail ? 'phone number' : 'email address'} is linked to this account.'
-                      : 'You verified $identifier. Your linked ${_identifierIsEmail ? 'phone number' : 'email address'} is:',
-                  style: BambooFonts.ui(
-                    14,
-                    color: BambooInk.ink500,
-                    height: 1.5,
+                if (hint == null) ...[
+                  Text(
+                    'You verified $identifier. No ${_identifierIsEmail ? 'phone number' : 'email address'} is linked to this account.',
+                    style: BambooFonts.ui(
+                      14,
+                      color: BambooInk.ink500,
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                if (hint != null) ...[
-                  const SizedBox(height: AppSpace.md),
+                ] else ...[
+                  Text(
+                    'Linked ${_identifierIsEmail ? 'phone number' : 'email'}:',
+                    style: BambooFonts.ui(
+                      14,
+                      color: BambooInk.ink500,
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpace.xs),
                   Text(
                     hint,
                     textAlign: TextAlign.center,
                     style: BambooFonts.heading(24, color: BambooInk.ink900),
                   ),
-                ],
-                const SizedBox(height: AppSpace.lg),
-                Text(
-                  'To confirm you recognise it, enter the last 4 digits of the linked ${_identifierIsEmail ? 'phone number' : 'email address'}. For an email, use its last 4 letters or digits and ignore punctuation.',
-                  textAlign: TextAlign.center,
-                  style: BambooFonts.ui(
-                    14,
-                    color: BambooInk.ink500,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: AppSpace.md),
-                TextField(
-                  controller: _contactCheckController,
-                  textCapitalization: TextCapitalization.none,
-                  textInputAction: TextInputAction.done,
-                  maxLength: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Last 4 letters or digits',
-                    counterText: '',
-                  ),
-                  onSubmitted: (_) => _confirmLinkedContactAndReturn(),
-                ),
-                const SizedBox(height: AppSpace.xl),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: BambooInk.slate,
-                    foregroundColor: BambooInk.lime,
-                    minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                  const SizedBox(height: AppSpace.md),
+                  Text(
+                    'To confirm you recognise it, enter the last 4 digits of the linked ${_identifierIsEmail ? 'phone number' : 'email address'}. For an email, use its last 4 letters or digits and ignore punctuation.',
+                    textAlign: TextAlign.center,
+                    style: BambooFonts.ui(
+                      14,
+                      color: BambooInk.ink500,
+                      height: 1.5,
                     ),
                   ),
-                  onPressed: _loading ? null : _confirmLinkedContactAndReturn,
-                  child: Text(_loading ? 'Checking…' : 'Return to sign in'),
-                ),
+                  const SizedBox(height: AppSpace.md),
+                  TextField(
+                    controller: _contactCheckController,
+                    textCapitalization: TextCapitalization.none,
+                    textInputAction: TextInputAction.done,
+                    maxLength: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Last 4 letters or digits',
+                      counterText: '',
+                    ),
+                    onSubmitted: (_) => _confirmLinkedContactAndReturn(),
+                  ),
+                  const SizedBox(height: AppSpace.xl),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: BambooInk.slate,
+                      foregroundColor: BambooInk.lime,
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onPressed: _loading ? null : _confirmLinkedContactAndReturn,
+                    child: Text(_loading ? 'Checking…' : 'Return to sign in'),
+                  ),
+                ],
                 TextButton(
                   onPressed: _loading
                       ? null

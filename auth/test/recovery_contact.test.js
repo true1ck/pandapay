@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
 const express = require('express');
-const { maskEmail, maskPhone } = require('../src/utils/recoveryContacts');
+const { maskEmail, maskPhone, maskPhonePrefix } = require('../src/utils/recoveryContacts');
 
 function load(relativePath, dependencies) {
   const filename = path.resolve(__dirname, relativePath);
@@ -93,6 +93,7 @@ async function harness(t) {
 test('linked contacts are masked in recognisable form', () => {
   assert.equal(maskEmail('chandresh@gmail.com'), 'c•••@gmail.com');
   assert.equal(maskPhone('+919876541234'), '+91 •••• 1234');
+  assert.equal(maskPhonePrefix('+919876541234'), '+91 98••••••••');
 });
 
 test('a normal session or expired recovery proof cannot replace a contact', async t => {
