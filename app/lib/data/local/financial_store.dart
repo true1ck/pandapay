@@ -1676,10 +1676,11 @@ class FinancialStore {
           body: row['body'] as String,
           receivedAt: receivedAt,
         );
-        if (parsed?.transaction == null ||
-            parsed!.transaction!.sourceKey != row['source_key'] ||
-            MerchantIdentity.cleanName(parsed!.transaction!.merchantName) == null ||
-            parsed.transaction!.amount.paise !=
+        final parsedTransaction = parsed?.transaction;
+        if (parsedTransaction == null ||
+            parsedTransaction.sourceKey != row['source_key'] ||
+            MerchantIdentity.cleanName(parsedTransaction.merchantName) == null ||
+            parsedTransaction.amount.paise !=
                 Money.fromRupees(payload['amount_inr'] as num).paise) {
           continue;
         }
