@@ -135,6 +135,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return null;
   }
 
+  /// Whether the submit button should read as active. Mirrors [_validate]
+  /// without duplicating its messages: every hard requirement that would
+  /// just bounce straight back as an inline error instead greys the button
+  /// out until it's met.
+  bool get _canSubmit {
+    final identifier = _identifierController.text.trim();
+    if (identifier.isEmpty || !identifier.contains('@')) return false;
+    final digits = _phoneController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length < 10) return false;
+    if (_isSignUp && !_acceptedTerms) return false;
+    return true;
+  }
+
   Future<void> _requestOtp() async {
     final validationError = _validate();
     if (validationError != null) {
@@ -373,6 +386,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             phoneFocusNode: _phoneFocusNode,
                             loading: _loading,
                             onSubmit: _requestOtp,
+                            canSubmit: () => _canSubmit,
                             onRequestPhoneHint: _requestPhoneNumberHint,
                             acceptedTerms: _acceptedTerms,
                             optInCrowdsource: _optInCrowdsource,
@@ -522,6 +536,10 @@ class _IdentifierStep extends StatelessWidget {
   final FocusNode phoneFocusNode;
   final bool loading;
   final VoidCallback onSubmit;
+
+  /// Read at build time so typing in either field re-evaluates it; the
+  /// submit button stays disabled while this returns false.
+  final bool Function() canSubmit;
   final VoidCallback onRequestPhoneHint;
 
   /// A4 — sign-up only. See _LoginScreenState's own fields for what each
@@ -541,6 +559,7 @@ class _IdentifierStep extends StatelessWidget {
     required this.phoneFocusNode,
     required this.loading,
     required this.onSubmit,
+    required this.canSubmit,
     required this.onRequestPhoneHint,
     required this.acceptedTerms,
     required this.optInCrowdsource,
@@ -602,7 +621,8 @@ class _IdentifierStep extends StatelessWidget {
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.done,
                 autofillHints: const [AutofillHints.telephoneNumber],
-                onSubmitted: (_) => loading ? null : onSubmit(),
+                onSubmitted: (_) =>
+                    loading || !canSubmit() ? null : onSubmit(),
                 style: BambooFonts.ui(15),
                 decoration:
                     _fieldDecoration(
@@ -651,10 +671,19 @@ class _IdentifierStep extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.only(top: 24),
-            child: EntryButton(
-              label: isSignUp ? 'Send verification code' : 'Send code',
-              onPressed: onSubmit,
-              loading: loading,
+            // Typing in either field doesn't rebuild the screen, so listen
+            // to both controllers here to flip the button between its light
+            // (not ready) and dark (ready) states.
+            child: ListenableBuilder(
+              listenable: Listenable.merge([
+                identifierController,
+                phoneController,
+              ]),
+              builder: (context, _) => EntryButton(
+                label: isSignUp ? 'Send verification code' : 'Send code',
+                onPressed: canSubmit() ? onSubmit : null,
+                loading: loading,
+              ),
             ),
           ),
         ],

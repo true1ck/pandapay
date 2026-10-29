@@ -77,6 +77,8 @@ void main() {
       );
       await tester.enterText(find.byType(TextField).at(0), 'test@example.com');
       await tester.enterText(find.byType(TextField).at(1), '9876543210');
+      // Send code only enables once the fields validate on the next frame.
+      await tester.pump();
       await tester.ensureVisible(find.text('Send code'));
       await tester.tap(find.text('Send code'));
       await tester.pumpAndSettle();
