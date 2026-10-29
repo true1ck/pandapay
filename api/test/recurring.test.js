@@ -49,6 +49,14 @@ test('three regular monthly charges are detected', () => {
   assert.strictEqual(series[0].typicalAmountInr, 649);
   assert.strictEqual(series[0].cadenceDays, 30);
   assert.strictEqual(series[0].occurrenceCount, 3);
+  assert.equal(series[0].reviewCandidate, true);
+});
+
+test('regular merchant visits are review candidates, never confirmed evidence', () => {
+  const series = detectRecurringSeries(monthly('Blue Tokai', 350, '2026-05-03', 4));
+  assert.equal(series.length, 1);
+  assert.equal(series[0].reviewCandidate, true);
+  assert.equal(series[0].subscriptionEvidence, 'posted_payment_pattern');
 });
 
 test('two anonymous charges are not enough', () => {

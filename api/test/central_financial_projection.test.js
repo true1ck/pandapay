@@ -188,6 +188,18 @@ test('generic merchant mandate does not imply a subscription', () => {
   assert.equal(decisions.some((item) => item.projectionKind === 'subscription'), false);
 });
 
+test('unknown merchant mandate with generic historical evidence stays mandate-only', () => {
+  const decisions = projection.buildProjectionDecisions({
+    facts: [mandate({
+      merchant: 'LOCAL GROCERY SHOP',
+      targetKind: 'service_merchant',
+      subscriptionEvidence: 'historical',
+    })],
+  });
+  assert.equal(decisions.filter((item) => item.projectionKind === 'mandate').length, 1);
+  assert.equal(decisions.some((item) => item.projectionKind === 'subscription'), false);
+});
+
 test('legacy known service mandate row gets an unpriced setup fallback', () => {
   const fallback = projection.legacyMandateSetupRow({
     id: 'legacy-openai', display_name: 'OPENAILLC', detection_source: 'mandate',

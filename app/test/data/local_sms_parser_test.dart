@@ -11,6 +11,19 @@ import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 
 void main() {
+  test('explicit service renewal keeps stated amount and next date', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'test',
+      sender: '5550101',
+      body:
+          'Subscription for ChatGPT Plus renewed. Monthly plan payment Rs.499 paid on 29-Oct-2026. Next renewal 29-Nov-2026.',
+      receivedAt: DateTime.utc(2026, 10, 29),
+    );
+    expect(result?.eventType, LocalSmsEventType.autopay);
+    expect(result?.billerName, 'ChatGPT Plus');
+    expect(result?.amountDue?.rupees, 499);
+    expect(result?.dueDate, DateTime(2026, 11, 29));
+  });
   test(
     'purchase confirmation with downloadable bill is classified as receipt',
     () {

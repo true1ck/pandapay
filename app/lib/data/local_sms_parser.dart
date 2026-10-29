@@ -2164,13 +2164,60 @@ class LocalSmsParser {
     );
     // Reminders and offers are observations, never purchases.
     final futureDebit = _hasFutureDebitWording(body);
+    // A service renewal notice can carry explicit plan terms without a bank
+    // debit. Preserve it as a service observation for typed facts rather than
+    // leaving it in generic review or treating its price as posted spending.
+    final serviceRenewal = _re(
+      r'\b(?:subscription|membership)\s+(?:for|to|with)\s+[A-Za-z][A-Za-z0-9 .&-]{2,60}?\s+(?:renewed|renewal|renews|expires|monthly|yearly|annual)\b',
+    ).hasMatch(body);
+    if (serviceRenewal) {
+      final service = _re(
+        r'\b(?:subscription|membership)\s+(?:for|to|with)\s+([A-Za-z][A-Za-z0-9 .&-]{2,60}?)(?=\s+(?:renewed|renewal|renews|expires|monthly|yearly|annual)\b|[.,;]|$)',
+      ).firstMatch(body)?.group(1)?.trim();
+      if (service != null && service.length >= 3) {
+        final nextDateToken = _re(
+          r'\b(?:next\s+(?:renewal|payment)|renews?\s+on)\s*(?:is|on|:)?\s*(' +
+              dateToken +
+              r')',
+        ).firstMatch(body)?.group(1);
+        final statedAmountToken =
+            _re(
+              r'\b(?:monthly|quarterly|yearly|annual)\s+(?:plan\s+)?(?:payment|price|amount|charge|fee)?\s*(?:of|is|:)?\s*(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)',
+            ).firstMatch(body)?.group(1) ??
+            _re(
+              r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:paid|debited|charged|renewed)',
+            ).firstMatch(body)?.group(1);
+        final statedAmount = statedAmountToken == null
+            ? null
+            : Money.fromPaise(
+                (double.parse(statedAmountToken.replaceAll(',', '')) * 100)
+                    .round(),
+              );
+        final finalAmt = statedAmount ?? amountDue ?? billAmount;
+        return LocalSmsObservation(
+          billerName: service,
+          cadenceHint: cadenceHint,
+          dueDate: nextDateToken == null ? due : parseDate(nextDateToken),
+          amountDue: finalAmt,
+          autopayLimit: null,
+          amount: finalAmt,
+          eventType: LocalSmsEventType.autopay,
+          disposition: LocalSmsDisposition.localIgnore,
+          reasonCodes: const ['explicit_subscription_service'],
+          confidence: 0.95,
+          isAutopay: true,
+        );
+      }
+    }
     final isReceipt = isMerchantReceiptOrEbill(body);
     final receiptMerchant = isReceipt ? extractReceiptMerchant(body) : null;
     final receiptAmount = isReceipt ? extractReceiptAmount(body) : null;
     // A merchant receipt is enrichment, not an independent posted bank spend.
     // With no named instrument the bank alert (if any) remains the spend
     // source, so this row stays in review instead of double-counting.
-    if (isReceipt && !isPayLaterBill && !_receiptHasSettlementInstrument(body)) {
+    if (isReceipt &&
+        !isPayLaterBill &&
+        !_receiptHasSettlementInstrument(body)) {
       return LocalSmsObservation(
         eventType: LocalSmsEventType.unknown,
         disposition: LocalSmsDisposition.review,

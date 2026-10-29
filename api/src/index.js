@@ -8505,6 +8505,8 @@ app.get('/recurring', requireAuth, async (req, res) => {
       const legacyMandateRows = stored.rows
         .map((row) => centralProjection.legacyMandateSetupRow(row))
         .filter(Boolean);
+      // Historical transaction patterns are surfaced as review candidates.
+      // They must not share the confirmed-service projection or annual total.
       const validRows = stored.rows.filter(isDisplayableSubscriptionRecord).concat(legacyMandateRows);
       const now = new Date();
       const series = validRows.map((r) => {
@@ -8588,6 +8590,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
           paymentMethod: r.payment_method,
           cardName: r.card_nickname || r.card_name,
           detectionSource: r.detection_source || 'observed',
+          reviewCandidate: r.detection_source === 'observed' && !r.user_edited,
           isMandate: r.detection_source === 'mandate',
           isUserEdited: r.user_edited,
           lifecycleStatus: r.lifecycle_status || 'active',
@@ -8657,7 +8660,9 @@ app.get('/recurring', requireAuth, async (req, res) => {
           cadenceConfirmed: cadenceKnown,
           setupConfirmed: projection.setupConfirmed === true,
           engineStatus: status === 'active' && (oneTime || cadenceKnown) ? 'confirmed' : status,
-          annualCostInr: oneTime || !cadenceKnown || amount === null ? 0 : amount * (365 / cadence),
+          annualCostInr: oneTime || !cadenceKnown || amount === null
+            ? 0
+            : annualCost({ typicalAmountInr: amount, cadenceDays: cadence }),
         });
         existingServiceKeys.add(serviceKey);
       }
@@ -8673,7 +8678,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
         // and still billing. Guesses (needs_cadence), unused mandates and
         // possibly-stopped series don't belong in "your recurring spend".
         totalAnnualInr: series
-          .filter((s) => s.engineStatus === 'confirmed')
+          .filter((s) => s.engineStatus === 'confirmed' && !s.reviewCandidate)
           .reduce((sum, s) => sum + s.annualCostInr, 0),
       };
     });

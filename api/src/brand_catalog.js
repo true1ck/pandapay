@@ -21,18 +21,21 @@
 const BRANDS = [
   // AI + productivity
   { match: /openaillc|openai|chatgpt/i, name: 'OpenAI', cadence: 30 },
-  { match: /anthropic|claude\.ai|claudepro/i, name: 'Anthropic', cadence: 30 },
-  { match: /google\s*one|googleone|googlegemini|gemini\.google/i, name: 'Google One', cadence: 30 },
+  { match: /anthropic|claude\.ai|claudepro|\bclaude\b/i, name: 'Claude', cadence: 30 },
+  { match: /google[*\s]?gemini|gemini(?:\.google|advanced)?|\bgemini\b/i, name: 'Google Gemini', cadence: 30 },
+  { match: /google\s*one|googleone/i, name: 'Google One', cadence: 30 },
   { match: /google\s*play|googleplay/i, name: 'Google Play', cadence: 30 },
-  { match: /perplexity/i, name: 'Perplexity', cadence: 12 },
+  { match: /cursor|anysphere/i, name: 'Cursor', cadence: 30 },
+  { match: /github/i, name: 'GitHub', cadence: 30 },
+  { match: /perplexity/i, name: 'Perplexity', cadence: 30 },
   { match: /midjourney/i, name: 'Midjourney', cadence: 30 },
-  { match: /notion\./i, name: 'Notion', cadence: 12 },
-  { match: /figma/i, name: 'Figma', cadence: 12 },
-  { match: /canva/i, name: 'Canva', cadence: 12 },
-  { match: /adobe/i, name: 'Adobe', cadence: 12 },
-  { match: /dropbox/i, name: 'Dropbox', cadence: 12 },
-  { match: /linkedinpremium|linkedin\s*premium/i, name: 'LinkedIn Premium', cadence: 12 },
-  { match: /microsoft365|office365|office\s*365/i, name: 'Microsoft 365', cadence: 12 },
+  { match: /notion\./i, name: 'Notion', cadence: 30 },
+  { match: /figma/i, name: 'Figma', cadence: 30 },
+  { match: /canva/i, name: 'Canva', cadence: 30 },
+  { match: /adobe/i, name: 'Adobe', cadence: 30 },
+  { match: /dropbox/i, name: 'Dropbox', cadence: 30 },
+  { match: /linkedinpremium|linkedin\s*premium/i, name: 'LinkedIn Premium', cadence: 30 },
+  { match: /ind\*microsoft|microsoftrs|microsoft365|office365|office\s*365|\bmicrosoft\b/i, name: 'Microsoft 365', cadence: 30 },
   { match: /icloud|apple\b/i, name: 'Apple', cadence: 30 },
 
   // Streaming + music
@@ -40,9 +43,9 @@ const BRANDS = [
   { match: /amazonprime|amazon\s*prime|primevideo|prime\s*video/i, name: 'Amazon Prime', cadence: 365 },
   { match: /hotstar|jiocinema|jiohostar/i, name: 'JioHotstar', cadence: 365 },
   { match: /youtube(?!mail)|ytpremium|ytkids/i, name: 'YouTube Premium', cadence: 30 },
-  { match: /spotify/i, name: 'Spotify', cadence: 12 },
+  { match: /spotify/i, name: 'Spotify', cadence: 30 },
   { match: /sonyliv|sonylivfhd/i, name: 'SonyLIV', cadence: 365 },
-  { match: /zee5|zilra/i, name: 'ZEE5', cadence: 12 },
+  { match: /zee5|zilra/i, name: 'ZEE5', cadence: 30 },
   { match: /jiosaavn|wynk|gaana/i, name: 'Music streaming', cadence: 30 },
 
   // India utility + telecom (postpaid/broadband plans, not one-off recharges:
@@ -57,10 +60,6 @@ const BRANDS = [
   // Fitness + memberships
   { match: /cult\.|cultfit|cultelite/i, name: 'Cult.Fit', cadence: 30 },
 
-  // Broking AMC/maintenance fees (brand intentionally allowed through the
-  // name-level financial filter; funding messages are blocked separately)
-  { match: /zerodha/i, name: 'Zerodha', cadence: 365 },
-  { match: /groww/i, name: 'Groww', cadence: 365 },
 ];
 
 /** The brand whose match pattern fits `name`, or undefined. */
