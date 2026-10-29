@@ -3908,6 +3908,13 @@ async function insertTransactionAndUpdateState(client, userId, {
       [userId, old.id],
     );
     const classificationLocked = lockResult.rows[0]?.locked === true;
+    const merchantLockResult = await client.query(
+      `SELECT COALESCE(bool_or(metadata->>'merchantLocked' = 'true'), false) AS locked
+         FROM transaction_observations
+        WHERE profile_id = $1 AND transaction_id = $2`,
+      [userId, old.id],
+    );
+    const merchantLocked = merchantLockResult.rows[0]?.locked === true;
     const oldMovesCardState = old.instrument === 'credit_card'
       && old.entry_kind === 'spend'
       && Boolean(old.user_card_id);
@@ -3929,9 +3936,15 @@ async function insertTransactionAndUpdateState(client, userId, {
     const refreshed = await client.query(
       `UPDATE transactions t
           SET merchant_name = CASE
-                -- Parser upgrade: replace only the stale generic credit label.
-                WHEN t.merchant_name = 'Money received'
-                     AND $8::text IS NOT NULL AND $8::text <> 'Money received'
+                -- Parser upgrade: fill only missing or known generic labels.
+                WHEN $9::boolean = false
+                     AND (t.merchant_name IS NULL OR t.merchant_name IN
+                       ('Money received', 'Bank debit', 'Credit card bill payment',
+                        'Unknown', 'Unknown merchant', 'Unknown payee',
+                        'Merchant not captured'))
+                     AND $8::text IS NOT NULL
+                     AND $8::text NOT IN ('Money received', 'Bank debit', 'Credit card bill payment',
+                       'Unknown', 'Unknown merchant', 'Unknown payee', 'Merchant not captured')
                   THEN $8::text
                 ELSE t.merchant_name
               END,
@@ -3954,7 +3967,7 @@ async function insertTransactionAndUpdateState(client, userId, {
               END
         WHERE t.id = $1 AND t.profile_id = $2
       RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
-      [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify), merchantName || null]
+      [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify), merchantName || null, merchantLocked]
     );
     if (shouldReclassify && refreshedMovesCardState && !old.is_backfill) {
       const card = oldCard || (userCardId ? await loadUserCardForState(client, userId, userCardId) : null);
@@ -6041,7 +6054,7 @@ app.post('/transactions/reconcile-sms', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       repairSmsHistory(client, req.userId, { reviewCrossSource: true }));
-    res.json({ ...result, reconciliationVersion: 2 });
+    res.json({ ...result, reconciliationVersion: 3 });
   } catch (err) {
     console.error('POST /transactions/reconcile-sms error', err);
     res.status(500).json({ error: 'internal_error' });
@@ -6912,6 +6925,14 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         await client.query(
           `UPDATE transaction_observations
               SET metadata = metadata || '{"classificationLocked":true,"classificationSource":"user"}'::jsonb
+            WHERE profile_id = $1 AND transaction_id = $2`,
+          [req.userId, old.id],
+        );
+      }
+      if (merchantName !== undefined) {
+        await client.query(
+          `UPDATE transaction_observations
+              SET metadata = metadata || '{"merchantLocked":true,"merchantSource":"user"}'::jsonb
             WHERE profile_id = $1 AND transaction_id = $2`,
           [req.userId, old.id],
         );

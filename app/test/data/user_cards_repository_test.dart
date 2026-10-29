@@ -112,6 +112,25 @@ void main() {
       expect(repaired.classificationReclassified, 2);
       expect(repaired.remappedTransactions, 3);
     });
+
+    test('v3 response enables historical recipient replay', () async {
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'session-token',
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'reconciliationVersion': 3,
+              'classificationReclassified': 1,
+            }),
+            200,
+          ),
+        ),
+      );
+      final repaired = await repository.reconcileSmsHistory();
+      expect(repaired.reconciliationVersion, 3);
+      expect(repaired.classificationReclassified, 1);
+    });
   });
 
   group('TransactionEntry category labels', () {

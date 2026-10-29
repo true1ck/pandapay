@@ -1867,6 +1867,32 @@ void main() {
       expect(parsed?.transaction?.amount.paise, 50000);
     });
 
+    test('Unicode-masked P2A reference keeps the actual recipient', () {
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'AX-AXISBK-S',
+        body: 'INR 9000.00 debited\nA/c no. XX2583\n'
+            '04-10-26, 21:49:33\nUPI/P2A/•••• 2120/AANCHAL YADU\n'
+            'Not you? SMS BLOCKUPI Cust ID to •••• 0002\nAxis Bank',
+        receivedAt: DateTime(2026, 10, 4, 21, 49, 36),
+      );
+      expect(parsed?.transaction?.merchantName, 'AANCHAL YADU');
+      expect(parsed?.transaction?.entryKind, TxnEntryKind.spend);
+    });
+
+    test('processed ICICI card bill is a named transfer', () {
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VM-SBYONO-S',
+        body: 'ICICI Credit card bill - of Rs.94567.00 has been '
+            'successfully processed from SBI A/C-0208. Your B-connect '
+            'Txn id is xxxxKvEe -YONO SBI',
+        receivedAt: DateTime(2026, 10, 22, 22, 7, 7),
+      );
+      expect(parsed?.transaction?.merchantName, 'ICICI credit card bill');
+      expect(parsed?.transaction?.entryKind, TxnEntryKind.transfer);
+    });
+
     test('P2M without a payee token leaves no fabricated merchant', () {
       final parsed = LocalSmsParser.parse(
         namespace: 'user:test',

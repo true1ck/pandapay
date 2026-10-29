@@ -1285,7 +1285,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   String _merchantName(TransactionEntry entry) =>
       entry.merchantName?.trim().isNotEmpty == true
       ? entry.merchantName!.trim()
-      : 'Unknown merchant';
+      : 'Recipient unknown';
 
   String _cardName(TransactionEntry entry) =>
       SpendingSelection.sourceName(entry, bankAccounts: _bankAccounts);
@@ -2043,7 +2043,7 @@ class _TagCategoryRow extends StatelessWidget {
   });
 
   List<_PayeeGroup> _merchantGroups() =>
-      _groupByPayee(entries, unknownLabel: 'Unknown merchant');
+      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
 
   @override
   Widget build(BuildContext context) => ExpansionTile(
@@ -4313,7 +4313,7 @@ class _ExpandableCategoryRow extends StatelessWidget {
   });
 
   List<_PayeeGroup> _merchantGroups() =>
-      _groupByPayee(entries, unknownLabel: 'Merchant not captured');
+      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
 
   @override
   Widget build(BuildContext context) {
@@ -4432,7 +4432,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
   });
 
   List<_PayeeGroup> _recipientGroups() =>
-      _groupByPayee(entries, unknownLabel: 'Unknown payee');
+      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
 
   @override
   Widget build(BuildContext context) {
@@ -4579,7 +4579,7 @@ class _ExpandableMerchantRow extends StatelessWidget {
     final display = _merchantDisplayFor(
       entries,
       fallbackLabel: row.label,
-      unknownLabel: 'Unknown merchant',
+      unknownLabel: 'Recipient unknown',
     );
 
     return CardSummaryPanel(
@@ -4811,7 +4811,7 @@ class _MerchantGroup extends StatelessWidget {
                   MerchantIdentity.cleanName(entry.merchantName) == null,
             ))
               Text(
-                'Tap the payment to add its merchant.',
+                'Tap the payment to name its recipient.',
                 style: BambooFonts.ui(11, color: BambooInk.ink500),
               ),
             if (hasRewardData)
@@ -4848,7 +4848,7 @@ class _MerchantGroup extends StatelessWidget {
                   MerchantIdentity.cleanName(entry.merchantName) == null,
             ))
               Text(
-                'Tap the payment to add its merchant.',
+                'Tap the payment to name its recipient.',
                 style: BambooFonts.ui(11, color: BambooInk.ink500),
               ),
             if (hasRewardData)
@@ -5040,7 +5040,7 @@ class _AccountRow extends StatelessWidget {
   });
 
   List<_PayeeGroup> _payeeGroups() =>
-      _groupByPayee(entries, unknownLabel: 'Unknown merchant');
+      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
 
   @override
   Widget build(BuildContext context) {

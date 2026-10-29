@@ -758,11 +758,11 @@ void main() {
       );
       await tester.tap(find.text('Online Shopping'));
       await tester.pumpAndSettle();
-      expect(find.text('Merchant not captured'), findsNWidgets(2));
+      expect(find.text('Recipient unknown'), findsNWidgets(2));
       expect(find.text('1 transaction · Card A'), findsOneWidget);
       expect(find.text('1 transaction · Card B'), findsOneWidget);
       expect(
-        find.text('Tap the payment to add its merchant.'),
+        find.text('Tap the payment to name its recipient.'),
         findsNWidgets(2),
       );
     },
@@ -812,7 +812,7 @@ void main() {
     await tester.pumpAndSettle();
 
     const storageKey =
-        'spending-merchant-group-Merchant not captured-unnamed-layout';
+        'spending-merchant-group-Recipient unknown-unnamed-layout';
     final tile = tester.getRect(
       find.byKey(const PageStorageKey<String>(storageKey)),
     );
@@ -1294,7 +1294,7 @@ void main() {
       find.text('2 transactions · Tap to review transactions'),
       findsOneWidget,
     );
-    expect(find.text('Unknown payee'), findsNothing);
+    expect(find.text('Recipient unknown'), findsNothing);
   });
 
   testWidgets('account rows expand into payees and matching transactions', (
@@ -1546,7 +1546,7 @@ void main() {
 
     expect(find.text('Swiggy'), findsOneWidget);
     expect(find.textContaining('6c123479'), findsNothing);
-    expect(find.text('Unknown payee'), findsNothing);
+    expect(find.text('Recipient unknown'), findsNothing);
 
     await tester.tap(find.text('Swiggy'));
     await tester.pumpAndSettle();
@@ -1605,15 +1605,15 @@ void main() {
     await tester.tap(find.text('UPI from bank account'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Unknown payee'), findsNWidgets(2));
+    expect(find.text('Recipient unknown'), findsNWidgets(2));
     expect(
-      find.text('Tap the payment to add its merchant.'),
+      find.text('Tap the payment to name its recipient.'),
       findsNWidgets(2),
     );
     expect(find.textContaining('6c123479'), findsNothing);
     expect(find.textContaining('9901e1edad'), findsNothing);
 
-    await tester.tap(find.text('Unknown payee').first);
+    await tester.tap(find.text('Recipient unknown').first);
     await tester.pumpAndSettle();
     expect(find.textContaining('12/08/2026'), findsOneWidget);
     expect(find.textContaining('13/08/2026'), findsNothing);
@@ -1688,7 +1688,7 @@ void main() {
 
     expect(find.text('Mumbai'), findsOneWidget);
     expect(find.text('Café Mylapore'), findsOneWidget);
-    expect(find.text('Unknown merchant'), findsNothing);
+    expect(find.text('Recipient unknown'), findsNothing);
   });
 
   testWidgets('omits the long trend chart from the spending summary', (

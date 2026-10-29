@@ -138,7 +138,8 @@ class LocalSmsParser {
   // 18: Disambiguate investment share vs advisory warnings, support YONO UPI, and dot-masked accounts.
   // 19: Allow scanner reprocessing of historical alerts on parser upgrade without lockout.
   // 21: Named payees for UPI narrations and "towards X for INR" debits, weak-name rejection.
-  static const version = 21;
+  // 22: Unicode-masked UPI references precede the named recipient.
+  static const version = 22;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -877,7 +878,7 @@ class LocalSmsParser {
       index += 1;
     }
     while (index < segments.length &&
-        _re(r'^(?:[Xx*#]{2,}\s*)?\d{4,}$').hasMatch(segments[index])) {
+        _re(r'^(?:[Xx*#•●·.\-]{2,}\s*)?\d{4,}$').hasMatch(segments[index])) {
       index += 1;
     }
     if (index >= segments.length) return null;
@@ -2336,8 +2337,11 @@ class LocalSmsParser {
     final billPaymentCandidate = _re(
       r'\b(?:payment|paid|debited|debit|amount)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\b(?:your\s+)?credit\s+card\b|\bcredit\s+card\s+(?:bill|payment)\b[\s\S]{0,90}\b(?:received|credited|debited|paid|successful|completed)\b|\b(?:paid|payment|debited)\b[\s\S]{0,90}\b(?:to|for)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card(?:\s+bill)?\b|\bbill\b[\s\S]{0,60}\b(?:for|on|of)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card\b[\s\S]{0,90}\b(?:paid|received|successful|completed)\b|\b(?:card\s+bill\s*(?:payment|pmt)|cc\s*(?:bill\s*)?(?:payment|pmt)|card\s+bill\s+pay)\b[\s\S]{0,90}\b(?:paid|received|debited|successful|completed|credited)\b|\b(?:payment|paid|debited|debit|transferred)\b[\s\S]{0,90}\b(?:towards?|for|to)\s+(?:your\s+)?(?:card|cc)\b|\b(?:imps|neft|upi)\b[\s\S]{0,80}\b(?:cc|credit\s+card)\s*(?:bill\s*)?(?:pmt|payment)\b',
     ).hasMatch(body);
+    final processedCardBill = _re(
+      r'\b([A-Za-z][A-Za-z ]{1,35})\s+credit\s+card\s+bill\s*[-:]?\s*of\s+(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?\s+has\s+been\s+successfully\s+processed\b',
+    ).firstMatch(body);
     final billPayment =
-        billPaymentCandidate &&
+        (billPaymentCandidate || processedCardBill != null) &&
         (!_re(
               r'\b(?:payment|amount|minimum)\s+due\b|\bdue\s+on\b',
             ).hasMatch(body) ||
@@ -2569,7 +2573,9 @@ class LocalSmsParser {
         ownUserName != null &&
         _isOwnPersonName(merchant, ownUserName);
     if (billPayment) {
-      merchant = 'Credit card bill payment';
+      merchant = processedCardBill == null
+          ? 'Credit card bill payment'
+          : '${processedCardBill.group(1)!.trim()} credit card bill';
     } else if (ownNameTransfer) {
       merchant = 'Transfer between own accounts';
     } else if (brokerSettlement) {

@@ -33,6 +33,47 @@ void main() {
       financialStore.entities(ns, 'transactions', id: key).firstOrNull;
 
   group('Section 9 Scenarios (Mobile Device Parity)', () {
+    test('exact screenshot SMS keeps the receiver or bill destination in the local transaction', () {
+      final messages = [
+        QueuedSms(
+          sender: 'AX-AXISBK-S',
+          body: 'INR 9000.00 debited\n'
+              'A/c no. XX2583\n'
+              '04-10-26, 21:49:33\n'
+              'UPI/P2A/•••• 2120/AANCHAL YADU\n'
+              'Not you? SMS BLOCKUPI Cust ID to •••• 0002\n'
+              'Axis Bank',
+          receivedAt: DateTime(2026, 10, 4, 21, 49, 36),
+        ),
+        QueuedSms(
+          sender: 'VM-SBYONO-S',
+          body: 'ICICI Credit card bill - of Rs.94567.00 has been '
+              'successfully processed from SBI A/C-0208. Your B-connect '
+              'txn id is xxxxKvEe -YONO SBI',
+          receivedAt: DateTime(2026, 10, 22, 22, 7, 7),
+        ),
+      ];
+
+      importStore.captureBatch('user1', messages);
+
+      final personKey = smsSourceKey(
+        'user1',
+        messages[0].sender,
+        messages[0].body,
+      );
+      final billKey = smsSourceKey(
+        'user1',
+        messages[1].sender,
+        messages[1].body,
+      );
+      final person = getTransaction('user1', 'local-sms:$personKey');
+      final bill = getTransaction('user1', 'local-sms:$billKey');
+      expect(person?['merchant_name'], 'AANCHAL YADU');
+      expect(person?['entry_kind'], TxnEntryKind.spend.wireValue);
+      expect(bill?['merchant_name'], 'ICICI credit card bill');
+      expect(bill?['entry_kind'], TxnEntryKind.transfer.wireValue);
+    });
+
     test('Scenario 1: Fresh install mixed inbox triage, facts without AI, zero OTP persistence', () {
       final messages = [
         QueuedSms(

@@ -360,6 +360,25 @@ test('credit-card bill payment receipts become transfers, not spending', () => {
   assert.equal(result.fields.entryKind, 'transfer');
 });
 
+test('Axis Unicode-masked P2A narration identifies the receiver', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'AX-AXISBK-S',
+    body: 'INR 9000.00 debited\nA/c no. XX2583\n04-10-26, 21:49:33\nUPI/P2A/•••• 2120/AANCHAL YADU\nNot you? SMS BLOCKUPI Cust ID to •••• 0002\nAxis Bank',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.merchant, 'AANCHAL YADU');
+});
+
+test('SBI processed card bill identifies destination and stays outside spend', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'VM-SBYONO-S',
+    body: 'ICICI Credit card bill - of Rs.94567.00 has been successfully processed from SBI A/C-0208. Your B-connect Txn id is xxxxKvEe -YONO SBI',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.merchant, 'ICICI credit card bill');
+  assert.equal(result.fields.entryKind, 'transfer');
+});
+
 test('paid card bills remain transfers while purchases on the same card remain spend', () => {
   const payments = [
     'Your Axis Bank Credit Card bill of Rs. 80000 paid successfully for card ending 2006.',

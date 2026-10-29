@@ -6635,6 +6635,51 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         // replay never doubles a transaction; the updated parser re-classifies
         // them as loan repayments and refreshes the stored merchant label.
         final emiNamespace = ref.read(cacheNamespaceProvider);
+        final recipientReplayKey =
+            'pandapay_app.recipient_replayed_v1_$emiNamespace';
+        if (repo != null &&
+            prefs.getInt(recipientReplayKey) == null &&
+            ref.read(isOnlineProvider).valueOrNull != false) {
+          try {
+            final reconciliation = await repo.reconcileSmsHistory();
+            if (reconciliation.reconciliationVersion >= 3) {
+              final cache = await ref.read(responseCacheProvider.future);
+              final candidates = cache.financialStore
+                  .recipientReplayCandidates(emiNamespace);
+              var replayed = true;
+              for (var i = 0; i < candidates.length; i += 200) {
+                try {
+                  await repo.logTransactionsFromSmsBatch(
+                    messages: [
+                      for (final row in candidates.skip(i).take(200))
+                        SmsBatchMessage(
+                          userCardId: null,
+                          sender: row['sender'] as String,
+                          body: row['body'] as String,
+                          occurredAt: row['occurredAt'] as DateTime,
+                        ),
+                    ],
+                    backfill: true,
+                    captureLocally: false,
+                    notifyNewTransactions: false,
+                  );
+                } catch (_) {
+                  replayed = false;
+                  break;
+                }
+              }
+              if (replayed) {
+                await prefs.setInt(
+                  recipientReplayKey,
+                  DateTime.now().millisecondsSinceEpoch,
+                );
+                changed = candidates.isNotEmpty || changed;
+              }
+            }
+          } catch (_) {
+            // Retry when the matching API version and network are available.
+          }
+        }
         final emiReplayKey =
             'pandapay_app.emi_repayment_replayed_v1_$emiNamespace';
         if (repo != null &&

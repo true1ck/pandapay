@@ -265,7 +265,7 @@ function upiNarrationParty(body) {
   if (segments.length < 2) return null;
   let index = 1;
   if (/^(?:P2M|P2A|P2P|REV|PAY|CR|DR)$/i.test(segments[index])) index += 1;
-  while (index < segments.length && /^(?:[Xx*#]{2,}\s*)?\d{4,}$/.test(segments[index])) index += 1;
+  while (index < segments.length && /^(?:[Xx*#•●·.\-]{2,}\s*)?\d{4,}$/.test(segments[index])) index += 1;
   if (index >= segments.length) return null;
   const party = segments[index]
     .replace(/\s+\b(?:on|dated|ref(?:erence)?|refno|txn|transaction|not\s+you|call|sms\s+block|via|bal(?:ance)?|avl|available)\b[\s\S]*$/i, '')
@@ -927,7 +927,8 @@ function parseBuiltInCardBillPayment(sms) {
     || /\b(?:card\s+bill\s*(?:payment|pmt)|cc\s*(?:bill\s*)?(?:payment|pmt)|card\s+bill\s+pay)\b[\s\S]{0,90}\b(?:paid|received|debited|successful|completed|credited)\b/i.test(body)
     || /\b(?:payment|paid|debited|debit|transferred)\b[\s\S]{0,90}\b(?:towards?|for|to)\s+(?:your\s+)?(?:card|cc)\b/i.test(body)
     || /\b(?:imps|neft|upi)\b[\s\S]{0,80}\b(?:cc|credit\s+card)\s*(?:bill\s*)?(?:pmt|payment)\b/i.test(body);
-  if (!towardCard) return { ok: false, reason: 'no_card_bill_payment_match' };
+  const processedCardBill = body.match(/\b([A-Za-z][A-Za-z ]{1,35})\s+credit\s+card\s+bill\s*[-:]?\s*of\s+(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?\s+has\s+been\s+successfully\s+processed\b/i);
+  if (!towardCard && !processedCardBill) return { ok: false, reason: 'no_card_bill_payment_match' };
 
   const last4Match = body.match(/\b(?:credit\s+card|card)\b[\s\S]{0,50}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|last\s*4|no\.?)\D{0,5}(\d{4})\b/i);
   const instrument = /\b(?:a\/?c\.?|account|savings)\b[\s\S]{0,60}\b(?:debited|debit|paid)\b/i.test(lower)
@@ -940,7 +941,7 @@ function parseBuiltInCardBillPayment(sms) {
     fields: withAvailableBalance({
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
       ...(last4Match ? { last4: last4Match[1] } : {}),
-      merchant: 'Credit card bill payment',
+      merchant: processedCardBill ? `${processedCardBill[1].trim()} credit card bill` : 'Credit card bill payment',
       transferKind: 'card_bill',
       instrument,
       entryKind: 'transfer',
