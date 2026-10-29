@@ -2,6 +2,8 @@
 
 Reviewed 30 October 2026. This is a proposed design based on source inspection and read-only queries against the local `pandapay` and `pandapay_auth` databases. It is not a claim about the hosted databases, deployed ingress, or a completed security rollout. No account, credential, grant, or deployment was changed during this review.
 
+For implementation, use the [detailed application/server/deployment plan](admin-console-implementation-plan-2026-10-30.md) and [parallel Luna handoff](admin-console-luna-handoff-2026-10-30.md). That plan selects the v1 authentication, private transport, permission, enrollment and deployment contracts; this page remains the initial findings and high-level design.
+
 ## What already exists
 
 | Component | Verified finding | Source |
