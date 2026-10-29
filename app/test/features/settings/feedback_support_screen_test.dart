@@ -53,6 +53,7 @@ void main() {
 
     expect(find.text('Feedback & Support'), findsOneWidget);
     expect(find.text('What kind of feedback is this?'), findsOneWidget);
+    expect(find.text("Show what we'll send"), findsNothing);
 
     // Enter message
     await tester.enterText(find.byType(TextField), 'Unable to receive OTP login code');
@@ -75,6 +76,8 @@ void main() {
     final body = jsonDecode(capturedRequest!.body) as Map<String, dynamic>;
     expect(body['kind'], 'general');
     expect(body['message'], 'Unable to receive OTP login code');
+    expect(body['diagnostics'], isNotNull);
+    expect(body['diagnostics']['platform'], isNotNull);
     expect(capturedRequest!.headers.containsKey('authorization'), isFalse);
 
     // Tap OK on dialog
