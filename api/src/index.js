@@ -6062,6 +6062,50 @@ app.post('/transactions/reconcile-sms', requireAuth, async (req, res) => {
 });
 
 /**
+ * A device that retained the original SMS can correct a confirmed legacy
+ * AutoPay card-bill row. Only structured fields cross the wire; the raw SMS
+ * stays on the phone. User edits and non-SMS transactions are never replaced.
+ */
+app.post('/transactions/autopay-bill-correction', requireAuth, async (req, res) => {
+  const { transactionId, merchantName, accountLast4, amountPaise } = req.body || {};
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(transactionId || '')) ||
+      !/^[A-Za-z][A-Za-z .&-]{2,70} Credit Card [0-9]{4}$/.test(String(merchantName || '')) ||
+      !/^[0-9]{4}$/.test(String(accountLast4 || '')) ||
+      !Number.isSafeInteger(amountPaise) || amountPaise <= 0) {
+    return res.status(400).json({ error: 'invalid_correction' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const row = await client.query(
+        `SELECT id, merchant_name, source_account_last4
+           FROM transactions
+          WHERE id=$1 AND profile_id=$2 AND source IN ('sms','sms_bulk')
+            AND status='active' AND round(amount_inr * 100)::bigint=$3
+          FOR UPDATE`,
+        [transactionId, req.userId, amountPaise],
+      );
+      if (row.rows.length !== 1) return { status: 404, body: { error: 'transaction_not_found' } };
+      const current = row.rows[0];
+      const generic = current.merchant_name == null ||
+        ['Unknown', 'Unknown merchant', 'Merchant not captured'].includes(current.merchant_name);
+      if (!generic) return { status: 200, body: { updated: false } };
+      const updated = await client.query(
+        `UPDATE transactions SET merchant_name=$3,
+            source_account_last4=COALESCE(source_account_last4,$4)
+          WHERE id=$1 AND profile_id=$2
+          RETURNING id`,
+        [transactionId, req.userId, merchantName, accountLast4],
+      );
+      return { status: 200, body: { updated: updated.rowCount === 1 } };
+    });
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    console.error('POST /transactions/autopay-bill-correction error', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * GET /transactions/sms-import-state — the small amount of server state the
  * Android inbox reconciler needs to detect a server-side data reset. The
  * client keeps its last successful inbox checkpoint locally; comparing this
