@@ -340,10 +340,25 @@ class _ScanCardScreenState extends State<ScanCardScreen>
     final side = _scanSide;
     if (side == _ScanSide.front) {
       _frontExtracted = extracted;
-      setState(() => _scanSide = _ScanSide.back);
-      // The inline hint already tells the user to flip the card. Avoid a
-      // SnackBar here: it overlays the back-side capture controls on compact
-      // screens and makes the next action harder to reach.
+      final frontMatches = matchCardText(extracted, widget.catalogue);
+      final frontLast4 = extractLastFourDigits(extracted.rawText);
+      final hasHighConfidence = frontMatches.any(
+        (m) => m.confidence == MatchConfidence.high,
+      );
+
+      // If the front scan already captured a high-confidence card match and
+      // the card number (PAN), do not trap the user into an unnecessary back
+      // scan. Proceed immediately to confirmation.
+      if (hasHighConfidence && frontLast4 != null) {
+        setState(() {
+          _lastExtracted = extracted;
+          _resultIsFromOcr = true;
+          _matches = frontMatches;
+        });
+        await _teardownCamera();
+      } else {
+        setState(() => _scanSide = _ScanSide.back);
+      }
     } else {
       _backExtracted = extracted;
       final combined = _combinedExtracted;
@@ -372,6 +387,17 @@ class _ScanCardScreenState extends State<ScanCardScreen>
         setState(() => _previewImageFile = null);
       }
     }
+  }
+
+  Future<void> _useFrontScan() async {
+    final front = _frontExtracted;
+    if (front == null || !mounted) return;
+    setState(() {
+      _lastExtracted = front;
+      _resultIsFromOcr = true;
+      _matches = matchCardText(front, widget.catalogue);
+    });
+    await _teardownCamera();
   }
 
   ExtractedCardText get _combinedExtracted => ExtractedCardText(
@@ -580,6 +606,9 @@ class _ScanCardScreenState extends State<ScanCardScreen>
                         mode: _mode,
                         side: _scanSide,
                         onPickImage: _processingImage ? null : _pickImage,
+                        onUseFrontScan: _frontExtracted != null
+                            ? _useFrontScan
+                            : null,
                       )
                     : ScanResultPanel(
                         extracted: _lastExtracted!,
@@ -987,10 +1016,14 @@ class _IdleHint extends StatelessWidget {
   /// Null while a pick is already in flight (disables the button).
   final VoidCallback? onPickImage;
 
+  /// Allows skipping the back scan when the front scan was already read.
+  final VoidCallback? onUseFrontScan;
+
   const _IdleHint({
     required this.mode,
     required this.side,
     required this.onPickImage,
+    this.onUseFrontScan,
   });
 
   @override
@@ -1036,14 +1069,31 @@ class _IdleHint extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpace.md),
-            OutlinedButton.icon(
-              onPressed: onPickImage,
-              icon: const Icon(Icons.photo_library_outlined, size: 18),
-              label: Text(pickLabel),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: BambooInk.ink900,
-                side: const BorderSide(color: BambooInk.hairlineOnPaper),
-              ),
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpace.sm,
+              runSpacing: AppSpace.xs,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onPickImage,
+                  icon: const Icon(Icons.photo_library_outlined, size: 18),
+                  label: Text(pickLabel),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: BambooInk.ink900,
+                    side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  ),
+                ),
+                if (side == _ScanSide.back && onUseFrontScan != null)
+                  TextButton.icon(
+                    onPressed: onUseFrontScan,
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                    label: const Text('Use front scan'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: BambooInk.ink700,
+                    ),
+                  ),
+              ],
             ),
           ],
         ),

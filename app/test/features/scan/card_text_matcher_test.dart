@@ -26,6 +26,86 @@ void main() {
     });
   });
 
+  group('passesLuhn', () {
+    test('validates standard Luhn-compliant PANs', () {
+      // Standard Luhn test numbers
+      expect(passesLuhn('4111111111111111'), isTrue);
+      expect(passesLuhn('4532123456788909'), isTrue);
+      expect(passesLuhn('4000001234567899'), isTrue);
+      expect(passesLuhn('49927398716'), isFalse); // < 13 digits
+    });
+
+    test('rejects numbers that violate Luhn checksum', () {
+      expect(passesLuhn('4111111111112222'), isFalse);
+      expect(passesLuhn('4532123456788908'), isFalse);
+      expect(passesLuhn('18002095577'), isFalse);
+    });
+
+    test('rejects strings that are too short, too long, or non-numeric', () {
+      expect(passesLuhn('1234'), isFalse);
+      expect(passesLuhn('123456789012'), isFalse);
+      expect(passesLuhn('12345678901234567890'), isFalse);
+      expect(passesLuhn('411111111111111a'), isFalse);
+    });
+  });
+
+  group('isLikelyExpiryOrHelpline', () {
+    test('identifies toll-free helpline prefixes and customer care numbers', () {
+      expect(isLikelyExpiryOrHelpline('1800', '1800 209 5577'), isTrue);
+      expect(isLikelyExpiryOrHelpline('1860', '1860 266 2666'), isTrue);
+      expect(
+        isLikelyExpiryOrHelpline('5577', 'Customer care 1800 209 5577'),
+        isTrue,
+      );
+      expect(
+        isLikelyExpiryOrHelpline('3800', 'Toll Free: 1800-425-3800'),
+        isTrue,
+      );
+      expect(
+        isLikelyExpiryOrHelpline('1234', 'Helpline: 080 6789 1234'),
+        isTrue,
+      );
+    });
+
+    test('identifies expiry years and dates', () {
+      expect(
+        isLikelyExpiryOrHelpline('2029', 'VALID THRU 2029'),
+        isTrue,
+      );
+      expect(
+        isLikelyExpiryOrHelpline('2026', 'VALID 2026'),
+        isTrue,
+      );
+      expect(
+        isLikelyExpiryOrHelpline('2030', 'GOOD THRU 2030'),
+        isTrue,
+      );
+      expect(
+        isLikelyExpiryOrHelpline('2028', 'EXP 2028'),
+        isTrue,
+      );
+      expect(
+        isLikelyExpiryOrHelpline('1228', 'VALID THRU 12/28'),
+        isTrue,
+      );
+    });
+
+    test('does not misclassify genuine card last 4 digits', () {
+      expect(
+        isLikelyExpiryOrHelpline('8908', 'HDFC BANK •••• •••• •••• 8908'),
+        isFalse,
+      );
+      expect(
+        isLikelyExpiryOrHelpline('4321', 'AXIS BANK 4321'),
+        isFalse,
+      );
+      expect(
+        isLikelyExpiryOrHelpline('5678', 'SBI CARD ending in 5678'),
+        isFalse,
+      );
+    });
+  });
+
   group('extractLastFourDigits', () {
     test('returns the last 4-digit group found', () {
       expect(extractLastFourDigits('4111 1111 1111 2222'), '2222');
@@ -37,6 +117,76 @@ void main() {
 
     test('prefers a PAN-shaped run over a later four-digit label', () {
       expect(extractLastFourDigits('4111 1111 1111 2222 VALID 2026'), '2222');
+    });
+
+    test('handles multiple spaces between 4-digit blocks from ML Kit OCR', () {
+      expect(extractLastFourDigits('4532   1234   5678   8908'), '8908');
+      expect(extractLastFourDigits('4532  1234  5678  8908'), '8908');
+    });
+
+    test('handles newlines between 4-digit blocks from ML Kit OCR', () {
+      expect(extractLastFourDigits('4532\n1234\n5678\n8908'), '8908');
+      expect(extractLastFourDigits('4532\r\n1234\r\n5678\r\n8908'), '8908');
+      expect(extractLastFourDigits('4532  1234\n5678  8908'), '8908');
+    });
+
+    test('handles dash and dot separated blocks', () {
+      expect(extractLastFourDigits('4532-1234-5678-8908'), '8908');
+      expect(extractLastFourDigits('4532.1234.5678.8908'), '8908');
+      expect(extractLastFourDigits('4532 - 1234 - 5678 - 8908'), '8908');
+    });
+
+    test('extracts from masked card representations', () {
+      expect(extractLastFourDigits('•••• •••• •••• 8908'), '8908');
+      expect(extractLastFourDigits('**** **** **** 8908'), '8908');
+      expect(extractLastFourDigits('xxxx 8908'), '8908');
+      expect(extractLastFourDigits('XXXX XXXX XXXX 8908'), '8908');
+      expect(extractLastFourDigits('•••• 8908'), '8908');
+      expect(extractLastFourDigits('************8908'), '8908');
+      expect(extractLastFourDigits('Card ending in 8908'), '8908');
+    });
+
+    test('prioritizes Luhn-passing PAN candidate over non-Luhn candidate', () {
+      // 4532123456788909 passes Luhn, whereas 1234567890123456 fails Luhn
+      final mixedText = 'ORDER 1234 5678 9012 3456 CARD 4532 1234 5678 8909';
+      expect(extractLastFourDigits(mixedText), '8909');
+    });
+
+    test('prioritizes Luhn-passing PAN over customer care helplines', () {
+      final cardWithHelpline = '''
+HDFC BANK PLATINUM
+4532 1234 5678 8909
+VALID THRU 08/29
+CUSTOMER CARE 1800 209 5577
+''';
+      expect(extractLastFourDigits(cardWithHelpline), '8909');
+    });
+
+    test('rejects customer care helplines when no card number is present', () {
+      expect(extractLastFourDigits('CUSTOMER CARE 1800 209 5577'), isNull);
+      expect(extractLastFourDigits('Toll Free: 1800-425-3800'), isNull);
+      expect(extractLastFourDigits('Helpline 1860 266 2666'), isNull);
+    });
+
+    test('rejects expiry dates when no card number is present', () {
+      expect(extractLastFourDigits('VALID THRU 2029'), isNull);
+      expect(extractLastFourDigits('VALID 2026'), isNull);
+      expect(extractLastFourDigits('GOOD THRU 2030'), isNull);
+      expect(extractLastFourDigits('MEMBER SINCE 2021'), isNull);
+    });
+
+    test('rejects pincodes and generic non-card labels', () {
+      expect(extractLastFourDigits('BRANCH BANGALORE PIN 560001'), isNull);
+    });
+
+    test('correctly extracts from masked statement text with expiry and helpline', () {
+      final statementText = '''
+SBI Card Statement
+Account ending in •••• 8908
+Valid Thru 12/28
+For queries call 1800 180 1290
+''';
+      expect(extractLastFourDigits(statementText), '8908');
     });
   });
 
@@ -300,6 +450,132 @@ void main() {
 
       expect(matches, hasLength(2));
       expect(matches.every((m) => m.confidence == MatchConfidence.low), isTrue);
+    });
+
+    test('generic word card never fuzzy-matches bobcard', () {
+      final myZone = _product(
+        'axis-my-zone',
+        'Axis Bank MY ZONE Credit Card',
+        CardNetwork.visa,
+        issuerName: 'Axis Bank',
+      );
+      final bobcard = _product(
+        'bobcard-easy',
+        'BOBCARD Easy',
+        CardNetwork.visa,
+        issuerName: 'BOBCARD',
+      );
+
+      final matches = matchCardText(
+        const ExtractedCardText(
+          'AXIS BANK MY ZONE CREDIT CARD 4111 2222 3333 8908\nFOR EASY EMI CALL 1800 103 5577',
+        ),
+        [bobcard, myZone],
+      );
+
+      expect(matches.where((m) => m.product.id == 'bobcard-easy'), isEmpty);
+      expect(matches.first.product.id, 'axis-my-zone');
+    });
+
+    test(
+      'base card beats sub-variant when extra token is from disclaimer text',
+      () {
+        final myZone = _product(
+          'axis-my-zone',
+          'Axis Bank MY ZONE Credit Card',
+          CardNetwork.visa,
+          issuerName: 'Axis Bank',
+        );
+        final myZoneEasy = _product(
+          'axis-my-zone-easy',
+          'Axis Bank MY ZONE EASY Credit Card',
+          CardNetwork.visa,
+          issuerName: 'Axis Bank',
+        );
+
+        final matches = matchCardText(
+          const ExtractedCardText(
+            'AXIS BANK MY ZONE CREDIT CARD\nNOT VALID WITHOUT SIGNATURE\nFOR EASY EMI CALL 1800 103 5577',
+          ),
+          [myZoneEasy, myZone],
+        );
+
+        expect(matches.first.product.id, 'axis-my-zone');
+        expect(matches.first.confidence, MatchConfidence.high);
+        expect(matches.first.overlap, 1.0);
+      },
+    );
+
+    test('sub-variant beats base card when sub-variant phrase is explicit', () {
+      final myZone = _product(
+        'axis-my-zone',
+        'Axis Bank MY ZONE Credit Card',
+        CardNetwork.visa,
+        issuerName: 'Axis Bank',
+      );
+      final myZoneEasy = _product(
+        'axis-my-zone-easy',
+        'Axis Bank MY ZONE EASY Credit Card',
+        CardNetwork.visa,
+        issuerName: 'Axis Bank',
+      );
+
+      final matches = matchCardText(
+        const ExtractedCardText(
+          'AXIS BANK MY ZONE EASY CREDIT CARD 4111 2222 3333 8908',
+        ),
+        [myZone, myZoneEasy],
+      );
+
+      expect(matches.first.product.id, 'axis-my-zone-easy');
+      expect(matches.first.confidence, MatchConfidence.high);
+      expect(matches.first.overlap, 1.0);
+    });
+
+    test('recognizes compound product tokens like myzone and simplyclick', () {
+      final myZone = _product(
+        'axis-my-zone',
+        'Axis Bank MY ZONE Credit Card',
+        CardNetwork.visa,
+        issuerName: 'Axis Bank',
+      );
+      final simplyClick = _product(
+        'sbi-simplyclick',
+        'SBI SimplyClick Credit Card',
+        CardNetwork.visa,
+        issuerName: 'State Bank of India',
+      );
+
+      final myZoneMatches = matchCardText(
+        const ExtractedCardText('AXIS BANK MYZONE CREDIT CARD'),
+        [myZone],
+      );
+      expect(myZoneMatches.first.product.id, 'axis-my-zone');
+      expect(myZoneMatches.first.confidence, MatchConfidence.high);
+
+      final simplyClickMatches = matchCardText(
+        const ExtractedCardText('SBI SIMPLYCLICK CREDIT CARD'),
+        [simplyClick],
+      );
+      expect(simplyClickMatches.first.product.id, 'sbi-simplyclick');
+      expect(simplyClickMatches.first.confidence, MatchConfidence.high);
+    });
+
+    test('deduplicates issuer tokens in searchable product name', () {
+      final myZone = _product(
+        'axis-my-zone',
+        'Axis Bank MY ZONE Credit Card',
+        CardNetwork.visa,
+        issuerName: 'Axis Bank',
+      );
+
+      final matches = matchCardText(
+        const ExtractedCardText('AXIS BANK MY ZONE CREDIT CARD'),
+        [myZone],
+      );
+      expect(matches.first.confidence, MatchConfidence.high);
+      expect(matches.first.overlap, 1.0);
+      expect(matches.first.reason, contains('name match 100%'));
     });
   });
 

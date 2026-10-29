@@ -327,4 +327,78 @@ void main() {
 
     expect(recognizer.disposed, isTrue);
   });
+
+  testWidgets(
+    'OCR mode: high-confidence front scan with PAN avoids back scan trap',
+    (tester) async {
+      final recognizer = _FakeRecognizer(
+        'AXIS BANK MY ZONE VISA 4111 2222 3333 8908',
+      );
+      final axisCard = const CardProduct(
+        id: 'axis-my-zone',
+        name: 'Axis Bank MY ZONE Credit Card',
+        network: CardNetwork.visa,
+        issuerName: 'Axis Bank',
+      );
+
+      await tester.pumpWidget(
+        _host(
+          ScanCardScreen(
+            catalogue: [axisCard],
+            recognizerFactory: () => recognizer,
+            pickImagePath: () async => '/tmp/fake-card.jpg',
+          ),
+        ),
+      );
+      await _tick(tester);
+
+      expect(find.text('Upload front photo'), findsOneWidget);
+      await tester.tap(find.text('Upload front photo'));
+      await _tick(tester);
+
+      // Should directly show results, never asking to scan the back
+      expect(find.text('Now scan the back of your card'), findsNothing);
+      expect(find.text('Detected card'), findsOneWidget);
+      expect(find.text('Axis Bank MY ZONE Credit Card'), findsOneWidget);
+      expect(
+        find.text('Card number captured securely · •••• 8908'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(FilledButton, 'Use this'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'OCR mode: "Use front scan" button allows proceeding without back scan',
+    (tester) async {
+      final recognizer = _FakeRecognizer('HDFC BANK MILLENNIA VISA');
+      await tester.pumpWidget(
+        _host(
+          ScanCardScreen(
+            catalogue: _catalogue,
+            recognizerFactory: () => recognizer,
+            pickImagePath: () async => '/tmp/fake-card.jpg',
+          ),
+        ),
+      );
+      await _tick(tester);
+
+      expect(find.text('Upload front photo'), findsOneWidget);
+      await tester.tap(find.text('Upload front photo'));
+      await _tick(tester);
+
+      // On back scan view, "Use front scan" is offered
+      expect(find.text('Now scan the back of your card'), findsOneWidget);
+      expect(find.text('Use front scan'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Use front scan'));
+      await tester.tap(find.text('Use front scan'));
+      await _tick(tester);
+
+      // Navigated to results using front scan
+      expect(find.text('Detected card'), findsOneWidget);
+      expect(find.text('HDFC Millennia'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Use this'), findsOneWidget);
+    },
+  );
 }
