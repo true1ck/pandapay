@@ -49,7 +49,10 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _attempt());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      if (mounted) _attempt();
+    });
   }
 
   Future<void> _attempt() async {
