@@ -369,7 +369,7 @@ class _NoSpendingReportState extends StatelessWidget {
                 const SizedBox(height: AppSpace.xs),
                 MoneyText(
                   const Money.zero(),
-                  confidence: Confidence.estimated,
+                  confidence: Confidence.confirmed,
                   showConfidenceIcon: false,
                   style: BambooFonts.money(30, color: BambooInk.lime),
                 ),
@@ -1949,6 +1949,76 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
 
 enum _SpendingTab { categories, merchants, accounts, tags }
 
+class _SpendingChevron extends StatelessWidget {
+  final bool expanded;
+
+  const _SpendingChevron({required this.expanded});
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: AnimatedRotation(
+      turns: expanded ? 0.5 : 0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      child: Icon(
+        Icons.expand_more_rounded,
+        size: 20,
+        color: expanded ? BambooInk.jade : BambooInk.ink700,
+      ),
+    ),
+  );
+}
+
+/// An [ExpansionTile] that keeps its chevron inside [title].
+///
+/// The stock trailing icon reserves its width plus ListTile's 16dp title gap,
+/// which pushed every amount a long way off the card's right edge.
+class _SpendingExpandableRow extends StatefulWidget {
+  final Key? pageStorageKey;
+  final bool initiallyExpanded;
+  final EdgeInsetsGeometry tilePadding;
+  final EdgeInsetsGeometry childrenPadding;
+  final Widget leading;
+  final Widget? subtitle;
+  final Widget Function(bool expanded) titleBuilder;
+  final List<Widget> children;
+
+  const _SpendingExpandableRow({
+    this.pageStorageKey,
+    this.initiallyExpanded = false,
+    required this.tilePadding,
+    required this.childrenPadding,
+    required this.leading,
+    required this.titleBuilder,
+    required this.children,
+    this.subtitle,
+  });
+
+  @override
+  State<_SpendingExpandableRow> createState() =>
+      _SpendingExpandableRowState();
+}
+
+class _SpendingExpandableRowState extends State<_SpendingExpandableRow> {
+  late bool _expanded = widget.initiallyExpanded;
+
+  @override
+  Widget build(BuildContext context) => ExpansionTile(
+    key: widget.pageStorageKey,
+    initiallyExpanded: widget.initiallyExpanded,
+    onExpansionChanged: (expanded) => setState(() => _expanded = expanded),
+    showTrailingIcon: false,
+    tilePadding: widget.tilePadding,
+    childrenPadding: widget.childrenPadding,
+    shape: const Border(),
+    collapsedShape: const Border(),
+    leading: widget.leading,
+    title: widget.titleBuilder(_expanded),
+    subtitle: widget.subtitle,
+    children: widget.children,
+  );
+}
+
 class _ExpandableTagRow extends StatefulWidget {
   final TransactionTag tag;
   final Money total;
@@ -1977,8 +2047,8 @@ class _ExpandableTagRowState extends State<_ExpandableTagRow> {
   Widget build(BuildContext context) => CardSummaryPanel(
     padding: EdgeInsets.zero,
     margin: const EdgeInsets.only(bottom: AppSpace.sm),
-    child: ExpansionTile(
-      key: PageStorageKey<String>('spending-tag-${widget.tag.id}'),
+    child: _SpendingExpandableRow(
+      pageStorageKey: PageStorageKey<String>('spending-tag-${widget.tag.id}'),
       tilePadding: const EdgeInsets.fromLTRB(
         AppSpace.md,
         AppSpace.sm,
@@ -1991,8 +2061,6 @@ class _ExpandableTagRowState extends State<_ExpandableTagRow> {
         AppSpace.md,
         AppSpace.sm,
       ),
-      shape: const Border(),
-      collapsedShape: const Border(),
       leading: const _SpendingVisualBadge(
         visual: SpendingVisual(
           icon: Icons.sell_rounded,
@@ -2000,7 +2068,7 @@ class _ExpandableTagRowState extends State<_ExpandableTagRow> {
         ),
         size: 38,
       ),
-      title: SpendingBreakdownHeader(
+      titleBuilder: (expanded) => SpendingBreakdownHeader(
         label: Text(
           widget.tag.name,
           style: BambooFonts.ui(13.5, color: BambooInk.ink900),
@@ -2008,7 +2076,7 @@ class _ExpandableTagRowState extends State<_ExpandableTagRow> {
         ),
         amount: MoneyText(
           widget.total,
-          confidence: Confidence.estimated,
+          confidence: Confidence.confirmed,
           showConfidenceIcon: false,
           style: BambooFonts.ui(
             13.5,
@@ -2016,6 +2084,7 @@ class _ExpandableTagRowState extends State<_ExpandableTagRow> {
             color: BambooInk.ink900,
           ),
         ),
+        trailing: _SpendingChevron(expanded: expanded),
       ),
       subtitle: Text(
         '${widget.txnCount} ${widget.txnCount == 1 ? 'transaction' : 'transactions'}',
@@ -2084,8 +2153,8 @@ class _TagCategoryRow extends StatelessWidget {
       _groupByPayee(entries, unknownLabel: 'Unknown merchant');
 
   @override
-  Widget build(BuildContext context) => ExpansionTile(
-    key: PageStorageKey<String>(
+  Widget build(BuildContext context) => _SpendingExpandableRow(
+    pageStorageKey: PageStorageKey<String>(
       'spending-tag-category-$tagId-${category.categoryId ?? SpendingSelection.normalize(category.label)}',
     ),
     tilePadding: const EdgeInsetsDirectional.fromSTEB(
@@ -2100,13 +2169,11 @@ class _TagCategoryRow extends StatelessWidget {
       AppSpace.sm,
       AppSpace.sm,
     ),
-    shape: const Border(),
-    collapsedShape: const Border(),
     leading: _SpendingVisualBadge(
       visual: spendingCategoryVisual(category.label),
       size: 34,
     ),
-    title: SpendingBreakdownHeader(
+    titleBuilder: (expanded) => SpendingBreakdownHeader(
       label: Text(
         category.label,
         style: BambooFonts.ui(13, color: BambooInk.ink900),
@@ -2115,7 +2182,7 @@ class _TagCategoryRow extends StatelessWidget {
       ),
       amount: MoneyText(
         category.total,
-        confidence: Confidence.estimated,
+        confidence: Confidence.confirmed,
         showConfidenceIcon: false,
         style: BambooFonts.ui(
           12.5,
@@ -2123,6 +2190,7 @@ class _TagCategoryRow extends StatelessWidget {
           color: BambooInk.ink900,
         ),
       ),
+      trailing: _SpendingChevron(expanded: expanded),
     ),
     subtitle: Text(
       '${category.txnCount} ${category.txnCount == 1 ? 'transaction' : 'transactions'} · Tap to see payments',
@@ -2979,7 +3047,7 @@ class _SpendMetricTile extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: MoneyText(
                     amount,
-                    confidence: Confidence.estimated,
+                    confidence: Confidence.confirmed,
                     showConfidenceIcon: false,
                     style: BambooFonts.money(
                       14,
@@ -4056,7 +4124,7 @@ class SpendingDonut extends StatelessWidget {
               fit: BoxFit.scaleDown,
               child: MoneyText(
                 total,
-                confidence: Confidence.estimated,
+                confidence: Confidence.confirmed,
                 showConfidenceIcon: false,
                 style: BambooFonts.ui(
                   compact ? 12 : 16,
@@ -4115,7 +4183,7 @@ class _SelectedMixDetail extends StatelessWidget {
           fit: BoxFit.scaleDown,
           child: MoneyText(
             row.total,
-            confidence: Confidence.estimated,
+            confidence: Confidence.confirmed,
             showConfidenceIcon: false,
             style: BambooFonts.ui(
               compact ? 10.5 : 12,
@@ -4251,7 +4319,7 @@ class _MixLegendRow extends StatelessWidget {
                   alignment: Alignment.centerRight,
                   child: MoneyText(
                     row.total,
-                    confidence: Confidence.estimated,
+                    confidence: Confidence.confirmed,
                     showConfidenceIcon: false,
                     style: BambooFonts.ui(
                       compact ? 9.5 : 12,
@@ -4365,7 +4433,7 @@ class _ExpandableCategoryRow extends StatelessWidget {
     return CardSummaryPanel(
       padding: EdgeInsets.zero,
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
-      child: ExpansionTile(
+      child: _SpendingExpandableRow(
         initiallyExpanded: initiallyExpanded,
         tilePadding: const EdgeInsets.fromLTRB(
           AppSpace.md,
@@ -4379,13 +4447,11 @@ class _ExpandableCategoryRow extends StatelessWidget {
           AppSpace.md,
           AppSpace.sm,
         ),
-        shape: const Border(),
-        collapsedShape: const Border(),
         leading: _SpendingVisualBadge(
           visual: spendingCategoryVisual(row.label),
           size: 38,
         ),
-        title: Column(
+        titleBuilder: (expanded) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SpendingBreakdownHeader(
@@ -4397,7 +4463,7 @@ class _ExpandableCategoryRow extends StatelessWidget {
               percentage: '${(ratio * 100).toStringAsFixed(0)}%',
               amount: MoneyText(
                 row.total,
-                confidence: Confidence.estimated,
+                confidence: Confidence.confirmed,
                 showConfidenceIcon: false,
                 style: BambooFonts.ui(
                   13.5,
@@ -4405,6 +4471,7 @@ class _ExpandableCategoryRow extends StatelessWidget {
                   color: BambooInk.ink900,
                 ),
               ),
+              trailing: _SpendingChevron(expanded: expanded),
             ),
             const SizedBox(height: 2),
             Text(
@@ -4486,7 +4553,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
     return CardSummaryPanel(
       padding: EdgeInsets.zero,
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
-      child: ExpansionTile(
+      child: _SpendingExpandableRow(
         tilePadding: const EdgeInsets.fromLTRB(
           AppSpace.md,
           AppSpace.sm,
@@ -4499,13 +4566,11 @@ class _ExpandableInstrumentRow extends StatelessWidget {
           AppSpace.md,
           AppSpace.sm,
         ),
-        shape: const Border(),
-        collapsedShape: const Border(),
         leading: _SpendingVisualBadge(
           visual: spendingInstrumentVisual(row.instrument),
           size: 38,
         ),
-        title: Column(
+        titleBuilder: (expanded) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (needsMethodReview) ...[
@@ -4520,7 +4585,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
                 percentage: '${(ratio * 100).toStringAsFixed(0)}%',
                 amount: MoneyText(
                   row.total,
-                  confidence: Confidence.estimated,
+                  confidence: Confidence.confirmed,
                   showConfidenceIcon: false,
                   style: BambooFonts.ui(
                     13.5,
@@ -4528,6 +4593,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
                     color: BambooInk.ink900,
                   ),
                 ),
+                trailing: _SpendingChevron(expanded: expanded),
               ),
             ] else
               SpendingBreakdownHeader(
@@ -4540,7 +4606,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
                 percentage: '${(ratio * 100).toStringAsFixed(0)}%',
                 amount: MoneyText(
                   row.total,
-                  confidence: Confidence.estimated,
+                  confidence: Confidence.confirmed,
                   showConfidenceIcon: false,
                   style: BambooFonts.ui(
                     13.5,
@@ -4548,6 +4614,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
                     color: BambooInk.ink900,
                   ),
                 ),
+                trailing: _SpendingChevron(expanded: expanded),
               ),
             const SizedBox(height: 2),
             Text(
@@ -4629,7 +4696,7 @@ class _ExpandableMerchantRow extends StatelessWidget {
     return CardSummaryPanel(
       padding: EdgeInsets.zero,
       margin: const EdgeInsets.only(bottom: AppSpace.md),
-      child: ExpansionTile(
+      child: _SpendingExpandableRow(
         tilePadding: const EdgeInsets.fromLTRB(
           AppSpace.md,
           AppSpace.sm,
@@ -4642,8 +4709,6 @@ class _ExpandableMerchantRow extends StatelessWidget {
           AppSpace.md,
           AppSpace.sm,
         ),
-        shape: const Border(),
-        collapsedShape: const Border(),
         leading: _SpendingVisualBadge(
           visual: const SpendingVisual(
             icon: Icons.storefront_rounded,
@@ -4651,7 +4716,7 @@ class _ExpandableMerchantRow extends StatelessWidget {
           ),
           size: 38,
         ),
-        title: Column(
+        titleBuilder: (expanded) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SpendingBreakdownHeader(
@@ -4663,7 +4728,7 @@ class _ExpandableMerchantRow extends StatelessWidget {
               percentage: '${(ratio * 100).toStringAsFixed(0)}%',
               amount: MoneyText(
                 row.total,
-                confidence: Confidence.estimated,
+                confidence: Confidence.confirmed,
                 showConfidenceIcon: false,
                 style: BambooFonts.ui(
                   13.5,
@@ -4671,6 +4736,7 @@ class _ExpandableMerchantRow extends StatelessWidget {
                   color: BambooInk.ink900,
                 ),
               ),
+              trailing: _SpendingChevron(expanded: expanded),
             ),
             const SizedBox(height: 2),
             Text(
@@ -4785,7 +4851,7 @@ class _MerchantGroup extends StatelessWidget {
                 ),
           trailing: MoneyText(
             entry.amount,
-            confidence: Confidence.estimated,
+            confidence: Confidence.confirmed,
             showConfidenceIcon: false,
             hidePaise: true,
             style: BambooFonts.ui(
@@ -4848,7 +4914,7 @@ class _MerchantGroup extends StatelessWidget {
                 ),
                 MoneyText(
                   amount,
-                  confidence: Confidence.estimated,
+                  confidence: Confidence.confirmed,
                   showConfidenceIcon: false,
                   style: BambooFonts.ui(
                     12.5,
@@ -4993,6 +5059,7 @@ class _MerchantExpansionTileState extends State<_MerchantExpansionTile> {
     key: PageStorageKey<String>(widget.storageKey),
     initiallyExpanded: widget.initiallyExpanded,
     onExpansionChanged: (expanded) => setState(() => _expanded = expanded),
+    showTrailingIcon: false,
     tilePadding: const EdgeInsets.fromLTRB(
       AppSpace.sm,
       AppSpace.xs,
@@ -5057,7 +5124,7 @@ class _MerchantExpansionTileState extends State<_MerchantExpansionTile> {
               key: ValueKey<String>(
                 'spending-merchant-amount-${widget.storageKey}',
               ),
-              confidence: Confidence.estimated,
+              confidence: Confidence.confirmed,
               showConfidenceIcon: false,
               style: BambooFonts.ui(
                 12.5,
@@ -5065,23 +5132,13 @@ class _MerchantExpansionTileState extends State<_MerchantExpansionTile> {
                 color: BambooInk.ink900,
               ),
             ),
+            const SizedBox(width: AppSpace.xs),
+            _SpendingChevron(expanded: _expanded),
           ],
         ),
         const SizedBox(height: 2),
         widget.subtitle,
       ],
-    ),
-    trailing: ExcludeSemantics(
-      child: AnimatedRotation(
-        turns: _expanded ? 0.5 : 0,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        child: Icon(
-          Icons.expand_more_rounded,
-          size: 20,
-          color: _expanded ? BambooInk.jade : BambooInk.ink700,
-        ),
-      ),
     ),
     children: widget.children,
   );
@@ -5134,7 +5191,7 @@ class _AccountRow extends StatelessWidget {
     return CardSummaryPanel(
       padding: EdgeInsets.zero,
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
-      child: ExpansionTile(
+      child: _SpendingExpandableRow(
         tilePadding: const EdgeInsets.fromLTRB(
           AppSpace.md,
           AppSpace.sm,
@@ -5147,10 +5204,8 @@ class _AccountRow extends StatelessWidget {
           AppSpace.md,
           AppSpace.sm,
         ),
-        shape: const Border(),
-        collapsedShape: const Border(),
         leading: _SpendingVisualBadge(visual: visual, size: 34),
-        title: Column(
+        titleBuilder: (expanded) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SpendingBreakdownHeader(
@@ -5161,7 +5216,7 @@ class _AccountRow extends StatelessWidget {
               ),
               amount: MoneyText(
                 row.total,
-                confidence: Confidence.estimated,
+                confidence: Confidence.confirmed,
                 showConfidenceIcon: false,
                 style: BambooFonts.ui(
                   13.5,
@@ -5169,6 +5224,7 @@ class _AccountRow extends StatelessWidget {
                   color: BambooInk.ink900,
                 ),
               ),
+              trailing: _SpendingChevron(expanded: expanded),
             ),
             const SizedBox(height: 4),
             Text(

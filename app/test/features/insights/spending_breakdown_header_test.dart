@@ -80,4 +80,34 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a trailing chevron follows the amount on the row edge', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 360,
+            child: SpendingBreakdownHeader(
+              label: const Text('Other'),
+              percentage: '100%',
+              amountKey: const Key('amount'),
+              amount: amount('₹447.00'),
+              trailing: const Icon(
+                Icons.expand_more_rounded,
+                key: Key('chevron'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final amountRect = tester.getRect(find.byKey(const Key('amount')));
+    final chevronRect = tester.getRect(find.byKey(const Key('chevron')));
+
+    expect(chevronRect.left, greaterThan(amountRect.right));
+    expect(chevronRect.right, closeTo(360, 0.01));
+  });
 }
