@@ -1528,6 +1528,69 @@ void main() {
     expect((secondPayment.title as Text).data, startsWith('13/08/2026'));
   });
 
+  testWidgets('transfer payees drop the redundant "Transfer to" verb', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _report(
+        spend: 200,
+        byInstrument: [
+          InstrumentSpendRow(
+            instrument: 'upi_bank',
+            total: Money.fromRupees(200),
+            txnCount: 2,
+          ),
+        ],
+      ),
+      transactions: [
+        _detailEntry(
+          id: 'transfer-txn-1',
+          merchant: 'Transfer to Zephr',
+          merchantVpa: 'zephr@upi',
+          amount: 125,
+          categoryId: 'other',
+          categoryName: 'Other',
+          occurredAt: DateTime(2026, 8, 12),
+          instrument: TxnInstrument.upiBank,
+          cardDisplayName: null,
+          userCardId: null,
+        ),
+        _detailEntry(
+          id: 'transfer-txn-2',
+          merchant: 'Transfer to Zephr',
+          merchantVpa: 'zephr@upi',
+          amount: 75,
+          categoryId: 'other',
+          categoryName: 'Other',
+          occurredAt: DateTime(2026, 8, 13),
+          instrument: TxnInstrument.upiBank,
+          cardDisplayName: null,
+          userCardId: null,
+        ),
+      ],
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('UPI from bank account'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.ensureVisible(find.text('UPI from bank account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('UPI from bank account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Zephr'), findsOneWidget);
+    expect(find.textContaining('Transfer to'), findsNothing);
+    expect(find.text('zephr@upi'), findsOneWidget);
+
+    await tester.tap(find.text('Zephr'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Transfer to'), findsNothing);
+  });
+
   testWidgets('Accounts groups UPI spend under the matched bank account', (
     tester,
   ) async {

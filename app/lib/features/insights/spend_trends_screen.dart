@@ -63,11 +63,22 @@ String? _readableMerchantVpa(String? value) {
   return vpa;
 }
 
+/// P2P transfers are stored as "Transfer to <payee>". Inside a spending
+/// breakdown the payment method already says it was a transfer, so the verb
+/// only eats label space.
+String? _payeeDisplayName(String? name) {
+  if (name == null) return null;
+  final stripped = name
+      .replaceFirst(RegExp(r'^transfer\s+to\s+', caseSensitive: false), '')
+      .trim();
+  return stripped.isEmpty ? name : stripped;
+}
+
 // Opaque addresses still distinguish identities even when hidden in the UI.
 String _merchantGroupKey(TransactionEntry entry) {
   final vpa = entry.merchantVpa?.trim();
   if (vpa != null && vpa.isNotEmpty) return 'vpa:${SpendingSelection.normalize(vpa)}';
-  final name = MerchantIdentity.cleanName(entry.merchantName);
+  final name = _payeeDisplayName(MerchantIdentity.cleanName(entry.merchantName));
   if (name != null) return 'name:${SpendingSelection.normalize(name)}';
   return 'entry:${entry.id}';
 }
@@ -95,6 +106,7 @@ _MerchantDisplay _merchantDisplayFor(
     name = names[best.key];
   }
   name ??= MerchantIdentity.cleanName(fallbackLabel);
+  name = _payeeDisplayName(name);
 
   final readableVpas = <String>{};
   for (final entry in entries) {
@@ -4893,7 +4905,9 @@ class _MerchantGroup extends StatelessWidget {
   /// A transaction sometimes carries a more specific name than its group.
   /// Show it only when it is a real, different name.
   String? _secondaryMerchantName(TransactionEntry entry) {
-    final name = MerchantIdentity.cleanName(entry.merchantName);
+    final name = _payeeDisplayName(
+      MerchantIdentity.cleanName(entry.merchantName),
+    );
     if (name == null) return null;
     return SpendingSelection.normalize(name) ==
             SpendingSelection.normalize(merchant)
