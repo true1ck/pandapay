@@ -9,9 +9,10 @@ import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 import 'entry_brand.dart';
+import 'onboarding_back.dart';
 
 /// Design 31 "You're all set" — the final onboarding screen, reached from
-/// Tracking Setup once onboarding is already marked complete. Pushed
+/// Tracking Setup (or the card skip action) before onboarding is completed. Pushed
 /// imperatively (`Navigator.push`), not a go_router route: same "one-off,
 /// looked-at-then-returns(-Home)" shape as A8/other single-destination
 /// screens noted in router.dart's own AppRoute doc-comment, so it doesn't
@@ -39,8 +40,9 @@ class _AllSetScreenState extends ConsumerState<AllSetScreen> {
         uc.nickname?.isNotEmpty == true ? uc.nickname! : p.name,
     ];
 
-    return PopScope(
-      canPop: false,
+    return OnboardingBackScope(
+      busy: _finishing,
+      onBack: () => onboardingBack(context, fallback: AppRoute.addFirstCard),
       child: EntryBackdrop(
         child: SafeArea(
           child: Padding(
@@ -48,7 +50,19 @@ class _AllSetScreenState extends ConsumerState<AllSetScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: AppSpace.md),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    tooltip: 'Back',
+                    onPressed: _finishing
+                        ? null
+                        : () => onboardingBack(
+                            context,
+                            fallback: AppRoute.addFirstCard,
+                          ),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                ),
                 const EntryProgress(step: 3),
                 Expanded(
                   child: Center(

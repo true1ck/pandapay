@@ -32,6 +32,8 @@ import '../features/cards/request_new_card_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/home/bank_accounts_screen.dart';
 import '../features/import/import_hub_screen.dart';
+import '../features/sms_import/ios_sms_intake_providers.dart';
+import '../features/sms_import/sms_sync_status_bar.dart';
 import '../features/insights/billing_float_screen.dart';
 import '../features/insights/caps_screen.dart';
 import '../features/insights/credit_utilization_screen.dart';
@@ -250,7 +252,10 @@ class _RouterRefreshNotifier extends ChangeNotifier {
     // made GoRouter re-evaluate the whole shell every refresh interval.
     ref.listen(cacheNamespaceProvider, (_, _) => notifyListeners());
     ref.listen(onboardingCompleteProvider, (_, _) => notifyListeners());
-    ref.listen(activationVerifiedNamespaceProvider, (_, _) => notifyListeners());
+    ref.listen(
+      activationVerifiedNamespaceProvider,
+      (_, _) => notifyListeners(),
+    );
     // S5/S6 — re-evaluate redirect once the status/version checks resolve,
     // and again any time appStatusProvider is invalidated (e.g.
     // MaintenanceScreen's "Try again" button).
@@ -377,7 +382,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // Flutter deep-link parser is disabled and forwards validated native
       // intents through PandaPayApp instead.
       final invitationCode = invitationCodeFromUri(state.uri);
-      if (invitationCode != null && path != '${AppRoute.inviteLinkPrefix}/$invitationCode') {
+      if (invitationCode != null &&
+          path != '${AppRoute.inviteLinkPrefix}/$invitationCode') {
         return '${AppRoute.inviteLinkPrefix}/$invitationCode';
       }
 
@@ -414,6 +420,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
 
       final signedIn = ref.read(accessTokenProvider) != null;
       final complete = onboarding.valueOrNull ?? false;
+      // A cold Shortcuts callback has no live continuation session. Send it
+      // through the ordinary account/setup gates rather than an unknown page.
+      if (state.uri.scheme == 'pandapay' && state.uri.host == 'sms-import') {
+        return signedIn
+            ? (complete ? AppRoute.home : AppRoute.permissions)
+            : AppRoute.welcome;
+      }
 
       // Loading just finished. Splash must always hand off to a real
       // destination here — it's never itself a valid resting page once
@@ -438,11 +451,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // emergency bypass in this build.
       if (!signedIn) {
         return {
-              AppRoute.welcome,
-              AppRoute.logIn,
-              AppRoute.signUp,
-            }.contains(path)
-                || path.startsWith('${AppRoute.inviteLinkPrefix}/')
+                  AppRoute.welcome,
+                  AppRoute.logIn,
+                  AppRoute.signUp,
+                }.contains(path) ||
+                path.startsWith('${AppRoute.inviteLinkPrefix}/')
             ? null
             : AppRoute.welcome;
       }
@@ -450,6 +463,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // New accounts must complete setup before entering Home. Returning
       // accounts with a persisted onboarding flag go straight to the shell.
       if (!complete) {
+        // Revisiting the introduction does not revoke an authenticated session.
+        // Its primary action resumes setup through the same activation guard.
+        if (path == AppRoute.welcome) return null;
         // An invite URL must be allowed to persist its code before the user
         // signs up. All other incomplete signed-in sessions pass through the
         // server-verified activation screen, including after a cold restart.
@@ -463,8 +479,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               : AppRoute.productActivation;
         }
         const setupRoutes = {
-          AppRoute.logIn,
-          AppRoute.signUp,
           AppRoute.productActivation,
           AppRoute.permissions,
           AppRoute.tour,
@@ -501,8 +515,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.welcome,
-        pageBuilder: (context, state) =>
-            const NoTransitionPage(child: WelcomeScreen()),
+        pageBuilder: (context, state) => NoTransitionPage(
+          child: WelcomeScreen(
+            resumeSetup: ref.read(accessTokenProvider) != null,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoute.inviteLink,
@@ -512,9 +529,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.productActivation,
-        pageBuilder: (context, state) => const NoTransitionPage(
-          child: ProductActivationScreen(),
-        ),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: ProductActivationScreen()),
       ),
       GoRoute(
         path: AppRoute.logIn,
@@ -540,10 +556,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const NoTransitionPage(child: TourScreen()),
       ),
-      // A7/A9/A10: the rest of the onboarding chain, reached via
-      // context.go(...) as forward linear steps (not pushed-and-returned
-      // like A8) — see AppRoute's own doc-comment above for the push-vs-
-      // route reasoning this follows.
+      // Setup pages push their next step so Back preserves the current form.
+      // Cold-start/deep-link entries also supply an explicit fallback route.
       GoRoute(
         path: AppRoute.addFirstCard,
         pageBuilder: (context, state) =>
@@ -551,6 +565,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.cardDetailsSetup,
+        redirect: (_, state) =>
+            state.extra is List<String> &&
+                (state.extra! as List<String>).isNotEmpty
+            ? null
+            : AppRoute.addFirstCard,
         pageBuilder: (context, state) => NoTransitionPage(
           child: CardDetailsSetupScreen(
             userCardIds: state.extra! as List<String>,
@@ -769,10 +788,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const GroupedInsightScreen(
           title: 'Payments',
           tabs: [
-            (
-              label: 'Bills & commitments',
-              body: BillsAndCommitmentsTab(),
-            ),
+            (label: 'Bills & commitments', body: BillsAndCommitmentsTab()),
             (label: 'Due dates', body: DueDateCalendarScreen()),
           ],
         ),
@@ -1089,6 +1105,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
     ref.watch(notificationTriggerLifecycleProvider);
     ref.watch(smsBackgroundFlushProvider);
     ref.watch(smsListenerLifecycleProvider);
+    ref.watch(iosSmsIntakeLifecycleProvider);
     final tutorialKeys = ref.watch(tutorialKeysProvider);
     // Keep one guide mounted while it moves between Home, Quick add and
     // Insights/Spending. Only its own navigation controls change the view.
@@ -1122,7 +1139,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
             // it left a bare white band between the screen's own background
             // and the bar. Each tab pays the clearance itself as bottom scroll
             // padding — AppShell.navClearance.
-            widget.child,
+            SmsSyncStatusLayout(child: widget.child),
             if (tutorialSeen.valueOrNull == true) const BiometricSetupPrompt(),
             // `bottom: 26` measured from the physical bottom of the 390×844
             // frame, exactly as the mockup positions it — NOT 26 above the

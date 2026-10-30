@@ -6,6 +6,7 @@ import 'package:local_auth/local_auth.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../settings/account_settings_screen.dart' show biometricLockProvider;
+import 'device_authentication.dart';
 
 /// The enforcement half of account_settings_screen.dart's "Biometric lock"
 /// toggle — that screen only ever persisted a SharedPreferences bool with
@@ -37,7 +38,8 @@ class BiometricLockScreen extends ConsumerStatefulWidget {
   const BiometricLockScreen({super.key, this.localAuth});
 
   @override
-  ConsumerState<BiometricLockScreen> createState() => _BiometricLockScreenState();
+  ConsumerState<BiometricLockScreen> createState() =>
+      _BiometricLockScreenState();
 }
 
 class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
@@ -45,6 +47,7 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
   bool _authenticating = false;
   bool _noDeviceLockAvailable = false;
   String? _error;
+  DeviceAuthenticationInfo? _capability;
 
   @override
   void initState() {
@@ -62,8 +65,10 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
       _error = null;
     });
     try {
-      final supported = await _localAuth.isDeviceSupported();
-      if (!supported) {
+      final capability = await DeviceAuthenticationInfo.read(_localAuth);
+      if (!mounted) return;
+      setState(() => _capability = capability);
+      if (!capability.supported) {
         setState(() {
           _noDeviceLockAvailable = true;
           _authenticating = false;
@@ -71,9 +76,10 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
         return;
       }
       final ok = await _localAuth.authenticate(
-        localizedReason: 'Unlock PandaPay to continue',
+        localizedReason: capability.unlockReason,
         biometricOnly: false,
       );
+      if (!mounted) return;
       if (ok) {
         _unlock();
         return;
@@ -102,7 +108,9 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
       if (mounted) {
         setState(() {
           _noDeviceLockAvailable = noLockConfigured;
-          _error = noLockConfigured ? null : (e.message ?? 'Could not verify — try again.');
+          _error = noLockConfigured
+              ? null
+              : (e.message ?? 'Could not verify — try again.');
         });
       }
     } catch (_) {
@@ -134,7 +142,11 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+            colors: [
+              BambooInk.slateRaised,
+              BambooInk.slate,
+              BambooInk.slateLow,
+            ],
           ),
         ),
         child: SafeArea(
@@ -143,7 +155,11 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.fingerprint_rounded, color: BambooInk.lime, size: 56),
+                Icon(
+                  _capability?.icon ?? Icons.lock_outline_rounded,
+                  color: BambooInk.lime,
+                  size: 56,
+                ),
                 const SizedBox(height: AppSpace.lg),
                 Text(
                   'PandaPay is locked',
@@ -166,7 +182,9 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                       foregroundColor: BambooInk.onSlate,
                       side: const BorderSide(color: BambooInk.onSlateMuted),
                       minimumSize: const Size.fromHeight(52),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
                     ),
                     onPressed: _disableAndContinue,
@@ -178,7 +196,9 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                       foregroundColor: BambooInk.onSlate,
                       side: const BorderSide(color: BambooInk.onSlateMuted),
                       minimumSize: const Size.fromHeight(52),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
                     ),
                     onPressed: _authenticating ? null : _attempt,
@@ -186,7 +206,10 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.onSlate),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: BambooInk.onSlate,
+                            ),
                           )
                         : const Text('Try again'),
                   ),
@@ -196,7 +219,10 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                       onPressed: _disableAndContinue,
                       child: Text(
                         'Turn off lock',
-                        style: BambooFonts.ui(13.5, color: BambooInk.onSlateMuted),
+                        style: BambooFonts.ui(
+                          13.5,
+                          color: BambooInk.onSlateMuted,
+                        ),
                       ),
                     ),
                   ],
@@ -209,4 +235,3 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
     );
   }
 }
-

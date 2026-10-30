@@ -184,7 +184,10 @@ class SmsIntakeRepository {
     remember(namespace, sms);
     if (wasProcessed(namespace, id, parserVersion: parserVersion)) return id;
     database.db.execute(
-      'INSERT OR REPLACE INTO sms_intake(namespace,id,sender,body,received_at) VALUES (?,?,?,?,?)',
+      // Re-acquisition joins unfinished work without clearing its retry state,
+      // original input or next-attempt backoff.
+      'INSERT INTO sms_intake(namespace,id,sender,body,received_at) VALUES (?,?,?,?,?) '
+      'ON CONFLICT(namespace,id) DO NOTHING',
       [
         namespace,
         id,

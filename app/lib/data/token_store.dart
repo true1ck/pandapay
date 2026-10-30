@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import '../features/sms_import/ios_sms_intake_service.dart';
 
 /// UA-3. Access/refresh tokens let this device keep its session across app
 /// restarts. The server keeps a rolling 90-day inactivity limit for an
@@ -104,6 +105,9 @@ class TokenStore {
   }
 
   Future<void> clear() async {
+    // Revoke the capture-time account before removing its credentials. A cold
+    // Shortcut must never keep saving under a signed-out account.
+    await IosSmsIntakeService().revoke('signed-out');
     _cachedAccessToken = null;
     _cachedRefreshToken = null;
     await _secureStorage.delete(key: _accessKey);

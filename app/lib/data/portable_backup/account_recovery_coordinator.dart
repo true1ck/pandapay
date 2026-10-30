@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../local/app_database.dart';
 import '../local/recovery_deferred_sms.dart';
+import '../../features/sms_import/ios_sms_intake_service.dart';
 import 'account_recovery_local_snapshot.dart';
 import 'account_recovery_operation_gate.dart';
 import 'account_recovery_repository.dart';
@@ -157,8 +158,9 @@ class AccountRecoveryCoordinator {
       final payload = await remote.downloadAndDecrypt(snapshotId);
       try {
         checkAccountUnchanged();
-        await gate.exclusive(
-          () => database.withRecoveryDatabase((lease) async {
+        await gate.exclusive(() async {
+          await IosSmsIntakeService().revoke(namespace);
+          return database.withRecoveryDatabase((lease) async {
             checkAccountUnchanged();
             await AccountRecoveryLocalSnapshot.restoreFresh(
               lease: lease,
@@ -168,8 +170,8 @@ class AccountRecoveryCoordinator {
               attachmentsDirectory: attachmentsDirectory,
             );
             checkAccountUnchanged();
-          }),
-        );
+          });
+        });
         return true;
       } finally {
         payload.fillRange(0, payload.length, 0);

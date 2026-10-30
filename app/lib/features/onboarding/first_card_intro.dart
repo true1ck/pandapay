@@ -8,11 +8,13 @@ import 'entry_brand.dart';
 class FirstCardIntroduction extends StatelessWidget {
   final VoidCallback onAdd;
   final VoidCallback onSkip;
+  final VoidCallback? onBack;
 
   const FirstCardIntroduction({
     super.key,
     required this.onAdd,
     required this.onSkip,
+    this.onBack,
   });
 
   @override
@@ -34,6 +36,15 @@ class FirstCardIntroduction extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (onBack != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: IconButton(
+                              tooltip: 'Back',
+                              onPressed: onBack,
+                              icon: const Icon(Icons.arrow_back_rounded),
+                            ),
+                          ),
                         const EntryProgress(step: 2),
                         const SizedBox(height: 32),
                         Text(

@@ -104,6 +104,20 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
-
+    # permission_handler_apple compiles each strategy out by default. Usage
+    # descriptions alone do not enable native prompts. Keep these definitions
+    # on its pod in every configuration, including signed Profile builds.
+    if target.name == 'permission_handler_apple'
+      target.build_configurations.each do |config|
+        definitions = Array(config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'])
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = (definitions + [
+          '$(inherited)',
+          'PERMISSION_CAMERA=1',
+          'PERMISSION_MICROPHONE=1',
+          'PERMISSION_NOTIFICATIONS=1',
+          'PERMISSION_LOCATION=1',
+        ]).uniq
+      end
+    end
   end
 end

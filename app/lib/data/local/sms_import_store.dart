@@ -140,7 +140,10 @@ class SmsImportStore {
       if (SmsLearningFeedback(
         store.database,
         namespace: namespace,
-      ).matchesFalseTransactionRuleSync(sender: message.sender, body: message.body)) {
+      ).matchesFalseTransactionRuleSync(
+        sender: message.sender,
+        body: message.body,
+      )) {
         intake.recordDecision(
           namespace,
           sourceKey: sourceKey,
@@ -170,6 +173,37 @@ class SmsImportStore {
         );
         intake.forgetRaw(namespace, sourceKey);
         db.execute('RELEASE SAVEPOINT sms_capture');
+        return;
+      }
+
+      if (message.sender.trim().isEmpty) {
+        // Shared by Android and iOS: body evidence can make a message worth
+        // reviewing, but an unknown sender must not create financial effects
+        // or enter the automatic upload/AI queue as a verified bank alert.
+        intake.remember(namespace, message);
+        addNeedsReviewSync(
+          store.database,
+          namespace,
+          NeedsReviewItem(
+            id: sourceKey,
+            sender: '',
+            body: message.body,
+            reason: 'sender_unavailable',
+            receivedAt: message.receivedAt,
+          ),
+        );
+        intake.recordDecision(
+          namespace,
+          sourceKey: sourceKey,
+          decision: 'financial_review',
+          state: 'final',
+          reasonCode: 'sender_unavailable',
+          receivedAt: message.receivedAt.millisecondsSinceEpoch,
+          parserVersion: LocalSmsParser.version.toString(),
+          policyVersion: 'sender-evidence-v1',
+        );
+        db.execute('RELEASE SAVEPOINT sms_capture');
+        store.notifyExternalChanges(namespace, const ['needs_review']);
         return;
       }
 

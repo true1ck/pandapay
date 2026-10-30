@@ -40,7 +40,10 @@ class SmsCaptureWorker {
           }
         }
       } else {
-        _fail(StateError('SMS capture worker stopped unexpectedly: $message'));
+        _commands = null;
+        _isolate = null;
+        _fail(StateError('SMS capture worker stopped unexpectedly'));
+        if (_disposed) _responses.close();
       }
     });
   }
@@ -61,19 +64,20 @@ class SmsCaptureWorker {
         _run,
         [_responses.sendPort, databasePath, clientVersion],
         onError: _responses.sendPort,
+        onExit: _responses.sendPort,
         debugName: 'pandapay-sms-capture',
       ).then<void>(
         (isolate) {
           _isolate = isolate;
           if (_disposed) {
-            isolate.kill();
-            if (!ready.isCompleted) {
-              ready.completeError(StateError('SMS capture disposed'));
-            }
+            // onExit releases startup admission after native initialization
+            // has actually stopped, rather than abandoning an active writer.
+            isolate.kill(priority: Isolate.beforeNextEvent);
           }
         },
         onError: (Object error, StackTrace stack) {
           if (!ready.isCompleted) ready.completeError(error, stack);
+          if (_disposed) _responses.close();
         },
       ),
     );
@@ -81,7 +85,9 @@ class SmsCaptureWorker {
   }
 
   Future<List<String>> capture(String namespace, List<QueuedSms> messages) =>
-      AccountRecoveryOperationGate.process.run(() => _capture(namespace, messages));
+      AccountRecoveryOperationGate.process.run(
+        () => _capture(namespace, messages),
+      );
 
   Future<List<String>> _capture(
     String namespace,
@@ -112,21 +118,26 @@ class SmsCaptureWorker {
       ],
     ]);
     try {
-      return await reply.future.timeout(const Duration(seconds: 30));
+      // Do not abandon a native SQLite mutation on a Dart timeout. The recovery
+      // gate must stay held until the worker commits, fails or exits; otherwise
+      // a fallback/recovery owner can race a late write.
+      return await reply.future;
     } finally {
       _pending.remove(id);
     }
   }
 
   void dispose() {
+    if (_disposed) return;
     _disposed = true;
-    _fail(StateError('SMS capture disposed'));
     if (_commands != null) {
+      // The isolate processes this after already-admitted writes. Keep its
+      // response port and recovery admissions alive until those writes finish.
       _commands!.send(null);
     } else {
       _isolate?.kill(priority: Isolate.beforeNextEvent);
+      if (_startup == null) _responses.close();
     }
-    _responses.close();
   }
 
   static void _run(List<Object?> arguments) {
@@ -164,28 +175,25 @@ class SmsCaptureWorker {
           final clientVersion = arguments.length > 2
               ? arguments[2] as String
               : '1.0.0';
-          final rules = ruleStore.loadActiveBundleSync(clientVersion: clientVersion);
+          final rules = ruleStore.loadActiveBundleSync(
+            clientVersion: clientVersion,
+          );
           SmsImportStore(
             store,
             downloadedRules: rules,
-            candidateRules: ruleStore.loadCandidateBundlesSync(clientVersion: clientVersion, namespace: namespace),
+            candidateRules: ruleStore.loadCandidateBundlesSync(
+              clientVersion: clientVersion,
+              namespace: namespace,
+            ),
           ).captureBatch(namespace, messages);
           replies.send([id, changed.toList(), null]);
-        } catch (error) {
+        } catch (_) {
           // Never return raw message bodies in diagnostics.
-          replies.send([
-            id,
-            <String>[],
-            'Local SMS capture failed: $error',
-          ]);
+          replies.send([id, <String>[], 'Local SMS capture failed']);
         }
       });
-    } catch (error) {
-      replies.send([
-        -1,
-        <String>[],
-        'Local SMS storage unavailable: $error',
-      ]);
+    } catch (_) {
+      replies.send([-1, <String>[], 'Local SMS storage unavailable']);
     }
   }
 }

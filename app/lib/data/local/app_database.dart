@@ -55,6 +55,18 @@ CREATE INDEX IF NOT EXISTS idx_local_past_bill_receipts_date
   ON local_past_bill_receipts(namespace, updated_at DESC);
 CREATE TABLE IF NOT EXISTS cache_refresh_requests (key TEXT PRIMARY KEY);
 
+-- Acquisition evidence is part of the account schema on every platform, so a
+-- fresh-device recovery recognizes it before any iPhone handoff has occurred.
+-- Native spool authority/generations remain device-local and are not restored.
+CREATE TABLE IF NOT EXISTS ios_sms_acquisition_receipts (
+  namespace TEXT NOT NULL, generation TEXT NOT NULL, capture_id TEXT NOT NULL,
+  source_key TEXT NOT NULL, received_at INTEGER NOT NULL,
+  date_provenance TEXT NOT NULL, parser_version INTEGER NOT NULL,
+  outcome TEXT NOT NULL, PRIMARY KEY(namespace,generation,capture_id)
+);
+CREATE INDEX IF NOT EXISTS ios_sms_occurrences
+  ON ios_sms_acquisition_receipts(namespace,source_key,received_at);
+
 CREATE TABLE IF NOT EXISTS transaction_outbox_entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_card_id TEXT,

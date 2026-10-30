@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/router.dart';
 import 'entry_brand.dart';
+import 'onboarding_back.dart';
 
 class TourScreen extends StatefulWidget {
   final VoidCallback? onFinished;
@@ -44,89 +45,104 @@ class _TourScreenState extends State<TourScreen> {
     }
   }
 
+  void _back() {
+    if (_page > 0) {
+      _controller.previousPage(
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeInOutCubic,
+      );
+    } else {
+      onboardingBack(context, fallback: AppRoute.permissions);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => EntryBackdrop(
-    waves: false,
-    child: SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      tooltip: 'Back',
-                      onPressed: () => context.pop(),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                    ),
-                    const Spacer(),
-                    const PandaWordmark(size: 20),
-                    const Spacer(),
-                    TextButton(onPressed: _finish, child: const Text('Skip')),
-                  ],
+  Widget build(BuildContext context) => OnboardingBackScope(
+    handlesStep: _page > 0,
+    onBack: _back,
+    child: EntryBackdrop(
+      waves: false,
+      child: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Back',
+                        onPressed: _back,
+                        icon: const Icon(Icons.arrow_back_rounded),
+                      ),
+                      const Spacer(),
+                      const PandaWordmark(size: 20),
+                      const Spacer(),
+                      TextButton(onPressed: _finish, child: const Text('Skip')),
+                    ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: PageView(
-                  controller: _controller,
-                  onPageChanged: (i) => setState(() => _page = i),
-                  children: const [
-                    _TourPage(
-                      title: 'Meet your\nmoney buddy.',
-                      body:
-                          'Keeping track of every card can feel like a lot.\nPandaPay brings the important bits together.',
-                      illustration: PandaStoryIllustration(),
-                    ),
-                    _TourPage(
-                      title: 'The right card.\nAt the right moment.',
-                      body:
-                          'Compare rewards across the cards you own.\nScan a UPI QR to see which card fits.',
-                      illustration: PandaIllustration(size: 250),
-                    ),
-                    _TourPage(
-                      title: 'Your month,\nmade clearer.',
-                      body:
-                          'Follow your spending, reward caps and milestones.\nA little clarity goes a long way.',
-                      illustration: PandaStoryIllustration(spending: true),
-                    ),
-                  ],
+                Expanded(
+                  child: PageView(
+                    controller: _controller,
+                    onPageChanged: (i) => setState(() => _page = i),
+                    children: const [
+                      _TourPage(
+                        title: 'Meet your\nmoney buddy.',
+                        body:
+                            'Keeping track of every card can feel like a lot.\nPandaPay brings the important bits together.',
+                        illustration: PandaStoryIllustration(),
+                      ),
+                      _TourPage(
+                        title: 'The right card.\nAt the right moment.',
+                        body:
+                            'Compare rewards across the cards you own.\nScan a UPI QR to see which card fits.',
+                        illustration: PandaIllustration(size: 250),
+                      ),
+                      _TourPage(
+                        title: 'Your month,\nmade clearer.',
+                        body:
+                            'Follow your spending, reward caps and milestones.\nA little clarity goes a long way.',
+                        illustration: PandaStoryIllustration(spending: true),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        for (var i = 0; i < 3; i++)
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
-                            width: i == _page ? 20 : 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: i == _page
-                                  ? const Color(0xFFA8DD43)
-                                  : const Color(0xFFDADDD9),
-                              borderRadius: BorderRadius.circular(20),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          for (var i = 0; i < 3; i++)
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              width: i == _page ? 20 : 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: i == _page
+                                    ? const Color(0xFFA8DD43)
+                                    : const Color(0xFFDADDD9),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
                             ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 28),
-                    EntryButton(
-                      label: _page == 2 ? 'Let’s add your cards' : 'Next',
-                      onPressed: _next,
-                    ),
-                  ],
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      EntryButton(
+                        label: _page == 2 ? 'Let’s add your cards' : 'Next',
+                        onPressed: _next,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

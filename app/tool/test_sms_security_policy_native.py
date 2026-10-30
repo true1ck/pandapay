@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix='pandapay-security-policy-') as directory:
     target = Path(directory)
     (target / 'main.swift').write_bytes((root / 'test/native/security_advisory_test.swift').read_bytes())
-    subprocess.run(['xcrun','swiftc',str(root/'ios/Runner/DeviceHistoryRange.swift'),
+    subprocess.run(['xcrun','swiftc',str(root/'ios/Runner/SmsSecurityPolicy.swift'),str(root/'ios/Runner/DeviceHistoryRange.swift'),
                     str(root/'ios/Runner/DeviceLiveMessageInbox.swift'),str(target/'main.swift'),
                     '-o',str(target/'test')],check=True)
     subprocess.run([str(target/'test'),str(root/'test/fixtures/sms_security_advisory_synthetic.json')],check=True)

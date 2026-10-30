@@ -274,6 +274,19 @@ void main() {
     expect(find.text('Nothing needs review'), findsOneWidget);
   });
 
+  testWidgets('missing-sender financial input remains visible with an honest label', (tester) async {
+    addNeedsReviewSync(db, 'user:test', NeedsReviewItem(
+      id: 'unknown-sender', sender: '',
+      body: 'INR 250 spent on ICICI Card XX1234 at SYNTHETIC CAFE. Ref TEST-REVIEW',
+      reason: 'sender_unavailable', receivedAt: DateTime.now(),
+    ));
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+    expect(find.text('Sender unavailable'), findsOneWidget);
+    expect(find.text('Sender wasn’t provided. Check this message before adding it.'), findsOneWidget);
+    expect(find.textContaining('SYNTHETIC CAFE'), findsOneWidget);
+    expect(await reviews.fetchAll(), hasLength(1));
+  });
+
   testWidgets('shows the raw sender and body for a queued item', (
     tester,
   ) async {

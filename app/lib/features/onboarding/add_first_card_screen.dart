@@ -17,6 +17,7 @@ import '../scan/scan_card_screen.dart';
 import '../sms_import/sms_listener_service.dart';
 import 'all_set_screen.dart';
 import 'first_card_intro.dart';
+import 'onboarding_back.dart';
 import 'request_unsupported_card_screen.dart';
 
 /// ui-spec.md A7 "Add Your First Card". Same picker shape as C3's
@@ -42,6 +43,7 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
   bool _showIntroduction = true;
   final _searchController = TextEditingController();
   final _selected = <String>{};
+  final _addedIdsByProduct = <String, String>{};
   final _scannedLast4ByProductId = <String, String?>{};
   final _networkFilters = <CardNetwork>{};
   bool _adding = false;
@@ -89,18 +91,18 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
         // by the on-device wallet instead of POST /user-cards.
         final local = await ref.read(localUserCardsRepositoryProvider.future);
         for (final id in _selected) {
-          final userCardId = await local.addCard(
-            id,
-            last4: _scannedLast4ByProductId[id],
-          );
+          final userCardId =
+              _addedIdsByProduct[id] ??
+              await local.addCard(id, last4: _scannedLast4ByProductId[id]);
+          _addedIdsByProduct[id] = userCardId;
           addedIds.add(userCardId);
         }
       } else {
         for (final id in _selected) {
-          final userCardId = await repo.addCard(
-            id,
-            last4: _scannedLast4ByProductId[id],
-          );
+          final userCardId =
+              _addedIdsByProduct[id] ??
+              await repo.addCard(id, last4: _scannedLast4ByProductId[id]);
+          _addedIdsByProduct[id] = userCardId;
           addedIds.add(userCardId);
         }
       }
@@ -114,7 +116,7 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
     }
     ref.invalidate(userCardsProvider);
     ref.invalidate(myCardsProvider);
-    if (mounted) context.go(AppRoute.cardDetailsSetup, extra: addedIds);
+    if (mounted) context.push(AppRoute.cardDetailsSetup, extra: addedIds);
   }
 
   /// Design 30's "FASTEST · 4 seconds — Find them in my SMS" primary path.
@@ -182,11 +184,27 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => OnboardingBackScope(
+    handlesStep: !_showIntroduction,
+    busy: _adding,
+    onBack: _back,
+    child: _buildPage(context),
+  );
+
+  void _back() {
+    if (!_showIntroduction) {
+      setState(() => _showIntroduction = true);
+    } else {
+      onboardingBack(context, fallback: AppRoute.permissions);
+    }
+  }
+
+  Widget _buildPage(BuildContext context) {
     if (_showIntroduction) {
       return FirstCardIntroduction(
         onAdd: () => setState(() => _showIntroduction = false),
         onSkip: _skip,
+        onBack: _back,
       );
     }
     final catalogue = ref.watch(catalogueProvider);
@@ -195,7 +213,7 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
       appBar: AppBar(
         leading: IconButton(
           tooltip: 'Back',
-          onPressed: () => setState(() => _showIntroduction = true),
+          onPressed: _adding ? null : _back,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
         backgroundColor: BambooInk.paper,

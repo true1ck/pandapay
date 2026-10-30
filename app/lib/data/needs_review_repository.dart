@@ -64,6 +64,9 @@ class NeedsReviewItem {
   final String? aiSummary;
   final String? aiFailureReason;
 
+  bool get needsSender =>
+      sender.trim().isEmpty && reason == 'sender_unavailable';
+
   const NeedsReviewItem({
     required this.id,
     required this.sender,
@@ -155,6 +158,10 @@ class NeedsReviewItem {
 const _needsReviewKey = 'pandapay_app.needs_review_queue_v1';
 
 bool _capturesReviewableFinancial(NeedsReviewItem item) {
+  if (item.needsSender) {
+    return classifySmsTriage('', item.body).kind ==
+        SmsTriageKind.financialCandidate;
+  }
   if (LocalSmsParser.isActionableInsuranceRenewal(item.body)) return true;
 
   final bodyLower = item.body.toLowerCase();
@@ -199,6 +206,20 @@ void addNeedsReviewSync(
   NeedsReviewItem item, {
   List<TransactionEntry>? existingTransactions,
 }) {
+  if (item.needsSender) {
+    if (!_capturesReviewableFinancial(item)) return;
+    // Acquisition review must survive automatic parsing/archiving. Its body
+    // stays local and visible until the user explicitly resolves/dismisses it.
+    database.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+    );
+    database.db.execute(
+      'INSERT OR IGNORE INTO local_needs_review VALUES (?,?,?)',
+      [namespace, item.id, jsonEncode(item.toJson())],
+    );
+    NeedsReviewRepository._notify(database, namespace, 'needs_review');
+    return;
+  }
   if (NeedsReviewRepository.isNoiseItem(item)) return;
   if (!_capturesReviewableFinancial(item)) return;
   if (isInvestmentFolioAllotment(item.body) &&
@@ -226,7 +247,12 @@ void addNeedsReviewSync(
         linkedTransactionId: linkedId,
         status: PastBillReceiptStatus.paidLinked,
       );
-      NeedsReviewRepository._enrichLinkedReceipt(database, namespace, item, linkedId);
+      NeedsReviewRepository._enrichLinkedReceipt(
+        database,
+        namespace,
+        item,
+        linkedId,
+      );
       return;
     }
   }
@@ -565,7 +591,8 @@ class NeedsReviewRepository {
         if (++processed % 8 == 0) {
           await Future<void>.delayed(Duration.zero);
         }
-        if ((item.aiSuggestions != null && item.aiSuggestions!.isNotEmpty) ||
+        if (item.needsSender ||
+            (item.aiSuggestions != null && item.aiSuggestions!.isNotEmpty) ||
             (item.aiSummary != null && item.aiSummary!.trim().isNotEmpty)) {
           kept.add(item);
           continue;
@@ -832,7 +859,8 @@ class NeedsReviewRepository {
     final toRemove = <String>[];
     final now = DateTime.now();
     for (final item in nonNoise) {
-      if ((item.aiSuggestions != null && item.aiSuggestions!.isNotEmpty) ||
+      if (item.needsSender ||
+          (item.aiSuggestions != null && item.aiSuggestions!.isNotEmpty) ||
           (item.aiSummary != null && item.aiSummary!.trim().isNotEmpty)) {
         kept.add(item);
         continue;
@@ -1207,10 +1235,14 @@ class NeedsReviewRepository {
     final referenceMatches = <String, TransactionEntry>{};
     final nameMatches = <String, TransactionEntry>{};
     for (final txn in transactions ?? const <TransactionEntry>[]) {
-      if (txn.status != 'active' || txn.entryKind != TxnEntryKind.spend) continue;
+      if (txn.status != 'active' || txn.entryKind != TxnEntryKind.spend) {
+        continue;
+      }
       if (txn.amount.paise != extracted.paise ||
           txn.occurredAt.difference(item.receivedAt).abs() >
-              const Duration(hours: 72)) continue;
+              const Duration(hours: 72)) {
+        continue;
+      }
       final txnReferences = txn.observations
           .map((o) => o.reference?.trim().toLowerCase())
           .whereType<String>()
@@ -1236,18 +1268,34 @@ class NeedsReviewRepository {
     final transactionName = MerchantIdentity.cleanName(txnMerchant);
     final receiptName = MerchantIdentity.cleanName(receiptMerchant);
     if (transactionName == null || receiptName == null) return false;
-    const stopWords = {'pvt', 'ltd', 'limited', 'store', 'stores', 'the', 'and'};
+    const stopWords = {
+      'pvt',
+      'ltd',
+      'limited',
+      'store',
+      'stores',
+      'the',
+      'and',
+    };
     List<String> tokens(String name) => name
-        .toLowerCase().split(RegExp(r'[^\p{L}\p{M}\p{N}]+', unicode: true))
-        .where((t) => t.isNotEmpty && !stopWords.contains(t) &&
-            !RegExp(r'^\d+$').hasMatch(t)).toList();
+        .toLowerCase()
+        .split(RegExp(r'[^\p{L}\p{M}\p{N}]+', unicode: true))
+        .where(
+          (t) =>
+              t.isNotEmpty &&
+              !stopWords.contains(t) &&
+              !RegExp(r'^\d+$').hasMatch(t),
+        )
+        .toList();
     final receiptTokens = tokens(receiptName);
     final transactionTokens = tokens(transactionName);
     if (receiptTokens.isEmpty || transactionTokens.isEmpty) return false;
     final shorter = receiptTokens.length <= transactionTokens.length
-        ? receiptTokens : transactionTokens;
+        ? receiptTokens
+        : transactionTokens;
     final longer = receiptTokens.length <= transactionTokens.length
-        ? transactionTokens : receiptTokens;
+        ? transactionTokens
+        : receiptTokens;
     return shorter.every(longer.contains);
   }
 
@@ -1285,23 +1333,36 @@ class NeedsReviewRepository {
           [namespace],
         );
         for (final row in rows) {
-          final data = jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+          final data =
+              jsonDecode(row['payload'] as String) as Map<String, dynamic>;
           final id = row['id'] as String;
           byId.remove(id);
           final entryKind = (data['entry_kind'] as String?)?.toLowerCase();
-          if (entryKind != null && entryKind != 'spend' && entryKind != 'payment') continue;
-          final paise = row['amount_paise'] ??
+          if (entryKind != null &&
+              entryKind != 'spend' &&
+              entryKind != 'payment') {
+            continue;
+          }
+          final paise =
+              row['amount_paise'] ??
               (data['amount'] is Map ? data['amount']['paise'] : null);
           final occurred = row['occurred_at'] ?? data['occurred_at'];
           if (occurred is! int &&
-              (occurred is! String || DateTime.tryParse(occurred) == null)) continue;
+              (occurred is! String || DateTime.tryParse(occurred) == null)) {
+            continue;
+          }
           byId[id] = TransactionEntry.fromJson({
             ...data,
             'id': row['id'],
             if (paise is num) 'amount_inr': paise / 100,
             if (occurred is int)
-              'occurred_at': DateTime.fromMillisecondsSinceEpoch(occurred).toIso8601String(),
-            'merchant_name': data['merchant_name'] ?? data['merchant'] ?? data['merchantName'],
+              'occurred_at': DateTime.fromMillisecondsSinceEpoch(
+                occurred,
+              ).toIso8601String(),
+            'merchant_name':
+                data['merchant_name'] ??
+                data['merchant'] ??
+                data['merchantName'],
           });
         }
       } catch (_) {
@@ -1575,6 +1636,7 @@ class NeedsReviewRepository {
   }
 
   static bool isNoiseItem(NeedsReviewItem item) {
+    if (item.needsSender) return !_capturesReviewableFinancial(item);
     final cleanSender = item.sender.trim().toLowerCase();
     if (cleanSender.contains('indialend') ||
         cleanSender.contains('indlnd') ||

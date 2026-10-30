@@ -4,7 +4,9 @@ import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/providers.dart' show biometricUnlockedProvider;
 import '../settings/account_settings_screen.dart' show biometricLockProvider;
+import 'device_authentication.dart';
 
 const _biometricPromptSeenKey = 'biometric_setup_prompt_seen_v1';
 
@@ -46,7 +48,8 @@ class _BiometricSetupPromptState extends ConsumerState<BiometricSetupPrompt> {
 
       // This is only a capability check. The actual user verification is
       // performed after the user explicitly taps Enable.
-      if (!await _localAuth.isDeviceSupported() || !mounted) return;
+      final capability = await DeviceAuthenticationInfo.read(_localAuth);
+      if (!capability.supported || !mounted) return;
       _shownThisSession = true;
 
       final choice = await showModalBottomSheet<bool>(
@@ -54,25 +57,30 @@ class _BiometricSetupPromptState extends ConsumerState<BiometricSetupPrompt> {
         useSafeArea: true,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (context) => const _BiometricSetupSheet(),
+        builder: (context) => _BiometricSetupSheet(capability: capability),
       );
       if (!mounted) return;
 
       if (choice == true) {
-        await _enable(prefs);
+        await _enable(prefs, capability);
       } else if (choice == false) {
         await prefs.setBool(_biometricPromptSeenKey, true);
       }
+    } catch (_) {
+      // This optional invitation must not interrupt the app if capability
+      // detection is temporarily unavailable. Settings remains accessible.
     } finally {
       _checking = false;
     }
   }
 
-  Future<void> _enable(SharedPreferences prefs) async {
+  Future<void> _enable(
+    SharedPreferences prefs,
+    DeviceAuthenticationInfo capability,
+  ) async {
     try {
       final authenticated = await _localAuth.authenticate(
-        localizedReason:
-            'Use your fingerprint or device lock to protect PandaPay',
+        localizedReason: capability.setupReason,
         biometricOnly: false,
       );
       if (!authenticated) {
@@ -87,7 +95,19 @@ class _BiometricSetupPromptState extends ConsumerState<BiometricSetupPrompt> {
         }
         return;
       }
-      await ref.read(biometricLockProvider.notifier).setEnabled(true);
+      if (!mounted) return;
+      // Enabling follows a successful challenge. Reuse it for this process so
+      // the router does not immediately present a second unlock challenge.
+      final alreadyUnlocked = ref.read(biometricUnlockedProvider);
+      ref.read(biometricUnlockedProvider.notifier).state = true;
+      try {
+        await ref.read(biometricLockProvider.notifier).setEnabled(true);
+      } catch (_) {
+        if (mounted) {
+          ref.read(biometricUnlockedProvider.notifier).state = alreadyUnlocked;
+        }
+        rethrow;
+      }
       await prefs.setBool(_biometricPromptSeenKey, true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -104,7 +124,7 @@ class _BiometricSetupPromptState extends ConsumerState<BiometricSetupPrompt> {
         SnackBar(
           content: Text(
             noCredentials
-                ? 'Set up a fingerprint, face unlock, or device lock first, then try again.'
+                ? 'Set up biometrics or a screen lock in your device settings, then try again.'
                 : 'Biometric lock was not enabled. You can try again from Account settings.',
           ),
         ),
@@ -135,7 +155,8 @@ class _BiometricSetupPromptState extends ConsumerState<BiometricSetupPrompt> {
 }
 
 class _BiometricSetupSheet extends StatelessWidget {
-  const _BiometricSetupSheet();
+  final DeviceAuthenticationInfo capability;
+  const _BiometricSetupSheet({required this.capability});
 
   @override
   Widget build(BuildContext context) {
@@ -164,11 +185,7 @@ class _BiometricSetupSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpace.xl),
-            const Icon(
-              Icons.fingerprint_rounded,
-              size: 42,
-              color: BambooInk.slate,
-            ),
+            Icon(capability.icon, size: 42, color: BambooInk.slate),
             const SizedBox(height: AppSpace.md),
             Text(
               'Protect PandaPay',
@@ -176,7 +193,7 @@ class _BiometricSetupSheet extends StatelessWidget {
             ),
             const SizedBox(height: AppSpace.sm),
             Text(
-              'Use your fingerprint, face unlock, or device lock each time PandaPay opens. Your biometric data stays with Android.',
+              capability.setupDescription,
               style: BambooFonts.ui(14, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -192,7 +209,7 @@ class _BiometricSetupSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-                child: const Text('Enable fingerprint lock'),
+                child: Text(capability.enableLabel),
               ),
             ),
             const SizedBox(height: AppSpace.sm),

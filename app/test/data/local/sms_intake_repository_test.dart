@@ -135,4 +135,18 @@ void main() {
     expect(intake.decision('a', key), isNotNull);
   });
 
+  test('re-acquisition preserves pending attempts, input and retry backoff', () {
+    final original = sms('same pending');
+    final key = intake.capture('a', original);
+    intake.failed('a', key);
+    final before = db.db.select('SELECT * FROM sms_intake WHERE namespace=? AND id=?', ['a', key]).single;
+    intake.capture('a', QueuedSms(sender: original.sender, body: original.body,
+      receivedAt: original.receivedAt.add(const Duration(days: 1))));
+    final after = db.db.select('SELECT * FROM sms_intake WHERE namespace=? AND id=?', ['a', key]).single;
+    expect(after['attempts'], before['attempts']);
+    expect(after['next_attempt'], before['next_attempt']);
+    expect(after['received_at'], before['received_at']);
+    expect(intake.hasRepeatedOccurrence('a', key), isTrue);
+  });
+
 }

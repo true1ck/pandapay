@@ -12,6 +12,7 @@ import '../../app/device_permissions.dart';
 import '../../app/providers.dart';
 import '../../data/import_repository.dart';
 import '../sms_import/sms_backup_import_screen.dart';
+import '../sms_import/ios_sms_import_screen.dart';
 import 'auto_sms_sync_screen.dart';
 import 'statement_pdf_import_screen.dart';
 import 'screenshot_spending_import_screen.dart';
@@ -35,6 +36,7 @@ class ImportHubScreen extends ConsumerStatefulWidget {
 class _ImportHubScreenState extends ConsumerState<ImportHubScreen>
     with WidgetsBindingObserver {
   bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+  bool get _isIos => !kIsWeb && Platform.isIOS;
   bool _smsPermissionGranted = false;
 
   @override
@@ -107,7 +109,7 @@ class _ImportHubScreenState extends ConsumerState<ImportHubScreen>
                 : _Status(
                     _isAndroid
                         ? 'Not enabled · Tap to set up'
-                        : 'Available on Android',
+                        : _isIos ? 'Shortcuts · Live alerts and monthly history' : 'Available on Android',
                     BambooInk.ink500,
                   ),
             trailing: _smsPermissionGranted
@@ -126,6 +128,12 @@ class _ImportHubScreenState extends ConsumerState<ImportHubScreen>
                   )
                 : null,
             onTap: () async {
+              if (_isIos) {
+                await Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => const IosSmsImportScreen(),
+                ));
+                return;
+              }
               if (!_isAndroid) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(

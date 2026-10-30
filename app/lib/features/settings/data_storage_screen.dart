@@ -9,6 +9,8 @@ import '../../app/env.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/account_api.dart';
+import '../../data/portable_backup/account_recovery_operation_gate.dart';
+import '../sms_import/ios_sms_intake_service.dart';
 import 'storage_util.dart';
 
 /// H5 Data & Storage. Cache management stays device-local; account reset uses
@@ -230,7 +232,10 @@ class DataStorageScreen extends ConsumerWidget {
 
       final namespace = ref.read(cacheNamespaceProvider);
       final database = await ref.read(appDatabaseProvider.future);
-      await database.clearAccountNamespace(namespace);
+      await AccountRecoveryOperationGate.process.exclusive(() async {
+        await IosSmsIntakeService().revoke(namespace);
+        await database.clearAccountNamespace(namespace);
+      });
       final prefs = await SharedPreferences.getInstance();
       await clearPreferencesExceptPrefixes(prefs, const ['pandapay_app.']);
       final cacheDirectory = await getApplicationCacheDirectory();

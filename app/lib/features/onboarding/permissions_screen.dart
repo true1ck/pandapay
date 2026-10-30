@@ -1,7 +1,6 @@
 import 'dart:async';
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,7 +12,9 @@ import '../../app/device_permissions.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../sms_import/sms_inbox_scanner.dart';
+import '../sms_import/ios_sms_import_screen.dart';
 import 'entry_brand.dart';
+import 'onboarding_back.dart';
 import 'permission_art.dart';
 
 enum _SetupPage { sms, importing, imported, options }
@@ -29,7 +30,10 @@ class PermissionsScreen extends ConsumerStatefulWidget {
 
 class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
     with WidgetsBindingObserver {
-  bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+  bool get _isAndroid =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  bool get _isIos => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+  bool get _hasSmsStep => _isAndroid || _isIos;
   late _SetupPage _page;
   final _statuses = <Permission, PermissionStatus>{};
   static const _extraPermissions = [
@@ -50,7 +54,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
   @override
   void initState() {
     super.initState();
-    _page = _isAndroid ? _SetupPage.sms : _SetupPage.options;
+    _page = _hasSmsStep ? _SetupPage.sms : _SetupPage.options;
     WidgetsBinding.instance.addObserver(this);
     unawaited(_refreshStatuses());
   }
@@ -101,7 +105,9 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
   }
 
   bool _granted(Permission permission) =>
-      _statuses[permission]?.isGranted ?? false;
+      _statuses[permission]?.isGranted == true ||
+      (permission == Permission.notification &&
+          _statuses[permission]?.isProvisional == true);
   bool _blocked(Permission permission) =>
       _statuses[permission]?.isPermanentlyDenied ?? false;
   bool get _extrasEnabled => _extraPermissions.every(_granted);
@@ -121,7 +127,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
       final current = await readDevicePermissionStatus(permission);
       if (!mounted) return;
       setState(() => _statuses[permission] = current);
-      if (current.isGranted) {
+      if (_granted(permission)) {
         if (permission == Permission.sms) unawaited(_importSms());
         return;
       }
@@ -273,7 +279,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
   });
 
   void _back() {
-    if (_page == _SetupPage.options && _isAndroid) {
+    if (_page == _SetupPage.options && _hasSmsStep) {
       setState(() {
         _page = _importRunning
             ? _SetupPage.importing
@@ -282,35 +288,23 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
             : _SetupPage.sms;
         _message = null;
       });
-    } else if (_page == _SetupPage.imported) {
+    } else if (_page == _SetupPage.imported || _page == _SetupPage.importing) {
       setState(() {
         _page = _SetupPage.sms;
         _message = null;
       });
-    } else if (context.canPop()) {
-      context.pop();
     } else {
-      context.go(AppRoute.signUp);
+      onboardingBack(context, fallback: AppRoute.welcome);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final options = _page == _SetupPage.options;
-    return PopScope(
-      canPop:
-          !_requestingAll &&
-          (_page == _SetupPage.sms || (!_isAndroid && options)),
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) {
-          if (_requestingAll) return;
-          if (_page == _SetupPage.importing) {
-            _showOptions();
-          } else {
-            _back();
-          }
-        }
-      },
+    return OnboardingBackScope(
+      handlesStep: _page != _SetupPage.sms && _hasSmsStep,
+      busy: _requestingAll || _requesting != null,
+      onBack: _back,
       child: EntryBackdrop(
         waves: options,
         child: SafeArea(
@@ -326,10 +320,8 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
                       children: [
                         IconButton(
                           tooltip: 'Back',
-                          onPressed: _requestingAll
+                          onPressed: _requestingAll || _requesting != null
                               ? null
-                              : _page == _SetupPage.importing
-                              ? _showOptions
                               : _back,
                           icon: const Icon(Icons.arrow_back_rounded),
                         ),
@@ -347,7 +339,11 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
                         Expanded(child: _StepLine(active: options)),
                         const SizedBox(width: 12),
                         Text(
-                          options ? '2 of 2' : '1 of 2',
+                          !_hasSmsStep
+                              ? '1 of 1'
+                              : options
+                              ? '2 of 2'
+                              : '1 of 2',
                           style: BambooFonts.ui(12, color: BambooInk.ink700),
                         ),
                       ],
@@ -406,7 +402,9 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
       ),
       const SizedBox(height: 14),
       _body(
-        'Android grants inbox access. You can revoke it at any time in device Settings.',
+        _isIos
+            ? 'On iPhone, Shortcuts passes the messages you choose to PandaPay. iOS does not grant direct SMS inbox access. You can set this up now or later in Import & Sync.'
+            : 'Android grants inbox access. You can revoke it at any time in device Settings.',
         small: true,
       ),
     ],
@@ -622,14 +620,27 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         EntryButton(
-          label: _granted(Permission.sms)
+          label: _isIos
+              ? 'Set up SMS Shortcuts'
+              : _importRunning
+              ? 'View import progress'
+              : _granted(Permission.sms)
               ? 'Find my spends'
               : _blocked(Permission.sms)
               ? 'Open SMS settings'
               : 'Allow SMS & find my spends',
-          loading: _checkingStatuses || _requesting == Permission.sms,
-          onPressed: _checkingStatuses || _requesting != null
+          loading:
+              !_isIos && (_checkingStatuses || _requesting == Permission.sms),
+          onPressed: (!_isIos && _checkingStatuses) || _requesting != null
               ? null
+              : _isIos
+              ? () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const IosSmsImportScreen(),
+                  ),
+                )
+              : _importRunning
+              ? () => setState(() => _page = _SetupPage.importing)
               : () => _granted(Permission.sms)
                     ? _importSms()
                     : _request(Permission.sms),
@@ -638,7 +649,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
         TextButton(
           onPressed: _requesting != null ? null : _showOptions,
           child: Text(
-            'I’ll add spends myself',
+            _isIos ? 'Continue for now' : 'I’ll add spends myself',
             style: BambooFonts.ui(
               14,
               color: BambooInk.ink700,

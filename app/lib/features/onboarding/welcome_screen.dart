@@ -9,7 +9,8 @@ import '../../app/router.dart';
 import 'entry_brand.dart';
 
 class WelcomeScreen extends StatefulWidget {
-  const WelcomeScreen({super.key});
+  final bool resumeSetup;
+  const WelcomeScreen({super.key, this.resumeSetup = false});
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -193,16 +194,23 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       ),
                       const SizedBox(height: 8),
                       if (_page == 2) ...[
-                        EntryButton(
-                          label: 'Create account',
-                          onPressed: () => context.push(AppRoute.signUp),
-                        ),
-                        const SizedBox(height: 10),
-                        EntryButton(
-                          label: 'I already have an account',
-                          secondary: true,
-                          onPressed: () => context.push(AppRoute.logIn),
-                        ),
+                        if (widget.resumeSetup)
+                          EntryButton(
+                            label: 'Continue setup',
+                            onPressed: () => context.go(AppRoute.permissions),
+                          )
+                        else ...[
+                          EntryButton(
+                            label: 'Create account',
+                            onPressed: () => context.push(AppRoute.signUp),
+                          ),
+                          const SizedBox(height: 10),
+                          EntryButton(
+                            label: 'I already have an account',
+                            secondary: true,
+                            onPressed: () => context.push(AppRoute.logIn),
+                          ),
+                        ],
                       ] else
                         SizedBox(
                           height: 118,

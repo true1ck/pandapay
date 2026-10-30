@@ -10,6 +10,7 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/product_access_api.dart';
+import '../onboarding/onboarding_back.dart';
 
 /// Server-backed account activation after OTP verification. The route is also
 /// the cold-start gate for signed-in accounts whose local onboarding is not
@@ -198,7 +199,9 @@ class _ProductActivationScreenState
       return;
     }
     final store = await ref.read(pendingInvitationStoreProvider.future);
-    await store.replace(code); // Explicit user choice; never an implicit overwrite.
+    await store.replace(
+      code,
+    ); // Explicit user choice; never an implicit overwrite.
     setState(() {
       _codeConflict = null;
       _pendingCode = code;
@@ -311,34 +314,43 @@ class _ProductActivationScreenState
   }
 
   void _markGateAndContinue() {
-    ref.read(activationVerifiedNamespaceProvider.notifier).state =
-        ref.read(cacheNamespaceProvider);
+    if (!mounted) return;
+    ref.read(activationVerifiedNamespaceProvider.notifier).state = ref.read(
+      cacheNamespaceProvider,
+    );
     ref.invalidate(profileProvider);
     if (mounted) context.go(AppRoute.permissions);
   }
 
   @override
-  Widget build(BuildContext context) => AppBackground(
-    child: Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
+  Widget build(BuildContext context) => OnboardingBackScope(
+    onBack: () => context.go(AppRoute.welcome),
+    child: AppBackground(
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        title: Text(
-          'Account access',
-          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        appBar: AppBar(
+          leading: IconButton(
+            tooltip: 'Back',
+            onPressed: () => context.go(AppRoute.welcome),
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          title: Text(
+            'Account access',
+            style: BambooFonts.heading(18, color: BambooInk.ink900),
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpace.lg),
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildContent(),
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpace.lg),
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildContent(),
+              ),
             ),
           ),
         ),
@@ -357,11 +369,13 @@ class _ProductActivationScreenState
         onPressed: _retry,
       );
     }
-    if (access?.isPaused == true && policy?.isPaused == true &&
+    if (access?.isPaused == true &&
+        policy?.isPaused == true &&
         _pendingCode == null) {
       return _messagePanel(
         title: 'Invites are temporarily paused',
-        message: 'Your verified sign-in is saved. Try again later or use an invite code if you have one.',
+        message:
+            'Your verified sign-in is saved. Try again later or use an invite code if you have one.',
         action: 'Check again',
         onPressed: _retry,
       );
@@ -375,7 +389,8 @@ class _ProductActivationScreenState
       );
     }
 
-    final needsInvite = policy.isInviteOnly ||
+    final needsInvite =
+        policy.isInviteOnly ||
         policy.isPaused ||
         (access?.requiresInvitation == true && !policy.isOpen);
     final showCodeEntry = needsInvite || _pendingCode != null;
@@ -505,12 +520,14 @@ class _ProductActivationScreenState
         ] else if (policy.isOpen) ...[
           const _InfoCard(
             icon: Icons.verified_user_outlined,
-            text: 'PandaPay is open. No invite code is needed for this account.',
+            text:
+                'PandaPay is open. No invite code is needed for this account.',
           ),
         ] else if (policy.isPaused) ...[
           const _InfoCard(
             icon: Icons.hourglass_empty_rounded,
-            text: 'New access is paused right now. If you have an invite, enter it above.',
+            text:
+                'New access is paused right now. If you have an invite, enter it above.',
           ),
         ],
         if (!_productTermsAccepted) ...[
@@ -521,9 +538,8 @@ class _ProductActivationScreenState
             value: _productTermsAccepted,
             onChanged: _working
                 ? null
-                : (value) => setState(
-                    () => _productTermsAccepted = value ?? false,
-                  ),
+                : (value) =>
+                      setState(() => _productTermsAccepted = value ?? false),
             title: const Text('I agree to the Terms & Privacy Policy'),
             subtitle: Text('Required to activate · $appProductTermsVersion'),
           ),
@@ -568,7 +584,10 @@ class _ProductActivationScreenState
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Invite ${preview.code}', style: BambooFonts.ui(15, weight: FontWeight.w700)),
+        Text(
+          'Invite ${preview.code}',
+          style: BambooFonts.ui(15, weight: FontWeight.w700),
+        ),
         const SizedBox(height: AppSpace.xs),
         Text(
           preview.rewardAvailable

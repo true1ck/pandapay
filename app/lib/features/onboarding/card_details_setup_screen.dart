@@ -8,6 +8,7 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
+import 'onboarding_back.dart';
 
 /// ui-spec.md A9 Card Details Setup. Walks [userCardIds] one at a time
 /// ("Card N of M"), collecting the same fields C4 Edit Card already PATCHes
@@ -41,6 +42,17 @@ class _CardDetailsSetupScreenState
   int? _statementDay;
   int? _dueDay;
   String? _initializedForId;
+  final _drafts =
+      <
+        String,
+        ({
+          String nickname,
+          String creditLimit,
+          String points,
+          int? statementDay,
+          int? dueDay,
+        })
+      >{};
   bool _saving = false;
   String? _error;
 
@@ -54,17 +66,29 @@ class _CardDetailsSetupScreenState
 
   void _initFrom(UserCard card) {
     if (_initializedForId == card.id) return;
+    if (_initializedForId case final id?) {
+      _drafts[id] = (
+        nickname: _nicknameController.text,
+        creditLimit: _creditLimitController.text,
+        points: _pointsBalanceController.text,
+        statementDay: _statementDay,
+        dueDay: _dueDay,
+      );
+    }
     _initializedForId = card.id;
-    _nicknameController.text = card.nickname?.isNotEmpty == true
-        ? card.nickname!
-        : card.cardName;
+    final draft = _drafts[card.id];
+    _nicknameController.text =
+        draft?.nickname ??
+        (card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName);
     // These values may already have been learned from bank SMS during card
     // discovery/import. Keep them editable, but do not make the user type
     // them again.
-    _creditLimitController.text = card.creditLimit?.rupees.toStringAsFixed(0) ?? '';
-    _pointsBalanceController.text = card.pointsBalance?.toStringAsFixed(0) ?? '';
-    _statementDay = card.statementDay;
-    _dueDay = card.dueDay;
+    _creditLimitController.text =
+        draft?.creditLimit ?? card.creditLimit?.rupees.toStringAsFixed(0) ?? '';
+    _pointsBalanceController.text =
+        draft?.points ?? card.pointsBalance?.toStringAsFixed(0) ?? '';
+    _statementDay = draft != null ? draft.statementDay : card.statementDay;
+    _dueDay = draft != null ? draft.dueDay : card.dueDay;
   }
 
   bool get _isLast => _index == widget.userCardIds.length - 1;
@@ -127,12 +151,32 @@ class _CardDetailsSetupScreenState
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => OnboardingBackScope(
+    handlesStep: _index > 0,
+    busy: _saving,
+    onBack: _back,
+    child: _buildPage(context),
+  );
+
+  void _back() {
+    if (_index > 0) {
+      setState(() => _index--);
+    } else {
+      onboardingBack(context, fallback: AppRoute.addFirstCard);
+    }
+  }
+
+  Widget _buildPage(BuildContext context) {
     final id = widget.userCardIds[_index];
     final userCards = ref.watch(userCardsProvider);
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: _saving ? null : _back,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
         backgroundColor: BambooInk.paper,
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
@@ -247,9 +291,7 @@ class _CardDetailsSetupScreenState
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          onPressed: _saving
-                              ? null
-                              : () => setState(() => _index--),
+                          onPressed: _saving ? null : _back,
                           child: const Text('Back'),
                         ),
                       ),

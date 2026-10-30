@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../data/portable_backup/account_recovery_operation_gate.dart';
+import '../sms_import/ios_sms_intake_service.dart';
+import '../system/device_authentication.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
@@ -204,6 +207,7 @@ class _BiometricLockTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lockState = ref.watch(biometricLockProvider);
     final enabled = lockState.valueOrNull ?? false;
+    final capability = ref.watch(deviceAuthenticationProvider).valueOrNull;
     return Material(
       color: BambooInk.glassFillOnPaper,
       borderRadius: BorderRadius.circular(AppRadius.md),
@@ -227,7 +231,8 @@ class _BiometricLockTile extends ConsumerWidget {
             ),
           ),
           subtitle: Text(
-            'Require Face/Touch ID to open the app',
+            capability?.unlockReason ??
+                'Use your device authentication to unlock PandaPay',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
           activeTrackColor: BambooInk.slate,
@@ -336,7 +341,10 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
       deletionCompletedRemotely = true;
       final namespace = ref.read(cacheNamespaceProvider);
       final database = await ref.read(appDatabaseProvider.future);
-      await database.clearAccountNamespace(namespace);
+      await AccountRecoveryOperationGate.process.exclusive(() async {
+        await IosSmsIntakeService().revoke(namespace);
+        await database.clearAccountNamespace(namespace);
+      });
       final prefs = await SharedPreferences.getInstance();
       await clearPreferencesExceptPrefixes(prefs, const ['pandapay_app.']);
       final cacheDirectory = await getApplicationCacheDirectory();

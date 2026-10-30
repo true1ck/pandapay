@@ -123,6 +123,13 @@ if 'DeviceLiveMessageInbox.swift in Sources' not in text:
         6A170510A000000000000005 /* DeviceLiveMessageInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLiveMessageInbox.swift; sourceTree = "<group>"; };''')
     text = re.sub(r'(\s+\w+ /\* AppDelegate.swift \*/,)', r'\1\n                6A170510A000000000000005 /* DeviceLiveMessageInbox.swift */,', text)
     text = re.sub(r'(\s+\w+ /\* AppDelegate.swift in Sources \*/,)', r'\1\n                6A170510A000000000000006 /* DeviceLiveMessageInbox.swift in Sources */,', text)
+# Shared policy is also compiled into the production receiver.
+shutil.copyfile(source / 'ios/Runner/SmsSecurityPolicy.swift', target / 'ios/Runner/SmsSecurityPolicy.swift')
+if 'SmsSecurityPolicy.swift in Sources' not in text:
+    text = text.replace('/* Begin PBXBuildFile section */', '/* Begin PBXBuildFile section */\n        6A170530A000000000000002 /* SmsSecurityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A170530A000000000000001 /* SmsSecurityPolicy.swift */; };')
+    text = text.replace('/* Begin PBXFileReference section */', '/* Begin PBXFileReference section */\n        6A170530A000000000000001 /* SmsSecurityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmsSecurityPolicy.swift; sourceTree = "<group>"; };')
+    text = re.sub(r'(\s+\w+ /\* AppDelegate.swift \*/,)', r'\1\n                6A170530A000000000000001 /* SmsSecurityPolicy.swift */,', text)
+    text = re.sub(r'(\s+\w+ /\* AppDelegate.swift in Sources \*/,)', r'\1\n                6A170530A000000000000002 /* SmsSecurityPolicy.swift in Sources */,', text)
 project.write_text(text)
 
 info = target / 'ios/Runner/Info.plist'
@@ -139,7 +146,7 @@ if 'PANDAPAY_DEVICE_IMPORT_PROBE' not in settings:
     'packages': sorted(packages),
     'bundleId': 'app.pandapay.iosimportprobe',
     'rawMessageStorage': 'process memory only',
-    'nativeFiles': ['ios/Runner/PrototypeBankMessageIntent.swift', 'ios/Runner/DeviceHistoryRange.swift', 'ios/Runner/DeviceLiveMessageInbox.swift'],
+    'nativeFiles': ['ios/Runner/PrototypeBankMessageIntent.swift', 'ios/Runner/DeviceHistoryRange.swift', 'ios/Runner/DeviceLiveMessageInbox.swift', 'ios/Runner/SmsSecurityPolicy.swift'],
     'rangeShortcut': 'PANDAPAY SELECTED RANGE V2',
 }, indent=2) + '\n')
 print(f'Prepared {len(copied)} current Dart source files in {target}')

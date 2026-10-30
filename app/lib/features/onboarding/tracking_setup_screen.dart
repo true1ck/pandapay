@@ -9,7 +9,10 @@ import '../../app/design/widgets.dart';
 import '../import/email_forwarding_screen.dart';
 import '../import/statement_pdf_import_screen.dart';
 import '../sms_import/sms_import_screen.dart';
+import '../sms_import/ios_sms_import_screen.dart';
 import 'all_set_screen.dart';
+import '../../app/router.dart';
+import 'onboarding_back.dart';
 
 /// ui-spec.md A10 Tracking Setup — the last onboarding step; this is where
 /// onboarding actually completes now (after sign-up,
@@ -20,13 +23,16 @@ class TrackingSetupScreen extends ConsumerStatefulWidget {
   const TrackingSetupScreen({super.key});
 
   @override
-  ConsumerState<TrackingSetupScreen> createState() => _TrackingSetupScreenState();
+  ConsumerState<TrackingSetupScreen> createState() =>
+      _TrackingSetupScreenState();
 }
 
 class _TrackingSetupScreenState extends ConsumerState<TrackingSetupScreen> {
   bool _finishing = false;
+  bool _openingChannel = false;
 
   bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+  bool get _isIos => !kIsWeb && Platform.isIOS;
 
   /// Design 31 "You're all set" is the last step, so onboarding is NOT
   /// marked complete here — AllSetScreen's own "Take me Home" does that.
@@ -36,81 +42,117 @@ class _TrackingSetupScreenState extends ConsumerState<TrackingSetupScreen> {
   /// route this push was landing on, so screen 31 flashed past unseen.
   /// Confirmed on the simulator, not theorised.
   Future<void> _finish() async {
-    if (_finishing) return;
+    if (_finishing || _openingChannel) return;
     setState(() => _finishing = true);
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AllSetScreen()));
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AllSetScreen()));
     if (mounted) setState(() => _finishing = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return AppBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
+    return OnboardingBackScope(
+      onBack: () => onboardingBack(context, fallback: AppRoute.addFirstCard),
+      child: AppBackground(
+        child: Scaffold(
           backgroundColor: Colors.transparent,
-          foregroundColor: BambooInk.ink900,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          title: Text('Set up tracking', style: BambooFonts.heading(18, color: BambooInk.ink900)),
-        ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'How should we track your spending?',
-                  style: BambooFonts.heading(22, color: BambooInk.ink900),
-                ),
-                const SizedBox(height: AppSpace.sm),
-                Text(
-                  'Pick a channel below, or skip for now — you can always set this up later from Import & Sync.',
-                  style: BambooFonts.ui(13.5, color: BambooInk.ink500),
-                ),
-                const SizedBox(height: AppSpace.xl),
-                Expanded(
-                  child: ListView(
-                    children: [
-                      _ChannelChoiceCard(
-                        icon: Icons.email_outlined,
-                        title: 'Email forwarding',
-                        description: 'Works on any phone/provider, ~3 min setup.',
-                        badge: _isAndroid ? null : 'RECOMMENDED',
-                        onTap: () => _openChannel(const EmailForwardingScreen()),
-                      ),
-                      const SizedBox(height: AppSpace.md),
-                      if (_isAndroid)
+          appBar: AppBar(
+            leading: IconButton(
+              tooltip: 'Back',
+              onPressed: () =>
+                  onboardingBack(context, fallback: AppRoute.addFirstCard),
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+            backgroundColor: Colors.transparent,
+            foregroundColor: BambooInk.ink900,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            title: Text(
+              'Set up tracking',
+              style: BambooFonts.heading(18, color: BambooInk.ink900),
+            ),
+          ),
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'How should we track your spending?',
+                    style: BambooFonts.heading(22, color: BambooInk.ink900),
+                  ),
+                  const SizedBox(height: AppSpace.sm),
+                  Text(
+                    'Pick a channel below, or skip for now — you can always set this up later from Import & Sync.',
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                  ),
+                  const SizedBox(height: AppSpace.xl),
+                  Expanded(
+                    child: ListView(
+                      children: [
                         _ChannelChoiceCard(
-                          icon: Icons.sms_outlined,
-                          title: 'SMS auto-read',
-                          description: 'Android bank alerts with account sync.',
-                          badge: 'RECOMMENDED',
-                          onTap: () => _openChannel(const SmsImportScreen()),
+                          icon: Icons.email_outlined,
+                          title: 'Email forwarding',
+                          description:
+                              'Works on any phone/provider, ~3 min setup.',
+                          badge: _isAndroid ? null : 'RECOMMENDED',
+                          onTap: () =>
+                              _openChannel(const EmailForwardingScreen()),
                         ),
-                      if (_isAndroid) const SizedBox(height: AppSpace.md),
-                      _ChannelChoiceCard(
-                        icon: Icons.picture_as_pdf_outlined,
-                        title: 'Manual / statement import',
-                        description: 'No setup.',
-                        onTap: () => _openChannel(const StatementPdfImportScreen()),
+                        const SizedBox(height: AppSpace.md),
+                        if (_isAndroid)
+                          _ChannelChoiceCard(
+                            icon: Icons.sms_outlined,
+                            title: 'SMS auto-read',
+                            description:
+                                'Android bank alerts with account sync.',
+                            badge: 'RECOMMENDED',
+                            onTap: () => _openChannel(const SmsImportScreen()),
+                          ),
+                        if (_isAndroid) const SizedBox(height: AppSpace.md),
+                        if (_isIos) ...[
+                          _ChannelChoiceCard(
+                            icon: Icons.sms_outlined,
+                            title: 'SMS through Shortcuts',
+                            description:
+                                'Live alerts and history, one month at a time.',
+                            onTap: () =>
+                                _openChannel(const IosSmsImportScreen()),
+                          ),
+                          const SizedBox(height: AppSpace.md),
+                        ],
+                        _ChannelChoiceCard(
+                          icon: Icons.picture_as_pdf_outlined,
+                          title: 'Manual / statement import',
+                          description: 'No setup.',
+                          onTap: () =>
+                              _openChannel(const StatementPdfImportScreen()),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.md),
+                  FilledButton(
+                    onPressed: _finishing || _openingChannel ? null : _finish,
+                    child: const Text('Continue'),
+                  ),
+                  const SizedBox(height: AppSpace.sm),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: BambooInk.ink900,
+                      minimumSize: const Size.fromHeight(48),
+                      side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                    ],
+                    ),
+                    onPressed: _finishing || _openingChannel ? null : _finish,
+                    child: const Text('Set up later'),
                   ),
-                ),
-                const SizedBox(height: AppSpace.md),
-                OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: BambooInk.ink900,
-                    minimumSize: const Size.fromHeight(48),
-                    side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  onPressed: _finishing ? null : _finish,
-                  child: const Text('Set up later'),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -122,13 +164,18 @@ class _TrackingSetupScreenState extends ConsumerState<TrackingSetupScreen> {
   /// runs its own [SmsConsentScreen] declaration step before requesting the
   /// OS permission, so A10 doesn't duplicate that consent flow itself, it
   /// just launches straight into the real screen same as Email/Manual).
-  /// DoD: returning from ANY of the three completes onboarding too, same as
-  /// "Set up later" — every channel screen here is independently skippable/
-  /// back-able, so simply coming back (having looked at it, set up or not)
-  /// counts as "done with this step."
+  /// Returning from a channel keeps the user on the choice page. Only the
+  /// explicit Continue/Set up later action advances to the final screen.
   Future<void> _openChannel(Widget screen) async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
-    await _finish();
+    if (_openingChannel || _finishing) return;
+    setState(() => _openingChannel = true);
+    try {
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => screen));
+    } finally {
+      if (mounted) setState(() => _openingChannel = false);
+    }
   }
 }
 
@@ -161,7 +208,9 @@ class _ChannelChoiceCard extends StatelessWidget {
             color: BambooInk.glassFillOnPaper,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: badge != null ? BambooInk.slate : BambooInk.hairlineOnPaper,
+              color: badge != null
+                  ? BambooInk.slate
+                  : BambooInk.hairlineOnPaper,
               width: badge != null ? 1.5 : 1,
             ),
           ),
@@ -171,7 +220,10 @@ class _ChannelChoiceCard extends StatelessWidget {
               Container(
                 width: 44,
                 height: 44,
-                decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(
+                  color: BambooInk.slate,
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 child: Icon(icon, color: BambooInk.lime, size: 22),
               ),
               const SizedBox(width: AppSpace.md),
@@ -182,12 +234,21 @@ class _ChannelChoiceCard extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(title, style: BambooFonts.heading(16, color: BambooInk.ink900)),
+                          child: Text(
+                            title,
+                            style: BambooFonts.heading(
+                              16,
+                              color: BambooInk.ink900,
+                            ),
+                          ),
                         ),
                         if (badge != null) ...[
                           const SizedBox(width: AppSpace.xs),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: BambooInk.lime,
                               borderRadius: BorderRadius.circular(999),
@@ -205,7 +266,10 @@ class _ChannelChoiceCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(description, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                    Text(
+                      description,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
                   ],
                 ),
               ),

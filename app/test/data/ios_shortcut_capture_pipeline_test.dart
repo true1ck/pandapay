@@ -10,6 +10,7 @@ import 'package:pandapay/data/authenticated_http_client.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
+import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/features/sms_import/sms_listener_service.dart';
 
 class _NoAndroidInbox extends SmsListenerService {
@@ -119,6 +120,30 @@ void main() {
         },
       ]);
       expect(SmsIntakeRepository(db).pending(namespace), isEmpty);
+      final unknown = await owner.captureShortcutMessages(
+        expectedNamespace: namespace,
+        records: [
+          {
+            'body':
+                'INR 180 spent on Card XX7788 at SYNTHETIC CAFE. Ref TEST-MISSING',
+            'receivedAt': '2026-09-30T20:10:51.277+05:30',
+          },
+        ],
+      );
+      expect(unknown.messages.single.sender, '');
+      expect(unknown.missingSender, 1);
+      expect(unknown.incomplete, 0);
+      final review = NeedsReviewRepository(
+        namespace: namespace,
+        loadDatabase: () async => db,
+      );
+      expect((await review.fetchAll()).single.needsSender, isTrue);
+      await owner.syncPendingMessages();
+      expect(
+        uploads,
+        hasLength(1),
+        reason: 'Unknown-sender review remains local, outside automatic upload',
+      );
       await expectLater(
         owner.captureShortcutMessages(
           expectedNamespace: 'user:other-account',

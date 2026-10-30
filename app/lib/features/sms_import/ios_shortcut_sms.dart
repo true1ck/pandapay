@@ -52,7 +52,10 @@ class IosShortcutSmsBatch {
     return 'VM-BANK';
   }
 
-  factory IosShortcutSmsBatch.fromRows(List<Map<Object?, Object?>> rows) {
+  factory IosShortcutSmsBatch.fromRows(
+    List<Map<Object?, Object?>> rows, {
+    bool allowSenderInference = true,
+  }) {
     if (rows.length > 2000) {
       throw ArgumentError('Import at most 2000 Shortcut messages per batch.');
     }
@@ -95,8 +98,8 @@ class IosShortcutSmsBatch {
       if (senderValid) {
         effectiveSender = sender.trim();
       } else {
-        effectiveSender = _inferSender(body);
         missingSender++;
+        effectiveSender = allowSenderInference ? _inferSender(body) : '';
       }
 
       // QueuedSms requires a receive date. Quarantine incomplete input rather
@@ -108,7 +111,10 @@ class IosShortcutSmsBatch {
       }
 
       sourceRows.add(
-        Map.unmodifiable({...row, 'senderInferred': !senderValid}),
+        Map.unmodifiable({
+          ...row,
+          'senderInferred': !senderValid && allowSenderInference,
+        }),
       );
       accepted.add(
         QueuedSms(sender: effectiveSender, body: body, receivedAt: date),

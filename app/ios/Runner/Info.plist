@@ -11,6 +11,8 @@
 	<string>PandaPay uses the camera to scan a merchant's UPI QR at checkout so it can recommend the best card to pay with, and to read a QR/barcode on a card mailer or statement when you add a card.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>PandaPay uses the microphone when you choose Add by voice so your spoken spending details can be shown for review before saving.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>PandaPay uses Face ID to unlock the app when you enable app lock. Your biometric data stays on your device.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>PandaPay uses speech recognition when you choose Add by voice to transcribe spending details for your review.</string>
 	<!-- UA-8 (Chunk 32, extended): "check nearby merchants" geofencing.

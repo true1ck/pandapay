@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
 import '../onboarding/entry_brand.dart';
+import '../onboarding/onboarding_back.dart';
 import '../../app/providers.dart';
+import '../../app/router.dart' show AppRoute;
 import '../../data/api_exception.dart';
 import '../../data/auth_api.dart';
 import '../../data/phone_number_hint.dart';
@@ -298,7 +299,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       : 'Welcome back';
 
   @override
-  Widget build(BuildContext context) => EntryBackdrop(
+  Widget build(BuildContext context) => OnboardingBackScope(
+    handlesStep: _otpRequested,
+    busy: _loading,
+    onBack: _back,
+    child: _buildPage(context),
+  );
+
+  void _back() {
+    if (_otpRequested) {
+      _changeIdentifier();
+    } else {
+      onboardingBack(context, fallback: AppRoute.welcome);
+    }
+  }
+
+  Widget _buildPage(BuildContext context) => EntryBackdrop(
     waves: !_isSignUp || _otpRequested,
     child: SafeArea(
       child: LayoutBuilder(
@@ -322,15 +338,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           children: [
                             IconButton(
                               tooltip: 'Back',
-                              onPressed: _loading
-                                  ? null
-                                  : () {
-                                      if (_otpRequested) {
-                                        _changeIdentifier();
-                                      } else if (context.canPop()) {
-                                        context.pop();
-                                      }
-                                    },
+                              onPressed: _loading ? null : _back,
                               icon: const Icon(Icons.arrow_back_rounded),
                               color: BambooInk.ink900,
                               padding: EdgeInsets.zero,
@@ -639,8 +647,7 @@ class _IdentifierStep extends StatelessWidget {
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.done,
                 autofillHints: const [AutofillHints.telephoneNumber],
-                onSubmitted: (_) =>
-                    loading || !canSubmit() ? null : onSubmit(),
+                onSubmitted: (_) => loading || !canSubmit() ? null : onSubmit(),
                 style: BambooFonts.ui(15),
                 decoration:
                     _fieldDecoration(

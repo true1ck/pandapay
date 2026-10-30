@@ -7049,11 +7049,22 @@ class SmsAutoImportController {
     }
 
     checkAccount();
-    final batch = IosShortcutSmsBatch.fromRows(records);
+    if (records.length > 50) {
+      throw ArgumentError('Drain Shortcut input in batches of at most 50.');
+    }
+    final batch = IosShortcutSmsBatch.fromRows(
+      records,
+      allowSenderInference: false,
+    );
     if (batch.messages.isEmpty) return batch;
     final cache = await _ref.read(responseCacheProvider.future);
     checkAccount();
-    await _captureMessages(expectedNamespace, cache, batch.messages);
+    await _captureMessages(
+      expectedNamespace,
+      cache,
+      batch.messages,
+      allowSynchronousFallback: false,
+    );
     checkAccount();
     return batch;
   });
@@ -7161,8 +7172,9 @@ class SmsAutoImportController {
   Future<void> _captureMessages(
     String namespace,
     ResponseCache cache,
-    List<QueuedSms> messages,
-  ) async {
+    List<QueuedSms> messages, {
+    bool allowSynchronousFallback = true,
+  }) async {
     if (messages.isEmpty) return;
     if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
       throw StateError('Account changed during SMS capture');
@@ -7170,6 +7182,9 @@ class SmsAutoImportController {
     final store = cache.financialStore;
     final path = store.database.filePath;
     void captureDirect() {
+      if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
+        throw StateError('Account changed during SMS capture');
+      }
       final clientVersion =
           _ref.read(appVersionProvider).valueOrNull ?? '1.0.0';
       final ruleStore = SmsRuleBundleStore(store.database);
@@ -7202,9 +7217,8 @@ class SmsAutoImportController {
         }
         store.notifyExternalChanges(namespace, changed);
       } catch (e) {
-        debugPrint(
-          'Worker capture failed ($e), falling back to direct store capture',
-        );
+        if (!allowSynchronousFallback || messages.length > 50) rethrow;
+        debugPrint('Worker capture unavailable; retrying local capture');
         captureDirect();
       }
     }

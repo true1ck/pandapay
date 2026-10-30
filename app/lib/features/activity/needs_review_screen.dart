@@ -128,6 +128,9 @@ String _reviewTypeLabel(NeedsReviewItem item) {
 }
 
 String _reviewReasonLabel(String? reason, String body) {
+  if (reason == 'sender_unavailable') {
+    return 'Sender wasn’t provided. Check this message before adding it.';
+  }
   if (NeedsReviewRepository.isPayLaterDrawdown(body)) {
     return 'Credit facility drawdown (Amazon Pay Later / Axio). Actual debit occurs via monthly AutoPay bill payment.';
   }
@@ -390,11 +393,13 @@ Future<void> _recordReviewedTransactionFeedback(
       payload['entryKind'] == entryKind.wireValue;
 
   final cache = await queueContext.cacheFuture;
-  if (SmsIntakeRepository(cache.financialStore.database)
-      .hasRepeatedOccurrence(queueContext.namespace, sourceKey)) {
+  if (SmsIntakeRepository(
+    cache.financialStore.database,
+  ).hasRepeatedOccurrence(queueContext.namespace, sourceKey)) {
     return;
   }
-  SmsFeedbackOutbox(cache.financialStore.database,
+  SmsFeedbackOutbox(
+    cache.financialStore.database,
     namespace: queueContext.namespace,
   ).enqueue(
     sourceKey: sourceKey,
@@ -508,17 +513,20 @@ Future<void> _recordReviewedBillFeedback(
   final sameAmount = result.amount == null
       ? payload['amountDueInr'] == null
       : payload['amountDueInr'] is num &&
-          (payload['amountDueInr'] as num).toDouble() ==
-              result.amount!.rupees;
-  final sameDate = DateTime.tryParse('${payload['dueDate'] ?? ''}')?.toUtc() ==
+            (payload['amountDueInr'] as num).toDouble() ==
+                result.amount!.rupees;
+  final sameDate =
+      DateTime.tryParse('${payload['dueDate'] ?? ''}')?.toUtc() ==
       result.dueOn.toUtc();
-  final matches = payload['billerName'] == result.title &&
+  final matches =
+      payload['billerName'] == result.title &&
       sameAmount &&
       sameDate &&
       payload['category'] == result.category.name;
   final cache = await queueContext.cacheFuture;
-  if (SmsIntakeRepository(cache.financialStore.database)
-      .hasRepeatedOccurrence(queueContext.namespace, sourceKey)) {
+  if (SmsIntakeRepository(
+    cache.financialStore.database,
+  ).hasRepeatedOccurrence(queueContext.namespace, sourceKey)) {
     return;
   }
   SmsFeedbackOutbox(
@@ -711,7 +719,11 @@ Future<void> _persistReviewedSmsFactCorrection(
         templateText: consented ? templateText : null,
       );
       if (accepted) {
-        outbox.acknowledgeOverride(queueContext.namespace, sourceKey, factIndex);
+        outbox.acknowledgeOverride(
+          queueContext.namespace,
+          sourceKey,
+          factIndex,
+        );
       } else {
         outbox.failedOverride(queueContext.namespace, sourceKey, factIndex);
       }
@@ -3103,20 +3115,23 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       if (correctionKind == null || !mounted) return;
       setState(() => _busy = true);
       final suggestedFact = (widget.item.aiSuggestions ?? const [])
-          .where((fact) => const {
-            'posted_movement',
-            'bill_obligation',
-            'mandate_lifecycle',
-          }.contains(fact['factType']))
+          .where(
+            (fact) => const {
+              'posted_movement',
+              'bill_obligation',
+              'mandate_lifecycle',
+            }.contains(fact['factType']),
+          )
           .firstOrNull;
       final suggestedType = suggestedFact?['factType'];
       final family = switch (suggestedType) {
         'bill_obligation' => 'bill_obligation',
         'mandate_lifecycle' => 'mandate_lifecycle',
         'posted_movement' => 'posted_movement',
-        _ => correctionKind == 'false_transaction'
-            ? 'posted_movement'
-            : 'ignore_noise',
+        _ =>
+          correctionKind == 'false_transaction'
+              ? 'posted_movement'
+              : 'ignore_noise',
       };
       final resolvedKind = switch (family) {
         'bill_obligation' => 'bill',
@@ -3211,8 +3226,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           final queueContext = _captureSmsLearningQueueContext(ref);
           final cache = await queueContext.cacheFuture;
           final sourceKey = _feedbackSourceKey(widget.item.id);
-          if (SmsIntakeRepository(cache.financialStore.database)
-              .hasRepeatedOccurrence(queueContext.namespace, sourceKey)) {
+          if (SmsIntakeRepository(
+            cache.financialStore.database,
+          ).hasRepeatedOccurrence(queueContext.namespace, sourceKey)) {
             await _resolveFactSuggestion(factIndex);
             return;
           }
@@ -3244,9 +3260,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
             messageAt: widget.item.receivedAt,
           );
           unawaited(
-            queueContext.repository
-                ?.flushSmsLearningFeedbackQueue()
-                .catchError((_) => 0),
+            queueContext.repository?.flushSmsLearningFeedbackQueue().catchError(
+              (_) => 0,
+            ),
           );
         } catch (_) {
           // Learning is best effort; never prevent the user's local decision.
@@ -3820,7 +3836,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.sender,
+                      item.sender.isEmpty ? 'Sender unavailable' : item.sender,
                       style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                     ),
                     const SizedBox(height: 2),

@@ -15,8 +15,10 @@ import UIKit
     DeviceHistoryProbeBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
 #elseif !targetEnvironment(simulator)
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    IncomingSmsBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
 #else
     SimulatorPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    IncomingSmsBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
 #if DEBUG
     PrototypeBankMessageBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
     if #available(iOS 16.0, *) {
@@ -24,5 +26,12 @@ import UIKit
     }
 #endif
 #endif
+  }
+
+  override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+#if !PANDAPAY_DEVICE_IMPORT_PROBE
+    if IncomingSmsBridge.handleReturnURL(url) { return true }
+#endif
+    return super.application(app, open: url, options: options)
   }
 }

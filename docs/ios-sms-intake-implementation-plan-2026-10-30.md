@@ -2,6 +2,8 @@
 
 Prepared 30 October 2026. This is the execution plan for moving acquisition from the diagnostic app to the real PandaPay iPhone app. It incorporates nonblocking reconciliation, replay prevention, selected monthly onboarding, account ownership and recovery. Production implementation and device acceptance remain pending; this planning change installs no app or automation.
 
+Implementation update: main-app native handoff, shared draining, persisted history/catch-up and nonblocking setup/status are now implemented in the working branch. See the [implementation status and actual Shortcut action names](ios-main-app-implementation-status-2026-10-30.md) for completed work, signing details, verification and remaining device/release gates. The original plan below remains the acceptance contract; it is not a claim that every device case has passed.
+
 Related specifications:
 
 - [Android/iPhone acquisition comparison](ios-android-sms-acquisition-parity-2026-10-29.md)
@@ -12,6 +14,8 @@ Related specifications:
 ## Required result
 
 The main app displays its existing local data immediately. A user returning after several days can navigate and edit normally while eligible saved SMS are processed off the UI isolate. A small, nonmodal status strip near the top reports catch-up progress, waiting for Shortcuts, partial results or retry. No route guard, full-screen spinner or modal blocks ordinary app use for SMS import.
+
+Onboarding and **Import & Sync** must open the same iPhone SMS import screen. History presets and custom dates remain available while a catch-up/history job is active, paused or partial. Choosing dates alone does not stop or start work. **Start new import** explicitly replaces the observed unfinished job in one native transaction, retaining captured data and deduplication receipts. Reject stale/account-mismatched replacements; failed creation must leave the previous job resumable. Do not advance a coverage checkpoint for stopped or partial work. Back returns to the calling page without logging out, stopping intake or launching a Shortcut.
 
 Live, app-open, daily and history acquisition converge on one durable handoff and the existing shared financial pipeline. Repeated acquisition of the same source must not create another financial transaction, reset retry progress or lose an unfinished item. Initial iOS history remains selectable, including two years/custom dates, processed one calendar window at a time.
 
@@ -80,6 +84,12 @@ Use the existing app shell (`_AppShell` in `app/lib/app/router.dart`) to host a 
 
 The View renders immutable state from a Riverpod-backed controller or existing state-management equivalent. Keep databases, native calls, retries and hashing out of widget `build`. No new state-management framework is needed. Rate-limit progress rebuilds/accessibility announcements, respect reduced motion/text scaling and safe areas, and avoid exposing SMS bodies or senders in the strip. A dismissed strip must not delete or acknowledge pending intake.
 
+The shell must keep its page subtree mounted when the strip appears/disappears. Reserve a fixed strip/progress height across busy/idle and label changes, coalesce short processing gaps and select only display fields so per-message receipt updates cannot rebuild or repeatedly move Home/other pages. Preserve scroll positions, edits and navigation state throughout; tests must measure page geometry and state across bursts. Hiding status must never stop native capture or change acknowledgements/checkpoints.
+
+Interactive month continuation requires committed source/processing receipts **and** the matching Shortcuts callback. If foreground Finish returns to PandaPay before Shortcuts finishes its final steps, allow at most one foreground return to the **existing** Shortcuts run after a short grace period. Use the documented `shortcuts://` last-used-state destination, retain the current nonce/request and await its real callback before issuing another window. Never substitute a timer or a successful app-open result for completion evidence, launch a second workflow to unblock the first, loop app switches, or trigger continuation from an unrelated/cold/background session. Recheck native scene activation so a valid callback arriving just before foreground activation cannot strand an otherwise complete month.
+
+For app-started iOS 26 history, prefer returning to PandaPay after the first durable capture using supported dynamic foreground continuation, when the system permits. Daily/cold captures remain quiet. During an active month, five seconds without new capture receipts can trigger one resume of the existing runner for that unchanged progress count; new receipts re-arm the interval. Native state/count/account checks must reject stale recovery. Inactivity never means the source month is complete, and a runner-resume is never another search invocation. Preserve saved input if foreground presentation is denied and keep all receipt/callback gates for the next month. iOS retains final control over foreground transitions and confirmation.
+
 Startup/resume creates or joins an asynchronous job **after the first usable local screen**, never an awaited prerequisite for routing or ordinary providers. Coalesce repeated resume events; rate-limit no-op checks and retain the active attempt token across external-app round trips. Do not recursively open Shortcuts each time it returns focus to PandaPay. Preserve in-progress edits and navigation as financial data updates.
 
 ## Processing and concurrency architecture
@@ -110,7 +120,7 @@ An isolate protects UI responsiveness; it does not keep iOS alive or guarantee t
 - On interruption, restore existing attempts/receipts before scheduling another; callbacks are untrusted/idempotent signals, not proof of complete acquisition.
 - Bind job, receipt and native spool data to account/recovery generation. Sign-out/reset prevents old captures from being attributed to the next account, and recovery fencing applies across isolates/native writers.
 - A daily trigger, manual action and app resume at once should coalesce into one acquisition lease plus at most one follow-up. Live single-message saving stays available while history is paused or running.
-- Keep original sender/body/receive-date provenance. Missing sender inference remains an explicit diagnostic-only option; estimated live dates must not participate as verified original occurrence dates.
+- Keep original sender/body/receive-date provenance. Missing sender inference remains an explicit diagnostic-only option; production retains a valid non-sensitive input with an explicitly unknown sender and routes shared financial candidates to local review. It must not silently discard that body or invent a bank header. This review has no automatic financial effects or upload and is acknowledged only after the shared review commits. Unknown senders and estimated live dates cannot establish verified original occurrence identities.
 - Use classified non-sensitive error codes in UI/logs; do not let exceptions or callback URLs expose raw financial messages or credentials. Hashes are not public telemetry.
 
 ## Existing shortcuts: required migration
