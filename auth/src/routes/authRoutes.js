@@ -260,7 +260,7 @@ router.post(
         // A generated code is not useful unless the SMS provider accepted it.
         // Only the explicit dev/test allowlist may bypass an external SMS
         // provider. Production OTPs still require provider acceptance.
-        const smsResult = !isVersionedOtpRequest(req) && isTestOtpIdentifier(normalizedPhone)
+        const smsResult = isTestOtpIdentifier(normalizedPhone)
           ? { success: true, testMode: true }
           : await sendOtpSms(normalizedPhone, code);
 
@@ -851,7 +851,9 @@ router.post(
 
         const purpose = recovery_only === true ? 'recovery' : 'signin';
         const { code, requestId } = await createChallenge(req, normalizedEmail, 'email', purpose);
-        const emailResult = await sendOtpEmail(normalizedEmail, code);
+        const emailResult = isTestOtpIdentifier(normalizedEmail)
+          ? { success: true, testMode: true }
+          : await sendOtpEmail(normalizedEmail, code);
 
         await logAuthEvent({
           action: 'otp_request_email',

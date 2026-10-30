@@ -144,12 +144,18 @@ class SpendingVisualBadge extends StatelessWidget {
 /// A shared, column-aligned header for expandable spending breakdown rows.
 ///
 /// The amount gets a stable trailing rail instead of participating in the
-/// row's flex calculation. This keeps differently sized figures (and their
-/// confidence icons) on the same right edge across adjacent cards.
+/// row's flex calculation. This keeps differently sized figures on the same
+/// right edge across adjacent cards.
+///
+/// [trailing] is the row's expand chevron. It belongs here rather than in
+/// [ExpansionTile.trailing] because a ListTile always reserves the icon width
+/// plus its 16dp title gap before the text column ends — which left the amount
+/// floating well short of the card's right edge.
 class SpendingBreakdownHeader extends StatelessWidget {
   final Widget label;
   final String? percentage;
   final Widget amount;
+  final Widget? trailing;
   final Key? percentageKey;
   final Key? amountKey;
   final double maxAmountWidth;
@@ -159,6 +165,7 @@ class SpendingBreakdownHeader extends StatelessWidget {
     required this.label,
     required this.amount,
     this.percentage,
+    this.trailing,
     this.percentageKey,
     this.amountKey,
     this.maxAmountWidth = 112,
@@ -201,6 +208,10 @@ class SpendingBreakdownHeader extends StatelessWidget {
               ),
             ),
           ),
+          if (trailing != null) ...[
+            const SizedBox(width: AppSpace.xs),
+            trailing!,
+          ],
         ],
       );
     },

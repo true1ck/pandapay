@@ -4919,8 +4919,14 @@ String? _namedServiceAutoPayName(String? raw) {
   }
   if (normalized.contains('netflix')) return 'Netflix';
   if (normalized.contains('spotify')) return 'Spotify';
-  if (normalized.contains('googleplay')) return 'Google Play';
+  if (normalized.contains('googleplay') ||
+      normalized.contains('googleasiapacific') ||
+      normalized.contains('googleindiadigital') ||
+      normalized.contains('googleindia')) {
+    return 'Google Play';
+  }
   if (normalized.contains('googleone')) return 'Google One';
+  if (normalized == 'google') return 'Google Play';
   return name;
 }
 
@@ -4936,11 +4942,12 @@ RecurringSeries _normalizeLegacyServiceMandate(RecurringSeries item) {
   return RecurringSeries(
     id: item.id,
     displayName: service,
-    typicalAmount: Money.zero(),
-    amountKnown: false,
-    cadenceDays: 0,
-    occurrenceCount: 0,
-    annualCost: Money.zero(),
+    typicalAmount: item.typicalAmount,
+    amountKnown: item.amountKnown,
+    autopayLimit: item.autopayLimit,
+    cadenceDays: item.cadenceDays,
+    occurrenceCount: item.occurrenceCount,
+    annualCost: item.annualCost,
     categoryName: item.categoryName,
     subcategoryName: item.subcategoryName,
     cardName: item.cardName,
@@ -4952,7 +4959,11 @@ RecurringSeries _normalizeLegacyServiceMandate(RecurringSeries item) {
     autopayStatus: item.autopayStatus,
     mandateReference: item.mandateReference,
     sourceKey: item.sourceKey,
-    cadenceConfirmed: false,
+    startDate: item.startDate,
+    endDate: item.endDate,
+    lastSeenOn: item.lastSeenOn ?? item.startDate,
+    nextExpectedOn: item.nextExpectedOn,
+    cadenceConfirmed: item.cadenceConfirmed || item.cadenceDays == 0,
     setupConfirmed: true,
     engineStatus: lifecycle.isEmpty || lifecycle == 'active'
         ? 'candidate'
@@ -5271,8 +5282,8 @@ SpendReport _makeLocalSpendReport(
     ),
     byMerchant: _localBreakdownRows(
       spendRows,
-      keyFor: (row) => row.merchantName ?? row.categoryName ?? 'other',
-      labelFor: (row) => row.merchantName ?? row.categoryName ?? 'Other',
+      keyFor: (row) => row.merchantName?.trim().isNotEmpty == true ? row.merchantName!.trim().toLowerCase() : 'unknown_merchant',
+      labelFor: (row) => row.merchantName?.trim().isNotEmpty == true ? row.merchantName!.trim() : 'Unknown merchant',
     ),
     byCard: _localCardRows(spendRows),
     byInstrument: _localInstrumentRows(spendRows),
@@ -5410,13 +5421,16 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
       continue;
     }
     if (RegExp(
-          r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic)\b',
+          r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|retai|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic|vending)\b',
           caseSensitive: false,
         ).hasMatch(merchantLower) &&
         !isSubscriptionAutoPay(merchant)) {
       continue;
     }
-    final key = merchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ');
+    final canonicalName = _namedServiceAutoPayName(merchant);
+    final key = canonicalName != null
+        ? canonicalName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '')
+        : merchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ');
     groups.putIfAbsent(key, () => []).add(row);
   }
 
@@ -5511,26 +5525,37 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
     final statedPaise = explicitService
         ? (observation['amount_due_paise'] as num?)?.round()
         : null;
+    final limPaise = (observation['autopay_limit_paise'] as num?)?.round();
+    final limitMoney = limPaise != null && limPaise > 0
+        ? Money.fromPaise(limPaise)
+        : null;
     final amountKnown = statedPaise != null && statedPaise > 0;
-    final cadence = explicitService
-        ? switch (observation['cadence_hint']) {
-            'weekly' => 7,
-            'monthly' => 30,
-            'quarterly' => 91,
-            'halfYearly' => 182,
-            'annual' || 'yearly' => 365,
-            _ => 0,
-          }
-        : 0;
+    final cadenceHint = observation['cadence_hint'] as String?;
+    final cadence = switch (cadenceHint) {
+      'weekly' => 7,
+      'monthly' => 30,
+      'quarterly' => 91,
+      'halfYearly' => 182,
+      'annual' || 'yearly' => 365,
+      _ => 0,
+    };
     final statedAmount = amountKnown
         ? Money.fromPaise(statedPaise)
         : Money.zero();
+    final startDate = DateTime.tryParse(observation['start_date'] as String? ?? '');
+    final endDate = DateTime.tryParse(observation['end_date'] as String? ?? '');
+    final receivedAt = DateTime.tryParse(observation['received_at'] as String? ?? '');
+    final dueDate = DateTime.tryParse(observation['due_date'] as String? ?? '');
+    final paymentMethod = observation['payment_method'] as String? ??
+        (isAutopay ? 'UPI AutoPay' : null);
+
     series.add(
       RecurringSeries(
         id: 'local-setup:${observation['id'] ?? key}',
         sourceKey: observation['id'] as String?,
         displayName: service,
         typicalAmount: statedAmount,
+        autopayLimit: limitMoney,
         amountKnown: amountKnown,
         cadenceDays: cadence,
         occurrenceCount: explicitService ? 1 : 0,
@@ -5539,12 +5564,19 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
                 (statedPaise * _chargesPerYear(cadence)).round(),
               )
             : Money.zero(),
-        nextExpectedOn: explicitService
-            ? DateTime.tryParse(observation['due_date'] as String? ?? '')
-            : null,
+        startDate: startDate,
+        endDate: endDate,
+        lastSeenOn: startDate ?? receivedAt,
+        nextExpectedOn: explicitService ? dueDate : null,
+        categoryName: observation['category_name'] as String?,
+        subcategoryName: observation['subcategory_name'] as String?,
+        cardName: observation['card_name'] as String?,
+        paymentMethod: paymentMethod,
         detectionSource: explicitService ? 'local_explicit' : 'local_setup',
+        isMandate: isAutopay,
+        autopayStatus: isAutopay ? 'active' : 'unknown',
         setupConfirmed: true,
-        cadenceConfirmed: cadence > 0,
+        cadenceConfirmed: cadence > 0 || cadenceHint == 'asPresented',
         engineStatus: explicitService && cadence > 0 && amountKnown
             ? 'confirmed'
             : 'candidate',
@@ -5581,18 +5613,68 @@ Future<RecurringReport> _mergeLocalSetupSeries(
   );
   final local = await _buildLocalRecurringReport(ref);
   if (local == null) return normalizedReport;
-  final serviceKeys = {
-    for (final item in normalizedReport.series)
-      _recurringServiceKey(item.displayName),
+
+  final localByService = <String, RecurringSeries>{
+    for (final item in local.series.where((item) => item.setupConfirmed))
+      _recurringServiceKey(item.displayName): item,
   };
-  final additions = <RecurringSeries>[];
-  for (final item in local.series.where((item) => item.setupConfirmed)) {
-    if (!serviceKeys.add(_recurringServiceKey(item.displayName))) continue;
-    additions.add(item);
+
+  final mergedSeries = <RecurringSeries>[];
+  final seenKeys = <String>{};
+
+  for (final item in normalizedReport.series) {
+    final key = _recurringServiceKey(item.displayName);
+    final localMatch = localByService[key];
+    final canonicalName = _namedServiceAutoPayName(item.displayName) ?? item.displayName;
+
+    final enriched = item.copyWith(
+      displayName: canonicalName,
+      autopayLimit: item.autopayLimit ?? localMatch?.autopayLimit,
+      startDate: item.startDate ?? localMatch?.startDate,
+      endDate: item.endDate ?? localMatch?.endDate,
+      paymentMethod: item.paymentMethod ?? localMatch?.paymentMethod,
+      sourceKey: item.sourceKey ?? localMatch?.sourceKey,
+      mandateReference: item.mandateReference ?? localMatch?.mandateReference,
+      cadenceConfirmed: item.cadenceConfirmed || (localMatch?.cadenceConfirmed ?? false) || item.cadenceDays == 0,
+      setupConfirmed: item.setupConfirmed || (localMatch?.setupConfirmed ?? false),
+      autopayStatus: (item.autopayStatus.isNotEmpty && item.autopayStatus != 'unknown')
+          ? item.autopayStatus
+          : (localMatch?.autopayStatus ?? item.autopayStatus),
+    );
+
+    if (seenKeys.add(key)) {
+      mergedSeries.add(enriched);
+    } else {
+      final existingIndex = mergedSeries.indexWhere((s) => _recurringServiceKey(s.displayName) == key);
+      if (existingIndex >= 0) {
+        final prev = mergedSeries[existingIndex];
+        mergedSeries[existingIndex] = prev.copyWith(
+          autopayLimit: prev.autopayLimit ?? enriched.autopayLimit,
+          startDate: prev.startDate ?? enriched.startDate,
+          endDate: prev.endDate ?? enriched.endDate,
+          paymentMethod: prev.paymentMethod ?? enriched.paymentMethod,
+          typicalAmount: (prev.amountKnown && prev.typicalAmount.paise > 0) ? prev.typicalAmount : enriched.typicalAmount,
+          amountKnown: prev.amountKnown || enriched.amountKnown,
+          occurrenceCount: prev.occurrenceCount > enriched.occurrenceCount ? prev.occurrenceCount : enriched.occurrenceCount,
+          lastSeenOn: prev.lastSeenOn ?? enriched.lastSeenOn,
+          nextExpectedOn: prev.nextExpectedOn ?? enriched.nextExpectedOn,
+          cadenceDays: prev.cadenceDays > 0 ? prev.cadenceDays : enriched.cadenceDays,
+          setupConfirmed: prev.setupConfirmed || enriched.setupConfirmed,
+          cadenceConfirmed: prev.cadenceConfirmed || enriched.cadenceConfirmed,
+        );
+      }
+    }
+    localByService.remove(key);
   }
-  if (additions.isEmpty) return normalizedReport;
-  final allSeries = [...normalizedReport.series, ...additions];
-  final calculatedTotal = allSeries
+
+  for (final item in localByService.values) {
+    final key = _recurringServiceKey(item.displayName);
+    if (seenKeys.add(key)) {
+      mergedSeries.add(item);
+    }
+  }
+
+  final calculatedTotal = mergedSeries
       .where(
         (s) =>
             !s.reviewCandidate &&
@@ -5602,13 +5684,16 @@ Future<RecurringReport> _mergeLocalSetupSeries(
   final total = calculatedTotal.paise > normalizedReport.totalAnnual.paise
       ? calculatedTotal
       : normalizedReport.totalAnnual;
-  return RecurringReport(series: allSeries, totalAnnual: total);
+  return RecurringReport(series: mergedSeries, totalAnnual: total);
 }
 
 String _recurringServiceKey(String name) {
   final canonical = _namedServiceAutoPayName(name) ?? name;
   return canonical.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 }
+
+String? namedServiceAutoPayName(String? raw) => _namedServiceAutoPayName(raw);
+String recurringServiceKey(String name) => _recurringServiceKey(name);
 
 /// Shared stale-safe transaction loader for Activity, Insights, and the
 /// period detail rows in Spending. The server remains authoritative, but a
@@ -6872,9 +6957,12 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     (_) => unawaited(flushAndRetry()),
   );
   ref.onDispose(aiReconcileTimer.cancel);
-  // Once at startup too: the most common case is the app being opened
-  // fresh after messages arrived, which fires no resume event.
-  unawaited(flushAndRetry());
+  // Once at startup too: defer by 2 seconds so cold launch entrance animations
+  // and biometric lock settle cleanly without competing for CPU or DB locks.
+  final startupTimer = Timer(const Duration(seconds: 2), () {
+    if (!disposed) unawaited(flushAndRetry());
+  });
+  ref.onDispose(startupTimer.cancel);
 });
 
 /// Owns the one live SMS registration for the whole app. The old listener
@@ -7033,11 +7121,12 @@ class SmsAutoImportController {
 
     final prefs = await SharedPreferences.getInstance();
     final lastScanVer =
-        prefs.getInt('pandapay_app.sms_inbox_scanner_ver_${namespace}') ?? 0;
+        prefs.getInt('pandapay_app.sms_inbox_scanner_ver_$namespace') ?? 0;
     if (lastScanVer < LocalSmsParser.version) {
-      SmsInboxProgress(store.database).rewind(namespace, 300);
+      // Version upgrade updates preferences without rewinding the scan checkpoint.
+      // Already captured transactions are safe; only strictly new messages are ingested.
       await prefs.setInt(
-        'pandapay_app.sms_inbox_scanner_ver_${namespace}',
+        'pandapay_app.sms_inbox_scanner_ver_$namespace',
         LocalSmsParser.version,
       );
     }

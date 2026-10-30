@@ -51,9 +51,9 @@ bool _isExcludedNonSubscription(String name) {
   if (name.contains('@')) {
     return true;
   }
-  // 4. Retail stores, supermarkets, grocery, provisions, tea stall, cafes, bakeries, restaurants, medical
+  // 4. Retail stores, supermarkets, grocery, provisions, tea stall, cafes, bakeries, restaurants, medical, vending
   if (RegExp(
-    r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic)\b',
+    r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|retai|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic|vending)\b',
     caseSensitive: false,
   ).hasMatch(lower)) {
     return true;
@@ -77,7 +77,9 @@ bool _isDisplayableSubscription(RecurringSeries series) {
   // setup amount and a maximum ceiling, neither of which proves a service
   // subscription or a future payment. Bills & Commitments owns that evidence
   // until the central projection links it to a service and supporting facts.
-  if (series.isMandate || series.detectionSource == 'mandate') {
+  if ((series.isMandate || series.detectionSource == 'mandate') &&
+      !series.setupConfirmed &&
+      namedServiceAutoPayName(name) == null) {
     return false;
   }
   // Merchant recurrence is useful for review, but it cannot establish that
@@ -255,15 +257,56 @@ class SubscriptionsScreen extends ConsumerWidget {
                     'with your account.',
               );
             }
-            final subscriptions = data.series
+            final rawSubscriptions = data.series
                 .where(_isDisplayableSubscription)
                 .toList(growable: false);
-            final reviewCandidates = data.series
+            final uniqueSubscriptionsMap = <String, RecurringSeries>{};
+            for (final item in rawSubscriptions) {
+              final k = recurringServiceKey(item.displayName);
+              final canonical = namedServiceAutoPayName(item.displayName) ?? item.displayName;
+              final normalizedItem = item.copyWith(displayName: canonical);
+              final existing = uniqueSubscriptionsMap[k];
+              if (existing == null) {
+                uniqueSubscriptionsMap[k] = normalizedItem;
+              } else {
+                final bestName = namedServiceAutoPayName(existing.displayName) ??
+                    namedServiceAutoPayName(normalizedItem.displayName) ??
+                    existing.displayName;
+                uniqueSubscriptionsMap[k] = existing.copyWith(
+                  displayName: bestName,
+                  autopayLimit: existing.autopayLimit ?? normalizedItem.autopayLimit,
+                  startDate: existing.startDate ?? normalizedItem.startDate,
+                  endDate: existing.endDate ?? normalizedItem.endDate,
+                  paymentMethod: existing.paymentMethod ?? normalizedItem.paymentMethod,
+                  typicalAmount: (existing.amountKnown && existing.typicalAmount.paise > 0)
+                      ? existing.typicalAmount
+                      : normalizedItem.typicalAmount,
+                  amountKnown: existing.amountKnown || normalizedItem.amountKnown,
+                  occurrenceCount: existing.occurrenceCount > normalizedItem.occurrenceCount
+                      ? existing.occurrenceCount
+                      : normalizedItem.occurrenceCount,
+                  cadenceDays: existing.cadenceDays > 0 ? existing.cadenceDays : normalizedItem.cadenceDays,
+                  setupConfirmed: existing.setupConfirmed || normalizedItem.setupConfirmed,
+                  cadenceConfirmed: existing.cadenceConfirmed || normalizedItem.cadenceConfirmed,
+                );
+              }
+            }
+            final subscriptions = uniqueSubscriptionsMap.values.toList(growable: false);
+            final rawCandidates = data.series
                 .where((series) => series.reviewCandidate)
                 .where((series) => series.displayName.trim().length >= 2)
                 .where((series) => series.cadenceDays >= 20)
                 .where((series) => !_isExcludedNonSubscription(series.displayName))
                 .toList(growable: false);
+            final uniqueCandidatesMap = <String, RecurringSeries>{};
+            for (final item in rawCandidates) {
+              final k = recurringServiceKey(item.displayName);
+              final existing = uniqueCandidatesMap[k];
+              if (existing == null || item.occurrenceCount > existing.occurrenceCount) {
+                uniqueCandidatesMap[k] = item;
+              }
+            }
+            final reviewCandidates = uniqueCandidatesMap.values.toList(growable: false);
             if (subscriptions.isEmpty) {
               if (hasSubscriptionAutopays || reviewCandidates.isNotEmpty) {
                 return RefreshIndicator(
@@ -1331,6 +1374,10 @@ class _TotalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final monthly = Money.fromPaise((totalAnnual.paise / 12).round());
+    final totalMandateLimit = series.fold<Money>(
+      Money.zero(),
+      (sum, item) => sum + (item.autopayLimit ?? Money.zero()),
+    );
     final setupOnly =
         totalAnnual.isZero &&
         series.any(
@@ -1402,15 +1449,28 @@ class _TotalCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: AppSpace.lg),
-                  if (setupOnly)
+                  if (setupOnly) ...[
                     Text(
-                      'Paid amount not known',
+                      totalMandateLimit.paise > 0
+                          ? 'Up to ${totalMandateLimit.format(hidePaise: true)} authorized'
+                          : 'Paid amount not known',
                       style: BambooFonts.ui(
                         15,
                         weight: FontWeight.w700,
                         color: BambooInk.onSlate,
                       ),
-                    )
+                    ),
+                    if (totalMandateLimit.paise > 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Mandate limit • Awaiting first charge',
+                        style: BambooFonts.ui(
+                          12,
+                          color: BambooInk.onSlateMuted,
+                        ),
+                      ),
+                    ],
+                  ]
                   else ...[
                     Text(
                       'Estimated annual cost',
@@ -1525,6 +1585,9 @@ class _SeriesCard extends ConsumerWidget {
     final days = series.cadenceDays;
     final labelLower = series.cadenceLabel.toLowerCase();
 
+    if (labelLower.contains('as presented') || labelLower.contains('on-demand')) {
+      return 'As presented';
+    }
     if (days >= 300 ||
         labelLower.contains('year') ||
         labelLower.contains('annual')) {
@@ -1555,6 +1618,9 @@ class _SeriesCard extends ConsumerWidget {
   /// guessed cadence would bleed into the headline later.
   String get _costLine {
     if (_setupOnly || !series.amountKnown) {
+      if (series.autopayLimit != null && series.autopayLimit!.paise > 0) {
+        return 'AutoPay limit up to ${series.autopayLimit!.format(hidePaise: true)} • Awaiting first charge';
+      }
       if (series.hasActiveAutoPay ||
           series.autopayStatus == 'active' ||
           series.isMandate) {
@@ -1645,6 +1711,11 @@ class _SeriesCard extends ConsumerWidget {
                         confidence: Confidence.estimated,
                         style: BambooFonts.money(16, color: BambooInk.ink900),
                       ),
+                    )
+                  else if (series.autopayLimit != null && series.autopayLimit!.paise > 0)
+                    Text(
+                      'Up to ${series.autopayLimit!.format(hidePaise: true)}',
+                      style: BambooFonts.money(14, color: BambooInk.ink900),
                     )
                   else
                     Text(

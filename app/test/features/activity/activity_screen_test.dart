@@ -1,3 +1,4 @@
+import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -495,15 +496,165 @@ void main() {
       expect(find.text('Groww Settlement'), findsOneWidget);
       expect(find.text('Grocery'), findsOneWidget);
 
-      await tester.tap(find.text('All activities'));
+      await tester.tap(find.text('Filters'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Investments'));
       await tester.pumpAndSettle();
 
+      await tester.tap(find.text('Show results'));
+      await tester.pumpAndSettle();
+
       expect(find.text('Zerodha'), findsOneWidget);
       expect(find.text('Groww Settlement'), findsOneWidget);
       expect(find.text('Grocery'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'setting filter, leaving page, navigating elsewhere, returning, and unsetting works reliably',
+    (tester) async {
+      final now = DateTime.now();
+      final repo = _FakeUserCardsRepository([
+        _txn(
+          id: 't1',
+          amount: Money.fromRupees(100),
+          occurredAt: now,
+          categoryId: 'dining',
+          categoryName: 'Dining',
+          merchantName: 'Restaurant',
+        ),
+        _txn(
+          id: 't2',
+          amount: Money.fromRupees(200),
+          occurredAt: now,
+          categoryId: 'groceries',
+          categoryName: 'Groceries',
+          merchantName: 'Supermarket',
+        ),
+      ]);
+
+      const diningCat = SpendCategory(
+        id: 'dining',
+        name: 'Dining',
+        slug: 'dining',
+      );
+      const grocCat = SpendCategory(
+        id: 'groceries',
+        name: 'Groceries',
+        slug: 'groceries',
+      );
+
+      final router = GoRouter(
+        initialLocation: '/home',
+        routes: [
+          GoRoute(
+            path: '/home',
+            builder: (context, state) => Scaffold(
+              body: ElevatedButton(
+                onPressed: () => context.push('/activity'),
+                child: const Text('Go Activity'),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/other',
+            builder: (context, state) => Scaffold(
+              body: ElevatedButton(
+                onPressed: () => context.push('/activity'),
+                child: const Text('Go Activity from Other'),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/activity',
+            builder: (context, state) => Scaffold(
+              appBar: AppBar(title: const Text('Activity')),
+              body: const ActivityScreen(),
+            ),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            accessTokenProvider.overrideWith((ref) => 'test-token'),
+            sessionInitProvider.overrideWith((ref) async {}),
+            userCardsRepositoryProvider.overrideWithValue(repo),
+            userCardsProvider.overrideWith((ref) async => const []),
+            categoriesProvider.overrideWith(
+              (ref) async => [diningCat, grocCat],
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1. Go to Activity
+      await tester.tap(find.text('Go Activity'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Restaurant'), findsOneWidget);
+      expect(find.text('Supermarket'), findsOneWidget);
+
+      // 2. Set filter (Once set kar)
+      await tester.tap(find.text('Filters'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('All categories'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Dining'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Show results'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Restaurant'), findsOneWidget);
+      expect(find.text('Supermarket'), findsNothing);
+
+      // Verify Clear chip is rendered first and visible
+      expect(find.text('Clear'), findsOneWidget);
+
+      // 3. Back go
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.text('Go Activity'), findsOneWidget);
+
+      // 4. Go to some other page and go back in
+      router.go('/other');
+      await tester.pumpAndSettle();
+      expect(find.text('Go Activity from Other'), findsOneWidget);
+
+      await tester.tap(find.text('Go Activity from Other'));
+      await tester.pumpAndSettle();
+
+      // Entering anew should start fresh with no leftover filter
+      expect(find.text('Restaurant'), findsOneWidget);
+      expect(find.text('Supermarket'), findsOneWidget);
+
+      // 5. Now set filter again and unset via Clear chip
+      await tester.tap(find.text('Filters'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('All categories'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dining'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Show results'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Restaurant'), findsOneWidget);
+      expect(find.text('Supermarket'), findsNothing);
+
+      // Tap Clear chip directly (it is at index 0, so never scrolled off-screen)
+      await tester.tap(find.text('Clear'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Restaurant'), findsOneWidget);
+      expect(find.text('Supermarket'), findsOneWidget);
+      expect(find.text('Clear'), findsNothing);
     },
   );
 }

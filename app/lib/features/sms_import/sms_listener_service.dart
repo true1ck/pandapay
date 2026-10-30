@@ -189,7 +189,7 @@ class SmsListenerService {
   Future<SmsInboxPage> readInboxPage({
     required int afterId,
     required int throughId,
-    int pageSize = 200,
+    int pageSize = 25,
   }) async {
     final rows = await _telephony.getInboxSms(
       columns: const [

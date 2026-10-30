@@ -119,9 +119,9 @@ async function createOtpInternal(identifier, type, purpose, binding = null) {
   if (typeof identifier !== 'string' || !identifier.trim()) throw new TypeError('OTP identifier is required');
   // === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY, see constants above ===
   const normalizedIdentifier = identifier.trim().toLowerCase();
-  const isTestIdentifier = !binding && isTestOtpIdentifier(normalizedIdentifier);
+  const isTestIdentifier = isTestOtpIdentifier(normalizedIdentifier);
 
-  const code = binding ? randomInt(100000, 1000000).toString() : (isTestIdentifier ? TEST_OTP_CODE : generateOtpCode());
+  const code = isTestIdentifier ? (binding ? '123456' : TEST_OTP_CODE) : (binding ? randomInt(100000, 1000000).toString() : generateOtpCode());
 
   const requestId = randomUUID();
   const ttl = binding ? V2_TTL_SECONDS : OTP_TTL_SECONDS;

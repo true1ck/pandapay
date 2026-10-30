@@ -758,11 +758,11 @@ void main() {
       );
       await tester.tap(find.text('Online Shopping'));
       await tester.pumpAndSettle();
-      expect(find.text('Recipient unknown'), findsNWidgets(2));
+      expect(find.text('Unknown merchant'), findsNWidgets(2));
       expect(find.text('1 transaction · Card A'), findsOneWidget);
       expect(find.text('1 transaction · Card B'), findsOneWidget);
       expect(
-        find.text('Tap the payment to name its recipient.'),
+        find.text('Tap the payment to add its merchant.'),
         findsNWidgets(2),
       );
     },
@@ -812,7 +812,7 @@ void main() {
     await tester.pumpAndSettle();
 
     const storageKey =
-        'spending-merchant-group-Recipient unknown-unnamed-layout';
+        'spending-merchant-group-Unknown merchant-unnamed-layout';
     final tile = tester.getRect(
       find.byKey(const PageStorageKey<String>(storageKey)),
     );
@@ -887,6 +887,98 @@ void main() {
     expect(find.textContaining('15/08/2026'), findsOneWidget);
     expect(find.text('Dining\nHDFC Millennia'), findsNWidgets(2));
   });
+
+  testWidgets(
+    'merchant with null name expands into transaction details instead of unavailable message',
+    (tester) async {
+      await _pump(
+        tester,
+        _report(
+          spend: 94567,
+          byMerchant: [
+            SpendBreakdownRow(
+              label: 'Unknown merchant',
+              total: Money.fromRupees(94567),
+              txnCount: 1,
+            ),
+          ],
+        ),
+        transactions: [
+          _detailEntry(
+            id: 'txn-1',
+            merchant: null,
+            amount: 94567,
+            cardDisplayName: 'Credit Card',
+            categoryId: 'other',
+            categoryName: 'Other',
+            occurredAt: DateTime(2026, 10, 22),
+          ),
+        ],
+      );
+
+      await tester.ensureVisible(find.text('Merchants'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Merchants'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unknown merchant'), findsOneWidget);
+      expect(find.text('1 transaction · Tap to see payments'), findsOneWidget);
+
+      await tester.tap(find.text('Unknown merchant'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Transaction details are not available for this period yet.'),
+        findsNothing,
+      );
+      expect(find.textContaining('22/10/2026'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'legacy cached row labeled Other with null merchant expands into transaction details',
+    (tester) async {
+      await _pump(
+        tester,
+        _report(
+          spend: 94567,
+          byMerchant: [
+            SpendBreakdownRow(
+              label: 'Other',
+              total: Money.fromRupees(94567),
+              txnCount: 1,
+            ),
+          ],
+        ),
+        transactions: [
+          _detailEntry(
+            id: 'txn-legacy',
+            merchant: null,
+            amount: 94567,
+            cardDisplayName: 'Credit Card',
+            categoryId: 'other',
+            categoryName: 'Other',
+            occurredAt: DateTime(2026, 10, 22),
+          ),
+        ],
+      );
+
+      await tester.ensureVisible(find.text('Merchants'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Merchants'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unknown merchant'), findsOneWidget);
+      await tester.tap(find.text('Unknown merchant'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Transaction details are not available for this period yet.'),
+        findsNothing,
+      );
+      expect(find.textContaining('22/10/2026'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'combined category and merchant filters match despite merchant casing',
@@ -1294,7 +1386,7 @@ void main() {
       find.text('2 transactions · Tap to review transactions'),
       findsOneWidget,
     );
-    expect(find.text('Recipient unknown'), findsNothing);
+    expect(find.text('Unknown merchant'), findsNothing);
   });
 
   testWidgets('account rows expand into payees and matching transactions', (
@@ -1436,6 +1528,91 @@ void main() {
     expect((secondPayment.title as Text).data, startsWith('13/08/2026'));
   });
 
+  testWidgets('transfer payees drop the redundant "Transfer to" verb', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _report(
+        spend: 200,
+        byInstrument: [
+          InstrumentSpendRow(
+            instrument: 'upi_bank',
+            total: Money.fromRupees(200),
+            txnCount: 2,
+          ),
+        ],
+      ),
+      transactions: [
+        _detailEntry(
+          id: 'transfer-txn-1',
+          merchant: 'Transfer to Zephr',
+          merchantVpa: 'zephr@upi',
+          amount: 125,
+          categoryId: 'other',
+          categoryName: 'Other',
+          occurredAt: DateTime(2026, 8, 12),
+          instrument: TxnInstrument.upiBank,
+          cardDisplayName: null,
+          userCardId: null,
+        ),
+        _detailEntry(
+          id: 'transfer-txn-2',
+          merchant: 'Transfer to Zephr',
+          merchantVpa: 'zephr@upi',
+          amount: 75,
+          categoryId: 'other',
+          categoryName: 'Other',
+          occurredAt: DateTime(2026, 8, 13),
+          instrument: TxnInstrument.upiBank,
+          cardDisplayName: null,
+          userCardId: null,
+        ),
+      ],
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('UPI from bank account'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.ensureVisible(find.text('UPI from bank account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('UPI from bank account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Zephr'), findsOneWidget);
+    expect(find.textContaining('Transfer to'), findsNothing);
+    expect(find.text('zephr@upi'), findsOneWidget);
+    expect(
+      find.byIcon(Icons.hourglass_top_rounded),
+      findsNothing,
+      reason: 'category, payment and payee totals are sums of stored facts',
+    );
+
+    await tester.tap(find.text('Zephr'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Transfer to'), findsNothing);
+
+    final tile = find.byKey(const ValueKey('spending-transaction-transfer-txn-1'));
+    expect(tester.widget<ListTile>(tile).subtitle, isNull,
+        reason: 'uncategorized rows and repeated payment labels add no detail');
+    expect(
+      find.descendant(
+        of: tile,
+        matching: find.byIcon(Icons.hourglass_top_rounded),
+      ),
+      findsNothing,
+      reason: 'a parsed amount is a fact, not an estimate',
+    );
+    expect(
+      find.descendant(of: tile, matching: find.text('₹125')),
+      findsOneWidget,
+      reason: 'whole-rupee line amounts drop the .00',
+    );
+  });
+
   testWidgets('Accounts groups UPI spend under the matched bank account', (
     tester,
   ) async {
@@ -1546,7 +1723,7 @@ void main() {
 
     expect(find.text('Swiggy'), findsOneWidget);
     expect(find.textContaining('6c123479'), findsNothing);
-    expect(find.text('Recipient unknown'), findsNothing);
+    expect(find.text('Unknown merchant'), findsNothing);
 
     await tester.tap(find.text('Swiggy'));
     await tester.pumpAndSettle();
@@ -1605,15 +1782,15 @@ void main() {
     await tester.tap(find.text('UPI from bank account'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Recipient unknown'), findsNWidgets(2));
+    expect(find.text('Unknown merchant'), findsNWidgets(2));
     expect(
-      find.text('Tap the payment to name its recipient.'),
+      find.text('Tap the payment to add its merchant.'),
       findsNWidgets(2),
     );
     expect(find.textContaining('6c123479'), findsNothing);
     expect(find.textContaining('9901e1edad'), findsNothing);
 
-    await tester.tap(find.text('Recipient unknown').first);
+    await tester.tap(find.text('Unknown merchant').first);
     await tester.pumpAndSettle();
     expect(find.textContaining('12/08/2026'), findsOneWidget);
     expect(find.textContaining('13/08/2026'), findsNothing);
@@ -1688,7 +1865,7 @@ void main() {
 
     expect(find.text('Mumbai'), findsOneWidget);
     expect(find.text('Café Mylapore'), findsOneWidget);
-    expect(find.text('Recipient unknown'), findsNothing);
+    expect(find.text('Unknown merchant'), findsNothing);
   });
 
   testWidgets('omits the long trend chart from the spending summary', (
@@ -1822,6 +1999,7 @@ void main() {
     );
     expect(find.text('No spending recorded'), findsOneWidget);
     expect(find.text('₹0.00'), findsOneWidget);
+    expect(find.byIcon(Icons.hourglass_top_rounded), findsNothing);
   });
 
   testWidgets(

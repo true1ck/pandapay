@@ -51,7 +51,7 @@ void main() {
       ).readInboxPage(afterId: 10, throughId: 13);
       expect(native.filter!.selectionArgs, ['10', '13']);
       expect(native.filter!.selection, contains('>'));
-      expect(native.limit, 200);
+      expect(native.limit, 25);
       expect(page.messages.single.id, 11);
       expect(page.rowCount, 3);
       expect(page.lastId, 13);

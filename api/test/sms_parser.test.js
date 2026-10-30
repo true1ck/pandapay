@@ -559,6 +559,17 @@ test('bank-account credits become incoming income entries', () => {
   assert.equal(result.fields.reference, '123456789012');
 });
 
+test('completed external VPA credit is money in', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'AX-HDFCBK-S',
+    body: 'Credit Alert! Rs.1.00 credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA *r123@oksbi (UPI 630371662093)',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'income');
+  assert.equal(result.fields.transferKind, 'external_vpa_credit');
+  assert.equal(result.fields.amountInr, 1);
+});
+
 test('generic bank-origin credits are transfer candidates until paired', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'HDFCBK',
@@ -1512,8 +1523,10 @@ test('AutoPay activation and mandate notices are not flagged as noise and do not
   const autoPaySetupMessages = [
     'AutoPay activation successful.\nTxn amt: INR 0.00\nMerchant: OpenAILLC\nAxis Bank Card no.: XX7105\nMax limit: INR 1999.00\n...',
     'AutoPay activation successful. Txn amt: INR 0.00 Merchant: OpenAI LLC Axis Bank Card no.: XX7105 Max limit: INR 1999.00.',
-    'AutoPay e-mandate successfully registered for NETFLIX with maximum limit of INR 2,000.00 on Axis Bank Card no.: XX7105',
+    'AutoPay e-mandate successfully registered for NETFLIX with maximum limit of INR 2,00,000.00 on Axis Bank Card no.: XX7105',
     'Standing Instruction created towards AGIONE TEC. Max limit: INR 500.00 on card ending 1234.',
+    'For the upcoming mandate set for 03-09-26, INR 3000.00 will be debited from your A/c towards ICCL GROWW AUTOPAY for UPI Mandate, •••• 5173. To stop execution, pause mandate - Axis Bank',
+    'For the upcoming mandate set for 25-10-26, your account will be debited with Rs.81.00 towards Amazon Pay for the Recurring Bill Payments. If mandate is paused the execution for the same will not happen. - Amazon and Yes Bank.',
   ];
 
   for (const body of autoPaySetupMessages) {

@@ -7,7 +7,7 @@ class MerchantIdentity {
   );
   static final _letterRe = RegExp(r'\p{L}', unicode: true);
   static const _genericNames = {
-    'unknown', 'unknown merchant', 'unknown payee', 'merchant unknown',
+    'unknown', 'unknown merchant', 'unknown payee', 'merchant unknown', 'recipient unknown', 'other',
     'merchant', 'not available', 'n/a', 'bank debit', 'bank credit',
     'bank transfer', 'money received', 'purchase', 'payment', 'transaction',
     'txn', 'transfer', 'self transfer', 'transfer between own accounts',

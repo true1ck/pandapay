@@ -255,5 +255,215 @@ void main() {
         expect(find.text('₹1,499.00'), findsNWidgets(2)); // Header and What we know
       },
     );
+
+    testWidgets(
+      'renders mandate limit, date range, and payment method when configured',
+      (tester) async {
+        final series = RecurringSeries(
+          id: 'google-mandate-1',
+          displayName: 'Google Play',
+          typicalAmount: Money.zero(),
+          amountKnown: false,
+          autopayLimit: Money.fromRupees(4000),
+          cadenceDays: 0,
+          occurrenceCount: 0,
+          annualCost: Money.zero(),
+          startDate: DateTime(2026, 7, 10),
+          endDate: DateTime(2036, 12, 31),
+          lastSeenOn: DateTime(2026, 7, 10),
+          paymentMethod: 'UPI AutoPay (Axis Bank)',
+          setupConfirmed: true,
+          cadenceConfirmed: true,
+          isMandate: true,
+          autopayStatus: 'active',
+          engineStatus: 'candidate',
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              cacheNamespaceProvider.overrideWithValue('user:test'),
+            ],
+            child: MaterialApp(
+              home: SubscriptionDetailScreen(series: series),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Subscription details'), findsOneWidget);
+        expect(find.text('Google Play'), findsOneWidget);
+        expect(find.text('Up to ₹4,000'), findsOneWidget);
+        expect(find.text('Mandate limit • Awaiting first charge'), findsOneWidget);
+        expect(find.text('Up to ₹4,000.00 (Mandate limit)'), findsOneWidget);
+        expect(find.text('As presented (On-demand)'), findsNWidgets(2)); // Badge and What we know
+        expect(find.text('10/7/2026 – 31/12/2036'), findsOneWidget);
+        expect(find.text('10/7/2026'), findsOneWidget);
+        expect(find.text('Valid till 31/12/2036'), findsOneWidget);
+        expect(find.text('UPI AutoPay (Axis Bank)'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'enriches mandate details from local SMS intake repository evidence when series fields are unpopulated',
+      (tester) async {
+        final db = openInMemoryForTesting();
+        final cache = ResponseCache(db);
+        SmsIntakeRepository(db); // ensures tables exist
+
+        // Store the mandate SMS evidence directly in DB
+        db.db.execute(
+          'INSERT INTO sms_captured_messages(namespace, id, sender, body, received_at) VALUES (?, ?, ?, ?, ?)',
+          [
+            'user:test',
+            'sms-mandate-axis-1',
+            'VM-AXISBK-S',
+            'Your UPI ASPRESENTED mandate has been successfully created towards Google Asia Pacific Pte.Ltd from 10-07-26 to 31-12-36 for INR 4000.00 Axis Bank. UMRN is 123456789@axisbank',
+            DateTime(2026, 7, 10, 10, 0).millisecondsSinceEpoch,
+          ],
+        );
+
+        // Bare series without limit or dates
+        final bareSeries = const RecurringSeries(
+          id: 'google-bare',
+          displayName: 'Google Asia Pacific Pte',
+          typicalAmount: Money.zero(),
+          amountKnown: false,
+          cadenceDays: 0,
+          occurrenceCount: 0,
+          annualCost: Money.zero(),
+          setupConfirmed: true,
+          isMandate: true,
+          autopayStatus: 'active',
+          engineStatus: 'candidate',
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              cacheNamespaceProvider.overrideWithValue('user:test'),
+              responseCacheProvider.overrideWith((ref) => Future.value(cache)),
+            ],
+            child: MaterialApp(
+              home: SubscriptionDetailScreen(series: bareSeries),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Must display parsed mandate ceiling, cadence, validity and payment method
+        expect(find.text('Subscription details'), findsOneWidget);
+        expect(find.text('Up to ₹4,000'), findsOneWidget);
+        expect(find.text('Up to ₹4,000.00 (Mandate limit)'), findsOneWidget);
+        expect(find.text('As presented (On-demand)'), findsNWidgets(2));
+        expect(find.text('10/7/2026 – 31/12/2036'), findsOneWidget);
+        expect(find.text('UPI AutoPay (Axis Bank)'), findsOneWidget);
+        expect(find.text('Related service message', skipOffstage: false), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'SubscriptionsScreen deduplicates Google Play variants and Microsoft 365 review candidates and excludes vending',
+      (tester) async {
+        final report = RecurringReport(
+          series: [
+            // Multiple Google variants
+            const RecurringSeries(
+              id: 'g-1',
+              displayName: 'Google',
+              typicalAmount: Money.zero(),
+              amountKnown: false,
+              cadenceDays: 0,
+              occurrenceCount: 0,
+              annualCost: Money.zero(),
+              setupConfirmed: true,
+            ),
+            const RecurringSeries(
+              id: 'g-2',
+              displayName: 'Google Play',
+              typicalAmount: Money.zero(),
+              amountKnown: false,
+              autopayLimit: Money.fromPaise(400000),
+              cadenceDays: 0,
+              occurrenceCount: 0,
+              annualCost: Money.zero(),
+              setupConfirmed: true,
+              paymentMethod: 'UPI AutoPay (Axis Bank)',
+            ),
+            const RecurringSeries(
+              id: 'g-3',
+              displayName: 'Google Asia Pacific Pte',
+              typicalAmount: Money.zero(),
+              amountKnown: false,
+              cadenceDays: 0,
+              occurrenceCount: 0,
+              annualCost: Money.zero(),
+              setupConfirmed: true,
+            ),
+            // Review candidates: duplicate Microsoft 365
+            const RecurringSeries(
+              id: 'ms-1',
+              displayName: 'Microsoft 365',
+              typicalAmount: Money.fromPaise(97800),
+              cadenceDays: 30,
+              occurrenceCount: 4,
+              annualCost: Money.fromPaise(1173600),
+              reviewCandidate: true,
+            ),
+            const RecurringSeries(
+              id: 'ms-2',
+              displayName: 'Microsoft 365',
+              typicalAmount: Money.fromPaise(97800),
+              cadenceDays: 30,
+              occurrenceCount: 3,
+              annualCost: Money.fromPaise(1173600),
+              reviewCandidate: true,
+            ),
+            // Excluded non-subscription
+            const RecurringSeries(
+              id: 'vending-1',
+              displayName: 'Vending Buddy Retai',
+              typicalAmount: Money.fromPaise(1000),
+              cadenceDays: 30,
+              occurrenceCount: 3,
+              annualCost: Money.fromPaise(12000),
+              reviewCandidate: true,
+            ),
+          ],
+          totalAnnual: Money.zero(),
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              cacheNamespaceProvider.overrideWithValue('user:test'),
+              recurringReportProvider.overrideWith((ref) => Future.value(report)),
+            ],
+            child: const MaterialApp(
+              home: SubscriptionsScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // 1. Google Play variants should be deduplicated to exactly ONE card
+        expect(find.text('Google Play'), findsOneWidget);
+        expect(find.text('Google'), findsNothing);
+        expect(find.text('Google Asia Pacific Pte'), findsNothing);
+        expect(find.text('Up to ₹4,000'), findsOneWidget);
+
+        // 2. Microsoft 365 review candidates should be deduplicated to exactly ONE candidate with highest count
+        expect(find.text('Microsoft 365'), findsOneWidget);
+        expect(find.text('4 similar payments · not confirmed'), findsOneWidget);
+        expect(find.text('3 similar payments · not confirmed'), findsNothing);
+
+        // 3. Vending machine non-subscription must be excluded
+        expect(find.text('Vending Buddy Retai'), findsNothing);
+
+        // 4. Headline total card shows authorized mandate ceiling
+        expect(find.text('Up to ₹4,000 authorized'), findsOneWidget);
+        expect(find.text('Paid amount not known'), findsNothing);
+      },
+    );
   });
 }

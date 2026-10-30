@@ -423,7 +423,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // once loading is done).
       if (path == AppRoute.splash) {
         if (!signedIn) return AppRoute.welcome;
-        return complete ? AppRoute.home : AppRoute.productActivation;
+        if (!complete) return AppRoute.productActivation;
+        final biometricLockOn =
+            ref.read(biometricLockProvider).valueOrNull ?? false;
+        final biometricUnlocked = ref.read(biometricUnlockedProvider);
+        if (biometricLockOn && !biometricUnlocked) {
+          return AppRoute.biometricLock;
+        }
+        return AppRoute.home;
       }
 
       // Authentication is a hard gate. The only unauthenticated routes are

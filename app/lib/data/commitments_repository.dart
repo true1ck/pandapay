@@ -15,6 +15,7 @@ enum CommitmentCategory {
   education,
   tax,
   subscription,
+  investment,
   other;
 
   String get label => switch (this) {
@@ -26,6 +27,7 @@ enum CommitmentCategory {
     CommitmentCategory.education => 'Education',
     CommitmentCategory.tax => 'Tax & Government',
     CommitmentCategory.subscription => 'Subscription',
+    CommitmentCategory.investment => 'Investment / SIP',
     CommitmentCategory.other => 'Other',
   };
 
@@ -38,6 +40,7 @@ enum CommitmentCategory {
     CommitmentCategory.education => Icons.school_outlined,
     CommitmentCategory.tax => Icons.account_balance_outlined,
     CommitmentCategory.subscription => Icons.autorenew_rounded,
+    CommitmentCategory.investment => Icons.trending_up_rounded,
     CommitmentCategory.other => Icons.receipt_outlined,
   };
 
@@ -50,6 +53,7 @@ enum CommitmentCategory {
     CommitmentCategory.education => const Color(0xFFFFFDE7),
     CommitmentCategory.tax => const Color(0xFFECEFF1),
     CommitmentCategory.subscription => BambooInk.rankBadgeBg,
+    CommitmentCategory.investment => const Color(0xFFE0F2F1),
     CommitmentCategory.other => BambooInk.paperMuted,
   };
 
@@ -62,6 +66,7 @@ enum CommitmentCategory {
     CommitmentCategory.education => const Color(0xFFF57F17),
     CommitmentCategory.tax => const Color(0xFF455A64),
     CommitmentCategory.subscription => BambooInk.rankBadgeInk,
+    CommitmentCategory.investment => const Color(0xFF00796B),
     CommitmentCategory.other => BambooInk.ink700,
   };
 
@@ -162,6 +167,25 @@ enum CommitmentCategory {
     if (has('PENSION') || has('YOJANA') || has('TAX') || has('GOVT')) {
       return CommitmentCategory.tax;
     }
+    if (has('GROWW') ||
+        has('ZERODHA') ||
+        has('ICCL') ||
+        has('UPSTOX') ||
+        has('ANGEL ONE') ||
+        has('ANGELONE') ||
+        has('DHAN') ||
+        has('KUVERA') ||
+        has('PAYTM MONEY') ||
+        has('INDMONEY') ||
+        has('5PAISA') ||
+        has('MOTILAL OSWAL') ||
+        has('SHAREKHAN') ||
+        has('MUTUAL FUND') ||
+        has('SIP') ||
+        has('INVESTMENT') ||
+        has('SECURITIES')) {
+      return CommitmentCategory.investment;
+    }
     return CommitmentCategory.other;
   }
 }
@@ -203,7 +227,8 @@ bool isSubscriptionAutoPay(String? name) {
       category == CommitmentCategory.insurance ||
       category == CommitmentCategory.loanOrEmi ||
       category == CommitmentCategory.rent ||
-      category == CommitmentCategory.tax) {
+      category == CommitmentCategory.tax ||
+      category == CommitmentCategory.investment) {
     return false;
   }
 
@@ -391,6 +416,8 @@ class Commitment {
   }
 
   bool isDueToday(DateTime now) => daysUntilDue(now) == 0;
+
+  bool get isAutoPay => isSubscriptionAutoPay(title);
 
   DateTime? get gracePeriodEndsOn {
     if (gracePeriodDays == null || gracePeriodDays! <= 0) return null;

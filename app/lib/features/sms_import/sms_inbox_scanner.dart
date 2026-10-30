@@ -24,9 +24,17 @@ class SmsInboxProgress {
       CREATE TABLE IF NOT EXISTS sms_inbox_progress (
         namespace TEXT PRIMARY KEY,
         last_provider_id INTEGER NOT NULL,
+        last_scanned_at INTEGER NOT NULL DEFAULT 0,
         initial_complete INTEGER NOT NULL DEFAULT 0
       )
     ''');
+    final columns = database.db.select('PRAGMA table_info(sms_inbox_progress)');
+    final names = columns.map((row) => row['name'] as String).toSet();
+    if (!names.contains('last_scanned_at')) {
+      database.db.execute(
+        'ALTER TABLE sms_inbox_progress ADD COLUMN last_scanned_at INTEGER NOT NULL DEFAULT 0',
+      );
+    }
   }
 
   int lastId(String namespace) {
@@ -56,15 +64,24 @@ class SmsInboxProgress {
     );
   }
 
-  void commit(String namespace, int id, {bool complete = false}) {
+  int lastScannedAt(String namespace) {
+    final rows = database.db.select(
+      'SELECT last_scanned_at FROM sms_inbox_progress WHERE namespace=?',
+      [namespace],
+    );
+    return rows.isEmpty ? 0 : (rows.single['last_scanned_at'] as int? ?? 0);
+  }
+
+  void commit(String namespace, int id, {int timestamp = 0, bool complete = false}) {
     database.db.execute(
       '''
-      INSERT INTO sms_inbox_progress(namespace,last_provider_id,initial_complete)
-      VALUES (?,?,?) ON CONFLICT(namespace) DO UPDATE SET
+      INSERT INTO sms_inbox_progress(namespace,last_provider_id,last_scanned_at,initial_complete)
+      VALUES (?,?,?,?) ON CONFLICT(namespace) DO UPDATE SET
         last_provider_id=MAX(last_provider_id,excluded.last_provider_id),
+        last_scanned_at=MAX(last_scanned_at,excluded.last_scanned_at),
         initial_complete=MAX(initial_complete,excluded.initial_complete)
     ''',
-      [namespace, id, complete ? 1 : 0],
+      [namespace, id, timestamp, complete ? 1 : 0],
     );
   }
 }
@@ -113,14 +130,21 @@ class SmsInboxScanner {
       checkAccount();
       // A crash before this commit may replay this one page, idempotently.
       // A network failure can never move this checkpoint backwards.
-      progress.commit(namespace, page.lastId);
+      final maxTimestamp = page.messages.isEmpty
+          ? 0
+          : page.messages
+              .map((m) => m.receivedAt.millisecondsSinceEpoch)
+              .fold<int>(0, (max, ts) => ts > max ? ts : max);
+      progress.commit(namespace, page.lastId, timestamp: maxTimestamp);
       afterId = page.lastId;
       captured += page.messages.length;
       checked += page.rowCount;
       onProgress?.call(
         SmsInboxScanProgress(checked: checked, matched: captured),
       );
-      await Future<void>.delayed(Duration.zero);
+      // Yield 35ms between micro-batches so the Flutter rendering pipeline
+      // and Android touch event queue have uninterrupted 60/120 FPS frame time.
+      await Future<void>.delayed(const Duration(milliseconds: 35));
     }
     // Never rewind automatically if the provider was reset/restored.
     progress.commit(namespace, afterId, complete: true);

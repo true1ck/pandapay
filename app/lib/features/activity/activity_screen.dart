@@ -12,6 +12,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
+import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/spending_selection.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
@@ -55,6 +56,141 @@ class ActivityScreen extends ConsumerStatefulWidget {
 }
 
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
+
+  Future<void> _openPeriodSheet(
+    BuildContext context,
+    ActivityFilter filter,
+  ) async {
+    final picked = await showModalBottomSheet<_ActivityDatePreset>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  AppSpace.sm,
+                  AppSpace.lg,
+                  AppSpace.xs,
+                ),
+                child: Text(
+                  'Activity period',
+                  style: BambooFonts.heading(17, color: BambooInk.ink900),
+                ),
+              ),
+              for (final preset in _ActivityDatePreset.values)
+                ListTile(
+                  leading: Icon(
+                    _datePresetIcon(preset),
+                    color: preset == filter.datePreset
+                        ? BambooInk.jade
+                        : BambooInk.ink500,
+                  ),
+                  title: Text(
+                    preset.label,
+                    style: BambooFonts.ui(
+                      14,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                  selected: preset == filter.datePreset,
+                  selectedTileColor: BambooInk.paperMuted,
+                  onTap: () => Navigator.of(sheetContext).pop(preset),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+
+    if (picked == _ActivityDatePreset.custom) {
+      final now = DateTime.now();
+      final firstDate = DateTime(now.year - 5, 1, 1);
+      final lastDate = DateTime(now.year + 1, 12, 31);
+      DateTimeRange? initialRange;
+      if (filter.from != null && filter.to != null) {
+        final start =
+            filter.from!.isBefore(firstDate) ? firstDate : filter.from!;
+        final end = filter.to!.isAfter(lastDate)
+            ? lastDate
+            : (filter.to!.isBefore(start) ? start : filter.to!);
+        initialRange = DateTimeRange(start: start, end: end);
+      }
+      if (!context.mounted) return;
+      final range = await showDateRangePicker(
+        context: context,
+        firstDate: firstDate,
+        lastDate: lastDate,
+        initialDateRange: initialRange,
+      );
+      if (range != null && mounted) {
+        ref.read(_activityFilterProvider.notifier).update(
+          (current) => current.copyWith(
+            from: () => range.start,
+            to: () => range.end,
+            datePreset: _ActivityDatePreset.custom,
+          ),
+        );
+      }
+      return;
+    }
+
+    final range = picked.range(DateTime.now());
+    ref.read(_activityFilterProvider.notifier).update(
+      (current) => current.copyWith(
+        from: () => range?.start,
+        to: () => range?.end,
+        datePreset: picked,
+      ),
+    );
+  }
+
+  Future<void> _openFilterSheet(
+    BuildContext context,
+    ActivityFilter filter,
+    List<TransactionEntry> entries,
+  ) async {
+    final cards = ref.read(userCardsProvider).valueOrNull ?? const [];
+    final tagRepo = ref.read(transactionTagsProvider);
+    final tags = tagRepo?.allTags ?? const [];
+    var categories = ref.read(categoriesProvider).valueOrNull;
+    if (categories == null) {
+      try {
+        categories = await ref.read(categoriesProvider.future);
+      } catch (_) {}
+    }
+    final resolvedCategories = categories ?? const <SpendCategory>[];
+
+    final updated = await showModalBottomSheet<ActivityFilter>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: BambooInk.paper,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => _ActivityFilterSheet(
+        initial: filter,
+        entries: entries,
+        cards: cards,
+        tags: tags,
+        categories: resolvedCategories,
+      ),
+    );
+
+    if (updated != null && mounted) {
+      ref.read(_activityFilterProvider.notifier).update((_) => updated);
+    }
+  }
+
   final Set<String> _selectedIds = {};
   bool _selecting = false;
   bool _isBulkOperating = false;
@@ -71,7 +207,15 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   @override
   void initState() {
     super.initState();
-    if (_hasInitialFilter) _applyInitialFilterAfterBuild();
+    if (_hasInitialFilter) {
+      _applyInitialFilterAfterBuild();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(_activityFilterProvider.notifier).state =
+            _activityMonthFilter();
+      });
+    }
   }
 
   @override
@@ -487,7 +631,19 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpace.sm),
-                _FilterRow(filter: filter),
+                _SpendPeriodAndFilterBar(
+                  filter: filter,
+                  onOpenPeriod: () => _openPeriodSheet(context, filter),
+                  onOpenFilters: () => _openFilterSheet(
+                    context,
+                    filter,
+                    transactions.valueOrNull ?? const [],
+                  ),
+                ),
+                if (filter.hasClearableFilters) ...[
+                  const SizedBox(height: AppSpace.xs),
+                  _ActiveFilterBadgesRow(filter: filter),
+                ],
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
@@ -520,14 +676,33 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               ),
               data: (entries) {
                 if (entries.isEmpty) {
-                  return EmptyState(
-                    icon: Icons.receipt_long_outlined,
-                    title: filter.hasClearableFilters
-                        ? 'No activity matches these filters'
-                        : 'No activity this month',
-                    message: filter.isActive
-                        ? null
-                        : 'Transactions you log from the Cards tab show up here.',
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      ref.invalidate(activityTransactionsProvider);
+                      ref.invalidate(transactionsProvider);
+                      try {
+                        await ref.read(activityTransactionsProvider.future);
+                      } catch (_) {}
+                    },
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: EmptyState(
+                            icon: Icons.receipt_long_outlined,
+                            title: filter.hasClearableFilters
+                                ? 'No activity matches these filters'
+                                : 'No activity this month',
+                            message: filter.isActive
+                                ? null
+                                : 'Transactions you log from the Cards tab show up here.',
+                          ),
+                        ),
+                      ),
+                    ),
                   );
                 }
                 final grouped = _groupByDay(entries);
@@ -550,7 +725,15 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 return Column(
                   children: [
                     Expanded(
-                      child: ListView(
+                      child: RefreshIndicator(
+                        onRefresh: () async {
+                          ref.invalidate(activityTransactionsProvider);
+                          ref.invalidate(transactionsProvider);
+                          try {
+                            await ref.read(activityTransactionsProvider.future);
+                          } catch (_) {}
+                        },
+                        child: ListView(
                         padding: const EdgeInsets.fromLTRB(
                           AppSpace.lg,
                           AppSpace.lg,
@@ -644,6 +827,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                             const SizedBox(height: AppSpace.sm),
                           ],
                         ],
+                        ),
                       ),
                     ),
                     if (_selecting)
@@ -854,6 +1038,13 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
   final filter = ref.watch(_activityFilterProvider);
   final tags = ref.watch(transactionTagsProvider);
 
+  // Synchronously listen once to canonical provider invalidation
+  ref.listen(transactionsProvider, (previous, next) {
+    if (previous?.hasValue == true && next.hasValue) {
+      ref.invalidateSelf();
+    }
+  });
+
   // Keep the unfiltered Activity surface on the same provider as every
   // other transaction consumer. SMS reconciliation, quick-add, imports and
   // resume refreshes invalidate [transactionsProvider]; using a second
@@ -867,29 +1058,16 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
       filter.categoryId != null ||
       (filter.query != null && filter.query!.trim().isNotEmpty);
   final entries = hasServerFilter
-      ? await (() {
-          // Listen to the canonical provider as a refresh signal even while a
-          // narrower server query is active. Ignore its initial load: watching
-          // its AsyncValue here would restart this async provider while both
-          // snapshots are loading, leaving callers awaiting the disposed
-          // Future. Once a previously loaded canonical snapshot refreshes,
-          // invalidate this filtered view so new SMS/import rows appear.
-          ref.listen(transactionsProvider, (previous, next) {
-            if (previous?.hasValue == true && next.hasValue) {
-              ref.invalidateSelf();
-            }
-          });
-          return loadTransactionsWithOfflineCache(
-            ref,
-            repo: repo,
-            cacheKey: 'transactions:activity',
-            from: filter.from,
-            to: filter.to,
-            cardId: filter.cardId,
-            categoryId: filter.categoryId,
-            query: filter.query,
-          );
-        })()
+      ? await loadTransactionsWithOfflineCache(
+          ref,
+          repo: repo,
+          cacheKey: 'transactions:activity',
+          from: filter.from,
+          to: filter.to,
+          cardId: filter.cardId,
+          categoryId: filter.categoryId,
+          query: filter.query,
+        )
       : await ref.watch(transactionsProvider.future);
   final selection = SpendingSelection(
     tagIds: filter.tagIds,
@@ -900,6 +1078,10 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
       .where(
         (entry) =>
             filter.type.matches(entry) &&
+            (filter.cardId == null || entry.userCardId == filter.cardId) &&
+            (filter.categoryId == null ||
+                entry.categoryId == filter.categoryId ||
+                entry.parentCategoryId == filter.categoryId) &&
             (filter.categoryLabel == null ||
                 filter.categoryLabel!.trim().toLowerCase() ==
                     entry.categoryLabel.trim().toLowerCase()) &&
@@ -1030,6 +1212,12 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
   Timer? _debounce;
 
   @override
+  void initState() {
+    super.initState();
+    _controller.text = ref.read(_activityFilterProvider).query ?? '';
+  }
+
+  @override
   void dispose() {
     _debounce?.cancel();
     _controller.dispose();
@@ -1062,6 +1250,17 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<String?>(_activityFilterProvider.select((f) => f.query), (
+      _,
+      next,
+    ) {
+      final incoming = next ?? '';
+      if (_controller.text != incoming) {
+        _controller.text = incoming;
+        setState(() {});
+      }
+    });
+
     return TextField(
       controller: _controller,
       onChanged: _onChanged,
@@ -1091,331 +1290,806 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
   }
 }
 
-class _FilterRow extends ConsumerWidget {
+class _SpendPeriodAndFilterBar extends StatelessWidget {
   final ActivityFilter filter;
-  const _FilterRow({required this.filter});
+  final VoidCallback onOpenPeriod;
+  final VoidCallback onOpenFilters;
+
+  const _SpendPeriodAndFilterBar({
+    required this.filter,
+    required this.onOpenPeriod,
+    required this.onOpenFilters,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final filtersActive = filter.hasClearableFilters;
+    final periodLabel = _dateFilterLabel(filter);
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onOpenPeriod,
+            icon: const Icon(Icons.calendar_month_rounded, size: 18),
+            label: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    periodLabel,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+              ],
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BambooInk.ink900,
+              side: const BorderSide(color: BambooInk.hairlineOnPaper),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              minimumSize: const Size(0, 44),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpace.sm),
+        OutlinedButton.icon(
+          onPressed: onOpenFilters,
+          icon: const Icon(Icons.tune_rounded, size: 18),
+          label: Text(filtersActive ? 'Filters ·' : 'Filters'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor:
+                filtersActive ? BambooInk.jade : BambooInk.ink900,
+            side: BorderSide(
+              color: filtersActive
+                  ? BambooInk.jade
+                  : BambooInk.hairlineOnPaper,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            minimumSize: const Size(0, 44),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ActiveFilterBadgesRow extends ConsumerWidget {
+  final ActivityFilter filter;
+  const _ActiveFilterBadgesRow({required this.filter});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
-    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
-    final topLevelCategories = categories
-        .where((c) => !c.isSubcategory)
-        .toList();
-    final tagRepository = ref.watch(transactionTagsProvider);
-    final selectedCard = cards.where((c) => c.id == filter.cardId).firstOrNull;
+    final card = filter.cardId != null
+        ? cards.cast<UserCard?>().firstWhere(
+              (c) => c?.id == filter.cardId,
+              orElse: () => null,
+            )
+        : null;
+    final cardTitle = card?.nickname?.isNotEmpty == true
+        ? card!.nickname!
+        : (card?.cardName ?? 'Card');
 
-    final chips = <Widget>[
-      _FilterChipButton(
-        label: filter.untagged
-            ? 'Untagged'
-            : filter.tagIds.isEmpty
-            ? 'Tags'
-            : 'Tags (${filter.tagIds.length})',
-        active: filter.untagged || filter.tagIds.isNotEmpty,
-        onTap: () async {
-          var ids = {...filter.tagIds};
-          var untagged = filter.untagged;
-          final result = await showDialog<({Set<String> ids, bool untagged})>(
-            context: context,
-            builder: (context) => StatefulBuilder(
-              builder: (context, setState) => AlertDialog(
-                title: const Text('Filter by tags'),
-                content: SizedBox(
-                  width: double.maxFinite,
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      const Text('Match any selected tag across categories.'),
-                      CheckboxListTile(
-                        title: const Text('Untagged'),
-                        value: untagged,
-                        onChanged: (value) => setState(() {
-                          untagged = value == true;
-                          if (untagged) ids.clear();
-                        }),
-                      ),
-                      for (final tag
-                          in tagRepository?.allTags ?? const <TransactionTag>[])
-                        CheckboxListTile(
-                          title: Text(tag.name),
-                          subtitle: tag.archivedAt == null
-                              ? null
-                              : const Text('Archived'),
-                          value: ids.contains(tag.id),
-                          onChanged: (value) => setState(() {
-                            if (value == true) {
-                              untagged = false;
-                              ids.add(tag.id);
-                            } else {
-                              ids.remove(tag.id);
-                            }
-                          }),
-                        ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  TextButton(
-                    onPressed: () => setState(() {
-                      ids.clear();
-                      untagged = false;
-                    }),
-                    child: const Text('Reset'),
-                  ),
-                  FilledButton(
-                    onPressed: () =>
-                        Navigator.pop(context, (ids: ids, untagged: untagged)),
-                    child: const Text('Apply'),
-                  ),
-                ],
-              ),
-            ),
-          );
-          if (result != null)
-            ref
-                .read(_activityFilterProvider.notifier)
-                .update(
-                  (current) => current.copyWith(
-                    tagIds: result.ids,
-                    untagged: result.untagged,
-                  ),
-                );
-        },
-      ),
-      const SizedBox(width: AppSpace.xs),
-      _FilterChipButton(
-        label: filter.type.label,
-        active: filter.hasTypeFilter,
-        onTap: () async {
-          final picked = await showModalBottomSheet<_ActivityTypeFilter>(
-            context: context,
-            builder: (context) => ListView(
-              shrinkWrap: true,
-              children: [
-                for (final type in _ActivityTypeFilter.values)
-                  ListTile(
-                    leading: Icon(_typeIcon(type)),
-                    title: Text(type.label),
-                    selected: type == filter.type,
-                    trailing: type == filter.type
-                        ? const Icon(Icons.check_rounded)
-                        : null,
-                    onTap: () => Navigator.of(context).pop(type),
-                  ),
-              ],
-            ),
-          );
-          if (picked != null) {
-            ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
-              type: picked,
-            );
-          }
-        },
-      ),
-      const SizedBox(width: AppSpace.xs),
-      _FilterChipButton(
-        label: selectedCard == null
-            ? 'All cards'
-            : selectedCard.nickname?.isNotEmpty == true
-            ? selectedCard.nickname!
-            : selectedCard.cardName,
-        active: filter.cardId != null,
-        onTap: () async {
-          final picked = await showModalBottomSheet<({bool all, String? id})>(
-            context: context,
-            builder: (context) => ListView(
-              shrinkWrap: true,
-              children: [
-                ListTile(
-                  title: const Text('All cards'),
-                  selected: filter.cardId == null,
-                  trailing: filter.cardId == null
-                      ? const Icon(Icons.check_rounded)
-                      : null,
-                  onTap: () => Navigator.of(context).pop((all: true, id: null)),
-                ),
-                for (final c in cards)
-                  ListTile(
-                    title: Text(
-                      c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName,
-                    ),
-                    selected: c.id == filter.cardId,
-                    trailing: c.id == filter.cardId
-                        ? const Icon(Icons.check_rounded)
-                        : null,
-                    onTap: () =>
-                        Navigator.of(context).pop((all: false, id: c.id)),
-                  ),
-              ],
-            ),
-          );
-          if (picked == null) return;
-          ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
-            cardId: () => picked.all ? null : picked.id,
-          );
-        },
-      ),
-      const SizedBox(width: AppSpace.xs),
-      _FilterChipButton(
-        label: filter.categoryId == null
-            ? filter.categoryLabel ?? 'All categories'
-            : (categories
-                      .where((c) => c.id == filter.categoryId)
-                      .firstOrNull
-                      ?.name ??
-                  'All categories'),
-        active: filter.categoryId != null || filter.categoryLabel != null,
-        onTap: () async {
-          final picked = await showModalBottomSheet<({bool all, String? id})>(
-            context: context,
-            builder: (context) => ListView(
-              shrinkWrap: true,
-              children: [
-                ListTile(
-                  title: const Text('All categories'),
-                  selected:
-                      filter.categoryId == null && filter.categoryLabel == null,
-                  trailing:
-                      filter.categoryId == null && filter.categoryLabel == null
-                      ? const Icon(Icons.check_rounded)
-                      : null,
-                  onTap: () => Navigator.of(context).pop((all: true, id: null)),
-                ),
-                for (final c in topLevelCategories)
-                  ListTile(
-                    title: Text(c.name),
-                    selected: c.id == filter.categoryId,
-                    trailing: c.id == filter.categoryId
-                        ? const Icon(Icons.check_rounded)
-                        : null,
-                    onTap: () =>
-                        Navigator.of(context).pop((all: false, id: c.id)),
-                  ),
-              ],
-            ),
-          );
-          if (picked == null) return;
-          ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
-            categoryId: () => picked.all ? null : picked.id,
-            categoryLabel: () => null,
-          );
-        },
-      ),
-      const SizedBox(width: AppSpace.xs),
-      _FilterChipButton(
-        label: _dateFilterLabel(filter),
-        active: filter.from != null || filter.to != null,
-        onTap: () async {
-          final picked = await showModalBottomSheet<_ActivityDatePreset>(
-            context: context,
-            builder: (sheetContext) => SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpace.lg,
-                        AppSpace.sm,
-                        AppSpace.lg,
-                        AppSpace.xs,
-                      ),
-                      child: Text(
-                        'Track activity by time',
-                        style: BambooFonts.heading(17, color: BambooInk.ink900),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpace.lg,
-                        0,
-                        AppSpace.lg,
-                        AppSpace.sm,
-                      ),
-                      child: Text(
-                        'Choose a quick period or set your own dates.',
-                        style: BambooFonts.ui(13, color: BambooInk.ink500),
-                      ),
-                    ),
-                    for (final preset in _ActivityDatePreset.values)
-                      ListTile(
-                        leading: Icon(
-                          _datePresetIcon(preset),
-                          color: preset == filter.datePreset
-                              ? BambooInk.jade
-                              : BambooInk.ink500,
-                        ),
-                        title: Text(
-                          preset.label,
-                          style: BambooFonts.ui(
-                            14,
-                            weight: FontWeight.w600,
-                            color: BambooInk.ink900,
-                          ),
-                        ),
-                        selected: preset == filter.datePreset,
-                        selectedTileColor: BambooInk.paperMuted,
-                        onTap: () => Navigator.of(sheetContext).pop(preset),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          );
-          if (picked == null) return;
-
-          if (picked == _ActivityDatePreset.custom) {
-            final range = await showDateRangePicker(
-              context: context,
-              firstDate: DateTime.now().subtract(const Duration(days: 365 * 3)),
-              lastDate: DateTime.now(),
-              initialDateRange: filter.from != null && filter.to != null
-                  ? DateTimeRange(start: filter.from!, end: filter.to!)
-                  : null,
-            );
-            if (range != null) {
-              ref.read(_activityFilterProvider.notifier).state = filter
-                  .copyWith(
-                    from: () => range.start,
-                    to: () => range.end,
-                    datePreset: _ActivityDatePreset.custom,
-                  );
-            }
-            return;
-          }
-
-          final range = picked.range(DateTime.now());
-          ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
-            from: () => range?.start,
-            to: () => range?.end,
-            datePreset: picked,
-          );
-        },
-      ),
-      if (filter.hasClearableFilters) ...[
-        const SizedBox(width: AppSpace.xs),
-        _FilterChipButton(
-          label: 'Clear',
-          active: false,
-          onTap: () => ref.read(_activityFilterProvider.notifier).state =
-              _activityMonthFilter(),
-        ),
-      ],
-    ];
     return SizedBox(
-      height: 44,
-      child: SingleChildScrollView(
+      height: 38,
+      child: ListView(
         scrollDirection: Axis.horizontal,
-        child: Row(mainAxisSize: MainAxisSize.min, children: chips),
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: _FilterChipButton(
+              label: 'Clear',
+              active: false,
+              icon: Icons.close_rounded,
+              onTap: () => ref.read(_activityFilterProvider.notifier).state =
+                  _activityMonthFilter(),
+            ),
+          ),
+          if (filter.type != _ActivityTypeFilter.all)
+            _badge(
+              label: filter.type.label,
+              onRemove: () => ref.read(_activityFilterProvider.notifier).update(
+                    (current) => current.copyWith(type: _ActivityTypeFilter.all),
+                  ),
+            ),
+          if (filter.categoryId != null || filter.categoryLabel != null)
+            _badge(
+              label: filter.categoryLabel ?? 'Category',
+              onRemove: () => ref.read(_activityFilterProvider.notifier).update(
+                    (current) => current.copyWith(
+                      categoryId: () => null,
+                      categoryLabel: () => null,
+                    ),
+                  ),
+            ),
+          if (filter.cardId != null)
+            _badge(
+              label: cardTitle,
+              onRemove: () => ref.read(_activityFilterProvider.notifier).update(
+                    (current) => current.copyWith(cardId: () => null),
+                  ),
+            ),
+          if (filter.tagIds.isNotEmpty || filter.untagged)
+            _badge(
+              label: filter.untagged ? 'Untagged' : '${filter.tagIds.length} tags',
+              onRemove: () => ref.read(_activityFilterProvider.notifier).update(
+                    (current) =>
+                        current.copyWith(tagIds: const {}, untagged: false),
+                  ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _badge({required String label, required VoidCallback onRemove}) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ActionChip(
+        avatar: const Icon(
+          Icons.close_rounded,
+          size: 15,
+          color: BambooInk.onSlate,
+        ),
+        label: Text(label),
+        backgroundColor: BambooInk.slate,
+        side: BorderSide.none,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        labelStyle: BambooFonts.ui(
+          12,
+          weight: FontWeight.w600,
+          color: BambooInk.onSlate,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+        onPressed: onRemove,
       ),
     );
   }
 }
+
+class _ActivityFilterSheet extends StatefulWidget {
+  final ActivityFilter initial;
+  final List<TransactionEntry> entries;
+  final List<UserCard> cards;
+  final List<TransactionTag> tags;
+  final List<SpendCategory> categories;
+
+  const _ActivityFilterSheet({
+    required this.initial,
+    required this.entries,
+    required this.cards,
+    required this.tags,
+    required this.categories,
+  });
+
+  @override
+  State<_ActivityFilterSheet> createState() => _ActivityFilterSheetState();
+}
+
+class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
+  late _ActivityTypeFilter _type = widget.initial.type;
+  late _ActivityDatePreset _datePreset = widget.initial.datePreset;
+  late DateTime? _from = widget.initial.from;
+  late DateTime? _to = widget.initial.to;
+  late String? _cardId = widget.initial.cardId;
+  late String? _categoryId = widget.initial.categoryId;
+  late String? _categoryLabel = widget.initial.categoryLabel;
+  late Set<String> _tagIds = {...widget.initial.tagIds};
+  late bool _untagged = widget.initial.untagged;
+
+  List<TransactionEntry> get _matchingEntries {
+    return widget.entries.where((entry) {
+      if (_type != _ActivityTypeFilter.all && !_type.matches(entry)) {
+        return false;
+      }
+      if (_cardId != null && entry.userCardId != _cardId) return false;
+      if (_categoryId != null &&
+          entry.categoryId != _categoryId &&
+          entry.parentCategoryId != _categoryId) {
+        return false;
+      }
+      if (_categoryLabel != null &&
+          entry.categoryName != _categoryLabel) {
+        return false;
+      }
+      final entryTagIds = entry.tags.map((t) => t.id).toSet();
+      if (_untagged && entryTagIds.isNotEmpty) return false;
+      if (_tagIds.isNotEmpty && !entryTagIds.any(_tagIds.contains)) {
+        return false;
+      }
+      if (_from != null && entry.occurredAt.isBefore(_from!)) return false;
+      if (_to != null && entry.occurredAt.isAfter(_to!)) return false;
+      return true;
+    }).toList();
+  }
+
+  Money get _matchingTotal {
+    return _matchingEntries
+        .where((e) => e.status == 'active' && e.entryKind != TxnEntryKind.income)
+        .fold<Money>(
+          const Money.zero(),
+          (sum, e) => sum + e.amount,
+        );
+  }
+
+  void _reset() {
+    final def = _activityMonthFilter();
+    setState(() {
+      _type = def.type;
+      _datePreset = def.datePreset;
+      _from = def.from;
+      _to = def.to;
+      _cardId = def.cardId;
+      _categoryId = def.categoryId;
+      _categoryLabel = def.categoryLabel;
+      _tagIds = {...def.tagIds};
+      _untagged = def.untagged;
+    });
+  }
+
+  String get _currentDateLabel {
+    if (_datePreset != _ActivityDatePreset.allTime) {
+      if (_datePreset != _ActivityDatePreset.custom ||
+          _from != null ||
+          _to != null) {
+        return _datePreset == _ActivityDatePreset.custom
+            ? '${_shortDateLabel(_from)} – ${_shortDateLabel(_to)}'
+            : _datePreset.label;
+      }
+    }
+    return _datePreset.label;
+  }
+
+  String? get _selectedCardName {
+    if (_cardId == null) return null;
+    final c = widget.cards.cast<UserCard?>().firstWhere(
+          (c) => c?.id == _cardId,
+          orElse: () => null,
+        );
+    if (c == null) return null;
+    return c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName;
+  }
+
+  String? get _selectedCategoryName {
+    if (_categoryId != null) {
+      final c = widget.categories.cast<SpendCategory?>().firstWhere(
+            (cat) => cat?.id == _categoryId,
+            orElse: () => null,
+          );
+      if (c != null) return c.name;
+    }
+    return _categoryLabel;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final topLevelCategories =
+        widget.categories.where((c) => !c.isSubcategory).toList();
+
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.92,
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  0,
+                  AppSpace.lg,
+                  AppSpace.lg,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Filter activity',
+                          style: BambooFonts.heading(
+                            22,
+                            color: BambooInk.ink900,
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: _reset,
+                          style: TextButton.styleFrom(
+                            foregroundColor: BambooInk.jade,
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            textStyle: BambooFonts.ui(
+                              15,
+                              weight: FontWeight.w700,
+                            ),
+                          ),
+                          child: const Text('Reset'),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      'Applies across all activity views',
+                      style: BambooFonts.ui(14, color: BambooInk.ink500),
+                    ),
+                    const SizedBox(height: AppSpace.xl),
+
+                    const _FilterLabel('Date range'),
+                    const SizedBox(height: AppSpace.xs),
+                    _selectionField(
+                      icon: Icons.calendar_today_outlined,
+                      label: _currentDateLabel,
+                      trailing: const Icon(Icons.keyboard_arrow_down_rounded),
+                      onTap: () async {
+                        final picked = await showModalBottomSheet<
+                            _ActivityDatePreset>(
+                          context: context,
+                          showDragHandle: true,
+                          builder: (sheetContext) => SafeArea(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpace.sm),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      AppSpace.lg,
+                                      AppSpace.sm,
+                                      AppSpace.lg,
+                                      AppSpace.xs,
+                                    ),
+                                    child: Text(
+                                      'Activity period',
+                                      style: BambooFonts.heading(17,
+                                          color: BambooInk.ink900),
+                                    ),
+                                  ),
+                                  for (final preset
+                                      in _ActivityDatePreset.values)
+                                    ListTile(
+                                      leading: Icon(
+                                        _datePresetIcon(preset),
+                                        color: preset == _datePreset
+                                            ? BambooInk.jade
+                                            : BambooInk.ink500,
+                                      ),
+                                      title: Text(
+                                        preset.label,
+                                        style: BambooFonts.ui(14,
+                                            weight: FontWeight.w600,
+                                            color: BambooInk.ink900),
+                                      ),
+                                      selected: preset == _datePreset,
+                                      selectedTileColor: BambooInk.paperMuted,
+                                      onTap: () => Navigator.of(sheetContext)
+                                          .pop(preset),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                        if (picked == null || !mounted) return;
+                        if (picked == _ActivityDatePreset.custom) {
+                          final now = DateTime.now();
+                          final firstDate = DateTime(now.year - 5, 1, 1);
+                          final lastDate = DateTime(now.year + 1, 12, 31);
+                          if (!context.mounted) return;
+                          final range = await showDateRangePicker(
+                            context: context,
+                            firstDate: firstDate,
+                            lastDate: lastDate,
+                            initialDateRange: _from != null && _to != null
+                                ? DateTimeRange(start: _from!, end: _to!)
+                                : null,
+                          );
+                          if (range != null && mounted) {
+                            setState(() {
+                              _from = range.start;
+                              _to = range.end;
+                              _datePreset = _ActivityDatePreset.custom;
+                            });
+                          }
+                          return;
+                        }
+                        final range = picked.range(DateTime.now());
+                        setState(() {
+                          _from = range?.start;
+                          _to = range?.end;
+                          _datePreset = picked;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: AppSpace.xl),
+
+                    const _FilterLabel('Transaction type'),
+                    const SizedBox(height: AppSpace.xs),
+                    Wrap(
+                      spacing: AppSpace.sm,
+                      runSpacing: AppSpace.sm,
+                      children: [
+                        for (final type in _ActivityTypeFilter.values)
+                          _typePill(
+                            label: type.label,
+                            icon: _typeIcon(type),
+                            selected: _type == type,
+                            onTap: () => setState(() => _type = type),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpace.xl),
+
+                    const _FilterLabel('Category'),
+                    const SizedBox(height: AppSpace.xs),
+                    _selectionField(
+                      icon: Icons.shopping_bag_outlined,
+                      child: _selectedCategoryName == null
+                          ? Text(
+                              'All categories',
+                              style: BambooFonts.ui(14, color: BambooInk.ink500),
+                            )
+                          : _valueChip(
+                              _selectedCategoryName!,
+                              onRemove: () => setState(() {
+                                _categoryId = null;
+                                _categoryLabel = null;
+                              }),
+                            ),
+                      trailing: _selectedCategoryName == null
+                          ? const Icon(Icons.keyboard_arrow_down_rounded)
+                          : null,
+                      onTap: () async {
+                        final picked = await showModalBottomSheet<
+                            ({bool all, String? id, String? name})>(
+                          context: context,
+                          showDragHandle: true,
+                          builder: (sheetContext) => SafeArea(
+                            child: ListView(
+                              shrinkWrap: true,
+                              children: [
+                                ListTile(
+                                  title: const Text('All categories'),
+                                  selected: _categoryId == null &&
+                                      _categoryLabel == null,
+                                  onTap: () => Navigator.of(sheetContext)
+                                      .pop((all: true, id: null, name: null)),
+                                ),
+                                for (final c in topLevelCategories)
+                                  ListTile(
+                                    title: Text(c.name),
+                                    selected: c.id == _categoryId,
+                                    onTap: () => Navigator.of(sheetContext)
+                                        .pop((all: false, id: c.id, name: c.name)),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                        if (picked == null || !mounted) return;
+                        setState(() {
+                          _categoryId = picked.all ? null : picked.id;
+                          _categoryLabel = picked.all ? null : picked.name;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: AppSpace.xl),
+
+                    const _FilterLabel('Account or card'),
+                    const SizedBox(height: AppSpace.xs),
+                    _selectionField(
+                      icon: Icons.credit_card_outlined,
+                      child: _selectedCardName == null
+                          ? Text(
+                              'All cards & accounts',
+                              style: BambooFonts.ui(14, color: BambooInk.ink500),
+                            )
+                          : _valueChip(
+                              _selectedCardName!,
+                              onRemove: () => setState(() => _cardId = null),
+                            ),
+                      trailing: _selectedCardName == null
+                          ? const Icon(Icons.keyboard_arrow_down_rounded)
+                          : null,
+                      onTap: () async {
+                        final picked = await showModalBottomSheet<
+                            ({bool all, String? id})>(
+                          context: context,
+                          showDragHandle: true,
+                          builder: (sheetContext) => SafeArea(
+                            child: ListView(
+                              shrinkWrap: true,
+                              children: [
+                                ListTile(
+                                  title: const Text('All cards & accounts'),
+                                  selected: _cardId == null,
+                                  onTap: () => Navigator.of(sheetContext)
+                                      .pop((all: true, id: null)),
+                                ),
+                                for (final c in widget.cards)
+                                  ListTile(
+                                    title: Text(
+                                      c.nickname?.isNotEmpty == true
+                                          ? c.nickname!
+                                          : c.cardName,
+                                    ),
+                                    selected: c.id == _cardId,
+                                    onTap: () => Navigator.of(sheetContext)
+                                        .pop((all: false, id: c.id)),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                        if (picked == null || !mounted) return;
+                        setState(() => _cardId = picked.all ? null : picked.id);
+                      },
+                    ),
+                    const SizedBox(height: AppSpace.xl),
+
+                    const _FilterLabel('Tags'),
+                    const SizedBox(height: AppSpace.xs),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        FilterChip(
+                          label: const Text('Untagged'),
+                          selected: _untagged,
+                          onSelected: (val) => setState(() {
+                            _untagged = val;
+                            if (val) _tagIds.clear();
+                          }),
+                        ),
+                        for (final tag in widget.tags)
+                          FilterChip(
+                            label: Text(tag.name),
+                            selected: _tagIds.contains(tag.id),
+                            onSelected: (val) => setState(() {
+                              _untagged = false;
+                              val
+                                  ? _tagIds.add(tag.id)
+                                  : _tagIds.remove(tag.id);
+                            }),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpace.xs),
+                    Text(
+                      'Matches any selected tag across categories.',
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            Container(
+              padding: EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.md,
+                AppSpace.lg,
+                MediaQuery.viewInsetsOf(context).bottom + AppSpace.sm,
+              ),
+              decoration: const BoxDecoration(
+                color: BambooInk.paper,
+                border:
+                    Border(top: BorderSide(color: BambooInk.hairlineOnPaper)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RichText(
+                    text: TextSpan(
+                      style: BambooFonts.ui(14, color: BambooInk.ink900),
+                      children: [
+                        TextSpan(
+                          text:
+                              '${_matchingEntries.length} matching ${_matchingEntries.length == 1 ? 'transaction' : 'transactions'} · ',
+                        ),
+                        TextSpan(
+                          text: _matchingTotal.format(hidePaise: true),
+                          style: BambooFonts.ui(
+                            14,
+                            weight: FontWeight.w700,
+                            color: BambooInk.ink900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.md),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: BambooInk.lime,
+                        foregroundColor: BambooInk.slate,
+                        minimumSize: const Size.fromHeight(52),
+                        textStyle:
+                            BambooFonts.ui(16, weight: FontWeight.w700),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      onPressed: () {
+                        final result = widget.initial.copyWith(
+                          type: _type,
+                          datePreset: _datePreset,
+                          from: () => _from,
+                          to: () => _to,
+                          cardId: () => _cardId,
+                          categoryId: () => _categoryId,
+                          categoryLabel: () => _categoryLabel,
+                          tagIds: _tagIds,
+                          untagged: _untagged,
+                        );
+                        Navigator.of(context).pop(result);
+                      },
+                      child: const Text('Show results'),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(
+                      foregroundColor: BambooInk.jade,
+                      textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterLabel extends StatelessWidget {
+  final String label;
+  const _FilterLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: BambooFonts.ui(
+        13,
+        weight: FontWeight.w700,
+        color: BambooInk.ink500,
+      ),
+    );
+  }
+}
+
+Widget _selectionField({
+  IconData? icon,
+  String? label,
+  Widget? child,
+  Widget? trailing,
+  VoidCallback? onTap,
+}) =>
+    InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 52),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
+        decoration: BoxDecoration(
+          color: BambooInk.paper,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        child: Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 22, color: BambooInk.ink900),
+              const SizedBox(width: 14),
+            ],
+            Expanded(
+              child: child ??
+                  Text(
+                    label ?? '',
+                    style: BambooFonts.ui(14, color: BambooInk.ink500),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+            ),
+            if (trailing != null) trailing,
+          ],
+        ),
+      ),
+    );
+
+Widget _typePill({
+  required String label,
+  required bool selected,
+  required VoidCallback onTap,
+  IconData? icon,
+}) =>
+    InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? BambooInk.slate : BambooInk.paper,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? BambooInk.slate : BambooInk.hairlineOnPaper,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 15,
+                color: selected ? BambooInk.onSlate : BambooInk.ink700,
+              ),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: BambooFonts.ui(
+                13,
+                weight: selected ? FontWeight.w600 : FontWeight.w500,
+                color: selected ? BambooInk.onSlate : BambooInk.ink700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+Widget _valueChip(String label, {VoidCallback? onRemove}) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: BambooInk.paperMuted,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: BambooFonts.ui(
+              13,
+              weight: FontWeight.w600,
+              color: BambooInk.ink900,
+            ),
+          ),
+          if (onRemove != null) ...[
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: onRemove,
+              child: const Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: BambooInk.ink500,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
 
 String _dateFilterLabel(ActivityFilter filter) {
   if (filter.datePreset != _ActivityDatePreset.allTime) {
@@ -1465,10 +2139,12 @@ class _FilterChipButton extends StatelessWidget {
   final String label;
   final bool active;
   final VoidCallback onTap;
+  final IconData? icon;
   const _FilterChipButton({
     required this.label,
     required this.active,
     required this.onTap,
+    this.icon,
   });
 
   @override
@@ -1476,6 +2152,13 @@ class _FilterChipButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 0),
       child: ActionChip(
+        avatar: icon != null
+            ? Icon(
+                icon,
+                size: 16,
+                color: active ? BambooInk.onSlate : BambooInk.ink700,
+              )
+            : null,
         label: Text(label, overflow: TextOverflow.ellipsis),
         backgroundColor: active ? BambooInk.slate : BambooInk.paperMuted,
         side: BorderSide.none,
@@ -1512,19 +2195,39 @@ class _SummaryCard extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
         ),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(16),
       ),
-      padding: const EdgeInsets.all(AppSpace.lg),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            title,
-            style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: BambooFonts.ui(12, color: BambooInk.onSlateMuted),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                count == 0
+                    ? 'No activity'
+                    : '$count transaction${count == 1 ? '' : 's'}',
+                style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted),
+              ),
+              if (totalOutgoing.paise == 0) ...[
+                const SizedBox(width: AppSpace.sm),
+                Text(
+                  'No spending',
+                  style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: AppSpace.sm),
+          const SizedBox(height: 6),
           Row(
             children: [
               Expanded(
@@ -1544,24 +2247,6 @@ class _SummaryCard extends StatelessWidget {
                   color: BambooInk.clay,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Row(
-            children: [
-              Text(
-                count == 0
-                    ? 'No activity'
-                    : '$count transaction${count == 1 ? '' : 's'}',
-                style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
-              ),
-              if (totalOutgoing.paise == 0) ...[
-                const SizedBox(width: AppSpace.sm),
-                Text(
-                  'No spending',
-                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
-                ),
-              ],
             ],
           ),
         ],
@@ -1593,8 +2278,9 @@ class _SummaryMetric extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: BambooFonts.ui(12, color: BambooInk.onSlateMuted)),
+        Text(label, style: BambooFonts.ui(11, color: BambooInk.onSlateMuted)),
         const SizedBox(height: 2),
         FittedBox(
           fit: BoxFit.scaleDown,
@@ -1603,7 +2289,7 @@ class _SummaryMetric extends StatelessWidget {
             amount,
             prefix: prefix,
             confidence: Confidence.estimated,
-            style: BambooFonts.money(21, color: color),
+            style: BambooFonts.money(19, color: color),
             showConfidenceIcon: false,
             hidePaise: true,
             compact: useCompactDenomination,
@@ -1869,12 +2555,6 @@ class _TransactionTile extends StatelessWidget {
   }
 }
 
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull {
-    final it = iterator;
-    return it.moveNext() ? it.current : null;
-  }
-}
 
 
 class _BulkActionBar extends StatelessWidget {

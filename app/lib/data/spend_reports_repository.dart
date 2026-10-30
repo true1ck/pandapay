@@ -845,6 +845,9 @@ class RecurringSeries {
   /// never proof that the merchant sells a subscription.
   final bool reviewCandidate;
   final Money annualCost;
+  final Money? autopayLimit;
+  final DateTime? startDate;
+  final DateTime? endDate;
 
   /// One honest state computed by the detection engine:
   /// confirmed | at_risk | needs_cadence | unused. Null when the source
@@ -860,6 +863,9 @@ class RecurringSeries {
     required this.cadenceDays,
     required this.occurrenceCount,
     required this.annualCost,
+    this.autopayLimit,
+    this.startDate,
+    this.endDate,
     this.lastSeenOn,
     this.nextExpectedOn,
     this.userCategoryId,
@@ -950,14 +956,80 @@ class RecurringSeries {
   /// Plain-language cadence. Approximate on purpose — "about every 5 weeks"
   /// is honest about a 33-day median in a way that "monthly" is not.
   String get cadenceLabel {
+    if (cadenceDays == 0 && (isMandate || setupConfirmed || hasActiveAutoPay)) {
+      return 'As presented (On-demand)';
+    }
     if (cadenceDays >= 350) return 'Yearly';
     if (cadenceDays >= 175) return 'Every 6 months';
     if (cadenceDays >= 85) return 'Quarterly';
     if (cadenceDays >= 26 && cadenceDays <= 32) return 'Monthly';
     if (cadenceDays >= 13 && cadenceDays <= 16) return 'Fortnightly';
     if (cadenceDays == 7) return 'Weekly';
-    if (cadenceDays < 26) return 'About every $cadenceDays days';
-    return 'About every ${(cadenceDays / 7).round()} weeks';
+    if (cadenceDays < 26 && cadenceDays > 0) return 'About every $cadenceDays days';
+    if (cadenceDays >= 26) return 'About every ${(cadenceDays / 7).round()} weeks';
+    return 'Not confirmed';
+  }
+
+  RecurringSeries copyWith({
+    String? id,
+    String? displayName,
+    Money? typicalAmount,
+    bool? amountKnown,
+    int? cadenceDays,
+    int? occurrenceCount,
+    Money? annualCost,
+    Money? autopayLimit,
+    DateTime? startDate,
+    DateTime? endDate,
+    DateTime? lastSeenOn,
+    DateTime? nextExpectedOn,
+    String? userCategoryId,
+    String? categoryName,
+    String? subcategoryName,
+    String? cardName,
+    String? paymentMethod,
+    String? detectionSource,
+    bool? isMandate,
+    bool? isUserEdited,
+    String? lifecycleStatus,
+    String? autopayStatus,
+    String? mandateReference,
+    String? sourceKey,
+    bool? cadenceConfirmed,
+    bool? setupConfirmed,
+    bool? reviewCandidate,
+    String? engineStatus,
+  }) {
+    return RecurringSeries(
+      id: id ?? this.id,
+      displayName: displayName ?? this.displayName,
+      typicalAmount: typicalAmount ?? this.typicalAmount,
+      amountKnown: amountKnown ?? this.amountKnown,
+      cadenceDays: cadenceDays ?? this.cadenceDays,
+      occurrenceCount: occurrenceCount ?? this.occurrenceCount,
+      annualCost: annualCost ?? this.annualCost,
+      autopayLimit: autopayLimit ?? this.autopayLimit,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      lastSeenOn: lastSeenOn ?? this.lastSeenOn,
+      nextExpectedOn: nextExpectedOn ?? this.nextExpectedOn,
+      userCategoryId: userCategoryId ?? this.userCategoryId,
+      categoryName: categoryName ?? this.categoryName,
+      subcategoryName: subcategoryName ?? this.subcategoryName,
+      cardName: cardName ?? this.cardName,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      detectionSource: detectionSource ?? this.detectionSource,
+      isMandate: isMandate ?? this.isMandate,
+      isUserEdited: isUserEdited ?? this.isUserEdited,
+      lifecycleStatus: lifecycleStatus ?? this.lifecycleStatus,
+      autopayStatus: autopayStatus ?? this.autopayStatus,
+      mandateReference: mandateReference ?? this.mandateReference,
+      sourceKey: sourceKey ?? this.sourceKey,
+      cadenceConfirmed: cadenceConfirmed ?? this.cadenceConfirmed,
+      setupConfirmed: setupConfirmed ?? this.setupConfirmed,
+      reviewCandidate: reviewCandidate ?? this.reviewCandidate,
+      engineStatus: engineStatus ?? this.engineStatus,
+    );
   }
 
   factory RecurringSeries.fromJson(Map<String, dynamic> json) {
@@ -991,10 +1063,13 @@ class RecurringSeries {
       id: json['id'] as String,
       displayName: json['displayName'] as String? ?? 'Unknown',
       typicalAmount: _money(json['typicalAmountInr']),
+      autopayLimit: json['autopayLimitInr'] != null ? _money(json['autopayLimitInr']) : null,
       amountKnown: json['typicalAmountInr'] != null,
       cadenceDays: cadenceDays,
       occurrenceCount: occurrenceCount,
       annualCost: _money(json['annualCostInr']),
+      startDate: json['startDate'] == null ? null : DateTime.tryParse(json['startDate'] as String),
+      endDate: json['endDate'] == null ? null : DateTime.tryParse(json['endDate'] as String),
       lastSeenOn: lastSeenOn,
       nextExpectedOn: nextExpectedOn,
       userCategoryId: json['userCategoryId'] as String?,
@@ -1025,8 +1100,11 @@ class RecurringSeries {
     'id': id,
     'displayName': displayName,
     'typicalAmountInr': amountKnown ? typicalAmount.rupees : null,
+    if (autopayLimit != null) 'autopayLimitInr': autopayLimit!.rupees,
     'cadenceDays': cadenceDays,
     'occurrenceCount': occurrenceCount,
+    if (startDate != null) 'startDate': startDate!.toIso8601String(),
+    if (endDate != null) 'endDate': endDate!.toIso8601String(),
     'lastSeenOn': lastSeenOn?.toIso8601String(),
     'annualCostInr': annualCost.rupees,
     'nextExpectedOn': nextExpectedOn?.toIso8601String(),

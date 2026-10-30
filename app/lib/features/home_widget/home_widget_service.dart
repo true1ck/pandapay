@@ -100,6 +100,11 @@ class HomeWidgetService {
     required Recommendation? recommendation,
     required String nowIso,
   }) async {
+    // Avoid running 21 offscreen image rasterizations if the user has no
+    // active home screen widgets placed on their launcher.
+    if (!await isWidgetInstalled()) {
+      return;
+    }
     await configure();
 
     final categories = (report?.byCategory ?? const <SpendBreakdownRow>[])

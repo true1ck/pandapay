@@ -54,6 +54,7 @@ const BOILERPLATE_CUTS = [
   /\bhttps?:\/\/\S+/i,
   /\bwww\.\S+/i,
   /\b(?:for\s+other\s+services|other\s+services)\b/i,
+  /\b(?:for\s+the\s+upcoming\s+mandate|upcoming\s+mandate)\b/i,
   /\b(?:if\s+not\s+u|if\s+not\s+you|not\s+you)\b/i,
   /\b(?:view|download)\s+(?:the\s+)?(?:payment\s+)?(?:receipt|bill|invoice)\b/i,
   /\b(?:has|have|had|was|were|is|are)\s+(?:been\s+)?(?:successfully\s+)?(?:recorded|completed|processed|confirmed)\b/i,
@@ -65,6 +66,9 @@ const WEAK_EXACT = new Set([
   'call',
   'completed',
   'downloaded',
+  'mandate',
+  'upcoming mandate',
+  'the upcoming mandate',
   'other services',
   'payment',
   'payment receipt',
@@ -163,6 +167,14 @@ function cleanMerchantName(value) {
   text = cutBoilerplate(text);
   text = stripWrapping(text);
   if (!text) return null;
+
+  text = text
+    .replace(/^ICCL\s+/i, '')
+    .replace(/\s+AUTOPAY$/i, '')
+    .replace(/\s+MANDATE$/i, '')
+    .trim();
+  if (text.toLowerCase() === 'groww') return 'Groww';
+  if (text.toLowerCase() === 'zerodha') return 'Zerodha';
 
   const alias = ALIAS_BY_LOWER.get(text.toLowerCase());
   if (alias) return alias;
