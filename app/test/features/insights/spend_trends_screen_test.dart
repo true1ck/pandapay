@@ -1584,11 +1584,33 @@ void main() {
     expect(find.text('Zephr'), findsOneWidget);
     expect(find.textContaining('Transfer to'), findsNothing);
     expect(find.text('zephr@upi'), findsOneWidget);
+    expect(
+      find.byIcon(Icons.hourglass_top_rounded),
+      findsNothing,
+      reason: 'category, payment and payee totals are sums of stored facts',
+    );
 
     await tester.tap(find.text('Zephr'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Transfer to'), findsNothing);
+
+    final tile = find.byKey(const ValueKey('spending-transaction-transfer-txn-1'));
+    expect(tester.widget<ListTile>(tile).subtitle, isNull,
+        reason: 'uncategorized rows and repeated payment labels add no detail');
+    expect(
+      find.descendant(
+        of: tile,
+        matching: find.byIcon(Icons.hourglass_top_rounded),
+      ),
+      findsNothing,
+      reason: 'a parsed amount is a fact, not an estimate',
+    );
+    expect(
+      find.descendant(of: tile, matching: find.text('₹125')),
+      findsOneWidget,
+      reason: 'whole-rupee line amounts drop the .00',
+    );
   });
 
   testWidgets('Accounts groups UPI spend under the matched bank account', (
@@ -1977,6 +1999,7 @@ void main() {
     );
     expect(find.text('No spending recorded'), findsOneWidget);
     expect(find.text('₹0.00'), findsOneWidget);
+    expect(find.byIcon(Icons.hourglass_top_rounded), findsNothing);
   });
 
   testWidgets(

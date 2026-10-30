@@ -370,6 +370,7 @@ class _NoSpendingReportState extends StatelessWidget {
                 MoneyText(
                   const Money.zero(),
                   confidence: Confidence.estimated,
+                  showConfidenceIcon: false,
                   style: BambooFonts.money(30, color: BambooInk.lime),
                 ),
                 const SizedBox(height: AppSpace.md),
@@ -2008,6 +2009,7 @@ class _ExpandableTagRowState extends State<_ExpandableTagRow> {
         amount: MoneyText(
           widget.total,
           confidence: Confidence.estimated,
+          showConfidenceIcon: false,
           style: BambooFonts.ui(
             13.5,
             weight: FontWeight.w600,
@@ -2114,6 +2116,7 @@ class _TagCategoryRow extends StatelessWidget {
       amount: MoneyText(
         category.total,
         confidence: Confidence.estimated,
+        showConfidenceIcon: false,
         style: BambooFonts.ui(
           12.5,
           weight: FontWeight.w600,
@@ -4249,6 +4252,7 @@ class _MixLegendRow extends StatelessWidget {
                   child: MoneyText(
                     row.total,
                     confidence: Confidence.estimated,
+                    showConfidenceIcon: false,
                     style: BambooFonts.ui(
                       compact ? 9.5 : 12,
                       weight: FontWeight.w700,
@@ -4394,6 +4398,7 @@ class _ExpandableCategoryRow extends StatelessWidget {
               amount: MoneyText(
                 row.total,
                 confidence: Confidence.estimated,
+                showConfidenceIcon: false,
                 style: BambooFonts.ui(
                   13.5,
                   weight: FontWeight.w600,
@@ -4516,6 +4521,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
                 amount: MoneyText(
                   row.total,
                   confidence: Confidence.estimated,
+                  showConfidenceIcon: false,
                   style: BambooFonts.ui(
                     13.5,
                     weight: FontWeight.w600,
@@ -4658,6 +4664,7 @@ class _ExpandableMerchantRow extends StatelessWidget {
               amount: MoneyText(
                 row.total,
                 confidence: Confidence.estimated,
+                showConfidenceIcon: false,
                 style: BambooFonts.ui(
                   13.5,
                   weight: FontWeight.w600,
@@ -4748,41 +4755,52 @@ class _MerchantGroup extends StatelessWidget {
     final sorted = [...entries]
       ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
 
-    final transactionList = [
-      for (final entry in sorted)
-        Material(
-          color: Colors.transparent,
-          child: ListTile(
-            key: ValueKey('spending-transaction-${entry.id}'),
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            visualDensity: VisualDensity.compact,
-            title: Text(
-              '${_shortDate(entry.occurredAt)} · ${_paymentLabel(entry)}',
-              style: BambooFonts.ui(11.5, color: BambooInk.ink900),
-            ),
-            subtitle: Text(
-              [
-                ?_secondaryMerchantName(entry),
-                if (entry.categoryName != null) entry.categoryLabel,
-                entry.cardDisplayName ?? _paymentLabel(entry),
-              ].join('\n'),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: BambooFonts.ui(10.5, color: BambooInk.ink500),
-            ),
-            trailing: MoneyText(
-              entry.amount,
-              confidence: Confidence.estimated,
-              style: BambooFonts.ui(
-                11.5,
-                weight: FontWeight.w600,
-                color: BambooInk.ink900,
-              ),
-            ),
-            onTap: () => context.push('/activity/${entry.id}', extra: entry),
+    Widget transactionTile(TransactionEntry entry) {
+      // Only lines that add something the title/amount don't already say.
+      // The payment method is in the title, "Other" is the uncategorized
+      // placeholder, and the amount is a parsed fact, not an estimate.
+      final details = [
+        ?_secondaryMerchantName(entry),
+        if (_showsCategory(entry)) entry.categoryLabel,
+        if (entry.cardDisplayName != null) entry.cardDisplayName!,
+      ].join('\n');
+      return Material(
+        color: Colors.transparent,
+        child: ListTile(
+          key: ValueKey('spending-transaction-${entry.id}'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          visualDensity: VisualDensity.compact,
+          title: Text(
+            '${_shortDate(entry.occurredAt)} · ${_paymentLabel(entry)}',
+            style: BambooFonts.ui(11.5, color: BambooInk.ink900),
           ),
+          subtitle: details.isEmpty
+              ? null
+              : Text(
+                  details,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+                ),
+          trailing: MoneyText(
+            entry.amount,
+            confidence: Confidence.estimated,
+            showConfidenceIcon: false,
+            hidePaise: true,
+            style: BambooFonts.ui(
+              11.5,
+              weight: FontWeight.w600,
+              color: BambooInk.ink900,
+            ),
+          ),
+          onTap: () => context.push('/activity/${entry.id}', extra: entry),
         ),
+      );
+    }
+
+    final transactionList = [
+      for (final entry in sorted) transactionTile(entry),
     ];
 
     if (!isCollapsible) {
@@ -4901,6 +4919,12 @@ class _MerchantGroup extends StatelessWidget {
       ),
     );
   }
+
+  /// "Other" is the API's bucket for uncategorized spend, so printing it
+  /// under a row that has no category says nothing.
+  bool _showsCategory(TransactionEntry entry) =>
+      entry.categoryName != null &&
+      entry.categoryLabel.trim().toLowerCase() != 'other';
 
   /// A transaction sometimes carries a more specific name than its group.
   /// Show it only when it is a real, different name.
@@ -5138,6 +5162,7 @@ class _AccountRow extends StatelessWidget {
               amount: MoneyText(
                 row.total,
                 confidence: Confidence.estimated,
+                showConfidenceIcon: false,
                 style: BambooFonts.ui(
                   13.5,
                   weight: FontWeight.w600,
