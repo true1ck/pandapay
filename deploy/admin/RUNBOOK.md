@@ -40,6 +40,8 @@ Configure independent backend-only values: `ADMIN_AUTH_DATABASE_URL`, `ADMIN_API
 
 ## Administrator enrollment
 
+For the current local-owner request, completed/remaining work and exact initial reconciliation procedure, use [implementation plan §5.1](../../docs/admin-console-implementation-plan-2026-10-30.md#51-creating-the-first-local-owner-and-adding-later-admins). The requested local email has an orphan membership but no local auth identity; it is not provisioned or enabled.
+
 First verify the intended email in the target's ordinary auth service; the CLI never creates a user or marks an email verified. Set the two explicit `ADMIN_PROVISION_*_DATABASE_URL` values in protected maintenance configuration and the exact `ADMIN_PROVISION_ENV` (`local`, `staging` or `production`). Hosted operations also require the reviewed credential-free target fingerprint emitted by the CLI as `ADMIN_PROVISION_APPROVED_TARGET_SHA256`; do not approve it without independently checking the target.
 
 Use `node db/scripts/admin_access.js plan --email EMAIL --user-id UUID --role owner --reason REASON --operation grant`. The preview produces a plan hash. Use `apply` with the same arguments and `--plan-hash HASH` only after review. If a stale UUID already holds the email, use an explicit `reconcile` plan; old audit IDs remain in place.

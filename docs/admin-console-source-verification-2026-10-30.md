@@ -33,6 +33,10 @@ Date: 30 October 2026. Branch: `codex/ios-shortcuts-prototype`, based on the mer
 
 The protocol fixture is deliberately synthetic and minimal. A separate rehearsal now applies the complete checked-in auth/product schemas to clean disposable databases and exercises read routes and representative writes. These prove the tested authority/protocol/schema behavior, not compatibility of every populated application table, provider or actual hosted schema. Test authenticators sign a real WebAuthn assertion; physical key registration and operator recovery were not performed.
 
+## Local-owner request after the source candidate
+
+The user selected **local development only** for the first owner. Read-only inspection found an older product membership for the requested email on the loopback `pandapay` database, no matching identity in the paired local `pandapay_auth`, and no new private-admin schemas applied there. The inspected project configuration mixed a stale local product port with hosted auth; it was not used for provisioning. No account/grant/verification flag was created or changed. The updated [implementation plan](admin-console-implementation-plan-2026-10-30.md#51-creating-the-first-local-owner-and-adding-later-admins) records the requested owner, outstanding local setup and exact verification/reconciliation/enrollment sequence, plus the procedure for additional administrators.
+
 ## Still required before live activation
 
 1. Rehearse upgrades against a recent actual-data restored copy. The clean checked-in schemas pass; target history/data, grants, owners, inheritance, all views/definer functions, every role/operation pair and audit preservation still require acceptance. Correct any compatibility gaps before enabling administration.

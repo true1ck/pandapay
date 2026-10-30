@@ -1,5 +1,7 @@
 # PandaPay Console — Internal Business Data Tool (Not a User Product)
 
+> **Current private-admin implementation:** see the [30 October implementation status, remaining work and admin-enrollment procedure](docs/admin-console-implementation-plan-2026-10-30.md). Source foundation is implemented; production is not activated. This older product document is not the current login/provisioning guide.
+
 > **Historical/product design reference — reviewed 25 October 2026.** Feature and architecture statements here may describe intended or earlier designs. The [current source architecture](docs/security-current-architecture-2026-10-25.md), [security progress](docs/security-implementation-progress-2026-10-22.md) and [deployment guide](deploy/DEPLOY.md) are the implementation/operations entrypoints. Do not infer a deployed feature, database topology or encryption state from this plan.
 
 Companion to [`product-plan.md`](./product-plan.md) and [`ui-spec.md`](./ui-spec.md). This is the **third application** in the system, and it exists for one reason: **we need to know exactly what every credit card offers — rewards, caps, milestones, fees, benefits — so that we, the business, can recommend the right card to PandaPay's users.** That data is the entire product's foundation, and this console is how we build and maintain it.

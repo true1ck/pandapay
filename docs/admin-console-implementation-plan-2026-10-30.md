@@ -1,10 +1,44 @@
 # Local admin console: implementation and deployment plan
 
-Date: 30 October 2026. Status: implementation specification; no security feature or production deployment described here is complete merely because this document exists.
+Date: 30 October 2026. Updated after source commit `a4d0c02` on `codex/ios-shortcuts-prototype`. Status: private-admin foundation implemented and tested locally; implementation gaps and deployment acceptance remain. The feature is not live.
 
 Source candidate update: the [implementation verification report](admin-console-source-verification-2026-10-30.md) records the private protocol, UI, runtime, migrations and packaging now added, executed local checks and remaining acceptance. Use the [operator runbook](../deploy/admin/RUNBOOK.md) for concrete installation/deployment steps. Production remains unactivated; this specification's completion checklist is not automatically satisfied by the source candidate.
 
 This is the implementation companion to the [reviewed design](admin-console-local-only-design-2026-10-30.md). Use the [Luna coordinator handoff](admin-console-luna-handoff-2026-10-30.md) to assign the work. The original review used commit `78651cf`; implementation preparation subsequently merged master through `32ed071` into `codex/ios-shortcuts-prototype`. Re-read the current merged branch before implementation; never implement against the pre-merge snapshot.
+
+### Implemented, remaining and first-owner status
+
+This table records source implementation, not activation. The [verification report](admin-console-source-verification-2026-10-30.md) contains the executed evidence; the [runbook](../deploy/admin/RUNBOOK.md) contains operator commands.
+
+| Area | Already implemented | Still to implement or verify |
+| --- | --- | --- |
+| Public/private boundary | Separate auth/API factories and entrypoints; public `/admin`, `/browser` and introspection denial; legacy QA OTP/session minting retired | Built-image, edge/direct-origin, LAN/IPv6 denial and complete customer regressions on the intended target |
+| Authentication | Six-digit email proof plus user-verified WebAuthn; purpose/cookie/origin/RP binding; atomic enrollment-grant consumption; primary/backup enrollment checks | Physical-key/browser acceptance, later-factor management and offline recovery; real provider delivery/shared quotas |
+| Sessions | HttpOnly browser cookie, CSRF, server-encrypted opaque upstream tokens, idle/absolute expiry, step-up, logout, principal/factor revocation and external restore epoch | Multi-replica renewal/revocation races, key rotation/custody, restored-state reconciliation and bounded retention |
+| Authorization and data | 92 classified method/path policies; current membership rechecked; dedicated NOINHERIT runtimes; forward auth/product migrations; DB rejects customer-asserted admin context | Every populated-table/role/mutation combination, definer-function owners/grants and full restored-target upgrade acceptance |
+| Provisioning | Explicit target inspection/plan/apply/reconcile/revoke; pending admission; single-use enrollment grants; final enable requires two credentials | Durable cross-database operation/resume state, all crash/concurrency cases, real owner enrollment and access review |
+| Existing console | Private email/passkey/enrollment flow; target/role display; fresh-factor action; server logout; local WebAuthn assets; release build | Complete readonly/permission-aware UI, expired-session/error flows and physical-device end-to-end checks |
+| PC/private deployment | Local-only TLS/Nginx/SSH launcher; protected config; start/status/stop; opt-in isolated Compose profile and SSH template | Exact host/network/trust setup, patched image/version pinning, image/network tests, installation and approved activation |
+| Verification | Auth 362, API 1,326 (3 existing skips), DB/script 232 and console 57 tests passed; clean/repeated full-schema migration rehearsal, all admin GET routes and representative audited writes passed | Every mutation, real-data performance, external exposure, independent review and encrypted recovery rehearsal (`age` unavailable on this Mac) |
+
+**Requested first owner:** `chandresh.kerkar1@gmail.com`, **local development only**, as explicitly selected by the user. This is an operator enrollment request, not an email allowlist embedded in the app, an automatic seed, or an active grant. A second administrator can be added later with a separate verified UUID and separate credentials.
+
+Local inspection on 30 October 2026 found the paired databases `pandapay` and `pandapay_auth` on loopback port 5432. The product database contains an older active owner membership for this email; the local auth database contains no matching user. Neither local database has the new private-admin schema yet. The API `.env` points at an unavailable local port while auth `.env` points at a hosted database; these files must not be combined for enrollment. **No administrator was created, enabled or reconciled during this documentation update.** Prepare the matching local stack, complete normal email verification there, and then use the explicit reconciliation flow in §5.1. Do not reuse the orphan membership UUID to manufacture an auth identity.
+
+### Remaining implementation work, in execution order
+
+These are source gaps, separate from operator deployment gates. Successful unit tests do not close them.
+
+| Priority / area | Concrete remaining deliverable | Completion evidence |
+| --- | --- | --- |
+| P1 — provisioning | Durable operation state and retry/reconciliation across auth/product commits; enrollment/enable/revoke race handling | Crash after each commit, duplicate invocation, stale preview and concurrent revoke cannot enable unintended admission; audit history preserved |
+| P1 — mutations/providers | Finish every private mutation's grants, bounded business effects and transactional audit/idempotency; implement reviewed durable broadcast and learning-worker dispatch | Role-by-route real-DB tests, lost-response/replay reconciliation and bounded worker/provider execution. Broadcast currently returns 503; direct learning cycle returns 409 |
+| P1 — database authority | Review every table/view/definer routine and owner under actual least-privilege migration/runtime identities | Full populated upgrade plus positive/negative permission matrix; customer/worker identities cannot reach admin authority |
+| P1 — session/recovery | Multi-replica refresh/CSRF/revocation races, supported factor replacement/recovery, encryption/lookup-key rotation and retained revocations after restore | Restart/rotation/outage and formerly-valid session/factor/grant restore tests; no OTP-only bypass |
+| P1 — scale/budgets | Paginate legacy unbounded reads, bound expensive job concurrency and request/response work, share actual mail/provider quotas and whole-cluster connection budgets | Representative populated-data load with bounded public latency, DB locks/connections and provider calls |
+| P1 — operations/release | Auth-state retention, monitoring/alerts, exact-candidate release evidence and pinned private runtime/image inventory | Monitored cleanup/failure tests; release checker refuses activation when required admin evidence is absent |
+| P2 — console/contracts | Complete permission-aware UI, safe expiry/retry UX, remaining versioned HTTP/config/repository schemas and documentation; supply native local-dev service/proxy configuration alongside the SSH deployment mode | Readonly UI and denied/expired/unknown-outcome flows tested; generated contract copies agree |
+| Final — target acceptance | Real local owner enrollment now requested; hosted migration/deployment remains separately scoped | Verified target, independent primary/backup authenticators, installed local trust, external-denial proof and accountable activation |
 
 ### Master synchronization review
 
@@ -27,9 +61,11 @@ All implementation results stay on the current branch. No agent may merge to mas
 
 The live customer application still needs its public APIs. Administrative UI assets must not be uploaded to a public website, CDN, hosting bucket or app distribution. Backend administrative services necessarily run beside the data they manage, with private access. Scope includes API routing, auth, database policies, local packaging, deployment, recovery and verification; a localhost UI alone is insufficient.
 
-## 2. Verified starting points and unknowns
+## 2. Pre-implementation baseline and remaining target unknowns
 
-| Item | Source finding / required action |
+The following table describes the original baseline, before `a4d0c02`. Use the status table above for current implementation; these baseline rows do not mean the old login/routing is still the selected design.
+
+| Item | Original finding / target consideration |
 | --- | --- |
 | Dashboard | Reuse `console/lib/main.dart` and its existing features. |
 | Login | `console/lib/features/auth/login_screen.dart` and `console/lib/data/admin_api.dart` implement phone/email OTP. No password field. |
@@ -200,7 +236,7 @@ Add new forward-only migrations through `db/scripts/product_migrate.js` and `aut
 | Auth admin principal registry | Verified user FK, pending/enabled/revoked state, version, enrolled/revoked timestamps |
 | WebAuthn credential store | Unique credential ID, principal, public key bytes, library counter/device/backup data, transports, revocation; no credential private key |
 | Challenges/preauth/enrollment grants | Purpose, principal, bound session/origin/RP, expiry, attempts, consumption/version; grants stored as digests |
-| Existing `console_private.sessions` | Extend/reuse with principal, MFA time, idle/absolute expiry, revocation version and encrypted upstream token; avoid competing duplicate session authorities |
+| Private `admin_private.sessions` | Implemented separate privileged state with principal version, external epoch, MFA time, idle/absolute expiry, revocation and encrypted upstream token; legacy `console_private` sessions are not accepted or upgraded into admin authority |
 | Access-token digests | Bound to current admin session with short expiry; no plaintext token lookup store |
 | Product role/permission data | Explicit allowed role-permission mapping, no runtime role-management DML |
 | Provisioning/audit records | Durable operation ID, actor/reason, before/after state and completion; bounded secret-free metadata |
@@ -210,30 +246,95 @@ Provisioning is not a distributed SQL transaction. Keep a durable operation stat
 
 For stale membership IDs, dry-run refuses a silent rewrite. The selected reconciliation model retains the old row inactive with its original ID/email and audit references, and inserts the new verified UUID as the active membership. A forward migration replaces the global email-uniqueness constraint with uniqueness over active normalized/citext email. Create/validate the replacement invariant before removing the old constraint; preserve all existing rows and review lock budgets. Update membership lookups to require active state and exact verified UUID, with no ambiguous email-only authorization. The coordinator inventories all foreign keys and consumers in Wave 0; an incompatible consumer blocks this strategy pending an explicit contract revision. A worker cannot delete history, move audit attribution to a new identity, or silently choose another conflict resolution.
 
-Proposed CLI `db/scripts/admin_access.js` supports inspect/plan, grant, reconcile, revoke, enrollment-grant output, and explicit enable after factor acceptance. It requires explicit environment/target and a reason, validates the verified user ID, prints a credential-free preview, and applies only a matching plan hash. No automatic loading of an arbitrary project `.env`, no connection passwords in command arguments, no OTP seeds, no auth-user creation/verification bypass and no refresh-token minting. Secret outputs go to a named protected 0600 file, with only its path printed. Grant/revoke must have reversible and audited outcomes. A grant remains pending until the explicit enable checks pass; backend deployment alone does not activate a user.
+Implemented CLI `db/scripts/admin_access.js` supports `inspect`, `plan --operation grant|reconcile`, matching-hash `apply`, `revoke`, `enrollment-grant`, and explicit `enable` after factor acceptance. Durable multi-store resume remains open, so a partial failure requires inspection/reconciliation before retry. It requires explicit environment/target and a reason, validates the verified user ID, prints a credential-free preview, and applies only a matching plan hash. No automatic loading of an arbitrary project `.env`, no connection passwords in command arguments, no OTP seeds, no auth-user creation/verification bypass and no refresh-token minting. Secret outputs go to a named protected 0600 file, with only its path printed. Grant/revoke must have reversible and audited outcomes. A grant remains pending until the explicit enable checks pass; backend deployment alone does not activate a user.
 
 Use separate provisioning credentials for product/auth, temporary custody and minimal routines/grants. Preserve prior admin audit attribution and reconcile conflicting identities before enabling the intended owner.
 
+### 5.1 Creating the first local owner and adding later admins
+
+**Current request:** use the first-owner email in the status section, with role `owner`, on **local development only**. Inspection found an orphan product membership and no corresponding local auth account. The commands below describe the supported enrollment procedure; none has been applied to that account yet. All remaining implementation/release requirements still apply before treating this as an accepted deployment.
+
+1. **Use the matching local pair.** Select loopback port 5432, product database `pandapay` and auth database `pandapay_auth`. Keep the maintenance URLs in protected operator configuration. Do not source `auth/.env` for this task: it selects a hosted auth target. Do not change public application configuration or use the private runtime logins as provisioning identities.
+2. **Prepare the local schemas and services.** Back up the local pair, review migration history, and use the canonical auth/product migration runners with the explicit local maintenance connections. An unledgered auth baseline must pass the runner's reviewed baseline/adoption checks. Do not run ad hoc DDL just to make the enrollment command succeed. Configure the local ordinary-auth service and private gateway/API explicitly against this pair, with separate runtime credentials. This setup has not been performed; no matching local auth service/mail/private-console configuration was found. The delivered launcher assumes reviewed SSH transport; a purely native local development setup still needs its explicit service/proxy transport configuration, without enabling OS remote login implicitly.
+3. **Establish the ordinary auth identity.** Register/sign in through that local auth application's supported flow and complete its real email verification. Record the exact local auth UUID. A product membership with the same email is not an auth identity. Never create an auth row under the orphan UUID, set `is_email_verified` manually, seed an OTP, or substitute a hosted user's UUID.
+4. **Inspect and preview.** Configure `ADMIN_PROVISION_ENV=local`, `ADMIN_PROVISION_PRODUCT_DATABASE_URL`, `ADMIN_PROVISION_AUTH_DATABASE_URL`, `NODE_ENV=development` and `DB_SSL=false` for the loopback pair. Set `ADMIN_OWNER_EMAIL` to the requested email and `ADMIN_OWNER_USER_ID` to its verified local UUID. These names below are operator shell inputs, not an app-level email allowlist.
+
+   ```sh
+   node db/scripts/admin_access.js inspect --email "$ADMIN_OWNER_EMAIL" --user-id "$ADMIN_OWNER_USER_ID"
+   node db/scripts/admin_access.js plan --operation reconcile \
+     --email "$ADMIN_OWNER_EMAIL" --user-id "$ADMIN_OWNER_USER_ID" \
+     --role owner --reason "Initial local owner enrollment; preserve prior audit IDs"
+   ```
+
+   For this local email, `reconcile` is required while the older membership is active under another UUID. Review the printed target, verified UUID, conflicting ID and membership snapshot. Keep the old row inactive with its original audit references. For a future email without a stale membership, use `--operation grant` instead.
+
+5. **Apply the reviewed preview.** Set `ADMIN_OWNER_PLAN_HASH` to the hash from that reviewed preview, then use exactly the same operation/email/UUID/role/reason:
+
+   ```sh
+   node db/scripts/admin_access.js apply --operation reconcile \
+     --email "$ADMIN_OWNER_EMAIL" --user-id "$ADMIN_OWNER_USER_ID" \
+     --role owner --reason "Initial local owner enrollment; preserve prior audit IDs" \
+     --plan-hash "$ADMIN_OWNER_PLAN_HASH"
+   ```
+
+   This prepares pending auth admission and disabled product membership. It does not sign in or enable the owner. If either store fails, inspect and reconcile the partial result before retry; durable automatic resume remains an implementation gap.
+
+6. **Enroll independent primary and backup credentials.** Install/configure the local private services and the PC console using the runbook. Use a new protected directory outside source control for grant files; mode 0700 for the directory, 0600 for files. Issue each grant immediately before enrolling its corresponding factor:
+
+   ```sh
+   node db/scripts/admin_access.js enrollment-grant --user-id "$ADMIN_OWNER_USER_ID" \
+     --slot primary --file /absolute/protected/primary-enrollment.txt
+   # In the local console: prove email, supply this grant, register primary.
+   node db/scripts/admin_access.js enrollment-grant --user-id "$ADMIN_OWNER_USER_ID" \
+     --slot backup --file /absolute/protected/backup-enrollment.txt
+   # Start a fresh email proof and enroll the independent backup credential.
+   ```
+
+   Each grant expires after ten minutes and can be consumed only once. Neither grant supplies a full session. Do not paste grants into GitHub, URLs, logs or this plan. Remove the protected grant files after use/expiry.
+
+7. **Enable explicitly and test.** Verify the target, UUID, prepared role and two independent enrolled factors. Only then run:
+
+   ```sh
+   node db/scripts/admin_access.js enable --user-id "$ADMIN_OWNER_USER_ID" \
+     --reason "Local owner primary and backup factors accepted"
+   ```
+
+   Log in with email proof plus passkey. Confirm target/role display, a permitted audited operation, denied customer/less-privileged paths, step-up and server logout. Record the credential-free result and update this plan's local-owner checklist.
+
+8. **Add another admin later.** Repeat normal local email verification and `plan --operation grant` / matching `apply` for the second person's own UUID. Select the least role needed (`readonly`, `reviewer`, `operator`, or explicitly justified `owner`); enroll that person's primary and backup factors and enable separately. Do not share the first owner's factors or add an email to source as authorization. For another environment, perform a separate target review/enrollment; local authorization does not promote anyone to staging or production.
+
+To revoke an administrator, use the exact email/UUID and a recorded reason:
+
+```sh
+node db/scripts/admin_access.js revoke --email "$ADMIN_OWNER_EMAIL" \
+  --user-id "$ADMIN_OWNER_USER_ID" --reason "Local administrator access retired"
+```
+
+Revocation is available even when the auth account is inactive. Re-enabling a retired account must not restore a revoked admin principal/session automatically. There is **no shared admin password** in this flow.
+
 ## 6. Configuration and secrets to implement
 
-Names marked new are proposed contracts, not existing runtime behavior. Validate types, bounds and combinations at startup. False/empty admin configuration must not prevent customer API/auth from starting.
+The private entrypoints implement the settings below unless explicitly described as remaining work. Missing/invalid required private settings deny private startup; they must not prevent customer API/auth from starting. Deployment must still validate target-specific values, custody and budgets.
 
 | Setting | Owner / default |
 | --- | --- |
-| `ADMIN_GATEWAY_ENABLED`, `ADMIN_API_ENABLED` (new) | Private services only; false unless explicitly enabled with complete configuration |
+| `ADMIN_GATEWAY_ENABLED`, `ADMIN_API_ENABLED` (private setting) | Private services only; false unless explicitly enabled with complete configuration |
 | `CONSOLE_BROWSER_ENABLED` | Must not mount any gateway on the public auth process after isolation |
 | `ENABLE_ADMIN_DASHBOARD` | false on public auth; optional security dashboard remains disabled for v1 |
-| `ADMIN_BROWSER_ORIGIN` (new) | Exact `https://localhost:8443` |
-| `ADMIN_WEBAUTHN_RP_ID` (new) | `localhost`; fixed configuration |
-| `ADMIN_API_BASE_URL`, `ADMIN_INTROSPECTION_BASE_URL` (new) | Fixed private service origins; no redirects/arbitrary path/embedded credentials |
-| `ADMIN_API_DATABASE_URL` (new) | New least-privilege product runtime; private API only |
-| `ADMIN_AUTH_DATABASE_URL` (new) | Bounded auth/session/challenge capability; gateway only |
-| `ADMIN_INTROSPECTION_SERVICE_SECRET` (new) | Independent random service secret, at least 32 bytes, retained/rotatable, never frontend |
-| `CONSOLE_SESSION_ENCRYPTION_KEY` | Reuse reviewed server custody pattern, including key version/read-key rotation |
-| `ADMIN_TOKEN_LOOKUP_KEY` (new) | Separate keyed digest secret; independent of encryption key |
-| `ADMIN_PROVISION_PRODUCT_DATABASE_URL` / `ADMIN_PROVISION_AUTH_DATABASE_URL` (new) | CLI-only provisioning context |
+| `ADMIN_BROWSER_ORIGIN` (private setting) | Exact `https://localhost:8443` |
+| `ADMIN_WEBAUTHN_RP_ID` (private setting) | `localhost`; fixed configuration |
+| `ADMIN_API_BASE_URL`, `ADMIN_INTROSPECTION_BASE_URL` (private setting) | Fixed private service origins; no redirects/arbitrary path/embedded credentials |
+| `ADMIN_API_DATABASE_URL` (private setting) | New least-privilege product runtime; private API only |
+| `ADMIN_AUTH_DATABASE_URL` (private setting) | Bounded auth/session/challenge capability; gateway only |
+| `ADMIN_INTROSPECTION_SERVICE_SECRET` (private setting) | Independent random service secret, at least 32 bytes, retained/rotatable, never frontend |
+| `CONSOLE_SESSION_ENCRYPTION_KEY` | Implemented canonical base64 32-byte server key; versioned read-key rotation/custody acceptance remains open |
+| `ADMIN_TOKEN_LOOKUP_KEY` (private setting) | Separate keyed digest secret; independent of encryption key |
+| `ADMIN_PROVISION_PRODUCT_DATABASE_URL` / `ADMIN_PROVISION_AUTH_DATABASE_URL` (private setting) | CLI-only provisioning context |
 | Local TLS/SSH paths | Operator protected files/Keychain references, never GitHub Actions artifacts or source |
-| Mail provider and existing global quota identity | Backend only; admin sends share real provider/global budgets with customer auth |
+| `ADMIN_SMTP_HOST/PORT/USER/PASSWORD/FROM` | Implemented independent backend mail configuration and bounded sends; actual shared customer/provider quota coordination remains open |
+| `ADMIN_SESSION_EPOCH` | Implemented external 32–128 character restore/session invalidation value; rotate outside restored state |
+| `ADMIN_GATEWAY_DB_PASSWORD` / `ADMIN_API_DB_PASSWORD` | Optional maintenance-only provisioning of distinct runtime logins; never supplied to the browser |
+| `ADMIN_PROVISION_ENV` / `ADMIN_PROVISION_APPROVED_TARGET_SHA256` | Explicit local/staging/production CLI target; hosted targets require independent fingerprint review |
 | `ALLOW_TEST_OTP` | Never enables the private admin flow; false in hosted production/staging |
 | Retention/expiry values | Enforce 120s challenges, 600s enrollment grant, 300s access/step-up, 900s idle, 8h absolute as specified above |
 
@@ -356,7 +457,7 @@ The existing GitHub production workflow is pinned to reviewed/tested master comm
 
 ### Required deployment artifacts and operator commands
 
-These file names/commands are implementation deliverables, not commands that work in the current source yet:
+These source artifacts and commands are now delivered. They require reviewed local dependencies and explicit target configuration; their presence is not proof of installed trust, running services or live acceptance:
 
 | Artifact | Responsibility |
 | --- | --- |
@@ -367,7 +468,7 @@ These file names/commands are implementation deliverables, not commands that wor
 | `scripts/admin_console/start.sh --target TARGET --config PATH` | Read protected operator configuration, verify target/origin/trust/bundle version, acquire its process lock, start tunnel/proxy, verify private readiness and open the loopback page. |
 | `scripts/admin_console/status.sh` / `stop.sh` | Show credential-free target/readiness; stop only owned processes and remove temporary material. |
 | `db/scripts/admin_access.js` | Inspect/plan, grant/reconcile/revoke, primary/backup enrollment grants and final enable with plan-hash/state checks. |
-| `deploy/admin/RUNBOOK.md` | Exact installed versions, target-specific private topology, validated install/deploy/start/stop/upgrade/recovery/rollback instructions and secret references; generated only from verified target facts. |
+| `deploy/admin/RUNBOOK.md` | Delivered command/runbook template. Installed versions, actual topology, secret references and operational acceptance must be completed from verified target facts. |
 
 The integration verification should build the auth/API images at the exact candidate, test explicit private entrypoints and validate the merged Compose topology before any deployment. The `admin` profile never publishes 4001, never publishes 4321 on all interfaces and never attaches admin services to a broad worker network. Public proxy configs cannot route to the private services. Test both IPv4 and IPv6.
 
@@ -383,16 +484,32 @@ Build the console using the supported Flutter release flags already documented b
 - Extend the restore procedure so private admin admission stays disabled by default after restore. Rotate the externally retained recovery/session epoch, invalidate restored sessions/grants, and reconcile memberships/factor revocations against retained operator records before re-enabling. A session-epoch value stored only inside the restored snapshot cannot establish freshness; the restore test must include an old formerly valid admin session/factor/grant.
 - Roll forward fixes when possible; retain explicit code/schema/config compatibility and a tested previous customer release.
 
-## 11. Completion checklist
+## 11. Implementation and activation checklists
 
-- [ ] Contract schemas, route manifest, permission matrix, file ownership and interface version frozen.
-- [ ] Existing UI reused; public admin mounts and public-identity privilege shortcuts eliminated.
-- [ ] Safe verified enrollment/reconciliation works without static codes, shared passwords or public role assignment.
-- [ ] MFA, recovery, per-operation API/DB permissions, private transport and server sessions implemented.
-- [ ] PC-only package and complete backend/DB/SSH/private-network manifests delivered.
-- [ ] Target-specific roles, shared pool/provider budgets, retention and monitoring reviewed.
-- [ ] Component, real-role DB, integration, replica/race, customer-regression and exposure checks pass.
-- [ ] Live owner/hardware/external acceptance evidence exists for the exact candidate.
-- [ ] Test access retired; revoke/rollback/recovery rehearsed; owner approves activation.
+### Implemented source foundation
 
-Until every applicable item passes, report “implemented in source, deployment acceptance pending” or the exact incomplete state. Neither a localhost dashboard nor a large user count establishes security by itself.
+- [x] Existing console reused with private email/WebAuthn login, enrollment, step-up and server logout; local browser assets bundled.
+- [x] Private auth/API entrypoints and 92-route policy manifest delivered; public ingress denies administrative paths and customer tokens cannot establish admin authority.
+- [x] Durable challenge/session/rate state, CSRF, opaque introspection, expiry, revocation and restore epoch implemented and covered by local protocol tests.
+- [x] Forward migrations and explicit private runtime capabilities delivered; clean/repeat full-schema and representative permission/write checks pass.
+- [x] Provisioning CLI delivers reviewed target preview/apply, pending enrollment, primary/backup grants, enable and revoke; legacy static QA minting retired.
+- [x] PC-only launcher, TLS/SSH/Compose templates, operator commands and verification report delivered.
+- [x] Component suites, Flutter analysis/release build and disposable PostgreSQL protocol/schema checks recorded in the verification report.
+
+### Remaining source implementation
+
+- [ ] Every mutation, DB routine/owner and role combination accepted; durable high-impact dispatch/audit/idempotency complete.
+- [ ] Provisioning operation/resume state and session/factor/key-rotation/recovery races complete.
+- [ ] Pagination, expensive-job concurrency, shared provider/connection budgets, retention and operational monitoring complete.
+- [ ] Permission-aware UI, remaining machine-readable contracts and exact-candidate release evidence complete.
+
+### Local owner and deployment acceptance
+
+- [ ] Local auth account for the requested owner exists and its email has been normally verified.
+- [ ] Local schemas/migration history accepted; old orphan membership reconciled without moving audit attribution.
+- [ ] Separate primary/backup factors enrolled and tested; final enable performed for the verified local UUID.
+- [ ] Target-specific owners/grants, installed local trust, private network, images and external/LAN denial accepted.
+- [ ] Restored-data, replica/race, customer/resource regressions and independent security review pass.
+- [ ] Test grants retired; revoke/rollback/recovery rehearsed and accountable operator approves activation.
+
+Report the exact state: **source foundation implemented; remaining implementation and activation pending**. The local owner is requested but not yet provisioned. Neither a localhost dashboard nor a large user count establishes security by itself.
