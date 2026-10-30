@@ -6,6 +6,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/local/sms_intake_repository.dart';
+import '../../data/local_sms_parser.dart';
 import '../../data/spend_reports_repository.dart';
 import '../../main.dart' show MoneyText;
 
@@ -28,18 +29,96 @@ class _SubscriptionEvidence {
 
 class _SubscriptionDetailScreenState
     extends ConsumerState<SubscriptionDetailScreen> {
+  late RecurringSeries _series;
   late final Future<_SubscriptionEvidence?> _evidence = _findEvidence();
+
+  @override
+  void initState() {
+    super.initState();
+    _series = widget.series;
+    _enrichFromStore();
+  }
+
+  void _enrichFromStore() {
+    final namespace = ref.read(cacheNamespaceProvider);
+    if (namespace == 'signed-out') return;
+    final cache = ref.read(responseCacheProvider).valueOrNull;
+    if (cache == null) return;
+    final observations = cache.financialStore
+        .entities(namespace, 'sms_observations')
+        .where((r) => r['event_type'] == 'autopay' || r['is_autopay'] == true);
+    final key = _series.displayName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    for (final row in observations) {
+      final biller = (row['biller_name'] as String?)?.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '') ?? '';
+      if (biller.contains(key) || key.contains(biller) ||
+          (_series.mandateReference != null && row['mandate_reference'] == _series.mandateReference)) {
+        final limPaise = (row['autopay_limit_paise'] as num?)?.round() ??
+            (row['amount_due_paise'] as num?)?.round();
+        final limitMoney = limPaise != null && limPaise > 0 ? Money.fromPaise(limPaise) : null;
+        final start = DateTime.tryParse(row['start_date'] as String? ?? '');
+        final end = DateTime.tryParse(row['end_date'] as String? ?? '');
+        final paymentMethod = row['payment_method'] as String?;
+        final cadenceHint = row['cadence_hint'] as String?;
+        _series = _series.copyWith(
+          autopayLimit: _series.autopayLimit ?? limitMoney,
+          startDate: _series.startDate ?? start,
+          endDate: _series.endDate ?? end,
+          paymentMethod: _series.paymentMethod ?? paymentMethod,
+          lastSeenOn: _series.lastSeenOn ?? start,
+          cadenceConfirmed: _series.cadenceConfirmed || cadenceHint == 'asPresented',
+          isMandate: _series.isMandate || row['is_autopay'] == true,
+          setupConfirmed: true,
+        );
+        break;
+      }
+    }
+  }
+
+  void _enrichFromSms(SmsIntakeEntry captured) {
+    final parsed = LocalSmsParser.parse(
+      namespace: ref.read(cacheNamespaceProvider),
+      sender: captured.message.sender,
+      body: captured.message.body,
+      receivedAt: captured.message.receivedAt,
+    );
+    if (parsed == null) return;
+    if (parsed.isAutopay || parsed.billerName != null) {
+      final lim = parsed.autopayLimit ?? parsed.amountDue ?? parsed.amount;
+      final limitMoney = lim != null && lim.paise > 0
+          ? Money.fromPaise(lim.paise)
+          : null;
+      if (mounted) {
+        setState(() {
+          _series = _series.copyWith(
+            autopayLimit: _series.autopayLimit ?? limitMoney,
+            startDate: _series.startDate ?? parsed.startDate,
+            endDate: _series.endDate ?? parsed.endDate,
+            paymentMethod: _series.paymentMethod ?? parsed.paymentMethod,
+            lastSeenOn: _series.lastSeenOn ?? parsed.startDate ?? captured.message.receivedAt,
+            nextExpectedOn: _series.nextExpectedOn ?? (parsed.dueDate ?? parsed.endDate),
+            cadenceDays: _series.cadenceDays > 0
+                ? _series.cadenceDays
+                : (parsed.cadenceHint == 'asPresented' ? 0 : _series.cadenceDays),
+            cadenceConfirmed: _series.cadenceConfirmed || parsed.cadenceHint == 'asPresented',
+            isMandate: _series.isMandate || parsed.isAutopay,
+            setupConfirmed: true,
+          );
+        });
+      }
+    }
+  }
 
   Future<_SubscriptionEvidence?> _findEvidence() async {
     final namespace = ref.read(cacheNamespaceProvider);
     if (namespace == 'signed-out') return null;
     final cache = await ref.read(responseCacheProvider.future);
     final repo = SmsIntakeRepository(cache.financialStore.database);
-    final series = widget.series;
+    final series = _series;
     final sourceKey = series.sourceKey;
     if (sourceKey != null && sourceKey.isNotEmpty) {
       final captured = repo.capturedById(namespace, sourceKey);
       if (captured != null) {
+        _enrichFromSms(captured);
         return _SubscriptionEvidence(captured, exact: true);
       }
     }
@@ -90,6 +169,7 @@ class _SubscriptionDetailScreenState
       }
       final captured = repo.capturedById(namespace, row['id'] as String);
       if (captured != null) {
+        _enrichFromSms(captured);
         return _SubscriptionEvidence(captured, exact: false);
       }
     }
@@ -210,7 +290,7 @@ class _SubscriptionDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    final series = widget.series;
+    final series = _series;
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -394,7 +474,7 @@ class _SubscriptionDetailScreenState
                   ),
                   _detail(
                     'Billing cycle',
-                    series.cadenceConfirmed || series.isMandate
+                    series.cadenceConfirmed || series.isMandate || series.setupConfirmed
                         ? series.cadenceLabel
                         : 'Not confirmed',
                   ),
@@ -437,8 +517,8 @@ class _SubscriptionDetailScreenState
                         : (series.paymentMethod != null &&
                                 series.paymentMethod!.isNotEmpty)
                             ? series.paymentMethod!
-                            : (series.hasActiveAutoPay || series.isMandate
-                                ? 'AutoPay Mandate'
+                            : (series.hasActiveAutoPay || series.isMandate || series.setupConfirmed
+                                ? 'UPI AutoPay'
                                 : 'Not specified'),
                   ),
                 ],

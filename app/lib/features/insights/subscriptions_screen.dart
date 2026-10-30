@@ -77,7 +77,9 @@ bool _isDisplayableSubscription(RecurringSeries series) {
   // setup amount and a maximum ceiling, neither of which proves a service
   // subscription or a future payment. Bills & Commitments owns that evidence
   // until the central projection links it to a service and supporting facts.
-  if (series.isMandate || series.detectionSource == 'mandate') {
+  if ((series.isMandate || series.detectionSource == 'mandate') &&
+      !series.setupConfirmed &&
+      namedServiceAutoPayName(name) == null) {
     return false;
   }
   // Merchant recurrence is useful for review, but it cannot establish that
@@ -255,9 +257,41 @@ class SubscriptionsScreen extends ConsumerWidget {
                     'with your account.',
               );
             }
-            final subscriptions = data.series
+            final rawSubscriptions = data.series
                 .where(_isDisplayableSubscription)
                 .toList(growable: false);
+            final uniqueSubscriptionsMap = <String, RecurringSeries>{};
+            for (final item in rawSubscriptions) {
+              final k = recurringServiceKey(item.displayName);
+              final canonical = namedServiceAutoPayName(item.displayName) ?? item.displayName;
+              final normalizedItem = item.copyWith(displayName: canonical);
+              final existing = uniqueSubscriptionsMap[k];
+              if (existing == null) {
+                uniqueSubscriptionsMap[k] = normalizedItem;
+              } else {
+                final bestName = namedServiceAutoPayName(existing.displayName) ??
+                    namedServiceAutoPayName(normalizedItem.displayName) ??
+                    existing.displayName;
+                uniqueSubscriptionsMap[k] = existing.copyWith(
+                  displayName: bestName,
+                  autopayLimit: existing.autopayLimit ?? normalizedItem.autopayLimit,
+                  startDate: existing.startDate ?? normalizedItem.startDate,
+                  endDate: existing.endDate ?? normalizedItem.endDate,
+                  paymentMethod: existing.paymentMethod ?? normalizedItem.paymentMethod,
+                  typicalAmount: (existing.amountKnown && existing.typicalAmount.paise > 0)
+                      ? existing.typicalAmount
+                      : normalizedItem.typicalAmount,
+                  amountKnown: existing.amountKnown || normalizedItem.amountKnown,
+                  occurrenceCount: existing.occurrenceCount > normalizedItem.occurrenceCount
+                      ? existing.occurrenceCount
+                      : normalizedItem.occurrenceCount,
+                  cadenceDays: existing.cadenceDays > 0 ? existing.cadenceDays : normalizedItem.cadenceDays,
+                  setupConfirmed: existing.setupConfirmed || normalizedItem.setupConfirmed,
+                  cadenceConfirmed: existing.cadenceConfirmed || normalizedItem.cadenceConfirmed,
+                );
+              }
+            }
+            final subscriptions = uniqueSubscriptionsMap.values.toList(growable: false);
             final rawCandidates = data.series
                 .where((series) => series.reviewCandidate)
                 .where((series) => series.displayName.trim().length >= 2)
@@ -266,7 +300,7 @@ class SubscriptionsScreen extends ConsumerWidget {
                 .toList(growable: false);
             final uniqueCandidatesMap = <String, RecurringSeries>{};
             for (final item in rawCandidates) {
-              final k = item.displayName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+              final k = recurringServiceKey(item.displayName);
               final existing = uniqueCandidatesMap[k];
               if (existing == null || item.occurrenceCount > existing.occurrenceCount) {
                 uniqueCandidatesMap[k] = item;
@@ -1340,6 +1374,10 @@ class _TotalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final monthly = Money.fromPaise((totalAnnual.paise / 12).round());
+    final totalMandateLimit = series.fold<Money>(
+      Money.zero(),
+      (sum, item) => sum + (item.autopayLimit ?? Money.zero()),
+    );
     final setupOnly =
         totalAnnual.isZero &&
         series.any(
@@ -1411,15 +1449,28 @@ class _TotalCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: AppSpace.lg),
-                  if (setupOnly)
+                  if (setupOnly) ...[
                     Text(
-                      'Paid amount not known',
+                      totalMandateLimit.paise > 0
+                          ? 'Up to ${totalMandateLimit.format(hidePaise: true)} authorized'
+                          : 'Paid amount not known',
                       style: BambooFonts.ui(
                         15,
                         weight: FontWeight.w700,
                         color: BambooInk.onSlate,
                       ),
-                    )
+                    ),
+                    if (totalMandateLimit.paise > 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Mandate limit • Awaiting first charge',
+                        style: BambooFonts.ui(
+                          12,
+                          color: BambooInk.onSlateMuted,
+                        ),
+                      ),
+                    ],
+                  ]
                   else ...[
                     Text(
                       'Estimated annual cost',

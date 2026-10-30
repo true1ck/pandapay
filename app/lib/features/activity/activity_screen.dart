@@ -71,7 +71,15 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   @override
   void initState() {
     super.initState();
-    if (_hasInitialFilter) _applyInitialFilterAfterBuild();
+    if (_hasInitialFilter) {
+      _applyInitialFilterAfterBuild();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(_activityFilterProvider.notifier).state =
+            _activityMonthFilter();
+      });
+    }
   }
 
   @override
@@ -520,14 +528,33 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               ),
               data: (entries) {
                 if (entries.isEmpty) {
-                  return EmptyState(
-                    icon: Icons.receipt_long_outlined,
-                    title: filter.hasClearableFilters
-                        ? 'No activity matches these filters'
-                        : 'No activity this month',
-                    message: filter.isActive
-                        ? null
-                        : 'Transactions you log from the Cards tab show up here.',
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      ref.invalidate(activityTransactionsProvider);
+                      ref.invalidate(transactionsProvider);
+                      try {
+                        await ref.read(activityTransactionsProvider.future);
+                      } catch (_) {}
+                    },
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: EmptyState(
+                            icon: Icons.receipt_long_outlined,
+                            title: filter.hasClearableFilters
+                                ? 'No activity matches these filters'
+                                : 'No activity this month',
+                            message: filter.isActive
+                                ? null
+                                : 'Transactions you log from the Cards tab show up here.',
+                          ),
+                        ),
+                      ),
+                    ),
                   );
                 }
                 final grouped = _groupByDay(entries);
@@ -550,7 +577,15 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 return Column(
                   children: [
                     Expanded(
-                      child: ListView(
+                      child: RefreshIndicator(
+                        onRefresh: () async {
+                          ref.invalidate(activityTransactionsProvider);
+                          ref.invalidate(transactionsProvider);
+                          try {
+                            await ref.read(activityTransactionsProvider.future);
+                          } catch (_) {}
+                        },
+                        child: ListView(
                         padding: const EdgeInsets.fromLTRB(
                           AppSpace.lg,
                           AppSpace.lg,
@@ -644,6 +679,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                             const SizedBox(height: AppSpace.sm),
                           ],
                         ],
+                        ),
                       ),
                     ),
                     if (_selecting)
@@ -854,6 +890,13 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
   final filter = ref.watch(_activityFilterProvider);
   final tags = ref.watch(transactionTagsProvider);
 
+  // Synchronously listen once to canonical provider invalidation
+  ref.listen(transactionsProvider, (previous, next) {
+    if (previous?.hasValue == true && next.hasValue) {
+      ref.invalidateSelf();
+    }
+  });
+
   // Keep the unfiltered Activity surface on the same provider as every
   // other transaction consumer. SMS reconciliation, quick-add, imports and
   // resume refreshes invalidate [transactionsProvider]; using a second
@@ -867,29 +910,16 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
       filter.categoryId != null ||
       (filter.query != null && filter.query!.trim().isNotEmpty);
   final entries = hasServerFilter
-      ? await (() {
-          // Listen to the canonical provider as a refresh signal even while a
-          // narrower server query is active. Ignore its initial load: watching
-          // its AsyncValue here would restart this async provider while both
-          // snapshots are loading, leaving callers awaiting the disposed
-          // Future. Once a previously loaded canonical snapshot refreshes,
-          // invalidate this filtered view so new SMS/import rows appear.
-          ref.listen(transactionsProvider, (previous, next) {
-            if (previous?.hasValue == true && next.hasValue) {
-              ref.invalidateSelf();
-            }
-          });
-          return loadTransactionsWithOfflineCache(
-            ref,
-            repo: repo,
-            cacheKey: 'transactions:activity',
-            from: filter.from,
-            to: filter.to,
-            cardId: filter.cardId,
-            categoryId: filter.categoryId,
-            query: filter.query,
-          );
-        })()
+      ? await loadTransactionsWithOfflineCache(
+          ref,
+          repo: repo,
+          cacheKey: 'transactions:activity',
+          from: filter.from,
+          to: filter.to,
+          cardId: filter.cardId,
+          categoryId: filter.categoryId,
+          query: filter.query,
+        )
       : await ref.watch(transactionsProvider.future);
   final selection = SpendingSelection(
     tagIds: filter.tagIds,
@@ -900,6 +930,10 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
       .where(
         (entry) =>
             filter.type.matches(entry) &&
+            (filter.cardId == null || entry.userCardId == filter.cardId) &&
+            (filter.categoryId == null ||
+                entry.categoryId == filter.categoryId ||
+                entry.parentCategoryId == filter.categoryId) &&
             (filter.categoryLabel == null ||
                 filter.categoryLabel!.trim().toLowerCase() ==
                     entry.categoryLabel.trim().toLowerCase()) &&
@@ -1030,6 +1064,12 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
   Timer? _debounce;
 
   @override
+  void initState() {
+    super.initState();
+    _controller.text = ref.read(_activityFilterProvider).query ?? '';
+  }
+
+  @override
   void dispose() {
     _debounce?.cancel();
     _controller.dispose();
@@ -1062,6 +1102,17 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<String?>(_activityFilterProvider.select((f) => f.query), (
+      _,
+      next,
+    ) {
+      final incoming = next ?? '';
+      if (_controller.text != incoming) {
+        _controller.text = incoming;
+        setState(() {});
+      }
+    });
+
     return TextField(
       controller: _controller,
       onChanged: _onChanged,
@@ -1106,6 +1157,16 @@ class _FilterRow extends ConsumerWidget {
     final selectedCard = cards.where((c) => c.id == filter.cardId).firstOrNull;
 
     final chips = <Widget>[
+      if (filter.hasClearableFilters) ...[
+        _FilterChipButton(
+          label: 'Clear',
+          active: false,
+          icon: Icons.close_rounded,
+          onTap: () => ref.read(_activityFilterProvider.notifier).state =
+              _activityMonthFilter(),
+        ),
+        const SizedBox(width: AppSpace.xs),
+      ],
       _FilterChipButton(
         label: filter.untagged
             ? 'Untagged'
@@ -1118,8 +1179,8 @@ class _FilterRow extends ConsumerWidget {
           var untagged = filter.untagged;
           final result = await showDialog<({Set<String> ids, bool untagged})>(
             context: context,
-            builder: (context) => StatefulBuilder(
-              builder: (context, setState) => AlertDialog(
+            builder: (dialogContext) => StatefulBuilder(
+              builder: (dialogContext, setState) => AlertDialog(
                 title: const Text('Filter by tags'),
                 content: SizedBox(
                   width: double.maxFinite,
@@ -1157,7 +1218,7 @@ class _FilterRow extends ConsumerWidget {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(dialogContext),
                     child: const Text('Cancel'),
                   ),
                   TextButton(
@@ -1169,7 +1230,7 @@ class _FilterRow extends ConsumerWidget {
                   ),
                   FilledButton(
                     onPressed: () =>
-                        Navigator.pop(context, (ids: ids, untagged: untagged)),
+                        Navigator.pop(dialogContext, (ids: ids, untagged: untagged)),
                     child: const Text('Apply'),
                   ),
                 ],
@@ -1194,7 +1255,7 @@ class _FilterRow extends ConsumerWidget {
         onTap: () async {
           final picked = await showModalBottomSheet<_ActivityTypeFilter>(
             context: context,
-            builder: (context) => ListView(
+            builder: (sheetContext) => ListView(
               shrinkWrap: true,
               children: [
                 for (final type in _ActivityTypeFilter.values)
@@ -1205,14 +1266,14 @@ class _FilterRow extends ConsumerWidget {
                     trailing: type == filter.type
                         ? const Icon(Icons.check_rounded)
                         : null,
-                    onTap: () => Navigator.of(context).pop(type),
+                    onTap: () => Navigator.of(sheetContext).pop(type),
                   ),
               ],
             ),
           );
           if (picked != null) {
-            ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
-              type: picked,
+            ref.read(_activityFilterProvider.notifier).update(
+              (current) => current.copyWith(type: picked),
             );
           }
         },
@@ -1228,7 +1289,7 @@ class _FilterRow extends ConsumerWidget {
         onTap: () async {
           final picked = await showModalBottomSheet<({bool all, String? id})>(
             context: context,
-            builder: (context) => ListView(
+            builder: (sheetContext) => ListView(
               shrinkWrap: true,
               children: [
                 ListTile(
@@ -1237,7 +1298,7 @@ class _FilterRow extends ConsumerWidget {
                   trailing: filter.cardId == null
                       ? const Icon(Icons.check_rounded)
                       : null,
-                  onTap: () => Navigator.of(context).pop((all: true, id: null)),
+                  onTap: () => Navigator.of(sheetContext).pop((all: true, id: null)),
                 ),
                 for (final c in cards)
                   ListTile(
@@ -1249,14 +1310,16 @@ class _FilterRow extends ConsumerWidget {
                         ? const Icon(Icons.check_rounded)
                         : null,
                     onTap: () =>
-                        Navigator.of(context).pop((all: false, id: c.id)),
+                        Navigator.of(sheetContext).pop((all: false, id: c.id)),
                   ),
               ],
             ),
           );
           if (picked == null) return;
-          ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
-            cardId: () => picked.all ? null : picked.id,
+          ref.read(_activityFilterProvider.notifier).update(
+            (current) => current.copyWith(
+              cardId: () => picked.all ? null : picked.id,
+            ),
           );
         },
       ),
@@ -1273,7 +1336,7 @@ class _FilterRow extends ConsumerWidget {
         onTap: () async {
           final picked = await showModalBottomSheet<({bool all, String? id})>(
             context: context,
-            builder: (context) => ListView(
+            builder: (sheetContext) => ListView(
               shrinkWrap: true,
               children: [
                 ListTile(
@@ -1284,7 +1347,7 @@ class _FilterRow extends ConsumerWidget {
                       filter.categoryId == null && filter.categoryLabel == null
                       ? const Icon(Icons.check_rounded)
                       : null,
-                  onTap: () => Navigator.of(context).pop((all: true, id: null)),
+                  onTap: () => Navigator.of(sheetContext).pop((all: true, id: null)),
                 ),
                 for (final c in topLevelCategories)
                   ListTile(
@@ -1294,15 +1357,17 @@ class _FilterRow extends ConsumerWidget {
                         ? const Icon(Icons.check_rounded)
                         : null,
                     onTap: () =>
-                        Navigator.of(context).pop((all: false, id: c.id)),
+                        Navigator.of(sheetContext).pop((all: false, id: c.id)),
                   ),
               ],
             ),
           );
           if (picked == null) return;
-          ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
-            categoryId: () => picked.all ? null : picked.id,
-            categoryLabel: () => null,
+          ref.read(_activityFilterProvider.notifier).update(
+            (current) => current.copyWith(
+              categoryId: () => picked.all ? null : picked.id,
+              categoryLabel: () => null,
+            ),
           );
         },
       ),
@@ -1368,44 +1433,48 @@ class _FilterRow extends ConsumerWidget {
             ),
           );
           if (picked == null) return;
+          if (!context.mounted) return;
 
           if (picked == _ActivityDatePreset.custom) {
+            final now = DateTime.now();
+            final firstDate = DateTime(now.year - 5, 1, 1);
+            final lastDate = DateTime(now.year + 1, 12, 31);
+            DateTimeRange? initialRange;
+            if (filter.from != null && filter.to != null) {
+              final start = filter.from!.isBefore(firstDate) ? firstDate : filter.from!;
+              final end = filter.to!.isAfter(lastDate)
+                  ? lastDate
+                  : (filter.to!.isBefore(start) ? start : filter.to!);
+              initialRange = DateTimeRange(start: start, end: end);
+            }
             final range = await showDateRangePicker(
               context: context,
-              firstDate: DateTime.now().subtract(const Duration(days: 365 * 3)),
-              lastDate: DateTime.now(),
-              initialDateRange: filter.from != null && filter.to != null
-                  ? DateTimeRange(start: filter.from!, end: filter.to!)
-                  : null,
+              firstDate: firstDate,
+              lastDate: lastDate,
+              initialDateRange: initialRange,
             );
             if (range != null) {
-              ref.read(_activityFilterProvider.notifier).state = filter
-                  .copyWith(
-                    from: () => range.start,
-                    to: () => range.end,
-                    datePreset: _ActivityDatePreset.custom,
-                  );
+              ref.read(_activityFilterProvider.notifier).update(
+                (current) => current.copyWith(
+                  from: () => range.start,
+                  to: () => range.end,
+                  datePreset: _ActivityDatePreset.custom,
+                ),
+              );
             }
             return;
           }
 
           final range = picked.range(DateTime.now());
-          ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
-            from: () => range?.start,
-            to: () => range?.end,
-            datePreset: picked,
+          ref.read(_activityFilterProvider.notifier).update(
+            (current) => current.copyWith(
+              from: () => range?.start,
+              to: () => range?.end,
+              datePreset: picked,
+            ),
           );
         },
       ),
-      if (filter.hasClearableFilters) ...[
-        const SizedBox(width: AppSpace.xs),
-        _FilterChipButton(
-          label: 'Clear',
-          active: false,
-          onTap: () => ref.read(_activityFilterProvider.notifier).state =
-              _activityMonthFilter(),
-        ),
-      ],
     ];
     return SizedBox(
       height: 44,
@@ -1465,10 +1534,12 @@ class _FilterChipButton extends StatelessWidget {
   final String label;
   final bool active;
   final VoidCallback onTap;
+  final IconData? icon;
   const _FilterChipButton({
     required this.label,
     required this.active,
     required this.onTap,
+    this.icon,
   });
 
   @override
@@ -1476,6 +1547,13 @@ class _FilterChipButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 0),
       child: ActionChip(
+        avatar: icon != null
+            ? Icon(
+                icon,
+                size: 16,
+                color: active ? BambooInk.onSlate : BambooInk.ink700,
+              )
+            : null,
         label: Text(label, overflow: TextOverflow.ellipsis),
         backgroundColor: active ? BambooInk.slate : BambooInk.paperMuted,
         side: BorderSide.none,

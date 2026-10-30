@@ -4941,11 +4941,12 @@ RecurringSeries _normalizeLegacyServiceMandate(RecurringSeries item) {
   return RecurringSeries(
     id: item.id,
     displayName: service,
-    typicalAmount: Money.zero(),
-    amountKnown: false,
-    cadenceDays: 0,
-    occurrenceCount: 0,
-    annualCost: Money.zero(),
+    typicalAmount: item.typicalAmount,
+    amountKnown: item.amountKnown,
+    autopayLimit: item.autopayLimit,
+    cadenceDays: item.cadenceDays,
+    occurrenceCount: item.occurrenceCount,
+    annualCost: item.annualCost,
     categoryName: item.categoryName,
     subcategoryName: item.subcategoryName,
     cardName: item.cardName,
@@ -4957,7 +4958,11 @@ RecurringSeries _normalizeLegacyServiceMandate(RecurringSeries item) {
     autopayStatus: item.autopayStatus,
     mandateReference: item.mandateReference,
     sourceKey: item.sourceKey,
-    cadenceConfirmed: false,
+    startDate: item.startDate,
+    endDate: item.endDate,
+    lastSeenOn: item.lastSeenOn ?? item.startDate,
+    nextExpectedOn: item.nextExpectedOn,
+    cadenceConfirmed: item.cadenceConfirmed || item.cadenceDays == 0,
     setupConfirmed: true,
     engineStatus: lifecycle.isEmpty || lifecycle == 'active'
         ? 'candidate'
@@ -5607,18 +5612,68 @@ Future<RecurringReport> _mergeLocalSetupSeries(
   );
   final local = await _buildLocalRecurringReport(ref);
   if (local == null) return normalizedReport;
-  final serviceKeys = {
-    for (final item in normalizedReport.series)
-      _recurringServiceKey(item.displayName),
+
+  final localByService = <String, RecurringSeries>{
+    for (final item in local.series.where((item) => item.setupConfirmed))
+      _recurringServiceKey(item.displayName): item,
   };
-  final additions = <RecurringSeries>[];
-  for (final item in local.series.where((item) => item.setupConfirmed)) {
-    if (!serviceKeys.add(_recurringServiceKey(item.displayName))) continue;
-    additions.add(item);
+
+  final mergedSeries = <RecurringSeries>[];
+  final seenKeys = <String>{};
+
+  for (final item in normalizedReport.series) {
+    final key = _recurringServiceKey(item.displayName);
+    final localMatch = localByService[key];
+    final canonicalName = _namedServiceAutoPayName(item.displayName) ?? item.displayName;
+
+    final enriched = item.copyWith(
+      displayName: canonicalName,
+      autopayLimit: item.autopayLimit ?? localMatch?.autopayLimit,
+      startDate: item.startDate ?? localMatch?.startDate,
+      endDate: item.endDate ?? localMatch?.endDate,
+      paymentMethod: item.paymentMethod ?? localMatch?.paymentMethod,
+      sourceKey: item.sourceKey ?? localMatch?.sourceKey,
+      mandateReference: item.mandateReference ?? localMatch?.mandateReference,
+      cadenceConfirmed: item.cadenceConfirmed || (localMatch?.cadenceConfirmed ?? false) || item.cadenceDays == 0,
+      setupConfirmed: item.setupConfirmed || (localMatch?.setupConfirmed ?? false),
+      autopayStatus: (item.autopayStatus.isNotEmpty && item.autopayStatus != 'unknown')
+          ? item.autopayStatus
+          : (localMatch?.autopayStatus ?? item.autopayStatus),
+    );
+
+    if (seenKeys.add(key)) {
+      mergedSeries.add(enriched);
+    } else {
+      final existingIndex = mergedSeries.indexWhere((s) => _recurringServiceKey(s.displayName) == key);
+      if (existingIndex >= 0) {
+        final prev = mergedSeries[existingIndex];
+        mergedSeries[existingIndex] = prev.copyWith(
+          autopayLimit: prev.autopayLimit ?? enriched.autopayLimit,
+          startDate: prev.startDate ?? enriched.startDate,
+          endDate: prev.endDate ?? enriched.endDate,
+          paymentMethod: prev.paymentMethod ?? enriched.paymentMethod,
+          typicalAmount: (prev.amountKnown && prev.typicalAmount.paise > 0) ? prev.typicalAmount : enriched.typicalAmount,
+          amountKnown: prev.amountKnown || enriched.amountKnown,
+          occurrenceCount: prev.occurrenceCount > enriched.occurrenceCount ? prev.occurrenceCount : enriched.occurrenceCount,
+          lastSeenOn: prev.lastSeenOn ?? enriched.lastSeenOn,
+          nextExpectedOn: prev.nextExpectedOn ?? enriched.nextExpectedOn,
+          cadenceDays: prev.cadenceDays > 0 ? prev.cadenceDays : enriched.cadenceDays,
+          setupConfirmed: prev.setupConfirmed || enriched.setupConfirmed,
+          cadenceConfirmed: prev.cadenceConfirmed || enriched.cadenceConfirmed,
+        );
+      }
+    }
+    localByService.remove(key);
   }
-  if (additions.isEmpty) return normalizedReport;
-  final allSeries = [...normalizedReport.series, ...additions];
-  final calculatedTotal = allSeries
+
+  for (final item in localByService.values) {
+    final key = _recurringServiceKey(item.displayName);
+    if (seenKeys.add(key)) {
+      mergedSeries.add(item);
+    }
+  }
+
+  final calculatedTotal = mergedSeries
       .where(
         (s) =>
             !s.reviewCandidate &&
@@ -5628,13 +5683,16 @@ Future<RecurringReport> _mergeLocalSetupSeries(
   final total = calculatedTotal.paise > normalizedReport.totalAnnual.paise
       ? calculatedTotal
       : normalizedReport.totalAnnual;
-  return RecurringReport(series: allSeries, totalAnnual: total);
+  return RecurringReport(series: mergedSeries, totalAnnual: total);
 }
 
 String _recurringServiceKey(String name) {
   final canonical = _namedServiceAutoPayName(name) ?? name;
   return canonical.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 }
+
+String? namedServiceAutoPayName(String? raw) => _namedServiceAutoPayName(raw);
+String recurringServiceKey(String name) => _recurringServiceKey(name);
 
 /// Shared stale-safe transaction loader for Activity, Insights, and the
 /// period detail rows in Spending. The server remains authoritative, but a

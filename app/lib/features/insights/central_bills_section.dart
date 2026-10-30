@@ -256,15 +256,24 @@ class _CentralHeader extends StatelessWidget {
   );
 }
 
+String _safeDateFormat(DateTime? date) {
+  if (date == null) return '';
+  try {
+    return DateFormat('d MMM yyyy', 'en_US').format(date.toLocal());
+  } catch (_) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+}
+
 class LocalMandateRow extends StatelessWidget {
   final Map<String, dynamic> row;
   const LocalMandateRow({super.key, required this.row});
 
   @override
   Widget build(BuildContext context) {
-    final title = (row['biller_name'] as String?)?.trim();
+    final title = (row['biller_name'] ?? row['service_name'] ?? row['merchant'])?.toString().trim();
     final rawLimit = row['autopay_limit_paise'] ?? row['amount_due_paise'] ?? row['amount_paise'];
-    final paise = rawLimit is num ? rawLimit.toInt() : null;
+    final paise = rawLimit is num ? rawLimit.toInt() : (rawLimit is String ? int.tryParse(rawLimit) : null);
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
       padding: const EdgeInsets.all(AppSpace.md),
@@ -308,13 +317,14 @@ class CentralRow extends StatelessWidget {
     final amountLabel = row.projectionKind == 'mandate'
         ? (amount == null ? null : 'AutoPay limit ₹${amount.toStringAsFixed(0)}')
         : (amount == null ? null : '₹${amount.toStringAsFixed(0)}');
+    final formattedDate = _safeDateFormat(date);
     final subtitle = row.projectionKind == 'mandate'
         ? [
             'AutoPay setup reported',
-            if (date != null) DateFormat('d MMM yyyy').format(date.toLocal()),
+            if (formattedDate.isNotEmpty) formattedDate,
           ].join(' · ')
         : [
-            if (date != null) 'Due ${DateFormat('d MMM yyyy').format(date.toLocal())}',
+            if (formattedDate.isNotEmpty) 'Due $formattedDate',
             'Check payment status',
           ].join(' · ');
     return Container(
