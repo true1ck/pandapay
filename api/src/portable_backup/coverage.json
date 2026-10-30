@@ -4,6 +4,10 @@
   "updated": "2026-10-29",
   "comment": "Schema-aware inventory of PostgreSQL CREATE TABLE objects in db/supabase/migrations. Public-schema keys remain unqualified for contract compatibility; non-public schemas are qualified. This registry covers server migration tables only, not SQLite tables or individual fields, and is not a full database disaster-recovery manifest. Portable export and restore services have separate device, integration and recovery acceptance gates; excluded user-linked rows remain explicit coverage gaps.",
   "tables": {
+    "admin_control.provisioning_receipts": {
+      "disposition": "platform_ops",
+      "reason": "Maintenance-only admin provisioning receipts preserve cross-database operation identity and audit in full PostgreSQL recovery; per-account portable restore cannot replay grants or enable administrators."
+    },
     "admin_role_permissions": {
       "disposition": "platform_ops",
       "reason": "Private administrative permission policy is operational security state preserved by full PostgreSQL recovery; customer portable restores cannot grant or replace administrator permissions."

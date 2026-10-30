@@ -1,6 +1,6 @@
 # Local admin console: implementation and deployment plan
 
-Date: 30 October 2026. Updated after source commit `a4d0c02` on `codex/ios-shortcuts-prototype`. Status: private-admin foundation implemented and tested locally; implementation gaps and deployment acceptance remain. The feature is not live.
+Date: 30 October 2026. Foundation source commit `a4d0c02`; updated with resumable provisioning after `a3f6694` on `codex/ios-shortcuts-prototype`. Status: private-admin foundation implemented and tested locally; implementation gaps and deployment acceptance remain. The feature is not live.
 
 Source candidate update: the [implementation verification report](admin-console-source-verification-2026-10-30.md) records the private protocol, UI, runtime, migrations and packaging now added, executed local checks and remaining acceptance. Use the [operator runbook](../deploy/admin/RUNBOOK.md) for concrete installation/deployment steps. Production remains unactivated; this specification's completion checklist is not automatically satisfied by the source candidate.
 
@@ -16,10 +16,10 @@ This table records source implementation, not activation. The [verification repo
 | Authentication | Six-digit email proof plus user-verified WebAuthn; purpose/cookie/origin/RP binding; atomic enrollment-grant consumption; primary/backup enrollment checks | Physical-key/browser acceptance, later-factor management and offline recovery; real provider delivery/shared quotas |
 | Sessions | HttpOnly browser cookie, CSRF, server-encrypted opaque upstream tokens, idle/absolute expiry, step-up, logout, principal/factor revocation and external restore epoch | Multi-replica renewal/revocation races, key rotation/custody, restored-state reconciliation and bounded retention |
 | Authorization and data | 92 classified method/path policies; current membership rechecked; dedicated NOINHERIT runtimes; forward auth/product migrations; DB rejects customer-asserted admin context | Every populated-table/role/mutation combination, definer-function owners/grants and full restored-target upgrade acceptance |
-| Provisioning | Explicit target inspection/plan/apply/reconcile/revoke; pending admission; single-use enrollment grants; final enable requires two credentials | Durable cross-database operation/resume state, all crash/concurrency cases, real owner enrollment and access review |
+| Provisioning | Explicit target preview/apply; maintenance-only auth journal and product receipts; status/resume; stale/changed-state refusal; pending enrollment; primary/backup grants; auth enabled last | Restored-target/non-owner maintenance role acceptance, further distributed failure/recovery review, real owner enrollment and access review |
 | Existing console | Private email/passkey/enrollment flow; target/role display; fresh-factor action; server logout; local WebAuthn assets; release build | Complete readonly/permission-aware UI, expired-session/error flows and physical-device end-to-end checks |
 | PC/private deployment | Local-only TLS/Nginx/SSH launcher; protected config; start/status/stop; opt-in isolated Compose profile and SSH template | Exact host/network/trust setup, patched image/version pinning, image/network tests, installation and approved activation |
-| Verification | Auth 362, API 1,326 (3 existing skips), DB/script 232 and console 57 tests passed; clean/repeated full-schema migration rehearsal, all admin GET routes and representative audited writes passed | Every mutation, real-data performance, external exposure, independent review and encrypted recovery rehearsal (`age` unavailable on this Mac) |
+| Verification | Auth 362, API 1,326 (3 existing skips), DB/script 233 and console 57 tests passed; clean/repeated full-schema migration rehearsal, all admin GET routes and representative audited writes passed | Every mutation, real-data performance, external exposure, independent review and encrypted recovery rehearsal (`age` unavailable on this Mac) |
 
 **Requested first owner:** `chandresh.kerkar1@gmail.com`, **local development only**, as explicitly selected by the user. This is an operator enrollment request, not an email allowlist embedded in the app, an automatic seed, or an active grant. A second administrator can be added later with a separate verified UUID and separate credentials.
 
@@ -31,7 +31,7 @@ These are source gaps, separate from operator deployment gates. Successful unit 
 
 | Priority / area | Concrete remaining deliverable | Completion evidence |
 | --- | --- | --- |
-| P1 — provisioning | Durable operation state and retry/reconciliation across auth/product commits; enrollment/enable/revoke race handling | Crash after each commit, duplicate invocation, stale preview and concurrent revoke cannot enable unintended admission; audit history preserved |
+| Provisioning — locally implemented | Durable intent/receipts, explicit status/resume and per-auth-DB CLI lock; reviewed hash required for enable/revoke; revocation supersedes unfinished admission; regrant retires previous factors/proofs | Local crash-at-each-commit, replay, stale preview, lock contention, factor change and audit-ID reconciliation checks pass. Restored target, non-owner maintenance role and broader distributed-failure acceptance remain |
 | P1 — mutations/providers | Finish every private mutation's grants, bounded business effects and transactional audit/idempotency; implement reviewed durable broadcast and learning-worker dispatch | Role-by-route real-DB tests, lost-response/replay reconciliation and bounded worker/provider execution. Broadcast currently returns 503; direct learning cycle returns 409 |
 | P1 — database authority | Review every table/view/definer routine and owner under actual least-privilege migration/runtime identities | Full populated upgrade plus positive/negative permission matrix; customer/worker identities cannot reach admin authority |
 | P1 — session/recovery | Multi-replica refresh/CSRF/revocation races, supported factor replacement/recovery, encryption/lookup-key rotation and retained revocations after restore | Restart/rotation/outage and formerly-valid session/factor/grant restore tests; no OTP-only bypass |
@@ -242,11 +242,15 @@ Add new forward-only migrations through `db/scripts/product_migrate.js` and `aut
 | Provisioning/audit records | Durable operation ID, actor/reason, before/after state and completion; bounded secret-free metadata |
 | Rate-limit namespace | Shared durable admin buckets/challenge attempts using existing bounded store patterns |
 
-Provisioning is not a distributed SQL transaction. Keep a durable operation state: validate verified identity first; prepare the auth enrollment in disabled/pending state; commit/reconcile product membership; enable auth admin admission last. Failure, crash or partial completion must leave admin use denied. Repeated operations resume idempotently.
+Provisioning uses a two-store protocol rather than a distributed SQL transaction. Implemented forward migrations `auth/db/migrations/0013_admin_provisioning_journal.sql` and `db/supabase/migrations/20261030110000_admin_provisioning_receipts.sql` add a maintenance-only auth journal and product receipt schema. Neither public nor private runtime roles can author these records. A canonical version-2 plan hash binds the environment/target, exact auth identity/principal/factors, membership snapshot, role, reason and operation ID.
+
+Auth preparation denies admission first and commits with the intent. Product effects, their existing audit rows and a replay receipt commit together. The auth journal acknowledges product completion and enables auth last only if identity, principal version, credentials and product receipt still match. Phases are `auth_prepared`, `product_applied`, `complete`, or `blocked`; errors retain the last durable state for explicit `status` / `resume`. Completed operations replay without performing another effect and cannot re-enable a later revoked account. Changed authority/receipt state blocks resume and requires a fresh reviewed plan. A per-auth-database advisory lock serializes maintenance commands without locking customer financial tables. An explicit revoke can supersede unfinished admission and invalidates sessions, factors, unused grants and proofs before product completion. A regrant also retires prior factors/proofs; it is not a factor-recovery bypass.
+
+Version-1 previews cannot be applied to this protocol: generate and review a fresh version-2 preview. Existing operation state must be inspected/resumed, rather than bypassed through another grant. Full restored-state and target maintenance-role acceptance remain release gates.
 
 For stale membership IDs, dry-run refuses a silent rewrite. The selected reconciliation model retains the old row inactive with its original ID/email and audit references, and inserts the new verified UUID as the active membership. A forward migration replaces the global email-uniqueness constraint with uniqueness over active normalized/citext email. Create/validate the replacement invariant before removing the old constraint; preserve all existing rows and review lock budgets. Update membership lookups to require active state and exact verified UUID, with no ambiguous email-only authorization. The coordinator inventories all foreign keys and consumers in Wave 0; an incompatible consumer blocks this strategy pending an explicit contract revision. A worker cannot delete history, move audit attribution to a new identity, or silently choose another conflict resolution.
 
-Implemented CLI `db/scripts/admin_access.js` supports `inspect`, `plan --operation grant|reconcile`, matching-hash `apply`, `revoke`, `enrollment-grant`, and explicit `enable` after factor acceptance. Durable multi-store resume remains open, so a partial failure requires inspection/reconciliation before retry. It requires explicit environment/target and a reason, validates the verified user ID, prints a credential-free preview, and applies only a matching plan hash. No automatic loading of an arbitrary project `.env`, no connection passwords in command arguments, no OTP seeds, no auth-user creation/verification bypass and no refresh-token minting. Secret outputs go to a named protected 0600 file, with only its path printed. Grant/revoke must have reversible and audited outcomes. A grant remains pending until the explicit enable checks pass; backend deployment alone does not activate a user.
+Implemented CLI `db/scripts/admin_access.js` supports `inspect`, `plan --operation grant|reconcile|enable|revoke`, matching-hash `apply`, `status`, `resume`, `enrollment-grant`, and `enable`/`revoke` aliases that also require a reviewed plan hash. After a partial failure use the operation ID and original reviewed hash to inspect/resume; do not regenerate a hash to approve a changed intermediate state. It requires explicit environment/target and a reason, validates the verified user ID, prints a credential-free preview, and applies only a matching plan hash. No automatic loading of an arbitrary project `.env`, no connection passwords in command arguments, no OTP seeds, no auth-user creation/verification bypass and no refresh-token minting. Secret outputs go to a named protected 0600 file, with only its path printed. Grant/revoke must have reversible and audited outcomes. A grant remains pending until the explicit enable checks pass; backend deployment alone does not activate a user.
 
 Use separate provisioning credentials for product/auth, temporary custody and minimal routines/grants. Preserve prior admin audit attribution and reconcile conflicting identities before enabling the intended owner.
 
@@ -277,7 +281,15 @@ Use separate provisioning credentials for product/auth, temporary custody and mi
      --plan-hash "$ADMIN_OWNER_PLAN_HASH"
    ```
 
-   This prepares pending auth admission and disabled product membership. It does not sign in or enable the owner. If either store fails, inspect and reconcile the partial result before retry; durable automatic resume remains an implementation gap.
+   This prepares pending auth admission and disabled product membership. It does not sign in or enable the owner. Keep the `operationId` and reviewed hash from the preview. If either store fails, inspect the recorded operation and resume it with that same approval:
+
+   ```sh
+   node db/scripts/admin_access.js status --operation-id "$ADMIN_OWNER_OPERATION_ID"
+   node db/scripts/admin_access.js resume --operation-id "$ADMIN_OWNER_OPERATION_ID" \
+     --plan-hash "$ADMIN_OWNER_PLAN_HASH"
+   ```
+
+   A blocked operation requires inspection and a fresh reviewed intent; resume never overrides changed factors, principals or membership receipts.
 
 6. **Enroll independent primary and backup credentials.** Install/configure the local private services and the PC console using the runbook. Use a new protected directory outside source control for grant files; mode 0700 for the directory, 0600 for files. Issue each grant immediately before enrolling its corresponding factor:
 
@@ -295,8 +307,12 @@ Use separate provisioning credentials for product/auth, temporary custody and mi
 7. **Enable explicitly and test.** Verify the target, UUID, prepared role and two independent enrolled factors. Only then run:
 
    ```sh
-   node db/scripts/admin_access.js enable --user-id "$ADMIN_OWNER_USER_ID" \
+   node db/scripts/admin_access.js plan --operation enable --user-id "$ADMIN_OWNER_USER_ID" \
      --reason "Local owner primary and backup factors accepted"
+   # Review the new enable preview; set ADMIN_ENABLE_PLAN_HASH to its hash.
+   node db/scripts/admin_access.js enable --user-id "$ADMIN_OWNER_USER_ID" \
+     --reason "Local owner primary and backup factors accepted" \
+     --plan-hash "$ADMIN_ENABLE_PLAN_HASH"
    ```
 
    Log in with email proof plus passkey. Confirm target/role display, a permitted audited operation, denied customer/less-privileged paths, step-up and server logout. Record the credential-free result and update this plan's local-owner checklist.
@@ -306,8 +322,12 @@ Use separate provisioning credentials for product/auth, temporary custody and mi
 To revoke an administrator, use the exact email/UUID and a recorded reason:
 
 ```sh
-node db/scripts/admin_access.js revoke --email "$ADMIN_OWNER_EMAIL" \
+node db/scripts/admin_access.js plan --operation revoke --email "$ADMIN_OWNER_EMAIL" \
   --user-id "$ADMIN_OWNER_USER_ID" --reason "Local administrator access retired"
+# Review the revoke preview; set ADMIN_REVOKE_PLAN_HASH to its hash.
+node db/scripts/admin_access.js revoke --email "$ADMIN_OWNER_EMAIL" \
+  --user-id "$ADMIN_OWNER_USER_ID" --reason "Local administrator access retired" \
+  --plan-hash "$ADMIN_REVOKE_PLAN_HASH"
 ```
 
 Revocation is available even when the auth account is inactive. Re-enabling a retired account must not restore a revoked admin principal/session automatically. There is **no shared admin password** in this flow.
@@ -499,7 +519,8 @@ Build the console using the supported Flutter release flags already documented b
 ### Remaining source implementation
 
 - [ ] Every mutation, DB routine/owner and role combination accepted; durable high-impact dispatch/audit/idempotency complete.
-- [ ] Provisioning operation/resume state and session/factor/key-rotation/recovery races complete.
+- [x] Provisioning operation/resume state, effect receipts, stale-preview checks and local crash/replay/revocation tests implemented.
+- [ ] Non-owner maintenance target privileges, restored provisioning state, broader distributed failures and session/factor/key-rotation/recovery races accepted.
 - [ ] Pagination, expensive-job concurrency, shared provider/connection budgets, retention and operational monitoring complete.
 - [ ] Permission-aware UI, remaining machine-readable contracts and exact-candidate release evidence complete.
 

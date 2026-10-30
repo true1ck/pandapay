@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { assertLocal, buildPlan } = require('../scripts/admin_access');
+const { assertLocal, buildPlan, parseArgs, planHash, operationId } = require('../scripts/admin_access');
 
 function config(product = 'postgres://operator@127.0.0.1/product') {
   return {
@@ -22,19 +22,32 @@ test('hosted provisioning requires an explicit reviewed target fingerprint', () 
   assert.throws(() => assertLocal(env), /Reviewed target fingerprint/);
   assert.throws(() => assertLocal({ ...env, ADMIN_PROVISION_APPROVED_TARGET_SHA256: 'unreviewed' }), /Reviewed target fingerprint/);
 });
+test('review hashes survive JSONB key ordering and CLI rejects ambiguous duplicate input', () => {
+  const a=planHash({role:'owner',snapshot:{state:'pending',version:'4'}});
+  const b=planHash({snapshot:{version:'4',state:'pending'},role:'owner'});
+  assert.equal(a,b);
+  assert.match(operationId(a),/^[0-9a-f-]{36}$/);
+  assert.equal(parseArgs(['resume','--operation-id',operationId(a),'--plan-hash',a])['plan-hash'],a);
+  assert.throws(()=>parseArgs(['apply','--role','owner','--role','readonly']),/duplicate/);
+  assert.throws(()=>parseArgs(['apply','resume']),/one command/);
+});
 test('revocation can target an inactive identity but must name the exact UUID', async () => {
   const id = '11111111-1111-4111-8111-111111111111';
   const auth = { async query(sql, values) {
     if (sql.includes('FROM public.users')) {
-      assert.equal(values[2], true);
-      return { rowCount: 1, rows: [{ id, email: 'owner@example.test' }] };
+      assert.equal(values[0], id);
+      return { rowCount: 1, rows: [{ id, email: 'owner@example.test', is_active: false, deleted: false, is_email_verified: false }] };
     }
-    return { rows: [{ n: 'auth' }] };
+    if (sql.includes('FROM admin_private.principals')) return { rows: [{ state: 'revoked', version: '2' }] };
+    if (sql.includes('FROM admin_private.credentials')) return { rows: [] };
+    return { rows: [{ name: 'auth' }] };
   } };
   const product = { async query(sql) {
-    return { rows: sql.includes('FROM public.admin_users') ? [{ id, role: 'owner', is_active: false }] : [{ n: 'product' }] };
+    return { rows: sql.includes('FROM public.admin_users') ? [{ id, email: 'owner@example.test', role: 'owner', is_active: false }] : [{ name: 'product' }] };
   } };
   const args = { operation: 'revoke', email: 'owner@example.test', reason: 'Explicit incident revocation', 'user-id': id };
-  assert.equal((await buildPlan(args, auth, product)).userId, id);
-  await assert.rejects(buildPlan({ ...args, 'user-id': undefined }, auth, product), /exact --user-id/);
+  const target = { environment: 'local', targetKey: 'a'.repeat(64) };
+  assert.equal((await buildPlan(args, auth, product, target)).userId, id);
+  await assert.rejects(buildPlan({ ...args, 'user-id': undefined }, auth, product, target), /exact_user_id_required/);
+  await assert.rejects(buildPlan({ ...args, operation: 'grant' }, auth, product, target), /active_verified_identity_required/);
 });

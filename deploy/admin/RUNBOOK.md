@@ -16,7 +16,7 @@ Every route still needs acceptance against the populated target schema and least
 
 ## Database preparation
 
-Use the canonical auth/product migration runners. New files are auth migration `0012_private_admin_access.sql` and product migration `20261030100000_private_admin_authority.sql`.
+Use the canonical auth/product migration runners. Private authority uses auth `0012_private_admin_access.sql` / product `20261030100000_private_admin_authority.sql`. Resumable provisioning also requires forward migrations auth `0013_admin_provisioning_journal.sql` / product `20261030110000_admin_provisioning_receipts.sql`. Do not edit previously applied migrations or bypass their checksum ledgers.
 
 For explicit maintenance bootstrap only, provide independent generated credentials through protected environment configuration: `ADMIN_GATEWAY_DB_PASSWORD` and `ADMIN_API_DB_PASSWORD`. Existing credentials are checked, not silently rotated. The gateway authenticates as `admin_gateway_runtime`, the API as `admin_api_runtime`; neither owns the schema nor has superuser/BYPASSRLS. Runtime URLs must use those exact identities with verified PostgreSQL TLS. Migration/provisioning credentials stay outside service containers.
 
@@ -44,11 +44,24 @@ For the current local-owner request, completed/remaining work and exact initial 
 
 First verify the intended email in the target's ordinary auth service; the CLI never creates a user or marks an email verified. Set the two explicit `ADMIN_PROVISION_*_DATABASE_URL` values in protected maintenance configuration and the exact `ADMIN_PROVISION_ENV` (`local`, `staging` or `production`). Hosted operations also require the reviewed credential-free target fingerprint emitted by the CLI as `ADMIN_PROVISION_APPROVED_TARGET_SHA256`; do not approve it without independently checking the target.
 
-Use `node db/scripts/admin_access.js plan --email EMAIL --user-id UUID --role owner --reason REASON --operation grant`. The preview produces a plan hash. Use `apply` with the same arguments and `--plan-hash HASH` only after review. If a stale UUID already holds the email, use an explicit `reconcile` plan; old audit IDs remain in place.
+Use `node db/scripts/admin_access.js plan --email EMAIL --user-id UUID --role owner --reason REASON --operation grant`. The version-2 preview produces a plan hash and operation ID. Use `apply` with the same arguments and `--plan-hash HASH` only after review. Older version-1 previews must be regenerated/reviewed. If a stale UUID already holds the email, use an explicit `reconcile` plan; old audit IDs remain in place.
 
-The principal stays pending. Issue separate `enrollment-grant --user-id UUID --slot primary|backup --file ABSOLUTE_PROTECTED_FILE` grants, then use the PC console's verified-email enrollment screen. Each grant expires after ten minutes and is single use; neither grant creates an admin session. Enroll and test independent primary/backup authenticators, then use the explicit `enable --user-id UUID --reason REASON` command. Verify actual product membership, role and hardware factors before approving live use.
+The principal stays pending. Issue separate `enrollment-grant --user-id UUID --slot primary|backup --file ABSOLUTE_PROTECTED_FILE` grants, then use the PC console's verified-email enrollment screen. Each grant expires after ten minutes and is single use; neither grant creates an admin session. Enroll and test independent primary/backup authenticators, then generate/review `plan --operation enable --user-id UUID --reason REASON` and call `enable` with the same arguments plus `--plan-hash HASH`. Verify actual product membership, role and hardware factors before approving live use.
 
-Revocation uses `revoke --email EMAIL --user-id UUID --reason REASON` and must remain available when the account is disabled. Keep operator credentials out of logs, source, shell history and browser bundles. The old `create_test_admin.js` command always refuses OTP/session minting.
+Revocation requires a reviewed `plan --operation revoke --email EMAIL --user-id UUID --reason REASON` followed by `revoke` with those arguments and `--plan-hash HASH` and must remain available when the account is disabled. Keep operator credentials out of logs, source, shell history and browser bundles. The old `create_test_admin.js` command always refuses OTP/session minting.
+
+### Interrupted provisioning
+
+Keep the credential-free operation ID and reviewed plan hash. The CLI serializes maintenance operations against the selected auth DB. Auth admission is disabled before preparing/revoking membership; an enable becomes usable only after the product effect and auth completion. Journal/receipts are maintenance-owned; neither runtime can approve an intent.
+
+```sh
+node db/scripts/admin_access.js status --operation-id UUID
+node db/scripts/admin_access.js resume --operation-id UUID --plan-hash HASH
+```
+
+Resume uses the recorded intent and product receipt; it does not repeat a committed audited effect. An already complete operation remains complete even if the user was revoked later. A changed principal/factor/membership receipt produces a blocked operation requiring review. A new reviewed revoke can supersede unfinished admission, including an account with no product row yet. Regrant invalidates old sessions/factors/proofs; enroll new primary and backup credentials before enabling. Keep journal/receipt state together in paired backups and include retained revocations in restore acceptance.
+
+Enrollment files require an existing operator-owned mode-0700 directory outside source control. Files are created exclusively as 0600 and never overwritten. A new grant for a pending factor slot consumes older unused grants for that slot. Do not issue enrollment grants while the account's provisioning operation is unfinished.
 
 ## PC install and operation
 

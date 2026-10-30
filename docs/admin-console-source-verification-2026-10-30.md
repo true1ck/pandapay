@@ -9,7 +9,7 @@ Date: 30 October 2026. Branch: `codex/ios-shortcuts-prototype`, based on the mer
 - Session/challenge/grant state persists in PostgreSQL. Preauthentication cookies bind challenges, successful consumption is atomic, verified assertions require the exact origin/RP/user-verification settings, and ordinary customer JWTs cannot establish a private admin session. Opaque upstream tokens stay encrypted on the server.
 - Session expiry, versioned revocation, CSRF, private introspection, step-up, credential counters and external session-epoch invalidation are implemented. The external epoch must be rotated and historical revocations reconciled after a restore.
 - Forward auth/product migrations add private state and permission boundaries. Public customer database identities cannot assert admin status with a custom session setting. The auth runtime cannot enable principals or manufacture enrollment grants. Credential registration goes through a bounded routine that atomically consumes an approved grant/email proof/challenge.
-- Provisioning supports explicit target preview/apply, pending enrollment, stale-ID reconciliation preserving audit IDs, primary/backup grants, enable and revoke. Hosted target fingerprint and verified TLS configuration require operator review. The static QA creator no longer seeds codes or mints refresh tokens.
+- Provisioning supports explicit target preview/apply, pending enrollment, stale-ID reconciliation preserving audit IDs, primary/backup grants, enable and revoke. A subsequent implementation adds maintenance-only durable intent/product receipts, reviewed-hash status/resume, CLI serialization, changed-state refusal and revocation of unfinished admission. Regrant retires old sessions/factors/proofs. Hosted target fingerprint and verified TLS configuration require operator review. The static QA creator no longer seeds codes or mints refresh tokens.
 - Local TLS/Nginx/SSH supervision, private Compose overlay, forwarding-only SSH configuration and an operator runbook are provided. They are not installed or deployed by this work.
 
 ## Executed verification
@@ -24,10 +24,11 @@ Date: 30 October 2026. Branch: `codex/ios-shortcuts-prototype`, based on the mer
 | Existing deployment tests | 24 passed |
 | Local packaging tests | 3 passed |
 | Disposable PostgreSQL private integration | Passed: real PostgreSQL 18, separate socket-only cluster, actual runtime roles, ownership/permission checks, concurrent single-use challenge consumption, enrollment/replay, session version invalidation, real signed P-256 WebAuthn login through both actual factories, step-up, CSRF, factor-revocation session invalidation and logout |
+| Resumable provisioning PostgreSQL suite | 15 passed (suite plus 14 scenarios): crash at each commit, replay after revoke, factor change, stale preview/target, receipt drift, concurrent lock denial, protected enrollment files and stale-ID audit preservation |
 | Full checked-in schema rehearsal | Passed: clean auth/product schemas through canonical runners, repeat runs, all GET route registrations, catalogue create/upsert/review/publish, readonly/operator denial, audited support resolution audited referral hold/release, and customer inability to assert administration |
 | Focused gateway/API/public-boundary tests | 12 passed after integration fixes |
 | Route-manifest copies | Synchronization check passed |
-| Database/script regression suite | 232 passed, including dependency-license checks for pinned WebAuthn dependencies |
+| Database/script regression suite | 233 passed, including dependency-license checks for pinned WebAuthn dependencies |
 | Existing encrypted recovery rehearsal | Not executed to completion on this Mac: the required `age` binary is unavailable; existing CI retains this gate |
 | Credential-pattern scan | No matches in pending changes; this is not a complete secret/security audit |
 
@@ -44,7 +45,8 @@ The user selected **local development only** for the first owner. Read-only insp
 3. Run independent security review and built-image/network tests on the intended deployment: IPv4/IPv6, provider/direct origins, customer regressions, concurrent replicas, restart/rotation/outage races, connection/provider budgets and representative resource behavior. The evidence here does not establish million-user capacity or zero vulnerabilities.
 4. Verify the exact compute host/private topology, strict TLS/SSH trust and external/LAN denial. Install local trust only with the operator's explicit action. No public console hosting is approved.
 5. Enroll the real owner with independent primary/backup authenticators and verify grant/revocation, restore-epoch rotation and recovery without a bypass. Retire any existing test grants/challenges/sessions in the actual environment.
-6. Extend/complete the existing release-evidence workflow for the actual private deployment and obtain accountable operator approval. Keep the opt-in profile off until all applicable requirements pass.
+6. Verify the new provisioning maintenance-role privileges and paired journal/receipt restore/reconciliation on the actual target; local tests use disposable PostgreSQL. No real local user has been provisioned by this follow-up.
+7. Extend/complete the existing release-evidence workflow for the actual private deployment and obtain accountable operator approval. Keep the opt-in profile off until all applicable requirements pass.
 
 Three Luna agents contributed separate source areas, then stopped at their usage limit. The coordinator completed local integration fixes and verification. That coordination is not an independent security review.
 

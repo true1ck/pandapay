@@ -12,6 +12,7 @@ pg_ctl -D "$task_pg_dir/data" -l "$task_pg_dir/server.log" -o "-k $task_pg_dir -
 cd "$task_root"
 ADMIN_TEST_PG_SOCKET="$task_pg_dir" node --test tests/admin_console_security/postgres.test.js
 ADMIN_TEST_PG_SOCKET="$task_pg_dir" node --test tests/admin_console_security/full_schema.test.js
+ADMIN_TEST_PG_SOCKET="$task_pg_dir" node --test tests/admin_console_security/provisioning.test.js
 node --test auth/test/private_admin_gateway.test.js auth/test/public_admin_isolation.test.js api/test/admin_api_factory.test.js
 python3 -m unittest discover -s tests/admin_console_security
 node scripts/sync_admin_contracts.js --check
