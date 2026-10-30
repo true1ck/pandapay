@@ -537,6 +537,8 @@ function parseBuiltInAccountCredit(sms) {
   const earnedIncomeCredit = !nonIncomeCredit
     && !/\bsalary\s+advance\b/i.test(body)
     && /\b(?:salary|wages?|payroll|pension|interest|dividend|rent|commission|consulting|business\s+(?:receipt|income)|invoice\s+paid)\b/i.test(body);
+  const externalVpaCredit = !ownTransfer && !nonIncomeCredit
+    && /\bfrom\s+VPA\s+\S+@\S+/i.test(body);
   const cashbackCredit = /\bcashback\b/i.test(body);
   const rewardCredit = /\b(?:reward|rewards|points?|miles?)\b/i.test(body);
   const refundCredit = /\b(?:refund(?:ed)?|chargeback)\b/i.test(body);
@@ -576,6 +578,8 @@ function parseBuiltInAccountCredit(sms) {
       || accountReferences.length >= 2);
   const transferKind = ownTransfer
     ? 'account_to_account'
+    : externalVpaCredit
+    ? 'external_vpa_credit'
     : brokerSettlement
     ? 'investment_proceeds'
     : walletLoad
@@ -647,7 +651,7 @@ function parseBuiltInAccountCredit(sms) {
       ...(!earnedIncomeCredit || ownTransfer || incomingBankTransferCandidate || walletLoad || brokerSettlement
         ? { transferKind }
         : {}),
-      entryKind: earnedIncomeCredit && !ownTransfer ? 'income' : 'transfer',
+      entryKind: (earnedIncomeCredit && !ownTransfer) || externalVpaCredit ? 'income' : 'transfer',
     }, body),
   };
 }

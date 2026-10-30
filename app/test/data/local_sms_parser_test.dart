@@ -24,6 +24,7 @@ void main() {
     expect(result?.eventType, LocalSmsEventType.transaction);
     expect(result?.transaction, isNotNull);
     expect(result?.transaction?.amount.rupees, 1);
+    expect(result?.transaction?.entryKind, TxnEntryKind.income);
   });
   test('explicit service renewal keeps stated amount and next date', () {
     final result = LocalSmsParser.parse(

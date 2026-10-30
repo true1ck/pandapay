@@ -2834,6 +2834,22 @@ class LocalSmsParser {
       merchant ??= bankDebit ? 'Bank debit' : null;
     }
     final ownNameCredit = credit && _ownNameInFromClause(body, ownUserName);
+    // An explicit VPA-to-bank credit is money received from another party.
+    // Keep confirmed own-name credits as transfers, and leave ambiguous bank
+    // credits in the conservative transfer bucket.
+    final externalVpaCredit = credit &&
+        !ownNameCredit &&
+        !_ownAccountTransfer(body) &&
+        !refundCredit &&
+        !reversalCredit &&
+        !rewardCredit &&
+        !loanDisbursement &&
+        !investmentProceeds &&
+        !cashDeposit &&
+        !giftCredit &&
+        !reimbursementCredit &&
+        _re(r'\bfrom\s+VPA\s+\S+@\S+', caseSensitive: false).hasMatch(body);
+    if (externalVpaCredit) kind = TxnEntryKind.income;
     if (ownNameCredit) merchant = 'Transfer between own accounts';
     if (ownNameTransfer || ownNameCredit) {
       transfer = true;

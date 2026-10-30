@@ -496,10 +496,13 @@ void main() {
       expect(find.text('Groww Settlement'), findsOneWidget);
       expect(find.text('Grocery'), findsOneWidget);
 
-      await tester.tap(find.text('All activities'));
+      await tester.tap(find.text('Filters'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Investments'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Show results'));
       await tester.pumpAndSettle();
 
       expect(find.text('Zerodha'), findsOneWidget);
@@ -597,10 +600,16 @@ void main() {
       expect(find.text('Supermarket'), findsOneWidget);
 
       // 2. Set filter (Once set kar)
+      await tester.tap(find.text('Filters'));
+      await tester.pumpAndSettle();
+
       await tester.tap(find.text('All categories'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Dining'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Show results'));
       await tester.pumpAndSettle();
 
       expect(find.text('Restaurant'), findsOneWidget);
@@ -627,9 +636,13 @@ void main() {
       expect(find.text('Supermarket'), findsOneWidget);
 
       // 5. Now set filter again and unset via Clear chip
+      await tester.tap(find.text('Filters'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('All categories'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Dining'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Show results'));
       await tester.pumpAndSettle();
 
       expect(find.text('Restaurant'), findsOneWidget);

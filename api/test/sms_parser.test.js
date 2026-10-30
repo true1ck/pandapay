@@ -559,6 +559,17 @@ test('bank-account credits become incoming income entries', () => {
   assert.equal(result.fields.reference, '123456789012');
 });
 
+test('completed external VPA credit is money in', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'AX-HDFCBK-S',
+    body: 'Credit Alert! Rs.1.00 credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA *r123@oksbi (UPI 630371662093)',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'income');
+  assert.equal(result.fields.transferKind, 'external_vpa_credit');
+  assert.equal(result.fields.amountInr, 1);
+});
+
 test('generic bank-origin credits are transfer candidates until paired', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'HDFCBK',
