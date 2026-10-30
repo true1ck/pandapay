@@ -59,7 +59,7 @@ class TransactionDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final txn = ref.watch(_transactionProvider(transactionId));
+    final txn = ref.watch(transactionDetailProvider(transactionId));
     // Activity and Spending already hold the complete row that was tapped.
     // Use it immediately while a live refresh is pending or unavailable.
     final entry = txn.valueOrNull ?? initialEntry;
@@ -85,7 +85,7 @@ class TransactionDetailScreen extends ConsumerWidget {
                   extra: entry,
                 );
                 if (changed == true) {
-                  ref.invalidate(_transactionProvider(transactionId));
+                  ref.invalidate(transactionDetailProvider(transactionId));
                 }
               },
             ),
@@ -121,7 +121,7 @@ class TransactionDetailScreen extends ConsumerWidget {
                 error: (err, _) => ErrorState(
                   message: userFacingErrorMessage(err),
                   onRetry: () =>
-                      ref.invalidate(_transactionProvider(transactionId)),
+                      ref.invalidate(transactionDetailProvider(transactionId)),
                 ),
                 data: (_) => const EmptyState(
                   icon: Icons.receipt_long_outlined,
@@ -134,7 +134,11 @@ class TransactionDetailScreen extends ConsumerWidget {
   }
 }
 
-final _transactionProvider = FutureProvider.family<TransactionEntry?, String>((
+/// Shared so screens that change a transaction's lifecycle outside this one
+/// (Deleted transactions' restore) can drop the cached detail instead of
+/// showing the pre-restore status until the app restarts.
+final transactionDetailProvider =
+    FutureProvider.family<TransactionEntry?, String>((
   ref,
   id,
 ) async {
@@ -410,7 +414,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       // provider/cache. Invalidate the shared list as well so reopening the
       // transaction or searching for its note reads the value just saved.
       ref.invalidate(transactionsProvider);
-      ref.invalidate(_transactionProvider(widget.entry.id));
+      ref.invalidate(transactionDetailProvider(widget.entry.id));
     } catch (e) {
       if (mounted) setState(() => _note = previous);
       final offline = ref.read(isOnlineProvider).valueOrNull == false;
@@ -523,6 +527,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     });
 
     try {
+      final repo = ref.read(userCardsRepositoryProvider);
+      if (repo == null) throw StateError('Account is unavailable.');
+      // Server first: hiding the row locally before the server confirms it
+      // leaves a "deleted" row that still exists server-side, so it never
+      // shows in Deleted transactions and cannot be restored.
+      await repo.ignoreTransaction(widget.entry.id, reason: reason);
+
       final namespace = ref.read(cacheNamespaceProvider);
       final cache = await ref.read(responseCacheProvider.future);
       if (deleting) {
@@ -531,14 +542,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         cache.financialStore.markInactive(namespace, widget.entry.id, reason: reason);
       }
 
-      final repo = ref.read(userCardsRepositoryProvider);
-      if (repo != null) {
-        try {
-          await repo.ignoreTransaction(widget.entry.id, reason: reason);
-        } catch (_) {}
-      }
-
-      ref.invalidate(_transactionProvider(widget.entry.id));
+      ref.invalidate(transactionDetailProvider(widget.entry.id));
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       ref.invalidate(transactionsProvider);
@@ -621,18 +625,15 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     });
 
     try {
+      final repo = ref.read(userCardsRepositoryProvider);
+      if (repo == null) throw StateError('Account is unavailable.');
+      await repo.restoreTransaction(widget.entry.id);
+
       final namespace = ref.read(cacheNamespaceProvider);
       final cache = await ref.read(responseCacheProvider.future);
       cache.financialStore.markActive(namespace, widget.entry.id);
 
-      final repo = ref.read(userCardsRepositoryProvider);
-      if (repo != null) {
-        try {
-          await repo.restoreTransaction(widget.entry.id);
-        } catch (_) {}
-      }
-
-      ref.invalidate(_transactionProvider(widget.entry.id));
+      ref.invalidate(transactionDetailProvider(widget.entry.id));
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       ref.invalidate(transactionsProvider);
@@ -758,15 +759,36 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           content: const Text(
             'This will remove it from your spending totals. You can restore it later from Deleted transactions.',
           ),
+          // Side by side rather than AlertDialog's default stacked actions:
+          // the app-wide FilledButton minimumSize is Size.fromHeight, i.e.
+          // infinite width, which wraps the default action bar and stretches
+          // Delete across the dialog with Cancel orphaned above it.
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete'),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: BambooInk.ink900,
+                      side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                      minimumSize: const Size(0, 52),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.md),
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      minimumSize: const Size(0, 52),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Delete'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -790,7 +812,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       '/activity/${widget.entry.id}/edit',
     );
     if (changed == true && mounted) {
-      ref.invalidate(_transactionProvider(widget.entry.id));
+      ref.invalidate(transactionDetailProvider(widget.entry.id));
     }
   }
 
@@ -935,13 +957,32 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         title: const Text('Remove attachment?'),
         content: Text('Remove ${attachment.fileName} from this transaction?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Remove'),
+          // Equal halves — see the delete dialog's note on why the default
+          // stacked action bar is overridden here.
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: BambooInk.ink900,
+                    side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                    minimumSize: const Size(0, 52),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 52),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Remove'),
+                ),
+              ),
+            ],
           ),
         ],
       ),

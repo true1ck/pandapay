@@ -17,6 +17,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   TransactionEntry entry;
   final bool failFetch;
   final bool failSplits;
+  final bool failIgnore;
   String? lastIgnoreReason;
   String? lastNote;
   List<TransactionSplit> splits;
@@ -24,6 +25,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     this.entry, {
     this.failFetch = false,
     this.failSplits = false,
+    this.failIgnore = false,
     this.splits = const [],
   });
 
@@ -35,6 +37,11 @@ class _FakeUserCardsRepository implements UserCardsRepository {
 
   @override
   Future<void> ignoreTransaction(String id, {required String reason}) async {
+    if (failIgnore) {
+      throw ApiException(
+        'POST /transactions/:id/ignore failed: 500 {"error":"internal_error"}',
+      );
+    }
     lastIgnoreReason = reason;
     entry = TransactionEntry(
       id: entry.id,
@@ -528,9 +535,57 @@ void main() {
     await tester.tap(find.text('Delete transaction'));
     await tester.pumpAndSettle();
     expect(find.text('Delete transaction?'), findsOneWidget);
+
+    // Cancel and Delete must share one row at equal size: the app-wide
+    // FilledButton minimumSize is full-width, which otherwise wraps the
+    // default action bar into a stacked full-width Delete.
+    final cancelRect = tester.getRect(
+      find.widgetWithText(OutlinedButton, 'Cancel'),
+    );
+    final deleteRect = tester.getRect(
+      find.widgetWithText(FilledButton, 'Delete'),
+    );
+    expect(cancelRect.top, deleteRect.top);
+    expect(cancelRect.height, deleteRect.height);
+    expect(cancelRect.width, moreOrLessEquals(deleteRect.width));
+
     await tester.tap(find.text('Delete'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
     expect(repo.lastIgnoreReason, 'transfer');
+  });
+
+  testWidgets('a failed delete keeps the row and never claims it was deleted', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository(
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(750),
+        occurredAt: DateTime(2026, 3, 1),
+        userCardId: 'uc1',
+        source: 'manual',
+        status: 'active',
+      ),
+      failIgnore: true,
+    );
+    await _pump(tester, repo: repo);
+
+    await tester.tap(find.text('Refund, reversal, or delete transaction'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete transaction'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // A swallowed server error used to leave a locally "deleted" row that the
+    // server still had active, so it never reached Deleted transactions.
+    expect(find.text('Transaction deleted.'), findsNothing);
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.text('Active'), findsOneWidget);
+    expect(
+      find.text('Refund, reversal, or delete transaction'),
+      findsOneWidget,
+    );
   });
 }

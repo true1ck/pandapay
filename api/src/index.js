@@ -6313,8 +6313,13 @@ app.get('/transactions', requireAuth, async (req, res) => {
   // background reconciliation has run. Only a unique archived -> active
   // physical-card match is eligible; ambiguity remains visible as unmatched.
   const canonicalCardId = 'COALESCE(replacement.active_card_id, t.user_card_id)';
+  // The recovery list must contain everything Activity hides. Restricting it
+  // to 'deleted' plus the legacy transfer tag stranded rows ignored for any
+  // other reason (e.g. a wrong-transaction report) with no restore path in
+  // the app, even though POST /transactions/:id/restore accepts them. Refund
+  // and reversal rows stay in Activity by design, so they are excluded here.
   const statusCondition = status === 'deleted'
-    ? `(t.status = 'deleted' OR (t.status = 'ignored' AND t.note LIKE '[ignored: transfer]%'))`
+    ? `(t.status = 'deleted' OR (t.status = 'ignored' AND (t.note IS NULL OR (t.note NOT LIKE '[ignored: refund]%' AND t.note NOT LIKE '[ignored: reversal]%'))))`
     : `(t.status = 'active' OR (t.status = 'ignored' AND (t.note LIKE '[ignored: refund]%' OR t.note LIKE '[ignored: reversal]%')))`;
   const conditions = [`t.profile_id = $1`, statusCondition];
   const params = [req.userId];
