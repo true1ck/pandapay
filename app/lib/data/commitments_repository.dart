@@ -417,6 +417,8 @@ class Commitment {
 
   bool isDueToday(DateTime now) => daysUntilDue(now) == 0;
 
+  bool get isAutoPay => isSubscriptionAutoPay(title);
+
   DateTime? get gracePeriodEndsOn {
     if (gracePeriodDays == null || gracePeriodDays! <= 0) return null;
     return dueOn.add(Duration(days: gracePeriodDays!));

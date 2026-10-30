@@ -383,9 +383,6 @@ List<DuePayment> _cardRowsForHorizon(
 }
 
 bool _matchesCommitment(Commitment c, BillsHorizonFilter filter) {
-  // Subscriptions have their own dedicated screen (AppRoute.subscriptions).
-  // Exclude them from Payments Due to avoid cluttering actionable bills.
-  if (c.category == CommitmentCategory.subscription) return false;
   if (c.confidence < 0.85) return false;
   if (c.status == CommitmentStatus.needsConfirmation ||
       c.status == CommitmentStatus.dismissed) {
@@ -581,13 +578,21 @@ class _DueList extends ConsumerWidget {
               c.category == CommitmentCategory.telecom,
         )
         .toList(growable: false);
+    final investments = visibleCommitments
+        .where((c) => c.category == CommitmentCategory.investment)
+        .toList(growable: false);
+    final loansAndEmis = visibleCommitments
+        .where((c) => c.category == CommitmentCategory.loanOrEmi)
+        .toList(growable: false);
+    final subscriptions = visibleCommitments
+        .where((c) => c.category == CommitmentCategory.subscription)
+        .toList(growable: false);
     final renewals = visibleCommitments
         .where((c) => c.category == CommitmentCategory.insurance)
         .toList(growable: false);
     final scheduled = visibleCommitments
         .where(
           (c) =>
-              c.category == CommitmentCategory.loanOrEmi ||
               c.category == CommitmentCategory.rent ||
               c.category == CommitmentCategory.education ||
               c.category == CommitmentCategory.tax ||
@@ -622,6 +627,9 @@ class _DueList extends ConsumerWidget {
         !localFailed &&
         cardRows.isEmpty &&
         !(utilities.isNotEmpty ||
+            investments.isNotEmpty ||
+            loansAndEmis.isNotEmpty ||
+            subscriptions.isNotEmpty ||
             renewals.isNotEmpty ||
             (_showScheduledPayments && scheduled.isNotEmpty)) &&
         !hasSms &&
@@ -738,6 +746,51 @@ class _DueList extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpace.md),
             for (final item in utilities)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                child: _CommitmentRow(commitment: item, filter: filter),
+              ),
+            const SizedBox(height: AppSpace.lg),
+          ],
+
+          // Investments & SIPs
+          if (investments.isNotEmpty) ...[
+            _SectionHeader(
+              label: 'Investments & SIPs',
+              count: investments.length,
+            ),
+            const SizedBox(height: AppSpace.md),
+            for (final item in investments)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                child: _CommitmentRow(commitment: item, filter: filter),
+              ),
+            const SizedBox(height: AppSpace.lg),
+          ],
+
+          // Loans & EMIs
+          if (loansAndEmis.isNotEmpty) ...[
+            _SectionHeader(
+              label: 'Loans & EMIs',
+              count: loansAndEmis.length,
+            ),
+            const SizedBox(height: AppSpace.md),
+            for (final item in loansAndEmis)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                child: _CommitmentRow(commitment: item, filter: filter),
+              ),
+            const SizedBox(height: AppSpace.lg),
+          ],
+
+          // Subscriptions
+          if (subscriptions.isNotEmpty) ...[
+            _SectionHeader(
+              label: 'Subscriptions',
+              count: subscriptions.length,
+            ),
+            const SizedBox(height: AppSpace.md),
+            for (final item in subscriptions)
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpace.sm),
                 child: _CommitmentRow(commitment: item, filter: filter),
@@ -2229,7 +2282,8 @@ class _CommitmentRow extends ConsumerWidget {
       );
     }
     if (daysUntil < 0) {
-      if (commitment.category == CommitmentCategory.subscription) {
+      if (commitment.category == CommitmentCategory.subscription ||
+          commitment.category == CommitmentCategory.investment) {
         return Text(
           'Active mandate · Auto-debited',
           style: BambooFonts.ui(12, color: BambooInk.ink500),

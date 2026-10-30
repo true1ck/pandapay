@@ -71,7 +71,10 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.dataString?.let { assistantChannel?.invokeMethod("assistantUri", it) }
+        intent.dataString?.let {
+            assistantChannel?.invokeMethod("assistantUri", it)
+            intent.data = null
+        }
     }
 
     override fun onResume() {
@@ -89,7 +92,11 @@ class MainActivity : FlutterFragmentActivity() {
         assistantChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ASSISTANT_CHANNEL)
         assistantChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
-                "getInitialAssistantUri" -> result.success(intent?.dataString)
+                "getInitialAssistantUri" -> {
+                    val uri = intent?.dataString
+                    intent?.data = null
+                    result.success(uri)
+                }
                 else -> result.notImplemented()
             }
         }

@@ -214,7 +214,15 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
           icon: const Icon(Icons.arrow_back_rounded, size: 25),
           color: BambooInk.ink900,
           tooltip: 'Back',
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoute.home);
+            }
+          },
         ),
         titleSpacing: 0,
         title: Text(

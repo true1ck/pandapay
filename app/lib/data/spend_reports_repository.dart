@@ -970,6 +970,68 @@ class RecurringSeries {
     return 'Not confirmed';
   }
 
+  RecurringSeries copyWith({
+    String? id,
+    String? displayName,
+    Money? typicalAmount,
+    bool? amountKnown,
+    int? cadenceDays,
+    int? occurrenceCount,
+    Money? annualCost,
+    Money? autopayLimit,
+    DateTime? startDate,
+    DateTime? endDate,
+    DateTime? lastSeenOn,
+    DateTime? nextExpectedOn,
+    String? userCategoryId,
+    String? categoryName,
+    String? subcategoryName,
+    String? cardName,
+    String? paymentMethod,
+    String? detectionSource,
+    bool? isMandate,
+    bool? isUserEdited,
+    String? lifecycleStatus,
+    String? autopayStatus,
+    String? mandateReference,
+    String? sourceKey,
+    bool? cadenceConfirmed,
+    bool? setupConfirmed,
+    bool? reviewCandidate,
+    String? engineStatus,
+  }) {
+    return RecurringSeries(
+      id: id ?? this.id,
+      displayName: displayName ?? this.displayName,
+      typicalAmount: typicalAmount ?? this.typicalAmount,
+      amountKnown: amountKnown ?? this.amountKnown,
+      cadenceDays: cadenceDays ?? this.cadenceDays,
+      occurrenceCount: occurrenceCount ?? this.occurrenceCount,
+      annualCost: annualCost ?? this.annualCost,
+      autopayLimit: autopayLimit ?? this.autopayLimit,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      lastSeenOn: lastSeenOn ?? this.lastSeenOn,
+      nextExpectedOn: nextExpectedOn ?? this.nextExpectedOn,
+      userCategoryId: userCategoryId ?? this.userCategoryId,
+      categoryName: categoryName ?? this.categoryName,
+      subcategoryName: subcategoryName ?? this.subcategoryName,
+      cardName: cardName ?? this.cardName,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      detectionSource: detectionSource ?? this.detectionSource,
+      isMandate: isMandate ?? this.isMandate,
+      isUserEdited: isUserEdited ?? this.isUserEdited,
+      lifecycleStatus: lifecycleStatus ?? this.lifecycleStatus,
+      autopayStatus: autopayStatus ?? this.autopayStatus,
+      mandateReference: mandateReference ?? this.mandateReference,
+      sourceKey: sourceKey ?? this.sourceKey,
+      cadenceConfirmed: cadenceConfirmed ?? this.cadenceConfirmed,
+      setupConfirmed: setupConfirmed ?? this.setupConfirmed,
+      reviewCandidate: reviewCandidate ?? this.reviewCandidate,
+      engineStatus: engineStatus ?? this.engineStatus,
+    );
+  }
+
   factory RecurringSeries.fromJson(Map<String, dynamic> json) {
     final detectionSource = json['detectionSource'] as String? ?? 'observed';
     final setupConfirmed = json['setupConfirmed'] == true;

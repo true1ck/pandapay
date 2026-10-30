@@ -93,7 +93,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="pandapay" android:host="assistant" android:pathPrefix="/spending" />
+                <data android:scheme="pandapay" android:host="assistant" />
             </intent-filter>
             <!-- Public invite links. MainActivity forwards these through the
                  same validated MethodChannel as Assistant links because the

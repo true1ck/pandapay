@@ -10,6 +10,9 @@ enum AssistantAction {
   nearbyMerchants,
   scanUpi,
   bestCard,
+  subscriptions,
+  insights,
+  home,
 }
 
 final class AssistantRequest {
@@ -64,6 +67,12 @@ AssistantRequest? parseAssistantUri(Uri uri) {
       return const AssistantRequest(action: AssistantAction.scanUpi);
     case 'best-card':
       return const AssistantRequest(action: AssistantAction.bestCard);
+    case 'subscriptions':
+      return const AssistantRequest(action: AssistantAction.subscriptions);
+    case 'insights':
+      return const AssistantRequest(action: AssistantAction.insights);
+    case 'home':
+      return const AssistantRequest(action: AssistantAction.home);
     default:
       return null;
   }

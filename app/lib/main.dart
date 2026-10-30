@@ -294,7 +294,12 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
       case AssistantAction.scanUpi:
         router.go(AppRoute.assistantScanUpi);
       case AssistantAction.bestCard:
+      case AssistantAction.home:
         router.go(AppRoute.home);
+      case AssistantAction.subscriptions:
+        router.go(AppRoute.subscriptions);
+      case AssistantAction.insights:
+        router.go(AppRoute.insights);
     }
   }
 
