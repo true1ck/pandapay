@@ -243,7 +243,7 @@ void main() {
     expect(find.text('Yesterday'), findsOneWidget);
     expect(find.text('Today Shop'), findsOneWidget);
     expect(find.text('Yesterday Shop'), findsOneWidget);
-    expect(find.text('2 transactions'), findsOneWidget);
+    expect(find.text('2 txns'), findsOneWidget);
   });
 
   testWidgets('does not count a credit-card bill payment as spending', (
@@ -291,8 +291,10 @@ void main() {
     expect(find.text('Money out'), findsOneWidget);
     expect(find.text('+₹9,000'), findsOneWidget);
     expect(find.text('−₹1,250'), findsOneWidget);
-    expect(find.byIcon(Icons.arrow_downward_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.arrow_upward_rounded), findsOneWidget);
+    // Each arrow appears twice: once in the summary strip's badge and once on
+    // the matching transaction row's tile.
+    expect(find.byIcon(Icons.arrow_downward_rounded), findsNWidgets(2));
+    expect(find.byIcon(Icons.arrow_upward_rounded), findsNWidgets(2));
   });
 
   testWidgets('compacts large summary totals to keep both metrics visible', (
