@@ -11,6 +11,20 @@ import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 
 void main() {
+  test('HDFC UPI credit alert is captured as an incoming transaction', () {
+    const sender = 'AX-HDFCBK-S';
+    const body = 'Credit Alert! Rs.1.00 credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA *r123@oksbi (UPI 630371662093)';
+    expect(capturesFinancialSms(body, sender: sender), isTrue);
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: sender,
+      body: body,
+      receivedAt: DateTime(2026, 10, 30, 13, 37),
+    );
+    expect(result?.eventType, LocalSmsEventType.transaction);
+    expect(result?.transaction, isNotNull);
+    expect(result?.transaction?.amount.rupees, 1);
+  });
   test('explicit service renewal keeps stated amount and next date', () {
     final result = LocalSmsParser.parse(
       namespace: 'test',
