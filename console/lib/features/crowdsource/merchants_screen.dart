@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../widgets/confirm_dialog.dart';
 
 /// AD-6.1/6.2: crowdsourced merchant visibility. Scope note (see api/'s
 /// GET /admin/merchants doc comment): this is a filtered table over
@@ -244,9 +245,18 @@ class _MerchantDetailDialogState extends ConsumerState<_MerchantDetailDialog> {
                       OutlinedButton(
                         onPressed: _busy
                             ? null
-                            : () => _act(() => ref
-                                .read(adminApiProvider)!
-                                .unpublishMerchant(widget.merchantId, reason: 'console unpublish')),
+                            : () async {
+                                final confirmed = await confirmAdminAction(
+                                  context,
+                                  title: 'Unpublish this merchant?',
+                                  message: 'The merchant disappears from user-facing suggestions until published again.',
+                                  confirmLabel: 'Unpublish',
+                                );
+                                if (!confirmed || !mounted) return;
+                                await _act(() => ref
+                                    .read(adminApiProvider)!
+                                    .unpublishMerchant(widget.merchantId, reason: 'console unpublish'));
+                              },
                         child: const Text('Unpublish'),
                       ),
                     ],

@@ -360,6 +360,25 @@ test('credit-card bill payment receipts become transfers, not spending', () => {
   assert.equal(result.fields.entryKind, 'transfer');
 });
 
+test('Axis Unicode-masked P2A narration identifies the receiver', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'AX-AXISBK-S',
+    body: 'INR 9000.00 debited\nA/c no. XX2583\n04-10-26, 21:49:33\nUPI/P2A/•••• 2120/AANCHAL YADU\nNot you? SMS BLOCKUPI Cust ID to •••• 0002\nAxis Bank',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.merchant, 'AANCHAL YADU');
+});
+
+test('SBI processed card bill identifies destination and stays outside spend', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'VM-SBYONO-S',
+    body: 'ICICI Credit card bill - of Rs.94567.00 has been successfully processed from SBI A/C-0208. Your B-connect Txn id is xxxxKvEe -YONO SBI',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.merchant, 'ICICI credit card bill');
+  assert.equal(result.fields.entryKind, 'transfer');
+});
+
 test('paid card bills remain transfers while purchases on the same card remain spend', () => {
   const payments = [
     'Your Axis Bank Credit Card bill of Rs. 80000 paid successfully for card ending 2006.',
@@ -718,6 +737,21 @@ test('loan repayments and bank fees do not inflate purchase spending', () => {
   assert.equal(fee.ok, true);
   assert.equal(fee.fields.entryKind, 'spend');
   assert.equal(fee.fields.transferKind, 'fee');
+});
+
+test('credited EMI repayment alerts are loan repayments, not income', () => {
+  for (const body of [
+    'Dear Customer, your account no. XX3510 has been credited with Rs.6300 towards the payment of EMI on 04-10-2026. UCO Bank',
+    'Dear Customer, your account no. XX2315 has been credited with Rs.9700 towards the payment of EMI on 04-10-2026. UCO Bank',
+    'Loan EMI payment of Rs.5000 credited to your account ending 2626.',
+    'Your a/c XX4455 has been credited with Rs.8500. Equated Monthly Installment received towards home loan. SBI',
+  ]) {
+    const result = parseSmsAgainstPatterns([], { sender: 'VM-UCOBNK-S', body });
+    assert.equal(result.ok, true, body);
+    assert.equal(result.fields.entryKind, 'transfer', body);
+    assert.equal(result.fields.transferKind, 'loan_repayment', body);
+    assert.equal(result.fields.merchant, 'Loan or EMI repayment', body);
+  }
 });
 
 test('loan disbursement, investment proceeds, gifts and reimbursements are not earned income by default', () => {
@@ -1614,4 +1648,37 @@ test('Axio Amazon Pay Later drawdown parses as spend transaction with merchant A
     assert.equal(result.fields.instrument, 'other');
     assert.equal(result.fields.accountLast4, 'Amazon Pay Later');
   }
+});
+
+test('Axis UPI P2M narration names the merchant after a masked reference', () => {
+  const body = 'INR 12.00 debited\n'
+    + 'A/c no. XX2583\n'
+    + '21-10-26, 22:41:20\n'
+    + 'UPI/P2M/**** 6977/MANYAM VISWANADA RE\n'
+    + 'Not you? SMS BLOCKUPI Cust ID to **** 0002\n'
+    + 'Axis Bank';
+  const result = parseSmsAgainstPatterns([], { sender: 'AD-AXISBK-S', body });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 12);
+  assert.equal(result.fields.merchant, 'MANYAM VISWANADA RE');
+});
+
+test('UPI P2M narration without a party token does not invent a merchant', () => {
+  const body = 'INR 12.00 debited\nA/c no. XX2583\n21-10-26, 22:41:20\n'
+    + 'UPI/P2M/**** 6977\nNot you? SMS BLOCKUPI Cust ID to **** 0002';
+  const result = parseSmsAgainstPatterns([], { sender: 'AD-AXISBK-S', body });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 12);
+  assert.ok(!result.fields.merchant || !/^P2M$/i.test(result.fields.merchant));
+});
+
+test('"debited towards X for INR" names X and never the VPA hash', () => {
+  const body = 'Your A/c has been debited towards Google Play for INR 4999.00 '
+    + 'on 10-10-26. '
+    + '9901e1edad8e46cd937da209ef0baf55@axl - Axis Bank';
+  const result = parseSmsAgainstPatterns([], { sender: 'AD-AXISBK-S', body });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 4999);
+  assert.equal(result.fields.merchant, 'Google Play');
+  assert.notEqual(result.fields.merchant, 'Bank transfer');
 });

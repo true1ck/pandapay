@@ -34,6 +34,41 @@ void main() {
       expect(requestCount, 0);
       expect(repository.dismissalRetryQueue, isEmpty);
     });
+
+    test('typed classification dismissal survives retry with its predicted kind', () async {
+      final requests = <Map<String, dynamic>>[];
+      var callCount = 0;
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'session-token',
+        loadSmsSharedLearningConsent: () async => DateTime(2026, 10, 1),
+        client: MockClient((request) async {
+          requests.add(jsonDecode(request.body) as Map<String, dynamic>);
+          callCount++;
+          return callCount == 1
+              ? http.Response('{}', 503)
+              : http.Response('{"acknowledged":true}', 200);
+        }),
+      );
+
+      final accepted = await repository.dismissSms(
+        sourceKey: List.filled(64, 'b').join(),
+        sender: 'HDFCBK',
+        sampleBody: 'Debited INR 500 at merchant',
+        reason: 'user_marked_wrong_financial_kind',
+        family: 'posted_movement',
+        correctionKind: 'false_transaction',
+        resolvedKind: 'transaction',
+      );
+      expect(accepted, isFalse);
+      expect(await repository.flushDismissalQueue(), 1);
+      expect(requests, hasLength(2));
+      for (final payload in requests) {
+        expect(payload['correctionKind'], 'false_transaction');
+        expect(payload['resolvedKind'], 'transaction');
+        expect((payload['originalDecision'] as Map)['kind'], 'posted_movement');
+      }
+    });
   });
 
   group('SMS history reconciliation version', () {
@@ -76,6 +111,25 @@ void main() {
       expect(repaired.crossSourceCandidatesCreated, 1);
       expect(repaired.classificationReclassified, 2);
       expect(repaired.remappedTransactions, 3);
+    });
+
+    test('v3 response enables historical recipient replay', () async {
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'session-token',
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'reconciliationVersion': 3,
+              'classificationReclassified': 1,
+            }),
+            200,
+          ),
+        ),
+      );
+      final repaired = await repository.reconcileSmsHistory();
+      expect(repaired.reconciliationVersion, 3);
+      expect(repaired.classificationReclassified, 1);
     });
   });
 

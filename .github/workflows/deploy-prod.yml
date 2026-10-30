@@ -283,6 +283,15 @@ jobs:
               error: payload.error || null,
               detail: payload.detail || null,
             }));
+            // External Places/OSM availability is not a deployment health
+            // signal. Keep the outage visible without marking a healthy API
+            // deployment as failed.
+            if (response.status === 503
+              && payload.error === 'nearby_discovery_unavailable'
+              && payload.unavailable === true) {
+              console.log('::warning::Nearby providers are unavailable; API health and Gemini checks passed.');
+              return;
+            }
             if (!response.ok || count < 0
               || !['google_places', 'google_maps', 'openstreetmap_fallback'].includes(payload.source)) {
               process.exitCode = 1;
@@ -309,6 +318,15 @@ jobs:
               http://127.0.0.1:3210/users/me)"
             printf "anonymous API denial: %s; anonymous auth denial: %s\\n" "$api_status" "$auth_status"
             [ "$api_status" = 401 ] && [ "$auth_status" = 401 ]'
+
+      - name: Show sanitized Google Places diagnostic
+        if: success()
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
+            'cd /home/ubuntu/apps/pandapay && docker compose --env-file .env -f docker-compose.prod.yml logs --tail=100 api | grep "Google Places failed:" | tail -n 1 || true'
 
       - name: Show sanitized API diagnostics
         if: failure()

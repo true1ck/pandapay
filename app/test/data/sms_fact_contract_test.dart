@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/sms_fact_contract.dart';
 
-Map<String, Object?> spendFact({double amount = 250, String merchant = 'SWIGGY'}) => {
+Map<String, Object?> spendFact({
+  double amount = 250,
+  String merchant = 'SWIGGY',
+}) => {
   'amountRole': 'posted',
   'amountInr': amount,
   'entryKind': 'spend',
@@ -68,10 +71,31 @@ void main() {
     final ceilingOmitted = validateSmsFact(
       SmsFactValidationEntry(
         factType: 'mandate_lifecycle',
-        payload: {'mandateStatus': 'registered', 'asOfAt': '2026-10-16T10:00:00.000Z'},
+        payload: {
+          'mandateStatus': 'registered',
+          'asOfAt': '2026-10-16T10:00:00.000Z',
+        },
       ),
     );
     expect(ceilingOmitted.valid, isTrue);
+  });
+
+  test('completed bill payment accepts a posted transfer amount', () {
+    final result = validateSmsFact(
+      const SmsFactValidationEntry(
+        factType: 'bill_payment',
+        payload: {
+          'amountRole': 'posted',
+          'amountInr': 3160.8,
+          'occurredAt': '2026-04-15T06:59:00.000Z',
+          'billerName': 'Turtlemint',
+          'entryKind': 'transfer',
+          'isComplete': true,
+          'confidence': 0.8,
+        },
+      ),
+    );
+    expect(result.valid, isTrue, reason: result.errors.join('; '));
   });
 
   test('a mandate ceiling can never be booked as posted money', () {
@@ -137,24 +161,22 @@ void main() {
     final ia = assignDeterministicSmsFactIndices(setA);
     final ib = assignDeterministicSmsFactIndices(setB);
     final byType = (List<SmsFactValidationEntry> facts) =>
-        facts.map((f) => [f.factIndex, f.factType]).toList()..sort((x, y) => (x[1] as String).compareTo(y[1] as String));
+        facts.map((f) => [f.factIndex, f.factType]).toList()
+          ..sort((x, y) => (x[1] as String).compareTo(y[1] as String));
     // Node reference ordering: [0] balance_snapshot, [1] posted_movement.
-    expect(
-      byType(ia),
-      [
-        [0, 'balance_snapshot'],
-        [1, 'posted_movement'],
-      ],
-    );
+    expect(byType(ia), [
+      [0, 'balance_snapshot'],
+      [1, 'posted_movement'],
+    ]);
     expect(byType(ia), byType(ib));
     expect(ia.map((f) => f.factIndex).toList(), [0, 1]);
   });
 
   test('user override merges over the parser payload and wins', () {
-    final merged = applySmsFactOverride(
-      spendFact(amount: 250),
-      {'amountInr': 350.0, 'merchant': 'Blaack Forest Restaurant'},
-    );
+    final merged = applySmsFactOverride(spendFact(amount: 250), {
+      'amountInr': 350.0,
+      'merchant': 'Blaack Forest Restaurant',
+    });
     expect(merged['amountInr'], 350.0);
     expect(merged['merchant'], 'Blaack Forest Restaurant');
     expect(merged['occurredAt'], spendFact()['occurredAt']);

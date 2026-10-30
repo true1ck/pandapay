@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 
 import 'api_exception.dart';
 
+const smsSharedLearningPurpose = 'sms_shared_learning';
+const smsSharedLearningPolicyVersion = 'sms-shared-learning-v2';
+
 /// H4 Privacy & Permissions. Thin IO boundary over Task H-0's
 /// `user_consents` routes — mirrors ProfileApi's shape (app/lib/data/auth_api.dart):
 /// constructor takes `{required apiBaseUrl, required accessToken}`, methods
@@ -36,7 +39,9 @@ class ConsentRecord {
       purpose: json['purpose'] as String,
       granted: json['granted'] as bool,
       grantedAt: DateTime.parse(json['granted_at'] as String),
-      revokedAt: json['revoked_at'] == null ? null : DateTime.parse(json['revoked_at'] as String),
+      revokedAt: json['revoked_at'] == null
+          ? null
+          : DateTime.parse(json['revoked_at'] as String),
       policyVersion: json['policy_version'] as String?,
       sourceScreen: json['source_screen'] as String?,
     );
@@ -48,8 +53,11 @@ class ConsentsApi {
   final String accessToken;
   final http.Client _client;
 
-  ConsentsApi({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-    : _client = client ?? http.Client();
+  ConsentsApi({
+    required this.apiBaseUrl,
+    required this.accessToken,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
     'Authorization': 'Bearer $accessToken',
@@ -58,9 +66,14 @@ class ConsentsApi {
 
   /// GET /consents — latest row per purpose (server-side `DISTINCT ON`).
   Future<List<ConsentRecord>> fetchLatest() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/consents'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/consents'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /consents failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /consents failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final consents = (body['consents'] as List).cast<Map<String, dynamic>>();
@@ -69,9 +82,14 @@ class ConsentsApi {
 
   /// GET /consents/history — every row ever written, most recent first.
   Future<List<ConsentRecord>> fetchHistory() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/consents/history'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/consents/history'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /consents/history failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /consents/history failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final consents = (body['consents'] as List).cast<Map<String, dynamic>>();
@@ -98,7 +116,9 @@ class ConsentsApi {
       }),
     );
     if (response.statusCode != 201) {
-      throw ApiException('POST /consents failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /consents failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 }

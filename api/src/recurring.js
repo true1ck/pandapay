@@ -9,10 +9,10 @@ const { brandFor } = require('./brand_catalog');
 // SIP-like bank debit is spend the user may want surfaced. Investment
 // WORDING is still blocked, and message-level funding checks
 // (isInvestmentFundingMessage) still guard at ingestion.
-const FINANCIAL_MOVEMENT_NAME = /\b(?:bank\s+transfer|transfer\s+to|transfer\s+between|cash\s+withdrawal|credit\s+card\s+bill\s+payment|investment\s+contribution|money\s+received|salary|refund|cashback|dividend|demat|trading|broker(?:age|ing)?|portfolio|mutual\s+fund|systematic\s+investment|sip|stocks?|shares?|equity|investment)\b/i;
+const FINANCIAL_MOVEMENT_NAME = /\b(?:bank\s+transfer|transfer\s+to|transfer\s+between|cash\s+withdrawal|credit\s+card\s+bill\s+payment|investment\s+contribution|money\s+received|salary|refund|cashback|dividend|demat|trading|broker(?:age|ing)?|portfolio|mutual\s+fund|systematic\s+investment|sip|stocks?|shares?|equity|investment|deposit|funding|add\s*funds?|top-?up)\b/i;
 
 const FINANCIAL_PROVIDER = /\b(?:zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|demat|trading|broker(?:age|ing)?|portfolio)\b/i;
-const INVESTMENT_INTENT = /\b(?:sip|systematic\s+investment|mutual\s+fund|investment|invested|invest(?:ment)?\s+account|add(?:ing|ed)?\s+(?:money|funds?)|funds?\s+(?:added|credited|transferred|deposited)|top[ -]?up|fund(?:ed|ing)|buy|bought|purchase(?:d)?|units?|stocks?|shares?|equity)\b/i;
+const INVESTMENT_INTENT = /\b(?:sip|systematic\s+investment|mutual\s+fund|investment|invested|invest(?:ment)?\s+account|add(?:ing|ed)?\s+(?:money|funds?)|funds?\s+(?:added|credited|transferred|deposited)|top[ -]?up|fund(?:ed|ing)|buy|bought|purchase(?:d)?|units?|stocks?|shares|equity\s+shares?|equity)\b/i;
 const MOVEMENT_VERB = /\b(?:debit(?:ed)?|paid|sent|transferred|withdrawn|invested|purchased|bought|credited|received|deposited|add(?:ing|ed)?|funded|top[ -]?up)\b/i;
 const FEE_ONLY = /\b(?:fee|fees|charge|charges|commission|brokerage\s+fee|annual\s+maintenance)\b/i;
 
@@ -23,7 +23,8 @@ const FEE_ONLY = /\b(?:fee|fees|charge|charges|commission|brokerage\s+fee|annual
 // phrase "add funds back to your <broker> account" is an instruction about
 // the user's next step, not this transaction.
 function isBrokerSettlementMessage(value) {
-  const text = String(value || '');
+  const rawText = String(value || '');
+  const text = rawText.replace(/\b(?:(?:do\s+not|don't|never)\s+share\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|passcode|details|secret|code)\b|bank\s+never\s+asks\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details))\b[^\n]*/gi, '');
   return /\b(?:dhan|zerodha|groww|upstox|angel\s+one|5paisa|sharekhan|motilal\s+oswal|hdfc\s+securities|icici\s+direct|kotak\s+securities|paytm\s+money|iifl)\b/i.test(text)
     && /\b(?:running\s+account\s+settlement|quarterly\s+settlement|account\s+settlement|settlement\s+(?:payout|credit|dated)|payout|pay-?out|funds?\s+released)\b/i.test(text);
 }
@@ -41,7 +42,8 @@ function isInvestmentFolioAllotment(body) {
 }
 
 function isInvestmentFundingMessage(value) {
-  const text = String(value || '');
+  const rawText = String(value || '');
+  const text = rawText.replace(/\b(?:(?:do\s+not|don't|never)\s+share\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|passcode|details|secret|code)\b|bank\s+never\s+asks\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details))\b[^\n]*/gi, '');
   if (!text || !MOVEMENT_VERB.test(text)) return false;
   if (isInvestmentFolioAllotment(text)) return false;
   const explicitInvestment = INVESTMENT_INTENT.test(text);
@@ -60,7 +62,8 @@ function isInvestmentFundingMessage(value) {
 }
 
 function isInvestmentMandateMessage(value) {
-  const text = String(value || '');
+  const rawText = String(value || '');
+  const text = rawText.replace(/\b(?:(?:do\s+not|don't|never)\s+share\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|passcode|details|secret|code)\b|bank\s+never\s+asks\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details))\b[^\n]*/gi, '');
   return FINANCIAL_PROVIDER.test(text) &&
     /\b(?:autopay|auto[- ]?pay|mandate|standing\s+instruction|sip)\b/i.test(text) &&
     INVESTMENT_INTENT.test(text) &&
@@ -147,6 +150,16 @@ function isUsableSubscriptionName(name) {
     return false;
   }
 
+  // Ordinary retail stores, supermarkets, grocery shops, food/dining, cafes, and tea stalls are everyday spends, not subscriptions
+  if (
+    !brandFor(value) &&
+    /\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|canteen|sweets|pharmacy|chemist|medical|hospital|clinic)\b/i.test(
+      value
+    )
+  ) {
+    return false;
+  }
+
   const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   if (
     /^(?:daily|weekly|fortnightly|monthly|quarterly|half yearly|yearly|annual)(?:\s+(?:payment|charge|debit|subscription|mandate|autopay|plan))?$/.test(
@@ -214,11 +227,13 @@ function isDisplayableSubscriptionRecord(record) {
 function merchantSeriesKey(name) {
   const raw = String(name || '').trim();
   if (!raw) return '';
+  const brand = brandFor(raw);
+  if (brand?.name) return normalizeMerchant(brand.name);
   // Cut at the first real separator or at a run of digits, whichever is
   // earlier. Digits in a descriptor are an order/date reference, never part
   // of the brand.
-  const brand = raw.split(/[*.#/\\|]|\d{2,}/)[0];
-  return normalizeMerchant(brand) || normalizeMerchant(raw);
+  const brandSegment = raw.split(/[*.#/\\|]|\d{2,}/)[0];
+  return normalizeMerchant(brandSegment) || normalizeMerchant(raw);
 }
 
 function median(values) {
@@ -562,7 +577,8 @@ function detectRecurringSeries(rows, { now = new Date() } = {}) {
     if (gaps.length === 0) continue;
 
     const cadence = median(gaps);
-    if (cadence < MIN_CADENCE_DAYS || cadence > MAX_CADENCE_DAYS) continue;
+    const minCadence = brand ? MIN_CADENCE_DAYS : 20;
+    if (cadence < minCadence || cadence > MAX_CADENCE_DAYS) continue;
 
     // Every gap has to be near the median. A merchant charged on the 1st,
     // the 3rd, and then eight months later is not a subscription, even
@@ -582,6 +598,9 @@ function detectRecurringSeries(rows, { now = new Date() } = {}) {
       detectionSource: 'observed',
       evidenceSource: 'historical_posted_payment',
       subscriptionEvidence: 'posted_payment_pattern',
+      // A repeated debit only identifies a possible recurring merchant
+      // pattern. It does not prove that the user bought a subscription.
+      reviewCandidate: true,
       // The canonical catalog name when the merchant matches a known brand
       // ('OPENAILLC' → 'OpenAI'), otherwise the most recent spelling: the
       // one the user will recognise on their statement.

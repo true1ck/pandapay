@@ -154,11 +154,11 @@ function makeFakeClient() {
     }
 
     // --- ai_jobs -----------------------------------------------------------
-    if (norm.startsWith('SELECT id FROM ai_jobs WHERE profile_id') || norm.startsWith('SELECT id, status FROM ai_jobs WHERE profile_id')) {
+    if (norm.startsWith('SELECT id FROM ai_jobs WHERE profile_id') || norm.startsWith('SELECT id, status, result FROM ai_jobs WHERE profile_id')) {
       const job = [...state.jobs.values()].find(
         (j) => j.profile_id === params[0] && j.source_key === params[1],
       );
-      return { rows: job ? [{ id: job.id, status: job.status }] : [], rowCount: job ? 1 : 0 };
+      return { rows: job ? [{ id: job.id, status: job.status, result: job.result }] : [], rowCount: job ? 1 : 0 };
     }
     if (norm.startsWith('INSERT INTO ai_jobs')) {
       const key = `${params[0]}:${params[1]}`;
@@ -232,6 +232,7 @@ function makeFakeClient() {
       if (!job) return { rows: [], rowCount: 0 };
       job.status = 'queued';
       job.payload = typeof params[1] === 'string' ? JSON.parse(params[1]) : params[1];
+      if (norm.includes('result = NULL')) job.result = null;
       job.attempts = 0;
       job.lease_token = null;
       job.lease_expires_at = null;
@@ -447,7 +448,7 @@ const BILL_FACTS = [
   },
 ];
 
-test('acceptance is replay-safe: same source twice, one job, one event, one quota unit', async () => {
+test('acceptance is replay-safe: same source twice creates one job and one event', async () => {
   const client = makeUserClient();
   const first = await geminiQueue.acceptOneJob(client, PROFILE_A, {
     sourceKey: SOURCE_KEY,
@@ -520,6 +521,39 @@ test('explicit device retry reopens one failed job without consuming another quo
   assert.equal(client.state.jobs.size, 1);
   assert.equal(client.state.quota.size, 0);
   assert.equal(client.state.events.filter((event) => event.event_type === 'requeued').length, 1);
+});
+
+test('explicit device retry reopens a completed empty result but preserves job identity', async () => {
+  const client = makeUserClient();
+  const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: BILL_BODY,
+  });
+  const job = client.state.jobs.get(accepted.jobId);
+  job.status = 'done';
+  job.result = { landed: [], factTypes: [], decision: { topic: 'bank_transfer', shouldConsider: true } };
+  job.payload = { purged: true };
+
+  const ordinaryReplay = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY,
+  });
+  assert.equal(ordinaryReplay.reused, true);
+  assert.equal(job.status, 'done');
+
+  const retry = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: BILL_BODY, retryFailed: true,
+  });
+  assert.equal(retry.accepted, true);
+  assert.equal(retry.reused, false);
+  assert.equal(retry.jobId, accepted.jobId);
+  assert.equal(job.status, 'queued');
+  assert.equal(job.result, null);
+  assert.equal(job.payload.body, BILL_BODY);
+  assert.equal(
+    client.state.events.at(-1).payload.reason,
+    'explicit_device_retry_after_empty_result',
+  );
 });
 
 test('explicit failed-job retry works and preserves same job identity', async () => {
@@ -982,6 +1016,9 @@ function harness({ workerToken } = {}) {
     get(path, ...mws) {
       handlers.set(path, mws[mws.length - 1]);
     },
+    patch(path, ...mws) {
+      handlers.set(path, mws[mws.length - 1]);
+    },
   };
   const client = makeUserClient();
   aiQueueRoute.registerAiQueueRoutes(app, {
@@ -1308,7 +1345,12 @@ test('result endpoint carries the computed auto-resolution decision and score', 
   job.lease_expires_at = new Date(Date.now() + 600000);
   const result = await h.call('/ai/jobs/:id/result', {
     params: { id: job.id },
-    body: { profileId: PROFILE_A, leaseToken: lease.body.job.leaseToken, facts: [SWIGGY_FACT] },
+    body: {
+      profileId: PROFILE_A,
+      leaseToken: lease.body.job.leaseToken,
+      decision: { topic: 'upi_debit', shouldConsider: true, rejectionReason: 'none' },
+      facts: [SWIGGY_FACT],
+    },
   });
   assert.equal(result.status, 200);
   assert.equal(result.body.jobStatus, 'done');
@@ -1316,8 +1358,9 @@ test('result endpoint carries the computed auto-resolution decision and score', 
   assert.ok(result.body.confidenceScore >= 0.85);
   assert.equal(job.result.reviewRequired, false);
   assert.equal(job.result.specialists, null);
-  assert.equal(result.body.decision, null);
-  assert.equal(job.result.decision, null);
+  assert.equal(result.body.decision.topic, 'upi_debit');
+  assert.equal(result.body.decisionValid, true);
+  assert.equal(job.result.decision.topic, 'upi_debit');
 });
 
 test('noise rejection: shouldConsider=false forces reviewRequired=false and persists decision', async () => {
@@ -1331,7 +1374,6 @@ test('noise rejection: shouldConsider=false forces reviewRequired=false and pers
   job.lease_expires_at = new Date(Date.now() + 600000);
   const decision = {
     topic: 'telecom_carrier_deduction',
-    summary: 'Jio number retention airtime deduction',
     shouldConsider: false,
     rejectionReason: 'telecom_carrier_deduction',
   };
@@ -1345,6 +1387,39 @@ test('noise rejection: shouldConsider=false forces reviewRequired=false and pers
   assert.deepEqual(result.body.decision, decision);
   assert.deepEqual(job.result.decision, decision);
   assert.equal(job.result.reviewRequired, false);
+});
+
+test('invalid Gemini dismissal decision completes safely but remains in review', async () => {
+  const h = harness({});
+  const accepted = await h.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: SWIGGY_BODY },
+  });
+  const lease = await h.call('/ai/jobs/lease', { body: {} });
+  const job = h.state.jobs.get(accepted.body.jobId);
+  job.lease_expires_at = new Date(Date.now() + 600000);
+  const result = await h.call('/ai/jobs/:id/result', {
+    params: { id: job.id },
+    body: {
+      profileId: PROFILE_A,
+      leaseToken: lease.body.job.leaseToken,
+      facts: [SWIGGY_FACT],
+      decision: {
+        topic: 'generic_promotional_spam',
+        shouldConsider: false,
+        rejectionReason: 'none',
+      },
+    },
+  });
+  assert.equal(result.status, 200, 'invalid model classification is not an API SMS refusal');
+  assert.equal(result.body.decision, null);
+  assert.equal(result.body.decisionValid, false);
+  assert.equal(result.body.reviewRequired, true);
+  assert.equal(job.status, 'done');
+  assert.equal(job.result.decision, null);
+  assert.equal(job.result.reviewRequired, true);
+  assert.equal(job.result.landed.length, 1,
+    'validated facts remain available as suggestions for a manual review');
 });
 
 test('source status omits AI facts the user already confirmed or corrected', async () => {

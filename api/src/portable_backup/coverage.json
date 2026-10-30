@@ -397,6 +397,30 @@
       "disposition": "platform_ops",
       "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
     },
+    "sms_learning_feedback_events": {
+      "disposition": "excluded_with_intent",
+      "reason": "Account-linked SMS correction history is not exported in portable backup v1; the learning ledger is removed on account erasure."
+    },
+    "sms_ai_learning_proposals": {
+      "disposition": "excluded_with_intent",
+      "reason": "Account-linked AI learning proposals are not exported in portable backup v1; shared review state must not be restored as personal data."
+    },
+    "sms_category_rule_approvals": {
+      "disposition": "platform_ops",
+      "reason": "Shared admin approval state for SMS category rules belongs to platform recovery, not account-scoped portable restore."
+    },
+    "sms_category_rule_v2_approvals": {
+      "disposition": "platform_ops",
+      "reason": "Shared admin approval state for contextual SMS category rules belongs to platform recovery, not account-scoped portable restore."
+    },
+    "sms_parser_candidate_approvals": {
+      "disposition": "platform_ops",
+      "reason": "Shared admin approval state for parser candidates belongs to platform recovery, not account-scoped portable restore."
+    },
+    "sms_learning_settings": {
+      "disposition": "platform_ops",
+      "reason": "Global SMS learning thresholds are platform configuration and must not be replaced by an account archive."
+    },
     "sms_learning_candidate_decisions": {
       "disposition": "platform_ops",
       "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."

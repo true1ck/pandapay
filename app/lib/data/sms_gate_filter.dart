@@ -104,7 +104,8 @@ class SmsGateFilter {
     final trimmedSender = sender.trim();
 
     // Gate 2: Security & OTP veto (never persists or processes security secrets)
-    if (_otpSecurityRe.hasMatch(body)) {
+    final cleanedSecurityBody = body.replaceAll(LocalSmsParser.advisoryWarningRe, '');
+    if (_otpSecurityRe.hasMatch(cleanedSecurityBody)) {
       return const SmsGateVerdict.drop(SmsGateDropReason.otpOrSecurity);
     }
 

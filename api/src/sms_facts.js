@@ -254,13 +254,24 @@ function validatePayload(factType, payload) {
   if (NON_POSTED_TYPES.has(factType) && payload.amountRole !== undefined && payload.amountRole !== null &&
       payload.amountRole !== 'proposed' &&
       !(factType === 'mandate_lifecycle' && payload.amountRole === 'ceiling')) {
-    if (factType === 'bill_obligation' || factType === 'bill_payment') {
-      // Bills legitimately use due/outstanding roles; posted is never right.
+    if (factType === 'bill_obligation') {
+      // Obligations may use due/outstanding roles; posted is never right.
       if (payload.amountRole === 'posted') {
         errors.push(`${factType} must not use amountRole 'posted'`);
       }
     } else {
       errors.push(`${factType} must not carry a due/posted amount role`);
+    }
+  }
+  // A completed bill payment is an actual posted transfer with bill context.
+  // Keep it distinct from an amount-due obligation while allowing the
+  // transaction projection to consume the evidenced amountInr.
+  if (factType === 'bill_payment') {
+    if (payload.amountRole !== 'posted') {
+      errors.push("bill_payment must use amountRole 'posted'");
+    }
+    if (payload.entryKind !== undefined && payload.entryKind !== 'transfer') {
+      errors.push("bill_payment entryKind, when supplied, must be 'transfer'");
     }
   }
   if (factType === 'mandate_lifecycle' && payload.limitInr !== undefined) {
@@ -401,10 +412,18 @@ async function writeSmsFactOverride(
   { sourceId, factIndex, patch, reason },
 ) {
   await client.query(
+    // Merge at the top level instead of replacing: a category-only correction
+    // must not drop an earlier merchant correction. jsonb || keeps the newest
+    // value for conflicting keys while preserving explicit JSON nulls, and the
+    // profile predicate keeps a conflict from crossing tenant ownership.
     `INSERT INTO fact_overrides (profile_id, source_id, fact_index, patch, reason)
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (source_id, fact_index)
-     DO UPDATE SET patch = EXCLUDED.patch, reason = EXCLUDED.reason, applied_at = now()`,
+     DO UPDATE SET
+       patch = COALESCE(fact_overrides.patch, '{}'::jsonb) || COALESCE(EXCLUDED.patch, '{}'::jsonb),
+       reason = EXCLUDED.reason,
+       applied_at = now()
+     WHERE fact_overrides.profile_id = EXCLUDED.profile_id`,
     [profileId, sourceId, factIndex, JSON.stringify(patch), reason || null],
   );
 }

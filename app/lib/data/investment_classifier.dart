@@ -4,7 +4,15 @@
 /// This intentionally requires both movement language and investment intent so
 /// a broker name by itself (for example, a brokerage fee) is not enough.
 bool isInvestmentMovementDescription(String value) {
-  final text = value.trim();
+  final text = value
+      .replaceAll(
+        RegExp(
+          r"\b(?:(?:do\s+not|don't|never)\s+share\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|passcode|details|secret|code)\b|bank\s+never\s+asks\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details))\b[^\n]*",
+          caseSensitive: false,
+        ),
+        '',
+      )
+      .trim();
   if (text.isEmpty) return false;
   if (isInvestmentFolioAllotment(text)) return false;
 
@@ -13,7 +21,7 @@ bool isInvestmentMovementDescription(String value) {
     caseSensitive: false,
   ).hasMatch(text);
   final explicitIntent = RegExp(
-    r'\b(?:sip|systematic\s+investment|mutual\s+fund|investment|invested|investment\s+account|asba|ipo|add(?:ing|ed)?\s+(?:money|funds?)|funds?\s+(?:added|credited|transferred|deposited)|top[- ]?up|fund(?:ed|ing)|buy|bought|purchase(?:d)?|units?|stocks?|shares?|equity)\b',
+    r'\b(?:sip|systematic\s+investment|mutual\s+fund|investment|invested|investment\s+account|asba|ipo|add(?:ing|ed)?\s+(?:money|funds?)|funds?\s+(?:added|credited|transferred|deposited)|top[- ]?up|fund(?:ed|ing)|buy|bought|purchase(?:d)?|units?|stocks?|shares|equity\s+shares?|equity)\b',
     caseSensitive: false,
   ).hasMatch(text);
   final movement = RegExp(

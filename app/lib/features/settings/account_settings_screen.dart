@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/router.dart' show AppRoute;
 import '../../app/providers.dart';
 import '../../data/account_api.dart';
 import '../../data/api_exception.dart';
 import '../../app/env.dart';
+import 'storage_util.dart';
 
 /// H2 Account (real) — replaces AccountScreen's ~15%-built body (signed-in
 /// state + sign-out only) with the full spec surface: sign-out, a
@@ -274,28 +278,80 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
   Future<void> _confirmDelete() async {
     final token = ref.read(accessTokenProvider);
     if (token == null) return;
+    _confirmController.clear();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Permanently delete your account?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Your account, saved cards, transactions, imports, and settings will be permanently erased. You will be signed out and cannot restore this data.',
+              ),
+              const SizedBox(height: AppSpace.md),
+              TextField(
+                controller: _confirmController,
+                decoration: const InputDecoration(
+                  labelText: 'Type DELETE to confirm',
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: _confirmController.text.trim() == 'DELETE'
+                  ? () => Navigator.of(dialogContext).pop(true)
+                  : null,
+              child: const Text(
+                'Delete account',
+                style: TextStyle(color: BambooInk.clay),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     setState(() {
       _submitting = true;
       _error = null;
     });
+    var deletionCompletedRemotely = false;
     try {
       final api = AccountApi(
         apiBaseUrl: _accountApiBaseUrl,
+        authBaseUrl: Env.authBaseUrl,
         accessToken: token,
         client: ref.read(authenticatedHttpClientProvider),
       );
-      final dueAt = await api.requestDeletion();
-      // Deletion is scheduled, not immediate — the account is not gone
-      // yet. Sign out locally (same path as the manual "Sign out" button)
-      // so the device stops presenting itself as this account, while the
-      // 30-day grace period runs server-side.
+      await api.deleteAccountPermanently();
+      deletionCompletedRemotely = true;
+      final namespace = ref.read(cacheNamespaceProvider);
+      final database = await ref.read(appDatabaseProvider.future);
+      await database.clearAccountNamespace(namespace);
+      final prefs = await SharedPreferences.getInstance();
+      await clearPreferencesExceptPrefixes(prefs, const ['pandapay_app.']);
+      final cacheDirectory = await getApplicationCacheDirectory();
+      await clearDirectoryContents(cacheDirectory);
       await _signOut(ref);
+      ref.invalidate(profileProvider);
       if (!mounted) return;
-      setState(() {
-        _dueAtOverride = dueAt;
-        _submitting = false;
-      });
+      context.go(AppRoute.welcome);
     } catch (err) {
+      if (deletionCompletedRemotely) {
+        await _signOut(ref);
+        ref.invalidate(profileProvider);
+        if (mounted) context.go(AppRoute.welcome);
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _error = userFacingErrorMessage(err);
@@ -315,6 +371,7 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
     try {
       final api = AccountApi(
         apiBaseUrl: _accountApiBaseUrl,
+        authBaseUrl: Env.authBaseUrl,
         accessToken: token,
         client: ref.read(authenticatedHttpClientProvider),
       );
@@ -370,7 +427,6 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
             )
           else
             _TypedConfirmDeletionForm(
-              controller: _confirmController,
               submitting: _submitting,
               onConfirm: _confirmDelete,
             ),
@@ -385,12 +441,10 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
 }
 
 class _TypedConfirmDeletionForm extends StatefulWidget {
-  final TextEditingController controller;
   final bool submitting;
   final VoidCallback onConfirm;
 
   const _TypedConfirmDeletionForm({
-    required this.controller,
     required this.submitting,
     required this.onConfirm,
   });
@@ -402,43 +456,17 @@ class _TypedConfirmDeletionForm extends StatefulWidget {
 
 class _TypedConfirmDeletionFormState extends State<_TypedConfirmDeletionForm> {
   @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_onChanged);
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_onChanged);
-    super.dispose();
-  }
-
-  void _onChanged() => setState(() {});
-
-  @override
   Widget build(BuildContext context) {
-    final canConfirm =
-        widget.controller.text.trim() == 'DELETE' && !widget.submitting;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Your account, cards, and transaction history will be permanently '
-          'deleted in 30 days. Crowdsourced merchant data you\'ve contributed '
-          'stays anonymous and is never linked back to you. Backups are '
-          'purged on their own retention schedule.',
+          'deleted after you confirm. Crowdsourced data is handled according '
+          'to its anonymization policy; backups follow their retention schedule.',
           style: BambooFonts.ui(13.5, color: BambooInk.ink500),
         ),
         const SizedBox(height: AppSpace.lg),
-        TextField(
-          controller: widget.controller,
-          decoration: const InputDecoration(
-            labelText: 'Type DELETE to confirm',
-            hintText: 'DELETE',
-          ),
-          textCapitalization: TextCapitalization.characters,
-        ),
-        const SizedBox(height: AppSpace.md),
         SizedBox(
           width: double.infinity,
           child: FilledButton(
@@ -450,7 +478,7 @@ class _TypedConfirmDeletionFormState extends State<_TypedConfirmDeletionForm> {
               ),
               textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
             ),
-            onPressed: canConfirm ? widget.onConfirm : null,
+            onPressed: widget.submitting ? null : widget.onConfirm,
             child: widget.submitting
                 ? const SizedBox(
                     width: 18,

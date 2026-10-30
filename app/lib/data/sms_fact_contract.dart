@@ -377,12 +377,21 @@ SmsFactValidationResult validateSmsFactPayload(
       amountRole != null &&
       amountRole != 'proposed' &&
       !(factType == 'mandate_lifecycle' && amountRole == 'ceiling')) {
-    if (factType == 'bill_obligation' || factType == 'bill_payment') {
+    if (factType == 'bill_obligation') {
       if (amountRole == 'posted') {
         errors.add("$factType must not use amountRole 'posted'");
       }
     } else {
       errors.add('$factType must not carry a due/posted amount role');
+    }
+  }
+
+  if (factType == 'bill_payment') {
+    if (amountRole != 'posted') {
+      errors.add("bill_payment must use amountRole 'posted'");
+    }
+    if (payload['entryKind'] != null && payload['entryKind'] != 'transfer') {
+      errors.add("bill_payment entryKind, when supplied, must be 'transfer'");
     }
   }
 

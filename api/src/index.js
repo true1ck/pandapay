@@ -53,6 +53,7 @@ const applyTransactionSync = createSyncTransactionApplier({
 const centralProjection = require('./central_financial_projection');
 const { registerBillsProjectionRoutes } = require('./bills_projection_route');
 const smsFactsRoute = require('./sms_facts_route');
+const smsLearningFeedbackRoute = require('./sms_learning_feedback_route');
 const smsRuleBundleRoute = require('./sms_rule_bundle');
 const smsLearning = require('./sms_learning');
 const { testImapLogin } = require('./imap_test');
@@ -1326,6 +1327,10 @@ app.post('/merchants/nearby/google', requireValidJwt, async (req, res) => {
       lng,
       radiusM,
       googleApiKey,
+      onGoogleFailure: (failure) => console.warn('Google Places failed:', JSON.stringify({
+        requestId: req.requestId,
+        ...failure,
+      })),
       fallbackDiscover: (params) => nearbyGoogleFallback.discover(params),
     });
     if (result.degraded) {
@@ -1338,6 +1343,10 @@ app.post('/merchants/nearby/google', requireValidJwt, async (req, res) => {
     console.warn('POST /merchants/nearby/google unavailable', {
       requestId: req.requestId,
       googleFailure: safeErrorCode(err.googleFailure),
+      googleKeyConfigured: Boolean(googleApiKey),
+      googleHttpStatus: err.googleFailure?.providerHttpStatus || null,
+      googleStatus: err.googleFailure?.providerStatus || null,
+      googleReason: err.googleFailure?.providerReason || null,
       fallbackFailure: safeErrorCode(err.cause),
     });
     res.status(503).json({
@@ -3745,11 +3754,12 @@ function clientMutationSourceKey(userId, source, clientMutationId) {
 
 async function insertTransactionAndUpdateState(client, userId, {
   userCardId, amount, occurred, categoryId, userCategoryId, rail, merchantName, note, source,
-  merchantVpa, mcc, sourceKey, backfill, instrument, entryKind, accountLast4,
+  merchantVpa, mcc, sourceKey, backfill, instrument, entryKind, status, accountLast4,
   observationMetadata, observedAt,
 }) {
   const resolvedInstrument = instrument || 'credit_card';
   const resolvedEntryKind = entryKind || 'spend';
+  const resolvedStatus = ['active', 'ignored', 'deleted'].includes(status) ? status : 'active';
   const resolvedSource = source || 'manual';
   const resolvedAccountLast4 = /^\d{4}$/.test(String(accountLast4 || '').trim())
     ? String(accountLast4).trim()
@@ -3788,7 +3798,8 @@ async function insertTransactionAndUpdateState(client, userId, {
   // that card yet (or its last four digits are missing). Keep the payment
   // instrument as credit_card so reports do not silently relabel it as
   // "Other". Only card-state side effects require a concrete user_card row.
-  const movesCardState = resolvedInstrument === 'credit_card'
+  const movesCardState = resolvedStatus === 'active'
+    && resolvedInstrument === 'credit_card'
     && resolvedEntryKind === 'spend'
     && Boolean(userCardId);
 
@@ -3803,11 +3814,11 @@ async function insertTransactionAndUpdateState(client, userId, {
   // index only covers non-null keys.
   const txn = await client.query(
     `INSERT INTO transactions
-       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, merchant_vpa, mcc, category_id, user_category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill, source_account_last4)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'estimated', $13, $14, $15, false, $16, $17)
+       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, merchant_vpa, mcc, category_id, user_category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, status, state_applied, is_backfill, source_account_last4)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'estimated', $13, $14, $15, $16, false, $17, $18)
      ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
      RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
-    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, merchantVpa || null, mcc || null, categoryId || null, userCategoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, backfill === true, resolvedAccountLast4]
+    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, merchantVpa || null, mcc || null, categoryId || null, userCategoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, resolvedStatus, backfill === true, resolvedAccountLast4]
   );
 
   // Zero rows back means the unique index rejected it: this exact message
@@ -3820,7 +3831,10 @@ async function insertTransactionAndUpdateState(client, userId, {
     // an unmatched credit-card alert to `other`. The source key correctly
     // prevents a second ledger row, but returning the stale attribution would
     // make the bug permanent. Refresh only stronger parser evidence here:
-    // never alter amount/date/merchant and never replace an existing card.
+    // never alter amount/date, and never replace a named merchant — except
+    // the stale generic `Money received` fallback, which a parser upgrade
+    // may now name precisely (e.g. EMI repayments previously mislabelled as
+    // generic credits). Amount/merchant are otherwise immutable on retries.
     const existing = await client.query(
       `SELECT t.*
          FROM transactions t
@@ -3838,6 +3852,13 @@ async function insertTransactionAndUpdateState(client, userId, {
       [userId, old.id],
     );
     const classificationLocked = lockResult.rows[0]?.locked === true;
+    const merchantLockResult = await client.query(
+      `SELECT COALESCE(bool_or(metadata->>'merchantLocked' = 'true'), false) AS locked
+         FROM transaction_observations
+        WHERE profile_id = $1 AND transaction_id = $2`,
+      [userId, old.id],
+    );
+    const merchantLocked = merchantLockResult.rows[0]?.locked === true;
     const oldMovesCardState = old.instrument === 'credit_card'
       && old.entry_kind === 'spend'
       && Boolean(old.user_card_id);
@@ -3858,7 +3879,20 @@ async function insertTransactionAndUpdateState(client, userId, {
       && Boolean(old.user_card_id || userCardId);
     const refreshed = await client.query(
       `UPDATE transactions t
-          SET instrument = CASE
+          SET merchant_name = CASE
+                -- Parser upgrade: fill only missing or known generic labels.
+                WHEN $9::boolean = false
+                     AND (t.merchant_name IS NULL OR t.merchant_name IN
+                       ('Money received', 'Bank debit', 'Credit card bill payment',
+                        'Unknown', 'Unknown merchant', 'Unknown payee',
+                        'Merchant not captured'))
+                     AND $8::text IS NOT NULL
+                     AND $8::text NOT IN ('Money received', 'Bank debit', 'Credit card bill payment',
+                       'Unknown', 'Unknown merchant', 'Unknown payee', 'Merchant not captured')
+                  THEN $8::text
+                ELSE t.merchant_name
+              END,
+              instrument = CASE
                 WHEN t.instrument::text IN ('other', '')
                  AND $3::text IN ('credit_card', 'debit_card', 'upi_bank', 'wallet')
                   THEN $3::txn_instrument
@@ -3877,7 +3911,7 @@ async function insertTransactionAndUpdateState(client, userId, {
               END
         WHERE t.id = $1 AND t.profile_id = $2
       RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
-      [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify)]
+      [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify), merchantName || null, merchantLocked]
     );
     if (shouldReclassify && refreshedMovesCardState && !old.is_backfill) {
       const card = oldCard || (userCardId ? await loadUserCardForState(client, userId, userCardId) : null);
@@ -3917,6 +3951,9 @@ async function insertTransactionAndUpdateState(client, userId, {
     observedAt: observedAt || occurred,
     metadata: observationMetadata,
   });
+  if (resolvedStatus !== 'active') {
+    return { status: 201, transaction: txn.rows[0] };
+  }
   if (typeof pairTransferObservation === 'function') {
     await pairTransferObservation(client, userId, txn.rows[0].id);
   }
@@ -5443,6 +5480,11 @@ smsFactsRoute.registerSmsFactsRoutes(app, {
   withUserClient,
   persistSubscriptionMandate,
 });
+smsLearningFeedbackRoute.registerSmsLearningFeedbackRoute(app, {
+  requireAuth,
+  requireAdmin,
+  withUserClient,
+});
 registerBillsProjectionRoutes(app, { requireAuth, withUserClient });
 // The versioned rule bundle the device downloads and applies locally, so a
 // parser improvement reaches a phone without an app release.
@@ -5956,10 +5998,59 @@ app.post('/transactions/reconcile-sms', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       repairSmsHistory(client, req.userId, { reviewCrossSource: true }));
-    res.json({ ...result, reconciliationVersion: 2 });
+    res.json({ ...result, reconciliationVersion: 3 });
   } catch (err) {
     console.error('POST /transactions/reconcile-sms error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * A device that retained the original SMS can correct a confirmed legacy
+ * AutoPay card-bill row. Only structured fields cross the wire; the raw SMS
+ * stays on the phone. User edits and non-SMS transactions are never replaced.
+ */
+app.post('/transactions/autopay-bill-correction', requireAuth, async (req, res) => {
+  const { transactionId, merchantName, accountLast4, amountPaise } = req.body || {};
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(transactionId || '')) ||
+      !/^[A-Za-z][A-Za-z .&-]{2,70} Credit Card [0-9]{4}$/.test(String(merchantName || '')) ||
+      !/^[0-9]{4}$/.test(String(accountLast4 || '')) ||
+      !Number.isSafeInteger(amountPaise) || amountPaise <= 0) {
+    return res.status(400).json({ error: 'invalid_correction' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const row = await client.query(
+        `SELECT t.id, t.merchant_name, t.source_account_last4
+           FROM transactions t
+          WHERE t.id=$1 AND t.profile_id=$2 AND t.source IN ('sms','sms_bulk')
+            AND t.status='active' AND round(t.amount_inr * 100)::bigint=$3
+            AND NOT EXISTS (
+              SELECT 1 FROM transaction_observations o
+               WHERE o.profile_id=t.profile_id AND o.transaction_id=t.id
+                 AND o.metadata->>'merchantLocked'='true'
+            )
+          FOR UPDATE OF t`,
+        [transactionId, req.userId, amountPaise],
+      );
+      if (row.rows.length !== 1) return { status: 404, body: { error: 'transaction_not_found' } };
+      const current = row.rows[0];
+      const generic = current.merchant_name == null ||
+        ['Unknown', 'Unknown merchant', 'Merchant not captured'].includes(current.merchant_name);
+      if (!generic) return { status: 200, body: { updated: false } };
+      const updated = await client.query(
+        `UPDATE transactions SET merchant_name=$3,
+            source_account_last4=COALESCE(source_account_last4,$4)
+          WHERE id=$1 AND profile_id=$2
+          RETURNING id`,
+        [transactionId, req.userId, merchantName, accountLast4],
+      );
+      return { status: 200, body: { updated: updated.rowCount === 1 } };
+    });
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    console.error('POST /transactions/autopay-bill-correction error', error);
+    return res.status(500).json({ error: 'internal_error' });
   }
 });
 
@@ -6831,6 +6922,14 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
           [req.userId, old.id],
         );
       }
+      if (merchantName !== undefined) {
+        await client.query(
+          `UPDATE transaction_observations
+              SET metadata = metadata || '{"merchantLocked":true,"merchantSource":"user"}'::jsonb
+            WHERE profile_id = $1 AND transaction_id = $2`,
+          [req.userId, old.id],
+        );
+      }
 
       const stateUpdates = old.is_backfill || !newMovesCardState
         ? {}
@@ -7329,7 +7428,7 @@ app.post('/transactions/category-bulk-apply', requireAuth, async (req, res) => {
   }
 });
 
-const IGNORE_REASONS = ['refund', 'reversal', 'transfer'];
+const IGNORE_REASONS = ['refund', 'reversal', 'transfer', 'wrong_transaction'];
 
 /**
  * PATCH /transactions/:id/note — design 18 "Add a note".
@@ -8324,6 +8423,8 @@ app.get('/recurring', requireAuth, async (req, res) => {
       const legacyMandateRows = stored.rows
         .map((row) => centralProjection.legacyMandateSetupRow(row))
         .filter(Boolean);
+      // Historical transaction patterns are surfaced as review candidates.
+      // They must not share the confirmed-service projection or annual total.
       const validRows = stored.rows.filter(isDisplayableSubscriptionRecord).concat(legacyMandateRows);
       const now = new Date();
       const series = validRows.map((r) => {
@@ -8407,6 +8508,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
           paymentMethod: r.payment_method,
           cardName: r.card_nickname || r.card_name,
           detectionSource: r.detection_source || 'observed',
+          reviewCandidate: r.detection_source === 'observed' && !r.user_edited,
           isMandate: r.detection_source === 'mandate',
           isUserEdited: r.user_edited,
           lifecycleStatus: r.lifecycle_status || 'active',
@@ -8476,7 +8578,9 @@ app.get('/recurring', requireAuth, async (req, res) => {
           cadenceConfirmed: cadenceKnown,
           setupConfirmed: projection.setupConfirmed === true,
           engineStatus: status === 'active' && (oneTime || cadenceKnown) ? 'confirmed' : status,
-          annualCostInr: oneTime || !cadenceKnown || amount === null ? 0 : amount * (365 / cadence),
+          annualCostInr: oneTime || !cadenceKnown || amount === null
+            ? 0
+            : annualCost({ typicalAmountInr: amount, cadenceDays: cadence }),
         });
         existingServiceKeys.add(serviceKey);
       }
@@ -8492,7 +8596,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
         // and still billing. Guesses (needs_cadence), unused mandates and
         // possibly-stopped series don't belong in "your recurring spend".
         totalAnnualInr: series
-          .filter((s) => s.engineStatus === 'confirmed')
+          .filter((s) => s.engineStatus === 'confirmed' && !s.reviewCandidate)
           .reduce((sum, s) => sum + s.annualCostInr, 0),
       };
     });
@@ -9106,6 +9210,7 @@ const CONSENT_PURPOSES = [
   'marketing',
   'aggregate_insights',
   'partner_sharing',
+  'sms_shared_learning',
 ];
 
 /**
@@ -9173,14 +9278,30 @@ app.post('/consents', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'policyVersion is required' });
   }
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
+    const result = await withUserClient(req.userId, async (client) => {
+      if (purpose === 'sms_shared_learning') {
+        // Match the feedback route's lock so revocation/purge cannot race an
+        // in-flight contribution write under the previous grant.
+        await client.query(
+          'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
+          [`sms-shared-learning-consent:${req.userId}`],
+        );
+      }
+      const inserted = await client.query(
         `INSERT INTO user_consents (profile_id, purpose, policy_version, granted, source_screen)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING purpose, granted, granted_at, policy_version, source_screen`,
         [req.userId, purpose, policyVersion, granted, sourceScreen || null]
-      )
-    );
+      );
+      if (purpose === 'sms_shared_learning' && !granted) {
+        await smsLearning.deleteLearningExamplesForUser(client, req.userId);
+        await client.query(
+          'DELETE FROM public.sms_ai_learning_proposals WHERE profile_id = $1',
+          [req.userId],
+        );
+      }
+      return inserted;
+    });
     res.status(201).json({ consent: result.rows[0] });
   } catch (err) {
     console.error('POST /consents error', safeErrorCode(err));
@@ -10351,8 +10472,10 @@ app.get('/admin/data-quality-dashboard', requireAdmin, async (req, res) => {
 /**
  * AD-9 Anonymization Audit Automation.
  *
- * `pandapay.run_anonymization_audit()` (the 6-check function itself) already
- * existed in db/supabase/migrations/0010_functions_and_views.sql — not
+ * `pandapay.run_anonymization_audit()` (12 checks — six over the crowdsourced
+ * merchant surface, six over SMS shared learning since
+ * 20261028100000_sms_learning_anonymization_audit.sql) already existed in
+ * db/supabase/migrations/0010_functions_and_views.sql — not
  * written this chunk. What's new here: exposing its run history to the
  * console (AD-9.1), and — separately, see .github/workflows/anonymization-
  * audit.yml added alongside this route — actually calling it from CI on

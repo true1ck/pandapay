@@ -10,6 +10,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
+import '../../data/merchant_identity.dart';
 import '../../data/spend_reports_repository.dart';
 import '../../data/spending_selection.dart';
 import '../../data/user_cards_repository.dart';
@@ -17,6 +18,120 @@ import '../../main.dart' show MoneyText;
 import '../cards/card_summary.dart';
 import '../import/data_transfer_screen.dart';
 import 'spending_visuals.dart';
+
+/// A merchant/payee label plus an optional readable UPI address.
+///
+/// The name is always the primary label. A VPA is only kept as secondary text
+/// when it is a real address, never when it is an opaque reference that would
+/// look like a merchant to the user.
+class _MerchantDisplay {
+  final String label;
+  final String? vpa;
+
+  const _MerchantDisplay({required this.label, this.vpa});
+}
+
+/// One payee group. [entries] stay attached so totals, expansion and
+/// transaction taps are computed from the same rows as before.
+class _PayeeGroup {
+  final String label;
+  final String? vpa;
+  final List<TransactionEntry> entries;
+
+  const _PayeeGroup({required this.label, required this.entries, this.vpa});
+
+  int get totalPaise =>
+      entries.fold(0, (sum, entry) => sum + entry.amount.paise);
+}
+
+/// A readable VPA has exactly one `@`, a real local part and a domain. Hash
+/// fragments and other reference noise are not shown as if they identified a
+/// person. [MerchantIdentity] deliberately treats every VPA as a weak *name*,
+/// so VPA shape is checked here before it is used as secondary text.
+String? _readableMerchantVpa(String? value) {
+  final vpa = value?.trim();
+  if (vpa == null || !RegExp(r'^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$').hasMatch(vpa)) return null;
+  final at = vpa.indexOf('@');
+  if (at <= 0 || at == vpa.length - 1) return null;
+  if (vpa.indexOf('@', at + 1) != -1) return null;
+  final local = vpa.substring(0, at);
+  final domain = vpa.substring(at + 1);
+  if (!RegExp(r'[A-Za-z]').hasMatch(domain)) return null;
+  if (RegExp(r'^[0-9a-fA-F]{8,}$').hasMatch(local) ||
+      MerchantIdentity.isWeakName(local) ||
+      RegExp(r'^(?:paytmqr|bharatpe)\d', caseSensitive: false).hasMatch(local)) return null;
+  return vpa;
+}
+
+// Opaque addresses still distinguish identities even when hidden in the UI.
+String _merchantGroupKey(TransactionEntry entry) {
+  final vpa = entry.merchantVpa?.trim();
+  if (vpa != null && vpa.isNotEmpty) return 'vpa:${SpendingSelection.normalize(vpa)}';
+  final name = MerchantIdentity.cleanName(entry.merchantName);
+  if (name != null) return 'name:${SpendingSelection.normalize(name)}';
+  return 'entry:${entry.id}';
+}
+
+/// Resolves the visible label for a group. Names observed on the rows win;
+/// [fallbackLabel] is only used by report rows before details arrive.
+_MerchantDisplay _merchantDisplayFor(
+  List<TransactionEntry> entries, {
+  required String unknownLabel,
+  String? fallbackLabel,
+}) {
+  final counts = <String, int>{};
+  final names = <String, String>{};
+  for (final entry in entries) {
+    final name = MerchantIdentity.cleanName(entry.merchantName);
+    if (name == null) continue;
+    final normalized = SpendingSelection.normalize(name);
+    counts[normalized] = (counts[normalized] ?? 0) + 1;
+    names.putIfAbsent(normalized, () => name);
+  }
+
+  String? name;
+  if (counts.isNotEmpty) {
+    final best = counts.entries.reduce((a, b) => b.value > a.value ? b : a);
+    name = names[best.key];
+  }
+  name ??= MerchantIdentity.cleanName(fallbackLabel);
+
+  final readableVpas = <String>{};
+  for (final entry in entries) {
+    final vpa = _readableMerchantVpa(entry.merchantVpa);
+    if (vpa != null) readableVpas.add(vpa);
+  }
+  final vpa = readableVpas.length == 1 ? readableVpas.single : null;
+
+  if (name != null) return _MerchantDisplay(label: name, vpa: vpa);
+  if (vpa != null) return _MerchantDisplay(label: vpa);
+  return _MerchantDisplay(label: unknownLabel);
+}
+
+/// Groups payments by counterparty, preserving existing ordering by amount.
+List<_PayeeGroup> _groupByPayee(
+  Iterable<TransactionEntry> entries, {
+  required String unknownLabel,
+}) {
+  final grouped = <String, List<TransactionEntry>>{};
+  for (final entry in entries) {
+    grouped.putIfAbsent(_merchantGroupKey(entry), () => []).add(entry);
+  }
+  return grouped.values
+      .map((group) {
+        final display = _merchantDisplayFor(
+          group,
+          unknownLabel: unknownLabel,
+        );
+        return _PayeeGroup(
+          label: display.label,
+          vpa: display.vpa,
+          entries: group,
+        );
+      })
+      .toList()
+    ..sort((a, b) => b.totalPaise.compareTo(a.totalPaise));
+}
 
 /// Rows for the same calendar period as the aggregate report. The report
 /// endpoint remains the source of truth for totals; this companion request
@@ -1170,7 +1285,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   String _merchantName(TransactionEntry entry) =>
       entry.merchantName?.trim().isNotEmpty == true
       ? entry.merchantName!.trim()
-      : 'Unknown merchant';
+      : 'Recipient unknown';
 
   String _cardName(TransactionEntry entry) =>
       SpendingSelection.sourceName(entry, bankAccounts: _bankAccounts);
@@ -1927,29 +2042,8 @@ class _TagCategoryRow extends StatelessWidget {
     required this.onViewAll,
   });
 
-  List<MapEntry<String, List<TransactionEntry>>> _merchantGroups() {
-    final grouped = <String, List<TransactionEntry>>{};
-    for (final entry in entries) {
-      final merchant = entry.merchantName?.trim();
-      final label = merchant == null || merchant.isEmpty
-          ? 'Unknown merchant'
-          : merchant;
-      grouped.putIfAbsent(label, () => []).add(entry);
-    }
-    final result = grouped.entries.toList()
-      ..sort((a, b) {
-        final aTotal = a.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        final bTotal = b.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        return bTotal.compareTo(aTotal);
-      });
-    return result;
-  }
+  List<_PayeeGroup> _merchantGroups() =>
+      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
 
   @override
   Widget build(BuildContext context) => ExpansionTile(
@@ -2019,7 +2113,11 @@ class _TagCategoryRow extends StatelessWidget {
         )
       else
         for (final group in _merchantGroups())
-          _MerchantGroup(merchant: group.key, entries: group.value),
+          _MerchantGroup(
+            merchant: group.label,
+            vpa: group.vpa,
+            entries: group.entries,
+          ),
       Align(
         alignment: AlignmentDirectional.centerEnd,
         child: TextButton.icon(
@@ -2920,7 +3018,7 @@ class _MonthlyComparisonCard extends StatefulWidget {
 }
 
 class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
-  int _selectedIndex = 0;
+  int? _selectedIndex;
 
   static String _monthLabel(DateTime date) {
     const months = <String>[
@@ -2945,7 +3043,9 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
   Widget build(BuildContext context) {
     final series = widget.series;
     if (series.length < 2) return const SizedBox.shrink();
-    final selectedIndex = _selectedIndex.clamp(0, series.length - 1).toInt();
+    final selectedIndex = (_selectedIndex ?? series.length - 1)
+        .clamp(0, series.length - 1)
+        .toInt();
     final selected = series[selectedIndex];
     final latest = series.last;
     final previous = series[series.length - 2];
@@ -2977,7 +3077,7 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
                 ),
               ),
               Tooltip(
-                message: 'Tap or swipe across a bar to inspect that month',
+                message: 'Tap a bar to inspect that month',
                 child: Icon(
                   Icons.info_outline_rounded,
                   color: BambooInk.ink500,
@@ -3054,7 +3154,7 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    '$comparisonText\nTap or swipe across bars to inspect each month.',
+                    '$comparisonText\nTap a bar to inspect a month. Swipe sideways when months overflow.',
                     style: BambooFonts.ui(10.5, color: BambooInk.ink900),
                   ),
                 ),
@@ -3067,7 +3167,93 @@ class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
   }
 }
 
-class _InteractiveMonthlyBarChart extends StatelessWidget {
+/// Painted area of the chart: gridlines, bars and the month labels.
+const double _monthlyChartPlotHeight = 145;
+
+/// Box around it — the spare height under the month labels carries the
+/// scroll position bar, so the bar never crosses the dates.
+const double _monthlyChartHeight = _monthlyChartPlotHeight + 6;
+
+const double _monthlyChartAxisGutter = 48;
+const double _monthlyChartTopPad = 22;
+const double _monthlyChartBottomPad = 38;
+
+/// Minimum horizontal space a month gets before the plot starts scrolling.
+/// Sized for the widest label pair ("Sep 2026" above a "₹1.2L" bar value) so
+/// labels never fall back to ellipses.
+const double _monthlyChartMinSlot = 56;
+
+const double _monthlyChartScrollbarThickness = 3;
+const double _monthlyChartScrollbarInset = 5;
+const double _monthlyChartMinThumbWidth = 28;
+
+const double _monthlyChartMaxBarWidth = 64;
+const double _monthlyChartMinBarWidth = 20;
+const double _monthlyChartBarSlotFraction = 0.56;
+
+double _monthlyChartBarWidth(double slot) => math
+    .min(
+      _monthlyChartMaxBarWidth,
+      math.max(_monthlyChartMinBarWidth, slot * _monthlyChartBarSlotFraction),
+    )
+    .toDouble();
+
+String _monthlyAxisLabel(int paise) {
+  final rupees = paise / 100;
+  if (rupees >= 100000) return '₹${(rupees / 100000).toStringAsFixed(1)}L';
+  if (rupees >= 1000) return '₹${(rupees / 1000).toStringAsFixed(0)}K';
+  return '₹${rupees.toStringAsFixed(0)}';
+}
+
+String _monthlyBarLabel(Money amount) {
+  final rupees = amount.paise / 100;
+  if (rupees >= 100000) return '₹${(rupees / 100000).toStringAsFixed(1)}L';
+  if (rupees >= 1000) return '₹${(rupees / 1000).toStringAsFixed(1)}K';
+  return amount.format(hidePaise: true);
+}
+
+String _monthlyPointLabel(DateTime date) {
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final local = date.toLocal();
+  return '${months[local.month - 1]} ${local.year}';
+}
+
+void _paintMonthlyChartText(
+  Canvas canvas,
+  String value,
+  Offset offset,
+  double maxWidth,
+  TextStyle style, {
+  TextAlign align = TextAlign.left,
+}) {
+  final painter = TextPainter(
+    text: TextSpan(text: value, style: style),
+    textAlign: align,
+    maxLines: 1,
+    ellipsis: '…',
+    textDirection: TextDirection.ltr,
+  )..layout(maxWidth: maxWidth);
+  final x = align == TextAlign.center
+      ? offset.dx + (maxWidth - painter.width) / 2
+      : offset.dx;
+  painter.paint(canvas, Offset(x, offset.dy));
+  painter.dispose();
+}
+
+class _InteractiveMonthlyBarChart extends StatefulWidget {
   final List<SpendSeriesPoint> series;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
@@ -3078,39 +3264,161 @@ class _InteractiveMonthlyBarChart extends StatelessWidget {
     required this.onSelected,
   });
 
-  void _selectAt(Offset position, Size size) {
-    const left = 48.0;
-    const right = 4.0;
-    if (position.dx < left || position.dx > size.width - right) return;
-    final chartWidth = math.max(1.0, size.width - left - right).toDouble();
-    final slot = chartWidth / series.length;
-    final index = ((position.dx - left) / slot).floor();
-    if (index >= 0 && index < series.length) onSelected(index);
+  @override
+  State<_InteractiveMonthlyBarChart> createState() =>
+      _InteractiveMonthlyBarChartState();
+}
+
+class _InteractiveMonthlyBarChartState
+    extends State<_InteractiveMonthlyBarChart> {
+  final ScrollController _controller = ScrollController();
+
+  /// Slot and viewport of the most recent layout, needed to map taps and to
+  /// scroll the selected month into view from lifecycle callbacks.
+  double _slotWidth = _monthlyChartMinSlot;
+  double _viewportWidth = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _revealSelected(animate: false);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _InteractiveMonthlyBarChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedIndex != widget.selectedIndex ||
+        oldWidget.series.length != widget.series.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _revealSelected(
+          animate: oldWidget.series.length == widget.series.length,
+        );
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _revealSelected({required bool animate}) {
+    if (!_controller.hasClients) return;
+    final position = _controller.position;
+    if (position.maxScrollExtent <= 0) return;
+    final barWidth = _monthlyChartBarWidth(_slotWidth);
+    final barLeft =
+        widget.selectedIndex * _slotWidth + (_slotWidth - barWidth) / 2;
+    final barRight = barLeft + barWidth;
+    final viewLeft = position.pixels;
+    final viewRight = viewLeft + _viewportWidth;
+    // Already fully visible — scrolling would just nudge the chart under the
+    // user's finger.
+    if (barLeft >= viewLeft && barRight <= viewRight) return;
+    final target = (barLeft + barRight) / 2 - _viewportWidth / 2;
+    final offset = target.clamp(0.0, position.maxScrollExtent).toDouble();
+    if ((position.pixels - offset).abs() < 0.5) return;
+    if (!animate) {
+      _controller.jumpTo(offset);
+      return;
+    }
+    _controller.animateTo(
+      offset,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _selectAt(Offset position) {
+    if (_slotWidth <= 0) return;
+    final index = (position.dx / _slotWidth).floor();
+    if (index >= 0 && index < widget.series.length) widget.onSelected(index);
   }
 
   @override
   Widget build(BuildContext context) {
+    final maxPaise = widget.series.fold<int>(
+      1,
+      (maxValue, point) =>
+          maxValue > point.spend.paise ? maxValue : point.spend.paise,
+    );
     return SizedBox(
+      key: const ValueKey('monthly-comparison-chart'),
       width: double.infinity,
-      height: 145,
+      height: _monthlyChartHeight,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final size = Size(constraints.maxWidth, 145);
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapUp: (details) => _selectAt(details.localPosition, size),
-            onHorizontalDragUpdate: (details) =>
-                _selectAt(details.localPosition, size),
-            child: Semantics(
-              label:
-                  'Monthly spending chart. Swipe or tap a bar to select a month.',
-              child: CustomPaint(
-                painter: _MonthlyBarChartPainter(
-                  series: series,
-                  selectedIndex: selectedIndex,
+          final viewport = math.max(
+            1.0,
+            constraints.maxWidth - _monthlyChartAxisGutter,
+          );
+          // Every month keeps a legible slot; when that no longer fits the
+          // card the plot overflows and scrolls instead of truncating labels.
+          final slot = math.max(
+            _monthlyChartMinSlot,
+            viewport / widget.series.length,
+          );
+          final contentWidth = math.max(
+            viewport,
+            slot * widget.series.length,
+          );
+          final scrollable = contentWidth > viewport + 0.5;
+          _slotWidth = contentWidth / widget.series.length;
+          _viewportWidth = viewport;
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _MonthlyChartAxisPainter(
+                      maxPaise: maxPaise,
+                      controller: _controller,
+                      scrollable: scrollable,
+                      contentWidth: contentWidth,
+                      viewportWidth: viewport,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              Row(
+                children: [
+                  const SizedBox(width: _monthlyChartAxisGutter),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: _controller,
+                      scrollDirection: Axis.horizontal,
+                      physics: scrollable
+                          ? const ClampingScrollPhysics()
+                          : const NeverScrollableScrollPhysics(),
+                      child: SizedBox(
+                        width: contentWidth,
+                        height: _monthlyChartHeight,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTapUp: (details) => _selectAt(details.localPosition),
+                          child: Semantics(
+                            label: scrollable
+                                ? 'Monthly spending chart. Swipe sideways to scroll months. Tap a bar to select a month.'
+                                : 'Monthly spending chart. Tap a bar to select a month.',
+                            child: CustomPaint(
+                              painter: _MonthlyBarsPainter(
+                                series: widget.series,
+                                selectedIndex: widget.selectedIndex,
+                                maxPaise: maxPaise,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           );
         },
       ),
@@ -3118,83 +3426,34 @@ class _InteractiveMonthlyBarChart extends StatelessWidget {
   }
 }
 
-class _MonthlyBarChartPainter extends CustomPainter {
-  final List<SpendSeriesPoint> series;
-  final int selectedIndex;
+/// Gridlines, the value axis and the scroll position bar. Painted once behind
+/// the scrolled plot so all three stay pinned while months move underneath.
+class _MonthlyChartAxisPainter extends CustomPainter {
+  final int maxPaise;
+  final ScrollController controller;
+  final bool scrollable;
+  final double contentWidth;
+  final double viewportWidth;
 
-  const _MonthlyBarChartPainter({
-    required this.series,
-    required this.selectedIndex,
-  });
-
-  String _axisLabel(int paise) {
-    final rupees = paise / 100;
-    if (rupees >= 100000) return '₹${(rupees / 100000).toStringAsFixed(1)}L';
-    if (rupees >= 1000) return '₹${(rupees / 1000).toStringAsFixed(0)}K';
-    return '₹${rupees.toStringAsFixed(0)}';
-  }
-
-  String _barLabel(Money amount) {
-    final rupees = amount.paise / 100;
-    if (rupees >= 100000) return '₹${(rupees / 100000).toStringAsFixed(1)}L';
-    if (rupees >= 1000) return '₹${(rupees / 1000).toStringAsFixed(1)}K';
-    return amount.format(hidePaise: true);
-  }
-
-  static String _monthLabel(DateTime date) {
-    const months = <String>[
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final local = date.toLocal();
-    return '${months[local.month - 1]} ${local.year}';
-  }
-
-  void _text(
-    Canvas canvas,
-    String value,
-    Offset offset,
-    double maxWidth,
-    TextStyle style, {
-    TextAlign align = TextAlign.left,
-  }) {
-    final painter = TextPainter(
-      text: TextSpan(text: value, style: style),
-      textAlign: align,
-      maxLines: 1,
-      ellipsis: '…',
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: maxWidth);
-    final x = align == TextAlign.center
-        ? offset.dx + (maxWidth - painter.width) / 2
-        : offset.dx;
-    painter.paint(canvas, Offset(x, offset.dy));
-  }
+  _MonthlyChartAxisPainter({
+    required this.maxPaise,
+    required this.controller,
+    required this.scrollable,
+    required this.contentWidth,
+    required this.viewportWidth,
+  }) : super(repaint: controller);
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (series.isEmpty || size.width <= 0 || size.height <= 0) return;
-    const left = 48.0;
-    const right = 4.0;
-    const top = 22.0;
-    const bottom = 38.0;
-    final chartWidth = math.max(1.0, size.width - left - right).toDouble();
-    final chartHeight = math.max(1.0, size.height - top - bottom).toDouble();
-    final maxPaise = series.fold<int>(
-      1,
-      (maxValue, point) =>
-          maxValue > point.spend.paise ? maxValue : point.spend.paise,
-    );
+    if (size.width <= 0 || size.height <= 0) return;
+    final chartHeight = math
+        .max(
+          1.0,
+          _monthlyChartPlotHeight -
+              _monthlyChartTopPad -
+              _monthlyChartBottomPad,
+        )
+        .toDouble();
     final gridPaint = Paint()
       ..color = BambooInk.hairlineOnPaper
       ..strokeWidth = 1;
@@ -3203,40 +3462,120 @@ class _MonthlyBarChartPainter extends CustomPainter {
       ..strokeWidth = 1.2;
 
     for (final fraction in <double>[0, 0.5, 1]) {
-      final y = top + chartHeight * (1 - fraction);
+      final y = _monthlyChartTopPad + chartHeight * (1 - fraction);
       canvas.drawLine(
-        Offset(left, y),
-        Offset(size.width - right, y),
+        Offset(_monthlyChartAxisGutter, y),
+        Offset(size.width, y),
         gridPaint,
       );
-      _text(
+      _paintMonthlyChartText(
         canvas,
-        _axisLabel((maxPaise * fraction).round()),
+        _monthlyAxisLabel((maxPaise * fraction).round()),
         Offset(0, y - 7),
-        left - 7,
+        _monthlyChartAxisGutter - 7,
         BambooFonts.ui(10.5, color: BambooInk.ink500),
         align: TextAlign.right,
       );
     }
     canvas.drawLine(
-      Offset(left, top),
-      Offset(left, top + chartHeight),
+      Offset(_monthlyChartAxisGutter, _monthlyChartTopPad),
+      Offset(_monthlyChartAxisGutter, _monthlyChartTopPad + chartHeight),
       axisPaint,
     );
     canvas.drawLine(
-      Offset(left, top + chartHeight),
-      Offset(size.width - right, top + chartHeight),
+      Offset(_monthlyChartAxisGutter, _monthlyChartTopPad + chartHeight),
+      Offset(size.width, _monthlyChartTopPad + chartHeight),
       axisPaint,
     );
 
-    final slot = chartWidth / series.length;
-    final barWidth = math.min(64.0, math.max(20.0, slot * 0.56)).toDouble();
+    if (!scrollable) return;
+    // Own strip under the month labels: a Material scrollbar lands on the
+    // labels at this height, which reads as a stray line through the dates.
+    final trackLeft = _monthlyChartAxisGutter + 2;
+    final trackWidth = math.max(0.0, size.width - 2 - trackLeft);
+    if (trackWidth <= 0) return;
+    final centerY = _monthlyChartHeight - _monthlyChartScrollbarInset;
+    final trackPaint = Paint()
+      ..color = BambooInk.ink500.withValues(alpha: 0.14);
+    final thumbPaint = Paint()
+      ..color = BambooInk.ink500.withValues(alpha: 0.5);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          trackLeft,
+          centerY - _monthlyChartScrollbarThickness / 2,
+          trackWidth,
+          _monthlyChartScrollbarThickness,
+        ),
+        const Radius.circular(2),
+      ),
+      trackPaint,
+    );
+    if (!controller.hasClients) return;
+    final position = controller.position;
+    final visible = (viewportWidth / contentWidth).clamp(0.0, 1.0);
+    final thumbWidth = math.max(
+      _monthlyChartMinThumbWidth,
+      trackWidth * visible,
+    );
+    final progress = position.maxScrollExtent <= 0
+        ? 0.0
+        : (position.pixels / position.maxScrollExtent).clamp(0.0, 1.0);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          trackLeft + (trackWidth - thumbWidth) * progress,
+          centerY - _monthlyChartScrollbarThickness / 2,
+          thumbWidth,
+          _monthlyChartScrollbarThickness,
+        ),
+        const Radius.circular(2),
+      ),
+      thumbPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MonthlyChartAxisPainter oldDelegate) =>
+      oldDelegate.maxPaise != maxPaise ||
+      oldDelegate.controller != controller ||
+      oldDelegate.scrollable != scrollable ||
+      oldDelegate.contentWidth != contentWidth ||
+      oldDelegate.viewportWidth != viewportWidth;
+}
+
+/// Bars, their values and month labels. Laid out in content coordinates
+/// (no axis gutter) because the parent scroll view owns the horizontal offset.
+class _MonthlyBarsPainter extends CustomPainter {
+  final List<SpendSeriesPoint> series;
+  final int selectedIndex;
+  final int maxPaise;
+
+  const _MonthlyBarsPainter({
+    required this.series,
+    required this.selectedIndex,
+    required this.maxPaise,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (series.isEmpty || size.width <= 0 || size.height <= 0) return;
+    final chartHeight = math
+        .max(
+          1.0,
+          _monthlyChartPlotHeight -
+              _monthlyChartTopPad -
+              _monthlyChartBottomPad,
+        )
+        .toDouble();
+    final slot = size.width / series.length;
+    final barWidth = _monthlyChartBarWidth(slot);
     for (var index = 0; index < series.length; index += 1) {
       final point = series[index];
       final normalized = point.spend.paise / maxPaise;
       final barHeight = chartHeight * normalized;
-      final x = left + slot * index + (slot - barWidth) / 2;
-      final y = top + chartHeight - barHeight;
+      final x = slot * index + (slot - barWidth) / 2;
+      final y = _monthlyChartTopPad + chartHeight - barHeight;
       final barPaint = Paint()
         ..color = index == selectedIndex
             ? BambooInk.lime
@@ -3249,18 +3588,18 @@ class _MonthlyBarChartPainter extends CustomPainter {
         ),
         barPaint,
       );
-      _text(
+      _paintMonthlyChartText(
         canvas,
-        _barLabel(point.spend),
-        Offset(left + slot * index, math.max(0, y - 19)),
+        _monthlyBarLabel(point.spend),
+        Offset(slot * index, math.max(0, y - 19)),
         slot,
         BambooFonts.ui(10.5, weight: FontWeight.w700, color: BambooInk.ink900),
         align: TextAlign.center,
       );
-      _text(
+      _paintMonthlyChartText(
         canvas,
-        _monthLabel(point.periodStart),
-        Offset(left + slot * index, top + chartHeight + 9),
+        _monthlyPointLabel(point.periodStart),
+        Offset(slot * index, _monthlyChartTopPad + chartHeight + 9),
         slot,
         BambooFonts.ui(10.5, color: BambooInk.ink500),
         align: TextAlign.center,
@@ -3269,9 +3608,10 @@ class _MonthlyBarChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MonthlyBarChartPainter oldDelegate) =>
+  bool shouldRepaint(covariant _MonthlyBarsPainter oldDelegate) =>
       oldDelegate.series != series ||
-      oldDelegate.selectedIndex != selectedIndex;
+      oldDelegate.selectedIndex != selectedIndex ||
+      oldDelegate.maxPaise != maxPaise;
 }
 
 /// A visual summary of the same category totals shown in the expandable rows
@@ -3972,33 +4312,8 @@ class _ExpandableCategoryRow extends StatelessWidget {
     this.initiallyExpanded = false,
   });
 
-  List<MapEntry<String, List<TransactionEntry>>> _merchantGroups() {
-    final grouped = <String, List<TransactionEntry>>{};
-    final unnamed = <MapEntry<String, List<TransactionEntry>>>[];
-    for (final entry in entries) {
-      final merchant = entry.merchantName?.trim();
-      if (merchant == null || merchant.isEmpty) {
-        // Missing names do not identify a shared merchant. Keep each payment
-        // separate so unrelated cards and dates cannot look like one shop.
-        unnamed.add(MapEntry('Merchant not captured', [entry]));
-        continue;
-      }
-      grouped.putIfAbsent(merchant, () => []).add(entry);
-    }
-    final result = [...grouped.entries, ...unnamed]
-      ..sort((a, b) {
-        final aTotal = a.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        final bTotal = b.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        return bTotal.compareTo(aTotal);
-      });
-    return result;
-  }
+  List<_PayeeGroup> _merchantGroups() =>
+      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
 
   @override
   Widget build(BuildContext context) {
@@ -4089,7 +4404,11 @@ class _ExpandableCategoryRow extends StatelessWidget {
             )
           else
             for (final group in groups)
-              _MerchantGroup(merchant: group.key, entries: group.value),
+              _MerchantGroup(
+                merchant: group.label,
+                vpa: group.vpa,
+                entries: group.entries,
+              ),
         ],
       ),
     );
@@ -4112,19 +4431,8 @@ class _ExpandableInstrumentRow extends StatelessWidget {
     required this.detailsLoading,
   });
 
-  Map<String, List<TransactionEntry>> _recipientGroups() {
-    final isUpi = row.instrument == 'upi_bank';
-    final groups = <String, List<TransactionEntry>>{};
-    for (final entry in entries) {
-      final vpa = entry.merchantVpa?.trim();
-      final merchant = entry.merchantName?.trim();
-      final label = isUpi && vpa != null && vpa.isNotEmpty
-          ? vpa
-          : (merchant == null || merchant.isEmpty ? 'Unknown payee' : merchant);
-      groups.putIfAbsent(label, () => []).add(entry);
-    }
-    return groups;
-  }
+  List<_PayeeGroup> _recipientGroups() =>
+      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
 
   @override
   Widget build(BuildContext context) {
@@ -4132,18 +4440,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
     final ratio = total.isZero
         ? 0.0
         : (row.total.paise / total.paise).clamp(0.0, 1.0);
-    final groups = _recipientGroups().entries.toList()
-      ..sort((a, b) {
-        final aTotal = a.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        final bTotal = b.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        return bTotal.compareTo(aTotal);
-      });
+    final groups = _recipientGroups();
 
     return CardSummaryPanel(
       padding: EdgeInsets.zero,
@@ -4247,7 +4544,11 @@ class _ExpandableInstrumentRow extends StatelessWidget {
             )
           else
             for (final group in groups)
-              _MerchantGroup(merchant: group.key, entries: group.value),
+              _MerchantGroup(
+                merchant: group.label,
+                vpa: group.vpa,
+                entries: group.entries,
+              ),
         ],
       ),
     );
@@ -4275,6 +4576,11 @@ class _ExpandableMerchantRow extends StatelessWidget {
     final ratio = total.isZero
         ? 0.0
         : (row.total.paise / total.paise).clamp(0.0, 1.0);
+    final display = _merchantDisplayFor(
+      entries,
+      fallbackLabel: row.label,
+      unknownLabel: 'Recipient unknown',
+    );
 
     return CardSummaryPanel(
       padding: EdgeInsets.zero,
@@ -4306,7 +4612,7 @@ class _ExpandableMerchantRow extends StatelessWidget {
           children: [
             SpendingBreakdownHeader(
               label: Text(
-                row.label,
+                display.label,
                 style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -4360,7 +4666,8 @@ class _ExpandableMerchantRow extends StatelessWidget {
             )
           else
             _MerchantGroup(
-              merchant: row.label,
+              merchant: display.label,
+              vpa: display.vpa,
               entries: entries,
               isCollapsible: false,
             ),
@@ -4372,12 +4679,14 @@ class _ExpandableMerchantRow extends StatelessWidget {
 
 class _MerchantGroup extends StatelessWidget {
   final String merchant;
+  final String? vpa;
   final List<TransactionEntry> entries;
   final bool isCollapsible;
 
   const _MerchantGroup({
     required this.merchant,
     required this.entries,
+    this.vpa,
     this.isCollapsible = true,
   });
 
@@ -4416,10 +4725,7 @@ class _MerchantGroup extends StatelessWidget {
             ),
             subtitle: Text(
               [
-                if (entry.merchantName?.trim().isNotEmpty == true &&
-                    entry.merchantName!.trim().toLowerCase() !=
-                        merchant.toLowerCase())
-                  entry.merchantName!.trim(),
+                ?_secondaryMerchantName(entry),
                 if (entry.categoryName != null) entry.categoryLabel,
                 entry.cardDisplayName ?? _paymentLabel(entry),
               ].join('\n'),
@@ -4460,13 +4766,28 @@ class _MerchantGroup extends StatelessWidget {
                 ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
-                  child: Text(
-                    merchant,
-                    style: BambooFonts.ui(
-                      12.5,
-                      weight: FontWeight.w700,
-                      color: BambooInk.ink900,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        merchant,
+                        style: BambooFonts.ui(
+                          12.5,
+                          weight: FontWeight.w700,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                      if (vpa != null)
+                        Text(
+                          vpa!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: BambooFonts.ui(
+                            10.5,
+                            color: BambooInk.ink500,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 MoneyText(
@@ -4486,10 +4807,11 @@ class _MerchantGroup extends StatelessWidget {
               style: BambooFonts.ui(11, color: BambooInk.ink500),
             ),
             if (entries.every(
-              (entry) => entry.merchantName?.trim().isEmpty ?? true,
+              (entry) =>
+                  MerchantIdentity.cleanName(entry.merchantName) == null,
             ))
               Text(
-                'Tap the payment to add its merchant.',
+                'Tap the payment to name its recipient.',
                 style: BambooFonts.ui(11, color: BambooInk.ink500),
               ),
             if (hasRewardData)
@@ -4512,6 +4834,7 @@ class _MerchantGroup extends StatelessWidget {
         storageKey: groupStorageKey,
         initiallyExpanded: false,
         merchant: merchant,
+        vpa: vpa,
         amount: amount,
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -4521,10 +4844,11 @@ class _MerchantGroup extends StatelessWidget {
               style: BambooFonts.ui(11, color: BambooInk.ink500),
             ),
             if (entries.every(
-              (entry) => entry.merchantName?.trim().isEmpty ?? true,
+              (entry) =>
+                  MerchantIdentity.cleanName(entry.merchantName) == null,
             ))
               Text(
-                'Tap the payment to add its merchant.',
+                'Tap the payment to name its recipient.',
                 style: BambooFonts.ui(11, color: BambooInk.ink500),
               ),
             if (hasRewardData)
@@ -4537,6 +4861,17 @@ class _MerchantGroup extends StatelessWidget {
         children: transactionList,
       ),
     );
+  }
+
+  /// A transaction sometimes carries a more specific name than its group.
+  /// Show it only when it is a real, different name.
+  String? _secondaryMerchantName(TransactionEntry entry) {
+    final name = MerchantIdentity.cleanName(entry.merchantName);
+    if (name == null) return null;
+    return SpendingSelection.normalize(name) ==
+            SpendingSelection.normalize(merchant)
+        ? null
+        : name;
   }
 
   static String _shortDate(DateTime date) {
@@ -4560,6 +4895,7 @@ class _MerchantExpansionTile extends StatefulWidget {
   final String storageKey;
   final bool initiallyExpanded;
   final String merchant;
+  final String? vpa;
   final Money amount;
   final Widget subtitle;
   final List<Widget> children;
@@ -4571,6 +4907,7 @@ class _MerchantExpansionTile extends StatefulWidget {
     required this.amount,
     required this.subtitle,
     required this.children,
+    this.vpa,
   });
 
   @override
@@ -4612,16 +4949,34 @@ class _MerchantExpansionTileState extends State<_MerchantExpansionTile> {
       ),
       size: 30,
     ),
-    title: Text(
-      widget.merchant,
-      key: ValueKey<String>('spending-merchant-name-${widget.storageKey}'),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: BambooFonts.ui(
-        12.5,
-        weight: FontWeight.w700,
-        color: BambooInk.ink900,
-      ),
+    title: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          widget.merchant,
+          key: ValueKey<String>(
+            'spending-merchant-name-${widget.storageKey}',
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: BambooFonts.ui(
+            12.5,
+            weight: FontWeight.w700,
+            color: BambooInk.ink900,
+          ),
+        ),
+        if (widget.vpa != null)
+          Text(
+            widget.vpa!,
+            key: ValueKey<String>(
+              'spending-merchant-vpa-${widget.storageKey}',
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+          ),
+      ],
     ),
     subtitle: widget.subtitle,
     trailing: Row(
@@ -4684,23 +5039,8 @@ class _AccountRow extends StatelessWidget {
     required this.detailsLoading,
   });
 
-  Map<String, List<TransactionEntry>> _payeeGroups() {
-    final groups = <String, List<TransactionEntry>>{};
-    for (final entry in entries) {
-      final vpa = entry.merchantVpa?.trim();
-      final merchant = entry.merchantName?.trim();
-      final label =
-          entry.instrument == TxnInstrument.upiBank &&
-              vpa != null &&
-              vpa.isNotEmpty
-          ? vpa
-          : merchant == null || merchant.isEmpty
-          ? 'Unknown merchant'
-          : merchant;
-      groups.putIfAbsent(label, () => []).add(entry);
-    }
-    return groups;
-  }
+  List<_PayeeGroup> _payeeGroups() =>
+      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
 
   @override
   Widget build(BuildContext context) {
@@ -4722,18 +5062,7 @@ class _AccountRow extends StatelessWidget {
           ? BambooChartColors.blue
           : BambooChartColors.violet,
     );
-    final groups = _payeeGroups().entries.toList()
-      ..sort((a, b) {
-        final aTotal = a.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        final bTotal = b.value.fold<int>(
-          0,
-          (sum, entry) => sum + entry.amount.paise,
-        );
-        return bTotal.compareTo(aTotal);
-      });
+    final groups = _payeeGroups();
 
     return CardSummaryPanel(
       padding: EdgeInsets.zero,
@@ -4820,7 +5149,11 @@ class _AccountRow extends StatelessWidget {
             )
           else
             for (final group in groups)
-              _MerchantGroup(merchant: group.key, entries: group.value),
+              _MerchantGroup(
+                merchant: group.label,
+                vpa: group.vpa,
+                entries: group.entries,
+              ),
         ],
       ),
     );

@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('crypto');
 const { Client } = require('pg');
+const { recordReviewDismissal } = require('../src/sms_learning');
 
 const testDbUrl = process.env.PANDAPAY_TEST_DATABASE_URL || process.env.DATABASE_URL;
 
@@ -25,6 +26,27 @@ test('real database: app_user RLS, worker separation, advisory locks, and deleti
     try {
       const operatorRole = await client.query('SELECT current_user AS role');
       assert.equal(operatorRole.rows[0].role, 'postgres');
+      const legacyBundles = await client.query(`
+        SELECT count(*)::int AS count
+          FROM public.sms_rule_bundles
+         WHERE is_active = true AND published_by IS NULL
+      `);
+      assert.equal(legacyBundles.rows[0].count, 0, 'legacy worker bundles must be withdrawn');
+      const categoryGate = await client.query(`
+        SELECT pg_get_functiondef('pandapay.sms_approved_category_rules()'::regprocedure) AS definition
+      `);
+      assert.match(categoryGate.rows[0].definition, /sms_category_rule_approvals/);
+      assert.match(categoryGate.rows[0].definition, /status = 'approved'/);
+      const workerGlobalMutation = await client.query(`
+        SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sms_learning_worker')
+          THEN has_function_privilege('sms_learning_worker',
+            'pandapay.sms_publish_bundle(integer,jsonb,text,text)', 'EXECUTE')
+            OR has_function_privilege('sms_learning_worker',
+              'pandapay.sms_rollback_bundle(integer)', 'EXECUTE')
+          ELSE false END AS allowed
+      `);
+      assert.equal(workerGlobalMutation.rows[0].allowed, false);
+
       const user1 = crypto.randomUUID();
       const user2 = crypto.randomUUID();
       const hmacKey = 'test_learning_secret_key_32_characters_long';
@@ -71,6 +93,58 @@ test('real database: app_user RLS, worker separation, advisory locks, and deleti
         ],
       );
       assert.ok(insertRes.rows[0].id);
+
+      // Exercise the same two-sided feedback write used by POST /sms/dismiss
+      // under app_user against a real migrated schema. The review action means
+      // both "this is not a movement" and "this is ignore/noise" evidence.
+      const dismissal = {
+        profileId: user1,
+        sender: 'TX-TESTBANK',
+        body: 'Your account was debited INR 1,249.00 at Demo Merchant on 27-Oct-2026. Ref 1234567890123456',
+        reason: 'user_dismissed',
+        family: 'posted_movement',
+        hmacKey,
+      };
+      const dismissalResult = await recordReviewDismissal(client, dismissal);
+      assert.equal(dismissalResult.recorded, 2);
+      assert.deepEqual(dismissalResult.errors, []);
+      const duplicateDismissal = await recordReviewDismissal(client, dismissal);
+      assert.equal(duplicateDismissal.recorded, 0);
+      assert.deepEqual(duplicateDismissal.errors, []);
+      await client.query('RESET ROLE');
+      const dismissalFamilies = await client.query(
+        `SELECT fact_family, is_negative
+           FROM public.sms_learning_examples
+          WHERE user_hash = $1 AND sender_fingerprint = $2
+          ORDER BY fact_family`,
+        [
+          user1Hash,
+          crypto.createHmac('sha256', hmacKey).update('tx-testbank').digest('hex'),
+        ],
+      );
+      assert.deepEqual(dismissalFamilies.rows, [
+        { fact_family: 'ignore_noise', is_negative: false },
+        { fact_family: 'posted_movement', is_negative: true },
+      ]);
+
+      await client.query('SET LOCAL ROLE app_user');
+      // Messages without canonical source facts arrive as ignore_noise. This
+      // is the exact family a pre-ignore_noise production CHECK rejected.
+      const noiseOnly = await recordReviewDismissal(client, {
+        ...dismissal,
+        sender: 'TX-LEGACY',
+        family: 'ignore_noise',
+      });
+      assert.equal(noiseOnly.recorded, 1);
+      assert.deepEqual(noiseOnly.errors, []);
+      const familyConstraint = await client.query(`
+        SELECT pg_get_constraintdef(oid) AS definition
+          FROM pg_constraint
+         WHERE conrelid = 'public.sms_learning_examples'::regclass
+           AND conname = 'sms_learning_examples_fact_family_check'
+      `);
+      assert.match(familyConstraint.rows[0].definition, /ignore_noise/);
+
       await client.query("SELECT set_config('app.user_id', $1, true)", [user2]);
       const foreign = await client.query('SELECT id FROM public.sms_learning_examples WHERE id=$1', [insertRes.rows[0].id]);
       assert.equal(foreign.rowCount, 0);
@@ -99,7 +173,7 @@ test('real database: app_user RLS, worker separation, advisory locks, and deleti
         'SELECT pandapay.sms_delete_learning_examples_for_user($1::uuid, $2) AS deleted',
         [user1, hmacKey],
       );
-      assert.equal(Number(delRes.rows[0].deleted), 1);
+      assert.equal(Number(delRes.rows[0].deleted), 4);
     } finally {
       // Clean rollback ensures staging/dev DB is completely untouched
       await client.query('ROLLBACK').catch(() => {});

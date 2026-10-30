@@ -282,9 +282,15 @@ function synthesizeTemplate(sampleBody, extractedFields = {}) {
   // 1. Balance replacement
   const balVal = extractedFields.availableBalance || extractedFields.currentBalance || extractedFields.bal;
   if (balVal) {
-    const balNum = String(balVal).replace(/,/g, '');
-    const balPattern = new RegExp(`(?:₹|Rs\\.?|INR)\\s*${escapeRegex(balVal)}(?:\\.00)?|(?:₹|Rs\\.?|INR)\\s*${escapeRegex(balNum)}(?:\\.00)?`, 'i');
+    const balText = String(balVal);
+    const balNum = balText.replace(/,/g, '');
+    const balGrouped = balNum.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const balPattern = new RegExp(`(?:₹|Rs\\.?|INR)\\s*(?:${escapeRegex(balText)}|${escapeRegex(balNum)}|${escapeRegex(balGrouped)})(?:\\.00)?`, 'i');
+    const before = text;
     text = text.replace(balPattern, '{BAL}');
+    if (text === before) {
+      text = text.replace(/(?<=\b(?:bal|balance|avl bal|avail bal)\s*[:=]?\s*)(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\.[0-9]{1,2})?/i, '{BAL}');
+    }
   } else {
     text = text.replace(/(?<=\b(?:bal|balance|avl bal|avail bal)\s*[:=]?\s*)(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\.[0-9]{1,2})?/gi, '{BAL}');
   }
@@ -292,9 +298,15 @@ function synthesizeTemplate(sampleBody, extractedFields = {}) {
   // 2. Amount replacement
   const amtVal = extractedFields.amount || extractedFields.amountDue || extractedFields.amountInr;
   if (amtVal) {
-    const amtNum = String(amtVal).replace(/,/g, '');
-    const amtPattern = new RegExp(`(?:₹|Rs\\.?|INR)\\s*${escapeRegex(amtVal)}(?:\\.00)?|(?:₹|Rs\\.?|INR)\\s*${escapeRegex(amtNum)}(?:\\.00)?`, 'i');
+    const amtText = String(amtVal);
+    const amtNum = amtText.replace(/,/g, '');
+    const amtGrouped = amtNum.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const amtPattern = new RegExp(`(?:₹|Rs\\.?|INR)\\s*(?:${escapeRegex(amtText)}|${escapeRegex(amtNum)}|${escapeRegex(amtGrouped)})(?:\\.00)?`, 'i');
+    const before = text;
     text = text.replace(amtPattern, '{AMOUNT}');
+    if (text === before) {
+      text = text.replace(/(?<!\{BAL\})(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\.[0-9]{1,2})?/i, '{AMOUNT}');
+    }
   } else {
     text = text.replace(/(?<!\{BAL\})(?:₹|Rs\.?|INR)\s*[0-9,]+(?:\.[0-9]{1,2})?/i, '{AMOUNT}');
   }
@@ -316,7 +328,8 @@ function synthesizeTemplate(sampleBody, extractedFields = {}) {
   // 5. Last4 replacement
   const last4Val = extractedFields.last4 || extractedFields.accountLast4;
   if (last4Val && String(last4Val).length === 4) {
-    text = text.replace(new RegExp(`\\b${escapeRegex(String(last4Val))}\\b`), '{LAST4}');
+    const last4 = escapeRegex(String(last4Val));
+    text = text.replace(new RegExp(`\\b(?:X{2,12}|\\*{2,12})?${last4}\\b`, 'i'), '{LAST4}');
   } else {
     text = text.replace(/(?<=\b(?:card|a\/c|ac|account)\s*(?:no\.?|ending)?\s*(?:[Xx*]{2,12})?\s*)[0-9]{4}\b/i, '{LAST4}');
   }

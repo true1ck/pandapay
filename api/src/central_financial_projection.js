@@ -251,7 +251,9 @@ function subscriptionDecision(fact, sourceId, sourceKey, { fromMandate = false }
   const key = subscriptionKey(payload);
   const targetKind = fromMandate ? mandateTargetKind(payload) : null;
   const mandateSetup = fromMandate && targetKind === 'service_merchant' &&
-    knownSubscriptionMerchant(payload) && !explicitSubscription(payload);
+    !billLikeMandate(payload, targetKind) &&
+    (knownSubscriptionMerchant(payload) || payload.subscriptionEvidence === 'brand_prior') &&
+    !explicitSubscription(payload);
   // A merchant debit is not a subscription by itself. A named service
   // merchant mandate is the one setup exception: it establishes presence but
   // carries no paid amount, renewal, or due-date claim. Card-bill and utility

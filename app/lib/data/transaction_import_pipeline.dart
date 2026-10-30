@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'api_exception.dart';
 import 'csv_statement_parser.dart';
@@ -128,6 +129,10 @@ class ImportDocument {
         warnings: [...parsed.warnings, ...extractionWarnings],
       );
     }
+    if (kind == ImportDocumentKind.json) {
+      final pandaPayExport = _parsePandaPayExport(decodeStatementBytes(bytes));
+      if (pandaPayExport != null) return pandaPayExport;
+    }
     final rows = <ParsedStatementLine>[];
     final rejected = <ImportRejectedRow>[];
     final warnings = <String>[];
@@ -193,6 +198,154 @@ List<List<String>> _jsonRows(String input) {
               : row[key].toString(),
       ],
   ];
+}
+
+ParsedStatement? _parsePandaPayExport(String input) {
+  final value = jsonDecode(input);
+  if (value is! Map || value['transactions'] is! List) return null;
+  final records = value['transactions'] as List;
+  final looksLikePandaPay = records.any(
+    (record) =>
+        record is Map &&
+        record.containsKey('amount_inr') &&
+        record.containsKey('occurred_at') &&
+        record.containsKey('entry_kind'),
+  );
+  if (!looksLikePandaPay) return null;
+
+  final transactions = <ParsedStatementLine>[];
+  final rejected = <ImportRejectedRow>[];
+  var missingMerchants = 0;
+  for (var index = 0; index < records.length; index++) {
+    final sourceRowId = 'json:row:${index + 2}';
+    final raw = records[index];
+    if (raw is! Map) {
+      rejected.add(
+        ImportRejectedRow(sourceRowId, [raw.toString()], 'Transaction row must be an object.'),
+      );
+      continue;
+    }
+    final cells = [
+      for (final item in raw.values.take(12)) item?.toString() ?? '',
+    ];
+    final occurredAt = DateTime.tryParse(raw['occurred_at']?.toString() ?? '');
+    final rawAmount = raw['amount_inr'];
+    final amount = rawAmount is num
+        ? rawAmount.toDouble()
+        : double.tryParse(rawAmount?.toString() ?? '');
+    final entryKind = raw['entry_kind']?.toString().trim().toLowerCase();
+    final status = raw['status']?.toString().trim().toLowerCase() ?? 'active';
+    final instrument = _pandaPayInstrument(raw['instrument']);
+    final rail = raw['rail']?.toString().trim().toLowerCase();
+    if (occurredAt == null) {
+      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Transaction date is invalid.'));
+      continue;
+    }
+    if (amount == null || !amount.isFinite || amount <= 0) {
+      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Transaction amount is invalid.'));
+      continue;
+    }
+    if (!const {'spend', 'income', 'investment', 'transfer'}.contains(entryKind)) {
+      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Transaction type is not supported.'));
+      continue;
+    }
+    if (!const {'active', 'ignored', 'deleted'}.contains(status)) {
+      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Transaction status is not supported.'));
+      continue;
+    }
+    if (raw['instrument'] != null && instrument == null) {
+      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Payment instrument is not supported.'));
+      continue;
+    }
+    if (rail != null &&
+        rail.isNotEmpty &&
+        !const {'upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown'}
+            .contains(rail)) {
+      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Payment rail is not supported.'));
+      continue;
+    }
+
+    final merchant = raw['merchant_name']?.toString().trim();
+    final merchantNameMissing = merchant == null || merchant.isEmpty;
+    if (merchantNameMissing) missingMerchants += 1;
+    final userCategoryId = raw['user_category_id']?.toString().trim();
+    final categoryId = raw['category_id']?.toString().trim();
+    transactions.add(
+      ParsedStatementLine(
+        date: occurredAt,
+        description: merchantNameMissing ? 'Unknown merchant' : merchant,
+        amount: Money.fromRupees(amount),
+        isCredit: entryKind == 'income',
+        isTransfer: entryKind == 'transfer',
+        isInvestment: entryKind == 'investment',
+        sourceAccount: _nonEmptyString(raw['source_account']),
+        categoryHint: _nonEmptyString(raw['category_name']),
+        subcategoryHint: _nonEmptyString(raw['subcategory_name']),
+        tagNames: _pandaPayTagNames(raw['tags']),
+        categoryId: (userCategoryId == null || userCategoryId.isEmpty) &&
+                categoryId != null &&
+                _uuidPattern.hasMatch(categoryId)
+            ? categoryId
+            : null,
+        instrument: instrument,
+        rail: rail?.isEmpty == true ? null : rail,
+        note: _nonEmptyString(raw['note']),
+        status: status,
+        merchantNameMissing: merchantNameMissing,
+        sourceRowId: sourceRowId,
+      ),
+    );
+  }
+
+  final warnings = <String>[];
+  final cards = value['cards'];
+  if (cards is List && cards.isNotEmpty) {
+    warnings.add(
+      'This PandaPay export contains ${cards.length} card record${cards.length == 1 ? '' : 's'}. This spending import adds transaction rows only.',
+    );
+  }
+  if (missingMerchants > 0) {
+    warnings.add(
+      missingMerchants == 1
+          ? '1 transaction has no merchant name. It will remain unnamed after import.'
+          : '$missingMerchants transactions have no merchant name. They will remain unnamed after import.',
+    );
+  }
+  return ParsedStatement(
+    transactions: transactions,
+    rejectedRows: rejected,
+    warnings: warnings,
+  );
+}
+
+final RegExp _uuidPattern = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+  caseSensitive: false,
+);
+
+String? _nonEmptyString(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+TxnInstrument? _pandaPayInstrument(Object? value) {
+  final wireValue = _nonEmptyString(value);
+  if (wireValue == null) return null;
+  for (final instrument in TxnInstrument.values) {
+    if (instrument.wireValue == wireValue) return instrument;
+  }
+  return null;
+}
+
+List<String> _pandaPayTagNames(Object? value) {
+  if (value is! List) return const [];
+  return normalizeImportedTagNames([
+    for (final item in value)
+      if (item is String)
+        item
+      else if (item is Map && item['name'] is String)
+        item['name'] as String,
+  ]);
 }
 
 class ImportProgress {
@@ -356,6 +509,8 @@ class TransactionImportSession {
           instrument: row.instrument,
           rail: row.rail,
           note: row.note,
+          status: row.status,
+          merchantNameMissing: row.merchantNameMissing,
           sourceRowId: row.sourceRowId,
           reviewReasons: [
             ...row.reviewReasons,
@@ -562,12 +717,52 @@ class TransactionImportSession {
     rows.add(row.reviewed(sourceRowId: rejected.sourceRowId));
   }
 
+  /// Clears category ids the current catalogue does not contain.
+  ///
+  /// A PandaPay export carries the category UUIDs of the database that wrote
+  /// it. Importing that export into another deployment (or after a re-seed)
+  /// leaves those ids dangling: the row still has its category hint, but the
+  /// server rejects the whole batch with "A selected category is
+  /// unavailable". Dropping the stale id keeps the hint so automatic
+  /// classification still places the row, instead of failing every row.
+  void dropUnknownCategoryIds(Set<String> knownCategoryIds) {
+    for (var i = 0; i < rows.length; i++) {
+      final row = rows[i];
+      final categoryId = row.categoryId;
+      if (categoryId == null || knownCategoryIds.contains(categoryId)) continue;
+      rows[i] = ParsedStatementLine(
+        date: row.date,
+        description: row.description,
+        amount: row.amount,
+        isCredit: row.isCredit,
+        isTransfer: row.isTransfer,
+        isInvestment: row.isInvestment,
+        sourceAccount: row.sourceAccount,
+        bankReference: row.bankReference,
+        categoryHint: row.categoryHint,
+        subcategoryHint: row.subcategoryHint,
+        tagNames: row.tagNames,
+        userCategoryId: row.userCategoryId,
+        instrument: row.instrument,
+        rail: row.rail,
+        note: row.note,
+        status: row.status,
+        merchantNameMissing: row.merchantNameMissing,
+        sourceRowId: row.sourceRowId,
+        reviewReasons: row.reviewReasons,
+      );
+    }
+  }
+
   bool get hasCommittedBatches => _completed.isNotEmpty;
 
   StatementTransactionInput inputFor(int index) => StatementTransactionInput(
     occurredAt: rows[index].date,
     amount: rows[index].amount,
-    merchantName: rows[index].description,
+    merchantName: rows[index].merchantNameMissing
+        ? null
+        : rows[index].description,
+    status: rows[index].status,
     entryKind: rows[index].isTransfer
         ? TxnEntryKind.transfer
         : rows[index].isInvestment

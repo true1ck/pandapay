@@ -291,6 +291,7 @@ void main() {
                 'account': 'Bank',
               },
             ],
+            'tags': const [],
           }),
         ),
       ),
@@ -301,6 +302,125 @@ void main() {
     expect(parsed.transactions.single.description, 'Coffee');
     expect(parsed.transactions.single.sourceRowId, 'json:row:2');
   });
+
+  test('PandaPay JSON export preserves transaction metadata and null merchants', () {
+    const categoryId = 'd6044144-1a98-4129-8b40-68ec43ad188f';
+    final document = ImportDocument.open(
+      Uint8List.fromList(
+        utf8.encode(
+          jsonEncode({
+            'transactions': [
+              {
+                'id': 'transaction-1',
+                'source_account': 'upi_bank',
+                'amount_inr': '45.00',
+                'occurred_at': '2026-10-26T00:00:00.000Z',
+                'merchant_name': null,
+                'category_id': categoryId,
+                'user_category_id': null,
+                'category_name': 'Dining',
+                'subcategory_name': null,
+                'entry_kind': 'spend',
+                'instrument': 'upi_bank',
+                'rail': 'upi_qr',
+                'note': null,
+                'status': 'ignored',
+                'tags': [
+                  {'name': 'Sample'},
+                ],
+              },
+              {
+                'id': 'transaction-2',
+                'source_account': 'upi_bank',
+                'amount_inr': 1000,
+                'occurred_at': '2026-10-25T09:30:00.000Z',
+                'merchant_name': 'Salary',
+                'category_id': categoryId,
+                'user_category_id': null,
+                'category_name': 'Other',
+                'subcategory_name': null,
+                'entry_kind': 'income',
+                'instrument': 'upi_bank',
+                'rail': 'unknown',
+                'note': 'October pay',
+                'status': 'active',
+                'tags': const [],
+              },
+            ],
+            'tags': const [],
+            'cards': [
+              {'card_name': 'Sample card'},
+            ],
+          }),
+        ),
+      ),
+      'pandapay-export-all.json',
+    );
+
+    final parsed = document.parse();
+    expect(parsed.transactions, hasLength(2));
+    expect(parsed.rejectedRows, isEmpty);
+    expect(parsed.warnings, contains(contains('1 card record')));
+    expect(parsed.warnings, contains(contains('1 transaction has no merchant name')));
+
+    final missingMerchant = parsed.transactions.first;
+    expect(missingMerchant.description, 'Unknown merchant');
+    expect(missingMerchant.merchantNameMissing, isTrue);
+    expect(missingMerchant.status, 'ignored');
+    expect(missingMerchant.categoryId, categoryId);
+    expect(missingMerchant.categoryHint, 'Dining');
+    expect(missingMerchant.instrument, TxnInstrument.upiBank);
+    expect(missingMerchant.rail, 'upi_qr');
+    expect(missingMerchant.tagNames, ['Sample']);
+    expect(missingMerchant.reviewed(tagNames: const ['Edited']).merchantNameMissing, isTrue);
+    expect(missingMerchant.reviewed(description: 'Cafe').merchantNameMissing, isFalse);
+
+    final session = TransactionImportSession(
+      fileDigest: document.digest,
+      importSource: document.importSource,
+      statement: parsed,
+    );
+    final ignoredInput = session.inputFor(0);
+    expect(ignoredInput.merchantName, isNull);
+    expect(ignoredInput.status, 'ignored');
+    expect(ignoredInput.toJson()['merchantName'], isNull);
+    expect(ignoredInput.toJson()['status'], 'ignored');
+
+    final incomeInput = session.inputFor(1);
+    expect(incomeInput.merchantName, 'Salary');
+    expect(incomeInput.entryKind, TxnEntryKind.income);
+    expect(incomeInput.note, 'October pay');
+  });
+
+  test(
+    'category ids from another PandaPay database are dropped before submit',
+    () {
+      const known = '0c3b9f61-0d5e-4a37-9a2e-7f5c1d8e4b21';
+      const foreign = 'd6044144-1a98-4129-8b40-68ec43ad188f';
+      ParsedStatementLine withCategory(String id, int i) => ParsedStatementLine(
+        date: DateTime(2026, 10, 2, 12, i),
+        description: 'Shop $i',
+        amount: Money.fromRupees(100),
+        categoryId: id,
+        categoryHint: i == 0 ? 'Dining' : 'Other',
+        sourceRowId: 'json:row:${i + 2}',
+      );
+      final session = TransactionImportSession(
+        fileDigest: 'file',
+        importSource: 'json',
+        statement: ParsedStatement(
+          transactions: [withCategory(known, 0), withCategory(foreign, 1)],
+        ),
+      );
+
+      session.dropUnknownCategoryIds({known});
+
+      expect(session.inputFor(0).categoryId, known);
+      expect(session.inputFor(0).categoryHint, 'Dining');
+      expect(session.inputFor(1).categoryId, isNull);
+      expect(session.inputFor(1).categoryHint, 'Other');
+    },
+  );
 
   test(
     'unknown columns can be mapped; ambiguous dates require explicit format',

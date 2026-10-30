@@ -1,9 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
+import 'package:pandapay/data/auth_api.dart';
+import 'package:pandapay/data/consents_api.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/response_cache.dart';
+import 'package:pandapay/data/local/sms_feedback_outbox.dart';
+import 'package:pandapay/data/local/sms_intake_repository.dart';
+import 'package:pandapay/data/token_store.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
+import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/features/activity/edit_transaction_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -11,6 +22,8 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   final TransactionEntry entry;
   final Object? fetchError;
   Map<String, dynamic>? lastEditArgs;
+  int editCalls = 0;
+  bool failFirstEditWithAuth = false;
   _FakeUserCardsRepository(this.entry, {this.fetchError});
 
   @override
@@ -33,6 +46,10 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     TxnEntryKind? entryKind,
     bool clearCategory = false,
   }) async {
+    editCalls++;
+    if (failFirstEditWithAuth && editCalls == 1) {
+      throw ApiException('PATCH /transactions/:id failed: 401 {"error":"unauthorized"}');
+    }
     lastEditArgs = {
       'id': id,
       'amountInr': amountInr,
@@ -48,11 +65,25 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _SuccessfulRefreshCoordinator extends SessionRefreshCoordinator {
+  _SuccessfulRefreshCoordinator()
+    : super(
+        loadStore: () async => TokenStore(const FlutterSecureStorage()),
+        authApi: AuthApi(authBaseUrl: 'https://unused.invalid'),
+        readAccessToken: () => 'old-token',
+        writeAccessToken: (_) {},
+      );
+
+  @override
+  Future<String?> refresh({String? expectedAccessToken}) async => 'new-token';
+}
+
 Future<void> _pump(
   WidgetTester tester, {
   required _FakeUserCardsRepository repo,
   List<UserCard> cards = const [],
   TransactionEntry? initialEntry,
+  List<Override> overrides = const [],
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -60,6 +91,7 @@ Future<void> _pump(
         userCardsRepositoryProvider.overrideWithValue(repo),
         userCardsProvider.overrideWith((ref) async => cards),
         categoriesProvider.overrideWith((ref) async => const []),
+        ...overrides,
       ],
       child: MaterialApp(
         home: EditTransactionScreen(
@@ -232,6 +264,77 @@ void main() {
     expect(repo.lastEditArgs?['id'], 't1');
     expect(repo.lastEditArgs?['amountInr'], 2000.0);
     expect(repo.lastEditArgs?['merchantName'], 'New Merchant');
+  });
+
+  testWidgets('queues SMS correction after a successful auth-refresh retry', (
+    tester,
+  ) async {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    const namespace = 'user:test';
+    final cache = ResponseCache(database);
+    final receivedAt = DateTime.utc(2026, 10, 28, 10);
+    final sourceKey = SmsIntakeRepository(database).capture(
+      namespace,
+      QueuedSms(
+        sender: 'AD-HDFCBK',
+        body: 'Rs 500 debited at Store on 28-10-2026',
+        receivedAt: receivedAt,
+      ),
+    );
+    final entry = TransactionEntry(
+      id: 't-sms',
+      sourceKey: sourceKey,
+      amount: Money.fromRupees(500),
+      occurredAt: receivedAt,
+      merchantName: 'Store',
+      source: 'sms',
+      status: 'active',
+    );
+    final repo = _FakeUserCardsRepository(entry)..failFirstEditWithAuth = true;
+    final consentCompleter = Completer<ConsentRecord?>();
+
+    await _pump(
+      tester,
+      repo: repo,
+      initialEntry: entry,
+      overrides: [
+        sessionRefreshCoordinatorProvider.overrideWithValue(
+          _SuccessfulRefreshCoordinator(),
+        ),
+        cacheNamespaceProvider.overrideWithValue(namespace),
+        responseCacheProvider.overrideWith((ref) async => cache),
+        isOnlineProvider.overrideWith((ref) => Stream.value(true)),
+        smsSharedLearningConsentProvider.overrideWith(
+          (ref) => consentCompleter.future,
+        ),
+      ],
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Merchant'),
+      'Correct Store',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pump();
+    expect(repo.editCalls, 2);
+    expect(SmsFeedbackOutbox(database, namespace: namespace).count(), 0);
+    consentCompleter.complete(
+      ConsentRecord(
+        purpose: smsSharedLearningPurpose,
+        granted: true,
+        grantedAt: DateTime.utc(2026, 10, 1),
+        policyVersion: smsSharedLearningPolicyVersion,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump();
+
+    expect(repo.editCalls, 2);
+    expect(
+      SmsFeedbackOutbox(database, namespace: namespace).pending(),
+      hasLength(1),
+    );
   });
 
   testWidgets('income transactions keep their kind editable without a card', (

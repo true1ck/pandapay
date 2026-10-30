@@ -96,7 +96,7 @@ function merchantFromBody(body) {
 
   // 5. Well-known recurring services named anywhere in the alert.
   const known = flattened.match(
-    /\b(?:chatgpt|openai(?:llc)?|youtube|amazon\s+prime|prime\s+video|netflix|spotify|hotstar|google\s+one|swiggy|zomato|starbucks|reliance)\b/i
+    /\b(?:chatgpt(?:plus)?|openai(?:llc)?|claude(?:ai|pro)?|anthropic|gemini|google\s*(?:one|gemini)|cursor|perplexity|midjourney|youtube|amazon\s+prime|prime\s+video|netflix|spotify|hotstar|jiocinema|microsoft(?:\s*365)?|office\s*365|swiggy|zomato|starbucks|reliance)\b/i
   );
   return known ? known[0] : null;
 }

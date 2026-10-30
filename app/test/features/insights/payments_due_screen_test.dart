@@ -1002,4 +1002,186 @@ void main() {
       expect(find.text('No upcoming bills'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'central bill matching an existing card by name does not create a duplicate card',
+    (tester) async {
+      const kotakProjection = BillProjection(
+        id: 'bp-kotak',
+        projectionKind: 'bill_obligation',
+        projectionKey: 'k-kotak',
+        status: 'active',
+        projection: {
+          'billerName': 'Kotak Credit Card',
+          'amountInr': 22245.32,
+          'dueDate': '2026-11-22T00:00:00.000',
+        },
+        sourceKey: 's-kotak',
+        sourceFactIds: [],
+        projectionVersion: 1,
+        updatedAt: null,
+      );
+
+      final userKotakCard = _card(
+        id: 'uc-kotak',
+        name: 'Kotak Credit Card',
+        dueDay: 22,
+      );
+
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          myCardsProvider.overrideWith((ref) async => [userKotakCard]),
+          userCardsRepositoryProvider.overrideWithValue(_FakeRepo()),
+          cardBillLedgerProvider.overrideWith((ref) async => const {}),
+          centralBillsProjectionProvider.overrideWith(
+            (ref) async => const BillProjectionSnapshot(
+              available: true,
+              projections: [kotakProjection],
+            ),
+          ),
+          commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+          billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+        ],
+      );
+
+      expect(find.text('Kotak Credit Card'), findsOneWidget);
+      expect(find.textContaining('22,245'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'tapping a credit card row opens the prefilled bill edit sheet',
+    (tester) async {
+      final db = openInMemoryForTesting();
+      final cache = ResponseCache(db);
+      addTearDown(db.close);
+
+      final card = _card(id: 'c-hdfc', name: 'MoneyBack+ Credit Card', dueDay: 8);
+      final duePayment = DuePayment(
+        card: card,
+        dueOn: DateTime(2026, 11, 8),
+        daysUntilDue: 14,
+        loggedThisCycle: const Money.zero(),
+        bill: CardBill(
+          statementDate: DateTime(2026, 10, 18),
+          dueDate: DateTime(2026, 11, 8),
+          amountDue: Money.fromRupees(8331),
+          minimumDue: Money.fromRupees(500),
+          paidToward: const Money.zero(),
+          lastPaymentAt: null,
+          confidence: 0.9,
+          statementDateVerified: true,
+          statementDateExplicit: true,
+        ),
+      );
+
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          cacheNamespaceProvider.overrideWithValue('user:test'),
+          responseCacheProvider.overrideWith((ref) async => cache),
+          myCardsProvider.overrideWith((ref) async => [card]),
+          userCardsRepositoryProvider.overrideWithValue(_FakeRepo()),
+          paymentsDueProvider.overrideWith((ref) async => [duePayment]),
+          commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+          billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+        ],
+      );
+
+      expect(find.text('MoneyBack+ Credit Card'), findsOneWidget);
+      expect(find.textContaining('8,331'), findsOneWidget);
+
+      // Tap card row
+      await tester.tap(find.text('MoneyBack+ Credit Card'));
+      await tester.pumpAndSettle();
+
+      // Modal bottom sheet should be open with prefilled values
+      expect(find.text('Total amount due'), findsOneWidget);
+      expect(find.text('8331'), findsOneWidget);
+      expect(find.text('Minimum amount due (optional)'), findsOneWidget);
+      expect(find.text('500'), findsOneWidget);
+      expect(find.textContaining('8 November 2026'), findsOneWidget);
+      expect(find.text('Save bill details'), findsOneWidget);
+      expect(find.text('Edit card settings'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'tapping card row with Amount not seen auto-detects and prefills SMS bill and saves',
+    (tester) async {
+      final db = openInMemoryForTesting();
+      final cache = ResponseCache(db);
+      addTearDown(db.close);
+
+      // Save an unassigned HDFC bill SMS in financial store
+      cache.financialStore.saveObservation('user:test', 'obs-hdfc-sms', {
+        'id': 'obs-hdfc-sms',
+        'event_type': 'bill',
+        'sender_bank': 'HDFCBK',
+        'biller_name': 'HDFC Bank Credit Card',
+        'amount_due_paise': 833100,
+        'due_date': '2026-11-08T00:00:00.000',
+        'received_at': '2026-10-18T00:00:00.000',
+        'confidence': 0.9,
+      });
+
+      final card = _card(id: 'c-hdfc-mb', name: 'MoneyBack+ Credit Card', dueDay: 8);
+      final duePayment = DuePayment(
+        card: card,
+        dueOn: DateTime(2026, 11, 8),
+        daysUntilDue: 14,
+        loggedThisCycle: const Money.zero(),
+        bill: CardBill(
+          statementDate: DateTime(2026, 10, 18),
+          dueDate: DateTime(2026, 11, 8),
+          amountDue: null, // "Amount not seen"
+          minimumDue: null,
+          paidToward: const Money.zero(),
+          lastPaymentAt: null,
+          confidence: 0.5,
+          statementDateVerified: true,
+          statementDateExplicit: false,
+        ),
+      );
+
+      await _pumpBills(
+        tester,
+        overrides: [
+          ..._deterministicOverrides(),
+          cacheNamespaceProvider.overrideWithValue('user:test'),
+          responseCacheProvider.overrideWith((ref) async => cache),
+          myCardsProvider.overrideWith((ref) async => [card]),
+          userCardsRepositoryProvider.overrideWithValue(_FakeRepo()),
+          paymentsDueProvider.overrideWith((ref) async => [duePayment]),
+          commitmentsProvider.overrideWith((ref) async => const <Commitment>[]),
+          billsHorizonProvider.overrideWith((ref) => BillsHorizon.upcoming),
+        ],
+      );
+
+      expect(find.text('MoneyBack+ Credit Card'), findsOneWidget);
+      expect(find.text('Amount not seen'), findsOneWidget);
+
+      // Tap card row
+      await tester.tap(find.text('MoneyBack+ Credit Card'));
+      await tester.pumpAndSettle();
+
+      // Verified auto-detection banner and prefilled value
+      expect(find.text('Bill detected from SMS'), findsOneWidget);
+      expect(find.text('8331'), findsOneWidget);
+      expect(find.textContaining('8 November 2026'), findsOneWidget);
+
+      // Tap Save
+      await tester.tap(find.text('Save bill details'));
+      await tester.pumpAndSettle();
+
+      // Sheet should be dismissed
+      expect(find.text('Total amount due'), findsNothing);
+
+      // Verify the assignment was recorded in store
+      final assignments = cache.financialStore.cardBillAssignments('user:test');
+      expect(assignments.isNotEmpty, isTrue);
+    },
+  );
 }

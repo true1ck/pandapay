@@ -324,6 +324,37 @@ List<SmsFactValidationEntry> buildSmsFactsForObservation({
       });
       break;
     case LocalSmsEventType.autopay:
+      if (observation.reasonCodes.contains('explicit_subscription_service')) {
+        final service = observation.billerName?.trim();
+        if (service == null || service.isEmpty) break;
+        final statedAmount = observation.amountDue;
+        final cadence = switch (observation.cadenceHint) {
+          'monthly' => 30,
+          'quarterly' => 91,
+          'halfYearly' => 182,
+          'annual' => 365,
+          _ => null,
+        };
+        add('security_or_service_alert', {
+          'alertKind': 'service',
+          'occurredAt': asOfAt,
+          'serviceName': service,
+          'explicitSubscription': true,
+          'subscriptionEvidence': 'explicit',
+          'renewalMode': _reMatch(r'\b(?:auto(?:matic)?\s*renew|auto\s*pay|recurring)\b', lower)
+              ? 'automatic'
+              : 'unknown',
+          if (cadence != null) ...{
+            'cadenceDays': cadence,
+            'cadenceExplicit': true,
+          },
+          if (observation.dueDate != null)
+            'nextPaymentDate': observation.dueDate!.toUtc().toIso8601String(),
+          if (statedAmount != null && statedAmount.paise > 0)
+            'nextPaymentAmountInr': statedAmount.rupees,
+        });
+        break;
+      }
       if (_reMatch(r'\bcancel(?:led|ed|ling|ing)\b', lower)) {
         final cancelledMerchant = _mandateCancelledMerchant(lower);
         if (cancelledMerchant != null) {
@@ -366,7 +397,10 @@ List<SmsFactValidationEntry> buildSmsFactsForObservation({
             'explicitSubscription': true,
             'subscriptionEvidence': 'explicit',
           } else
-            'subscriptionEvidence': 'historical',
+            // A named AutoPay authorization proves setup presence, not that
+            // this merchant sells the user's subscription. The server only
+            // promotes known services or explicit subscription language.
+            'subscriptionEvidence': 'brand_prior',
         },
         if (limit != null && limit.paise > 0) ...{
           'amountRole': 'ceiling',

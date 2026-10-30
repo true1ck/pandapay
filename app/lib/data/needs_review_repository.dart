@@ -7,9 +7,10 @@ import 'commitments_repository.dart';
 import 'past_bill_receipts.dart';
 import 'adjustment_matcher.dart';
 import 'local/app_database.dart';
-import 'local/financial_store.dart' show FinancialChange;
+import 'local/financial_store.dart' show FinancialChange, FinancialStore;
 import 'local/sms_learning_feedback.dart';
 import 'local_sms_parser.dart';
+import 'merchant_identity.dart';
 import 'user_cards_repository.dart';
 import 'investment_classifier.dart';
 import '../features/sms_import/sms_text_hint.dart';
@@ -59,6 +60,7 @@ class NeedsReviewItem {
   final List<Map<String, dynamic>>? aiSuggestions;
   final AiReviewStatus aiStatus;
   final String? aiTopic;
+  final Map<String, dynamic>? aiDecision;
   final String? aiSummary;
   final String? aiFailureReason;
 
@@ -72,6 +74,7 @@ class NeedsReviewItem {
     this.aiSuggestions,
     this.aiStatus = AiReviewStatus.notChecked,
     this.aiTopic,
+    this.aiDecision,
     this.aiSummary,
     this.aiFailureReason,
   });
@@ -81,6 +84,7 @@ class NeedsReviewItem {
     List<Map<String, dynamic>>? aiSuggestions,
     AiReviewStatus? aiStatus,
     String? aiTopic,
+    Map<String, dynamic>? aiDecision,
     String? aiSummary,
     String? aiFailureReason,
     bool clearAiFailureReason = false,
@@ -94,6 +98,7 @@ class NeedsReviewItem {
     aiSuggestions: aiSuggestions ?? this.aiSuggestions,
     aiStatus: aiStatus ?? this.aiStatus,
     aiTopic: aiTopic ?? this.aiTopic,
+    aiDecision: aiDecision ?? this.aiDecision,
     aiSummary: aiSummary ?? this.aiSummary,
     aiFailureReason: clearAiFailureReason
         ? null
@@ -110,6 +115,7 @@ class NeedsReviewItem {
     if (aiSuggestions != null) 'aiSuggestions': aiSuggestions,
     'aiStatus': aiStatus.name,
     if (aiTopic != null) 'aiTopic': aiTopic,
+    if (aiDecision != null) 'aiDecision': aiDecision,
     if (aiSummary != null) 'aiSummary': aiSummary,
     if (aiFailureReason != null) 'aiFailureReason': aiFailureReason,
   };
@@ -137,6 +143,9 @@ class NeedsReviewItem {
         orElse: () => AiReviewStatus.notChecked,
       ),
       aiTopic: json['aiTopic'] as String?,
+      aiDecision: json['aiDecision'] is Map
+          ? Map<String, dynamic>.from(json['aiDecision'] as Map)
+          : null,
       aiSummary: json['aiSummary'] as String?,
       aiFailureReason: json['aiFailureReason'] as String?,
     );
@@ -217,6 +226,7 @@ void addNeedsReviewSync(
         linkedTransactionId: linkedId,
         status: PastBillReceiptStatus.paidLinked,
       );
+      NeedsReviewRepository._enrichLinkedReceipt(database, namespace, item, linkedId);
       return;
     }
   }
@@ -349,6 +359,21 @@ class NeedsReviewRepository {
 
   static void _notify(AppDatabase database, String namespace, String entity) {
     _changes[database]?.add(FinancialChange(namespace, entity));
+  }
+
+  /// Restore an explicitly disputed AI decision without re-running the SMS
+  /// classifier. Call this inside the same SQLite savepoint as the undo: the
+  /// original message must remain reviewable if the financial row is removed.
+  static void restoreDisputedDecisionSync(
+    AppDatabase database,
+    String namespace,
+    NeedsReviewItem item,
+  ) {
+    database.db.execute(
+      'INSERT OR REPLACE INTO local_needs_review(namespace,id,payload) VALUES (?,?,?)',
+      [namespace, item.id, jsonEncode(item.toJson())],
+    );
+    _notify(database, namespace, 'needs_review');
   }
 
   final String namespace;
@@ -624,6 +649,7 @@ class NeedsReviewRepository {
               linkedTransactionId: linkedId,
               status: PastBillReceiptStatus.paidLinked,
             );
+            _enrichLinkedReceipt(db, namespace, item, linkedId);
             toRemove.add(item.id);
             continue;
           }
@@ -1152,114 +1178,77 @@ class NeedsReviewRepository {
   static bool isMerchantReceiptOrEbill(String body) =>
       LocalSmsParser.isMerchantReceiptOrEbill(body);
 
+  static void _enrichLinkedReceipt(
+    AppDatabase database,
+    String namespace,
+    NeedsReviewItem item,
+    String transactionId,
+  ) {
+    final merchant = LocalSmsParser.extractReceiptMerchant(item.body);
+    if (merchant != null && FinancialStore.enrichProvisionalReceiptMerchant(
+      database, namespace, transactionId, merchant,
+    )) {
+      _notify(database, namespace, 'transactions');
+    }
+  }
+
   static TransactionEntry? matchingSpendTransactionInList(
     NeedsReviewItem item,
     List<TransactionEntry>? transactions,
   ) {
     final extracted = LocalSmsParser.extractReceiptAmount(item.body);
     if (extracted == null || extracted.paise <= 0) return null;
+    final merchant = LocalSmsParser.extractReceiptMerchant(item.body);
+    final references = RegExp(
+      r'\b(?:upi\s*(?:ref(?:erence)?\s*(?:no\.?)?)?|utr|rrn|ref(?:erence)?\s*(?:no\.?)?|transaction\s*id)\s*[:#.-]?\s*([a-z0-9]{8,35})\b',
+      caseSensitive: false,
+    ).allMatches(item.body).map((m) => m.group(1)!.toLowerCase())
+        .where((r) => !r.contains('xxxx')).toSet();
+    final referenceMatches = <String, TransactionEntry>{};
+    final nameMatches = <String, TransactionEntry>{};
     for (final txn in transactions ?? const <TransactionEntry>[]) {
-      if (txn.status != 'active') continue;
-      final entryKind = txn.entryKind.name.toLowerCase();
-      final wireValue = txn.entryKind.wireValue.toLowerCase();
-      if (entryKind != 'spend' &&
-          entryKind != 'payment' &&
-          wireValue != 'spend' &&
-          wireValue != 'payment') {
-        continue;
-      }
+      if (txn.status != 'active' || txn.entryKind != TxnEntryKind.spend) continue;
       if (txn.amount.paise != extracted.paise ||
           txn.occurredAt.difference(item.receivedAt).abs() >
-              const Duration(hours: 72)) {
+              const Duration(hours: 72)) continue;
+      final txnReferences = txn.observations
+          .map((o) => o.reference?.trim().toLowerCase())
+          .whereType<String>()
+          .where((r) => r.length >= 8 && !r.contains('xxxx')).toSet();
+      if (references.isNotEmpty && txnReferences.isNotEmpty) {
+        if (references.intersection(txnReferences).isNotEmpty) {
+          referenceMatches[txn.id] = txn;
+        }
         continue;
       }
-      if (_merchantMatchesOrOverlaps(
-        txn.merchantName,
-        item.body,
-        item.sender,
-      )) {
-        return txn;
+      if (_merchantMatchesOrOverlaps(txn.merchantName, merchant)) {
+        nameMatches[txn.id] = txn;
       }
     }
-    return null;
+    final matches = referenceMatches.isNotEmpty ? referenceMatches : nameMatches;
+    return matches.length == 1 ? matches.values.single : null;
   }
 
   static bool _merchantMatchesOrOverlaps(
     String? txnMerchant,
-    String receiptBody,
-    String receiptSender,
+    String? receiptMerchant,
   ) {
-    if (txnMerchant == null || txnMerchant.trim().isEmpty) {
-      return true;
-    }
-    final merchantLower = txnMerchant.trim().toLowerCase();
-    const stopWords = {
-      'pvt',
-      'ltd',
-      'limited',
-      'india',
-      'retail',
-      'store',
-      'stores',
-      'online',
-      'payment',
-      'payments',
-      'pay',
-      'corp',
-      'corporation',
-      'services',
-      'service',
-      'the',
-      'and',
-      'for',
-      'with',
-      'from',
-      'upi',
-      'pos',
-      'txn',
-      'bank',
-      'com',
-      'in',
-      'org',
-      'net',
-    };
-    final rawTokens = merchantLower
-        .split(RegExp(r'[^a-z0-9]+'))
-        .where((t) => t.isNotEmpty && !stopWords.contains(t))
-        .toList();
-
-    if (rawTokens.isEmpty) {
-      return true;
-    }
-
-    final cleanBody = receiptBody.toLowerCase().replaceAll(
-      RegExp(r'[^a-z0-9]'),
-      '',
-    );
-    final cleanSender = receiptSender.toLowerCase().replaceAll(
-      RegExp(r'[^a-z0-9]'),
-      '',
-    );
-    final lowerBody = receiptBody.toLowerCase();
-    final lowerSender = receiptSender.toLowerCase();
-
-    for (final token in rawTokens) {
-      if (token.length >= 4) {
-        if (cleanBody.contains(token) || cleanSender.contains(token)) {
-          return true;
-        }
-      } else if (token.length == 3) {
-        if (RegExp(r'\b' + RegExp.escape(token) + r'\b').hasMatch(lowerBody) ||
-            RegExp(
-              r'\b' + RegExp.escape(token) + r'\b',
-            ).hasMatch(lowerSender) ||
-            cleanSender.contains(token)) {
-          return true;
-        }
-      }
-    }
-
-    return false;
+    final transactionName = MerchantIdentity.cleanName(txnMerchant);
+    final receiptName = MerchantIdentity.cleanName(receiptMerchant);
+    if (transactionName == null || receiptName == null) return false;
+    const stopWords = {'pvt', 'ltd', 'limited', 'store', 'stores', 'the', 'and'};
+    List<String> tokens(String name) => name
+        .toLowerCase().split(RegExp(r'[^\p{L}\p{M}\p{N}]+', unicode: true))
+        .where((t) => t.isNotEmpty && !stopWords.contains(t) &&
+            !RegExp(r'^\d+$').hasMatch(t)).toList();
+    final receiptTokens = tokens(receiptName);
+    final transactionTokens = tokens(transactionName);
+    if (receiptTokens.isEmpty || transactionTokens.isEmpty) return false;
+    final shorter = receiptTokens.length <= transactionTokens.length
+        ? receiptTokens : transactionTokens;
+    final longer = receiptTokens.length <= transactionTokens.length
+        ? transactionTokens : receiptTokens;
+    return shorter.every(longer.contains);
   }
 
   static bool hasMatchingSpendTransactionSync(
@@ -1285,81 +1274,65 @@ class NeedsReviewRepository {
     List<TransactionEntry>? transactions,
     bool transactionsAreComplete = false,
   }) {
-    final extracted = LocalSmsParser.extractReceiptAmount(item.body);
-    if (extracted == null || extracted.paise <= 0) return null;
-
-    final listed = matchingSpendTransactionInList(item, transactions);
-    if (listed != null) return listed.id;
-    if (transactionsAreComplete) return null;
-
-    try {
-      database.db.execute('''
-        CREATE TABLE IF NOT EXISTS financial_entities (
-          namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,
-          payload TEXT NOT NULL, observed_at INTEGER NOT NULL,
-          pending INTEGER NOT NULL DEFAULT 0, source_key TEXT,
-          occurred_at INTEGER, amount_paise INTEGER,
-          PRIMARY KEY(namespace, entity, id)
+    final byId = <String, TransactionEntry>{
+      for (final transaction in transactions ?? const <TransactionEntry>[])
+        transaction.id: transaction,
+    };
+    if (!transactionsAreComplete) {
+      try {
+        final rows = database.db.select(
+          "SELECT id, payload, occurred_at, amount_paise FROM financial_entities WHERE namespace=? AND entity='transactions'",
+          [namespace],
         );
-      ''');
-      final rows = database.db.select(
-        "SELECT id, payload, occurred_at, amount_paise FROM financial_entities WHERE namespace = ? AND entity = 'transactions'",
-        [namespace],
-      );
-      for (final row in rows) {
-        final payloadJson = row['payload'] as String?;
-        if (payloadJson == null) continue;
-        final data = jsonDecode(payloadJson) as Map<String, dynamic>;
-
-        if ((data['status'] ?? 'active') != 'active') continue;
-        final entryKind = (data['entry_kind'] as String?)?.toLowerCase();
-        if (entryKind != null &&
-            entryKind != 'spend' &&
-            entryKind != 'payment') {
-          continue;
+        for (final row in rows) {
+          final data = jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+          final id = row['id'] as String;
+          byId.remove(id);
+          final entryKind = (data['entry_kind'] as String?)?.toLowerCase();
+          if (entryKind != null && entryKind != 'spend' && entryKind != 'payment') continue;
+          final paise = row['amount_paise'] ??
+              (data['amount'] is Map ? data['amount']['paise'] : null);
+          final occurred = row['occurred_at'] ?? data['occurred_at'];
+          if (occurred is! int &&
+              (occurred is! String || DateTime.tryParse(occurred) == null)) continue;
+          byId[id] = TransactionEntry.fromJson({
+            ...data,
+            'id': row['id'],
+            if (paise is num) 'amount_inr': paise / 100,
+            if (occurred is int)
+              'occurred_at': DateTime.fromMillisecondsSinceEpoch(occurred).toIso8601String(),
+            'merchant_name': data['merchant_name'] ?? data['merchant'] ?? data['merchantName'],
+          });
         }
-
-        final paiseCol = row['amount_paise'] as int?;
-        final amountInr = data['amount_inr'] as num?;
-        var amountMatched = false;
-        if (paiseCol != null) {
-          amountMatched = paiseCol == extracted.paise;
-        } else if (amountInr != null) {
-          amountMatched = (amountInr * 100).round() == extracted.paise;
-        } else if (data['amount'] is Map &&
-            (data['amount'] as Map)['paise'] is int) {
-          amountMatched = (data['amount'] as Map)['paise'] == extracted.paise;
-        }
-        if (!amountMatched) continue;
-
-        DateTime? occurredAt;
-        final occurredCol = row['occurred_at'] as int?;
-        if (occurredCol != null) {
-          occurredAt = DateTime.fromMillisecondsSinceEpoch(occurredCol);
-        } else if (data['occurred_at'] != null) {
-          final rawOccurred = data['occurred_at'];
-          if (rawOccurred is String) {
-            occurredAt = DateTime.tryParse(rawOccurred);
-          } else if (rawOccurred is int) {
-            occurredAt = DateTime.fromMillisecondsSinceEpoch(rawOccurred);
-          }
-        }
-        if (occurredAt == null) continue;
-
-        if (occurredAt.difference(item.receivedAt).abs() <=
-            const Duration(hours: 72)) {
-          final txnMerchant =
-              data['merchant_name'] as String? ??
-              data['merchant'] as String? ??
-              data['merchantName'] as String?;
-          if (_merchantMatchesOrOverlaps(txnMerchant, item.body, item.sender)) {
-            return row['id'] as String;
-          }
-        }
+      } catch (_) {
+        // An incomplete snapshot cannot establish a unique receipt match.
+        return null;
       }
-    } catch (_) {}
+    }
+    _applyPendingTransactionEdits(database, namespace, byId);
+    return matchingSpendTransactionInList(item, byId.values.toList())?.id;
+  }
 
-    return null;
+  static void _applyPendingTransactionEdits(
+    AppDatabase database,
+    String namespace,
+    Map<String, TransactionEntry> byId,
+  ) {
+    final edits = database.db.select(
+      "SELECT entity_id, op, payload_json FROM sync_pending_changes WHERE namespace=? AND entity='transactions' ORDER BY client_seq",
+      [namespace],
+    );
+    for (final edit in edits) {
+      final transaction = byId[edit['entity_id']];
+      if (transaction == null) continue;
+      byId[transaction.id] = TransactionEntry.fromJson({
+        ...transaction.toJson(),
+        if (edit['op'] == 'delete')
+          'status': 'ignored'
+        else
+          ...jsonDecode(edit['payload_json'] as String) as Map<String, dynamic>,
+      });
+    }
   }
 
   bool _hasMatchingSpendTransaction(
@@ -1378,33 +1351,7 @@ class NeedsReviewRepository {
         transactionsAreComplete: transactionsAreComplete,
       );
     }
-    final extracted = LocalSmsParser.extractReceiptAmount(item.body);
-    if (extracted == null || extracted.paise <= 0) return false;
-    if (txns != null) {
-      for (final txn in txns) {
-        if (txn.status != 'active') continue;
-        final entryKindStr = txn.entryKind.name.toLowerCase();
-        final wireValueStr = txn.entryKind.wireValue.toLowerCase();
-        if (entryKindStr != 'spend' &&
-            entryKindStr != 'payment' &&
-            wireValueStr != 'spend' &&
-            wireValueStr != 'payment') {
-          continue;
-        }
-        if (txn.amount.paise != extracted.paise) continue;
-        if (txn.occurredAt.difference(item.receivedAt).abs() <=
-            const Duration(hours: 72)) {
-          if (_merchantMatchesOrOverlaps(
-            txn.merchantName,
-            item.body,
-            item.sender,
-          )) {
-            return true;
-          }
-        }
-      }
-    }
-    return false;
+    return matchingSpendTransactionInList(item, txns) != null;
   }
 
   static bool isRefundOrReversal(String body) {
@@ -1689,6 +1636,7 @@ class NeedsReviewRepository {
             linkedTransactionId: linkedId,
             status: PastBillReceiptStatus.paidLinked,
           );
+          _enrichLinkedReceipt(db, namespace, item, linkedId);
           return;
         }
       } else if (_hasMatchingSpendTransaction(item, transactions: txns)) {
@@ -1840,16 +1788,19 @@ class NeedsReviewRepository {
     String id,
     List<Map<String, dynamic>> suggestions, {
     String? aiTopic,
+    Map<String, dynamic>? aiDecision,
     String? aiSummary,
   }) async {
     final items = await fetchAll();
     final current = items.where((item) => item.id == id).firstOrNull;
     if (current == null) return false;
     final nextTopic = aiTopic ?? current.aiTopic;
+    final nextDecision = aiDecision ?? current.aiDecision;
     final nextSummary = aiSummary ?? current.aiSummary;
     if (jsonEncode(current.aiSuggestions ?? const []) ==
             jsonEncode(suggestions) &&
         current.aiTopic == nextTopic &&
+        jsonEncode(current.aiDecision) == jsonEncode(nextDecision) &&
         current.aiSummary == nextSummary) {
       return false;
     }
@@ -1858,6 +1809,7 @@ class NeedsReviewRepository {
           .copyWith(
             aiSuggestions: suggestions,
             aiTopic: nextTopic,
+            aiDecision: nextDecision,
             aiSummary: nextSummary,
           )
           .toJson(),

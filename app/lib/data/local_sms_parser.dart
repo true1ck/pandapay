@@ -3,8 +3,10 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'investment_classifier.dart';
 import 'user_cards_repository.dart';
 import 'local/sms_intake_repository.dart';
+import 'local/sms_learning_feedback.dart';
 import 'local/sms_rule_bundle.dart';
 import 'indian_narration_sanitizer.dart';
+import 'merchant_identity.dart';
 import 'flashtext_merchant_extractor.dart';
 
 enum LocalSmsEventType {
@@ -132,25 +134,44 @@ class LocalSmsParser {
   // learned from its own AutoPay message.
   // 15: Telecom carrier retention fees (Jio, Airtel airtime deductions) and loan cross-sells.
   // 16: Betting/gambling promotions and digital credit power / loan limit marketing.
-  static const version = 16;
+  // 17: Bank cautionary advisory warnings ("Never share OTP/PIN/CVV") do not drop valid transactions.
+  // 18: Disambiguate investment share vs advisory warnings, support YONO UPI, and dot-masked accounts.
+  // 19: Allow scanner reprocessing of historical alerts on parser upgrade without lockout.
+  // 21: Named payees for UPI narrations and "towards X for INR" debits, weak-name rejection.
+  // 22: Unicode-masked UPI references precede the named recipient.
+  static const version = 22;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
   /// rules cannot produce different categories across captures.
-  static String? _userCategoryRuleSlug(
+  ///
+  /// Public so the AI auto-resolution path can apply the user's latest
+  /// correction BEFORE the AI's own category decision (plan C5 precedence).
+  static String? userCategoryRuleSlug(
     Map<String, String>? rules,
     String? merchant,
     String sender,
+    [String? body]
   ) {
     if (rules == null || rules.isEmpty) return null;
     String normalize(String value) =>
         value.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
     final merchantText = normalize(merchant ?? '');
     final senderText = normalize(sender);
+    final contextualPrefix = 'CTX|$merchantText|';
+    final contextualRules = rules.entries.where(
+      (entry) => entry.key.startsWith(contextualPrefix),
+    );
+    if (contextualRules.isNotEmpty) {
+      if (body == null || merchantText.isEmpty) return null;
+      final exact = SmsLearningFeedback.contextPattern(merchantText, sender, body);
+      return rules[exact];
+    }
     String? matchedSlug;
     var matchedLength = -1;
     for (final entry in rules.entries) {
       final pattern = normalize(entry.key);
+      if (pattern.startsWith('CTX|')) continue;
       if (pattern.isEmpty) continue;
       final matched =
           (merchantText.isNotEmpty && merchantText.contains(pattern)) ||
@@ -161,6 +182,33 @@ class LocalSmsParser {
       }
     }
     return matchedSlug;
+  }
+
+  static String? _sharedCategoryRuleSlug(
+    Map<String, String>? rules,
+    String? merchant,
+    String sender,
+    String body,
+  ) {
+    if (rules == null || merchant == null || merchant.trim().isEmpty) {
+      return null;
+    }
+    final key = merchant.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+    final senderKey = sender.trim().toUpperCase();
+    if (!RegExp(r'^[A-Z]{2}-[A-Z0-9]{3,10}(?:-[A-Z])?$').hasMatch(senderKey)) {
+      return null;
+    }
+    final contextKey = SmsSharedCategoryRule.contextKeyForBody(
+      body,
+      merchant: merchant,
+    );
+    if (contextKey.isEmpty || contextKey.split('|').length > 8) return null;
+    return rules[SmsSharedCategoryRule.tupleKey(
+      merchantKey: key,
+      senderKey: senderKey,
+      contextKey: contextKey,
+      factFamily: 'posted_movement',
+    )];
   }
 
   static String? categoryDisplayName(String? slug) {
@@ -202,8 +250,48 @@ class LocalSmsParser {
   static bool isMerchantReceiptOrEbill(String body) {
     final text = body.toLowerCase();
     return RegExp(
-      r'\b(?:view\s+(?:e[- ]?bill|bill|invoice|tax\s+invoice)|e[- ]?bill\s+of\b|view\s+bill\s+of\b|thanks?\s+for\s+(?:your\s+)?payment\s+of\s+(?:rs\.?|inr)|thank\s+you\s+for\s+your\s+purchase\b[\s\S]{0,240}\b(?:download|view)\b[\s\S]{0,80}\b(?:bill|invoice|receipt)\b)',
-    ).hasMatch(text);
+      r'\b(?:view\s+(?:the\s+)?(?:payment\s+)?(?:e[- ]?bill|bill|invoice|tax\s+invoice|receipt)|e[- ]?bill\s+of\b|view\s+bill\s+of\b|payment\s+receipt\b|thanks?\s+for\s+(?:your\s+)?payment\s+of\s+(?:rs\.?|inr)|thank\s+you\s+for\s+your\s+purchase\b[\s\S]{0,240}\b(?:download|view)\b[\s\S]{0,80}\b(?:bill|invoice|receipt)\b)',
+    ).hasMatch(text) ||
+        // Arbitrary named-shop receipts, e.g. "your payment of Rs. 700.0 to
+        // Balaji Sports has been recorded". The payee is not hardcoded: only
+        // the recorded/received sentence shape identifies a receipt.
+        RegExp(
+          r'\bpayment\s+of\s+(?:₹|rs\.?|inr)?\s*[\d,]+(?:\.\d{1,2})?\s+(?:to|towards)\s+[^.!?\n]{2,80}?\s+(?:has|have|was|were)\s+(?:been\s+)?(?:recorded|received)\b',
+        ).hasMatch(text);
+  }
+
+  /// Extracts the payee from a merchant receipt/order confirmation without
+  /// relying on a hardcoded shop. Returns null for opaque IDs and boilerplate.
+  static String? extractReceiptMerchant(String body) {
+    final patterns = <RegExp>[
+      _re(
+        r'\b(?:made\s+)?payment\s+of\s+(?:₹|rs\.?|inr)?\s*[\d,]+(?:\.\d{1,2})?\s+(?:to|towards)\s+([^.!?\n]{2,80}?)(?=\s+(?:has|have|was|were|is|are)\s+(?:been\s+)?(?:recorded|received|successful|successfully|completed|credited|debited|paid|processed)\b|[.!?\n]|\s+-\s+|$)',
+      ),
+      _re(
+        r'\b(?:paid|payment\s+to)\b[\s\S]{0,25}?(?:₹|rs\.?|inr)?\s*[\d,]+(?:\.\d{1,2})?\s+(?:to|at|towards)\s+([^.!?\n]{2,80}?)(?=[.!?\n]|\s+for\b|\s+(?:has|was|were|is)\b|\s+-\s+|$)',
+      ),
+      _re(
+        r'\bpayment\s+(?:to|towards)\s+([^.!?\n]{2,80}?)(?=\s+(?:has|have|was|were)\s+(?:been\s+)?(?:recorded|received|successful|successfully|completed)\b|[.!?\n]|\s+-\s+|$)',
+      ),
+      _re(
+        r'\b(?:purchase|order)\s*(?:@|at|from|with)\s+([^.!?\n]{2,60}?)(?=[.!?,]|\s+for\b|\s+has\b|$)',
+      ),
+      _re(
+        r'(?:^|\s)@\s*([^.!?\n]{2,60}?)(?=[.!?,]|\s+for\b|\s+has\b|$)',
+      ),
+      _re(
+        r'\breceipt\s+(?:from|for)\s+([^.!?\n]{2,80}?)(?=[.!?\n]|$)',
+      ),
+      _re(
+        r'\b(?:thank\s+you|thanks)\s+for\s+(?:choosing|visiting|shopping\s+(?:at|with))\s+([^.!?\n]{2,80}?)(?=[.!?\n]|\s+(?:view|download)\b|$)',
+      ),
+    ];
+    for (final pattern in patterns) {
+      final candidate = pattern.firstMatch(body)?.group(1);
+      final cleaned = MerchantIdentity.cleanName(candidate);
+      if (cleaned != null) return cleaned;
+    }
+    return null;
   }
 
   static Money? extractReceiptAmount(String body) {
@@ -221,6 +309,32 @@ class LocalSmsParser {
     final value = Money.fromPaise(paise);
     return value.paise > 0 ? value : null;
   }
+
+  /// Some bank alerts print only the number after the movement verb
+  /// ("debited by 50.00"). Currencyless amounts are accepted only when they
+  /// are tied directly to a completed debit/credit clause, never from a bare
+  /// number elsewhere in the SMS.
+  static String? _currencylessBankMovementAmountText(String body) {
+    final match = _re(
+      r'\b(?:debited|credited|deducted|deposited|withdrawn)\s+(?:by|with|for|of)\s*(?:₹|rs\.?|inr)?\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)\b',
+    ).firstMatch(body);
+    return match?.group(1);
+  }
+
+  /// A merchant receipt is only independent evidence when it names an
+  /// instrument that actually moved money. Otherwise the bank alert is the
+  /// posted-spend source of truth and the receipt is just enrichment.
+  static bool _receiptHasSettlementInstrument(String body) => _re(
+    r'\b(?:a\/?c\.?|account|card|wallet)\b[^.!?\n]{0,45}\b(?:debited|deducted|charged|withdrawn)\b'
+    r'|\b(?:debited|deducted|charged|withdrawn)\s+(?:from|to|on|using)\s+(?:your\s+)?(?:credit\s+|debit\s+|bank\s+)?(?:a\/?c\.?|account|card|wallet)\b',
+  ).hasMatch(body);
+
+  /// Shared by the downloaded-rule safety gate and the built-in future gate.
+  /// "would" is included deliberately: it previously slipped through and was
+  /// parsed as a completed spend.
+  static bool _hasFutureDebitWording(String body) => _re(
+    r'\b(?:(?:will|would|shall|to|scheduled\s+to|scheduled\s+for)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)|for\s+(?:auto[- ]?)?debit|scheduled\s+for\s+(?:auto[- ]?)?debit|(?:maintain|keep)\s+sufficient\s+(?:bal|balance)\b[\s\S]{0,50}\b(?:debit|deduction)|(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|pre[- ]?debit)\b[\s\S]{0,50}?\b(?:will|would|shall)\s+be\b|(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|pre[- ]?debit)\b[\s\S]{0,50}?\b(?:attempted|scheduled)\b)\b',
+  ).hasMatch(body);
 
   /// True if the message describes an AutoPay, mandate, recurring contribution,
   /// or scheduled payment deduction alert.
@@ -351,14 +465,14 @@ class LocalSmsParser {
     // or AutoPay/mandate terms keep the message actionable.
     final billerOnboarding =
         _re(
-              r'\b(?:added|registered|enrolled|linked|activated|subscribed|enabled)\b[\s\S]{0,80}\b(?:bill\s*pay|billpay|bill\s*payment(?:\s+service)?|biller|payee|e[- ]?bill|paperless|bill\s+fetch|bill\s+alerts?)\b',
-            ).hasMatch(text) ||
-            _re(
-              r'\b(?:bill\s*pay|billpay|biller|payee|e[- ]?bill|paperless|bill\s+fetch|bill\s+alerts?)\b[\s\S]{0,60}\b(?:added|registered|enrolled|linked|activated|subscribed|enabled|registration)\b',
-            ).hasMatch(text) ||
-            _re(
-              r'\b(?:bill\s+will\s+be\s+generated|bill\s+generation\s+date|we\s+will\s+notify\s+you\b[\s\S]{0,60}\bbill\b|(?:you\s+will\s+(?:receive|get)|we\s+will\s+(?:send|notify|inform))\b[\s\S]{0,50}\bbill\b|\bwill\s+(?:send|notify|inform|share)\b[\s\S]{0,40}\bbill\b|(?:once|when|after)\b[\s\S]{0,30}\bbill\b[\s\S]{0,15}\b(?:is\s+|gets\s+)?generated\b)',
-            ).hasMatch(text);
+          r'\b(?:added|registered|enrolled|linked|activated|subscribed|enabled)\b[\s\S]{0,80}\b(?:bill\s*pay|billpay|bill\s*payment(?:\s+service)?|biller|payee|e[- ]?bill|paperless|bill\s+fetch|bill\s+alerts?)\b',
+        ).hasMatch(text) ||
+        _re(
+          r'\b(?:bill\s*pay|billpay|biller|payee|e[- ]?bill|paperless|bill\s+fetch|bill\s+alerts?)\b[\s\S]{0,60}\b(?:added|registered|enrolled|linked|activated|subscribed|enabled|registration)\b',
+        ).hasMatch(text) ||
+        _re(
+          r'\b(?:bill\s+will\s+be\s+generated|bill\s+generation\s+date|we\s+will\s+notify\s+you\b[\s\S]{0,60}\bbill\b|(?:you\s+will\s+(?:receive|get)|we\s+will\s+(?:send|notify|inform))\b[\s\S]{0,50}\bbill\b|\bwill\s+(?:send|notify|inform|share)\b[\s\S]{0,40}\bbill\b|(?:once|when|after)\b[\s\S]{0,30}\bbill\b[\s\S]{0,15}\b(?:is\s+|gets\s+)?generated\b)',
+        ).hasMatch(text);
     final hasCurrencyAmount = _re(
       r'(?:₹|\brs\.?|\binr)\s*[\d,]+|\b\d[\d,]*(?:\.\d{1,2})?\s*(?:₹|rs\.?|inr)\b',
     ).hasMatch(text);
@@ -384,34 +498,52 @@ class LocalSmsParser {
       r'\b(?:a\/?c|account|card)\b[\s\S]{0,25}\b(?:xx|\*{2,}|ending(?:\s+(?:with|in))?\s*\d{3,4})\b|\b(?:xx|\*{2,})\d{3,4}\b',
     ).hasMatch(text);
 
-    final telecomCarrierNotice = (
-      _re(r'\b(?:number\s+)?retention\s+charges?\b').hasMatch(text) ||
-      _re(r'\b(?:deducted|debited)\s+from\s+(?:top-?up|talktime|prepaid|main|core)\s+bal(?:ance)?\b').hasMatch(text) ||
-      _re(r'\b(?:from|on)\s+top-?up\s+bal(?:ance)?\b').hasMatch(text) ||
-      _re(r'\bno\s+usage\s+observed\b[\s\S]{0,40}\b(?:days?|recharge)\b').hasMatch(text) ||
-      _re(r'\brecharge\s+your\s+(?:jio|airtel|vi|vodafone|idea|bsnl)?\s*number\b[\s\S]{0,60}\bto\s+avoid\s+(?:these\s+)?charges\b').hasMatch(text) ||
-      (
-        _re(r'\b(?:jio|airtel|vi|vodafone|idea|bsnl)\b', caseSensitive: false).hasMatch('$cleanSender $text') &&
-        _re(r'\b[6-9]\d{9}\b').hasMatch(text) &&
-        _re(r'\b(?:recharge\s+now|(?:kindly\s+|please\s+)?recharge\s+your|validity\s+(?:is\s+)?expir|top-?up|talktime|retention)\b').hasMatch(text) &&
-        !_re(r'\b(?:successful|completed|done|received)\b').hasMatch(text) &&
-        !hasMaskedAccount
-      )
-    ) && !hasDueDate && !_re(r'\b(?:statement|bill)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b').hasMatch(text);
+    final telecomCarrierNotice =
+        (_re(r'\b(?:number\s+)?retention\s+charges?\b').hasMatch(text) ||
+            _re(
+              r'\b(?:deducted|debited)\s+from\s+(?:top-?up|talktime|prepaid|main|core)\s+bal(?:ance)?\b',
+            ).hasMatch(text) ||
+            _re(r'\b(?:from|on)\s+top-?up\s+bal(?:ance)?\b').hasMatch(text) ||
+            _re(
+              r'\bno\s+usage\s+observed\b[\s\S]{0,40}\b(?:days?|recharge)\b',
+            ).hasMatch(text) ||
+            _re(
+              r'\brecharge\s+your\s+(?:jio|airtel|vi|vodafone|idea|bsnl)?\s*number\b[\s\S]{0,60}\bto\s+avoid\s+(?:these\s+)?charges\b',
+            ).hasMatch(text) ||
+            (_re(
+                  r'\b(?:jio|airtel|vi|vodafone|idea|bsnl)\b',
+                  caseSensitive: false,
+                ).hasMatch('$cleanSender $text') &&
+                _re(r'\b[6-9]\d{9}\b').hasMatch(text) &&
+                _re(
+                  r'\b(?:recharge\s+now|(?:kindly\s+|please\s+)?recharge\s+your|validity\s+(?:is\s+)?expir|top-?up|talktime|retention)\b',
+                ).hasMatch(text) &&
+                !_re(
+                  r'\b(?:successful|completed|done|received)\b',
+                ).hasMatch(text) &&
+                !hasMaskedAccount)) &&
+        !hasDueDate &&
+        !_re(
+          r'\b(?:statement|bill)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b',
+        ).hasMatch(text);
     if (telecomCarrierNotice) return true;
 
     // Repayment acknowledgments and loan eligibility checks that carry no
     // transaction amount or debit evidence are informational cross-sells.
-    final repaymentCourtesyOrLoanUpsell = _re(
-      r'\b(?:we\s+have\s+)?received\s+your\s+(?:timely\s+)?repayment\b[\s\S]{0,60}\btowards?\s+your\s+(?:pay\s*later|credit\s*line|loan)\b|'
-      r'\b(?:check\s+your\s+)?(?:updated\s+)?personal\s+loan\s+eligibility\b|'
-      r'\bpersonal\s+loan\s+eligibility\s+here\b',
-    ).hasMatch(text) && !hasCurrencyAmount;
+    final repaymentCourtesyOrLoanUpsell =
+        _re(
+          r'\b(?:we\s+have\s+)?received\s+your\s+(?:timely\s+)?repayment\b[\s\S]{0,60}\btowards?\s+your\s+(?:pay\s*later|credit\s*line|loan)\b|'
+          r'\b(?:check\s+your\s+)?(?:updated\s+)?personal\s+loan\s+eligibility\b|'
+          r'\bpersonal\s+loan\s+eligibility\s+here\b',
+        ).hasMatch(text) &&
+        !hasCurrencyAmount;
     if (repaymentCourtesyOrLoanUpsell) return true;
 
-    final loanOrCreditPowerMarketing = _re(
-      r'\b(?:new\s+credit\s+alert|your\s+loan\s+limit\s+is\s+revised|(?:loan|credit)\s+limit\b[\s\S]{0,30}\b(?:revised|increased|enhanced|updated)|digital\s+credit\s+power\s+is\s+(?:now\s+)?active|updated\s+limit\s+here\b|view\s+your\s+updated\s+limit)\b',
-    ).hasMatch(text) && !hasCurrencyAmount;
+    final loanOrCreditPowerMarketing =
+        _re(
+          r'\b(?:new\s+credit\s+alert|your\s+loan\s+limit\s+is\s+revised|(?:loan|credit)\s+limit\b[\s\S]{0,30}\b(?:revised|increased|enhanced|updated)|digital\s+credit\s+power\s+is\s+(?:now\s+)?active|updated\s+limit\s+here\b|view\s+your\s+updated\s+limit)\b',
+        ).hasMatch(text) &&
+        !hasCurrencyAmount;
     if (loanOrCreditPowerMarketing) return true;
 
     final bettingOrGamblingSpam = _re(
@@ -446,10 +578,11 @@ class LocalSmsParser {
         !_re(r'\b(?:debited|credited|charged)\b').hasMatch(text);
     if (orderNotice) return true;
 
-    final completed = _re(
-      r'\b(?:your\s+(?:txn|transaction)\s+of|(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[\d,.]+|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)(?:\s+(?:by|with|for|towards|of|amounting\s+to))?\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[*xX]*\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:sent|cash\s+withdrawal|withdrawal|auto[-\s]?debit)\s*(?:of|by)?\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase|settlement|payout)\b[\s\S]{0,45}\b(?:successful|completed|initiated|processed))',
-    ).hasMatch(text) &&
-    !(_re(r'\b(?:will|shall)\s+be\b').hasMatch(text) && !hasCurrencyAmount);
+    final completed =
+        _re(
+          r'\b(?:your\s+(?:txn|transaction)\s+of|(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[\d,.]+|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)(?:\s+(?:by|with|for|towards|of|amounting\s+to))?\s*(?:₹|rs\.?|inr)|(?:₹|rs\.?|inr)\s*[*xX]*\s*[\d,]+(?:\.\d{1,2})?\s*(?:has\s+been\s+)?(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)|(?:sent|cash\s+withdrawal|withdrawal|auto[-\s]?debit)\s*(?:of|by)?\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase|settlement|payout)\b[\s\S]{0,45}\b(?:successful|completed|initiated|processed))',
+        ).hasMatch(text) &&
+        !(_re(r'\b(?:will|shall)\s+be\b').hasMatch(text) && !hasCurrencyAmount);
     final asbaIpo = _re(
       r'\b(?:asba\s+application|asba\s+(?:req(?:uest)?|bid|block|lien)|towards\s+asba|for\s+asba|asba\b[\s\S]{0,50}\b(?:accepted|blocked|lien|created)|(?:blocked|lien\s+marked)\b[\s\S]{0,50}\b(?:for|towards)?\s*(?:ipo|asba|rights\s+issue)|(?:ipo\s+(?:application|bid|mandate|block|lien)))\b',
     ).hasMatch(text);
@@ -520,21 +653,30 @@ class LocalSmsParser {
       r'|\bas\s+per\s+sebi\b[\s\S]{0,120}\bsettlement\b',
     ).hasMatch(text);
 
-    final hasCompletedSettlement = hasCurrencyAmount &&
-        (hasMovement || _re(r'\b(?:transferred|settled|credited|payout|released)\b').hasMatch(text)) &&
-        !_re(r'\b(?:will|shall)\s+be\s+(?:transferred|settled|credited|paid|released)\b').hasMatch(text);
+    final hasCompletedSettlement =
+        hasCurrencyAmount &&
+        (hasMovement ||
+            _re(
+              r'\b(?:transferred|settled|credited|payout|released)\b',
+            ).hasMatch(text)) &&
+        !_re(
+          r'\b(?:will|shall)\s+be\s+(?:transferred|settled|credited|paid|released)\b',
+        ).hasMatch(text);
 
-    final sebiSettlementNoise = sebiSettlementPattern && !hasCompletedSettlement;
+    final sebiSettlementNoise =
+        sebiSettlementPattern && !hasCompletedSettlement;
 
-    final controlNotice = sebiSettlementNoise || _re(
-      r'\btransaction\s+limits?\b[\s\S]{0,60}\b(?:has|have|is|are)\s+been\s+(?:updated|changed|modified|set)\b'
-      r'|\bsecurity\s+tip\b[\s\S]{0,80}\b(?:enable|set|disable|protect|never\s+share|keep\s+your)\b'
-      r'|\benable\s+online\s+(?:use|usage|transactions?)\b'
-      r'|\bset\s+limit\s+on\b[\s\S]{0,40}\b(?:credit\s+card|card)\b'
-      r'|\b(?:credit\s+card|card|account)\b[\s\S]{0,50}\bhas\s+been\s+linked\b'
-      r'|\blinked\s+for\s+(?:net\s*banking|internet\s+banking|mobile\s+banking)\b'
-      r'|\bday\s+of\s+settlement\b',
-    ).hasMatch(text);
+    final controlNotice =
+        sebiSettlementNoise ||
+        _re(
+          r'\btransaction\s+limits?\b[\s\S]{0,60}\b(?:has|have|is|are)\s+been\s+(?:updated|changed|modified|set)\b'
+          r'|\bsecurity\s+tip\b[\s\S]{0,80}\b(?:enable|set|disable|protect|never\s+share|keep\s+your)\b'
+          r'|\benable\s+online\s+(?:use|usage|transactions?)\b'
+          r'|\bset\s+limit\s+on\b[\s\S]{0,40}\b(?:credit\s+card|card)\b'
+          r'|\b(?:credit\s+card|card|account)\b[\s\S]{0,50}\bhas\s+been\s+linked\b'
+          r'|\blinked\s+for\s+(?:net\s*banking|internet\s+banking|mobile\s+banking)\b'
+          r'|\bday\s+of\s+settlement\b',
+        ).hasMatch(text);
     if (isActionableInsuranceRenewal(body)) return false;
     return offer ||
         serviceNotice ||
@@ -547,7 +689,8 @@ class LocalSmsParser {
   /// suffixes from insurance, demat, brokerage, investment, and card alerts
   /// must not create rows in Home's bank-account snapshot.
   static bool isBankAccountMessage(String body, [String sender = '']) {
-    final text = body.toLowerCase();
+    final cleaned = body.replaceAll(advisoryWarningRe, '');
+    final text = cleaned.toLowerCase();
     if (text.trim().isEmpty) return false;
     final senderText = sender.toLowerCase();
     // Axio is a Pay Later / lending account, not a deposit bank. Its sender
@@ -568,7 +711,7 @@ class LocalSmsParser {
       return false;
     }
     if (RegExp(
-      r'\b(?:lic|life\s+insurance|policy|premium|demat|trading|broker(?:age|ing)?|portfolio|holdings?|folio|dp\s*id|client\s*id|nav|units?|shares?|stocks?|equity|sip|mutual\s+fund|investment|zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money)\b',
+      r'\b(?:lic|life\s+insurance|policy|premium|demat|trading|broker(?:age|ing)?|portfolio|holdings?|folio|dp\s*id|client\s*id|nav|units?|shares|equity\s+shares?|stocks?|equity|sip|mutual\s+fund|investment|zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money)\b',
     ).hasMatch(text)) {
       return false;
     }
@@ -580,7 +723,7 @@ class LocalSmsParser {
           r'\b(?:bank|a\/?c\.?|savings|current|upi|imps|neft|rtgs|atm|co-?op(?:erative)?|sahakari|ucb)\b',
         ).hasMatch(text) ||
         RegExp(
-          r'(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb|gucb|cosmos|svc|tjsb|nkgsb|kccb|coop|ucb)',
+          r'(?:bank|bnk|bk|upi|sbi|yono|sbyono|sbiyon|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb|gucb|cosmos|svc|tjsb|nkgsb|kccb|coop|ucb)',
         ).hasMatch(senderText);
     final balanceMarker = RegExp(
       r'\b(?:(?:total\s+)?(?:available|avail|avl|current|closing|clr|new|remaining)\.?\s*(?:balance|bal)\b|bal(?:ance)?\.?\s*(?:is|:|-))',
@@ -601,7 +744,7 @@ class LocalSmsParser {
   ).hasMatch(body);
 
   static bool _accountToAccountTransfer(String body) => _re(
-    r'\bfrom\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}[\s\S]{0,100}\b(?:to|towards?)\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}\b|\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}[\s\S]{0,35}\b(?:debited|sent|transferred|paid)\b[\s\S]{0,100}\b(?:to|towards?)\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}\b',
+    r'\bfrom\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+(?:with|in))?|last\s*4)\s*)?[*xX.\s-]*\d{4}[\s\S]{0,100}\b(?:to|towards?)\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+(?:with|in))?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b|\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+(?:with|in))?|last\s*4)\s*)?[*xX.\s-]*\d{4}[\s\S]{0,35}\b(?:debited|sent|transferred|paid)\b[\s\S]{0,100}\b(?:to|towards?)\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+(?:with|in))?|last\s*4)\s*)?[*xX.\s-]*\d{4}\b',
   ).hasMatch(body);
 
   static bool _walletLoad(String body) => _re(
@@ -618,28 +761,40 @@ class LocalSmsParser {
     if (RegExp(r'\b(?:dhan(?:hq)?)\b').hasMatch(text)) return 'Dhan';
     if (RegExp(r'\b(?:groww)\b').hasMatch(text)) return 'Groww';
     if (RegExp(r'\b(?:upstox)\b').hasMatch(text)) return 'Upstox';
-    if (RegExp(r'\b(?:angel\s+one|angel\s+broking|angel)\b').hasMatch(text)) return 'Angel One';
+    if (RegExp(r'\b(?:angel\s+one|angel\s+broking|angel)\b').hasMatch(text))
+      return 'Angel One';
     if (RegExp(r'\b(?:5paisa)\b').hasMatch(text)) return '5paisa';
-    if (RegExp(r'\b(?:kotak\s+neo|kotakn|neo)\b').hasMatch(text)) return 'Kotak Neo';
-    if (RegExp(r'\b(?:kotak\s+securities|kotaks)\b').hasMatch(text)) return 'Kotak Securities';
+    if (RegExp(r'\b(?:kotak\s+neo|kotakn|neo)\b').hasMatch(text))
+      return 'Kotak Neo';
+    if (RegExp(r'\b(?:kotak\s+securities|kotaks)\b').hasMatch(text))
+      return 'Kotak Securities';
     if (RegExp(r'\b(?:hdfc\s+sky|hdfcsky)\b').hasMatch(text)) return 'HDFC Sky';
-    if (RegExp(r'\b(?:hdfc\s+securities|hdfcsec)\b').hasMatch(text)) return 'HDFC Securities';
-    if (RegExp(r'\b(?:icici\s+direct|icicid|icicis)\b').hasMatch(text)) return 'ICICI Direct';
-    if (RegExp(r'\b(?:paytm\s+money|pytmmn|paytmm)\b').hasMatch(text)) return 'Paytm Money';
-    if (RegExp(r'\b(?:motilal\s+oswal|moswal|motlal)\b').hasMatch(text)) return 'Motilal Oswal';
+    if (RegExp(r'\b(?:hdfc\s+securities|hdfcsec)\b').hasMatch(text))
+      return 'HDFC Securities';
+    if (RegExp(r'\b(?:icici\s+direct|icicid|icicis)\b').hasMatch(text))
+      return 'ICICI Direct';
+    if (RegExp(r'\b(?:paytm\s+money|pytmmn|paytmm)\b').hasMatch(text))
+      return 'Paytm Money';
+    if (RegExp(r'\b(?:motilal\s+oswal|moswal|motlal)\b').hasMatch(text))
+      return 'Motilal Oswal';
     if (RegExp(r'\b(?:sharekhan|shrkhn)\b').hasMatch(text)) return 'Sharekhan';
     if (RegExp(r'\b(?:espresso|esprso)\b').hasMatch(text)) return 'Espresso';
     if (RegExp(r'\b(?:lemonn)\b').hasMatch(text)) return 'Lemonn';
     if (RegExp(r'\b(?:shoonya|shoony)\b').hasMatch(text)) return 'Shoonya';
     if (RegExp(r'\b(?:finvasia|fnvasia)\b').hasMatch(text)) return 'Finvasia';
     if (RegExp(r'\b(?:blinkx)\b').hasMatch(text)) return 'BlinkX';
-    if (RegExp(r'\b(?:jm\s+financial|jmfin)\b').hasMatch(text)) return 'JM Financial';
+    if (RegExp(r'\b(?:jm\s+financial|jmfin)\b').hasMatch(text))
+      return 'JM Financial';
     if (RegExp(r'\b(?:geojit)\b').hasMatch(text)) return 'Geojit';
-    if (RegExp(r'\b(?:axis\s+direct|axisdir|axisd)').hasMatch(text)) return 'Axis Direct';
+    if (RegExp(r'\b(?:axis\s+direct|axisdir|axisd)').hasMatch(text))
+      return 'Axis Direct';
     if (RegExp(r'\b(?:m\.?stock)\b').hasMatch(text)) return 'm.Stock';
-    if (RegExp(r'\b(?:mirae\s+asset|miraea|mirae)\b').hasMatch(text)) return 'Mirae Asset';
-    if (RegExp(r'\b(?:iifl\s+securities|iiflsec|iiflsc|iifl)\b').hasMatch(text)) return 'IIFL Securities';
-    if (RegExp(r'\b(?:sbi\s+securities|sbisec|sbicap)\b').hasMatch(text)) return 'SBI Securities';
+    if (RegExp(r'\b(?:mirae\s+asset|miraea|mirae)\b').hasMatch(text))
+      return 'Mirae Asset';
+    if (RegExp(r'\b(?:iifl\s+securities|iiflsec|iiflsc|iifl)\b').hasMatch(text))
+      return 'IIFL Securities';
+    if (RegExp(r'\b(?:sbi\s+securities|sbisec|sbicap)\b').hasMatch(text))
+      return 'SBI Securities';
     if (RegExp(r'\b(?:fyers)\b').hasMatch(text)) return 'Fyers';
     return null;
   }
@@ -700,9 +855,48 @@ class LocalSmsParser {
   /// remains narrow and does not change unrelated card or NEFT narratives.
   static String? _upiAccountRecipient(String body) {
     final match = _re(
-      r'\bfrom\s+(?:your\s+)?(?:a\/?c\.?|account)\s*(?:[xX*]{1,4}\s*)?\d{4}\s+to\s+([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+(?:via\s+)?upi\b|\s+on\b|\s+ref(?:erence)?\b|[.,;]|$)',
+      r'\bfrom\s+(?:your\s+)?(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX.\s-]*\d{4}[\s\S]{0,50}?\bto\s+([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+(?:by\s+upi|via\s+upi|via|on|ref(?:erence)?|refno|avl|available|bal(?:ance)?)\b|[.,;]|$)',
     ).firstMatch(body);
     return match?.group(1)?.trim();
+  }
+
+  /// UPI narrations carry the counterparty in a slash-separated slot:
+  /// UPI/P2M/<ref>/<party>[/<bank>]. The reference may be masked
+  /// ("**** 6977") and is never a name. Returns null instead of inventing a
+  /// party when only routing tokens remain.
+  static String? _upiNarrationParty(String body) {
+    final line = _re(r'\bUPI\s*/\s*[^\n]{3,200}').firstMatch(body)?.group(0);
+    if (line == null) return null;
+    final segments = line
+        .split('/')
+        .map((segment) => segment.trim())
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    if (segments.length < 2) return null;
+    var index = 1;
+    if (_re(r'^(?:P2M|P2A|P2P|REV|PAY|CR|DR)$').hasMatch(segments[index])) {
+      index += 1;
+    }
+    while (index < segments.length &&
+        _re(r'^(?:[Xx*#•●·.\-]{2,}\s*)?\d{4,}$').hasMatch(segments[index])) {
+      index += 1;
+    }
+    if (index >= segments.length) return null;
+    final party = segments[index]
+        .replaceFirst(
+          _re(
+            r'\s+\b(?:on|dated|ref(?:erence)?|refno|txn|transaction|not\s+you|call|sms\s+block|via|bal(?:ance)?|avl|available)\b[\s\S]*$',
+          ),
+          '',
+        )
+        .trim();
+    if (party.isEmpty ||
+        _re(
+          r'^(?:upi|yono|imps|neft|rtgs|vpa|p2m|p2a|p2p|rev|pay|cr|dr)$',
+        ).hasMatch(party)) {
+      return null;
+    }
+    return party;
   }
 
   static bool _incomingBankTransferCandidate(String body) =>
@@ -711,7 +905,7 @@ class LocalSmsParser {
 
   static bool _earnedIncomeCredit(String body) =>
       !_re(
-        r'\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|investment|mutual\s+fund|shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
+        r'\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|emi|equated\s+monthly\s+installment|instalment|investment|mutual\s+fund|shares|equity\s+shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
       ).hasMatch(body) &&
       !_re(r'\bsalary\s+advance\b').hasMatch(body) &&
       _re(
@@ -720,9 +914,15 @@ class LocalSmsParser {
 
   static bool _loanRepayment(String body) =>
       !_feeCharge(body) &&
-      _re(
-        r'\b(?:loan|personal\s+loan|home\s+loan|car\s+loan|education\s+loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|debited|repaid|repayment|deducted|transferred)\b',
-      ).hasMatch(body);
+      (_re(
+            r'\b(?:loan|personal\s+loan|home\s+loan|car\s+loan|education\s+loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|debited|repaid|repayment|deducted|transferred)\b',
+          ).hasMatch(body) ||
+          // "credited ... towards the payment of EMI" — verb before keyword.
+          // "received" only counts here, never keyword-first, because every
+          // disbursement alert says "loan ... received/credited".
+          _re(
+            r'\b(?:payment|repayment|repaid|received)\b[\s\S]{0,60}\b(?:of|towards?|for)\b[\s\S]{0,20}\b(?:the\s+)?(?:loan|emi|equated\s+monthly\s+installment|instalment)\b',
+          ).hasMatch(body));
 
   static bool _feeCharge(String body) => _re(
     r'\b(?:bank\s+charges?|service\s+charges?|processing\s+fees?|convenience\s+fees?|'
@@ -738,7 +938,7 @@ class LocalSmsParser {
         r'\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b',
       ).hasMatch(body) &&
       _re(
-        r'\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b',
+        r'\b(?:mutual\s+fund|sip|investment|shares|equity\s+shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b',
       ).hasMatch(body));
 
   static bool _cardCredit(String body) {
@@ -797,10 +997,19 @@ class LocalSmsParser {
     return null;
   }
 
-  static bool sensitive(String body) => RegExp(
-    r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin|passcode|secret code)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
+  static final advisoryWarningRe = RegExp(
+    r"\b(?:(?:do\s+not|don't|never)\s+share\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|passcode|details|secret|code)\b|(?:bank|sbi|union\s+bank)\s+(?:will\s+)?never\s+(?:call|ask)\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details)|bank\s+never\s+asks\s+for\b[\s\S]{0,60}?\b(?:otp|pin|cvv|password|details))\b[^\n]*",
     caseSensitive: false,
-  ).hasMatch(body);
+  );
+
+  static bool sensitive(String body) {
+    final cleaned = body.replaceAll(advisoryWarningRe, '');
+    return RegExp(
+      r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin|passcode|secret code)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
+      caseSensitive: false,
+    ).hasMatch(cleaned);
+  }
+
   static RegExp _re(String s, {bool caseSensitive = false}) =>
       RegExp(s, caseSensitive: caseSensitive);
 
@@ -893,11 +1102,16 @@ class LocalSmsParser {
   }
 
   static const dateToken =
-      r'(?:\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}(?:st|nd|rd|th)?[\s./-]+[A-Za-z]{3,9}[,\s./-]+\d{2,4}|[A-Za-z]{3,9}[\s./-]+\d{1,2}(?:st|nd|rd|th)?[,]?[\s./-]+\d{2,4})';
+      r'(?:\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\b\d{1,2}(?:st|nd|rd|th)?[A-Za-z]{3,9}\d{2,4}\b|\d{1,2}(?:st|nd|rd|th)?[\s./-]+[A-Za-z]{3,9}[,\s./-]+\d{2,4}|[A-Za-z]{3,9}[\s./-]+\d{1,2}(?:st|nd|rd|th)?[,]?[\s./-]+\d{2,4})';
 
   static DateTime? parseDate(String raw) {
     final text = raw
         .replaceAllMapped(_re(r'(\d)(?:st|nd|rd|th)\b'), (m) => m[1]!)
+        // Compact bank dates such as 17Oct26 have no separators.
+        .replaceAllMapped(
+          RegExp(r'^(\d{1,2})([A-Za-z]{3,9})(\d{2,4})$'),
+          (m) => '${m[1]} ${m[2]} ${m[3]}',
+        )
         .trim();
     final parts = text.split(RegExp(r'[\s,./-]+'));
     if (parts.length != 3) return null;
@@ -1037,6 +1251,7 @@ class LocalSmsParser {
     List<UserCard> cards = const [],
     String? ownUserName,
     Map<String, String>? userCategoryRules,
+    Map<String, String>? sharedCategoryRules,
   }) {
     final parsed = parse(
       namespace: namespace,
@@ -1046,6 +1261,7 @@ class LocalSmsParser {
       cards: cards,
       ownUserName: ownUserName,
       userCategoryRules: userCategoryRules,
+      sharedCategoryRules: sharedCategoryRules,
     );
     final transaction = parsed?.transaction;
     if (transaction != null) {
@@ -1101,7 +1317,8 @@ class LocalSmsParser {
                 ).firstMatch(body)?.group(1) ??
                 _re(
                   r'\b(?:contribution|subscription)\s+amount\b[\s\S]{0,50}?\b(?:₹|rs\.?|inr)\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
-                ).firstMatch(body)?.group(1),
+                ).firstMatch(body)?.group(1) ??
+                _currencylessBankMovementAmountText(body),
           )
         : null;
     final cardLast4 =
@@ -1125,15 +1342,19 @@ class LocalSmsParser {
     final asbaOrIpoBlock = _re(
       r'\b(?:asba\s+application|asba\s+(?:req(?:uest)?|bid|block|lien)|towards\s+asba|for\s+asba|asba\b[\s\S]{0,50}\b(?:accepted|blocked|lien|created)|(?:blocked|lien\s+marked)\b[\s\S]{0,50}\b(?:for|towards)?\s*(?:ipo|asba|rights\s+issue)|(?:ipo\s+(?:application|bid|mandate|block|lien)))\b',
     ).hasMatch(body);
+    final receiptMerchant = isMerchantReceiptOrEbill(body)
+        ? extractReceiptMerchant(body)
+        : null;
     final fvgMatch = _re(
-      r'\b(?:fvg|fav|favouring|favoring|infvo|in\s+fav(?:ou?r)?\s+of)\s*[:.\-]?\s*([A-Za-z0-9_][A-Za-z0-9 ._&@*\x27/-]{0,80}?)(?=\s+(?:avl|avail|available|bal(?:ance)?|ref(?:erence|\s*no)?|txn|transaction|if\s+not|not\s+you|call|sms\s+block|on|dated)\b|\s*\(|[.,;]|$)',
+      r'\b(?:fvg|fav|favouring|favoring|infvo|in\s+fav(?:ou?r)?\s+of)\s*[:.\-]?\s*([A-Za-z0-9_][A-Za-z0-9 ._&@*\x27/-]{0,80}?)(?=\s+(?:avl|avail|available|bal(?:ance)?|ref(?:erence|\s*no)?|refno|txn|transaction|if\s+not|not\s+you|call|sms\s+block|on|dated)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body);
     final towardsMatchDraft = _re(
-      r'\b(?:towards?|in\s+fav(?:ou?r)?\s+of)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+      r'\b(?:towards?|in\s+fav(?:ou?r)?\s+of)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body);
     var merchant = localOnly
         ? null
-        : (_upiAccountRecipient(body) ??
+        : (receiptMerchant ??
+              _upiAccountRecipient(body) ??
               fvgMatch?.group(1)?.trim() ??
               towardsMatchDraft?.group(1)?.trim());
     if (!localOnly &&
@@ -1150,7 +1371,7 @@ class LocalSmsParser {
     }
     if (!localOnly && (merchant == null || merchant.isEmpty)) {
       final merchantMatch = _re(
-        r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+        r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
       ).firstMatch(body);
       merchant = merchantMatch?.group(1)?.trim();
     }
@@ -1195,7 +1416,7 @@ class LocalSmsParser {
                   _isOwnPersonName(merchant, ownUserName)) ||
               _ownNameInFromClause(body, ownUserName) ||
               _re(
-                r'\b(?:refund(?:ed)?|reversal|reversed|cashback|reward|salary\s+advance|loan\s+disbursement|cash\s+deposit|cash\s+withdrawal)\b',
+                r'\b(?:refund(?:ed)?|reversal|reversed|cashback|reward|salary\s+advance|loan\s+(?:disbursement|repayment)|emi|equated\s+monthly\s+installment|instalment|cash\s+deposit|cash\s+withdrawal)\b',
               ).hasMatch(body)
         ? TxnEntryKind.transfer
         : _re(r'\b(?:credited|received|deposited)\b').hasMatch(body) &&
@@ -1364,6 +1585,7 @@ class LocalSmsParser {
     // safety gates). Normalised pattern -> category slug. Null keeps every
     // existing behaviour byte-for-byte.
     Map<String, String>? userCategoryRules,
+    Map<String, String>? sharedCategoryRules,
   }) {
     if (body.length > 20000 || sensitive(body)) return null;
 
@@ -1498,11 +1720,24 @@ class LocalSmsParser {
       }
     }
 
+    // Safety gate: a downloaded posted-movement rule must never convert a
+    // future/scheduled obligation or a failed notice into a completed spend.
+    // The built-in grammar below still classifies those messages.
+    final downloadedMovementBlocked =
+        _hasFutureDebitWording(body) ||
+        _re(
+          r'\b(?:declined|failed|failure|cancelled|canceled|unsuccessful)\b',
+        ).hasMatch(body);
+
     if (downloadedRules != null &&
         downloadedRules.rules.isNotEmpty &&
         !isMerchantReceiptOrEbill(body)) {
       for (final rule in downloadedRules.rules) {
         if (!rule.matchesSender(sender)) continue;
+        if (downloadedMovementBlocked &&
+            rule.family == SmsRuleFamily.postedMovement) {
+          continue;
+        }
         final match = rule.regExp.firstMatch(body);
         if (match == null) continue;
 
@@ -1515,6 +1750,7 @@ class LocalSmsParser {
           receivedAt: receivedAt,
           cards: cards,
           userCategoryRules: userCategoryRules,
+          sharedCategoryRules: sharedCategoryRules,
         );
         if (obs != null) return obs;
       }
@@ -1873,7 +2109,7 @@ class LocalSmsParser {
                 _re(r'\b(?:purchase|purchased)\b').hasMatch(movementBody)) ||
             asbaOrIpoBlock ||
             _re(
-              r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred|deducted)\b[\s\S]{0,40}\b(?:successful|successfully|completed)\b',
+              r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred|deducted)\b[\s\S]{0,100}\b(?:successful|successfully|completed)\b',
             ).hasMatch(movementBody) ||
             _re(
               r'\b(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[*xX]*[\d,.]+\b',
@@ -1927,15 +2163,71 @@ class LocalSmsParser {
           : 1,
     );
     // Reminders and offers are observations, never purchases.
-    final futureDebit = _re(
-      r'\b(?:(?:will|shall|to|scheduled to|scheduled for)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)|for\s+(?:auto[- ]?)?debit|scheduled\s+for\s+(?:auto[- ]?)?debit|(?:maintain|keep)\s+sufficient\s+(?:bal|balance)\b[\s\S]{0,50}\b(?:debit|deduction)|(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|pre[- ]?debit)\b[\s\S]{0,50}?\bwill\s+be\b|(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit|pre[- ]?debit)\b[\s\S]{0,50}?\b(?:attempted|scheduled)\b)\b',
+    final futureDebit = _hasFutureDebitWording(body);
+    // A service renewal notice can carry explicit plan terms without a bank
+    // debit. Preserve it as a service observation for typed facts rather than
+    // leaving it in generic review or treating its price as posted spending.
+    final serviceRenewal = _re(
+      r'\b(?:subscription|membership)\s+(?:for|to|with)\s+[A-Za-z][A-Za-z0-9 .&-]{2,60}?\s+(?:renewed|renewal|renews|expires|monthly|yearly|annual)\b',
     ).hasMatch(body);
-    if (isMerchantReceiptOrEbill(body) && !isPayLaterBill) {
-      return observation(
-        null,
-        LocalSmsEventType.unknown,
-        LocalSmsDisposition.review,
-        const ['merchant_ebill_receipt'],
+    if (serviceRenewal) {
+      final service = _re(
+        r'\b(?:subscription|membership)\s+(?:for|to|with)\s+([A-Za-z][A-Za-z0-9 .&-]{2,60}?)(?=\s+(?:renewed|renewal|renews|expires|monthly|yearly|annual)\b|[.,;]|$)',
+      ).firstMatch(body)?.group(1)?.trim();
+      if (service != null && service.length >= 3) {
+        final nextDateToken = _re(
+          r'\b(?:next\s+(?:renewal|payment)|renews?\s+on)\s*(?:is|on|:)?\s*(' +
+              dateToken +
+              r')',
+        ).firstMatch(body)?.group(1);
+        final statedAmountToken =
+            _re(
+              r'\b(?:monthly|quarterly|yearly|annual)\s+(?:plan\s+)?(?:payment|price|amount|charge|fee)?\s*(?:of|is|:)?\s*(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)',
+            ).firstMatch(body)?.group(1) ??
+            _re(
+              r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:paid|debited|charged|renewed)',
+            ).firstMatch(body)?.group(1);
+        final statedAmount = statedAmountToken == null
+            ? null
+            : Money.fromPaise(
+                (double.parse(statedAmountToken.replaceAll(',', '')) * 100)
+                    .round(),
+              );
+        final finalAmt = statedAmount ?? amountDue ?? billAmount;
+        return LocalSmsObservation(
+          billerName: service,
+          cadenceHint: cadenceHint,
+          dueDate: nextDateToken == null ? due : parseDate(nextDateToken),
+          amountDue: finalAmt,
+          autopayLimit: null,
+          amount: finalAmt,
+          eventType: LocalSmsEventType.autopay,
+          disposition: LocalSmsDisposition.localIgnore,
+          reasonCodes: const ['explicit_subscription_service'],
+          confidence: 0.95,
+          isAutopay: true,
+        );
+      }
+    }
+    final isReceipt = isMerchantReceiptOrEbill(body);
+    final receiptMerchant = isReceipt ? extractReceiptMerchant(body) : null;
+    final receiptAmount = isReceipt ? extractReceiptAmount(body) : null;
+    // A merchant receipt is enrichment, not an independent posted bank spend.
+    // With no named instrument the bank alert (if any) remains the spend
+    // source, so this row stays in review instead of double-counting.
+    if (isReceipt &&
+        !isPayLaterBill &&
+        !_receiptHasSettlementInstrument(body)) {
+      return LocalSmsObservation(
+        eventType: LocalSmsEventType.unknown,
+        disposition: LocalSmsDisposition.review,
+        amount: receiptAmount,
+        billerName: receiptMerchant,
+        reasonCodes: [
+          'merchant_ebill_receipt',
+          if (receiptAmount != null) 'receipt_amount_extracted',
+          if (receiptMerchant != null) 'receipt_merchant_extracted',
+        ],
       );
     }
     // Keep month-only dates out of AutoPay's fallback date/commitment path too.
@@ -2070,9 +2362,10 @@ class LocalSmsParser {
       );
     }
     final amount = money(
-      _re(
-        r'(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
-      ).firstMatch(body)?.group(1),
+      _currencylessBankMovementAmountText(body) ??
+          _re(
+            r'(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1),
     );
     if (amount == null || amount.paise <= 0) return observation();
     final accountShaped = _re(r'\b(?:a\/?c\.?|account)\b').hasMatch(body);
@@ -2091,8 +2384,11 @@ class LocalSmsParser {
     final billPaymentCandidate = _re(
       r'\b(?:payment|paid|debited|debit|amount)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\b(?:your\s+)?credit\s+card\b|\bcredit\s+card\s+(?:bill|payment)\b[\s\S]{0,90}\b(?:received|credited|debited|paid|successful|completed)\b|\b(?:paid|payment|debited)\b[\s\S]{0,90}\b(?:to|for)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card(?:\s+bill)?\b|\bbill\b[\s\S]{0,60}\b(?:for|on|of)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card\b[\s\S]{0,90}\b(?:paid|received|successful|completed)\b|\b(?:card\s+bill\s*(?:payment|pmt)|cc\s*(?:bill\s*)?(?:payment|pmt)|card\s+bill\s+pay)\b[\s\S]{0,90}\b(?:paid|received|debited|successful|completed|credited)\b|\b(?:payment|paid|debited|debit|transferred)\b[\s\S]{0,90}\b(?:towards?|for|to)\s+(?:your\s+)?(?:card|cc)\b|\b(?:imps|neft|upi)\b[\s\S]{0,80}\b(?:cc|credit\s+card)\s*(?:bill\s*)?(?:pmt|payment)\b',
     ).hasMatch(body);
+    final processedCardBill = _re(
+      r'\b([A-Za-z][A-Za-z ]{1,35})\s+credit\s+card\s+bill\s*[-:]?\s*of\s+(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d{1,2})?\s+has\s+been\s+successfully\s+processed\b',
+    ).firstMatch(body);
     final billPayment =
-        billPaymentCandidate &&
+        (billPaymentCandidate || processedCardBill != null) &&
         (!_re(
               r'\b(?:payment|amount|minimum)\s+due\b|\bdue\s+on\b',
             ).hasMatch(body) ||
@@ -2141,7 +2437,7 @@ class LocalSmsParser {
         !asbaOrIpoBlock &&
         !brokerSettlement &&
         !_re(
-          r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred|txn|transaction|deducted|deduct)\b',
+          r'\b(?:spent|debited|debit|paid|payment|purchase|purchased|charged|withdrawn|sent|transferred|txn|transaction|deducted|deduct)\b',
         ).hasMatch(body)) {
       return observation();
     }
@@ -2250,19 +2546,17 @@ class LocalSmsParser {
         ? TxnEntryKind.income
         : TxnEntryKind.spend;
     final fvgMatch = _re(
-      r'\b(?:fvg|fav|favouring|favoring|infvo|in\s+fav(?:ou?r)?\s+of)\s*[:.\-]?\s*([A-Za-z0-9_][A-Za-z0-9 ._&@*\x27/-]{0,80}?)(?=\s+(?:avl|avail|available|bal(?:ance)?|ref(?:erence|\s*no)?|txn|transaction|if\s+not|not\s+you|call|sms\s+block|on|dated)\b|\s*\(|[.,;]|$)',
-    ).firstMatch(body);
-    final upiSlashMatch = _re(
-      r'\bupi/(?:\d+/)?([a-zA-Z0-9 ._&@*\x27/-]{2,50}?)(?=[.,;\s]|$)',
+      r'\b(?:fvg|fav|favouring|favoring|infvo|in\s+fav(?:ou?r)?\s+of)\s*[:.\-]?\s*([A-Za-z0-9_][A-Za-z0-9 ._&@*\x27/-]{0,80}?)(?=\s+(?:avl|avail|available|bal(?:ance)?|ref(?:erence|\s*no)?|refno|txn|transaction|if\s+not|not\s+you|call|sms\s+block|on|dated)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body);
     final towardsMatchParse = _re(
-      r'\b(?:towards?|in\s+fav(?:ou?r)?\s+of)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+      r'\b(?:towards?|in\s+fav(?:ou?r)?\s+of)\s+(?!(?:₹|rs\.?|inr|re\.?)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:for|by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body);
 
     var merchant =
+        receiptMerchant ??
         _upiAccountRecipient(body) ??
         fvgMatch?.group(1)?.trim() ??
-        upiSlashMatch?.group(1)?.trim() ??
+        _upiNarrationParty(body) ??
         towardsMatchParse?.group(1)?.trim();
 
     if (asbaOrIpoBlock && (merchant == null || merchant.isEmpty)) {
@@ -2287,7 +2581,7 @@ class LocalSmsParser {
 
     if (merchant == null || merchant.isEmpty) {
       final merchantMatch = _re(
-        r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+        r'\b(?:at|to|for|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:a\/?c\.?|account)\b|using\s+yono\b)([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:for|by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
       ).firstMatch(body);
       merchant = merchantMatch?.group(1)?.trim();
     }
@@ -2295,9 +2589,10 @@ class LocalSmsParser {
     // Banking channels / currency tokens are not recipients.
     if (merchant != null &&
         (_re(
-              r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking|upi|imps|neft|rtgs)$',
+              r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking|upi|imps|neft|rtgs|yono|sbi|rinb|inb)$',
             ).hasMatch(merchant) ||
-            _re(r'^(?:rs\.?|inr|re\.?|\d+)$').hasMatch(merchant))) {
+            _re(r'^(?:rs\.?|inr|re\.?|\d+|vpa)$').hasMatch(merchant) ||
+            _re(r'^(?:a\/?c\.?|account)\b').hasMatch(merchant))) {
       merchant = fvgMatch?.group(1)?.trim();
     }
     if (isWalletDebit &&
@@ -2306,17 +2601,28 @@ class LocalSmsParser {
       merchant = null;
     }
     if (merchant != null) {
+      merchant = merchant
+          .replaceFirst(RegExp(r'^vpa[/ ]\s*', caseSensitive: false), '')
+          .trim();
+      if (_re(r'^(?:a\/?c\.?|account)\b').hasMatch(merchant)) {
+        merchant = null;
+      }
+    }
+    if (merchant != null) {
       final sanitized = IndianNarrationSanitizer.sanitize(merchant);
       if (sanitized.isNotEmpty) {
         merchant = sanitized;
       }
     }
+    merchant = MerchantIdentity.cleanName(merchant) ?? merchant;
     final ownNameTransfer =
         merchant != null &&
         ownUserName != null &&
         _isOwnPersonName(merchant, ownUserName);
     if (billPayment) {
-      merchant = 'Credit card bill payment';
+      merchant = processedCardBill == null
+          ? 'Credit card bill payment'
+          : '${processedCardBill.group(1)!.trim()} credit card bill';
     } else if (ownNameTransfer) {
       merchant = 'Transfer between own accounts';
     } else if (brokerSettlement) {
@@ -2412,26 +2718,28 @@ class LocalSmsParser {
     // A user correction is authoritative: it outranks both the brand catalog
     // and the layout-specific fallbacks below. Confidence for a transaction
     // observation is already 1.0, so the learned field is fully trusted.
-    final userRuleSlug = _userCategoryRuleSlug(
+    final userRuleSlug = userCategoryRuleSlug(
       userCategoryRules,
       merchant,
       sender,
+      body,
     );
-    final categorySlug =
-        userRuleSlug ??
+    final sharedCategorySlug =
+        _sharedCategoryRuleSlug(sharedCategoryRules, merchant, sender, body);
+    final categorySlug = userRuleSlug ??
         (brokerSettlement || investmentProceeds || investmentDebit
             ? 'investments'
-            : ftMatch?.category ??
-                (billPayment
-                    ? 'bills'
-                    : loanRepayment
-                    ? 'emi'
-                    : feeCharge
-                    ? 'bills'
-                    : credit && _re(r'\bsalary\b').hasMatch(body)
-                    ? 'income'
-                    : null));
-    final categoryName = categoryDisplayName(categorySlug);
+            : billPayment
+            ? 'bills'
+            : loanRepayment
+            ? 'emi'
+            : feeCharge
+            ? 'bills'
+            : credit && _re(r'\bsalary\b').hasMatch(body)
+            ? 'income'
+            : sharedCategorySlug ?? ftMatch?.category);
+    final resolvedCategorySlug = categorySlug;
+    final categoryName = categoryDisplayName(resolvedCategorySlug);
     return observation(
       TransactionEntry(
         id: 'local-sms:$key',
@@ -2439,7 +2747,7 @@ class LocalSmsParser {
         amount: amount,
         occurredAt: date,
         merchantName: merchant ?? ftMatch?.canonicalName,
-        categoryId: categorySlug,
+        categoryId: resolvedCategorySlug,
         categoryName: categoryName,
         userCardId: card?.id,
         cardDisplayName: card?.cardName,
@@ -2464,6 +2772,7 @@ class LocalSmsParser {
     required DateTime receivedAt,
     required List<UserCard> cards,
     Map<String, String>? userCategoryRules,
+    Map<String, String>? sharedCategoryRules,
   }) {
     if (rule.family == SmsRuleFamily.ignoreNoise) {
       // Safety safeguard: an ignore rule cannot silence an SMS containing real
@@ -2604,7 +2913,8 @@ class LocalSmsParser {
         textForMatching,
       );
       final categorySlug =
-          _userCategoryRuleSlug(userCategoryRules, merchant, sender) ??
+          userCategoryRuleSlug(userCategoryRules, merchant, sender, body) ??
+          _sharedCategoryRuleSlug(sharedCategoryRules, merchant, sender, body) ??
           ftMatch?.category;
       final categoryName = categoryDisplayName(categorySlug);
       final txn = TransactionEntry(

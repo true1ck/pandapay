@@ -15,7 +15,8 @@ void main() {
         'id': 'rule_spend_01',
         'family': 'posted_movement',
         'senderPattern': 'CUSTOMBK',
-        'regex': r'debited by Rs\.?\s*([0-9.]+) for ([A-Za-z0-9 ]+) on card (\d{4})',
+        'regex':
+            r'debited by Rs\.?\s*([0-9.]+) for ([A-Za-z0-9 ]+) on card (\d{4})',
         'fieldMap': {'amount': 1, 'merchant': 2, 'last4': 3},
         'defaultFields': {'instrument': 'creditCard', 'entryKind': 'spend'},
         'confidence': 0.99,
@@ -170,50 +171,268 @@ void main() {
       expect(afterRollback, isNull);
     });
 
-    test('syncRules downloads new bundle and ignores upToDate response', () async {
-      final syncRawRules = [
-        {
-          'id': 'rule_02',
-          'family': 'posted_movement',
-          'senderPattern': 'SBI',
-          'regex': r'debited by ([0-9.]+)',
-          'fieldMap': {'amount': 1},
-          'confidence': 0.99,
-        },
-      ];
-      final syncSha = SmsRuleBundle.computeSha256(
-        bundleVersion: 2,
-        minClientVersion: '1.0.0',
-        rawRules: syncRawRules,
-      );
-      final mockClient = MockClient((request) async {
-        if (request.url.queryParameters['since_version'] == '0') {
-          return http.Response(
-            jsonEncode({
-              'bundleVersion': 2,
-              'sha256': syncSha,
-              'publishedAt': '2026-10-21T22:30:00Z',
-              'minClientVersion': '1.0.0',
-              'rules': syncRawRules,
-            }),
-            200,
-          );
-        } else if (request.url.queryParameters['since_version'] == '2') {
-          return http.Response(jsonEncode({'upToDate': true, 'bundleVersion': 2}), 200);
-        }
-        return http.Response('not found', 404);
-      });
-
-      // First sync: downloads version 2
-      final updated = await store.syncRules(mockClient, apiBaseUrl: 'http://localhost');
-      expect(updated, isTrue);
-      final active = await store.loadActiveBundle();
-      expect(active?.bundleVersion, 2);
-
-      // Second sync: returns upToDate, does not re-write
-      final secondSync = await store.syncRules(mockClient, apiBaseUrl: 'http://localhost');
-      expect(secondSync, isFalse);
+    test('shared category parser accepts safe contextual tuples and canonical spend categories', () {
+      Map<String, dynamic> rule(String category) => {
+        'merchantKey': 'BUNDL TECHNOLOGIES',
+        'senderKey': 'TX-MNTPRO-S',
+        'contextKey': 'GROCERIES|SUPERMARKET',
+        'factFamily': 'posted_movement',
+        'categorySlug': category,
+        'supportCount': 10,
+        'agreementBp': 10000,
+      };
+      for (final slug in ['government', 'other']) {
+        expect(SmsSharedCategoryRule.fromJson(rule(slug)), isNotNull);
+      }
+      for (final slug in ['investments', 'income', 'cash', 'subscription']) {
+        expect(SmsSharedCategoryRule.fromJson(rule(slug)), isNull);
+      }
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'senderKey': 'HDFCBK'}), isNull);
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': ''}), isNull);
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': 'NONCONTEXTUAL'}), isNull);
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': 'GROCERY|GROCERY'}), isNull);
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': 'CAB|DIESEL|DINING|EDUCATION|ELECTRICITY|EMI|ENTERTAINMENT|FLIGHT|FUEL'}), isNull);
+      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'factFamily': 'balance_snapshot'}), isNull);
     });
+
+    test('context key uses allowlisted whole words and removes merchant tokens', () {
+      expect(
+        SmsSharedCategoryRule.contextKeyForBody(
+          'Paid TRAVELWORLD for petrol',
+          merchant: 'TRAVELWORLD',
+        ),
+        'PETROL',
+      );
+      expect(
+        SmsSharedCategoryRule.contextKeyForBody(
+          'Paid TRAVEL WORLD',
+          merchant: 'TRAVEL WORLD',
+        ),
+        isEmpty,
+      );
+      expect(
+        SmsSharedCategoryRule.contextKeyForBody(
+          'Paid at TRAVEL WORLD for groceries',
+          merchant: 'TRA-VEL WORLD',
+        ),
+        'GROCERIES',
+      );
+      expect(
+        SmsSharedCategoryRule.contextKeyForBody('Paid CabX'),
+        isEmpty,
+      );
+      expect(
+        SmsSharedCategoryRule.contextKeyForBody('Paid TRAVEL123'),
+        isEmpty,
+      );
+      expect(
+        SmsSharedCategoryRule.tupleKey(
+          merchantKey: 'A|B',
+          senderKey: 'TX-MNTPRO-S',
+          contextKey: 'GROCERY|TRAVEL',
+          factFamily: 'posted_movement',
+        ),
+        isNot(
+          SmsSharedCategoryRule.tupleKey(
+            merchantKey: 'A',
+            senderKey: 'B|TX-MNTPRO-S',
+            contextKey: 'GROCERY|TRAVEL',
+            factFamily: 'posted_movement',
+          ),
+        ),
+      );
+    });
+
+    test(
+      'verifies and syncs a shared category rule bundle independently',
+      () async {
+        const rawCategories = [
+          {
+            'merchantKey': 'BUNDL TECHNOLOGIES',
+            'senderKey': 'TX-MNTPRO-S',
+            'contextKey': 'GROCERIES|SUPERMARKET',
+            'factFamily': 'posted_movement',
+            'categorySlug': 'groceries',
+            'supportCount': 12,
+            'agreementBp': 10000,
+          },
+        ];
+        final categoryRule = SmsSharedCategoryRule.fromJson(
+          rawCategories.single,
+        )!;
+        final categorySha = SmsRuleBundleStore.computeSharedCategoryRulesSha256(
+          version: 2,
+          minClientVersion: '1.0.0',
+          rules: [categoryRule],
+        );
+        final response = {
+          'upToDate': true,
+          'categoryRulesV2Version': 2,
+          'categoryRulesV2MinClientVersion': '1.0.0',
+          'categoryRulesV2Sha256': categorySha,
+          'categoryRulesV2': rawCategories,
+        };
+        final client = MockClient(
+          (_) async => http.Response(jsonEncode(response), 200),
+        );
+
+        await store.syncRules(
+          client,
+          apiBaseUrl: 'https://api.example.test',
+          clientVersion: '1.2.0',
+          namespace: 'user:test',
+        );
+
+        expect(store.loadSharedCategoryRulesSync(), {
+          SmsSharedCategoryRule.tupleKey(
+            merchantKey: 'BUNDL TECHNOLOGIES',
+            senderKey: 'TX-MNTPRO-S',
+            contextKey: 'GROCERIES|SUPERMARKET',
+            factFamily: 'posted_movement',
+          ): 'groceries',
+        });
+      },
+    );
+
+    test(
+      'rejects a shared category bundle with an invalid integrity hash',
+      () async {
+        final accepted = await store.saveSharedCategoryRules({
+          'categoryRulesV2Version': 2,
+          'categoryRulesV2MinClientVersion': '1.0.0',
+          'categoryRulesV2Sha256': List.filled(64, '0').join(),
+          'categoryRulesV2': [
+            {
+              'merchantKey': 'BUNDL TECHNOLOGIES',
+              'senderKey': 'TX-MNTPRO-S',
+              'contextKey': 'GROCERY',
+              'factFamily': 'posted_movement',
+              'categorySlug': 'groceries',
+              'supportCount': 12,
+              'agreementBp': 10000,
+            },
+          ],
+        });
+        expect(accepted, isFalse);
+        expect(store.loadSharedCategoryRulesSync(), isEmpty);
+      },
+    );
+
+    test('ignores a persisted v1 merchant-only cache while offline', () {
+      store.loadSharedCategoryRulesSync(); // creates the cache table
+      db.db.execute(
+        '''INSERT OR REPLACE INTO sms_shared_category_rule_bundles
+           (id, raw_json, sha256, version, min_client_version, cached_at)
+           VALUES (1, ?, ?, 1, ?, ?)''',
+        [jsonEncode([{'merchantKey': 'BUNDL TECHNOLOGIES', 'categorySlug': 'groceries', 'supportCount': 12, 'agreementBp': 10000}]), 'legacy-v1-hash', '1.0.0', DateTime.now().millisecondsSinceEpoch],
+      );
+      expect(store.loadSharedCategoryRulesSync(), isEmpty);
+    });
+
+    test('an approved category rollback clears the cached rule set', () async {
+      final rule = SmsSharedCategoryRule.fromJson({
+        'merchantKey': 'BUNDL TECHNOLOGIES',
+        'senderKey': 'TX-MNTPRO-S',
+        'contextKey': 'GROCERY',
+        'factFamily': 'posted_movement',
+        'categorySlug': 'groceries',
+        'supportCount': 12,
+        'agreementBp': 10000,
+      })!;
+      final populated = [rule];
+      await store.saveSharedCategoryRules({
+        'categoryRulesV2Version': 2,
+        'categoryRulesV2MinClientVersion': '1.0.0',
+        'categoryRulesV2Sha256':
+            SmsRuleBundleStore.computeSharedCategoryRulesSha256(
+              version: 2,
+              minClientVersion: '1.0.0',
+              rules: populated,
+            ),
+        'categoryRulesV2': populated.map((item) => item.toJson()).toList(),
+      });
+      expect(store.loadSharedCategoryRulesSync(), isNotEmpty);
+
+      const emptyRules = <SmsSharedCategoryRule>[];
+      final rollback = {
+        'rolledBack': true,
+        'bundleVersion': 0,
+        'rules': <Object>[],
+        'sha256': '',
+        'categoryRulesV2Version': 2,
+        'categoryRulesV2MinClientVersion': '1.0.0',
+        'categoryRulesV2Sha256':
+            SmsRuleBundleStore.computeSharedCategoryRulesSha256(
+              version: 2,
+              minClientVersion: '1.0.0',
+              rules: emptyRules,
+            ),
+        'categoryRulesV2': <Object>[],
+      };
+      await store.syncRules(
+        MockClient((_) async => http.Response(jsonEncode(rollback), 200)),
+        apiBaseUrl: 'https://api.example.test',
+      );
+
+      expect(store.loadSharedCategoryRulesSync(), isEmpty);
+    });
+
+    test(
+      'syncRules downloads new bundle and ignores upToDate response',
+      () async {
+        final syncRawRules = [
+          {
+            'id': 'rule_02',
+            'family': 'posted_movement',
+            'senderPattern': 'SBI',
+            'regex': r'debited by ([0-9.]+)',
+            'fieldMap': {'amount': 1},
+            'confidence': 0.99,
+          },
+        ];
+        final syncSha = SmsRuleBundle.computeSha256(
+          bundleVersion: 2,
+          minClientVersion: '1.0.0',
+          rawRules: syncRawRules,
+        );
+        final mockClient = MockClient((request) async {
+          if (request.url.queryParameters['since_version'] == '0') {
+            return http.Response(
+              jsonEncode({
+                'bundleVersion': 2,
+                'sha256': syncSha,
+                'publishedAt': '2026-10-21T22:30:00Z',
+                'minClientVersion': '1.0.0',
+                'rules': syncRawRules,
+              }),
+              200,
+            );
+          } else if (request.url.queryParameters['since_version'] == '2') {
+            return http.Response(
+              jsonEncode({'upToDate': true, 'bundleVersion': 2}),
+              200,
+            );
+          }
+          return http.Response('not found', 404);
+        });
+
+        // First sync: downloads version 2
+        final updated = await store.syncRules(
+          mockClient,
+          apiBaseUrl: 'http://localhost',
+        );
+        expect(updated, isTrue);
+        final active = await store.loadActiveBundle();
+        expect(active?.bundleVersion, 2);
+
+        // Second sync: returns upToDate, does not re-write
+        final secondSync = await store.syncRules(
+          mockClient,
+          apiBaseUrl: 'http://localhost',
+        );
+        expect(secondSync, isFalse);
+      },
+    );
   });
 
   group('LocalSmsParser with downloaded rules', () {
@@ -222,7 +441,8 @@ void main() {
         'id': 'rule_custom_spend',
         'family': 'posted_movement',
         'senderPattern': 'CUSTOMGW',
-        'regex': r'Custom Gateway: Rs\.?\s*([0-9.]+) paid to Merchant ([A-Za-z ]+) card (\d{4})',
+        'regex':
+            r'Custom Gateway: Rs\.?\s*([0-9.]+) paid to Merchant ([A-Za-z ]+) card (\d{4})',
         'fieldMap': {'amount': 1, 'merchant': 2, 'last4': 3},
         'defaultFields': {'instrument': 'creditCard'},
         'confidence': 0.99,
@@ -248,7 +468,8 @@ void main() {
         'id': 'rule_custom_bill',
         'family': 'bill_obligation',
         'senderPattern': 'TELCO',
-        'regex': r'Telco bill due on (\d{2}/\d{2}/\d{4}) amount Rs\.?\s*([0-9.]+)',
+        'regex':
+            r'Telco bill due on (\d{2}/\d{2}/\d{4}) amount Rs\.?\s*([0-9.]+)',
         'fieldMap': {'dueDate': 1, 'amountDue': 2},
         'confidence': 0.95,
       },
@@ -270,7 +491,8 @@ void main() {
       final obs = LocalSmsParser.parse(
         namespace: 'profile1',
         sender: 'VK-CUSTOMGW-T',
-        body: 'Custom Gateway: Rs. 1499.50 paid to Merchant Amazon India card 9876',
+        body:
+            'Custom Gateway: Rs. 1499.50 paid to Merchant Amazon India card 9876',
         receivedAt: DateTime(2026, 10, 21, 14, 30),
         downloadedRules: bundle,
       );
@@ -336,23 +558,28 @@ void main() {
       expect(obs.reasonCodes, contains('downloaded_rule_bill'));
     });
 
-    test('safety gate drops OTP even if it happens to match a downloaded regex', () {
-      final obs = LocalSmsParser.parse(
-        namespace: 'profile1',
-        sender: 'CUSTOMGW',
-        body: 'OTP 123456: Custom Gateway: Rs. 500 paid to Merchant XYZ card 1234',
-        receivedAt: DateTime(2026, 10, 21, 14, 30),
-        downloadedRules: bundle,
-      );
+    test(
+      'safety gate drops OTP even if it happens to match a downloaded regex',
+      () {
+        final obs = LocalSmsParser.parse(
+          namespace: 'profile1',
+          sender: 'CUSTOMGW',
+          body:
+              'OTP 123456: Custom Gateway: Rs. 500 paid to Merchant XYZ card 1234',
+          receivedAt: DateTime(2026, 10, 21, 14, 30),
+          downloadedRules: bundle,
+        );
 
-      expect(obs, isNull); // Sensitive filter drops before any rule executes
-    });
+        expect(obs, isNull); // Sensitive filter drops before any rule executes
+      },
+    );
 
     test('falls through to built-in parser if no downloaded rule matches', () {
       final obs = LocalSmsParser.parse(
         namespace: 'profile1',
         sender: 'HDFCBK',
-        body: 'Rs 500.00 spent on HDFC Bank Card ending 1234 at Swiggy on 21-10-2026',
+        body:
+            'Rs 500.00 spent on HDFC Bank Card ending 1234 at Swiggy on 21-10-2026',
         receivedAt: DateTime(2026, 10, 21, 14, 30),
         downloadedRules: bundle,
       );

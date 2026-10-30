@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -9,6 +11,7 @@ import '../../data/api_exception.dart';
 import '../../data/bills_projection_api.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/spend_reports_repository.dart';
+import '../activity/sms_learning_capture.dart';
 import 'central_bills_section.dart';
 import 'subscription_detail_screen.dart';
 import '../cards/card_summary.dart';
@@ -24,9 +27,50 @@ const _subscriptionIcons = <IconData>[
 const _subscriptionAccent = BambooInk.jade;
 const _subscriptionTint = BambooInk.rankBadgeBg;
 
+bool _isExcludedNonSubscription(String name) {
+  final lower = name.toLowerCase();
+  // If it's a recognized subscription service, do not exclude
+  if (isSubscriptionAutoPay(name)) {
+    return false;
+  }
+  // 1. Demat / Broker / Trading / Investment / SIP / Mutual funds are money movements, NEVER subscriptions
+  if (RegExp(
+    r'\b(?:zerodha|groww|upstox|angel\s*one|dhan|paytm\s*money|indmoney|5paisa|motilal\s*oswal|icici\s*direct|hdfc\s*securities|hdfc\s*sky|kotak\s*securities|sharekhan|iifl|geojit|axis\s*direct|demat|trading|broker|portfolio|mutual\s*fund|sip|equity|investment|transfer)\b',
+    caseSensitive: false,
+  ).hasMatch(lower)) {
+    return true;
+  }
+  // 2. Fuel fill-ups and petrol pumps are variable spends, not subscriptions
+  if (RegExp(
+    r'\b(petroleum|petrol|fuel|gas\s*station|oil\s*co|hpcl|bpcl|iocl)\b',
+    caseSensitive: false,
+  ).hasMatch(lower)) {
+    return true;
+  }
+  // 3. Raw UPI VPAs containing '@' are peer/merchant transfer handles, not subscriptions
+  if (name.contains('@')) {
+    return true;
+  }
+  // 4. Retail stores, supermarkets, grocery, provisions, tea stall, cafes, bakeries, restaurants, medical
+  if (RegExp(
+    r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic)\b',
+    caseSensitive: false,
+  ).hasMatch(lower)) {
+    return true;
+  }
+  return false;
+}
+
 bool _isDisplayableSubscription(RecurringSeries series) {
   final name = series.displayName.trim();
   if (name.length < 2 || !RegExp(r'[A-Za-z]{2,}').hasMatch(name)) {
+    return false;
+  }
+  if (_isExcludedNonSubscription(name)) {
+    return false;
+  }
+  // Daily repetitive spends (cadence < 6 days, like daily 10 Rs tea/groceries) must NEVER be subscriptions
+  if (series.cadenceDays > 0 && series.cadenceDays < 6) {
     return false;
   }
   // A merchant mandate is an authorization record. It may carry a zero
@@ -36,6 +80,9 @@ bool _isDisplayableSubscription(RecurringSeries series) {
   if (series.isMandate || series.detectionSource == 'mandate') {
     return false;
   }
+  // Merchant recurrence is useful for review, but it cannot establish that
+  // the user has a subscription with that merchant unless it is a recognized service.
+  if (series.reviewCandidate) return false;
   // Central explicit facts may describe a free or one-time service before a
   // charge exists. Keep that row so its lifecycle and unknown amount remain
   // visible; legacy observed rows still need a monetary or posted signal.
@@ -44,17 +91,6 @@ bool _isDisplayableSubscription(RecurringSeries series) {
       !series.setupConfirmed &&
       series.detectionSource != 'central_projection' &&
       series.detectionSource != 'manual') {
-    return false;
-  }
-  // Raw UPI VPAs containing '@' are peer/merchant transfer handles, not subscriptions
-  if (name.contains('@')) {
-    return false;
-  }
-  // Fuel fill-ups and petrol pumps are variable spends, not subscriptions
-  if (RegExp(
-    r'\b(petroleum|petrol|fuel|gas\s*station|oil\s*co|hpcl|bpcl|iocl)\b',
-    caseSensitive: false,
-  ).hasMatch(name)) {
     return false;
   }
 
@@ -128,14 +164,18 @@ class SubscriptionsScreen extends ConsumerWidget {
             .entities(namespace, 'sms_observations')
             .where((row) =>
                 row['event_type'] == 'autopay' &&
-                row['autopay_limit_paise'] is num &&
+                !(row['reason_codes'] is List &&
+                    (row['reason_codes'] as List).contains('explicit_subscription_service')) &&
+                (row['autopay_limit_paise'] is num ||
+                    row['amount_due_paise'] is num ||
+                    row['amount_paise'] is num) &&
                 isSubscriptionAutoPay(row['biller_name'] as String?))
             .toList(growable: false);
     final localMandateKeys = <String>{};
     final uniqueLocalMandates = <Map<String, dynamic>>[];
     for (final row in localMandates) {
-      final key = _cleanIdentity(row['biller_name'] as String?) +
-          '|${row['card_last4'] ?? row['account_last4'] ?? ''}';
+      final key =
+          '${_cleanIdentity(row['biller_name'] as String?)}|${row['card_last4'] ?? row['account_last4'] ?? ''}';
       if (localMandateKeys.add(key)) uniqueLocalMandates.add(row);
     }
 
@@ -147,16 +187,16 @@ class SubscriptionsScreen extends ConsumerWidget {
             row.projectionKind == 'mandate' &&
             isSubscriptionAutoPay(row.billerName ?? row.serviceName))
         .where((row) {
-          final key = _cleanIdentity(row.billerName ?? row.serviceName) +
-              '|${row.last4 ?? ''}';
+          final key =
+              '${_cleanIdentity(row.billerName ?? row.serviceName)}|${row.last4 ?? ''}';
           return !localMandateKeys.contains(key);
         })
         .toList(growable: false);
     final centralMandateKeys = <String>{};
     final uniqueCentralMandates = <BillProjection>[];
     for (final row in centralMandates) {
-      final key = _cleanIdentity(row.billerName ?? row.serviceName) +
-          '|${row.last4 ?? ''}';
+      final key =
+          '${_cleanIdentity(row.billerName ?? row.serviceName)}|${row.last4 ?? ''}';
       if (centralMandateKeys.add(key)) uniqueCentralMandates.add(row);
     }
     final hasSubscriptionAutopays =
@@ -218,8 +258,14 @@ class SubscriptionsScreen extends ConsumerWidget {
             final subscriptions = data.series
                 .where(_isDisplayableSubscription)
                 .toList(growable: false);
+            final reviewCandidates = data.series
+                .where((series) => series.reviewCandidate)
+                .where((series) => series.displayName.trim().length >= 2)
+                .where((series) => series.cadenceDays >= 20)
+                .where((series) => !_isExcludedNonSubscription(series.displayName))
+                .toList(growable: false);
             if (subscriptions.isEmpty) {
-              if (hasSubscriptionAutopays) {
+              if (hasSubscriptionAutopays || reviewCandidates.isNotEmpty) {
                 return RefreshIndicator(
                   onRefresh: () async => ref.invalidate(recurringReportProvider),
                   child: ListView(
@@ -231,6 +277,10 @@ class SubscriptionsScreen extends ConsumerWidget {
                       AppShell.navClearance,
                     ),
                     children: [
+                      if (reviewCandidates.isNotEmpty) ...[
+                        _PossibleSubscriptionsSection(series: reviewCandidates),
+                        const SizedBox(height: AppSpace.lg),
+                      ],
                       _SubscriptionAutopaySection(
                         localMandates: uniqueLocalMandates,
                         centralMandates: uniqueCentralMandates,
@@ -300,7 +350,9 @@ class SubscriptionsScreen extends ConsumerWidget {
             final billing = filteredSubscriptions
                 .where(
                   (s) =>
-                      s.setupConfirmed || _subscriptionStatus(s) == 'confirmed',
+                      s.setupConfirmed ||
+                      _subscriptionStatus(s) == 'confirmed' ||
+                      _subscriptionStatus(s) == 'active',
                 )
                 .toList(growable: false);
             final flagged = filteredSubscriptions
@@ -308,6 +360,7 @@ class SubscriptionsScreen extends ConsumerWidget {
                   (s) =>
                       !s.setupConfirmed &&
                       _subscriptionStatus(s) != 'confirmed' &&
+                      _subscriptionStatus(s) != 'active' &&
                       _subscriptionStatus(s) != 'needs_cadence',
                 )
                 .toList(growable: false);
@@ -316,12 +369,10 @@ class SubscriptionsScreen extends ConsumerWidget {
                 .toList(growable: false);
             // The server total already counts only proven, still-billing
             // series; re-folding here would put guesses back in the headline.
-            final totalAnnual = filter == SubscriptionCadenceFilter.all
-                ? data.totalAnnual
-                : billing.fold<Money>(
-                    Money.zero(),
-                    (sum, s) => sum + s.annualCost,
-                  );
+            final totalAnnual = billing.fold<Money>(
+              Money.zero(),
+              (sum, s) => sum + s.annualCost,
+            );
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(recurringReportProvider),
               child: ListView(
@@ -333,6 +384,10 @@ class SubscriptionsScreen extends ConsumerWidget {
                   AppShell.navClearance,
                 ),
                 children: [
+                  if (reviewCandidates.isNotEmpty) ...[
+                    _PossibleSubscriptionsSection(series: reviewCandidates),
+                    const SizedBox(height: AppSpace.lg),
+                  ],
                   _TotalCard(
                     series: billing,
                     totalAnnual: totalAnnual,
@@ -629,6 +684,48 @@ class SubscriptionsScreen extends ConsumerWidget {
       }
     }
   }
+}
+
+class _PossibleSubscriptionsSection extends StatelessWidget {
+  final List<RecurringSeries> series;
+
+  const _PossibleSubscriptionsSection({required this.series});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpace.md),
+    decoration: BoxDecoration(
+      color: BambooInk.glassFillOnPaper,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      border: Border.all(color: BambooInk.hairlineOnPaper),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Possible subscriptions',
+            style: BambooFonts.heading(16, color: BambooInk.ink900)),
+        const SizedBox(height: AppSpace.xs),
+        Text('Repeated payments can be regular shopping. Review these patterns before adding a subscription.',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+        const SizedBox(height: AppSpace.sm),
+        for (final item in series)
+          Material(
+            color: Colors.transparent,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(item.displayName),
+              subtitle: Text('${item.occurrenceCount} similar payments · not confirmed'),
+              trailing: Text(item.typicalAmount.format()),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => SubscriptionDetailScreen(series: item),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 class _SubscriptionDraft {
@@ -1425,51 +1522,49 @@ class _SeriesCard extends ConsumerWidget {
 
   String get _frequencyLabel {
     if (!series.cadenceConfirmed) return 'Cadence not confirmed';
-    final suffix = series.autopayStatus == 'active' ? ' AutoPay' : '';
     final days = series.cadenceDays;
     final labelLower = series.cadenceLabel.toLowerCase();
 
     if (days >= 300 ||
         labelLower.contains('year') ||
         labelLower.contains('annual')) {
-      return 'Yearly$suffix';
+      return 'Yearly';
     }
     if ((days >= 70 && days < 150) ||
         days == 84 ||
         labelLower.contains('quarter')) {
-      return days == 84 ? '84-day$suffix' : 'Quarterly$suffix';
+      return days == 84 ? '84-day' : 'Quarterly';
     }
     if (days == 28) {
-      return '28-day$suffix';
+      return '28-day';
     }
     if (days == 56) {
-      return '56-day$suffix';
+      return '56-day';
     }
     if ((days >= 20 && days <= 45) || labelLower.contains('month')) {
-      return 'Monthly$suffix';
+      return 'Monthly';
     }
     if (labelLower.contains('week')) {
-      return 'Weekly$suffix';
+      return 'Weekly';
     }
-    if (labelLower.endsWith('autopay') && suffix.isEmpty) {
-      return series.cadenceLabel;
-    }
-    return '${series.cadenceLabel}$suffix';
+    return series.cadenceLabel;
   }
 
   /// The yearly line is only honest once the cycle is proven. Until then the
   /// per-cycle amount is what's real; a fabricated annual number built on a
   /// guessed cadence would bleed into the headline later.
   String get _costLine {
-    if (_setupOnly) {
-      return 'Setup confirmed — payment amount unknown';
-    }
-    if (!series.amountKnown) {
-      return 'Amount not stated';
+    if (_setupOnly || !series.amountKnown) {
+      if (series.hasActiveAutoPay ||
+          series.autopayStatus == 'active' ||
+          series.isMandate) {
+        return 'AutoPay active • Awaiting first charge';
+      }
+      return 'Setup confirmed • Awaiting first charge';
     }
     if (series.typicalAmount.paise == 0) return 'Free';
     final perCycle =
-        '₹${series.typicalAmount.format(hidePaise: true)} this cycle';
+        '${series.typicalAmount.format(hidePaise: true)} this cycle';
     switch (_subscriptionStatus(series)) {
       case 'needs_cadence':
         return '$perCycle — confirm the cadence to estimate the year';
@@ -1487,7 +1582,7 @@ class _SeriesCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final next = series.nextExpectedOn;
+    final next = series.nextExpectedOn?.toLocal();
     final icon = _subscriptionIcons[toneIndex % _subscriptionIcons.length];
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1553,8 +1648,12 @@ class _SeriesCard extends ConsumerWidget {
                     )
                   else
                     Text(
-                      series.amountKnown ? 'Free' : 'Amount not stated',
-                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                      series.amountKnown ? 'Free' : 'Awaiting first charge',
+                      style: BambooFonts.ui(
+                        12,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink500,
+                      ),
                     ),
                 ],
               ),
@@ -1584,8 +1683,9 @@ class _SeriesCard extends ConsumerWidget {
                       color: _subscriptionAccent,
                       background: _subscriptionTint,
                     ),
-                  if ((series.hasActiveAutoPay || series.isMandate) &&
-                      !_frequencyLabel.toLowerCase().contains('autopay'))
+                  if (series.hasActiveAutoPay ||
+                      series.autopayStatus == 'active' ||
+                      series.isMandate)
                     const _InfoPill(
                       icon: Icons.bolt_rounded,
                       label: 'AutoPay Active',
@@ -1945,6 +2045,15 @@ class _SeriesCard extends ConsumerWidget {
               nextExpectedOn: next!,
               autopayStatus: autopayStatus,
             );
+        unawaited(
+          _recordSubscriptionEditFeedback(
+            ref,
+            displayName: name.text.trim(),
+            amountInr: double.parse(amount.text),
+            cadenceDays: int.parse(cadence.text),
+            nextExpectedOn: next!,
+          ),
+        );
         if (!context.mounted) return;
         ref.invalidate(recurringReportProvider);
         ScaffoldMessenger.of(
@@ -1992,6 +2101,7 @@ class _SeriesCard extends ConsumerWidget {
       await ref
           .read(spendReportsRepositoryProvider)!
           .dismissRecurring(series.id);
+      unawaited(_recordSubscriptionDismissFeedback(ref));
       if (!context.mounted) return;
       ref.invalidate(recurringReportProvider);
       ScaffoldMessenger.of(
@@ -2004,6 +2114,82 @@ class _SeriesCard extends ConsumerWidget {
         ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
       }
     }
+  }
+
+  /// Queues one consented correction for an SMS-backed subscription after the
+  /// PATCH committed. Only a real change produces evidence. The service name
+  /// travels as `billerName` and is redacted server-side; a series without a
+  /// captured SMS on this device stays local.
+  Future<void> _recordSubscriptionEditFeedback(
+    WidgetRef ref, {
+    required String displayName,
+    required double amountInr,
+    required int cadenceDays,
+    required DateTime nextExpectedOn,
+  }) async {
+    final amountChanged = amountInr != series.typicalAmount.rupees;
+    final dateChanged =
+        series.nextExpectedOn != null &&
+        !nextExpectedOn.toUtc().isAtSameMomentAs(series.nextExpectedOn!.toUtc());
+    final nameChanged = displayName.trim() != series.displayName;
+    if (!amountChanged &&
+        !dateChanged &&
+        !nameChanged &&
+        cadenceDays == series.cadenceDays) {
+      return;
+    }
+    await queueSmsLearningEvent(
+      ref: ref,
+      sourceKey: series.sourceKey ?? '',
+      action: 'edited',
+      resolvedKind: 'bill',
+      occurredAtIso:
+          (series.lastSeenOn ?? DateTime.now()).toUtc().toIso8601String(),
+      originalDecision: {
+        'kind': 'bill_obligation',
+        'origin': 'parser',
+        'fields': {
+          'billerName': series.displayName,
+          'amountInr': series.typicalAmount.rupees,
+          'cadenceDays': series.cadenceDays,
+          if (series.nextExpectedOn != null)
+            'dueDate': series.nextExpectedOn!.toUtc().toIso8601String(),
+        },
+      },
+      correctedFields: {
+        'billerName': displayName.trim(),
+        'amountInr': amountInr,
+        'cadenceDays': cadenceDays,
+        'dueDate': nextExpectedOn.toUtc().toIso8601String(),
+      },
+      correctionKind: amountChanged
+          ? 'wrong_amount'
+          : dateChanged
+              ? 'wrong_date'
+              : 'wrong_bill_fields',
+    );
+  }
+
+  /// A subscription ignore is a tracking preference, not a claim that the
+  /// message was misclassified, so it is tagged `preference_only` and never
+  /// trains a shared rule.
+  Future<void> _recordSubscriptionDismissFeedback(WidgetRef ref) async {
+    await queueSmsLearningEvent(
+      ref: ref,
+      sourceKey: series.sourceKey ?? '',
+      action: 'dismissed',
+      resolvedKind: 'bill',
+      occurredAtIso:
+          (series.lastSeenOn ?? DateTime.now()).toUtc().toIso8601String(),
+      originalDecision: {
+        'kind': 'bill_obligation',
+        'origin': 'parser',
+        'fields': {'billerName': series.displayName},
+      },
+      correctedFields: const {},
+      correctionKind: 'preference_only',
+      reason: 'user_ignored_subscription',
+    );
   }
 }
 

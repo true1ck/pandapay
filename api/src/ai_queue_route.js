@@ -3,7 +3,7 @@
  *
  * Three actors, three guards:
  * - the app posts ONE source per /ai/jobs call (single-key gate); acceptance
- *   is replay-safe per (profile, source) and quota-gated per user per day;
+ *   is replay-safe per (profile, source); provider pacing is handled separately;
  * - the worker (bearer token via AI_WORKER_TOKEN; routes are disabled when
  *   the env var is unset) leases one job at a time and posts per-item
  *   validated results; the device-owned Needs Review item remains the user
@@ -21,6 +21,7 @@ const smsObservationMigration = require('./sms_observation_migration');
 const crypto = require('crypto');
 const { verifyModelFacts } = require('./ai_fact_evidence');
 const { providerLimits } = require('./ai_provider_quota_route');
+const { validateDecision } = require('./sms_decision');
 
 function leaseTokenMatches(expected, supplied) {
   if (typeof expected !== 'string' || typeof supplied !== 'string') return false;
@@ -242,10 +243,17 @@ function registerAiQueueRoutes(app, {
           });
           return { status: 422, error: 'result lacks SMS evidence', details: evidence.errors };
         }
+        const decisionValidation = validateDecision(decision, facts);
+        // A malformed decision is not a rejected SMS. Keep any validated facts
+        // as editable suggestions, but force the device to leave the source in
+        // Needs Review. In particular, only a consistent explicit negative
+        // decision may dismiss a row.
+        const acceptedDecision = decisionValidation.valid ? decision : null;
         const completion = await geminiQueue.completeJobWithResult(client, {
           job,
-          decision: decision || null,
+          decision: acceptedDecision,
           facts,
+          reviewRequired: decisionValidation.valid ? null : true,
           batchMetadata: {
             ...(typeof batchId === 'string' && /^[0-9a-f-]{36}$/i.test(batchId) ? { batchId } : {}),
             ...(Number.isInteger(batchSize) && batchSize >= 1 && batchSize <= 4 ? { batchSize } : {}),
@@ -258,6 +266,7 @@ function registerAiQueueRoutes(app, {
           status: 200,
           jobStatus: 'done',
           decision: completion.decision || null,
+          decisionValid: decisionValidation.valid,
           reviewRequired: completion.reviewRequired,
           confidenceScore: completion.confidenceScore,
         };
@@ -408,18 +417,95 @@ function registerAiQueueRoutes(app, {
 
   app.get('/admin/sms-ai/rollout', requireAdmin, async (req, res) => {
     try {
-      const config = await withUserClient(req.userId, async (client) => {
+      const payload = await withUserClient(req.userId, async (client) => {
         const rows = await client.query(
-          `SELECT key, is_enabled, rollout_percent, min_app_version, platforms
+          `SELECT key, is_enabled, rollout_percent, min_app_version, platforms,
+                  description, updated_at
              FROM feature_flags
-            WHERE key LIKE 'sms_%'`,
+            WHERE key LIKE 'sms_%'
+            ORDER BY key`,
         );
-        return smsObservationMigration.resolveSmsIntelligenceFlags(rows.rows || []);
+        return {
+          rollout: smsObservationMigration.resolveSmsIntelligenceFlags(rows.rows || []),
+          // The resolved booleans collapse partial rollouts to false; keep the
+          // raw rows so an operator can see the configured percentage, version
+          // floor and platforms instead of guessing from a disabled flag.
+          flags: rows.rows || [],
+        };
       });
-      res.status(200).json({ rollout: config });
+      res.status(200).json(payload);
     } catch (error) {
       console.error('GET /admin/sms-ai/rollout error', safeErrorCode(error));
       res.status(500).json({ error: 'failed to fetch rollout' });
+    }
+  });
+
+  app.patch('/admin/sms-ai/rollout/:key', requireAdmin, async (req, res) => {
+    const { key } = req.params;
+    if (typeof key !== 'string' || !/^sms_[a-z0-9_]{1,60}$/.test(key)) {
+      return res.status(400).json({ error: 'rollout key must be an sms_* feature flag' });
+    }
+    const has = (name) => Object.prototype.hasOwnProperty.call(req.body || {}, name);
+    const { isEnabled, rolloutPercent, minAppVersion, platforms, reason } = req.body || {};
+    if (has('isEnabled') && typeof isEnabled !== 'boolean') {
+      return res.status(400).json({ error: 'isEnabled must be a boolean' });
+    }
+    if (has('rolloutPercent') && (!Number.isInteger(rolloutPercent) || rolloutPercent < 0 || rolloutPercent > 100)) {
+      return res.status(400).json({ error: 'rolloutPercent must be an integer between 0 and 100' });
+    }
+    if (has('minAppVersion') && minAppVersion !== null && (typeof minAppVersion !== 'string' || minAppVersion.length > 32)) {
+      return res.status(400).json({ error: 'minAppVersion must be a short string or null' });
+    }
+    if (has('platforms') && (!Array.isArray(platforms) || platforms.length > 8
+      || platforms.some((platform) => typeof platform !== 'string' || !['android', 'ios', 'web'].includes(platform)))) {
+      return res.status(400).json({ error: 'platforms must be an array of android/ios/web' });
+    }
+    if (!has('isEnabled') && !has('rolloutPercent') && !has('minAppVersion') && !has('platforms')) {
+      return res.status(400).json({ error: 'no rollout fields supplied' });
+    }
+    if (reason !== undefined && (typeof reason !== 'string' || reason.length > 500)) {
+      return res.status(400).json({ error: 'reason must be a short string' });
+    }
+    try {
+      const outcome = await withUserClient(req.userId, async (client) => {
+        const before = await client.query(
+          `SELECT key, is_enabled, rollout_percent, min_app_version, platforms
+             FROM feature_flags WHERE key = $1 FOR UPDATE`,
+          [key],
+        );
+        if (before.rowCount === 0) return { missing: true };
+        const updated = await client.query(
+          `UPDATE feature_flags
+              SET is_enabled = coalesce($2, is_enabled),
+                  rollout_percent = coalesce($3, rollout_percent),
+                  min_app_version = case when $4 then $5 else min_app_version end,
+                  platforms = coalesce($6, platforms),
+                  updated_by = $7,
+                  updated_at = now()
+            WHERE key = $1
+            RETURNING key, is_enabled, rollout_percent, min_app_version, platforms, updated_at`,
+          [
+            key,
+            has('isEnabled') ? isEnabled : null,
+            has('rolloutPercent') ? rolloutPercent : null,
+            has('minAppVersion'),
+            has('minAppVersion') ? minAppVersion : null,
+            has('platforms') ? platforms : null,
+            req.userId,
+          ],
+        );
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+           VALUES ($1, 'update_sms_rollout_flag', 'feature_flags', NULL, $2, $3, $4)`,
+          [req.userId, JSON.stringify(before.rows[0]), JSON.stringify(updated.rows[0]), reason || null],
+        );
+        return { flag: updated.rows[0] };
+      });
+      if (outcome.missing) return res.status(404).json({ error: 'unknown rollout flag' });
+      res.status(200).json({ ok: true, flag: outcome.flag });
+    } catch (error) {
+      console.error('PATCH /admin/sms-ai/rollout/:key error', error.message || error);
+      res.status(500).json({ error: 'failed to update rollout flag' });
     }
   });
 }

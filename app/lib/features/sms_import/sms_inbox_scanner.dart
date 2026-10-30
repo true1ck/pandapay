@@ -45,6 +45,17 @@ class SmsInboxProgress {
     return rows.isNotEmpty && rows.single['initial_complete'] == 1;
   }
 
+  void rewind(String namespace, int count) {
+    database.db.execute(
+      '''
+      UPDATE sms_inbox_progress
+         SET last_provider_id = MAX(0, last_provider_id - ?)
+       WHERE namespace = ?
+      ''',
+      [count, namespace],
+    );
+  }
+
   void commit(String namespace, int id, {bool complete = false}) {
     database.db.execute(
       '''

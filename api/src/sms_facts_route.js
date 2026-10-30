@@ -240,11 +240,9 @@ function registerSmsFactsRoutes(app, {
     }
     try {
       const recorded = await withUserClient(req.userId, async (client) => {
-        const consent = await client.query(
-          `SELECT contributions_opt_in FROM profiles WHERE id = $1`,
-          [req.userId],
-        );
-        if (consent.rows?.[0]?.contributions_opt_in !== true) return { count: 0, consentEnabled: false };
+        if (!(await smsLearning.hasSmsSharedLearningConsent(client, req.userId))) {
+          return { count: 0, consentEnabled: false };
+        }
         let count = 0;
         for (const item of exposures) {
           // Exposure events are accepted only against a server issued
@@ -410,8 +408,12 @@ function registerSmsFactsRoutes(app, {
           `UPDATE public.sms_rule_candidate_exposures
               SET correction = true, outcome = 'review', updated_at = now()
             WHERE profile_id = $1 AND source_key = $2
-              AND EXISTS (SELECT 1 FROM profiles p
-                            WHERE p.id = $1 AND p.contributions_opt_in)`,
+              AND EXISTS (SELECT 1 FROM public.user_consents c
+                            WHERE c.profile_id = $1 AND c.purpose = 'sms_shared_learning'
+                              AND c.granted
+                              AND NOT EXISTS (SELECT 1 FROM public.user_consents newer
+                                WHERE newer.profile_id = c.profile_id AND newer.purpose = c.purpose
+                                  AND (newer.granted_at, newer.id) > (c.granted_at, c.id)))`,
           [req.userId, sourceKey],
         ).catch((error) => {
           // The exposure table is additive and may lag an API rollout. A
@@ -569,20 +571,20 @@ function registerSmsFactsRoutes(app, {
           await client.query(
             `UPDATE public.sms_rule_candidate_exposures
                 SET false_discard = true, outcome = 'ignored', updated_at = now()
-              WHERE profile_id = $1 AND source_key = $2
-                AND EXISTS (SELECT 1 FROM profiles p
-                              WHERE p.id = $1 AND p.contributions_opt_in)`,
+                WHERE profile_id = $1 AND source_key = $2
+                  AND EXISTS (SELECT 1 FROM public.user_consents c
+                                WHERE c.profile_id = $1 AND c.purpose = 'sms_shared_learning'
+                                  AND c.granted
+                                  AND NOT EXISTS (SELECT 1 FROM public.user_consents newer
+                                    WHERE newer.profile_id = c.profile_id AND newer.purpose = c.purpose
+                                      AND (newer.granted_at, newer.id) > (c.granted_at, c.id)))`,
             [req.userId, normalizedSourceKey],
           ).catch((error) => {
             console.warn('SMS candidate dismissal telemetry skipped:', safeErrorCode(error));
           });
         }
 
-        const consent = await client.query(
-          'SELECT contributions_opt_in FROM profiles WHERE id = $1',
-          [req.userId],
-        );
-        if (consent.rows?.[0]?.contributions_opt_in !== true) {
+        if (!(await smsLearning.hasSmsSharedLearningConsent(client, req.userId))) {
           return {
             status: 200,
             dismissed: true,

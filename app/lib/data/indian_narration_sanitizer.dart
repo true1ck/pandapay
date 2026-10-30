@@ -42,9 +42,11 @@ class IndianNarrationSanitizer {
     caseSensitive: false,
   );
 
-  // Major Indian metropolitan cities and ISO country codes often attached by POS terminals
-  static final _terminalLocationRe = RegExp(
-    r'\b(?:BANGALORE|BENGALURU|MUMBAI|BOMBAY|DELHI|NEW\s+DELHI|NOIDA|GURGAON|GURUGRAM|HYDERABAD|SECUNDERABAD|CHENNAI|MADRAS|KOLKATA|CALCUTTA|PUNE|AHMEDABAD|JAIPUR|CHANDIGARH|KOCHI|COCHIN|IND|IN|INDIA)\b',
+  // Major Indian metropolitan cities and ISO country codes often attached by
+  // POS terminals as trailing location noise. Only a suffix run is removed:
+  // a city that is part of the business name ("Delhi Public School") is kept.
+  static final _terminalLocationSuffixRe = RegExp(
+    r'(?:\s+(?:BANGALORE|BENGALURU|MUMBAI|BOMBAY|DELHI|NEW\s+DELHI|NOIDA|GURGAON|GURUGRAM|HYDERABAD|SECUNDERABAD|CHENNAI|MADRAS|KOLKATA|CALCUTTA|PUNE|AHMEDABAD|JAIPUR|CHANDIGARH|KOCHI|COCHIN|IND|IN|INDIA))+\s*$',
     caseSensitive: false,
   );
 
@@ -99,8 +101,9 @@ class IndianNarrationSanitizer {
     // 5. Strip Corporate Suffixes (Pvt Ltd, LLC, Inc)
     text = text.replaceAll(_corporateEntityRe, ' ');
 
-    // 6. Strip Terminal Location Suffixes (Bangalore, Mumbai, IN)
-    text = text.replaceAll(_terminalLocationRe, ' ');
+    // 6. Strip a trailing terminal location run (Bangalore / Mumbai / IN).
+    // Locations inside the name are preserved.
+    text = text.replaceFirst(_terminalLocationSuffixRe, '');
 
     // 7. Clean whitespace and trailing punctuation
     text = text.replaceAll(_multipleSpacesRe, ' ');

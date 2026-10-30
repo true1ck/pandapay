@@ -80,6 +80,43 @@ void main() {
       expect(IndianNarrationSanitizer.sanitize(''), equals(''));
       expect(IndianNarrationSanitizer.sanitize('   '), equals(''));
     });
+
+    test('keeps a city that is part of the business name', () {
+      expect(
+        IndianNarrationSanitizer.sanitize('Delhi Public School'),
+        equals('Delhi Public School'),
+      );
+      expect(
+        IndianNarrationSanitizer.sanitize('MUMBAI DABBAWALA'),
+        equals('MUMBAI DABBAWALA'),
+      );
+      expect(
+        IndianNarrationSanitizer.sanitize('NEW DELHI SWEETS'),
+        equals('NEW DELHI SWEETS'),
+      );
+    });
+
+    test('still drops a trailing terminal location run', () {
+      expect(
+        IndianNarrationSanitizer.sanitize('AMAZON SELLER BANGALORE IND'),
+        equals('AMAZON SELLER'),
+      );
+      expect(
+        IndianNarrationSanitizer.sanitize('SUNALI MUNDRA PUNE'),
+        equals('SUNALI MUNDRA'),
+      );
+    });
+
+    test('keeps reference ids out of the payee name', () {
+      expect(
+        IndianNarrationSanitizer.sanitize('SUNALI MUNDRA REF 665663775318'),
+        equals('SUNALI MUNDRA'),
+      );
+      expect(
+        IndianNarrationSanitizer.sanitize('UPI/P2M/3294829384/AMAZON SELLER/BARB0123/Pay'),
+        equals('AMAZON SELLER'),
+      );
+    });
   });
 
   group('FlashTextMerchantExtractor', () {

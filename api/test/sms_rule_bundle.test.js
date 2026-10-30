@@ -1,6 +1,63 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('crypto');
 const smsRuleBundle = require('../src/sms_rule_bundle');
+
+test('admin category proposals include only privacy-safe evidence for their category', async () => {
+  const handlers = new Map();
+  const app = {
+    get: (path, ...middleware) => handlers.set(`GET ${path}`, middleware[middleware.length - 1]),
+    post: () => {},
+  };
+  const client = {
+    query: async (sql) => {
+      assert.match(sql, /evidence\.sender_key = c\.sender_key/);
+      assert.match(sql, /evidence\.context_key = c\.context_key/);
+      assert.match(sql, /evidence\.category_slug = c\.category_slug/);
+      return { rows: [
+        {
+          merchant_key: 'EXAMPLE CAFE',
+          sender_key: 'TX-CAFE-S',
+          context_key: 'DINING',
+          fact_family: 'posted_movement',
+          category_slug: 'dining',
+          support_count: 12,
+          agreement_rate: 0.95,
+          redacted_pattern: 'Payment at {MERCHANT} for INR {AMOUNT}',
+        },
+        {
+          merchant_key: 'SAFE SHOP',
+          sender_key: 'TX-SHOP-S',
+          context_key: 'GROCERY',
+          fact_family: 'posted_movement',
+          category_slug: 'online',
+          support_count: 11,
+          agreement_rate: 0.91,
+          redacted_pattern: 'Contact user@example.com about payment',
+        },
+      ] };
+    },
+  };
+  smsRuleBundle.registerSmsRuleBundleRoutes(app, {
+    requireAuth: (_req, _res, next) => next(),
+    requireAdmin: (_req, _res, next) => next(),
+    withUserClient: async (_userId, callback) => callback(client),
+  });
+  const response = {
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    json(payload) { this.payload = payload; return this; },
+  };
+  await handlers.get('GET /admin/sms-rules/category-proposals')({ userId: 'admin' }, response);
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.payload.proposals[0].redacted_samples, [
+    'Payment at {MERCHANT} for INR {AMOUNT}',
+  ]);
+  assert.equal(response.payload.proposals[0].redacted_pattern, 'Payment at {MERCHANT} for INR {AMOUNT}');
+  assert.deepEqual(response.payload.proposals[1].redacted_samples, []);
+  assert.equal(response.payload.proposals[1].redacted_pattern, null);
+});
 
 test('validateRule: accepts well-formed rules across supported families', () => {
   const validSpend = {
@@ -187,11 +244,31 @@ test('routes: GET /sms/rules/active, publish, immutability, and rollback', async
     post: (path, ...middleware) => handlers.set(`POST ${path}`, middleware[middleware.length - 1]),
   };
 
-  const dbRows = [];
+  const dbRows = [{
+    bundle_version: 77,
+    rules: [{ id: 'legacy_unapproved_rule' }],
+    sha256: 'a'.repeat(64),
+    published_by: null,
+    is_active: true,
+    min_client_ver: '1.0.0',
+  }];
+  let categoryApproved = false;
   const fakeClient = {
     query: async (sql, params) => {
+      if (sql.includes("purpose = 'sms_shared_learning'")) {
+        return { rows: [{ granted: false }], rowCount: 1 };
+      }
+      if (sql.includes('sms_approved_category_rules_v2()')) {
+        if (!categoryApproved) return { rows: [] };
+        return { rows: [
+          { merchant_key: 'ZED CAFE', sender_key: 'TX-ZED-S', context_key: 'DINING', fact_family: 'posted_movement', category_slug: 'dining', support_count: '12', agreement_rate: '0.95' },
+          { merchant_key: 'ALPHA STORE', sender_key: 'TX-ALPHA-S', context_key: 'GROCERY', fact_family: 'posted_movement', category_slug: 'groceries', support_count: 10, agreement_rate: '0.9' },
+        ] };
+      }
       if (sql.includes('SELECT bundle_version')) {
-        const active = dbRows.filter((r) => r.is_active).sort((a, b) => b.bundle_version - a.bundle_version)[0];
+        const active = dbRows.filter((r) => r.is_active &&
+          (!sql.includes('published_by IS NOT NULL') || r.published_by !== null))
+          .sort((a, b) => b.bundle_version - a.bundle_version)[0];
         return { rows: active ? [active] : [] };
       }
       if (sql.includes('INSERT INTO public.sms_rule_bundles')) {
@@ -252,6 +329,28 @@ test('routes: GET /sms/rules/active, publish, immutability, and rollback', async
   assert.equal(res1.statusReceived, 200);
   assert.equal(res1.payload.bundleVersion, 0);
   assert.deepEqual(res1.payload.rules, []);
+  assert.deepEqual(res1.payload.candidateRules, []);
+  assert.deepEqual(res1.payload.categoryRules, []);
+
+  categoryApproved = true;
+  const approvedResponse = makeRes();
+  await handlers.get('GET /sms/rules/active')({ userId: 'u1', query: {} }, approvedResponse);
+  assert.equal(approvedResponse.statusReceived, 200);
+  assert.deepEqual(approvedResponse.payload.categoryRules, []);
+  assert.equal(approvedResponse.payload.categoryRulesVersion, 1);
+  assert.equal(approvedResponse.payload.categoryRulesMinClientVersion, '1.0.0');
+  const canonicalCategoryPayload = {
+    categoryRulesVersion: 1,
+    minClientVersion: '1.0.0',
+    categoryRules: approvedResponse.payload.categoryRules,
+  };
+  assert.equal(approvedResponse.payload.categoryRulesSha256, crypto.createHash('sha256')
+    .update(JSON.stringify(canonicalCategoryPayload)).digest('hex'));
+  assert.deepEqual(approvedResponse.payload.categoryRulesV2, [
+    { merchantKey: 'ALPHA STORE', senderKey: 'TX-ALPHA-S', contextKey: 'GROCERY', factFamily: 'posted_movement', categorySlug: 'groceries', supportCount: 10, agreementBp: 9000 },
+    { merchantKey: 'ZED CAFE', senderKey: 'TX-ZED-S', contextKey: 'DINING', factFamily: 'posted_movement', categorySlug: 'dining', supportCount: 12, agreementBp: 9500 },
+  ]);
+  assert.equal(approvedResponse.payload.categoryRulesV2Version, 2);
 
   // 2. Publish a valid bundle
   const publishPayload = {

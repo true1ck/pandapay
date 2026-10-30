@@ -6,6 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleListener;
 
 import '../../app/providers.dart';
+import '../../data/consents_api.dart' show smsSharedLearningPolicyVersion;
+import '../../data/local/sms_feedback_outbox.dart';
+import '../../data/local/sms_intake_repository.dart';
+import '../../data/local/sms_rule_exposure_outbox.dart';
 import '../../data/local/sync_queue.dart';
 import '../../data/sync_api.dart';
 import 'split_sync.dart';
@@ -86,6 +90,7 @@ class SyncEngine {
         splitRepositoryProvider.future,
       )).sync(reconnect: true);
       final queue = await _ref.read(syncQueueProvider.future);
+      await _flushAcknowledgedSmsFeedback(queue);
 
       var deviceId = queue.deviceId;
       if (deviceId == null) {
@@ -131,11 +136,30 @@ class SyncEngine {
           .where((r) => r.applied)
           .map((r) => r.clientSeq)
           .toSet();
+      final acceptedSmsUpdates = pending.where(
+        (change) =>
+            accepted.contains(change.clientSeq) &&
+            change.entity == 'transactions' &&
+            change.op == 'update',
+      );
+      if (acceptedSmsUpdates.isNotEmpty) {
+        final cache = await _ref.read(responseCacheProvider.future);
+        final feedback = SmsFeedbackOutbox(
+          cache.financialStore.database,
+          namespace: queue.namespace,
+        );
+        for (final change in acceptedSmsUpdates) {
+          feedback.acknowledgeAfterSync(change.clientSeq);
+        }
+      }
       final entities = pending
           .where((c) => accepted.contains(c.clientSeq))
           .map((c) => c.entity)
           .toSet();
       if (entities.isNotEmpty) await _materialize(api, entities, queue);
+      if (acceptedSmsUpdates.isNotEmpty) {
+        await _flushAcknowledgedSmsFeedback(queue);
+      }
       var applied = 0;
       for (final result in results) {
         if (result.clientSeq == null) continue;
@@ -164,6 +188,102 @@ class SyncEngine {
       return applied;
     } finally {
       queue.release(pending);
+    }
+  }
+
+  Future<void> _flushAcknowledgedSmsFeedback(SyncQueue queue) async {
+    final cache = await _ref.read(responseCacheProvider.future);
+    final database = cache.financialStore.database;
+    final outbox = SmsFeedbackOutbox(database, namespace: queue.namespace);
+    var queuedAny = false;
+    final deferredEvents = outbox.pendingAfterSync();
+    if (deferredEvents.isEmpty) return;
+    // An old cached consent must never authorize uploading SMS evidence after
+    // the user revoked it on another device.
+    _ref.invalidate(smsSharedLearningConsentProvider);
+    for (final deferred in deferredEvents) {
+      final event = deferred.payload;
+      try {
+        final consent = await _ref.read(smsSharedLearningConsentProvider.future);
+        final capturedAt = DateTime.tryParse(
+          event['capturedAt'] as String? ?? '',
+        );
+        if (consent == null ||
+            consent.granted != true ||
+            consent.policyVersion != smsSharedLearningPolicyVersion ||
+            capturedAt == null ||
+            consent.grantedAt.toUtc().isAfter(capturedAt.toUtc())) {
+          outbox.removeAfterSync(deferred.clientSeq);
+          continue;
+        }
+        final sourceKey = event['sourceKey'] as String? ?? '';
+        final captured = SmsIntakeRepository(database).capturedById(
+          queue.namespace,
+          sourceKey,
+        );
+        if (captured == null) {
+          outbox.removeAfterSync(deferred.clientSeq);
+          continue;
+        }
+        if (SmsIntakeRepository(database)
+            .hasRepeatedOccurrence(queue.namespace, sourceKey)) {
+          outbox.removeAfterSync(deferred.clientSeq);
+          continue;
+        }
+        final declaredOrigin = event['decisionOrigin'] as String?;
+        final originalDecision = Map<String, dynamic>.from(
+          event['originalDecision'] as Map,
+        );
+        // Same rule as the live capture path: only a parser-declared decision
+        // is re-attributed, and only to the candidate that produced the fact
+        // this sidecar corrects.
+        final correctedFamily = originalDecision['kind'];
+        final candidateId = declaredOrigin == 'parser'
+            ? SmsRuleExposureOutbox(database).appliedCandidateForFact(
+                queue.namespace,
+                sourceKey,
+                family: correctedFamily is String ? correctedFamily : null,
+              )
+            : null;
+        if (candidateId != null) {
+          originalDecision['origin'] = 'shared_rule';
+          originalDecision['ruleId'] = candidateId;
+        }
+        outbox.enqueue(
+          eventId: event['eventId'] as String?,
+          sourceKey: sourceKey,
+          action: event['action'] as String,
+          sender: captured.message.sender,
+          resolvedKind: event['resolvedKind'] as String,
+          occurredAt: event['occurredAt'] as String,
+          consentGrantedAt: consent.grantedAt,
+          sampleBody: captured.message.body,
+          originalDecision: originalDecision,
+          correctedFields: Map<String, dynamic>.from(
+            event['correctedFields'] as Map,
+          ),
+          correctionKind: event['correctionKind'] as String?,
+          decisionOrigin: candidateId == null
+              ? declaredOrigin
+              : 'shared_rule',
+          decisionRuleId: candidateId,
+          factIndex: event['factIndex'] as int? ?? 0,
+          messageAt: captured.message.receivedAt,
+        );
+        outbox.removeAfterSync(deferred.clientSeq);
+        queuedAny = true;
+      } catch (_) {
+        // Keep the acknowledged sidecar for the next sync/resume attempt.
+      }
+    }
+    if (queuedAny) {
+      try {
+        await _ref
+            .read(userCardsRepositoryProvider)
+            ?.flushSmsLearningFeedbackQueue();
+      } catch (_) {
+        // The durable feedback outbox will retry independently.
+      }
     }
   }
 
