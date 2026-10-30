@@ -1,1 +1,2 @@
 /db/scripts/compose-init-databases.sh text eol=lf
+/db/scripts/*.sh text eol=lf

@@ -24,7 +24,7 @@ const BRANDS = [
   { match: /anthropic|claude\.ai|claudepro|\bclaude\b/i, name: 'Claude', cadence: 30 },
   { match: /google[*\s]?gemini|gemini(?:\.google|advanced)?|\bgemini\b/i, name: 'Google Gemini', cadence: 30 },
   { match: /google\s*one|googleone/i, name: 'Google One', cadence: 30 },
-  { match: /google\s*play|googleplay/i, name: 'Google Play', cadence: 30 },
+  { match: /google\s*play|googleplay|google\s*asia\s*pacific|google\s*india\s*digital|\bgoogle\b/i, name: 'Google Play', cadence: 30 },
   { match: /cursor|anysphere/i, name: 'Cursor', cadence: 30 },
   { match: /github/i, name: 'GitHub', cadence: 30 },
   { match: /perplexity/i, name: 'Perplexity', cadence: 30 },

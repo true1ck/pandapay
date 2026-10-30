@@ -1959,5 +1959,51 @@ void main() {
             'never carry a hash VPA (got "$name")',
       );
     });
+
+    test('parses Axis Bank UPI ASPRESENTED mandate SMS with date range and amount limit', () {
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VM-AXISBK-S',
+        body: 'Your UPI ASPRESENTED mandate has been successfully created towards Google Asia Pacific Pte.Ltd '
+            'from 10-07-26 to 31-12-36 for INR 4000.00 Axis Bank. UMRN is axisf00000000000001',
+        receivedAt: DateTime(2026, 7, 10, 11, 30),
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.isAutopay, isTrue);
+      expect(parsed.billerName, contains('Google Asia Pacific'));
+      expect(parsed.autopayLimit?.paise, 400000);
+      expect(parsed.amountDue, isNull);
+      expect(parsed.cadenceHint, 'asPresented');
+      expect(parsed.startDate, DateTime(2026, 7, 10));
+      expect(parsed.endDate, DateTime(2036, 12, 31));
+      expect(parsed.paymentMethod, 'UPI AutoPay (Axis Bank)');
+    });
+
+    test('parses Axis Bank Groww AutoPay mandate SMS', () {
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'AX-AXISBK-S',
+        body:
+            'For the upcoming mandate set for 03-09-26, INR 3000.00 will be debited from your A/c towards ICCL GROWW AUTOPAY for UPI Mandate, •••• 5173. To stop execution, pause mandate - Axis Bank',
+        receivedAt: DateTime(2026, 9, 1, 6, 50, 23),
+      );
+
+      final draft = LocalSmsParser.reviewDraft(
+        namespace: 'user:test',
+        sender: 'AX-AXISBK-S',
+        body:
+            'For the upcoming mandate set for 03-09-26, INR 3000.00 will be debited from your A/c towards ICCL GROWW AUTOPAY for UPI Mandate, •••• 5173. To stop execution, pause mandate - Axis Bank',
+        receivedAt: DateTime(2026, 9, 1, 6, 50, 23),
+      );
+      expect(parsed?.isAutopay, isTrue);
+      expect(parsed?.eventType, LocalSmsEventType.investment);
+      expect(parsed?.disposition, LocalSmsDisposition.localCommitment);
+      expect(parsed?.billerName, 'Groww');
+      expect(parsed?.transaction, isNull);
+      expect(parsed?.amountDue?.rupees, 3000);
+      expect(parsed?.dueDate, DateTime(2026, 9, 3));
+      expect(draft.merchantName, isNull);
+    });
   });
 }

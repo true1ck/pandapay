@@ -286,7 +286,7 @@ class _SubscriptionDetailScreenState
                           label: 'AutoPay Active',
                           color: BambooInk.lime,
                         ),
-                      if (series.cadenceConfirmed)
+                      if (series.cadenceConfirmed || series.isMandate)
                         _subBadge(
                           icon: Icons.event_repeat_rounded,
                           label: series.cadenceLabel,
@@ -320,6 +320,21 @@ class _SubscriptionDetailScreenState
                           ),
                         ),
                       ],
+                    ),
+                  ] else if (series.autopayLimit != null && series.autopayLimit!.paise > 0) ...[
+                    const SizedBox(height: AppSpace.md),
+                    Text(
+                      'Up to ${series.autopayLimit!.format(hidePaise: true)}',
+                      style: BambooFonts.money(26, color: BambooInk.onSlate),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Mandate limit • Awaiting first charge',
+                      style: BambooFonts.ui(
+                        13,
+                        weight: FontWeight.w600,
+                        color: BambooInk.lime,
+                      ),
                     ),
                   ] else if (!series.amountKnown) ...[
                     const SizedBox(height: AppSpace.md),
@@ -373,11 +388,13 @@ class _SubscriptionDetailScreenState
                         ? (series.typicalAmount.isZero
                             ? 'Free'
                             : series.typicalAmount.format())
-                        : 'Awaiting first charge',
+                        : (series.autopayLimit != null && series.autopayLimit!.paise > 0
+                            ? 'Up to ${series.autopayLimit!.format()} (Mandate limit)'
+                            : 'Awaiting first charge'),
                   ),
                   _detail(
                     'Billing cycle',
-                    series.cadenceConfirmed
+                    series.cadenceConfirmed || series.isMandate
                         ? series.cadenceLabel
                         : 'Not confirmed',
                   ),
@@ -386,19 +403,32 @@ class _SubscriptionDetailScreenState
                       'Annual estimate',
                       series.annualCost.format(hidePaise: true),
                     ),
+                  if (series.startDate != null || series.endDate != null)
+                    _detail(
+                      'Mandate validity',
+                      series.startDate != null && series.endDate != null
+                          ? '${_date(series.startDate!)} – ${_date(series.endDate!)}'
+                          : (series.endDate != null
+                              ? 'Until ${_date(series.endDate!)}'
+                              : 'From ${_date(series.startDate!)}'),
+                    ),
                   _detail(
                     'Last seen date',
                     series.lastSeenOn != null
                         ? _date(series.lastSeenOn!)
-                        : 'None yet',
+                        : (series.startDate != null
+                            ? _date(series.startDate!)
+                            : 'None yet'),
                   ),
                   _detail(
                     'Next expected date',
                     series.nextExpectedOn != null
                         ? _date(series.nextExpectedOn!)
-                        : (series.setupConfirmed
-                            ? 'Awaiting schedule'
-                            : 'Not scheduled'),
+                        : (series.endDate != null
+                            ? 'Valid till ${_date(series.endDate!)}'
+                            : (series.setupConfirmed
+                                ? 'Awaiting schedule'
+                                : 'Not scheduled')),
                   ),
                   _detail(
                     'Payment card',

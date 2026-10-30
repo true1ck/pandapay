@@ -84,6 +84,11 @@ const BUILTIN_CATEGORY_RULES = [
   // letters and would be silently misclassified. Use known rent providers or
   // an explicit rent-pay descriptor instead.
   { slug: 'rent', priority: 90, patterns: ['nobroker', 'redgirraffe', 'rentpay', 'rental'] },
+  { slug: 'investments', priority: 85, patterns: [
+    'zerodha', 'groww', 'nextbillion', 'iccl', 'bse', 'upstox', 'angelone',
+    'angelbroking', 'dhan', 'kuvera', 'paytmmoney', 'indmoney', '5paisa',
+    'motilaloswal', 'sharekhan', 'mutualfund', 'sip',
+  ] },
   { slug: 'insurance', priority: 100, patterns: [
     'licindia', 'policybazaar', 'hdfclife', 'starhealth', 'icicilombard',
     'bajajallianz', 'insurance',

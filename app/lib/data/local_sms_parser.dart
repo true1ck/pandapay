@@ -1,5 +1,6 @@
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import 'commitments_repository.dart';
 import 'investment_classifier.dart';
 import 'user_cards_repository.dart';
 import 'local/sms_intake_repository.dart';
@@ -63,6 +64,9 @@ class LocalSmsObservation {
   final bool statementDateExplicit;
   final Money? availableBalance, amountDue, minimumDue, autopayLimit;
   final Money? amount;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final String? paymentMethod;
   String? get merchantName => billerName;
   final LocalSmsEventType eventType;
   final LocalSmsDisposition disposition;
@@ -89,6 +93,9 @@ class LocalSmsObservation {
     this.minimumDue,
     this.autopayLimit,
     this.amount,
+    this.startDate,
+    this.endDate,
+    this.paymentMethod,
     this.eventType = LocalSmsEventType.unknown,
     this.disposition = LocalSmsDisposition.review,
     this.reasonCodes = const [],
@@ -1016,6 +1023,35 @@ class LocalSmsParser {
   /// Extracts a display-safe biller name without retaining the raw SMS.
   /// Bank sender IDs are transport identifiers (for example, TNBPAY), not
   /// the provider name a person should see in a commitment list.
+  static String? _cleanMandateBiller(String? name) {
+    if (name == null) return null;
+    var cleaned = name.trim();
+    cleaned = cleaned
+        .replaceFirst(RegExp(r'^ICCL\s+', caseSensitive: false), '')
+        .trim();
+    cleaned = cleaned
+        .replaceFirst(RegExp(r'\s+AUTOPAY$', caseSensitive: false), '')
+        .trim();
+    cleaned = cleaned
+        .replaceFirst(RegExp(r'\s+MANDATE$', caseSensitive: false), '')
+        .trim();
+    cleaned = cleaned
+        .replaceFirst(RegExp(r'\s+ending\s+(?:in\s+)?\d+.*$', caseSensitive: false), '')
+        .trim();
+    if (RegExp(r'^\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}$').hasMatch(cleaned)) {
+      return null;
+    }
+    if (RegExp(
+      r'^(?:(?:the|your)\s+)?(?:upcoming|scheduled)\s+(?:mandate|debit|payment)|^(?:credit\s*card|card|account|bank|mandate)$',
+      caseSensitive: false,
+    ).hasMatch(cleaned)) {
+      return null;
+    }
+    if (cleaned.toUpperCase() == 'GROWW') return 'Groww';
+    if (cleaned.toUpperCase() == 'ZERODHA') return 'Zerodha';
+    return cleaned.isNotEmpty ? cleaned : null;
+  }
+
   static String? extractBillerName(String body) {
     final text = body.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (_re(r'\batal\s+pension\s+yojana\b').hasMatch(text)) {
@@ -1030,14 +1066,23 @@ class LocalSmsParser {
         return name;
       }
     }
+    final towardsMandatePartyMatch = _re(
+      r'\btowards\s+(?:(?:your|the)\s+)?([A-Za-z0-9_][-A-Za-z0-9 .&\x27/()]{1,60}?)(?=\s+(?:for\s+(?:upi\s+mandate|the\s+recurring|recurring|upi|mandate)|for|from|on|before|via|ref|txn|if\s+not|will|shall|would|is|ending)\b|[,.;]|$)',
+    ).firstMatch(text);
+    if (towardsMandatePartyMatch != null) {
+      final cleaned = _cleanMandateBiller(towardsMandatePartyMatch.group(1));
+      if (cleaned != null && cleaned.length >= 2) {
+        return cleaned;
+      }
+    }
     final mandateTowardsMatch = _re(
-      r'\b(?:created\s+towards|mandate\b[\s\S]{0,50}?\b(?:created\s+towards|towards|for)|subscription\s+to|subscription\s+towards|for\s+(?:the\s+)?subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 .&\x27/()]{1,60}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed)\b|[,.;]|$)',
+      r'\b(?:created\s+towards|mandate\b[\s\S]{0,50}?\b(?:created\s+towards|towards)|subscription\s+to|subscription\s+towards|for\s+(?:the\s+)?subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 .&\x27/()]{1,60}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed)\b|[,.;]|$)',
     ).firstMatch(text);
     if (mandateTowardsMatch != null) {
-      final name = mandateTowardsMatch.group(1)?.trim();
+      final name = _cleanMandateBiller(mandateTowardsMatch.group(1));
       if (name != null &&
           name.length >= 2 &&
-          !_re(r'^(?:credit card|card|account|bank)$').hasMatch(name)) {
+          !_re(r'^(?:credit card|card|account|bank)$').hasMatch(name.toLowerCase())) {
         return name;
       }
     }
@@ -1371,7 +1416,7 @@ class LocalSmsParser {
     }
     if (!localOnly && (merchant == null || merchant.isEmpty)) {
       final merchantMatch = _re(
-        r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+        r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
       ).firstMatch(body);
       merchant = merchantMatch?.group(1)?.trim();
     }
@@ -1383,6 +1428,10 @@ class LocalSmsParser {
       merchant = fvgMatch?.group(1)?.trim();
     }
     if (merchant != null) {
+      final cleanedMandate = _cleanMandateBiller(merchant);
+      if (cleanedMandate != null) {
+        merchant = cleanedMandate;
+      }
       final sanitized = IndianNarrationSanitizer.sanitize(merchant);
       if (sanitized.isNotEmpty) {
         merchant = sanitized;
@@ -1496,8 +1545,38 @@ class LocalSmsParser {
     }
 
     DateTime? effectiveDue = due;
+    DateTime? startDate;
+    DateTime? endDate;
+
+    final fromToMatch = _re(
+      r'\b(?:valid\s+)?from\s+(' + dateToken + r')\s+(?:to|till|until|-)\s+(' + dateToken + r')\b',
+    ).firstMatch(body);
+    if (fromToMatch != null) {
+      startDate = parseDate(fromToMatch.group(1)!);
+      endDate = parseDate(fromToMatch.group(2)!);
+    }
+
+    if (startDate == null) {
+      final startMatch = _re(
+        r'\b(?:start\s+date|starting\s+(?:from|on)?|created\s+on|registered\s+on)\s*[:\-]?\s*(' + dateToken + r')\b',
+      ).firstMatch(body);
+      if (startMatch != null) {
+        startDate = parseDate(startMatch.group(1)!);
+      }
+    }
+
+    if (endDate == null) {
+      final endMatch = _re(
+        r'\b(?:valid\s+(?:till|to|thru|through|upto|until)|end\s+date|expiry\s+date|expires\s+on)\s*[:\-]?\s*(' + dateToken + r')\b',
+      ).firstMatch(body);
+      if (endMatch != null) {
+        endDate = parseDate(endMatch.group(1)!);
+      }
+    }
+
     if (effectiveDue == null) {
       for (final phrase in [
+        r'\b(?:mandate\s+set\s+for|set\s+for)\s*[:\-]?\s*',
         r'\b(?:will|shall|to)?\s*(?:be\s+)?(?:auto[- ]?)?(?:deducted|debited)\b[\s\S]{0,70}?\bon\s*[:\-]?\s*',
         r'\b(?:auto[- ]?deducted|auto[- ]?debited|auto[- ]?debit)\s+on\s*[:\-]?\s*',
         r'\b(?:scheduled\s+for\s+)?(?:auto[- ]?debit|auto[- ]?pay|autopay|standing\s+instruction|si\s+debit)\b[\s\S]{0,80}?\b(?:on|by)\s*[:\-]?\s*',
@@ -1509,9 +1588,29 @@ class LocalSmsParser {
           if (effectiveDue != null) break;
         }
       }
+      effectiveDue ??= startDate;
       // A received-at timestamp is evidence of when the notice arrived, not
       // a payment date. Keep the due date unknown until the SMS states one.
     }
+
+    final bankName = _re(r'\baxis\b').hasMatch(body) || sender.toUpperCase().contains('AXIS')
+        ? 'Axis Bank'
+        : _re(r'\bhdfc\b').hasMatch(body) || sender.toUpperCase().contains('HDFC')
+        ? 'HDFC Bank'
+        : _re(r'\bicici\b').hasMatch(body) || sender.toUpperCase().contains('ICICI')
+        ? 'ICICI Bank'
+        : _re(r'\bsbi\b').hasMatch(body) || sender.toUpperCase().contains('SBI')
+        ? 'SBI'
+        : _re(r'\bkotak\b').hasMatch(body) || sender.toUpperCase().contains('KOTAK')
+        ? 'Kotak Bank'
+        : null;
+
+    final isUpi = _re(r'\bupi\b').hasMatch(body) || sender.toUpperCase().contains('UPI');
+    final detectedPaymentMethod = isUpi
+        ? (bankName != null ? 'UPI AutoPay ($bankName)' : 'UPI AutoPay')
+        : (effectiveCardLast4 != null
+            ? 'Card ending $effectiveCardLast4'
+            : (bankName != null ? 'AutoPay ($bankName)' : 'AutoPay Mandate'));
 
     // AutoPay alone does not establish a billing cadence. The central
     // projection may learn one from explicit plan evidence or posted history.
@@ -1528,6 +1627,9 @@ class LocalSmsParser {
         availableBalance: balance,
         amountDue: effectiveAmountDue,
         autopayLimit: autopayLimit,
+        startDate: startDate,
+        endDate: endDate,
+        paymentMethod: detectedPaymentMethod,
         eventType: LocalSmsEventType.bill,
         disposition: LocalSmsDisposition.localObservation,
         reasonCodes: const ['due_date_detected', 'autopay_notice'],
@@ -1543,21 +1645,40 @@ class LocalSmsParser {
               _re(
                 r'\b(?:auto[- ]?pay|autopay|mandate|e[- ]?mandate|e[- ]?nach|enach|standing\s+instruction|si\s+debit)\b',
               ).hasMatch(body));
+
+      Money? effectiveAutopayLimit = autopayLimit;
+      if (effectiveAutopayLimit == null && isSetup && effectiveAmountDue != null && effectiveAmountDue.paise > 0) {
+        effectiveAutopayLimit = effectiveAmountDue;
+      }
+
+      final isInvestment =
+          CommitmentCategory.fromText('${biller ?? ''} $body') ==
+          CommitmentCategory.investment;
+
       return LocalSmsObservation(
         cardLast4: effectiveCardLast4,
         accountLast4: accountLast4,
         billerName: biller,
-        cadenceHint: effectiveCadence,
+        cadenceHint: effectiveCadence ?? (isInvestment ? 'monthly' : null),
         dueDate: effectiveDue,
-        statementDate: receivedAt,
+        statementDate: startDate ?? receivedAt,
         availableBalance: balance,
         // A mandate limit is a ceiling, never the bill amount. A printed
         // ₹0 setup amount is an activation signal, not a due amount.
-        amountDue: effectiveAmountDue != null && effectiveAmountDue.paise > 0
-            ? effectiveAmountDue
-            : null,
-        autopayLimit: autopayLimit,
-        eventType: isSetup ? LocalSmsEventType.autopay : LocalSmsEventType.bill,
+        amountDue: isSetup
+            ? null
+            : (effectiveAmountDue != null && effectiveAmountDue.paise > 0
+                ? effectiveAmountDue
+                : null),
+        autopayLimit: effectiveAutopayLimit,
+        startDate: startDate,
+        endDate: endDate,
+        paymentMethod: detectedPaymentMethod,
+        eventType: isSetup
+            ? LocalSmsEventType.autopay
+            : (isInvestment
+                ? LocalSmsEventType.investment
+                : LocalSmsEventType.bill),
         disposition: isSetup
             ? LocalSmsDisposition.localIgnore
             : LocalSmsDisposition.localCommitment,
@@ -1565,6 +1686,7 @@ class LocalSmsParser {
           if (isSetup) 'autopay_setup' else 'commitment_detected',
           'mandate_notice',
           if (!isSetup) 'autopay_notice',
+          if (isInvestment) 'investment_sip_mandate',
         ],
         isAutopay: true,
         confidence: 0.95,
@@ -2000,9 +2122,15 @@ class LocalSmsParser {
         : extractBillerName(body) ??
               (isInsuranceReminder ? 'Insurance policy' : null);
     final cadenceHint =
-        _re(r'\b(?:monthly|month)\b').hasMatch(body) ||
+        _re(r'\b(?:as\s*presented|aspresented|as\s+and\s+when\s+presented|on\s+demand)\b').hasMatch(body)
+        ? 'asPresented'
+        : _re(r'\b(?:monthly|month)\b').hasMatch(body) ||
             _re(r'\b(?:for\s+the\s+month|month\s+of)\b').hasMatch(body)
         ? 'monthly'
+        : _re(r'\b(?:weekly|week)\b').hasMatch(body)
+        ? 'weekly'
+        : _re(r'\b(?:bi[- ]?monthly)\b').hasMatch(body)
+        ? 'biMonthly'
         : _re(r'\bquarterly\b').hasMatch(body)
         ? 'quarterly'
         : _re(r'\b(?:half[- ]yearly|half[- ]annual)\b').hasMatch(body)
@@ -2058,6 +2186,15 @@ class LocalSmsParser {
     final autopayLimit = money(
       _re(
         r'\b(?:max(?:imum)?|mandate|si|standing\s+instruction)\s*(?:limit|amount)?\s*(?:[:\-]|\s+(?:of|is|for))?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+      ).firstMatch(body)?.group(1) ??
+      _re(
+        r'\b(?:max(?:imum)?|mandate|si|standing\s+instruction|autopay)\b[\s\S]{0,140}?\b(?:for|of|limit|amount|upto|up\s+to|is)\s*[:\-]?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+      ).firstMatch(body)?.group(1) ??
+      _re(
+        r'\b(?:upto|up\s+to)\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+      ).firstMatch(body)?.group(1) ??
+      _re(
+        r'\bfor\s+(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)\s+(?:Axis|HDFC|ICICI|SBI|Kotak|Bank|VPA|UMRN)',
       ).firstMatch(body)?.group(1),
     );
     final hasAutopay = _re(
@@ -2581,7 +2718,7 @@ class LocalSmsParser {
 
     if (merchant == null || merchant.isEmpty) {
       final merchantMatch = _re(
-        r'\b(?:at|to|for|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:a\/?c\.?|account)\b|using\s+yono\b)([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:for|by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+        r'\b(?:at|to|for|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:a\/?c\.?|account)\b|using\s+yono\b|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:for|by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
       ).firstMatch(body);
       merchant = merchantMatch?.group(1)?.trim();
     }
@@ -2609,16 +2746,30 @@ class LocalSmsParser {
       }
     }
     if (merchant != null) {
+      merchant = merchant
+          .replaceFirst(RegExp(r'^ICCL\s+', caseSensitive: false), '')
+          .replaceFirst(RegExp(r'\s+AUTOPAY$', caseSensitive: false), '')
+          .replaceFirst(RegExp(r'\s+MANDATE$', caseSensitive: false), '')
+          .trim();
+      if (merchant.toUpperCase() == 'GROWW') merchant = 'Groww';
+      if (merchant.toUpperCase() == 'ZERODHA') merchant = 'Zerodha';
+    }
+    if (merchant != null) {
       final sanitized = IndianNarrationSanitizer.sanitize(merchant);
       if (sanitized.isNotEmpty) {
         merchant = sanitized;
       }
     }
-    merchant = MerchantIdentity.cleanName(merchant) ?? merchant;
+    merchant = MerchantIdentity.cleanName(merchant);
     final ownNameTransfer =
         merchant != null &&
         ownUserName != null &&
         _isOwnPersonName(merchant, ownUserName);
+    final isInvestmentPayee = merchant != null &&
+        CommitmentCategory.fromText(merchant) == CommitmentCategory.investment;
+    if (isInvestmentPayee && !transfer && !brokerSettlement) {
+      kind = TxnEntryKind.investment;
+    }
     if (billPayment) {
       merchant = processedCardBill == null
           ? 'Credit card bill payment'
@@ -2727,7 +2878,7 @@ class LocalSmsParser {
     final sharedCategorySlug =
         _sharedCategoryRuleSlug(sharedCategoryRules, merchant, sender, body);
     final categorySlug = userRuleSlug ??
-        (brokerSettlement || investmentProceeds || investmentDebit
+        (brokerSettlement || investmentProceeds || investmentDebit || isInvestmentPayee
             ? 'investments'
             : billPayment
             ? 'bills'

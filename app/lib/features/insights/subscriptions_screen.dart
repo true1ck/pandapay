@@ -51,9 +51,9 @@ bool _isExcludedNonSubscription(String name) {
   if (name.contains('@')) {
     return true;
   }
-  // 4. Retail stores, supermarkets, grocery, provisions, tea stall, cafes, bakeries, restaurants, medical
+  // 4. Retail stores, supermarkets, grocery, provisions, tea stall, cafes, bakeries, restaurants, medical, vending
   if (RegExp(
-    r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic)\b',
+    r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|retai|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic|vending)\b',
     caseSensitive: false,
   ).hasMatch(lower)) {
     return true;
@@ -258,12 +258,21 @@ class SubscriptionsScreen extends ConsumerWidget {
             final subscriptions = data.series
                 .where(_isDisplayableSubscription)
                 .toList(growable: false);
-            final reviewCandidates = data.series
+            final rawCandidates = data.series
                 .where((series) => series.reviewCandidate)
                 .where((series) => series.displayName.trim().length >= 2)
                 .where((series) => series.cadenceDays >= 20)
                 .where((series) => !_isExcludedNonSubscription(series.displayName))
                 .toList(growable: false);
+            final uniqueCandidatesMap = <String, RecurringSeries>{};
+            for (final item in rawCandidates) {
+              final k = item.displayName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+              final existing = uniqueCandidatesMap[k];
+              if (existing == null || item.occurrenceCount > existing.occurrenceCount) {
+                uniqueCandidatesMap[k] = item;
+              }
+            }
+            final reviewCandidates = uniqueCandidatesMap.values.toList(growable: false);
             if (subscriptions.isEmpty) {
               if (hasSubscriptionAutopays || reviewCandidates.isNotEmpty) {
                 return RefreshIndicator(
@@ -1525,6 +1534,9 @@ class _SeriesCard extends ConsumerWidget {
     final days = series.cadenceDays;
     final labelLower = series.cadenceLabel.toLowerCase();
 
+    if (labelLower.contains('as presented') || labelLower.contains('on-demand')) {
+      return 'As presented';
+    }
     if (days >= 300 ||
         labelLower.contains('year') ||
         labelLower.contains('annual')) {
@@ -1555,6 +1567,9 @@ class _SeriesCard extends ConsumerWidget {
   /// guessed cadence would bleed into the headline later.
   String get _costLine {
     if (_setupOnly || !series.amountKnown) {
+      if (series.autopayLimit != null && series.autopayLimit!.paise > 0) {
+        return 'AutoPay limit up to ${series.autopayLimit!.format(hidePaise: true)} • Awaiting first charge';
+      }
       if (series.hasActiveAutoPay ||
           series.autopayStatus == 'active' ||
           series.isMandate) {
@@ -1645,6 +1660,11 @@ class _SeriesCard extends ConsumerWidget {
                         confidence: Confidence.estimated,
                         style: BambooFonts.money(16, color: BambooInk.ink900),
                       ),
+                    )
+                  else if (series.autopayLimit != null && series.autopayLimit!.paise > 0)
+                    Text(
+                      'Up to ${series.autopayLimit!.format(hidePaise: true)}',
+                      style: BambooFonts.money(14, color: BambooInk.ink900),
                     )
                   else
                     Text(

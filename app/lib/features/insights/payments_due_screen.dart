@@ -2725,6 +2725,8 @@ class _AddCommitmentSheetState extends ConsumerState<_AddCommitmentSheet> {
                   CommitmentCategory.insurance,
                 ),
                 _buildCategoryChip('EMI / Loan', CommitmentCategory.loanOrEmi),
+                _buildCategoryChip('Investment / SIP', CommitmentCategory.investment),
+                _buildCategoryChip('Subscription', CommitmentCategory.subscription),
                 _buildCategoryChip('Rent', CommitmentCategory.rent),
                 _buildCategoryChip('Education', CommitmentCategory.education),
                 _buildCategoryChip('Other', CommitmentCategory.other),

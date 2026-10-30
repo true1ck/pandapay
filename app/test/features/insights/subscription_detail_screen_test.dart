@@ -255,5 +255,53 @@ void main() {
         expect(find.text('₹1,499.00'), findsNWidgets(2)); // Header and What we know
       },
     );
+
+    testWidgets(
+      'renders mandate limit, date range, and payment method when configured',
+      (tester) async {
+        final series = RecurringSeries(
+          id: 'google-mandate-1',
+          displayName: 'Google Play',
+          typicalAmount: Money.zero(),
+          amountKnown: false,
+          autopayLimit: Money.fromRupees(4000),
+          cadenceDays: 0,
+          occurrenceCount: 0,
+          annualCost: Money.zero(),
+          startDate: DateTime(2026, 7, 10),
+          endDate: DateTime(2036, 12, 31),
+          lastSeenOn: DateTime(2026, 7, 10),
+          paymentMethod: 'UPI AutoPay (Axis Bank)',
+          setupConfirmed: true,
+          cadenceConfirmed: true,
+          isMandate: true,
+          autopayStatus: 'active',
+          engineStatus: 'candidate',
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              cacheNamespaceProvider.overrideWithValue('user:test'),
+            ],
+            child: MaterialApp(
+              home: SubscriptionDetailScreen(series: series),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Subscription details'), findsOneWidget);
+        expect(find.text('Google Play'), findsOneWidget);
+        expect(find.text('Up to ₹4,000'), findsOneWidget);
+        expect(find.text('Mandate limit • Awaiting first charge'), findsOneWidget);
+        expect(find.text('Up to ₹4,000.00 (Mandate limit)'), findsOneWidget);
+        expect(find.text('As presented (On-demand)'), findsNWidgets(2)); // Badge and What we know
+        expect(find.text('10/7/2026 – 31/12/2036'), findsOneWidget);
+        expect(find.text('10/7/2026'), findsOneWidget);
+        expect(find.text('Valid till 31/12/2036'), findsOneWidget);
+        expect(find.text('UPI AutoPay (Axis Bank)'), findsOneWidget);
+      },
+    );
   });
 }

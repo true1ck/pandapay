@@ -263,7 +263,8 @@ class LocalMandateRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = (row['biller_name'] as String?)?.trim();
-    final paise = (row['autopay_limit_paise'] as num).toInt();
+    final rawLimit = row['autopay_limit_paise'] ?? row['amount_due_paise'] ?? row['amount_paise'];
+    final paise = rawLimit is num ? rawLimit.toInt() : null;
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
       padding: const EdgeInsets.all(AppSpace.md),
@@ -284,8 +285,12 @@ class LocalMandateRow extends StatelessWidget {
             Text('AutoPay setup reported', style: BambooFonts.ui(11, color: BambooInk.ink500)),
           ],
         )),
-        Text('AutoPay limit ₹${(paise / 100).toStringAsFixed(0)}',
-            style: BambooFonts.money(14, color: BambooInk.ink900)),
+        Text(
+          paise != null && paise > 0
+              ? 'AutoPay limit ₹${(paise / 100).toStringAsFixed(0)}'
+              : 'AutoPay active',
+          style: BambooFonts.money(14, color: BambooInk.ink900),
+        ),
       ]),
     );
   }

@@ -149,6 +149,8 @@ function isNonTransactionAlert(body) {
     // masked card number. That is an offer condition, not a purchase alert.
     || /\bspend\s*(?:₹|rs\.?|inr)\s*[\d,]+[\s\S]{0,50}\b(?:get|earn|cashback|reward|voucher)\b/.test(text)
     || /\b(?:cashback|reward|voucher|offer|eligible|campaign)\b[\s\S]{0,80}\b(?:spend|card)\b/.test(text)
+    || /\b(?:for\s+the\s+upcoming\s+mandate|upcoming\s+mandate|mandate\s+set\s+for|pre[- ]debit\s+notification)\b/i.test(text)
+    || /\b(?:(?:will|would|shall|to|scheduled\s+to|scheduled\s+for)\s+be\s+(?:auto[-\s]?)?(?:debited|deducted|charged)|for\s+(?:auto[-\s]?)?debit|scheduled\s+for\s+(?:auto[-\s]?)?debit)\b/i.test(text)
     || /\b(?:betting\s+(?:site|app)|gullybet|casino|slots|aviator|cockfight|fancy\s+bet|teen\s+patti|online\s+gambling|huge\s+bonus\b[\s\S]{0,30}\b(?:bet|casino|slots|win)|gbets\.win)\b/i.test(text);
 }
 
@@ -858,6 +860,10 @@ function isSuccessfulSpend(body) {
   if (isRejectedTransaction(text)) return false;
   if (isCardBillNotice(text)) return false;
   if (isNonTransactionAlert(text)) return false;
+  if (/\b(?:(?:will|would|shall|to|scheduled\s+to|scheduled\s+for)\s+be\s+(?:auto[-\s]?)?(?:debited|deducted|charged)|for\s+(?:auto[-\s]?)?debit|scheduled\s+for\s+(?:auto[-\s]?)?debit)\b/i.test(text) &&
+      !/\b(?:has\s+been|was|is)\s+(?:debited|deducted|charged|paid)\b/i.test(text)) {
+    return false;
+  }
   return /\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b/.test(text)
     || /\b(?:payment|purchase|transaction)\b[\s\S]{0,80}\b(?:successful|successfully|completed)\b/.test(text)
     // Issuer rewards-accomplishment alerts ("Your txn of ₹1,018 at M on
@@ -1074,13 +1080,16 @@ function parseBuiltInInvestmentMovement(sms) {
   }
   const investmentProceeds = /\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b[\s\S]{0,80}\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b/i.test(body)
     || /\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b[\s\S]{0,80}\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b/i.test(body);
+  if (isCardBillNotice(body)) {
+    return { ok: false, reason: 'card_bill_notice' };
+  }
   if (/\b(?:autopay|auto[- ]?pay|mandate|standing\s+instruction)\b/i.test(body) &&
       (!/\b(?:debited|credited|paid|transferred|invested|purchased|bought|funds?\s+added|money\s+added)\b/i.test(body)
        || /\b(?:txn\s*amt|amount)\s*[:.]?\s*(?:₹|rs\.?|inr)?\s*0(?:\.00?)?\b/i.test(body)
        || /\b(?:max(?:imum)?\s*limit|autopay\s+activation\s+successful)\b/i.test(body))) {
     return { ok: false, reason: 'investment_mandate_setup' };
   }
-  if (/\b(?:will|shall|would|to)\s+be\s+(?:added|credited|deposited|transferred)\b/i.test(body)) {
+  if (/\b(?:will|shall|would|to)\s+be\s+(?:debited|deducted|added|credited|deposited|transferred)\b/i.test(body)) {
     return { ok: false, reason: 'future_investment_movement' };
   }
   if (/\b(?:declined|failed|failure|cancelled|canceled|pending|processing|reversed|refund(?:ed)?)\b/i.test(body)) {
@@ -1126,25 +1135,30 @@ function parseBuiltInUpiDebit(sms) {
   // UPI alerts commonly put the reference in parentheses immediately after
   // the payee ("to ekart (UPI Ref ...)"). Stop before that metadata so it
   // cannot become part of the merchant name.
-  const merchantMatch = body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,;]|$|\r|\n)/i)
+  const towardsPartyMatch = body.match(/\btowards\s+(?:(?:your|the)\s+)?([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:for\s+(?:upi\s+mandate|the\s+recurring|recurring|upi|mandate)|for|from|on|before|via|ref|txn|if\s+not|will|shall|would|is|ending)\b|[,.;]|$|\r|\n)/i);
+  const merchantMatch = towardsPartyMatch
+    || body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,;]|$|\r|\n)/i)
     || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,;]|$|\r|\n)/i)
-    || body.match(/\b(?:to|at|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,]|$)/i);
+    || body.match(/\b(?:to|at|for)\s+(?!(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,]|$)/i);
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:upi\s*)?(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
   const narrationParty = merchantMatch ? null : upiNarrationParty(body);
   const walletLoad = isWalletLoadMessage(body);
+  const rawMerchant = merchantMatch ? merchantMatch[1].trim() : narrationParty;
+  const cleanedMerchant = cleanMerchantName(rawMerchant) || rawMerchant;
+  const isInvestment = cleanedMerchant && /\b(?:groww|zerodha|iccl|upstox|angel\s*one|dhan|kuvera|mutual\s*fund|sip)\b/i.test(cleanedMerchant);
   return {
     ok: true,
     patternId: null,
     fields: withAvailableBalance({
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
-      ...(merchantMatch ? { merchant: merchantMatch[1].trim() } : narrationParty ? { merchant: narrationParty } : {}),
+      ...(cleanedMerchant ? { merchant: cleanedMerchant } : {}),
       ...(dateMatch ? { date: dateMatch[1] } : {}),
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       ...(extractMcc(body) ? { mcc: extractMcc(body) } : {}),
       instrument,
       ...(walletLoad ? { merchant: 'Wallet load', transferKind: 'wallet_load' } : {}),
-      entryKind: walletLoad ? 'transfer' : 'spend',
+      entryKind: walletLoad ? 'transfer' : (isInvestment ? 'investment' : 'spend'),
     }, body),
   };
 }
@@ -1165,6 +1179,7 @@ function isCardBillNotice(body) {
   if (/\b(?:autopay\s+activation\s+successful|max(?:imum)?\s*limit)\b/i.test(text)) return true;
   if (/\b(?:txn\s*amt|amount)\s*[:.]?\s*(?:₹|rs\.?|inr)?\s*0(?:\.00?)?\b/i.test(text) &&
       /\b(?:autopay|auto[-\s]?pay|mandate|standing\s+instruction)\b/i.test(text)) return true;
+  if (/\b(?:for\s+the\s+upcoming\s+mandate|upcoming\s+mandate|mandate\s+set\s+for|pre[- ]debit\s+notification)\b/i.test(text)) return true;
   return (
     /\bwill\s+be\s+(?:auto[-\s]?)?(?:deducted|debited)\b/i.test(text) &&
     /\b(?:credit\s+card|card)\b[\s\S]{0,60}\bbill\b/i.test(text)

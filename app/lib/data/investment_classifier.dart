@@ -17,7 +17,7 @@ bool isInvestmentMovementDescription(String value) {
   if (isInvestmentFolioAllotment(text)) return false;
 
   final provider = RegExp(
-    r'\b(?:zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|demat|trading|broker(?:age|ing)?|portfolio)\b',
+    r'\b(?:zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|iccl|bse|demat|trading|broker(?:age|ing)?|portfolio)\b',
     caseSensitive: false,
   ).hasMatch(text);
   final explicitIntent = RegExp(

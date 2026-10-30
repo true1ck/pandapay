@@ -358,7 +358,8 @@ class SmsImportStore {
                 CommitmentCategory.telecom ||
                 CommitmentCategory.loanOrEmi ||
                 CommitmentCategory.rent ||
-                CommitmentCategory.subscription => CommitmentCadence.monthly,
+                CommitmentCategory.subscription ||
+                CommitmentCategory.investment => CommitmentCadence.monthly,
                 _ => CommitmentCadence.oneTime,
               },
             ),

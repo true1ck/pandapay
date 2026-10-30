@@ -405,6 +405,10 @@ class FlashTextMerchantExtractor {
     const investments = [
       ['zerodha', 'Zerodha'],
       ['groww', 'Groww'],
+      ['groww autopay', 'Groww'],
+      ['iccl groww autopay', 'Groww'],
+      ['iccl groww', 'Groww'],
+      ['iccl', 'ICCL'],
       ['nextbillion technology', 'Groww'],
       ['angel one', 'Angel One'],
       ['upstox', 'Upstox'],
@@ -414,7 +418,7 @@ class FlashTextMerchantExtractor {
       ['coin', 'Zerodha Coin'],
     ];
     for (final pair in investments) {
-      addKeyword(pair[0], canonicalName: pair[1], category: 'investment');
+      addKeyword(pair[0], canonicalName: pair[1], category: 'investments');
     }
 
     // 11. Wallets & Payment Platforms

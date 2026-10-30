@@ -819,6 +819,13 @@ async function resolveCategoryForImport(client, userId, {
     }
   }
 
+  if (entryKind === 'investment') {
+    const inv = await client.query(
+      `SELECT id FROM spend_categories WHERE slug IN ('investments', 'investment') LIMIT 1`
+    );
+    if (inv.rows[0]) return inv.rows[0].id;
+  }
+
   // Every successful spend belongs somewhere in the reporting taxonomy. Do
   // not leave a valid transaction with category_id NULL just because its
   // merchant is a small local business or a new UPI handle. This is a safe
