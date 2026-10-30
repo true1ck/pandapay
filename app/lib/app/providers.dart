@@ -4918,8 +4918,14 @@ String? _namedServiceAutoPayName(String? raw) {
   }
   if (normalized.contains('netflix')) return 'Netflix';
   if (normalized.contains('spotify')) return 'Spotify';
-  if (normalized.contains('googleplay')) return 'Google Play';
+  if (normalized.contains('googleplay') ||
+      normalized.contains('googleasiapacific') ||
+      normalized.contains('googleindiadigital') ||
+      normalized.contains('googleindia')) {
+    return 'Google Play';
+  }
   if (normalized.contains('googleone')) return 'Google One';
+  if (normalized == 'google') return 'Google Play';
   return name;
 }
 
@@ -5270,8 +5276,8 @@ SpendReport _makeLocalSpendReport(
     ),
     byMerchant: _localBreakdownRows(
       spendRows,
-      keyFor: (row) => row.merchantName ?? row.categoryName ?? 'other',
-      labelFor: (row) => row.merchantName ?? row.categoryName ?? 'Other',
+      keyFor: (row) => row.merchantName?.trim().isNotEmpty == true ? row.merchantName!.trim().toLowerCase() : 'unknown_merchant',
+      labelFor: (row) => row.merchantName?.trim().isNotEmpty == true ? row.merchantName!.trim() : 'Unknown merchant',
     ),
     byCard: _localCardRows(spendRows),
     byInstrument: _localInstrumentRows(spendRows),
@@ -5409,13 +5415,16 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
       continue;
     }
     if (RegExp(
-          r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic)\b',
+          r'\b(?:store|general\s*store|kirana|supermarket|mart|provision|traders|retail|retai|bazaar|tea\s*stall|chai|cafe|coffee|bakery|restaurant|dhaba|hotel|food|canteen|sweets|pharmacy|chemist|medical|hospital|clinic|vending)\b',
           caseSensitive: false,
         ).hasMatch(merchantLower) &&
         !isSubscriptionAutoPay(merchant)) {
       continue;
     }
-    final key = merchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ');
+    final canonicalName = _namedServiceAutoPayName(merchant);
+    final key = canonicalName != null
+        ? canonicalName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '')
+        : merchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ');
     groups.putIfAbsent(key, () => []).add(row);
   }
 
@@ -5510,26 +5519,37 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
     final statedPaise = explicitService
         ? (observation['amount_due_paise'] as num?)?.round()
         : null;
+    final limPaise = (observation['autopay_limit_paise'] as num?)?.round();
+    final limitMoney = limPaise != null && limPaise > 0
+        ? Money.fromPaise(limPaise)
+        : null;
     final amountKnown = statedPaise != null && statedPaise > 0;
-    final cadence = explicitService
-        ? switch (observation['cadence_hint']) {
-            'weekly' => 7,
-            'monthly' => 30,
-            'quarterly' => 91,
-            'halfYearly' => 182,
-            'annual' || 'yearly' => 365,
-            _ => 0,
-          }
-        : 0;
+    final cadenceHint = observation['cadence_hint'] as String?;
+    final cadence = switch (cadenceHint) {
+      'weekly' => 7,
+      'monthly' => 30,
+      'quarterly' => 91,
+      'halfYearly' => 182,
+      'annual' || 'yearly' => 365,
+      _ => 0,
+    };
     final statedAmount = amountKnown
         ? Money.fromPaise(statedPaise)
         : Money.zero();
+    final startDate = DateTime.tryParse(observation['start_date'] as String? ?? '');
+    final endDate = DateTime.tryParse(observation['end_date'] as String? ?? '');
+    final receivedAt = DateTime.tryParse(observation['received_at'] as String? ?? '');
+    final dueDate = DateTime.tryParse(observation['due_date'] as String? ?? '');
+    final paymentMethod = observation['payment_method'] as String? ??
+        (isAutopay ? 'UPI AutoPay' : null);
+
     series.add(
       RecurringSeries(
         id: 'local-setup:${observation['id'] ?? key}',
         sourceKey: observation['id'] as String?,
         displayName: service,
         typicalAmount: statedAmount,
+        autopayLimit: limitMoney,
         amountKnown: amountKnown,
         cadenceDays: cadence,
         occurrenceCount: explicitService ? 1 : 0,
@@ -5538,12 +5558,19 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
                 (statedPaise * _chargesPerYear(cadence)).round(),
               )
             : Money.zero(),
-        nextExpectedOn: explicitService
-            ? DateTime.tryParse(observation['due_date'] as String? ?? '')
-            : null,
+        startDate: startDate,
+        endDate: endDate,
+        lastSeenOn: startDate ?? receivedAt,
+        nextExpectedOn: explicitService ? dueDate : null,
+        categoryName: observation['category_name'] as String?,
+        subcategoryName: observation['subcategory_name'] as String?,
+        cardName: observation['card_name'] as String?,
+        paymentMethod: paymentMethod,
         detectionSource: explicitService ? 'local_explicit' : 'local_setup',
+        isMandate: isAutopay,
+        autopayStatus: isAutopay ? 'active' : 'unknown',
         setupConfirmed: true,
-        cadenceConfirmed: cadence > 0,
+        cadenceConfirmed: cadence > 0 || cadenceHint == 'asPresented',
         engineStatus: explicitService && cadence > 0 && amountKnown
             ? 'confirmed'
             : 'candidate',
@@ -6871,9 +6898,12 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     (_) => unawaited(flushAndRetry()),
   );
   ref.onDispose(aiReconcileTimer.cancel);
-  // Once at startup too: the most common case is the app being opened
-  // fresh after messages arrived, which fires no resume event.
-  unawaited(flushAndRetry());
+  // Once at startup too: defer by 2 seconds so cold launch entrance animations
+  // and biometric lock settle cleanly without competing for CPU or DB locks.
+  final startupTimer = Timer(const Duration(seconds: 2), () {
+    if (!disposed) unawaited(flushAndRetry());
+  });
+  ref.onDispose(startupTimer.cancel);
 });
 
 /// Owns the one live SMS registration for the whole app. The old listener
@@ -7010,7 +7040,8 @@ class SmsAutoImportController {
     final lastScanVer =
         prefs.getInt('pandapay_app.sms_inbox_scanner_ver_$namespace') ?? 0;
     if (lastScanVer < LocalSmsParser.version) {
-      SmsInboxProgress(store.database).rewind(namespace, 300);
+      // Version upgrade updates preferences without rewinding the scan checkpoint.
+      // Already captured transactions are safe; only strictly new messages are ingested.
       await prefs.setInt(
         'pandapay_app.sms_inbox_scanner_ver_$namespace',
         LocalSmsParser.version,

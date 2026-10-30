@@ -1285,7 +1285,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   String _merchantName(TransactionEntry entry) =>
       entry.merchantName?.trim().isNotEmpty == true
       ? entry.merchantName!.trim()
-      : 'Recipient unknown';
+      : 'Unknown merchant';
 
   String _cardName(TransactionEntry entry) =>
       SpendingSelection.sourceName(entry, bankAccounts: _bankAccounts);
@@ -1535,13 +1535,18 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   List<TransactionEntry> _transactionsForCategory(SpendBreakdownRow row) {
+    final targetLabel = row.label.trim().toLowerCase();
     return _visibleEntries.where((entry) {
       if (row.categoryId != null) {
-        return entry.categoryId == row.categoryId ||
+        if (entry.categoryId == row.categoryId ||
             entry.userCategoryId == row.categoryId ||
-            entry.parentUserCategoryId == row.categoryId;
+            entry.parentCategoryId == row.categoryId ||
+            entry.parentUserCategoryId == row.categoryId) {
+          return true;
+        }
       }
-      return _categoryName(entry).toLowerCase() == row.label.toLowerCase();
+      return _categoryName(entry).trim().toLowerCase() == targetLabel ||
+          entry.categoryName?.trim().toLowerCase() == targetLabel;
     }).toList();
   }
 
@@ -1556,12 +1561,23 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   List<TransactionEntry> _transactionsForMerchant(SpendBreakdownRow row) {
-    return _visibleEntries
-        .where(
-          (entry) =>
-              _merchantName(entry).toLowerCase() == row.label.toLowerCase(),
-        )
-        .toList();
+    final target = row.label.trim().toLowerCase();
+    final isUnknownMerchantRow = target == 'unknown merchant' ||
+        target == 'merchant unknown' ||
+        target == 'recipient unknown' ||
+        target == 'unknown';
+    return _visibleEntries.where((entry) {
+      final entryMerchant = entry.merchantName?.trim();
+      if (entryMerchant == null || entryMerchant.isEmpty) {
+        if (isUnknownMerchantRow) return true;
+        return target == 'other' ||
+            target == entry.categoryLabel.trim().toLowerCase();
+      }
+      if (isUnknownMerchantRow && MerchantIdentity.isWeakName(entryMerchant)) {
+        return true;
+      }
+      return entryMerchant.toLowerCase() == target;
+    }).toList();
   }
 
   Future<void> openFilters() async {
@@ -2043,7 +2059,7 @@ class _TagCategoryRow extends StatelessWidget {
   });
 
   List<_PayeeGroup> _merchantGroups() =>
-      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
+      _groupByPayee(entries, unknownLabel: 'Unknown merchant');
 
   @override
   Widget build(BuildContext context) => ExpansionTile(
@@ -4313,7 +4329,7 @@ class _ExpandableCategoryRow extends StatelessWidget {
   });
 
   List<_PayeeGroup> _merchantGroups() =>
-      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
+      _groupByPayee(entries, unknownLabel: 'Unknown merchant');
 
   @override
   Widget build(BuildContext context) {
@@ -4432,7 +4448,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
   });
 
   List<_PayeeGroup> _recipientGroups() =>
-      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
+      _groupByPayee(entries, unknownLabel: 'Unknown merchant');
 
   @override
   Widget build(BuildContext context) {
@@ -4491,6 +4507,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
               SpendingBreakdownHeader(
                 label: Text(
                   row.label,
+                  maxLines: 2,
                   style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -4498,6 +4515,7 @@ class _ExpandableInstrumentRow extends StatelessWidget {
                 amount: MoneyText(
                   row.total,
                   confidence: Confidence.estimated,
+                  showConfidenceIcon: false,
                   style: BambooFonts.ui(
                     13.5,
                     weight: FontWeight.w600,
@@ -4579,7 +4597,7 @@ class _ExpandableMerchantRow extends StatelessWidget {
     final display = _merchantDisplayFor(
       entries,
       fallbackLabel: row.label,
-      unknownLabel: 'Recipient unknown',
+      unknownLabel: 'Unknown merchant',
     );
 
     return CardSummaryPanel(
@@ -4793,6 +4811,7 @@ class _MerchantGroup extends StatelessWidget {
                 MoneyText(
                   amount,
                   confidence: Confidence.estimated,
+                  showConfidenceIcon: false,
                   style: BambooFonts.ui(
                     12.5,
                     weight: FontWeight.w700,
@@ -4811,7 +4830,7 @@ class _MerchantGroup extends StatelessWidget {
                   MerchantIdentity.cleanName(entry.merchantName) == null,
             ))
               Text(
-                'Tap the payment to name its recipient.',
+                'Tap the payment to add its merchant.',
                 style: BambooFonts.ui(11, color: BambooInk.ink500),
               ),
             if (hasRewardData)
@@ -4848,7 +4867,7 @@ class _MerchantGroup extends StatelessWidget {
                   MerchantIdentity.cleanName(entry.merchantName) == null,
             ))
               Text(
-                'Tap the payment to name its recipient.',
+                'Tap the payment to add its merchant.',
                 style: BambooFonts.ui(11, color: BambooInk.ink500),
               ),
             if (hasRewardData)
@@ -4953,68 +4972,70 @@ class _MerchantExpansionTileState extends State<_MerchantExpansionTile> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          widget.merchant,
-          key: ValueKey<String>(
-            'spending-merchant-name-${widget.storageKey}',
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: BambooFonts.ui(
-            12.5,
-            weight: FontWeight.w700,
-            color: BambooInk.ink900,
-          ),
-        ),
-        if (widget.vpa != null)
-          Text(
-            widget.vpa!,
-            key: ValueKey<String>(
-              'spending-merchant-vpa-${widget.storageKey}',
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.merchant,
+                    key: ValueKey<String>(
+                      'spending-merchant-name-${widget.storageKey}',
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.ui(
+                      12.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                  if (widget.vpa != null)
+                    Text(
+                      widget.vpa!,
+                      key: ValueKey<String>(
+                        'spending-merchant-vpa-${widget.storageKey}',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+                    ),
+                ],
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: BambooFonts.ui(10.5, color: BambooInk.ink500),
-          ),
-      ],
-    ),
-    subtitle: widget.subtitle,
-    trailing: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 112),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerRight,
-            child: MoneyText(
+            const SizedBox(width: AppSpace.xs),
+            MoneyText(
               widget.amount,
               key: ValueKey<String>(
                 'spending-merchant-amount-${widget.storageKey}',
               ),
               confidence: Confidence.estimated,
+              showConfidenceIcon: false,
               style: BambooFonts.ui(
                 12.5,
                 weight: FontWeight.w700,
                 color: BambooInk.ink900,
               ),
             ),
-          ),
+          ],
         ),
-        const SizedBox(width: AppSpace.sm),
-        ExcludeSemantics(
-          child: AnimatedRotation(
-            turns: _expanded ? 0.5 : 0,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            child: Icon(
-              Icons.expand_more_rounded,
-              size: 22,
-              color: _expanded ? BambooInk.jade : BambooInk.ink700,
-            ),
-          ),
-        ),
+        const SizedBox(height: 2),
+        widget.subtitle,
       ],
+    ),
+    trailing: ExcludeSemantics(
+      child: AnimatedRotation(
+        turns: _expanded ? 0.5 : 0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        child: Icon(
+          Icons.expand_more_rounded,
+          size: 20,
+          color: _expanded ? BambooInk.jade : BambooInk.ink700,
+        ),
+      ),
     ),
     children: widget.children,
   );
@@ -5040,7 +5061,7 @@ class _AccountRow extends StatelessWidget {
   });
 
   List<_PayeeGroup> _payeeGroups() =>
-      _groupByPayee(entries, unknownLabel: 'Recipient unknown');
+      _groupByPayee(entries, unknownLabel: 'Unknown merchant');
 
   @override
   Widget build(BuildContext context) {
