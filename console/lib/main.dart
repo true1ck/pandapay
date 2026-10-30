@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/providers.dart';
+import 'data/private_admin_auth.dart';
 import 'features/alerts/alerts_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/catalogue/catalogue_screen.dart';
@@ -67,7 +68,10 @@ class _AuthGateState extends ConsumerState<_AuthGate> {
     // Access tokens live for an hour. Refreshing well before expiry keeps an
     // open dashboard usable instead of turning every panel into a 401 error
     // that only a full page reload could fix.
-    _refreshTimer = Timer.periodic(const Duration(minutes: 10), (_) => _refreshSession());
+    _refreshTimer = Timer.periodic(
+      const Duration(minutes: 10),
+      (_) => _refreshSession(),
+    );
   }
 
   @override
@@ -82,8 +86,13 @@ class _AuthGateState extends ConsumerState<_AuthGate> {
     if (refreshToken == null) return;
     try {
       final tokens = await ref.read(authApiProvider).refresh(refreshToken);
-      await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
-      if (mounted) ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
+      await store.save(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      );
+      if (mounted) {
+        ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
+      }
     } catch (_) {
       // Keep the current session on a transient network failure; the next
       // attempt or an explicit API 401 will surface a real expiry.
@@ -91,6 +100,18 @@ class _AuthGateState extends ConsumerState<_AuthGate> {
   }
 
   Future<void> _signOut() async {
+    try {
+      await ref.read(authApiProvider).logout();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sign-out could not be completed. Try again.'),
+          ),
+        );
+      }
+      return;
+    }
     final store = await ref.read(tokenStoreProvider.future);
     await store.clear();
     ref.read(accessTokenProvider.notifier).state = null;
@@ -130,7 +151,10 @@ class _AuthGateState extends ConsumerState<_AuthGate> {
                     onPressed: () => ref.invalidate(isAdminProvider),
                     child: const Text('Retry'),
                   ),
-                  TextButton(onPressed: _signOut, child: const Text('Sign out')),
+                  TextButton(
+                    onPressed: _signOut,
+                    child: const Text('Sign out'),
+                  ),
                 ],
               ),
             ],
@@ -146,7 +170,10 @@ class _AuthGateState extends ConsumerState<_AuthGate> {
                 children: [
                   const Text('This console is internal-only.'),
                   const SizedBox(height: 12),
-                  TextButton(onPressed: _signOut, child: const Text('Sign out')),
+                  TextButton(
+                    onPressed: _signOut,
+                    child: const Text('Sign out'),
+                  ),
                 ],
               ),
             ),
@@ -226,6 +253,57 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: Consumer(
+          builder: (context, ref, _) {
+            final auth = ref.read(authApiProvider);
+            final target = auth is PrivateAdminAuthApi
+                ? auth.administrator
+                : null;
+            return Text(
+              target == null
+                  ? 'PandaPay • Private administration'
+                  : 'PandaPay • ${target['environment'] ?? 'Unknown target'} • ${target['role'] ?? 'Unknown role'}',
+            );
+          },
+        ),
+        actions: [
+          Consumer(
+            builder: (context, ref, _) {
+              final auth = ref.read(authApiProvider);
+              if (auth is! PrivateAdminAuthApi) return const SizedBox.shrink();
+              return TextButton.icon(
+                icon: const Icon(Icons.verified_user_outlined),
+                label: const Text('Verify security key'),
+                onPressed: () async {
+                  try {
+                    await auth.stepUp();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Security key verified for sensitive actions.',
+                          ),
+                        ),
+                      );
+                    }
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Security key verification was not completed.',
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+              );
+            },
+          ),
+        ],
+      ),
       body: Row(
         children: [
           // Chunk 35: the rail grew past 9 destinations (added Parser
@@ -296,7 +374,9 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
               index: _selected,
               children: [
                 for (var i = 0; i < _destinations.length; i++)
-                  _visited.contains(i) ? _destinations[i].screen : const SizedBox.shrink(),
+                  _visited.contains(i)
+                      ? _destinations[i].screen
+                      : const SizedBox.shrink(),
               ],
             ),
           ),

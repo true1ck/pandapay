@@ -1,0 +1,11 @@
+{
+  "target": "staging",
+  "ssh_host": "REPLACE_WITH_REVIEWED_HOST",
+  "ssh_user": "pandapay-admin-forward",
+  "ssh_identity": "/protected/admin-ssh-key",
+  "known_hosts": "/protected/admin-known-hosts",
+  "certificate": "/protected/localhost.pem",
+  "certificate_key": "/protected/localhost-key.pem",
+  "bundle": "/protected/pandapay-console/web",
+  "nginx_mime_types": "/opt/homebrew/etc/nginx/mime.types"
+}

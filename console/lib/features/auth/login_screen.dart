@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../data/admin_api.dart';
+import '../../data/private_admin_auth.dart';
 
 /// Sign-in uses the existing phone or email OTP routes. Whether the resulting
 /// session is an operator is decided by api/'s requireAdmin server-side, not
@@ -19,6 +20,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _codeController = TextEditingController();
+  final _grantController = TextEditingController();
   final _deviceId =
       'console-${List.generate(24, (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0')).join()}';
   ConsoleOtpChallenge? _challenge;
@@ -26,6 +28,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _otpRequested = false;
   bool _loading = false;
   String? _error;
+  bool get _privateAdmin => ref.read(authApiProvider) is PrivateAdminAuthApi;
+
+  Future<void> _enroll() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await (ref.read(authApiProvider) as PrivateAdminAuthApi).enroll(
+        _grantController.text,
+      );
+      _grantController.clear();
+      setState(() {
+        _otpRequested = false;
+        _codeController.clear();
+        _error =
+            'Security key registered. Complete your approved backup-key setup, then sign in again.';
+      });
+    } catch (_) {
+      setState(
+        () => _error =
+            'Enrollment could not be completed. Request a new grant if it expired.',
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   Future<void> _requestOtp() async {
     setState(() {
@@ -104,7 +133,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(height: 24),
-                if (!_otpRequested)
+                if (!_otpRequested && !_privateAdmin)
                   SegmentedButton<bool>(
                     segments: const [
                       ButtonSegment(value: true, label: Text('Email')),
@@ -126,6 +155,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     hintText: _useEmail ? 'you@example.com' : '+91XXXXXXXXXX',
                   ),
                 ),
+                if (_privateAdmin)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'Private admin access • Email verification and a security key are required.',
+                    ),
+                  ),
                 if (_otpRequested) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -156,6 +192,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 12),
                   Text(_error!, style: const TextStyle(color: Colors.red)),
                 ],
+                if (ref.read(authApiProvider) case PrivateAdminAuthApi(
+                  enrollmentRequired: true,
+                )) ...[
+                  TextField(
+                    controller: _grantController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'One-use enrollment grant',
+                    ),
+                  ),
+                  FilledButton(
+                    onPressed: _loading ? null : _enroll,
+                    child: const Text('Register security key'),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: _loading
@@ -180,6 +231,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _phoneController.dispose();
     _emailController.dispose();
     _codeController.dispose();
+    _grantController.dispose();
     super.dispose();
   }
 }

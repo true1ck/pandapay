@@ -10,10 +10,7 @@ const internalRoutes = require('./routes/internalRoutes');
 // === ADDED FOR RATE LIMITING ===
 const { initRedis, closeRedis } = require('./services/redisClient');
 // === ADMIN SECURITY VISUALIZER ===
-const adminRoutes = require('./routes/adminRoutes');
 const authMiddleware = require('./middleware/authMiddleware');
-const adminAuth = require('./middleware/adminAuth');
-const adminRateLimit = require('./middleware/adminRateLimit');
 const securityHeaders = require('./middleware/securityHeaders');
 // === SECURITY HARDENING: CORS VALIDATION ===
 const { validateCorsConfig, checkCorsAtRuntime } = require('./utils/corsValidator');
@@ -22,13 +19,12 @@ const { resolveTrustProxyHops, rejectMalformedClientIp } = require('./utils/prox
 const { mountTestHarness } = require('./utils/testHarnessAccess');
 const { createReadinessHandler } = require('./services/authReadiness');
 const { jsonBodyParser, jsonBodyErrorHandler } = require('./middleware/requestLimits');
-const {createConsoleBrowserRuntime}=require('./services/consoleBrowserRuntime');
 const {createAccountLifecycleRuntime}=require('./services/accountLifecycleRuntime');
 
 const app = express();
+app.use(require('./publicAdminBoundary').denyPublicAdmin);
 require('./services/newAccountAdmission').newAccountsPaused();
 let shuttingDown = false;
-const consoleBrowser=createConsoleBrowserRuntime();
 const authLifecycle=createAccountLifecycleRuntime();
 const {createAccountDeletionHandler}=require('./services/accountLifecycle');
 
@@ -131,7 +127,6 @@ app.get('/health', (req, res) => {
 app.get('/ready', createReadinessHandler({
   isDraining: () => shuttingDown,
   query: async (...args) => {
-    if (consoleBrowser) await consoleBrowser.readiness();
     if (authLifecycle) await authLifecycle.readiness();
     return db.query(...args);
   },
@@ -155,7 +150,6 @@ app.post('/auth/v2/account-status',createProofLookupHandler({
 }));
 app.use('/auth/v2',require('./routes/versionedOtpRoutes').createVersionedOtpRouter({legacyRouter:authRoutes}));
 app.use('/auth', authRoutes);
-if(consoleBrowser)app.use('/browser',consoleBrowser.router);
 app.use('/users', userRoutes);
 app.use('/users/me/recovery-contact', require('./routes/recoveryContactRoutes'));
 app.use('/internal', internalRoutes);
@@ -164,42 +158,8 @@ app.post('/internal/account/deletion/apply', (req,res,next)=>{
   next();
 },createAccountDeletionHandler({executor:authLifecycle?.executor,enabled:Boolean(authLifecycle)}));
 
-// === ADMIN SECURITY VISUALIZER ===
-// Admin dashboard and API endpoints (only enabled if flag is set)
-const ENABLE_ADMIN_DASHBOARD = process.env.ENABLE_ADMIN_DASHBOARD === 'true' || process.env.ENABLE_ADMIN_DASHBOARD === '1';
-
-if (ENABLE_ADMIN_DASHBOARD) {
-  console.info('Admin dashboard enabled');
-  
-  // === SECURITY HARDENING: ADMIN ROUTES PROTECTION ===
-  // All admin routes require:
-  // 1. JWT authentication (authMiddleware)
-  // 2. Admin role check (adminAuth)
-  // 3. Rate limiting (adminRateLimit)
-  // 4. Security headers (securityHeaders)
-  
-  // Admin API endpoints
-  // Note: securityHeaders already applied globally, but keeping here for explicit documentation
-  app.use('/admin', 
-    authMiddleware,
-    adminAuth,
-    adminRateLimit,
-    adminRoutes
-  );
-
-  // Serve admin dashboard (protected route)
-  app.get('/admin/security-dashboard', 
-    authMiddleware,
-    adminAuth,
-    (req, res) => {
-      // === SECURITY HARDENING: CLICKJACKING PROTECTION ===
-      // Security headers already set by global securityHeaders middleware
-      res.sendFile('security-dashboard.html', { root: 'public' });
-    }
-  );
-} else {
-  console.info('Admin dashboard disabled');
-}
+// Admin UI, browser sessions and security-dashboard routes are private-only.
+// This customer listener intentionally never registers them.
 
 // === ADDED FOR RATE LIMITING ===
 // Initialize Redis connection (falls back gracefully if not available)
@@ -230,7 +190,6 @@ async function shutdown(signal) {
       server.close((err) => (err ? reject(err) : resolve()));
     });
     await db.closeDb();
-    if(consoleBrowser)await consoleBrowser.close();
     if(authLifecycle)await authLifecycle.close();
     await closeRedis();
     clearTimeout(forceExit);

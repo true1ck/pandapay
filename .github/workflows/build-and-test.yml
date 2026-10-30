@@ -41,6 +41,9 @@ jobs:
           sudo apt-get install -y postgresql postgresql-contrib age
           ls -d /usr/lib/postgresql/*/bin | sort -V | tail -n 1 >> "$GITHUB_PATH"
           npm ci --omit=dev --prefix auth
+          npm ci --prefix api
+      - name: Private administrator boundary and signed WebAuthn integration
+        run: bash scripts/test_private_admin.sh
       - name: Migration and backup failure tests
         run: |
           node --test db/tests/*.test.js

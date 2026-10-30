@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../data/admin_api.dart';
 import '../data/token_store.dart';
+import '../data/private_admin_auth.dart';
 
 /// Same `--dart-define` contract as the user app's `app/lib/app/env.dart`
 /// (plan Phase 0.3) — kept as two plain consts here rather than a shared
@@ -29,13 +30,16 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 final authApiProvider = Provider<AuthApi>(
-  (ref) => AuthApi(
-    authBaseUrl: authBaseUrl,
-    versionedOtpEnabled: const bool.fromEnvironment(
-      'PANDAPAY_OTP_V2_ENABLED',
-      defaultValue: false,
-    ),
-  ),
+  (ref) =>
+      const bool.fromEnvironment('PANDAPAY_PRIVATE_ADMIN', defaultValue: true)
+      ? PrivateAdminAuthApi()
+      : AuthApi(
+          authBaseUrl: authBaseUrl,
+          versionedOtpEnabled: const bool.fromEnvironment(
+            'PANDAPAY_OTP_V2_ENABLED',
+            defaultValue: false,
+          ),
+        ),
 );
 
 final tokenStoreProvider = FutureProvider<TokenStore>(
@@ -84,6 +88,7 @@ final adminApiProvider = Provider<AdminApi?>((ref) {
         : apiBaseUrl,
     accessToken: token,
     csrfToken: auth.browserSessions ? () => auth.browserCsrf : null,
+    privateAdmin: auth is PrivateAdminAuthApi,
   );
 });
 
@@ -122,8 +127,9 @@ final cardRequestGroupsProvider = FutureProvider<List<Map<String, dynamic>>>((
   return api.fetchCardRequestGroups();
 });
 
-final supportTicketsProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final supportTicketsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchSupportTickets();
@@ -297,25 +303,33 @@ final smsRolloutProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   return api.fetchSmsRolloutStatus();
 });
 
-final smsRuleBundlesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final smsRuleBundlesProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchSmsRuleBundles();
 });
 
-final smsCategoryProposalsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchSmsCategoryProposals();
-});
+final smsCategoryProposalsProvider = FutureProvider<List<Map<String, dynamic>>>(
+  (ref) async {
+    final api = ref.watch(adminApiProvider);
+    if (api == null) return const [];
+    return api.fetchSmsCategoryProposals();
+  },
+);
 
-final smsParserProposalsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final smsParserProposalsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchSmsParserProposals();
 });
 
-final smsAiProposalsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final smsAiProposalsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchSmsAiProposals();
@@ -324,17 +338,23 @@ final smsAiProposalsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) 
 /// C7: explicit user-correction cases (typed correction envelope). Admin
 /// review affects candidate eligibility only; final rule approval remains
 /// separate.
-final smsCorrectionCasesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final smsCorrectionCasesProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchSmsCorrectionCases();
 });
 
-final smsAiJobTimelineProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, jobId) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchSmsAiJobTimeline(jobId);
-});
+final smsAiJobTimelineProvider =
+    FutureProvider.family<List<Map<String, dynamic>>, String>((
+      ref,
+      jobId,
+    ) async {
+      final api = ref.watch(adminApiProvider);
+      if (api == null) return const [];
+      return api.fetchSmsAiJobTimeline(jobId);
+    });
 
 final anonymizationAuditRunsProvider =
     FutureProvider<List<Map<String, dynamic>>>((ref) async {

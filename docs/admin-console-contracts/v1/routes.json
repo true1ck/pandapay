@@ -1,0 +1,554 @@
+[
+  {
+    "method": "GET",
+    "path": "/admin/me",
+    "permission": "reference.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/reference/categories",
+    "permission": "reference.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/cards",
+    "permission": "catalogue.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/issuers",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/cards",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/reward-rules/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/cap-rules",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/cap-rules/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/admin/cap-rules/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/milestone-rules",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/milestone-rules/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/admin/milestone-rules/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/fee-waiver-rules",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/fee-waiver-rules/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/admin/fee-waiver-rules/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/card-benefits",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/card-benefits/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/admin/card-benefits/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/redemption-options",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/redemption-options/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/admin/redemption-options/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/forex-rules/by-card/:cardProductId",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/fuel-surcharge-rules/by-card/:cardProductId",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/billing-cycle-rules/by-card/:cardProductId",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/parser-patterns",
+    "permission": "catalogue.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/parser-patterns",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/parser-patterns/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/admin/parser-patterns/:id",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/cards/:id/status",
+    "permission": "catalogue.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/card-requests",
+    "permission": "operations.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/card-requests/start-scraping",
+    "permission": "scraper.run",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/error-reports",
+    "permission": "support.evidence.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/error-reports/:id/approve",
+    "permission": "catalogue.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/error-reports/:id/reject",
+    "permission": "review.write",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/alerts",
+    "permission": "operations.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/alerts/:id",
+    "permission": "operations.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/alerts/:id/decide",
+    "permission": "review.write",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/notifications/broadcast",
+    "permission": "notifications.broadcast",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/support-tickets",
+    "permission": "support.evidence.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/support-tickets/:id/resolve",
+    "permission": "support.resolve",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/support-tickets/:id/dismiss",
+    "permission": "support.resolve",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/merchants",
+    "permission": "catalogue.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/merchants/:id",
+    "permission": "catalogue.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/merchants/:id/override",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/merchants/:id/unpublish",
+    "permission": "catalogue.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/merchant-conflicts",
+    "permission": "operations.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/merchant-conflicts/:id/resolve",
+    "permission": "catalogue.edit",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/abuse-signals",
+    "permission": "support.evidence.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/abuse-signals/:id/block",
+    "permission": "referrals.control",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/acceptance-summary",
+    "permission": "catalogue.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/acceptance-summary/:merchantId",
+    "permission": "catalogue.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/acceptance-summary/publish",
+    "permission": "catalogue.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/effective-rate-summary",
+    "permission": "financial.evidence.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/effective-rate-summary/:cardProductId/:categoryId/samples",
+    "permission": "financial.evidence.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sources",
+    "permission": "operations.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sources",
+    "permission": "scraper.configure",
+    "freshMfa": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/admin/sources/:id",
+    "permission": "scraper.configure",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/scrape-runs",
+    "permission": "operations.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/source-pages/:id/snapshots",
+    "permission": "operations.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sources/:id/pages",
+    "permission": "operations.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/data-quality-dashboard",
+    "permission": "operations.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/anonymization-audit-runs",
+    "permission": "admin.audit.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/anonymization-audit-runs/latest",
+    "permission": "admin.audit.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/anonymization-audit-runs/run",
+    "permission": "admin.audit.run",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/referrals/operations",
+    "permission": "referrals.read",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/referrals/holds/:scope",
+    "permission": "referrals.control",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-ai/summary",
+    "permission": "ai.queue.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-ai/jobs",
+    "permission": "ai.queue.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-ai/jobs/:id/events",
+    "permission": "ai.queue.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-ai/quota",
+    "permission": "ai.queue.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms-ai/dry-run",
+    "permission": "ai.queue.run",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-ai/rollout",
+    "permission": "ai.queue.read",
+    "freshMfa": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/admin/sms-ai/rollout/:key",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-learning/operations",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-learning/candidates",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-learning/rule-negative-evidence",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-learning/feedback-events",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms-learning/feedback-events/:eventId/review",
+    "permission": "review.write",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms-learning/candidates/:id/decision",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms-learning/candidates/:id/pause",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms-learning/candidates/:id/resume",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-learning/ai-proposals",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms-learning/ai-proposals/review",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-rules/category-proposals",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms-rules/category-proposals/review",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-rules/parser-proposals",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms-rules/parser-proposals/review",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-rules/bundles",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms-rules/bundles/:bundleVersion",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms-rules/publish",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms-rules/:bundleVersion/rollback",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms-learning/cycle",
+    "permission": "learning.cycle",
+    "freshMfa": true
+  }
+]

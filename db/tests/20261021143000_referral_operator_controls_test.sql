@@ -3,6 +3,13 @@
 \set ON_ERROR_STOP on
 
 begin;
+select session_user as fixture_original_login \gset
+do $$ begin
+  if not exists(select 1 from pg_roles where rolname='admin_api_runtime') then
+    create role admin_api_runtime login noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
+  end if;
+end $$;
+grant pandapay_admin_api to admin_api_runtime;
 select gen_random_uuid()::text as admin_id,
        gen_random_uuid()::text as member_id,
        'operator-test-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 16) as campaign_version
@@ -12,7 +19,7 @@ insert into public.profiles (id, display_name, locale, currency)
 values (:'admin_id'::uuid, 'Operator fixture', 'en-IN', 'INR'),
        (:'member_id'::uuid, 'Member fixture', 'en-IN', 'INR');
 insert into public.admin_users (id, email, role, is_active)
-values (:'admin_id'::uuid, 'referral-operator-fixture@example.invalid', 'operator', true);
+values (:'admin_id'::uuid, 'referral-operator-fixture@example.invalid', 'owner', true);
 
 insert into promotions.campaign_versions
   (version_key, calendar_zone, required_consecutive_days, qualification_window_days,
@@ -50,8 +57,19 @@ end
 $$;
 reset role;
 
+-- A customer connection cannot gain authority by adopting the owner's UUID.
 set local role app_user;
 select set_config('app.user_id', :'admin_id', true);
+select set_config('pandapay.admin_actor', :'admin_id', true);
+do $$ begin
+  if pandapay.is_admin() then raise exception 'customer connection asserted administration'; end if;
+end $$;
+reset role;
+set local session authorization admin_api_runtime;
+set local role pandapay_admin_api;
+select set_config('app.user_id', :'admin_id', true);
+select set_config('pandapay.admin_actor', :'admin_id', true);
+select set_config('pandapay.admin_permission', 'referrals.control', true);
 do $$
 declare
   v_status jsonb;
@@ -99,6 +117,7 @@ begin
 end
 $$;
 reset role;
+set local session authorization :"fixture_original_login";
 
 do $$
 begin

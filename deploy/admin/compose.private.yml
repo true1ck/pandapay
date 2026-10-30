@@ -1,0 +1,81 @@
+# Opt-in private processes. Merge with production Compose only after acceptance.
+# TLS to PostgreSQL must use the verified CA settings appropriate to the target.
+services:
+  admin-gateway:
+    profiles: [admin]
+    build:
+      context: ./auth
+    command: [node, src/admin/server.js]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
+    ports: ['127.0.0.1:4321:4321']
+    networks: [admin_private]
+    environment:
+      NODE_ENV: production
+      ADMIN_GATEWAY_ENABLED: 'true'
+      ADMIN_ENVIRONMENT: '${ADMIN_ENVIRONMENT:?}'
+      ADMIN_GATEWAY_HOST: '0.0.0.0'
+      ADMIN_GATEWAY_PORT: '4321'
+      ADMIN_CONTAINER_NETWORK: 'true'
+      ADMIN_BROWSER_ORIGIN: 'https://localhost:8443'
+      ADMIN_WEBAUTHN_RP_ID: localhost
+      ADMIN_AUTH_DATABASE_URL: '${ADMIN_AUTH_DATABASE_URL:?}'
+      ADMIN_API_BASE_URL: http://admin-api:4001
+      ADMIN_TOKEN_LOOKUP_KEY: '${ADMIN_TOKEN_LOOKUP_KEY:?}'
+      ADMIN_SESSION_EPOCH: '${ADMIN_SESSION_EPOCH:?}'
+      ADMIN_INTROSPECTION_SERVICE_SECRET: '${ADMIN_INTROSPECTION_SERVICE_SECRET:?}'
+      CONSOLE_SESSION_ENCRYPTION_KEY: '${CONSOLE_SESSION_ENCRYPTION_KEY:?}'
+      DB_SSL: 'true'
+      DB_SSL_CA: '${DB_SSL_CA:-}'
+      ADMIN_SMTP_HOST: '${ADMIN_SMTP_HOST:?}'
+      ADMIN_SMTP_PORT: '${ADMIN_SMTP_PORT:-587}'
+      ADMIN_SMTP_USER: '${ADMIN_SMTP_USER:?}'
+      ADMIN_SMTP_PASSWORD: '${ADMIN_SMTP_PASSWORD:?}'
+      ADMIN_SMTP_FROM: '${ADMIN_SMTP_FROM:?}'
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4321/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  admin-api:
+    profiles: [admin]
+    build:
+      context: ./api
+    command: [node, src/admin/server.js]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
+    # No published admin API port.
+    networks: [admin_private]
+    environment:
+      NODE_ENV: production
+      ADMIN_API_ENABLED: 'true'
+      ADMIN_API_HOST: '0.0.0.0'
+      ADMIN_API_PORT: '4001'
+      ADMIN_CONTAINER_NETWORK: 'true'
+      ADMIN_API_DATABASE_URL: '${ADMIN_API_DATABASE_URL:?}'
+      ADMIN_INTROSPECTION_BASE_URL: http://admin-gateway:4321
+      ADMIN_INTROSPECTION_SERVICE_SECRET: '${ADMIN_INTROSPECTION_SERVICE_SECRET:?}'
+      DB_SSL: 'true'
+      DB_SSL_CA: '${DB_SSL_CA:-}'
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4001/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+networks:
+  admin_private:
+    driver: bridge
+    # Egress needed for reviewed PostgreSQL and SMTP endpoints.
+    # Restrict egress with the actual host firewall; no customer/worker joins.

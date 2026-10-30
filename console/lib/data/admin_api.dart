@@ -255,18 +255,21 @@ class AdminApi {
   final String apiBaseUrl;
   final String accessToken;
   final String? Function()? csrfToken;
+  final bool privateAdmin;
   final http.Client _client;
 
   AdminApi({
     required this.apiBaseUrl,
     required this.accessToken,
     this.csrfToken,
+    this.privateAdmin = false,
     http.Client? client,
   }) : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
     if (csrfToken == null) 'Authorization': 'Bearer $accessToken',
     if (csrfToken != null) 'X-Console-Request': '1',
+    if (privateAdmin) 'X-Admin-Protocol': '1',
     if (csrfToken?.call() case final String csrf) 'X-CSRF-Token': csrf,
     'Content-Type': 'application/json',
   };
@@ -284,7 +287,9 @@ class AdminApi {
     // Collapsing it to false used to strand the operator on the internal-only
     // screen with no way to sign out.
     if (response.statusCode == 401) {
-      throw AdminApiException('Session expired. Sign out and request a new OTP.');
+      throw AdminApiException(
+        'Session expired. Sign out and request a new OTP.',
+      );
     }
     if (response.statusCode == 403) return false;
     throw AdminApiException(
@@ -555,9 +560,9 @@ class AdminApi {
     final params = <String, String>{};
     if (state != null) params['state'] = state;
     if (kind != null) params['kind'] = kind;
-    final uri = Uri.parse('$apiBaseUrl/admin/support-tickets').replace(
-      queryParameters: params.isNotEmpty ? params : null,
-    );
+    final uri = Uri.parse(
+      '$apiBaseUrl/admin/support-tickets',
+    ).replace(queryParameters: params.isNotEmpty ? params : null);
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
       throw AdminApiException(
@@ -585,10 +590,7 @@ class AdminApi {
     }
   }
 
-  Future<void> dismissSupportTicket(
-    String ticketId, {
-    String? reason,
-  }) async {
+  Future<void> dismissSupportTicket(String ticketId, {String? reason}) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/support-tickets/$ticketId/dismiss'),
       headers: _headers,
@@ -1232,7 +1234,11 @@ class AdminApi {
     }
   }
 
-  Future<void> decideSmsLearningCandidate(String id, String decision, {String? reason}) async {
+  Future<void> decideSmsLearningCandidate(
+    String id,
+    String decision, {
+    String? reason,
+  }) async {
     if (!const {'manual_pattern_authoring', 'reject'}.contains(decision)) {
       throw ArgumentError.value(decision, 'decision');
     }
@@ -1356,13 +1362,17 @@ class AdminApi {
     return body['flag'] as Map<String, dynamic>;
   }
 
-  Future<List<Map<String, dynamic>>> fetchSmsRuleBundles({int limit = 50}) async {
+  Future<List<Map<String, dynamic>>> fetchSmsRuleBundles({
+    int limit = 50,
+  }) async {
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/admin/sms-rules/bundles?limit=$limit'),
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('GET /admin/sms-rules/bundles failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'GET /admin/sms-rules/bundles failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['bundles'] as List).cast<Map<String, dynamic>>();
@@ -1374,7 +1384,9 @@ class AdminApi {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('Failed to load SMS category proposals: ${response.statusCode}');
+      throw AdminApiException(
+        'Failed to load SMS category proposals: ${response.statusCode}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['proposals'] as List).cast<Map<String, dynamic>>();
@@ -1403,7 +1415,9 @@ class AdminApi {
       }),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('Failed to review SMS category proposal: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'Failed to review SMS category proposal: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -1413,9 +1427,12 @@ class AdminApi {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('Failed to load parser proposals: ${response.statusCode}');
+      throw AdminApiException(
+        'Failed to load parser proposals: ${response.statusCode}',
+      );
     }
-    return ((jsonDecode(response.body) as Map<String, dynamic>)['proposals'] as List)
+    return ((jsonDecode(response.body) as Map<String, dynamic>)['proposals']
+            as List)
         .cast<Map<String, dynamic>>();
   }
 
@@ -1425,9 +1442,12 @@ class AdminApi {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('Failed to load AI-origin SMS proposals: ${response.statusCode}');
+      throw AdminApiException(
+        'Failed to load AI-origin SMS proposals: ${response.statusCode}',
+      );
     }
-    return ((jsonDecode(response.body) as Map<String, dynamic>)['proposals'] as List)
+    return ((jsonDecode(response.body) as Map<String, dynamic>)['proposals']
+            as List)
         .cast<Map<String, dynamic>>();
   }
 
@@ -1451,7 +1471,9 @@ class AdminApi {
   ///   originalCategorySlug, commitmentCategory (commitment taxonomy or null),
   ///   support {users, messages}, disagreement {users},
   ///   supersededAt, supersededByEventId.
-  Future<List<Map<String, dynamic>>> fetchSmsCorrectionCases({int limit = 100}) async {
+  Future<List<Map<String, dynamic>>> fetchSmsCorrectionCases({
+    int limit = 100,
+  }) async {
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/admin/sms-learning/feedback-events?limit=$limit'),
       headers: _headers,
@@ -1471,7 +1493,9 @@ class AdminApi {
     required String reason,
   }) async {
     final response = await _client.post(
-      Uri.parse('$apiBaseUrl/admin/sms-learning/feedback-events/$eventId/review'),
+      Uri.parse(
+        '$apiBaseUrl/admin/sms-learning/feedback-events/$eventId/review',
+      ),
       headers: _headers,
       body: jsonEncode({'decision': decision, 'reason': reason}),
     );
@@ -1497,7 +1521,9 @@ class AdminApi {
       }),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('Failed to review AI proposal: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'Failed to review AI proposal: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -1518,7 +1544,9 @@ class AdminApi {
       }),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('Failed to review parser proposal: ${response.statusCode} ${response.body}');
+      throw AdminApiException(
+        'Failed to review parser proposal: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -1536,7 +1564,10 @@ class AdminApi {
     return body['bundle'] as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> rollbackSmsRuleBundle(int bundleVersion, {String? reason}) async {
+  Future<Map<String, dynamic>> rollbackSmsRuleBundle(
+    int bundleVersion, {
+    String? reason,
+  }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/admin/sms-rules/$bundleVersion/rollback'),
       headers: _headers,

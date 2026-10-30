@@ -2,6 +2,8 @@
 
 Date: 30 October 2026. Status: implementation specification; no security feature or production deployment described here is complete merely because this document exists.
 
+Source candidate update: the [implementation verification report](admin-console-source-verification-2026-10-30.md) records the private protocol, UI, runtime, migrations and packaging now added, executed local checks and remaining acceptance. Use the [operator runbook](../deploy/admin/RUNBOOK.md) for concrete installation/deployment steps. Production remains unactivated; this specification's completion checklist is not automatically satisfied by the source candidate.
+
 This is the implementation companion to the [reviewed design](admin-console-local-only-design-2026-10-30.md). Use the [Luna coordinator handoff](admin-console-luna-handoff-2026-10-30.md) to assign the work. The original review used commit `78651cf`; implementation preparation subsequently merged master through `32ed071` into `codex/ios-shortcuts-prototype`. Re-read the current merged branch before implementation; never implement against the pre-merge snapshot.
 
 ### Master synchronization review

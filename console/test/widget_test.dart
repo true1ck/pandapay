@@ -831,6 +831,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Acceptance & Rates'), 100);
     await tester.tap(find.text('Acceptance & Rates'));
     await tester.pumpAndSettle();
 

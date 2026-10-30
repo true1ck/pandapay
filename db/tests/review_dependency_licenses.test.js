@@ -11,7 +11,7 @@ test('review deterministically describes current locks and preserves unknown lic
   assert.deepEqual(a, b);
   assert.equal(a.network, 'none');
   assert.equal(a.locks.find(x => x.path === 'api/package-lock.json').license_evidence.known, 98);
-  assert.equal(a.locks.find(x => x.path === 'auth/package-lock.json').license_evidence.known, 186);
+  assert.equal(a.locks.find(x => x.path === 'auth/package-lock.json').license_evidence.known, 210);
   assert.ok(a.locks.find(x => x.ecosystem === 'pod').license_evidence.unknown > 0);
   assert.equal(a.locks.find(x => x.ecosystem === 'swift').license_evidence.unknown, 1);
   const appDart = a.locks.find(x => x.path === 'app/pubspec.lock');

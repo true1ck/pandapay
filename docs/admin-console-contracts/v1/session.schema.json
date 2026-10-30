@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Private admin introspection response v1",
+  "oneOf": [
+    {"type":"object","required":["active"],"properties":{"active":{"const":false}},"additionalProperties":false},
+    {
+      "type":"object",
+      "required":["active","userId","sessionId","assurance","mfaVerifiedAt","expiresAt"],
+      "properties": {
+        "active":{"const":true},"userId":{"type":"string","format":"uuid"},
+        "sessionId":{"type":"string","format":"uuid"},
+        "assurance":{"const":"email+webauthn-uv"},
+        "mfaVerifiedAt":{"type":"string","format":"date-time"},
+        "expiresAt":{"type":"string","format":"date-time"}
+      },
+      "additionalProperties":false
+    }
+  ]
+}

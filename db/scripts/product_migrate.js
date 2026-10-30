@@ -305,6 +305,7 @@ async function main() {
       },
     });
     await configureServiceCapabilities(client, process.env);
+    await require('./admin_permissions').configureAdminApiRuntime(client, process.env);
   } finally {
     client?.release(); await pool.end(); fs.rmSync(temp, { recursive: true, force: true });
   }

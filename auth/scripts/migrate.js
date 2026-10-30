@@ -9,6 +9,7 @@ const path = require('node:path');
 const { safeErrorCode } = require('../src/utils/safeErrorCode');
 const { configureAuthRuntimeRole, isDbAccessLoggingEnabled } = require('./runtimePermissions');
 const { configureConsoleSessionLogin } = require('./consoleSessionPermissions');
+const { configureAdminGatewayRuntime } = require('./adminGatewayPermissions');
 const {configureAuthLifecycleLogin}=require('./authLifecyclePermissions');
 const { canonicalizePhone, phoneLookupHash } = require('../src/utils/encryptedPhoneSearch');
 const { decryptPhoneNumber } = require('../src/utils/fieldEncryption');
@@ -571,6 +572,7 @@ async function runMigrations(pool, {
       dbAccessLoggingEnabled: isDbAccessLoggingEnabled(env),
       securityDashboardEnabled: ['true', '1'].includes(env.ENABLE_ADMIN_DASHBOARD) });
     await configureConsoleSessionLogin(client, env);
+    await configureAdminGatewayRuntime(client, env);
     await configureAuthLifecycleLogin(client, env);
     console.log('Auth migrations and phone hash backfill complete');
   } finally {
