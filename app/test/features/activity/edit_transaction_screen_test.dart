@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/auth_api.dart';
@@ -48,7 +49,9 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   }) async {
     editCalls++;
     if (failFirstEditWithAuth && editCalls == 1) {
-      throw ApiException('PATCH /transactions/:id failed: 401 {"error":"unauthorized"}');
+      throw ApiException(
+        'PATCH /transactions/:id failed: 401 {"error":"unauthorized"}',
+      );
     }
     lastEditArgs = {
       'id': id,
@@ -84,7 +87,24 @@ Future<void> _pump(
   List<UserCard> cards = const [],
   TransactionEntry? initialEntry,
   List<Override> overrides = const [],
+  bool withRouter = false,
 }) async {
+  final editor = EditTransactionScreen(
+    transactionId: 't1',
+    initialEntry: initialEntry,
+  );
+  final router = withRouter
+      ? GoRouter(
+          initialLocation: '/edit',
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (context, state) => const Scaffold(),
+              routes: [GoRoute(path: 'edit', builder: (context, state) => editor)],
+            ),
+          ],
+        )
+      : null;
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -93,12 +113,9 @@ Future<void> _pump(
         categoriesProvider.overrideWith((ref) async => const []),
         ...overrides,
       ],
-      child: MaterialApp(
-        home: EditTransactionScreen(
-          transactionId: 't1',
-          initialEntry: initialEntry,
-        ),
-      ),
+      child: router == null
+          ? MaterialApp(home: editor)
+          : MaterialApp.router(routerConfig: router),
     ),
   );
   await tester.pumpAndSettle();
@@ -173,7 +190,10 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, 'Amount (₹)'), 'NaN');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
-    expect(find.text('Enter a valid amount greater than zero.'), findsOneWidget);
+    expect(
+      find.text('Enter a valid amount greater than zero.'),
+      findsOneWidget,
+    );
     expect(repo.lastEditArgs, isNull);
   });
 
@@ -331,6 +351,72 @@ void main() {
     await tester.pump();
 
     expect(repo.editCalls, 2);
+    expect(
+      SmsFeedbackOutbox(database, namespace: namespace).pending(),
+      hasLength(1),
+    );
+  });
+
+  testWidgets('normal SMS edit captures feedback before leaving the editor', (
+    tester,
+  ) async {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    const namespace = 'user:normal-edit';
+    final receivedAt = DateTime.utc(2026, 10, 28, 10);
+    final sourceKey = SmsIntakeRepository(database).capture(
+      namespace,
+      QueuedSms(
+        sender: 'AD-HDFCBK',
+        body: 'Rs 500 debited at Store on 28-10-2026',
+        receivedAt: receivedAt,
+      ),
+    );
+    final entry = TransactionEntry(
+      id: 't-sms',
+      sourceKey: sourceKey,
+      amount: Money.fromRupees(500),
+      occurredAt: receivedAt,
+      merchantName: 'Store',
+      source: 'sms',
+      status: 'active',
+    );
+    final repo = _FakeUserCardsRepository(entry);
+    final consentCompleter = Completer<ConsentRecord?>();
+    await _pump(
+      tester,
+      repo: repo,
+      initialEntry: entry,
+      withRouter: true,
+      overrides: [
+        cacheNamespaceProvider.overrideWithValue(namespace),
+        responseCacheProvider.overrideWith(
+          (ref) async => ResponseCache(database),
+        ),
+        isOnlineProvider.overrideWith((ref) => Stream.value(false)),
+        smsSharedLearningConsentProvider.overrideWith(
+          (ref) => consentCompleter.future,
+        ),
+      ],
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'Amount (₹)'), '555');
+    await tester.tap(find.text('Save'));
+    await tester.pump();
+    expect(repo.editCalls, 1);
+    expect(find.byType(EditTransactionScreen), findsOneWidget);
+    consentCompleter.complete(
+      ConsentRecord(
+        purpose: smsSharedLearningPurpose,
+        granted: true,
+        grantedAt: DateTime.utc(2026, 10, 1),
+        policyVersion: smsSharedLearningPolicyVersion,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repo.editCalls, 1);
+    expect(repo.lastEditArgs?['amountInr'], 555.0);
+    expect(find.byType(EditTransactionScreen), findsNothing);
     expect(
       SmsFeedbackOutbox(database, namespace: namespace).pending(),
       hasLength(1),

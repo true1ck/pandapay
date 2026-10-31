@@ -79,6 +79,34 @@ void main() {
     expect(intake.pending('a'), hasLength(1));
     expect(intake.pending('b'), hasLength(1));
   });
+  test('receiver and inbox clock skew does not look like another delivery', () {
+    final first = DateTime.fromMillisecondsSinceEpoch(1793445513000);
+    final message = QueuedSms(
+      sender: 'VM-HDFC',
+      body: 'unique payment',
+      receivedAt: first,
+    );
+    intake.remember('a', message);
+    final key = smsSourceKey('a', message.sender, message.body);
+    intake.remember(
+      'a',
+      QueuedSms(
+        sender: message.sender,
+        body: message.body,
+        receivedAt: DateTime.fromMillisecondsSinceEpoch(1793445510563),
+      ),
+    );
+    expect(intake.hasRepeatedOccurrence('a', key), isFalse);
+    intake.remember(
+      'a',
+      QueuedSms(
+        sender: message.sender,
+        body: message.body,
+        receivedAt: first.add(const Duration(minutes: 1)),
+      ),
+    );
+    expect(intake.hasRepeatedOccurrence('a', key), isTrue);
+  });
   test(
     'billing upload visits previous month then two months back before other alerts',
     () {
@@ -111,28 +139,30 @@ void main() {
     },
   );
 
-  test('records source decision and forgetRaw cleans intake while retaining decision', () {
-    final key = smsSourceKey('a', 'VM-HDFC', 'OTP 123456');
-    intake.recordDecision(
-      'a',
-      sourceKey: key,
-      decision: 'ignored_promotion',
-      state: 'final',
-      reasonCode: 'promotional_message',
-      receivedAt: 1729200000000,
-      policyVersion: 'v1',
-    );
+  test(
+    'records source decision and forgetRaw cleans intake while retaining decision',
+    () {
+      final key = smsSourceKey('a', 'VM-HDFC', 'OTP 123456');
+      intake.recordDecision(
+        'a',
+        sourceKey: key,
+        decision: 'ignored_promotion',
+        state: 'final',
+        reasonCode: 'promotional_message',
+        receivedAt: 1729200000000,
+        policyVersion: 'v1',
+      );
 
-    final dec = intake.decision('a', key);
-    expect(dec, isNotNull);
-    expect(dec!.decision, 'ignored_promotion');
-    expect(dec.state, 'final');
-    expect(dec.reasonCode, 'promotional_message');
-    expect(intake.wasProcessed('a', key), isTrue);
+      final dec = intake.decision('a', key);
+      expect(dec, isNotNull);
+      expect(dec!.decision, 'ignored_promotion');
+      expect(dec.state, 'final');
+      expect(dec.reasonCode, 'promotional_message');
+      expect(intake.wasProcessed('a', key), isTrue);
 
-    intake.capture('a', sms('temp'));
-    intake.forgetRaw('a', key);
-    expect(intake.decision('a', key), isNotNull);
-  });
-
+      intake.capture('a', sms('temp'));
+      intake.forgetRaw('a', key);
+      expect(intake.decision('a', key), isNotNull);
+    },
+  );
 }

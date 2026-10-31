@@ -6493,7 +6493,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
            GROUP BY archived_card_id
           HAVING COUNT(*) = 1
         )
-        SELECT t.id, COALESCE(replacement.active_card_id, t.user_card_id) AS user_card_id,
+        SELECT t.id, t.source_key, COALESCE(replacement.active_card_id, t.user_card_id) AS user_card_id,
                t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, t.user_category_id,
                 ucat.parent_user_category_id AS parent_user_category_id,

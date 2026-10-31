@@ -65,7 +65,7 @@ class SmsIntakeRepository {
   SmsIntakeRepository(this.database, {DateTime Function()? now})
     : now = now ?? DateTime.now {
     if (_initialized.add(database.db)) {
-    database.db.execute('''
+      database.db.execute('''
       CREATE TABLE IF NOT EXISTS sms_intake (
         namespace TEXT NOT NULL, id TEXT NOT NULL, sender TEXT NOT NULL,
         body TEXT NOT NULL, received_at INTEGER NOT NULL,
@@ -95,23 +95,23 @@ class SmsIntakeRepository {
         PRIMARY KEY(namespace, source_key)
       );
     ''');
-    if (!database.db
-        .select('PRAGMA table_info(sms_captured_messages)')
-        .any((column) => column['name'] == 'repeated_occurrence')) {
+      if (!database.db
+          .select('PRAGMA table_info(sms_captured_messages)')
+          .any((column) => column['name'] == 'repeated_occurrence')) {
+        database.db.execute(
+          'ALTER TABLE sms_captured_messages ADD COLUMN repeated_occurrence INTEGER NOT NULL DEFAULT 0',
+        );
+      }
+      if (!database.db
+          .select('PRAGMA table_info(sms_intake)')
+          .any((column) => column['name'] == 'next_attempt')) {
+        database.db.execute(
+          'ALTER TABLE sms_intake ADD COLUMN next_attempt INTEGER NOT NULL DEFAULT 0',
+        );
+      }
       database.db.execute(
-        'ALTER TABLE sms_captured_messages ADD COLUMN repeated_occurrence INTEGER NOT NULL DEFAULT 0',
+        'CREATE INDEX IF NOT EXISTS sms_pending_retry ON sms_intake(namespace,next_attempt)',
       );
-    }
-    if (!database.db
-        .select('PRAGMA table_info(sms_intake)')
-        .any((column) => column['name'] == 'next_attempt')) {
-      database.db.execute(
-        'ALTER TABLE sms_intake ADD COLUMN next_attempt INTEGER NOT NULL DEFAULT 0',
-      );
-    }
-    database.db.execute(
-      'CREATE INDEX IF NOT EXISTS sms_pending_retry ON sms_intake(namespace,next_attempt)',
-    );
     }
   }
 
@@ -202,20 +202,24 @@ class SmsIntakeRepository {
     database.db.execute(
       'INSERT INTO sms_captured_messages(namespace,id,sender,body,received_at,repeated_occurrence) VALUES (?,?,?,?,?,0) '
       'ON CONFLICT(namespace,id) DO UPDATE SET repeated_occurrence='
-      'CASE WHEN sms_captured_messages.received_at <> excluded.received_at '
+      // The broadcast PDU time and inbox provider time for one delivery can
+      // differ by a few seconds. Preserve the original time as the anchor.
+      'CASE WHEN ABS(sms_captured_messages.received_at - excluded.received_at) > 10000 '
       'THEN 1 ELSE sms_captured_messages.repeated_occurrence END',
       [namespace, sourceKey, sms.sender, sms.body, receivedAt],
     );
   }
 
-  /// True when this deduplicated source key was observed with another delivery
-  /// timestamp. Its local record remains deduplicated, but it is unsafe to
+  /// True when this deduplicated source key was observed more than ten seconds
+  /// apart. Its local record remains deduplicated, but it is unsafe to
   /// attribute a later correction to one particular SMS occurrence.
-  bool hasRepeatedOccurrence(String namespace, String sourceKey) =>
-      database.db.select(
-        'SELECT 1 FROM sms_captured_messages WHERE namespace=? AND id=? AND repeated_occurrence=1 LIMIT 1',
-        [namespace, sourceKey],
-      ).isNotEmpty;
+  bool hasRepeatedOccurrence(
+    String namespace,
+    String sourceKey,
+  ) => database.db.select(
+    'SELECT 1 FROM sms_captured_messages WHERE namespace=? AND id=? AND repeated_occurrence=1 LIMIT 1',
+    [namespace, sourceKey],
+  ).isNotEmpty;
 
   /// Returns the original SMS captured on this device for a source key.
   /// Raw text never leaves the device through this read path.
@@ -231,7 +235,9 @@ class SmsIntakeRepository {
       QueuedSms(
         sender: row['sender'] as String,
         body: row['body'] as String,
-        receivedAt: DateTime.fromMillisecondsSinceEpoch(row['received_at'] as int),
+        receivedAt: DateTime.fromMillisecondsSinceEpoch(
+          row['received_at'] as int,
+        ),
       ),
     );
   }
