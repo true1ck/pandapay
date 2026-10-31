@@ -13,6 +13,7 @@ import '../../app/providers.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/merchant_identity.dart';
 import '../../data/spending_selection.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
@@ -2328,6 +2329,47 @@ class _SummaryMetric extends StatelessWidget {
   }
 }
 
+/// The tinted pill beside a transaction title — Refund, Reversal or Transfer.
+class _MovementChip extends StatelessWidget {
+  const _MovementChip({
+    required this.label,
+    required this.tint,
+    required this.fillAlpha,
+    required this.borderAlpha,
+    this.textColor,
+  });
+
+  final String label;
+  final Color tint;
+  final double fillAlpha;
+  final double borderAlpha;
+  final Color? textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: fillAlpha),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: tint.withValues(alpha: borderAlpha),
+          width: 0.8,
+        ),
+      ),
+      child: Text(
+        label,
+        style: BambooFonts.ui(
+          10.5,
+          weight: FontWeight.w700,
+          color: textColor ?? tint,
+        ),
+      ),
+    );
+  }
+}
+
 class _TransactionTile extends StatelessWidget {
   final TransactionEntry entry;
   final VoidCallback onTap;
@@ -2384,14 +2426,16 @@ class _TransactionTile extends StatelessWidget {
           ? (entry.smsReceivedAt ?? entry.occurredAt)
           : entry.occurredAt,
     );
-    // v2 list convention (vibe_images/activity-transfer-row.html): the stored
-    // SMS merchant is "Transfer to X"; the row shows X and moves "Transfer"
-    // into the Refund/Reversal chip slot so the cue survives a list scan.
+    // SMS import stores a P2P transfer as "Transfer to <payee>". Showing the
+    // payee and moving "Transfer" into the chip slot keeps the cue when the
+    // list is scanned (docs/design/spending-activity-redesign-2026-10-20.html).
     final merchantDisplay = entry.merchantName ?? entryLabel;
-    final transferParty = RegExp(
-      r'^Transfer to (.+)$',
-      caseSensitive: false,
-    ).firstMatch(merchantDisplay)?.group(1);
+    final transferPayee = MerchantIdentity.transferPayee(merchantDisplay);
+    // The payee-first title only exists to free the chip slot. When Refund or
+    // Reversal claims it, the name keeps its verb — a row must not lose the
+    // transfer cue and the chip in the same breath.
+    final showTransferChip = transferPayee != null && !isRefund && !isReversal;
+    final nameDisplay = showTransferChip ? transferPayee : merchantDisplay;
     final subtitleParts = <String>[
       isSmsImported ? '$timeLabel · SMS' : timeLabel,
       if (entry.entryKind != TxnEntryKind.spend || isInvestmentCategory)
@@ -2417,9 +2461,15 @@ class _TransactionTile extends StatelessWidget {
           entry.rewardState == 'estimated' &&
           (entry.source == 'sms' || entry.source == 'sms_bulk'))
         'Pending confirmation',
+      // The Transfer chip is what replaces this segment, so the category goes
+      // only when the chip is actually on the row. `other` is one of the
+      // canonical fifteen and a user can pick it deliberately — nothing here
+      // can tell that apart from an auto-assigned one, and a real subcategory
+      // ("Other · UPI") still earns its place.
       if (entry.categoryName != null &&
-          !(transferParty != null &&
-              entry.categoryLabel.toLowerCase() == 'other'))
+          !(showTransferChip &&
+              entry.categoryName!.toLowerCase() == 'other' &&
+              entry.subcategoryName == null))
         entry.categoryLabel,
     ];
     // See account_screen.dart's _AccountTile for why Pressable, not InkWell.
@@ -2522,7 +2572,7 @@ class _TransactionTile extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            transferParty ?? merchantDisplay,
+                            nameDisplay,
                             // Two lines of the real name beat one line of an
                             // ellipsis — Indian merchant strings routinely need
                             // the full 25 characters ("Shantesh gurudas gaude").
@@ -2536,81 +2586,30 @@ class _TransactionTile extends StatelessWidget {
                         ),
                         if (isRefund) ...[
                           const SizedBox(width: AppSpace.xs),
-                          Container(
-                            margin: const EdgeInsets.only(top: 2),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1.5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: BambooInk.jade.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: BambooInk.jade.withValues(alpha: 0.3),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Text(
-                              'Refund',
-                              style: BambooFonts.ui(
-                                10.5,
-                                weight: FontWeight.w700,
-                                color: BambooInk.jade,
-                              ),
-                            ),
+                          const _MovementChip(
+                            label: 'Refund',
+                            tint: BambooInk.jade,
+                            fillAlpha: 0.12,
+                            borderAlpha: 0.3,
                           ),
                         ] else if (isReversal) ...[
                           const SizedBox(width: AppSpace.xs),
-                          Container(
-                            margin: const EdgeInsets.only(top: 2),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1.5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: BambooInk.amber.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: BambooInk.amber.withValues(alpha: 0.35),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Text(
-                              'Reversal',
-                              style: BambooFonts.ui(
-                                10.5,
-                                weight: FontWeight.w700,
-                                color: BambooInk.amber,
-                              ),
-                            ),
+                          const _MovementChip(
+                            label: 'Reversal',
+                            tint: BambooInk.amber,
+                            fillAlpha: 0.15,
+                            borderAlpha: 0.35,
                           ),
-                        ] else if (transferParty != null) ...[
-                          // Neutral chip, matching the Option B spec (ink on
-                          // rgba(43,49,58,.07)); jade/amber stay reserved for
+                        ] else if (showTransferChip) ...[
+                          // Neutral: jade and amber stay reserved for the
                           // Refund/Reversal money moves.
                           const SizedBox(width: AppSpace.xs),
-                          Container(
-                            margin: const EdgeInsets.only(top: 2),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1.5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: BambooInk.ink900.withValues(alpha: 0.07),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: BambooInk.ink900.withValues(alpha: 0.14),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Text(
-                              'Transfer',
-                              style: BambooFonts.ui(
-                                10.5,
-                                weight: FontWeight.w700,
-                                color: BambooInk.ink700,
-                              ),
-                            ),
+                          const _MovementChip(
+                            label: 'Transfer',
+                            tint: BambooInk.ink900,
+                            fillAlpha: 0.07,
+                            borderAlpha: 0.14,
+                            textColor: BambooInk.ink700,
                           ),
                         ],
                       ],

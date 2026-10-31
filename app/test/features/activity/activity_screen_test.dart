@@ -85,6 +85,8 @@ TransactionEntry _txn({
   String? merchantName,
   String? categoryId,
   String? categoryName,
+  String? subcategoryName,
+  String? note,
   List<TransactionTag> tags = const [],
   String userCardId = 'uc1',
   TxnEntryKind entryKind = TxnEntryKind.spend,
@@ -97,11 +99,13 @@ TransactionEntry _txn({
     merchantName: merchantName,
     categoryId: categoryId,
     categoryName: categoryName,
+    subcategoryName: subcategoryName,
     tags: tags,
     userCardId: userCardId,
     entryKind: entryKind,
     source: source,
     status: 'active',
+    note: note,
   );
 }
 
@@ -355,7 +359,6 @@ void main() {
         occurredAt: DateTime(2026, 10, 20, 18, 5),
         source: 'sms',
         merchantName: 'Transfer to Akriti',
-        // A user-picked category must survive; only filler "Other" is dropped.
         categoryName: 'Food',
       ),
     ]);
@@ -366,12 +369,117 @@ void main() {
     expect(find.text('Transfer to Zephr'), findsNothing);
     expect(find.text('Transfer'), findsNWidgets(2));
 
+    // `other` is one of the canonical fifteen, so a transfer whose category is
+    // bare Other loses it to keep the subtitle short — a user picking Other
+    // loses it too, and nothing here can tell the two apart.
     final zephrSubtitle =
         tester.widget<Text>(find.textContaining('6:10 PM · SMS')).data!;
     expect(zephrSubtitle.contains('Other'), isFalse);
     final akritiSubtitle =
         tester.widget<Text>(find.textContaining('6:05 PM · SMS')).data!;
     expect(akritiSubtitle.contains('Food'), isTrue);
+  });
+
+  testWidgets('reads the payee from a loosely spaced name and keeps a '
+      'transfer subcategory', (tester) async {
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'transfer-c',
+        amount: Money.fromRupees(90),
+        occurredAt: DateTime(2026, 10, 20, 18, 10),
+        source: 'sms',
+        merchantName: 'Transfer to  Meera',
+        categoryName: 'Rent',
+      ),
+      _txn(
+        id: 'transfer-d',
+        amount: Money.fromRupees(60),
+        occurredAt: DateTime(2026, 10, 20, 18, 5),
+        source: 'sms',
+        merchantName: 'Transfer to Rahul',
+        categoryName: 'Other',
+        subcategoryName: 'UPI',
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    expect(find.text('Meera'), findsOneWidget);
+    expect(find.text('Rahul'), findsOneWidget);
+    expect(find.text('Transfer'), findsNWidgets(2));
+    // A real subcategory earns its place back.
+    final rahulSubtitle =
+        tester.widget<Text>(find.textContaining('6:05 PM · SMS')).data!;
+    expect(rahulSubtitle.contains('Other · UPI'), isTrue);
+  });
+
+  testWidgets('drops the bare Other category only on transfer rows', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'spend-e',
+        amount: Money.fromRupees(430),
+        occurredAt: DateTime(2026, 10, 20, 18, 10),
+        source: 'sms',
+        merchantName: 'BOMBAY BAZAAR',
+        categoryName: 'Other',
+      ),
+      _txn(
+        id: 'transfer-a',
+        amount: Money.fromRupees(150),
+        occurredAt: DateTime(2026, 10, 20, 18, 5),
+        source: 'sms',
+        merchantName: 'Transfer to Zephr',
+        categoryName: 'Other',
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    final bazaarSubtitle =
+        tester.widget<Text>(find.textContaining('6:10 PM · SMS')).data!;
+    expect(bazaarSubtitle.contains('Other'), isTrue);
+    final zephrSubtitle =
+        tester.widget<Text>(find.textContaining('6:05 PM · SMS')).data!;
+    expect(zephrSubtitle.contains('Other'), isFalse);
+  });
+
+  testWidgets('keeps the transfer verb when a refund takes the chip slot', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'refund-transfer',
+        amount: Money.fromRupees(150),
+        occurredAt: DateTime(2026, 10, 20, 18, 10),
+        source: 'sms',
+        merchantName: 'Transfer to Zephr',
+        categoryName: 'Other',
+        note: 'Excluded from spend [ignored: refund]',
+      ),
+      _txn(
+        id: 'reversal-transfer',
+        amount: Money.fromRupees(147),
+        occurredAt: DateTime(2026, 10, 20, 18, 5),
+        source: 'sms',
+        merchantName: 'Transfer to Akriti',
+        note: 'Excluded from spend [ignored: reversal]',
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    // The payee-first title exists only to free the chip slot. With Refund or
+    // Reversal in it, the name keeps its verb so the row does not lose both.
+    expect(find.text('Transfer to Zephr'), findsOneWidget);
+    expect(find.text('Transfer to Akriti'), findsOneWidget);
+    expect(find.text('Zephr'), findsNothing);
+    expect(find.text('Akriti'), findsNothing);
+    expect(find.text('Refund'), findsOneWidget);
+    expect(find.text('Reversal'), findsOneWidget);
+    expect(find.text('Transfer'), findsNothing);
+    // No chip on the row, so nothing replaces the category segment either.
+    final refundSubtitle =
+        tester.widget<Text>(find.textContaining('6:10 PM · SMS')).data!;
+    expect(refundSubtitle.contains('Other'), isTrue);
   });
 
   testWidgets('offers useful date presets for faster activity tracking', (
