@@ -2006,7 +2006,7 @@ void main() {
     expect(find.byIcon(Icons.hourglass_top_rounded), findsNothing);
   });
 
-  testWidgets('background report reload keeps the Spending header mounted', (
+  testWidgets('background report reload hides prior report content', (
     tester,
   ) async {
     final refreshed = Completer<SpendReport?>();
@@ -2034,14 +2034,13 @@ void main() {
     await tester.pumpAndSettle();
     final header = find.byKey(headerKey);
     expect(header, findsOneWidget);
-    final originalElement = tester.element(header);
 
     final container = ProviderScope.containerOf(tester.element(header));
     container.read(_reportRefreshGeneration.notifier).state++;
     await tester.pump();
-    expect(header, findsOneWidget);
-    expect(tester.element(header), same(originalElement));
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    await tester.pump();
+    expect(header, findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     refreshed.complete(_report(spend: 43000));
     await tester.pumpAndSettle();

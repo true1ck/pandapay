@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
+import '../../app/startup_timing.dart';
 import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart'
@@ -67,6 +69,8 @@ import 'home_context_line.dart';
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
+  static bool _firstFrameScheduled = false;
+
   static const _categories = [
     ('groceries', 'Groceries', Icons.local_grocery_store_rounded),
     ('fuel', 'Fuel', Icons.local_gas_station_rounded),
@@ -96,6 +100,12 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (kProfileMode && !_firstFrameScheduled) {
+      _firstFrameScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        markStartup('Home first frame');
+      });
+    }
     // Start the server refresh in the background. The recommendation inputs
     // are cache-first, so this does not delay the first Home frame.
     ref.watch(homeDataRefreshProvider);

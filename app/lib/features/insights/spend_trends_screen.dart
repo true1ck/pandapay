@@ -259,11 +259,8 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
             ),
             Expanded(
               child: report.when(
-                // A background dependency refresh retains the previous
-                // report. Keep its header/body mounted while fresh data is
-                // fetched so the Spending screen does not flash a spinner or
-                // reset its local scroll and tab state.
-                skipLoadingOnReload: true,
+                skipLoadingOnRefresh: false,
+                skipLoadingOnReload: false,
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, _) => ErrorState(
                   message: userFacingErrorMessage(err),

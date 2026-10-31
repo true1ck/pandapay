@@ -537,8 +537,10 @@ class FinancialStore {
         'JOIN sms_captured_messages m '
         'ON m.namespace=e.namespace AND m.id=e.source_key '
         "WHERE e.namespace=? AND e.entity='transactions' AND e.pending=1 "
-        "AND e.id LIKE 'local-sms:%'",
-        [ns],
+        "AND e.id LIKE 'local-sms:%' "
+        'AND NOT EXISTS (SELECT 1 FROM local_repairs r '
+        'WHERE r.namespace=e.namespace AND r.repair_key=? || e.source_key)',
+        [ns, 'provisional_merchant_v1:${LocalSmsParser.version}:'],
       );
       for (final row in rows) {
         final id = row['id'] as String;
@@ -644,8 +646,10 @@ class FinancialStore {
         'JOIN sms_captured_messages m '
         'ON m.namespace=e.namespace AND m.id=e.source_key '
         "WHERE e.namespace=? AND e.entity='transactions' AND e.pending=1 "
-        "AND e.id LIKE 'local-sms:%'",
-        [ns],
+        "AND e.id LIKE 'local-sms:%' "
+        'AND NOT EXISTS (SELECT 1 FROM local_repairs r '
+        'WHERE r.namespace=e.namespace AND r.repair_key=? || e.source_key)',
+        [ns, 'declined_txn_repair_v1:${LocalSmsParser.version}:'],
       );
       for (final row in rows) {
         final id = row['id'] as String;

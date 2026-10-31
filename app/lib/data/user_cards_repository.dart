@@ -1362,6 +1362,7 @@ class UserCardsRepository {
   final String apiBaseUrl;
   final String accessToken;
   final http.Client _client;
+  final Map<String, Future<List<TransactionEntry>>> _inFlightTransactions = {};
 
   /// The server accepted this stable manual mutation, including an outbox
   /// retry. Local tag links can now move from local-outbox:<mutation> to id.
@@ -2354,7 +2355,7 @@ class UserCardsRepository {
     String? userCategoryId,
     String? source,
     String? query,
-  }) async {
+  }) {
     final params = <String, String>{
       if (from != null) 'from': _dateOnly(from),
       if (to != null) 'to': _dateOnly(to),
@@ -2373,6 +2374,20 @@ class UserCardsRepository {
     final uri = Uri.parse(
       '$apiBaseUrl/transactions',
     ).replace(queryParameters: params.isEmpty ? null : params);
+    final key = uri.toString();
+    final existing = _inFlightTransactions[key];
+    if (existing != null) return existing;
+    final request = _fetchTransactions(uri);
+    _inFlightTransactions[key] = request;
+    request.whenComplete(() {
+      if (identical(_inFlightTransactions[key], request)) {
+        _inFlightTransactions.remove(key);
+      }
+    }).ignore();
+    return request;
+  }
+
+  Future<List<TransactionEntry>> _fetchTransactions(Uri uri) async {
     final response = await _client
         .get(uri, headers: _headers)
         .timeout(_transactionRequestTimeout);

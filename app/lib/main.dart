@@ -79,6 +79,10 @@ void main() {
       WidgetsFlutterBinding.ensureInitialized();
       SemanticsBinding.instance.ensureSemantics();
     }
+    if (kProfileMode) {
+      WidgetsFlutterBinding.ensureInitialized();
+      installProfileFrameTiming();
+    }
     runApp(const ProviderScope(child: PandaPayApp()));
     if (kProfileMode) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
