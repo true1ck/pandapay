@@ -381,7 +381,10 @@ class FinancialStore {
     String? id,
   }) {
     repairAutoPayArtifacts(ns);
-    if (entity == 'transactions') _repairProvisionalMerchantNames(ns);
+    if (entity == 'transactions') {
+      _repairProvisionalMerchantNames(ns);
+      _deleteProvisionalDeclineTransactions(ns);
+    }
     final args = <Object?>[ns, entity];
     var range = '';
     if (id != null) {
@@ -509,7 +512,7 @@ class FinancialStore {
     }
   }
 
-  static const _provisionalMerchantRepairPrefix = 'local-sms:';
+  static const _provisionalSmsIdPrefix = 'local-sms:';
 
   // Confirmed names lack reliable manual-edit provenance and must not be rewritten.
   void _repairProvisionalMerchantNames(String ns) {
@@ -541,7 +544,7 @@ class FinancialStore {
         final id = row['id'] as String;
         final sourceKey = row['source_key'] as String?;
         if (sourceKey == null ||
-            id != '$_provisionalMerchantRepairPrefix$sourceKey') {
+            id != '$_provisionalSmsIdPrefix$sourceKey') {
           continue;
         }
         final marker = _provisionalMerchantRepairMarker(sourceKey);
@@ -584,14 +587,14 @@ class FinancialStore {
               transaction.amount.paise != Money.fromRupees(amount).paise ||
               decoded['instrument'] != transaction.instrument.wireValue ||
               decoded['entry_kind'] != transaction.entryKind.wireValue) {
-            _markProvisionalMerchantRepair(ns, marker);
+            _markLocalRepair(ns, marker);
             continue;
           }
           final cleaned = MerchantIdentity.cleanName(
             transaction.merchantName,
           );
           if (cleaned == null || MerchantIdentity.isWeakName(cleaned)) {
-            _markProvisionalMerchantRepair(ns, marker);
+            _markLocalRepair(ns, marker);
             continue;
           }
           if (_updateProvisionalMerchant(
@@ -602,7 +605,7 @@ class FinancialStore {
             decoded,
             cleaned,
           )) {
-            _markProvisionalMerchantRepair(ns, marker);
+            _markLocalRepair(ns, marker);
           }
         } catch (_) {
           // One malformed capture must not stop the rest of the pass.
@@ -610,6 +613,142 @@ class FinancialStore {
       }
     } catch (_) {
       // Best-effort local repair; reading must never fail because of it.
+    }
+  }
+
+  // A decline notice is not a spend, but v22 stored one as one: the bare
+  // "Txn of Rs X" shape counted as movement evidence and "due to insufficient
+  // balance" became the payee. Only a capture the current grammar positively
+  // calls a failed attempt qualifies, and a downloaded rule could not have
+  // made it a spend either (LocalSmsParser blocks posted-movement rules on
+  // decline wording), so the surviving row is necessarily an older artefact.
+  void _deleteProvisionalDeclineTransactions(String ns) {
+    try {
+      final hasCaptures = database.db
+          .select(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='sms_captured_messages'",
+          )
+          .isNotEmpty;
+      if (!hasCaptures) return;
+      _ensureLocalRepairsTable();
+      final hasAutoResolution = database.db
+          .select(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='local_auto_resolved_history'",
+          )
+          .isNotEmpty;
+      final rows = database.db.select(
+        'SELECT e.id, e.payload, e.source_key, m.sender, m.body, '
+        'm.received_at FROM financial_entities e '
+        'JOIN sms_captured_messages m '
+        'ON m.namespace=e.namespace AND m.id=e.source_key '
+        "WHERE e.namespace=? AND e.entity='transactions' AND e.pending=1 "
+        "AND e.id LIKE 'local-sms:%'",
+        [ns],
+      );
+      for (final row in rows) {
+        final id = row['id'] as String;
+        final sourceKey = row['source_key'] as String?;
+        if (sourceKey == null ||
+            id != '$_provisionalSmsIdPrefix$sourceKey') {
+          continue;
+        }
+        final marker = _declinedTransactionRepairMarker(sourceKey);
+        if (database.db.select(
+          'SELECT 1 FROM local_repairs WHERE namespace=? AND repair_key=?',
+          [ns, marker],
+        ).isNotEmpty) {
+          continue;
+        }
+        final decoded = jsonDecode(row['payload'] as String);
+        if (decoded is! Map<String, dynamic>) continue;
+        if (!_isUnclaimedProvisionalSmsTransaction(
+          database,
+          ns,
+          id,
+          sourceKey,
+          decoded,
+          hasAutoResolution: hasAutoResolution,
+        )) {
+          continue;
+        }
+        try {
+          final receivedMs = row['received_at'];
+          final receivedAt = receivedMs is int
+              ? DateTime.fromMillisecondsSinceEpoch(receivedMs)
+              : DateTime.tryParse(receivedMs?.toString() ?? '');
+          if (receivedAt == null) continue;
+          final parsed = LocalSmsParser.parse(
+            namespace: ns,
+            sender: row['sender'] as String,
+            body: row['body'] as String,
+            receivedAt: receivedAt,
+          );
+          if (parsed != null &&
+              parsed.transaction == null &&
+              parsed.eventType == LocalSmsEventType.failed &&
+              parsed.disposition == LocalSmsDisposition.localIgnore &&
+              _deleteProvisionalTransaction(ns, id, sourceKey)) {
+            // The capture is still queued for the hosted parser, which parses
+            // raw bodies independently and would hand the phantom back as a
+            // synced transaction. A v23 capture of this message acknowledges
+            // it locally, so the repair does the same.
+            _acknowledgeDeclinedCapture(ns, sourceKey);
+          }
+          _markLocalRepair(ns, marker);
+        } catch (_) {
+          // One malformed capture must not stop the rest of the pass.
+        }
+      }
+    } catch (_) {
+      // Best-effort local repair; reading must never fail because of it.
+    }
+  }
+
+  bool _deleteProvisionalTransaction(
+    String ns,
+    String id,
+    String sourceKey,
+  ) {
+    database.db.execute(
+      "DELETE FROM financial_entities WHERE namespace=? "
+      "AND entity='transactions' AND id=? AND pending=1 AND source_key=? "
+      'AND NOT EXISTS (SELECT 1 FROM sync_pending_changes p '
+      "WHERE p.namespace=? AND p.entity='transactions' AND p.entity_id=?) "
+      'AND NOT EXISTS (SELECT 1 FROM financial_source_receipts r '
+      'WHERE r.namespace=? AND r.source_key=?)',
+      [ns, id, sourceKey, ns, id, ns, sourceKey],
+    );
+    return database.db.updatedRows > 0;
+  }
+
+  void _acknowledgeDeclinedCapture(String ns, String sourceKey) {
+    final hasIntake = database.db
+        .select(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sms_intake'",
+        )
+        .isNotEmpty;
+    if (!hasIntake) return;
+    database.db.execute(
+      'UPDATE sms_captured_messages SET processed=1 WHERE namespace=? AND id=?',
+      [ns, sourceKey],
+    );
+    database.db.execute(
+      'DELETE FROM sms_intake WHERE namespace=? AND id=?',
+      [ns, sourceKey],
+    );
+    if (database.db
+        .select(
+          "SELECT 1 FROM sqlite_master WHERE type='table' "
+          "AND name='sms_source_decisions'",
+        )
+        .isNotEmpty) {
+      database.db.execute(
+        "UPDATE sms_source_decisions SET state='final' "
+        'WHERE namespace=? AND source_key=?',
+        [ns, sourceKey],
+      );
     }
   }
 
@@ -634,7 +773,7 @@ class FinancialStore {
       final id = row['id'] as String;
       final sourceKey = row['source_key'] as String?;
       if (sourceKey == null ||
-          id != '$_provisionalMerchantRepairPrefix$sourceKey') {
+          id != '$_provisionalSmsIdPrefix$sourceKey') {
         return false;
       }
       final decoded = jsonDecode(row['payload'] as String);
@@ -707,16 +846,40 @@ class FinancialStore {
     Map<String, dynamic> payload, {
     required bool hasAutoResolution,
   }) {
-    if (payload['id'] != id ||
-        payload['source_key'] != sourceKey ||
-        payload['source'] != 'sms' ||
-        payload['status'] != 'active') {
+    if (!_isUnclaimedProvisionalSmsTransaction(
+      database,
+      ns,
+      id,
+      sourceKey,
+      payload,
+      hasAutoResolution: hasAutoResolution,
+    )) {
       return false;
     }
     final currentName = payload['merchant_name'];
     if (currentName is String) {
       if (!MerchantIdentity.isWeakName(currentName)) return false;
     } else if (currentName != null) {
+      return false;
+    }
+    return true;
+  }
+
+  /// Device-only SMS previews whose row and source capture are still the ones
+  /// this pass read, and that nothing else has claimed: no server receipt, no
+  /// queued mutation, no user correction. Local repairs stop here.
+  static bool _isUnclaimedProvisionalSmsTransaction(
+    AppDatabase database,
+    String ns,
+    String id,
+    String sourceKey,
+    Map<String, dynamic> payload, {
+    required bool hasAutoResolution,
+  }) {
+    if (payload['id'] != id ||
+        payload['source_key'] != sourceKey ||
+        payload['source'] != 'sms' ||
+        payload['status'] != 'active') {
       return false;
     }
     if (database.db.select(
@@ -747,7 +910,10 @@ class FinancialStore {
   static String _provisionalMerchantRepairMarker(String sourceKey) =>
       'provisional_merchant_v1:${LocalSmsParser.version}:$sourceKey';
 
-  void _markProvisionalMerchantRepair(String ns, String marker) {
+  static String _declinedTransactionRepairMarker(String sourceKey) =>
+      'declined_txn_repair_v1:${LocalSmsParser.version}:$sourceKey';
+
+  void _markLocalRepair(String ns, String marker) {
     database.db.execute(
       'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
       [ns, marker],
