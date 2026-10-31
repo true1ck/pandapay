@@ -20,7 +20,8 @@ Updated 31 October 2026. Branch `codex/ios-shortcuts-prototype`, ahead of origin
 - Home refresh can finish before cache-first transaction network refresh, then invalidate reports. Repository single-flight only deduplicates identical requests on one repository instance. Define account-scoped refresh owner and publication semantics.
 - SMS coalescer can still schedule a second broad pass. Measure due work, backlogs, AI polls, account switches and frame overlap before splitting jobs.
 - Account-safe stale-content retention for Activity, Spending, Wallet and Subscriptions needs namespace/query keyed data ownership and tests. Current safe loading behavior can flicker.
-- Existing `integration_test/security_storage_key_test.dart` was attempted against the connected emulator; Gradle spent 141.2 s and failed to produce an APK. Integration execution needs a separate Gradle/build investigation before it can be a release gate.
+- Integration test setup is flavor-sensitive: the unflavored `flutter test integration_test/security_storage_key_test.dart` spent 141.2 s and failed to produce an APK. The correct `--flavor dev` command built `assembleDevDebug` and passed the native secure-storage test 1/1. It initially hit a version downgrade and the tool uninstalled the older emulator package before installing the test APK; the emulator's app data is therefore no longer a valid preserved-data performance baseline and must be re-seeded before another cold-start comparison.
+- Full `flutter test --no-pub --reporter compact` was started but stopped after 3m46s at roughly 1,420 tests, with at least 12 failures in portable-backup and Activity fixture scenarios and additional long-running cases. It is not a green release gate; focused suites remain the scoped-change gate until the full-suite isolation failures are triaged.
 
 ## Immediate next actions
 
