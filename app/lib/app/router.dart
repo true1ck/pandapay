@@ -960,6 +960,7 @@ class _AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<_AppShell> {
   bool _scanning = false;
+  bool _lifecycleStarted = false;
   int _tutorialNavigationRevision = 0;
   bool _finishingTutorial = false;
 
@@ -980,6 +981,15 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // restart or a test rebuild) so a stale pushed-route state cannot hide
     // the tab bar permanently.
     _shellStackNotEmpty.value = false;
+    // The shell owns long-lived sync/listener providers, but starting every
+    // one during the first build competes with the first visible page for the
+    // UI isolate and database. Let the route paint once, then start the
+    // background pipeline. Child pages remain local-first and can render from
+    // their own cached providers immediately.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _lifecycleStarted = true);
+    });
   }
 
   // Labels match the design doc's own nav copy ("02 Wallet" / "05 You")
@@ -1089,39 +1099,46 @@ class _AppShellState extends ConsumerState<_AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    // Runs sessionKeepAliveProvider for the app's whole lifetime — the shell
-    // is the one widget guaranteed to stay mounted across every tab.
-    ref.watch(sessionKeepAliveProvider);
-    // UA-0.3 offline cache lifecycle — clears the per-user cache on
-    // sign-out, and flushes the B6 offline outbox the moment connectivity
-    // returns. Same "read once from the shell" reasoning as
-    // sessionKeepAliveProvider above.
-    ref.watch(cacheLifecycleProvider);
-    ref.watch(outboxFlushProvider);
-    // Plan Phase 1.1: on each sign-in, pull the account's preference blob
-    // down onto this device. Anonymous wallet migration is intentionally
-    // gone because this build does not permit guest sessions.
-    ref.watch(settingsSyncLifecycleProvider);
-    // Plan Phase 2.2 — the top of the activation funnel. Fired from the
-    // shell's initState (see _appOpenedTracked) rather than build, which
-    // runs on every tab switch.
-    ref.watch(analyticsLifecycleProvider);
-    // Plan Phase 4 — pushes queued local edits and pulls other devices'
-    // changes on sign-in and on regaining connectivity.
-    ref.watch(syncLifecycleProvider);
-    // Keep the persistent display snapshot fresh even when the user is on
-    // Wallet/Insights/You rather than Home. Secondary screens can therefore
-    // render their last local snapshot offline and receive a background
-    // refresh when the app resumes or connectivity returns.
-    ref.watch(displayDataSyncLifecycleProvider);
-    ref.watch(homeDataRefreshProvider);
-    // UA-8.3 (B3) — the trigger sweep for caps/milestones/fee-waivers/bills/
-    // points-expiry/monthly-report/needs-review notifications. Same "read
-    // once from the shell" reasoning as everything else on this list.
-    ref.watch(notificationTriggerLifecycleProvider);
-    ref.watch(smsBackgroundFlushProvider);
-    ref.watch(smsListenerLifecycleProvider);
-    ref.watch(iosSmsIntakeLifecycleProvider);
+    if (_lifecycleStarted) {
+      // Runs sessionKeepAliveProvider for the app's whole lifetime — the shell
+      // is the one widget guaranteed to stay mounted across every tab.
+      ref.watch(sessionKeepAliveProvider);
+      // UA-0.3 offline cache lifecycle — clears the per-user cache on
+      // sign-out, and flushes the B6 offline outbox the moment connectivity
+      // returns. Same "read once from the shell" reasoning as
+      // sessionKeepAliveProvider above.
+      ref.watch(cacheLifecycleProvider);
+      ref.watch(outboxFlushProvider);
+      // Plan Phase 1.1: on each sign-in, pull the account's preference blob
+      // down onto this device. Anonymous wallet migration is intentionally
+      // gone because this build does not permit guest sessions.
+      ref.watch(settingsSyncLifecycleProvider);
+      // Plan Phase 2.2 — the top of the activation funnel. Fired from the
+      // shell's initState (see _appOpenedTracked) rather than build, which
+      // runs on every tab switch.
+      ref.watch(analyticsLifecycleProvider);
+      // Plan Phase 4 — pushes queued local edits and pulls other devices'
+      // changes on sign-in and on regaining connectivity.
+      ref.watch(syncLifecycleProvider);
+      // Keep the persistent display snapshot fresh even when the user is on
+      // Wallet/Insights/You rather than Home. Secondary screens can therefore
+      // render their last local snapshot offline and receive a background
+      // refresh when the app resumes or connectivity returns.
+      ref.watch(displayDataSyncLifecycleProvider);
+      // Home owns its coordinated refresh. Starting the same six-request
+      // burst from the shell made every first visit (including Wallet,
+      // Activity and Insights) compete with the page's local-first frame.
+      // HomeScreen watches this provider when Home is actually visible;
+      // displayDataSyncLifecycleProvider remains the cross-tab background
+      // snapshot owner.
+      // UA-8.3 (B3) — the trigger sweep for caps/milestones/fee-waivers/bills/
+      // points-expiry/monthly-report/needs-review notifications. Same "read
+      // once from the shell" reasoning as everything else on this list.
+      ref.watch(notificationTriggerLifecycleProvider);
+      ref.watch(smsBackgroundFlushProvider);
+      ref.watch(smsListenerLifecycleProvider);
+      ref.watch(iosSmsIntakeLifecycleProvider);
+    }
     final tutorialKeys = ref.watch(tutorialKeysProvider);
     // Keep one guide mounted while it moves between Home, Quick add and
     // Insights/Spending. Only its own navigation controls change the view.
