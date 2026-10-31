@@ -4779,6 +4779,11 @@ const _transactionsCacheKey = 'transactions';
 // Keep one quiet refresh per cache key so local-first rendering never creates
 // a burst of identical network requests.
 final _backgroundTransactionRefreshes = <String, Future<void>>{};
+// Cold-start consumers can ask for the same transaction window at once
+// (Home, Activity and a report projection). Share the network + SQLite
+// materialization for that exact account/query instead of letting each
+// provider run a full fetch and synchronous save on the UI isolate.
+final _transactionFetches = <String, Future<List<TransactionEntry>>>{};
 final _backgroundCardRefreshes = <String, Future<void>>{};
 final _backgroundDisplayRefreshes = <String, Future<void>>{};
 
@@ -5738,7 +5743,11 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   final store = cache?.financialStore;
   store?.migrateLegacy(namespace);
   final local = store?.transactions(namespace, filter);
-  final key = '$namespace:${filter.key}';
+  // Keep the single-flight scope inside one repository/cache owner. The
+  // namespace prevents account crossover, while the repository identity
+  // prevents an in-flight request from one ProviderContainer (or test cache)
+  // being reused by a different owner that happens to use the same namespace.
+  final key = '${identityHashCode(repo)}:$namespace:${filter.key}';
 
   Future<List<TransactionEntry>> fetchAndStore() async {
     final requestedAt = DateTime.now();
@@ -5778,6 +5787,22 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     }
   }
 
+  Future<List<TransactionEntry>> fetchShared() {
+    final existing = _transactionFetches[key];
+    if (existing != null) return existing;
+
+    late Future<List<TransactionEntry>> work;
+    work = fetchAndStore().whenComplete(() {
+      // A later account/query may have replaced this entry after a failure;
+      // never remove that newer work when the old future completes.
+      if (identical(_transactionFetches[key], work)) {
+        _transactionFetches.remove(key);
+      }
+    });
+    _transactionFetches[key] = work;
+    return work;
+  }
+
   // A known empty result has coverage too. Reading any surface never waits
   // for a network refresh when its saved content is available.
   if (local != null) {
@@ -5786,7 +5811,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
             DateTime.now().difference(local.fetchedAt) >=
                 const Duration(seconds: 15)) &&
         !_backgroundTransactionRefreshes.containsKey(key)) {
-      final work = fetchAndStore()
+      final work = fetchShared()
           .then((_) async {
             if (onBackgroundRefresh != null) await onBackgroundRefresh();
           })
@@ -5801,7 +5826,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     return local.rows;
   }
   try {
-    final rows = await fetchAndStore();
+    final rows = await fetchShared();
     ready = true;
     return rows;
   } catch (error) {

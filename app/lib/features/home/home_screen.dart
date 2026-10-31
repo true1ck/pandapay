@@ -66,7 +66,7 @@ import 'home_context_line.dart';
 /// The shell (app/router.dart's `_AppShell`) deliberately draws no AppBar,
 /// so this screen's own scroll padding covers the status bar — see that
 /// file for why.
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   static bool _firstFrameScheduled = false;
@@ -99,9 +99,30 @@ class HomeScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (kProfileMode && !_firstFrameScheduled) {
-      _firstFrameScheduled = true;
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+/// Keeps the first authenticated frame cheap on populated accounts. Home's
+/// route is already local-first, but recommendations, widget publication and
+/// the engagement receipt can still fan out into synchronous projections while
+/// the first populated frame is being rasterized. Present the local shell,
+/// then attach those secondary consumers on the next frame.
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  var _showDeferredSections = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _showDeferredSections = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (kProfileMode && !HomeScreen._firstFrameScheduled) {
+      HomeScreen._firstFrameScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         markStartup('Home first frame');
       });
@@ -110,14 +131,18 @@ class HomeScreen extends ConsumerWidget {
     // are cache-first, so this does not delay the first Home frame.
     ref.watch(homeDataRefreshProvider);
     final selectedCategory = ref.watch(selectedCategoryProvider);
-    final ranked = ref.watch(rankedRecommendationsProvider);
+    final ranked = _showDeferredSections
+        ? ref.watch(rankedRecommendationsProvider)
+        : const AsyncValue<List<Recommendation>>.loading();
     final tutorialKeys = ref.watch(tutorialKeysProvider);
     final now = ref.watch(clockProvider).now();
     // A signed engagement receipt is issued only after a live Home-summary
     // request, so cached/offline data can never manufacture streak activity.
-    ref.watch(
-      homeEngagementCheckInProvider(DateFormat('yyyy-MM-dd').format(now)),
-    );
+    if (_showDeferredSections) {
+      ref.watch(
+        homeEngagementCheckInProvider(DateFormat('yyyy-MM-dd').format(now)),
+      );
+    }
 
     // Keep the page hierarchy clear: greeting, spending summary, quick actions,
     // then the purchase controls and the recommendation they drive.
@@ -125,7 +150,7 @@ class HomeScreen extends ConsumerWidget {
     return AppBackground(
       child: Column(
         children: [
-          const _HomeWidgetSync(),
+          if (_showDeferredSections) const _HomeWidgetSync(),
           Expanded(
             child: CustomScrollView(
               slivers: [
@@ -144,21 +169,23 @@ class HomeScreen extends ConsumerWidget {
                     delegate: SliverChildListDelegate([
                       Padding(
                         padding: const EdgeInsets.fromLTRB(
-                          _gutter,
+                          HomeScreen._gutter,
                           0,
-                          _gutter,
+                          HomeScreen._gutter,
                           0,
                         ),
-                        child: _BrandHeader(greeting: _greetingFor(now)),
+                        child: _BrandHeader(
+                          greeting: HomeScreen._greetingFor(now),
+                        ),
                       ),
                       const _HomeSpendHeadline(),
                       const _HomeQuickActions(),
                       const _HomeSectionDivider(),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(
-                          _gutter,
+                          HomeScreen._gutter,
                           0,
-                          _gutter,
+                          HomeScreen._gutter,
                           0,
                         ),
                         child: Text(
@@ -175,9 +202,9 @@ class HomeScreen extends ConsumerWidget {
                       // directly under the question rather than in its own strip.
                       const Padding(
                         padding: EdgeInsets.fromLTRB(
-                          _gutter,
+                          HomeScreen._gutter,
                           AppSpace.xs,
-                          _gutter,
+                          HomeScreen._gutter,
                           0,
                         ),
                         child: HomeContextLine(),
@@ -186,7 +213,7 @@ class HomeScreen extends ConsumerWidget {
                       Padding(
                         key: tutorialKeys.categoryChips,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: _gutter,
+                          horizontal: HomeScreen._gutter,
                         ),
                         child: _PurchaseTypeSelector(
                           selectedCategory: selectedCategory,
@@ -200,9 +227,9 @@ class HomeScreen extends ConsumerWidget {
                       Padding(
                         key: tutorialKeys.amountField,
                         padding: const EdgeInsets.fromLTRB(
-                          _gutter,
+                          HomeScreen._gutter,
                           AppSpace.md,
-                          _gutter,
+                          HomeScreen._gutter,
                           0,
                         ),
                         child: const _AmountCard(),
@@ -210,7 +237,7 @@ class HomeScreen extends ConsumerWidget {
                       const SizedBox(height: AppSpace.sm),
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: _gutter,
+                          horizontal: HomeScreen._gutter,
                         ),
                         child: _RankedSection(
                           ranked: ranked,

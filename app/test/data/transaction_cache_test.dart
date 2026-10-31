@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,7 +48,73 @@ class _EmptyRepository implements UserCardsRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _BlockingTransactionRepository implements UserCardsRepository {
+  final Future<List<TransactionEntry>> response;
+  var transactionCalls = 0;
+
+  _BlockingTransactionRepository(this.response);
+
+  @override
+  Future<List<TransactionEntry>> fetchTransactions({
+    DateTime? from,
+    DateTime? to,
+    String? cardId,
+    String? categoryId,
+    String? userCategoryId,
+    String? source,
+    String? query,
+  }) {
+    transactionCalls++;
+    return response;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
+  test(
+    'shares a cold transaction materialization across identical consumers',
+    () async {
+      final database = openInMemoryForTesting();
+      addTearDown(database.close);
+      final cache = ResponseCache(database);
+      final response = Completer<List<TransactionEntry>>();
+      final repo = _BlockingTransactionRepository(response.future);
+      final first = FutureProvider<List<TransactionEntry>>(
+        (ref) => loadTransactionsWithOfflineCache(
+          ref,
+          repo: repo,
+          cacheKey: 'transactions:first',
+        ),
+      );
+      final second = FutureProvider<List<TransactionEntry>>(
+        (ref) => loadTransactionsWithOfflineCache(
+          ref,
+          repo: repo,
+          cacheKey: 'transactions:second',
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          accessTokenProvider.overrideWith((ref) => 'test-token'),
+          responseCacheProvider.overrideWith((ref) async => cache),
+          userCardsRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final firstFuture = container.read(first.future);
+      final secondFuture = container.read(second.future);
+      response.complete(const []);
+      expect(await firstFuture, isEmpty);
+      expect(await secondFuture, isEmpty);
+      // Both providers use the same account/query key even though their
+      // compatibility cache keys differ.
+      expect(repo.transactionCalls, 1);
+    },
+  );
+
   test(
     'Payments due renders saved dates with a synced empty history after 401',
     () async {

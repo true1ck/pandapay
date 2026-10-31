@@ -51,10 +51,18 @@ class _SplitResumeObserver extends WidgetsBindingObserver {
 final splitSyncLifecycleProvider = Provider<void>((ref) {
   final repository = ref.watch(splitRepositoryProvider).valueOrNull;
   if (repository == null) return;
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
   final observer = _SplitResumeObserver(repository);
   WidgetsBinding.instance.addObserver(observer);
   ref.onDispose(() => WidgetsBinding.instance.removeObserver(observer));
-  unawaited(repository.sync());
+
+  // Split sync performs SQLite reads/writes and can be expensive on a
+  // populated account. Let the first authenticated frame get onto the screen
+  // before the initial drain starts; resume/connectivity syncs remain eager.
+  Future<void>.delayed(const Duration(milliseconds: 250), () {
+    if (!disposed) unawaited(repository.sync());
+  });
   ref.listen<AsyncValue<bool>>(isOnlineProvider, (before, after) {
     if (before?.valueOrNull == false && after.valueOrNull == true) {
       unawaited(repository.sync(reconnect: true));
