@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +10,8 @@ import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/cards/card_summary.dart';
 import 'package:pandapay/features/insights/spend_trends_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+
+final _reportRefreshGeneration = StateProvider<int>((ref) => 0);
 
 /// The Trends screen's contract: it reports, it compares, and it never
 /// blends figures that mean different things.
@@ -2000,6 +2004,48 @@ void main() {
     expect(find.text('No spending recorded'), findsOneWidget);
     expect(find.text('₹0.00'), findsOneWidget);
     expect(find.byIcon(Icons.hourglass_top_rounded), findsNothing);
+  });
+
+  testWidgets('background report reload keeps the Spending header mounted', (
+    tester,
+  ) async {
+    final refreshed = Completer<SpendReport?>();
+    const headerKey = ValueKey('spending-overview-header');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+          ),
+          spendReportProvider.overrideWith((ref, query) async {
+            final generation = ref.watch(_reportRefreshGeneration);
+            if (generation == 0) return _report();
+            return refreshed.future;
+          }),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => const [],
+          ),
+        ],
+        child: const MaterialApp(
+          home: SpendTrendsScreen(overviewKey: headerKey),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final header = find.byKey(headerKey);
+    expect(header, findsOneWidget);
+    final originalElement = tester.element(header);
+
+    final container = ProviderScope.containerOf(tester.element(header));
+    container.read(_reportRefreshGeneration.notifier).state++;
+    await tester.pump();
+    expect(header, findsOneWidget);
+    expect(tester.element(header), same(originalElement));
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    refreshed.complete(_report(spend: 43000));
+    await tester.pumpAndSettle();
+    expect(header, findsOneWidget);
   });
 
   testWidgets(

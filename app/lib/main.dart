@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'data/portable_backup/app_private_temporary_storage.dart';
 import 'package:flutter/foundation.dart';
@@ -14,12 +15,17 @@ import 'app/error_handling.dart';
 import 'app/providers.dart';
 import 'app/assistant_action.dart';
 import 'app/router.dart';
+import 'app/startup_timing.dart';
 import 'data/spend_reports_repository.dart';
 import 'data/product_access_api.dart';
 import 'features/settings/appearance_providers.dart';
 import 'features/recovery/automatic_account_recovery.dart';
 
 void main() {
+  markStartup('Dart main');
+  if (kProfileMode) {
+    developer.Timeline.instantSync('PandaPay startup: Dart main');
+  }
   // error_handling.dart: catches the class of error that isn't caught by
   // Flutter's own build-error recovery (a stray unawaited Future, a
   // platform-channel callback) and would otherwise silently kill the whole
@@ -74,6 +80,12 @@ void main() {
       SemanticsBinding.instance.ensureSemantics();
     }
     runApp(const ProviderScope(child: PandaPayApp()));
+    if (kProfileMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        developer.Timeline.instantSync('PandaPay startup: first Flutter frame');
+        markStartup('first Flutter frame');
+      });
+    }
     unawaited(AppPrivateTemporaryStorage.reapOnStartup());
   });
 }

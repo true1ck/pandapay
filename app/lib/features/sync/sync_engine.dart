@@ -401,10 +401,10 @@ class SyncEngine {
   }
 
   void _invalidateFor(Set<String> entities) {
-    // A pull changes the server-side source of truth. The global display
-    // refresh watcher then writes the new response snapshots locally, so a
-    // later offline launch sees the same data that was just pulled.
-    _ref.invalidate(homeDataRefreshProvider);
+    // _materialize has already committed the changed entities and their
+    // offline snapshots. Invalidating the broad Home refresh here would
+    // immediately fetch the complete transaction history a second time and
+    // restart unrelated Home requests. Publish only affected projections.
     if (entities.contains('transactions')) {
       _ref.invalidate(transactionsProvider);
       _ref.invalidate(utilizationTransactionsProvider);

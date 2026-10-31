@@ -694,6 +694,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           ),
           Expanded(
             child: transactions.when(
+              // Keep committed rows visible while a provider invalidation reloads.
+              skipLoadingOnReload: true,
               // See my_cards_screen.dart for why a list-shaped skeleton
               // rather than a centred spinner.
               loading: () => const Padding(

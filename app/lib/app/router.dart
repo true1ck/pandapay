@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'startup_timing.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../data/api_exception.dart';
@@ -435,6 +438,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // while still loading; it must NOT also mean "stay on splash forever"
       // once loading is done).
       if (path == AppRoute.splash) {
+        markStartup('splash resolved');
+        if (kProfileMode) {
+          developer.Timeline.instantSync('PandaPay startup: splash resolved');
+        }
         if (!signedIn) return AppRoute.welcome;
         if (!complete) return AppRoute.productActivation;
         final biometricLockOn =
@@ -959,6 +966,15 @@ class _AppShellState extends ConsumerState<_AppShell> {
   @override
   void initState() {
     super.initState();
+    if (kProfileMode) {
+      developer.Timeline.instantSync('PandaPay startup: shell mounted');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.location == AppRoute.home) {
+          developer.Timeline.instantSync('PandaPay startup: Home frame');
+          markStartup('Home frame');
+        }
+      });
+    }
     // The observer is shared by the shell's navigator. Reset the visual
     // visibility flag when a fresh shell is created (for example after a
     // restart or a test rebuild) so a stale pushed-route state cannot hide

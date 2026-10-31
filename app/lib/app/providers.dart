@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -10,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'startup_timing.dart';
 
 import '../data/acceptance_reports_repository.dart';
 import '../data/analytics.dart';
@@ -872,6 +874,7 @@ class SessionRefreshCoordinator {
 }
 
 final sessionInitProvider = FutureProvider<void>((ref) async {
+  markStartup('session init start');
   // Restore the locally persisted access token before doing any network work.
   // The old startup path waited for /auth/refresh here, which made a healthy
   // install sit on the splash for several seconds whenever auth/ was slow.
@@ -880,6 +883,7 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
   late final TokenStore store;
   try {
     store = await ref.watch(tokenStoreProvider.future);
+    markStartup('session token ready');
   } catch (_) {
     // Keystore/platform failures are not proof that the account is signed
     // out. The router can show the account gate, while a later explicit login
@@ -986,8 +990,10 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
   }
 
   Future<void> _load() async {
+    markStartup('onboarding read start');
     final prefs = await SharedPreferences.getInstance();
     state = AsyncValue.data(prefs.getBool(_onboardingCompleteKey) ?? false);
+    markStartup('onboarding read complete');
   }
 
   Future<void> complete() async {
@@ -6424,6 +6430,10 @@ final smsFlushTriggerProvider = StateProvider<int>((ref) => 0);
 final smsBackgroundFlushProvider = Provider<void>((ref) {
   var workInProgress = false;
   var rerunRequested = false;
+  var runnerActive = false;
+  var passRequested = false;
+  var coalescedRequests = 0;
+  final pendingReasons = <String>{};
   var disposed = false;
   ref.onDispose(() => disposed = true);
   Timer? inFlightPollTimer;
@@ -6915,11 +6925,43 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     }
   }
 
-  Future<void> flushAndRetry() async {
+  Future<void> flushAndRetry(String reason) async {
+    if (disposed) return;
+    pendingReasons.add(reason);
+    passRequested = true;
+    if (runnerActive) {
+      coalescedRequests++;
+      return;
+    }
+    runnerActive = true;
     try {
-      await AccountRecoveryOperationGate.process.run(flushAndRetryAdmitted);
-    } on AccountRecoveryBusy {
-      // Durable queues and the next resume/reconnect retain this work.
+      while (passRequested && !disposed) {
+        passRequested = false;
+        final reasons = pendingReasons.toList()..sort();
+        pendingReasons.clear();
+        final coalesced = coalescedRequests;
+        coalescedRequests = 0;
+        final elapsed = Stopwatch()..start();
+        var gateWaitMs = 0;
+        try {
+          await AccountRecoveryOperationGate.process.run(() async {
+            gateWaitMs = elapsed.elapsedMilliseconds;
+            await flushAndRetryAdmitted();
+          });
+        } on AccountRecoveryBusy {
+          // Durable queues and the next resume/reconnect retain this work.
+        } finally {
+          if (kDebugMode || kProfileMode) {
+            debugPrint(
+              'sms_lifecycle reasons=${reasons.join(",")} '
+              'coalesced=$coalesced gate_wait_ms=$gateWaitMs '
+              'elapsed_ms=${elapsed.elapsedMilliseconds}',
+            );
+          }
+        }
+      }
+    } finally {
+      runnerActive = false;
     }
   }
 
@@ -6934,33 +6976,33 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       ),
     );
     if (next != 'signed-out' && next != previous) {
-      unawaited(flushAndRetry());
+      unawaited(flushAndRetry('namespace'));
     }
   });
 
   ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) {
     if (previous?.valueOrNull == false && next.valueOrNull == true) {
-      unawaited(flushAndRetry());
+      unawaited(flushAndRetry('reconnect'));
     }
   });
 
   ref.listen<int>(smsFlushTriggerProvider, (_, _) {
-    unawaited(flushAndRetry());
+    unawaited(flushAndRetry('manual'));
   });
 
   final listener = AppLifecycleListener(
-    onResume: () => unawaited(flushAndRetry()),
+    onResume: () => unawaited(flushAndRetry('resume')),
   );
   ref.onDispose(listener.dispose);
   final aiReconcileTimer = Timer.periodic(
     const Duration(seconds: 90),
-    (_) => unawaited(flushAndRetry()),
+    (_) => unawaited(flushAndRetry('periodic')),
   );
   ref.onDispose(aiReconcileTimer.cancel);
   // Once at startup too: defer by 2 seconds so cold launch entrance animations
   // and biometric lock settle cleanly without competing for CPU or DB locks.
   final startupTimer = Timer(const Duration(seconds: 2), () {
-    if (!disposed) unawaited(flushAndRetry());
+    if (!disposed) unawaited(flushAndRetry('startup'));
   });
   ref.onDispose(startupTimer.cancel);
 });

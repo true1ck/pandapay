@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/app/design/widgets.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/activity_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -145,6 +148,45 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('keeps committed rows visible during a transaction reload', (
+    tester,
+  ) async {
+    final row = _txn(
+      id: 'steady-row',
+      amount: Money.fromRupees(250),
+      occurredAt: DateTime.now(),
+      merchantName: 'Steady Merchant',
+    );
+    final pendingReload = Completer<List<TransactionEntry>>();
+    var loads = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          accessTokenProvider.overrideWith((ref) => 'test-token'),
+          sessionInitProvider.overrideWith((ref) async {}),
+          activityTransactionsProvider.overrideWith((ref) {
+            loads++;
+            return loads == 1 ? Future.value([row]) : pendingReload.future;
+          }),
+        ],
+        child: const MaterialApp(home: Scaffold(body: ActivityScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Steady Merchant'), findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ActivityScreen)),
+    );
+    container.invalidate(activityTransactionsProvider);
+    await tester.pump();
+    expect(find.text('Steady Merchant'), findsOneWidget);
+    expect(find.byType(SkeletonList), findsNothing);
+
+    pendingReload.complete([row]);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('initial tag/category drilldown only shows matching spending', (
     tester,
   ) async {
@@ -372,11 +414,13 @@ void main() {
     // `other` is one of the canonical fifteen, so a transfer whose category is
     // bare Other loses it to keep the subtitle short — a user picking Other
     // loses it too, and nothing here can tell the two apart.
-    final zephrSubtitle =
-        tester.widget<Text>(find.textContaining('6:10 PM · SMS')).data!;
+    final zephrSubtitle = tester
+        .widget<Text>(find.textContaining('6:10 PM · SMS'))
+        .data!;
     expect(zephrSubtitle.contains('Other'), isFalse);
-    final akritiSubtitle =
-        tester.widget<Text>(find.textContaining('6:05 PM · SMS')).data!;
+    final akritiSubtitle = tester
+        .widget<Text>(find.textContaining('6:05 PM · SMS'))
+        .data!;
     expect(akritiSubtitle.contains('Food'), isTrue);
   });
 
@@ -407,8 +451,9 @@ void main() {
     expect(find.text('Rahul'), findsOneWidget);
     expect(find.text('Transfer'), findsNWidgets(2));
     // A real subcategory earns its place back.
-    final rahulSubtitle =
-        tester.widget<Text>(find.textContaining('6:05 PM · SMS')).data!;
+    final rahulSubtitle = tester
+        .widget<Text>(find.textContaining('6:05 PM · SMS'))
+        .data!;
     expect(rahulSubtitle.contains('Other · UPI'), isTrue);
   });
 
@@ -435,11 +480,13 @@ void main() {
     ]);
     await _pump(tester, repo: repo, cards: const []);
 
-    final bazaarSubtitle =
-        tester.widget<Text>(find.textContaining('6:10 PM · SMS')).data!;
+    final bazaarSubtitle = tester
+        .widget<Text>(find.textContaining('6:10 PM · SMS'))
+        .data!;
     expect(bazaarSubtitle.contains('Other'), isTrue);
-    final zephrSubtitle =
-        tester.widget<Text>(find.textContaining('6:05 PM · SMS')).data!;
+    final zephrSubtitle = tester
+        .widget<Text>(find.textContaining('6:05 PM · SMS'))
+        .data!;
     expect(zephrSubtitle.contains('Other'), isFalse);
   });
 
@@ -477,8 +524,9 @@ void main() {
     expect(find.text('Reversal'), findsOneWidget);
     expect(find.text('Transfer'), findsNothing);
     // No chip on the row, so nothing replaces the category segment either.
-    final refundSubtitle =
-        tester.widget<Text>(find.textContaining('6:10 PM · SMS')).data!;
+    final refundSubtitle = tester
+        .widget<Text>(find.textContaining('6:10 PM · SMS'))
+        .data!;
     expect(refundSubtitle.contains('Other'), isTrue);
   });
 

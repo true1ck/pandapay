@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../features/sms_import/ios_sms_intake_service.dart';
+import '../app/startup_timing.dart';
 
 /// UA-3. Access/refresh tokens let this device keep its session across app
 /// restarts. The server keeps a rolling 90-day inactivity limit for an
@@ -31,9 +32,12 @@ class TokenStore {
       _cachedRefreshToken = refreshToken;
 
   static Future<TokenStore> load() async {
+    markStartup('token load start');
     const secureStorage = FlutterSecureStorage();
     var accessToken = await secureStorage.read(key: _accessKey);
+    markStartup('access token read complete');
     var refreshToken = await secureStorage.read(key: _refreshKey);
+    markStartup('refresh token read complete');
 
     // Migrate each credential independently. An interrupted first migration
     // can leave the access token in secure storage while the refresh token is
@@ -42,6 +46,7 @@ class TokenStore {
     // that eventually expired and no way to refresh it. Remove the plaintext
     // copy only after the corresponding secure write has succeeded.
     final prefs = await SharedPreferences.getInstance();
+    markStartup('token preferences ready');
     final legacyAccess = prefs.getString(_accessKey);
     final legacyRefresh = prefs.getString(_refreshKey);
 
@@ -63,6 +68,7 @@ class TokenStore {
       await prefs.remove(_refreshKey);
     }
 
+    markStartup('token load complete');
     return TokenStore(
       secureStorage,
       accessToken: accessToken,

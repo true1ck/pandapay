@@ -1,6 +1,12 @@
 # Mobile performance stabilization plan — 31 October 2026
 
-Status: investigation and implementation plan. No runtime behavior was changed. Current checkout: `dev` at `cefff2d0` when inspected. Preserve the pre-existing unrelated working-tree edits. This supersedes the performance recommendations in `app-responsiveness-investigation.md` only where the 18 October SMS follow-up already implemented them.
+Status: implementation in progress on `codex/ios-shortcuts-prototype`. The initial investigation was performed on `dev`; that branch was merged into the iOS prototype branch. Preserve unrelated working-tree files. This supersedes the performance recommendations in `app-responsiveness-investigation.md` only where the 18 October SMS follow-up already implemented them.
+
+## 31 October profile update
+
+The pictured PandaMark page is the Flutter `/splash` route. Its redirect waits for local session restoration and the onboarding preference, not the network token refresh. Three process-cold profile emulator runs after installing an instrumented dev APK resolved the splash at 5.39, 1.27 and 1.50 seconds from Dart `main`. In those runs the first Android secure-storage read completed at 5.21, 1.26 and 1.23 seconds; onboarding preferences completed at 1.54, 0.07 and 0.05 seconds. The first post-install run also had emulator startup stalls. This isolates a real wait in secure storage but does not establish that a physical release device has the same latency. Keep the authentication gate and measure a physical device before redesigning credential storage.
+
+Initial implementation retains committed Activity and Spending content during same-query provider reloads, coalesces concurrent SMS lifecycle requests at the operation gate, and stops sync materialization from restarting the entire Home refresh. Profile-only startup timing and debug/profile SMS pass timing were added. These are scoped improvements, not completion of the DB worker, refresh ownership, or full performance acceptance work below.
 
 ## Executive diagnosis
 
