@@ -85,7 +85,7 @@ Columns: user action → saved financial record → durable feedback → API/DB 
 | C5 | Apply the user's latest correction locally before any built-in, AI, or downloaded shared category rule. Scope personal merchant rules carefully; a mixed-context merchant must not force one category for every SMS. | **Implemented 2026-10-28** | `sms_import_store.dart` resolves the category with explicit precedence: the user's own correction (per merchant-key label) first, then AI auto-resolution (which itself applies the stored correction before the AI category), then personal merchant rule, then downloaded/shared rule, then built-in. A merchant seen across mixed contexts is not blanket-categorised: the override only applies where the user actually corrected it. A later user edit replaces the earlier personal label. Tests: `app/test/data/local/sms_import_store_category_precedence_test.dart` (4/4: personal outranks shared, later edit replaces, mixed-context not blanket-categorised, AI auto-resolution applies user correction first). |
 | C6 | Aggregate consented explicit corrections on the server by verified source, field, merchant, and message context. Count the latest explicit state once per user/source; invalidate an older AI-only label for the same SMS. Keep disagreement and false-positive examples visible. | **Implemented 2026-10-28** | `sms_facts.js` patch merge is profile-predicated and fact-scoped; supersede-before-insert (C2) keeps one current correction per (profile, fact) while older rows stay as audit history. `GET /admin/sms-learning/feedback-events` computes per-case support (distinct profiles + matching messages sharing merchant_key and target category, current, non-training) and disagreement (distinct profiles countering with a different slug) server-side, and links the latest AI proposal per source for advisory diagnosis. Tests: `db/tests/20261027200000_sms_aggregation_hardening_test.sql` (repeated edits, multi-user votes, consent withdrawal, AI conflict, source spoofing — passed on a fresh disposable DB), `api/test/sms_correction_cases_admin.test.js` (5/5). |
 | C7 | Give admins a reviewable proposal with safe message pattern, previous and corrected decision/fields, origin (parser/rule/AI), support, disagreement, and exact rule scope. AI diagnosis may be shown as advisory. Approval binds to exact rule identity; rejection and revocation are audited. | **Implemented 2026-10-28** | New console tab `sms_correction_cases_screen.dart` renders the backend-generalized pattern only (never raw body/sender), the allow-listed field diff, support/disagreement, supersede state, and the AI diagnosis explicitly labelled advisory with `kSafeDecisionFieldKeys`-filtered proposal fields. Server route `GET /admin/sms-learning/feedback-events` (limit clamp 1–200) applies the same redaction/withholding rules as the proposal routes; a serialized-response test asserts no raw body, account, reference, or OTP keys. Tests: `console/test/features/parser_patterns/sms_correction_cases_screen_test.dart` (8/8), `api/test/sms_correction_cases_admin.test.js` (5/5). |
-| C8 | Verify locally, then run device acceptance. Use a disposable fully migrated PostgreSQL database, focused API tests, Flutter app/console tests and build, plus one physical-device or emulator flow. | **Local verification complete 2026-10-28; emulator flow pending** | Fresh disposable DB: all migrations (except 0013 cron) + `setup_app_role.sql`, all six 2026-10-27 SQL suites pass. `npm test` 1022 tests / 1019 pass / 0 fail / 3 skipped. App `flutter analyze` exit 0 (no issues in touched files), full `flutter test` suite passes (one unrelated flake rerun clean). Console analyze clean after one lint fix, 40/40 console tests. Emulator scenario matrix still to run. |
+| C8 | Verify locally, then run device acceptance. Use a disposable fully migrated PostgreSQL database, focused API tests, Flutter app/console tests and build, plus one physical-device or emulator flow. | **Activity category correction upload verified on emulator 2026-10-31; broader device acceptance open** | The initial device run failed on D1/D2; the follow-up fixed both and produced one consented server feedback event. Focused app tests: 37 passed. See the dated run sections below. Other correction surfaces and second-device rule delivery still need acceptance. |
 | C9 | Protect active shared rules after a user correction. Attribute the correction to the exact delivered rule/candidate and count it as negative evidence without treating one subjective category choice as proof of a global defect. Pause or roll back a rule only through defined safety thresholds/admin action; keep the correcting user's override immediate. | **Implemented 2026-10-28** | Migration `20261027200000_sms_shared_rule_negative_evidence.sql`: `pandapay.sms_rule_negative_evidence()` rollup (current, non-superseded, non-cosmetic/preference corrections per decision_rule_id with distinct-profile counts), configurable pause threshold in `public.sms_learning_settings` (FORCE RLS, no policies, invalid values fall back to 3), `pandapay.sms_shared_rule_paused(rule_id)`. Serving path withholds paused rules from users with no prior assignment (prior assignments keep working), and a pause-lookup outage falls back to previous behaviour. `GET /admin/sms-learning/rule-negative-evidence` exposes counts only. Tests: `db/tests/20261027200000_sms_shared_rule_negative_evidence_test.sql` (passed on fresh DB), `api/test/sms_shared_rule_pause.test.js`. |
 
 ## Cases to test
@@ -216,3 +216,93 @@ This checkpoint supersedes the earlier **open shared-category scope** finding ab
 - A fresh `template0` PostgreSQL database applied 116 migrations (the `pg_cron` migration was skipped because the stock container lacks the extension). All 11 SMS learning SQL regression files passed. The real-database API test passed its exact v2 consent, approval, and rule-delivery flow against that disposable database.
 - The final Dev debug APK built with local API port 4001 and auth port 3210, installed with `adb install -r` on the emulator, and reopened to the signed-in Home screen. The local API health endpoint returned 200 and Import & Sync loaded history. This is an app/network smoke check; a device-level admin-approved rule download and application remains a later acceptance check.
 - No production deployment, commit, or push was performed in this verification pass.
+
+## 2026-10-31 emulator scenario run (C8 device acceptance) — FAILS
+
+Environment: `emulator-5554`, debug APK `1.0.15-dev` installed 2026-10-31 15:20 (postdates the
+capture commit `e3669410`), `test` profile, local dev-verify stack (API :4001, auth :3210,
+PostgreSQL :5544/5434 → `pandapay-dev-verify-db-1`). Namespace under test
+`user:f07a2ee8-f188-46cf-a5ee-14d9fb24fe04`. Baseline before the run:
+`sms_learning_feedback_events` = 0, `sms_learning_feedback` = 0, `sms_shared_learning` consents = 0.
+Local device DB read with `adb exec-out run-as … cat pandapay.sqlite{,-wal}` and queried off-device.
+
+What the run proved works:
+- Consent grant through the Privacy UI persists server-side:
+  `sms_shared_learning | granted=t | policy_version=sms-shared-learning-v2 | granted_at set`, which
+  matches `app/lib/data/consents_api.dart:7-8` exactly.
+- `adb emu sms send` → live import → Activity row → detail → Edit → category/amount → Save commits
+  the financial edit: `PATCH /transactions/:id` 200 (twice), the local row is promoted from
+  `local-sms:<hash>` to a server UUID with `pending=0`, and the new label renders in Activity
+  (`TANISHQ … Online Shopping`) and on the detail screen (`Category / Online Shopping`).
+
+### D1 — the repeated-occurrence dedupe guard fires on a single physical SMS (blocking)
+
+`SmsIntakeRepository.remember()` (`app/lib/data/local/sms_intake_repository.dart:199-209`) keys a
+message by `smsSourceKey(namespace, sender, body)` — the body hash excludes the timestamp — and
+sets `repeated_occurrence = 1` whenever a second record of the same key carries a different
+`received_at`. On device the two writers use different clocks:
+
+| message | live receiver stored (`sms_captured_messages.received_at`) | telephony inbox (`content://sms date`) | delta |
+| --- | --- | --- | --- |
+| TANISHQ ₹319 | `1793445513000` (second-aligned, PDU service-centre time) | `1793445510563` | 2,437 ms |
+| DOMINOS ₹749 | `1793442982000` | `1793442978614` | 3,386 ms |
+
+Measured sequence for a freshly injected, never-before-seen body: `repeated_occurrence` was `0` and
+`processed=0` at t+4 s, then `1` by t+60 s — one injection, no second `sms send`. Control: force-stop
+the app, inject, cold-start (only the inbox sweep records it) → `received_at` equals the telephony
+`date` exactly and `repeated_occurrence` stays `0`.
+
+Consequence: whenever the live receiver and the inbox sweep both see a message — the normal case —
+`hasRepeatedOccurrence()` is true and every capture path abstains:
+`sms_learning_capture.dart:127` and `:216`, `needs_review_screen.dart:394`, `:521`, `:3215`,
+`sms_auto_resolution_controller.dart:242`, `sync_engine.dart:229`. The 2026-10-28 checkpoint line
+"Identical sender/body SMS delivered at different timestamps … abstains" therefore overstates the
+design: it is not only genuine re-delivery, it is ordinary single delivery. Fix options: compare a
+delivery *identity* with a tolerance (seconds-level skew must not count as a second occurrence), or
+record occurrences in their own table keyed by the exact device timestamp, or make both writers
+source `receivedAt` from the telephony inbox.
+
+### D2 — Activity-editor corrections capture nothing even with D1 clean (blocking, not yet pinned)
+
+KFC INDIA ₹549 was injected while the app was stopped, so `repeated_occurrence=0`, one
+`financial_entities` row shares the source key, `source='sms'`, `source_key` is 64-hex, consent is
+granted on the matching policy version. Two separate corrections on that row — Dining → Online
+Shopping, then ₹549 → ₹555 — each produced a 200 PATCH and **no capture artifact of any kind**:
+`sms_learning_feedback_outbox` = 0, `sms_learning_after_sync` = 0, `user_merchant_category_rules` = 0
+(the local pre-consent write at `sms_learning_capture.dart:113-121` also never ran), server
+`sms_learning_feedback_events` = 0, no learning POST in the API log, no Dart exception in logcat.
+
+Ruled out: stale build, consent row/policy mismatch, source/sourceKey gates, multi-fact gate
+(`hasMultiplePersistedFacts` counts only `transactions` here because `sms_observations` rows store
+the hash in `id`, not in `source_key`), and the pop race (the amount-only edit shows no sheet).
+Not ruled out and next to test: a `WidgetRef` disposed before `queueSmsLearningEvent` reaches its
+provider reads (`_recordSmsEditFeedback` is `unawaited` at `edit_transaction_screen.dart:134`, and
+`ref.read`/`await consentFuture` continue after `_save()` returns), or a null
+`consentsApiProvider` inside that detached continuation. Both are swallowed by the
+`catch (_) {}` at `sms_learning_capture.dart:185`. A widget test that pumps the real editor through
+Save→pop against a real store, asserting one outbox row, is the fastest way to pin it; the existing
+20-scenario host matrix cannot see this class of failure because it drives the capture helper with a
+live ref.
+
+Acceptance verdict: **C8 device acceptance fails.** L11/L14/L15 device acceptance stays open for the
+same reason — no device-produced event has ever reached `sms_learning_feedback_events`.
+
+Device state left behind (deliberately, so the next run can retest without re-injecting): consent
+`sms_shared_learning` GRANTED; four SMS transactions present — SWIGGY FOODS ₹1,250 (Groceries),
+DOMINOS PIZZA ₹749 (Dining), TANISHQ ₹319 (Online Shopping), KFC INDIA ₹555 (Online Shopping), all
+`repeated_occurrence=1` except KFC; app still on the debug build pointed at the local dev-verify
+stack. Server learning tables are still empty, so nothing from this run needs cleanup there.
+
+## 2026-10-31 follow-up on emulator-5554
+
+The D1 and D2 fixes were verified against the local dev-verify stack. A fresh unique SMS for
+DEVICEVERIFY OCT31 imported as a server-backed transaction and retained `repeated_occurrence=0`
+after the live receiver and inbox sweep ran. The Activity editor category correction saved; the
+device captured the original SMS, resolved current consent, and queued learning feedback. The API
+logged `POST /sms/learning-feedback` with status 200, and the test profile had one row in
+`public.sms_learning_feedback_events`. The root cause of D2 was `GET /transactions/:id` omitting
+`t.source_key`; the app editor fetched that response and consequently saw a null source key.
+The API query now includes the field. The final dev debug APK (build number 67, without temporary
+diagnostic logging) built and installed with `adb install -r`. Focused app tests: 37 passed;
+`node --check api/src/index.js` and `git diff --check` passed. This verifies the correction upload
+on the test device; second-device approved-rule acceptance remains open.

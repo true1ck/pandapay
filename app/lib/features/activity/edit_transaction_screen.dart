@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -131,7 +129,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       }
       if (financialChanged) {
         await _submitEdit(amount);
-        unawaited(_recordSmsEditFeedback(amount));
+        await _recordSmsEditFeedbackSafely(amount);
       }
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
@@ -217,7 +215,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           if (refreshed != null && refreshed.isNotEmpty) {
             await _submitEdit(amount);
             if (financialChanged) {
-              unawaited(_recordSmsEditFeedback(amount));
+              await _recordSmsEditFeedbackSafely(amount);
             }
             ref.invalidate(userCardsProvider);
             ref.invalidate(myCardsProvider);
@@ -299,6 +297,14 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     );
   }
 
+  Future<void> _recordSmsEditFeedbackSafely(double amount) async {
+    try {
+      await _recordSmsEditFeedback(amount);
+    } catch (_) {
+      // The financial edit has committed; learning capture is best effort.
+    }
+  }
+
   Future<void> _queueSmsEditFeedbackAfterSync(
     SyncQueue queue,
     int clientSeq,
@@ -336,6 +342,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       }
       return null;
     }
+
     final merchant = _merchantController.text.trim();
     final originalFields = <String, dynamic>{
       'amountInr': original.amount.rupees,
@@ -344,8 +351,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         'merchant': original.merchantName!.trim(),
       if (slugFor(original.categoryId) != null)
         'categorySlug': slugFor(original.categoryId),
-      if (original.instrumentKnown)
-        'instrument': original.instrument.wireValue,
+      if (original.instrumentKnown) 'instrument': original.instrument.wireValue,
       'entryKind': original.entryKind.wireValue,
     };
     final correctedFields = <String, dynamic>{
@@ -415,9 +421,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null) return null;
     final isCustomCategory = targetCategoryId.startsWith('custom:');
-    final serverCategoryId = isCustomCategory
-        ? null
-        : targetCategoryId;
+    final serverCategoryId = isCustomCategory ? null : targetCategoryId;
     final serverUserCategoryId = isCustomCategory
         ? targetCategoryId.substring('custom:'.length)
         : null;
@@ -436,7 +440,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Saved this transaction. Related transactions could not be loaded.'),
+            content: Text(
+              'Saved this transaction. Related transactions could not be loaded.',
+            ),
           ),
         );
       }
@@ -444,7 +450,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     }
     if (!mounted || preview.candidates.isEmpty) return null;
 
-    Future<CategoryBulkApplyResult> apply(Set<String> ids) => repo.applyCategoryBulk(
+    Future<CategoryBulkApplyResult> apply(Set<String> ids) =>
+        repo.applyCategoryBulk(
           previewId: preview.previewId,
           selectedTransactionIds: ids,
           targetCategoryId: serverCategoryId,
@@ -493,7 +500,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Saved this transaction. Future rule options could not be loaded.'),
+            content: Text(
+              'Saved this transaction. Future rule options could not be loaded.',
+            ),
           ),
         );
       }
@@ -502,11 +511,12 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     if (!mounted || !preview.hasUsableIdentity) return null;
 
     Future<MerchantCategoryRule> create() => repo.create(
-          sourceTransactionId: widget.transactionId,
-          categoryId: categoryId,
-          userCategoryId: userCategoryId,
-        );
-    Future<MerchantCategoryRule> update(MerchantCategoryRule rule) => repo.update(
+      sourceTransactionId: widget.transactionId,
+      categoryId: categoryId,
+      userCategoryId: userCategoryId,
+    );
+    Future<MerchantCategoryRule> update(MerchantCategoryRule rule) =>
+        repo.update(
           rule.id,
           categoryId: categoryId,
           userCategoryId: userCategoryId,
