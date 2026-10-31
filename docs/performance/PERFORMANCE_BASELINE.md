@@ -12,4 +12,6 @@ Device: Android 15/API 35 `sdk_gphone64_x86_64` emulator, Flutter 3.44.8 profile
 
 First Flutter frame is not usable Home. Android `am start -W` reports displayed activity, which can precede Home. The 11.77 s sample does not yet isolate whether platform storage, Android main-thread scheduling, emulator-wide contention, or Flutter UI-isolate work caused the delayed plugin responses. Both SharedPreferences and secure storage were delayed in that run. Another run showed a substantial delay before Dart main. These are separate stages and require an Android startup trace plus a representative physical-device profile before assigning root cause.
 
+1 November 2026: captured a 15-second Android Perfetto trace during a force-stop launch of profile APK build 72 (`docs/performance/pandapay_startup.pftrace`, local artifact, 31 MB). The same run reported `am start -W` TotalTime 3.43 s. The trace is evidence for follow-up analysis, not a numeric frame result yet; open it in Perfetto to inspect Android main-thread, Flutter engine threads, binder calls and process scheduling around the first frame.
+
 UI/raster p95/p99, janky-frame percentage, CPU, memory, navigation and scroll metrics: **unmeasured**. The regression tests in `mobile-performance-real-world-test-matrix-2026-10-31.md` are correctness tests and must not be reported as performance results.

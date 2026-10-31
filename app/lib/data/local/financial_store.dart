@@ -226,6 +226,11 @@ class FinancialStore {
   final _changes = StreamController<FinancialChange>.broadcast();
   final _statusChanges = StreamController<String>.broadcast();
   final _transientStatus = <String, String>{};
+  // Repair markers are durable, but checking them and creating the repair
+  // tables on every transaction read is still synchronous work on the UI
+  // isolate. Cache only a fully completed namespace for this store lifetime;
+  // clear(ns) removes the entry so account reset remains safe.
+  final _completedAutoPayRepairs = <String>{};
   int _batchDepth = 0;
   final _batchedChanges = <(String, String)>{};
   void batch(void Function() work) {
@@ -1433,6 +1438,7 @@ class FinancialStore {
   }
 
   void repairAutoPayArtifacts(String ns) {
+    if (_completedAutoPayRepairs.contains(ns)) return;
     try {
       database.db.execute('''
         CREATE TABLE IF NOT EXISTS local_repairs (
@@ -1464,7 +1470,10 @@ class FinancialStore {
         'SELECT 1 FROM local_repairs WHERE namespace=? AND repair_key=?',
         [ns, 'bill_and_autopay_repair_v6'],
       );
-      if (applied.isNotEmpty) return;
+      if (applied.isNotEmpty) {
+        _completedAutoPayRepairs.add(ns);
+        return;
+      }
 
       var changed = false;
       final messages = database.db.select(
@@ -1675,6 +1684,7 @@ class FinancialStore {
         'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
         [ns, 'bill_and_autopay_repair_v6'],
       );
+      _completedAutoPayRepairs.add(ns);
       if (changed) {
         _notify(ns, entity: 'cards');
         _notify(ns, entity: 'observations');
@@ -2055,6 +2065,7 @@ class FinancialStore {
 
   void clear(String ns) {
     _transientStatus.remove(ns);
+    _completedAutoPayRepairs.remove(ns);
     _transaction(() {
       for (final table in [
         'financial_entities',

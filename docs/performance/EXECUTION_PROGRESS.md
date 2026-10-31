@@ -10,6 +10,8 @@ Updated 31 October 2026. Branch `codex/ios-shortcuts-prototype`, ahead of origin
 - Commit `c2479722`: profile startup markers, SMS gate coalescing, removal of broad Home invalidation after sync materialization. Its Activity/Spending previous-data retention was later judged insufficiently account-fenced; uncommitted follow-up explicitly disables it pending a safe provider design.
 - Uncommitted scoped work: FinancialStore SQL filter for already repaired provisional rows; repository-instance identical-query transaction single-flight; Home first-frame timing marker; test matrix/audit/setup/baseline docs. FinancialStore 51 tests and single-flight 2 tests passed; integrated Activity/Spending/FinancialStore/single-flight run passed 114 tests after an Activity test timing correction.
 - The parallel token-read experiment was tested in profile build 72: both reads completed together at 8.19 s and Home first frame was 9.71 s from Dart main, so it produced no demonstrated gain and was reverted.
+- Frame track: profile onboarding swipes reported UI p95 about 1.48–7.07 ms and raster p95 about 44.6–123 ms, with most sampled frames over 16.67 ms. This is not a Home/physical-device result; stable Home scrolling and Android/physical confirmation remain required.
+- DB track: a store-lifetime cache for completed AutoPay repair namespaces now avoids repeated marker/table checks on transaction reads and is ready for 53/53 focused-test validation. It still requires final review and commit.
 
 ## Unresolved
 
