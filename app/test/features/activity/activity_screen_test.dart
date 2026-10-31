@@ -337,6 +337,43 @@ void main() {
     expect(find.textContaining('3:20 PM · SMS'), findsOneWidget);
   });
 
+  testWidgets('shows P2P transfers as payee name with a Transfer chip', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'transfer-a',
+        amount: Money.fromRupees(150),
+        occurredAt: DateTime(2026, 10, 20, 18, 10),
+        source: 'sms',
+        merchantName: 'Transfer to Zephr',
+        categoryName: 'Other',
+      ),
+      _txn(
+        id: 'transfer-b',
+        amount: Money.fromRupees(147),
+        occurredAt: DateTime(2026, 10, 20, 18, 5),
+        source: 'sms',
+        merchantName: 'Transfer to Akriti',
+        // A user-picked category must survive; only filler "Other" is dropped.
+        categoryName: 'Food',
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    expect(find.text('Zephr'), findsOneWidget);
+    expect(find.text('Akriti'), findsOneWidget);
+    expect(find.text('Transfer to Zephr'), findsNothing);
+    expect(find.text('Transfer'), findsNWidgets(2));
+
+    final zephrSubtitle =
+        tester.widget<Text>(find.textContaining('6:10 PM · SMS')).data!;
+    expect(zephrSubtitle.contains('Other'), isFalse);
+    final akritiSubtitle =
+        tester.widget<Text>(find.textContaining('6:05 PM · SMS')).data!;
+    expect(akritiSubtitle.contains('Food'), isTrue);
+  });
+
   testWidgets('offers useful date presets for faster activity tracking', (
     tester,
   ) async {

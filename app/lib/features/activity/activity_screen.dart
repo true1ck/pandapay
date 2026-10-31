@@ -2384,6 +2384,14 @@ class _TransactionTile extends StatelessWidget {
           ? (entry.smsReceivedAt ?? entry.occurredAt)
           : entry.occurredAt,
     );
+    // v2 list convention (vibe_images/activity-transfer-row.html): the stored
+    // SMS merchant is "Transfer to X"; the row shows X and moves "Transfer"
+    // into the Refund/Reversal chip slot so the cue survives a list scan.
+    final merchantDisplay = entry.merchantName ?? entryLabel;
+    final transferParty = RegExp(
+      r'^Transfer to (.+)$',
+      caseSensitive: false,
+    ).firstMatch(merchantDisplay)?.group(1);
     final subtitleParts = <String>[
       isSmsImported ? '$timeLabel · SMS' : timeLabel,
       if (entry.entryKind != TxnEntryKind.spend || isInvestmentCategory)
@@ -2409,7 +2417,10 @@ class _TransactionTile extends StatelessWidget {
           entry.rewardState == 'estimated' &&
           (entry.source == 'sms' || entry.source == 'sms_bulk'))
         'Pending confirmation',
-      if (entry.categoryName != null) entry.categoryLabel,
+      if (entry.categoryName != null &&
+          !(transferParty != null &&
+              entry.categoryLabel.toLowerCase() == 'other'))
+        entry.categoryLabel,
     ];
     // See account_screen.dart's _AccountTile for why Pressable, not InkWell.
     return Semantics(
@@ -2511,7 +2522,7 @@ class _TransactionTile extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            entry.merchantName ?? entryLabel,
+                            transferParty ?? merchantDisplay,
                             // Two lines of the real name beat one line of an
                             // ellipsis — Indian merchant strings routinely need
                             // the full 25 characters ("Shantesh gurudas gaude").
@@ -2570,6 +2581,34 @@ class _TransactionTile extends StatelessWidget {
                                 10.5,
                                 weight: FontWeight.w700,
                                 color: BambooInk.amber,
+                              ),
+                            ),
+                          ),
+                        ] else if (transferParty != null) ...[
+                          // Neutral chip, matching the Option B spec (ink on
+                          // rgba(43,49,58,.07)); jade/amber stay reserved for
+                          // Refund/Reversal money moves.
+                          const SizedBox(width: AppSpace.xs),
+                          Container(
+                            margin: const EdgeInsets.only(top: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: BambooInk.ink900.withValues(alpha: 0.07),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: BambooInk.ink900.withValues(alpha: 0.14),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Text(
+                              'Transfer',
+                              style: BambooFonts.ui(
+                                10.5,
+                                weight: FontWeight.w700,
+                                color: BambooInk.ink700,
                               ),
                             ),
                           ),
