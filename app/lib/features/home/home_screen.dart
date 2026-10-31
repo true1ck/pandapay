@@ -127,9 +127,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         markStartup('Home first frame');
       });
     }
-    // Start the server refresh in the background. The recommendation inputs
-    // are cache-first, so this does not delay the first Home frame.
-    ref.watch(homeDataRefreshProvider);
+    // Start the server refresh only after the local shell has painted once.
+    // The provider writes several cache snapshots and invalidates dependent
+    // projections; attaching it during the first build competes with the
+    // initial raster pass even though the request itself is asynchronous.
+    if (_showDeferredSections) {
+      ref.watch(homeDataRefreshProvider);
+    }
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final ranked = _showDeferredSections
         ? ref.watch(rankedRecommendationsProvider)

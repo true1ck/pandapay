@@ -755,6 +755,28 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   const Money.zero(),
                   (a, e) => a + e.amount,
                 );
+                // Keep the scrollable lazy. The previous `ListView(children:)`
+                // eagerly built every transaction tile on first entry, which
+                // made large histories pay the full build/layout cost before
+                // the first scroll frame. Flatten only lightweight row
+                // metadata here; tile widgets are created on demand.
+                final rows = <_ActivityRow>[
+                  if (_selecting) const _ActivityRow.selection(),
+                  _ActivityRow.summary(
+                    totalIncoming: totalIncoming,
+                    totalOutgoing: totalOutgoing,
+                    activeCount: entries
+                        .where((e) => e.status == 'active')
+                        .length,
+                  ),
+                ];
+                for (final group in grouped) {
+                  rows.add(_ActivityRow.dayHeader(group.day));
+                  for (final entry in group.entries) {
+                    rows.add(_ActivityRow.transaction(entry));
+                  }
+                  rows.add(const _ActivityRow.spacer());
+                }
 
                 return Column(
                   children: [
@@ -767,113 +789,126 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                             await ref.read(activityTransactionsProvider.future);
                           } catch (_) {}
                         },
-                        child: ListView(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppSpace.lg,
-                          AppSpace.lg,
-                          AppSpace.lg,
-                          0,
-                        ),
-                        children: [
-                          if (_selecting) ...[
-                            Row(
-                              children: [
-                                _SelectionCountChip(
-                                  count: visibleSelected,
-                                  onCancel: _isBulkOperating
-                                      ? null
-                                      : () => setState(() {
-                                          _selecting = false;
-                                          _selectedIds.clear();
-                                        }),
-                                ),
-                                const Spacer(),
-                                TextButton(
-                                  onPressed: _isBulkOperating
-                                      ? null
-                                      : () => setState(() {
-                                          if (visibleSelected ==
-                                              entries.length) {
-                                            _selectedIds.clear();
-                                          } else {
-                                            _selectedIds.addAll(
-                                              entries.map((e) => e.id),
-                                            );
-                                          }
-                                        }),
-                                  child: Text(
-                                    visibleSelected == entries.length
-                                        ? 'Deselect all'
-                                        : 'Select all',
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: AppSpace.sm),
-                          ],
-                          _SummaryCard(
-                            totalIncoming: totalIncoming,
-                            totalOutgoing: totalOutgoing,
-                            count: entries
-                                .where((e) => e.status == 'active')
-                                .length,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpace.lg,
+                            AppSpace.lg,
+                            AppSpace.lg,
+                            0,
                           ),
-                          const SizedBox(height: AppSpace.lg),
-                          for (final group in grouped) ...[
-                            Padding(
-                              padding:
-                                  const EdgeInsets.only(bottom: AppSpace.sm),
-                              child: Text(
-                                _dayLabel(group.day),
-                                style: BambooFonts.heading(
-                                  13,
-                                  color: BambooInk.ink500,
-                                ),
-                              ),
-                            ),
-                            for (final entry in group.entries)
-                              Padding(
-                                padding:
-                                    const EdgeInsets.only(bottom: AppSpace.sm),
-                                child: _TransactionTile(
-                                  entry,
-                                  selecting: _selecting,
-                                  selected: _selectedIds.contains(entry.id),
-                                  tagNames:
-                                      (tagRepository?.tagsForTransaction(
-                                                entry.id,
-                                                fallback: entry.tags,
-                                              ) ??
-                                              entry.tags)
-                                          .map((tag) => tag.name)
-                                          .toList(),
-                                  onTap: () {
-                                    if (_selecting) {
-                                      if (!_isBulkOperating) {
-                                        setState(() {
-                                          if (!_selectedIds.remove(entry.id)) {
-                                            _selectedIds.add(entry.id);
-                                          }
-                                        });
+                          itemCount: rows.length,
+                          itemBuilder: (context, index) {
+                            final row = rows[index];
+                            switch (row.kind) {
+                              case _ActivityRowKind.selection:
+                                return Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppSpace.sm,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      _SelectionCountChip(
+                                        count: visibleSelected,
+                                        onCancel: _isBulkOperating
+                                            ? null
+                                            : () => setState(() {
+                                                _selecting = false;
+                                                _selectedIds.clear();
+                                              }),
+                                      ),
+                                      const Spacer(),
+                                      TextButton(
+                                        onPressed: _isBulkOperating
+                                            ? null
+                                            : () => setState(() {
+                                                if (visibleSelected ==
+                                                    entries.length) {
+                                                  _selectedIds.clear();
+                                                } else {
+                                                  _selectedIds.addAll(
+                                                    entries.map((e) => e.id),
+                                                  );
+                                                }
+                                              }),
+                                        child: Text(
+                                          visibleSelected == entries.length
+                                              ? 'Deselect all'
+                                              : 'Select all',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              case _ActivityRowKind.summary:
+                                return Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppSpace.lg,
+                                  ),
+                                  child: _SummaryCard(
+                                    totalIncoming: row.totalIncoming!,
+                                    totalOutgoing: row.totalOutgoing!,
+                                    count: row.activeCount!,
+                                  ),
+                                );
+                              case _ActivityRowKind.dayHeader:
+                                return Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppSpace.sm,
+                                  ),
+                                  child: Text(
+                                    _dayLabel(row.day!),
+                                    style: BambooFonts.heading(
+                                      13,
+                                      color: BambooInk.ink500,
+                                    ),
+                                  ),
+                                );
+                              case _ActivityRowKind.transaction:
+                                final entry = row.entry!;
+                                return Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppSpace.sm,
+                                  ),
+                                  child: _TransactionTile(
+                                    entry,
+                                    selecting: _selecting,
+                                    selected: _selectedIds.contains(entry.id),
+                                    tagNames:
+                                        (tagRepository?.tagsForTransaction(
+                                                  entry.id,
+                                                  fallback: entry.tags,
+                                                ) ??
+                                                entry.tags)
+                                            .map((tag) => tag.name)
+                                            .toList(),
+                                    onTap: () {
+                                      if (_selecting) {
+                                        if (!_isBulkOperating) {
+                                          setState(() {
+                                            if (!_selectedIds.remove(entry.id)) {
+                                              _selectedIds.add(entry.id);
+                                            }
+                                          });
+                                        }
+                                      } else {
+                                        context.push(
+                                          '/activity/${entry.id}',
+                                          extra: entry,
+                                        );
                                       }
-                                    } else {
-                                      context.push(
-                                        '/activity/${entry.id}',
-                                        extra: entry,
-                                      );
-                                    }
-                                  },
-                                  onLongPress: _selecting || _isBulkOperating
-                                      ? null
-                                      : () => setState(() {
-                                            _selecting = true;
-                                            _selectedIds.add(entry.id);
-                                          }),
-                                ),
-                              ),
-                            const SizedBox(height: AppSpace.sm),
-                          ],
-                        ],
+                                    },
+                                    onLongPress: _selecting || _isBulkOperating
+                                        ? null
+                                        : () => setState(() {
+                                              _selecting = true;
+                                              _selectedIds.add(entry.id);
+                                            }),
+                                  ),
+                                );
+                              case _ActivityRowKind.spacer:
+                                return const SizedBox(height: AppSpace.sm);
+                            }
+                          },
                         ),
                       ),
                     ),
@@ -954,6 +989,51 @@ class _DayGroup {
   final DateTime day;
   final List<TransactionEntry> entries;
   const _DayGroup(this.day, this.entries);
+}
+
+enum _ActivityRowKind { selection, summary, dayHeader, transaction, spacer }
+
+/// Lightweight metadata for the activity list. Keeping this separate from
+/// widget construction lets [ListView.builder] create transaction tiles only
+/// when they enter the viewport instead of eagerly building the entire
+/// history during first entry.
+class _ActivityRow {
+  final _ActivityRowKind kind;
+  final DateTime? day;
+  final TransactionEntry? entry;
+  final Money? totalIncoming;
+  final Money? totalOutgoing;
+  final int? activeCount;
+
+  const _ActivityRow._({
+    required this.kind,
+    this.day,
+    this.entry,
+    this.totalIncoming,
+    this.totalOutgoing,
+    this.activeCount,
+  });
+
+  const _ActivityRow.selection() : this._(kind: _ActivityRowKind.selection);
+
+  const _ActivityRow.summary({
+    required Money totalIncoming,
+    required Money totalOutgoing,
+    required int activeCount,
+  }) : this._(
+         kind: _ActivityRowKind.summary,
+         totalIncoming: totalIncoming,
+         totalOutgoing: totalOutgoing,
+         activeCount: activeCount,
+       );
+
+  const _ActivityRow.dayHeader(DateTime day)
+    : this._(kind: _ActivityRowKind.dayHeader, day: day);
+
+  const _ActivityRow.transaction(TransactionEntry entry)
+    : this._(kind: _ActivityRowKind.transaction, entry: entry);
+
+  const _ActivityRow.spacer() : this._(kind: _ActivityRowKind.spacer);
 }
 
 /// D1's filter state — card + category + date preset/range. A plain immutable
