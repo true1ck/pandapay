@@ -102,6 +102,14 @@ Future<void> _pump(
 }
 
 void main() {
+  // The selection tick rides on the row's avatar instead of a Checkbox column,
+  // so presence is identified by the per-transaction badge key.
+  final selectionBadges = find.byWidgetPredicate(
+    (widget) =>
+        widget.key is ValueKey<String> &&
+        (widget.key! as ValueKey<String>).value.startsWith('activity-select-'),
+  );
+
   testWidgets('shows Select transactions button and toggles selection mode', (
     tester,
   ) async {
@@ -124,17 +132,17 @@ void main() {
     await _pump(tester, repo: repo);
 
     // Initial state: "Select transactions" button is visible
-    expect(find.text('Select transactions'), findsOneWidget);
-    expect(find.byType(Checkbox), findsNothing);
+    expect(find.byTooltip('Select transactions'), findsOneWidget);
+    expect(selectionBadges, findsNothing);
     expect(find.text('0 selected'), findsNothing);
 
     // Tap to enter selection mode
-    await tester.tap(find.text('Select transactions'));
+    await tester.tap(find.byTooltip('Select transactions'));
     await tester.pumpAndSettle();
 
     // Now in selection mode
-    expect(find.text('Cancel selection'), findsOneWidget);
-    expect(find.byType(Checkbox), findsNWidgets(2));
+    expect(find.byTooltip('Cancel selection'), findsOneWidget);
+    expect(selectionBadges, findsNWidgets(2));
     expect(find.text('0 selected'), findsOneWidget);
     expect(find.text('Select all'), findsOneWidget);
 
@@ -146,11 +154,11 @@ void main() {
     expect(find.text('Deselect all'), findsOneWidget);
 
     // Tap "Cancel selection"
-    await tester.tap(find.text('Cancel selection'));
+    await tester.tap(find.byTooltip('Cancel selection'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Select transactions'), findsOneWidget);
-    expect(find.byType(Checkbox), findsNothing);
+    expect(find.byTooltip('Select transactions'), findsOneWidget);
+    expect(selectionBadges, findsNothing);
   });
 
   testWidgets('long press on transaction enters selection mode and selects it', (
@@ -173,7 +181,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Enters selection mode with 1 selected
-    expect(find.text('Cancel selection'), findsOneWidget);
+    expect(find.byTooltip('Cancel selection'), findsOneWidget);
     expect(find.text('1 selected'), findsOneWidget);
   });
 }

@@ -71,6 +71,10 @@ class MerchantIdentity {
   static final _leadingJunkRe = RegExp(r'^[\s\-*#_:/.,;]+');
   static final _trailingJunkRe = RegExp(r'[\s\-*#_:/.,;]+$');
   static final _multipleSpacesRe = RegExp(r'\s{2,}');
+  static final _transferToRe = RegExp(
+    r'^transfer\s+to\s+(.+)$',
+    caseSensitive: false,
+  );
 
   static String? cleanName(String? value) {
     if (value == null) return null;
@@ -87,6 +91,20 @@ class MerchantIdentity {
     }
     return isWeakName(text) ? null : text;
   }
+
+  /// The payee of a stored `Transfer to <payee>` merchant name, or null when
+  /// the name is not a P2P transfer. SMS import writes that prefix
+  /// (`sms_fact_scoring.dart`), and rows that already say they are a transfer
+  /// show only the payee.
+  static String? transferPayee(String? value) {
+    if (value == null) return null;
+    final payee = _transferToRe.firstMatch(_normalize(value))?.group(1)?.trim();
+    return payee == null || payee.isEmpty ? null : payee;
+  }
+
+  /// [transferPayee] where the verb has nowhere else to go: the payee when
+  /// there is one, otherwise the name unchanged. Never invents a label.
+  static String? payeeDisplayName(String? value) => transferPayee(value) ?? value;
 
   static bool isWeakName(String? value) {
     if (value == null) return true;

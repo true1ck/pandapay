@@ -147,8 +147,13 @@ class LocalSmsParser {
   // 19: Allow scanner reprocessing of historical alerts on parser upgrade without lockout.
   // 21: Named payees for UPI narrations and "towards X for INR" debits, weak-name rejection.
   // 22: Unicode-masked UPI references precede the named recipient.
-  // 23: Merge UPI recipient improvements with receive-time and zoned timestamp preservation.
-  static const version = 23;
+  // 23: UPI recipient and receive-time/zoned timestamp improvements on this
+  // branch; amount-printing decline notices on dev.
+  // 24: Decline reasons outrank movement verbs, so failed attempts are not
+  // classified as spends and decline reasons are not used as payees.
+  // 25: Reprocess rows classified by either divergent parser history using
+  // the combined rules.
+  static const version = 25;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -1719,6 +1724,27 @@ class LocalSmsParser {
     }
   }
 
+  /// A decline notice states its own reason: "returned due to insufficient
+  /// funds", "could not be processed due to insufficient balance", "was
+  /// declined". Movement verbs in the same sentence ("Rs 81,467 spent at the
+  /// mall was declined") restate the attempted amount rather than a debit, so
+  /// this verdict outranks them and no branch may mint a spend from the body.
+  /// The compensating form ("payment failed, but your account was debited")
+  /// carries no reason clause and stays reviewable.
+  static bool _declinedThisPayment(String body) =>
+      _re(
+        r'\b(?:declined|rejected|failed|failure|unsuccessful|bounced|returned|not\s+(?:be\s+)?processed)\b'
+        r'[\s\S]{0,48}\b(?:due\s+to|because\s+of|owing\s+to|on\s+account\s+of)\b'
+        r'[\s\S]{0,32}\b(?:insufficient|inadequate|low\s+balance|not\s+enough)\b',
+      ).hasMatch(body) ||
+      _re(
+        r'\b(?:insufficient|inadequate)\s+(?:funds?|balance|money|limit)\b'
+        r'[\s\S]{0,48}\b(?:declined|rejected|failed|failure|unsuccessful|bounced|returned|not\s+(?:be\s+)?processed)\b',
+      ).hasMatch(body) ||
+      _re(
+        r'\b(?:was|were|is|has\s+been|have\s+been|got)\s+(?:declined|rejected|marked\s+(?:failed|unsuccessful)|not\s+processed)\b',
+      ).hasMatch(body);
+
   static LocalSmsObservation? parse({
     required String namespace,
     required String sender,
@@ -1736,7 +1762,7 @@ class LocalSmsParser {
   }) {
     if (body.length > 20000 || sensitive(body)) return null;
 
-    if (isInvestmentFolioAllotment(body)) {
+    if (isInvestmentFolioAllotment(body) && !_declinedThisPayment(body)) {
       final amount = extractReceiptAmount(body);
       final schemeMatch = _re(
         r"\b(?:scheme|fund(?:\s+name)?)\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 .&'/()]{2,60})",
@@ -1837,7 +1863,7 @@ class LocalSmsParser {
               caseSensitive: false,
             ).hasMatch(body)) &&
         _payLaterDrawdownAmountRe.hasMatch(body);
-    if (isPayLaterDrawdownSpend) {
+    if (isPayLaterDrawdownSpend && !_declinedThisPayment(body)) {
       final rawAmount = _payLaterDrawdownAmountRe
           .firstMatch(body)
           ?.group(1)
@@ -1874,6 +1900,7 @@ class LocalSmsParser {
     // The built-in grammar below still classifies those messages.
     final downloadedMovementBlocked =
         _hasFutureDebitWording(body) ||
+        _declinedThisPayment(body) ||
         _re(
           r'\b(?:declined|failed|failure|cancelled|canceled|unsuccessful)\b',
         ).hasMatch(body);
@@ -2275,9 +2302,13 @@ class LocalSmsParser {
             _re(
               r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred|deducted)\b[\s\S]{0,100}\b(?:successful|successfully|completed)\b',
             ).hasMatch(movementBody) ||
-            _re(
-              r'\b(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[*xX]*[\d,.]+\b',
-            ).hasMatch(movementBody));
+            // "Txn of Rs 81,467 was declined due to insufficient balance"
+            // prints its amount without any money moving, so this bare shape
+            // is only movement evidence when the notice is not a failure.
+            (!failed &&
+                _re(
+                  r'\b(?:txn|transaction)\s+(?:of\s+)?(?:₹|rs\.?|inr)\s*[*xX]*[\d,.]+\b',
+                ).hasMatch(movementBody)));
     final isDueReminder =
         _re(
           r'\b(?:is\s+due\s+on|payment\s+is\s+due|bill\s+is\s+due|due\s+date\s+is|payment\s+due\s+date)\b|\b(?:payment|bill|amount)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[*xX]*[\d,.]+\b[\s\S]{0,80}\bis\s+due\b|\b(?:minimum|total)\s+amount\s+due\b',
@@ -2486,8 +2517,11 @@ class LocalSmsParser {
     // A failure/decline notice is non-spending only when it contains no
     // evidence that money actually moved. Some issuers send both messages
     // together (for example, "payment failed but account debited"); keep
-    // those cases reviewable instead of acknowledging them as noise.
-    if (failed && !hasCompletedMovement) {
+    // those cases reviewable instead of acknowledging them as noise. A notice
+    // that names its own decline reason is the exception: the movement verb
+    // printed beside it restates the attempted amount, so it is not evidence
+    // that money moved.
+    if ((failed && !hasCompletedMovement) || _declinedThisPayment(body)) {
       return observation(
         null,
         LocalSmsEventType.failed,
@@ -2788,6 +2822,14 @@ class LocalSmsParser {
       }
     }
     merchant = MerchantIdentity.cleanName(merchant);
+    // "declined due to insufficient balance" makes the merchant regex capture
+    // the reason as the payee. A decline reason is not a merchant name.
+    if (merchant != null &&
+        _re(
+          r'^(?:due\s+to\s+|owing\s+to\s+|because\s+of\s+)?(?:insufficient|inadequate|failed|failure|declined|rejected|blocked|expired|invalid|cancell?ed|not\s+permitted|exceeds?|over\s+limit|low\s+balance|technical\s+(?:error|issue)|network\s+(?:error|issue))\b',
+        ).hasMatch(merchant)) {
+      merchant = null;
+    }
     final ownNameTransfer =
         merchant != null &&
         ownUserName != null &&

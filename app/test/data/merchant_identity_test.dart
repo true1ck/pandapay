@@ -111,4 +111,36 @@ void main() {
       expect(MerchantIdentity.isWeakName('सुशील कुमार'), isFalse);
     });
   });
+
+  group('MerchantIdentity.transferPayee', () {
+    test('reads the payee out of the stored transfer form', () {
+      expect(
+        MerchantIdentity.transferPayee('Transfer to Sunali Mundra'),
+        equals('Sunali Mundra'),
+      );
+    });
+
+    test('tolerates the casing and spacing a merchant name can arrive with', () {
+      expect(MerchantIdentity.transferPayee('TRANSFER TO Zephr'), equals('Zephr'));
+      expect(MerchantIdentity.transferPayee('Transfer to  Zephr'), equals('Zephr'));
+      expect(MerchantIdentity.transferPayee(' transfer to Zephr '), equals('Zephr'));
+    });
+
+    test('returns null rather than a blank or absent payee', () {
+      expect(MerchantIdentity.transferPayee('Transfer to'), isNull);
+      expect(MerchantIdentity.transferPayee('Transfer to '), isNull);
+      expect(MerchantIdentity.transferPayee('BOMBAY BAZAAR'), isNull);
+      expect(MerchantIdentity.transferPayee(null), isNull);
+    });
+
+    test('payeeDisplayName falls back to the name it was given', () {
+      expect(
+        MerchantIdentity.payeeDisplayName('Transfer to Zephr'),
+        equals('Zephr'),
+      );
+      expect(MerchantIdentity.payeeDisplayName('Transfer to'), equals('Transfer to'));
+      expect(MerchantIdentity.payeeDisplayName('BOMBAY BAZAAR'), equals('BOMBAY BAZAAR'));
+      expect(MerchantIdentity.payeeDisplayName(null), isNull);
+    });
+  });
 }

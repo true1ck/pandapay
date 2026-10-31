@@ -66,13 +66,7 @@ String? _readableMerchantVpa(String? value) {
 /// P2P transfers are stored as "Transfer to <payee>". Inside a spending
 /// breakdown the payment method already says it was a transfer, so the verb
 /// only eats label space.
-String? _payeeDisplayName(String? name) {
-  if (name == null) return null;
-  final stripped = name
-      .replaceFirst(RegExp(r'^transfer\s+to\s+', caseSensitive: false), '')
-      .trim();
-  return stripped.isEmpty ? name : stripped;
-}
+String? _payeeDisplayName(String? name) => MerchantIdentity.payeeDisplayName(name);
 
 // Opaque addresses still distinguish identities even when hidden in the UI.
 String _merchantGroupKey(TransactionEntry entry) {

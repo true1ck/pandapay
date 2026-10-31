@@ -864,6 +864,112 @@ void main() {
     expect(result?.transaction, isNull);
   });
 
+  test('does not import a decline notice that prints its txn amount', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-HDFCBK-S',
+      body:
+          'Txn of Rs.81,467.00 on your HDFC Bank Card xx1234 was declined due to insufficient balance. Not you? Call 18002586161',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.eventType, LocalSmsEventType.failed);
+    expect(result?.disposition, LocalSmsDisposition.localIgnore);
+    expect(result?.transaction, isNull);
+  });
+
+  test('a movement verb beside a stated decline reason is not a spend', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-HDFCBK-S',
+      body:
+          'Rs.81,467.00 spent at PHOENIX MALL on your HDFC Bank Credit Card xx1234 '
+          'was declined due to insufficient funds. - HDFC Bank',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.eventType, LocalSmsEventType.failed);
+    expect(result?.disposition, LocalSmsDisposition.localIgnore);
+    expect(result?.transaction, isNull);
+  });
+
+  test('an ECS debit returned for insufficient funds is a failure', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-HDFCBK-S',
+      body:
+          'ECS Debit of Rs.81,467.00 presented to your A/c XX1234 on 18-10-2026 has '
+          'been returned due to insufficient funds.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.eventType, LocalSmsEventType.failed);
+    expect(result?.disposition, LocalSmsDisposition.localIgnore);
+    expect(result?.transaction, isNull);
+  });
+
+  test('a NACH debit that could not be processed is a failure', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-ICICIB-S',
+      body:
+          'NACH debit of Rs.81,467.00 on your A/c XX9876 could not be processed due '
+          'to insufficient balance. - ICICI Bank',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.eventType, LocalSmsEventType.failed);
+    expect(result?.disposition, LocalSmsDisposition.localIgnore);
+    expect(result?.transaction, isNull);
+  });
+
+  test('a SIP debit that failed for insufficient funds is not a spend', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-SBIINB-S',
+      body:
+          'Rs.5,000.00 debited from your A/c XX4321 towards SBI Bluechip Fund SIP on '
+          '18-10-2026. Payment failed due to insufficient funds.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.eventType, LocalSmsEventType.failed);
+    expect(result?.disposition, LocalSmsDisposition.localIgnore);
+    expect(result?.transaction, isNull);
+  });
+
+  test('a completed SIP allotment still syncs beside decline wording', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-SBIINB-S',
+      body:
+          'Rs.5,000.00 debited from your A/c XX4321 towards SBI Bluechip Fund SIP. '
+          'Units allotted at NAV of 105.25 under folio 1234/5678.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.transaction, isNotNull);
+    expect(result?.disposition, LocalSmsDisposition.sync);
+  });
+
+  test('a spend whose narration mentions returns stays a spend', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-HDFCBK-S',
+      body:
+          'Rs.1,200.00 spent at Croma on your HDFC Bank Credit Card xx1234 on '
+          '18-10-2026. Exchange and returns available in store.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.transaction, isNotNull);
+    expect(result?.transaction?.amount.paise, 120000);
+  });
+
+  test('does not name a payee after a decline reason', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-HDFCBK-S',
+      body:
+          'Your card was debited INR 500. The later payment failed due to insufficient balance.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.transaction?.merchantName, isNot('insufficient'));
+  });
+
   test('classifies AutoPay activation as a local observation, not spending', () {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',

@@ -33,6 +33,10 @@ const _googlePlayBody =
     'Your A/c has been debited towards Google Play for INR 4999.00 '
     'on 10-10-26. '
     '9901e1edad8e46cd937da209ef0baf55@axl - Axis Bank';
+const _declineSender = 'VM-HDFCBK-S';
+const _declineBody =
+    'Txn of Rs.81,467.00 on your HDFC Bank Card xx1234 was declined due to '
+    'insufficient balance. Not you? Call 18002586161';
 
 TransactionEntry provisionalSms(
   String key, {
@@ -1008,6 +1012,168 @@ void main() {
       expect(candidates.single['body'], _merchantRepairBody);
       expect(store.entities(ns, 'transactions').single['merchant_name'],
           'Balaji Sports');
+    });
+  });
+
+  group('declined SMS transaction repair', () {
+    void capture(AppDatabase db, String ns, String sender, String body) =>
+        SmsIntakeRepository(db).capture(
+          ns,
+          QueuedSms(
+            sender: sender,
+            body: body,
+            receivedAt: DateTime(2026, 10, 17),
+          ),
+        );
+
+    test('a decline notice stored as a spend by v22 is removed', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _declineSender, _declineBody);
+      capture(db, ns, _declineSender, _declineBody);
+      store.saveProvisional(
+        ns,
+        provisionalSms(key, merchant: 'insufficient', amountPaise: 8146700),
+      );
+
+      expect(store.entities(ns, 'transactions'), isEmpty);
+      expect(
+        db.db.select(
+          "SELECT 1 FROM financial_entities WHERE entity='transactions'",
+        ),
+        isEmpty,
+      );
+      // The capture stays on the device: its raw body would otherwise reach
+      // the hosted parser and come back as a synced phantom.
+      final intake = SmsIntakeRepository(db);
+      expect(intake.pending(ns), isEmpty);
+      expect(
+        db.db
+            .select(
+              'SELECT processed FROM sms_captured_messages WHERE namespace=?',
+              [ns],
+            )
+            .single['processed'],
+        1,
+      );
+      expect(
+        db.db
+            .select(
+              "SELECT repair_key FROM local_repairs WHERE namespace=? "
+              "AND repair_key LIKE 'declined_txn_repair_v1:%'",
+              [ns],
+            )
+            .single['repair_key'],
+        'declined_txn_repair_v1:${LocalSmsParser.version}:$key',
+      );
+    });
+
+    test('the Activity snapshot stops returning the phantom', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _declineSender, _declineBody);
+      capture(db, ns, _declineSender, _declineBody);
+      store.saveProvisional(ns, provisionalSms(key, merchant: 'insufficient'));
+
+      final snapshot = store.transactions(ns, const TransactionQuery());
+
+      expect(snapshot?.rows, isEmpty);
+    });
+
+    test('the repair evaluates a source key once per parser version', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _declineSender, _declineBody);
+      capture(db, ns, _declineSender, _declineBody);
+      store.saveProvisional(ns, provisionalSms(key, merchant: 'insufficient'));
+      expect(store.entities(ns, 'transactions'), isEmpty);
+
+      // The marker, not the grammar, now decides: a replay from an older
+      // build is left for the user to correct.
+      store.saveProvisional(ns, provisionalSms(key, merchant: 'insufficient'));
+      expect(store.entities(ns, 'transactions'), hasLength(1));
+    });
+
+    test('a confirmed decline row is left for the server to own', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _declineSender, _declineBody);
+      capture(db, ns, _declineSender, _declineBody);
+      store.saveTransactions(ns, [
+        provisionalSms(key, merchant: 'insufficient', amountPaise: 8146700),
+      ]);
+
+      expect(store.entities(ns, 'transactions').single['merchant_name'],
+          'insufficient');
+      expect(SmsIntakeRepository(db).pending(ns), hasLength(1));
+    });
+
+    test('a genuine spend next to the phantom survives', () {
+      const ns = 'a';
+      final declineKey = smsSourceKey(ns, _declineSender, _declineBody);
+      final spendKey =
+          smsSourceKey(ns, _merchantRepairSender, _merchantRepairBody);
+      capture(db, ns, _declineSender, _declineBody);
+      capture(db, ns, _merchantRepairSender, _merchantRepairBody);
+      store.saveProvisional(
+        ns,
+        provisionalSms(
+          declineKey,
+          merchant: 'insufficient',
+          amountPaise: 8146700,
+        ),
+      );
+      store.saveProvisional(ns, provisionalSms(spendKey, amountPaise: 70000));
+
+      final rows = store.entities(ns, 'transactions');
+      expect(rows, hasLength(1));
+      expect(rows.single['merchant_name'], 'Balaji Sports');
+      expect(rows.single['amount_inr'], 700.0);
+      // Only the decline leaves the upload queue.
+      expect(SmsIntakeRepository(db).pending(ns).single.id, spendKey);
+    });
+
+    test('a capture the grammar merely stops recognising is kept', () {
+      const ns = 'a';
+      const sender = 'VM-AXISBK-S';
+      const body = 'Your Axis Bank a/c XX5121 balance is Rs 500.00 as on 17Oct26.';
+      final key = smsSourceKey(ns, sender, body);
+      capture(db, ns, sender, body);
+      final original = provisionalSms(key, merchant: 'Corner Shop');
+      store.saveProvisional(ns, original);
+
+      expect(store.entities(ns, 'transactions').single['merchant_name'],
+          'Corner Shop');
+      expect(rawTransaction(db, ns, original.id)['pending'], 1);
+    });
+
+    test('a source receipt blocks the decline repair', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _declineSender, _declineBody);
+      capture(db, ns, _declineSender, _declineBody);
+      final original = provisionalSms(key, merchant: 'insufficient');
+      store.saveProvisional(ns, original);
+      db.db.execute(
+        'INSERT OR REPLACE INTO financial_source_receipts VALUES (?,?,?)',
+        [ns, key, 'server-id'],
+      );
+
+      expect(store.entities(ns, 'transactions').single['merchant_name'],
+          'insufficient');
+      expect(SmsIntakeRepository(db).pending(ns).single.id, key);
+    });
+
+    test('a queued correction blocks the decline repair', () {
+      const ns = 'a';
+      final key = smsSourceKey(ns, _declineSender, _declineBody);
+      capture(db, ns, _declineSender, _declineBody);
+      final original = provisionalSms(key, merchant: 'insufficient');
+      store.saveProvisional(ns, original);
+      SyncQueue(db, namespace: ns).enqueueUpdate(
+        entity: 'transactions',
+        entityId: original.id,
+        fields: {'merchant_name': 'Corner Shop'},
+      );
+
+      expect(store.entities(ns, 'transactions').single['merchant_name'],
+          'Corner Shop');
+      expect(SmsIntakeRepository(db).pending(ns).single.id, key);
     });
   });
 }

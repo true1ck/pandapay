@@ -13,6 +13,7 @@ import '../../app/providers.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/merchant_identity.dart';
 import '../../data/spending_selection.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
@@ -585,6 +586,43 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     }
   }
 
+  void _openBulkEditSheet(List<TransactionEntry> visible) {
+    final tagsAvailable = ref.read(transactionTagsProvider) != null;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: BambooInk.paper,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => _BulkEditSheet(
+        count: _selectedIds.length,
+        tagsAvailable: tagsAvailable,
+        onSetCategory: () {
+          Navigator.of(sheetContext).pop();
+          _bulkCategorize(visible);
+        },
+        onAddTags: tagsAvailable
+            ? () {
+                Navigator.of(sheetContext).pop();
+                _changeTags(visible, remove: false);
+              }
+            : null,
+        onRemoveTags: tagsAvailable
+            ? () {
+                Navigator.of(sheetContext).pop();
+                _changeTags(visible, remove: true);
+              }
+            : null,
+        onAssignCard: () {
+          Navigator.of(sheetContext).pop();
+          _bulkAssignCard(visible);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final sessionInit = ref.watch(sessionInitProvider);
@@ -619,6 +657,13 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     const Expanded(child: _SearchField()),
                     const SizedBox(width: AppSpace.xs),
                     IconButton(
+                      tooltip: 'Select transactions',
+                      onPressed: _selecting || _isBulkOperating
+                          ? null
+                          : () => setState(() => _selecting = true),
+                      icon: const Icon(Icons.checklist),
+                    ),
+                    IconButton(
                       tooltip: 'Deleted transactions',
                       color: AppColors.error,
                       onPressed: () => Navigator.of(context).push(
@@ -644,21 +689,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   const SizedBox(height: AppSpace.xs),
                   _ActiveFilterBadgesRow(filter: filter),
                 ],
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: _isBulkOperating
-                        ? null
-                        : () => setState(() {
-                            _selecting = !_selecting;
-                            _selectedIds.clear();
-                          }),
-                    icon: Icon(_selecting ? Icons.close : Icons.checklist),
-                    label: Text(
-                      _selecting ? 'Cancel selection' : 'Select transactions',
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -741,8 +771,43 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                           0,
                         ),
                         children: [
+                          if (_selecting) ...[
+                            Row(
+                              children: [
+                                _SelectionCountChip(
+                                  count: visibleSelected,
+                                  onCancel: _isBulkOperating
+                                      ? null
+                                      : () => setState(() {
+                                          _selecting = false;
+                                          _selectedIds.clear();
+                                        }),
+                                ),
+                                const Spacer(),
+                                TextButton(
+                                  onPressed: _isBulkOperating
+                                      ? null
+                                      : () => setState(() {
+                                          if (visibleSelected ==
+                                              entries.length) {
+                                            _selectedIds.clear();
+                                          } else {
+                                            _selectedIds.addAll(
+                                              entries.map((e) => e.id),
+                                            );
+                                          }
+                                        }),
+                                  child: Text(
+                                    visibleSelected == entries.length
+                                        ? 'Deselect all'
+                                        : 'Select all',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpace.sm),
+                          ],
                           _SummaryCard(
-                            title: _summaryTitle(filter),
                             totalIncoming: totalIncoming,
                             totalOutgoing: totalOutgoing,
                             count: entries
@@ -766,62 +831,40 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                               Padding(
                                 padding:
                                     const EdgeInsets.only(bottom: AppSpace.sm),
-                                child: Row(
-                                  children: [
-                                    if (_selecting)
-                                      Checkbox(
-                                        key: ValueKey(
-                                            'activity-select-${entry.id}'),
-                                        value: _selectedIds.contains(entry.id),
-                                        onChanged: _isBulkOperating
-                                            ? null
-                                            : (value) => setState(() {
-                                                if (value == true) {
-                                                  _selectedIds.add(entry.id);
-                                                } else {
-                                                  _selectedIds.remove(entry.id);
-                                                }
-                                              }),
-                                      ),
-                                    Expanded(
-                                      child: _TransactionTile(
-                                        entry,
-                                        tagNames:
-                                            (tagRepository?.tagsForTransaction(
-                                                      entry.id,
-                                                      fallback: entry.tags,
-                                                    ) ??
-                                                    entry.tags)
-                                                .map((tag) => tag.name)
-                                                .toList(),
-                                        onTap: () {
-                                          if (_selecting) {
-                                            if (!_isBulkOperating) {
-                                              setState(() {
-                                                if (!_selectedIds
-                                                    .remove(entry.id)) {
-                                                  _selectedIds.add(entry.id);
-                                                }
-                                              });
-                                            }
-                                          } else {
-                                            context.push(
-                                              '/activity/${entry.id}',
-                                              extra: entry,
-                                            );
+                                child: _TransactionTile(
+                                  entry,
+                                  selecting: _selecting,
+                                  selected: _selectedIds.contains(entry.id),
+                                  tagNames:
+                                      (tagRepository?.tagsForTransaction(
+                                                entry.id,
+                                                fallback: entry.tags,
+                                              ) ??
+                                              entry.tags)
+                                          .map((tag) => tag.name)
+                                          .toList(),
+                                  onTap: () {
+                                    if (_selecting) {
+                                      if (!_isBulkOperating) {
+                                        setState(() {
+                                          if (!_selectedIds.remove(entry.id)) {
+                                            _selectedIds.add(entry.id);
                                           }
-                                        },
-                                        onLongPress:
-                                            _selecting || _isBulkOperating
-                                                ? null
-                                                : () => setState(() {
-                                                      _selecting = true;
-                                                      _selectedIds
-                                                          .add(entry.id);
-                                                    }),
-                                      ),
-                                    ),
-                                  ],
+                                        });
+                                      }
+                                    } else {
+                                      context.push(
+                                        '/activity/${entry.id}',
+                                        extra: entry,
+                                      );
+                                    }
+                                  },
+                                  onLongPress: _selecting || _isBulkOperating
+                                      ? null
+                                      : () => setState(() {
+                                            _selecting = true;
+                                            _selectedIds.add(entry.id);
+                                          }),
                                 ),
                               ),
                             const SizedBox(height: AppSpace.sm),
@@ -833,23 +876,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     if (_selecting)
                       _BulkActionBar(
                         selectedCount: visibleSelected,
-                        totalCount: entries.length,
                         isBusy: _isBulkOperating,
-                        onSelectAll: () => setState(() {
-                          if (visibleSelected == entries.length) {
-                            _selectedIds.clear();
-                          } else {
-                            _selectedIds.addAll(entries.map((e) => e.id));
-                          }
-                        }),
-                        onAddTags: tagRepository != null
-                            ? () => _changeTags(entries, remove: false)
-                            : null,
-                        onRemoveTags: tagRepository != null
-                            ? () => _changeTags(entries, remove: true)
-                            : null,
-                        onSetCategory: () => _bulkCategorize(entries),
-                        onAssignCard: () => _bulkAssignCard(entries),
+                        onEdit: () => _openBulkEditSheet(entries),
                         onDelete: () => _bulkDelete(entries),
                       ),
                   ],
@@ -916,11 +944,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       (entry.entryKind == TxnEntryKind.spend ||
           entry.entryKind == TxnEntryKind.investment) &&
       entry.amount.paise > 0;
-}
-
-String _summaryTitle(ActivityFilter filter) {
-  if (filter.from == null && filter.to == null) return 'All activity';
-  return 'Activity · ${_dateFilterLabel(filter)}';
 }
 
 class _DayGroup {
@@ -2175,12 +2198,10 @@ class _FilterChipButton extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  final String title;
   final Money totalIncoming;
   final Money totalOutgoing;
   final int count;
   const _SummaryCard({
-    required this.title,
     required this.totalIncoming,
     required this.totalOutgoing,
     required this.count,
@@ -2188,69 +2209,77 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The spend-trends metrics-card language (paper, hairline, icon circles)
+    // instead of a slate hero — the period chip right above already says
+    // which window this covers.
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
-        ),
+        color: BambooInk.paper,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: BambooFonts.ui(12, color: BambooInk.onSlateMuted),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Text(
-                count == 0
-                    ? 'No activity'
-                    : '$count transaction${count == 1 ? '' : 's'}',
-                style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted),
-              ),
-              if (totalOutgoing.paise == 0) ...[
-                const SizedBox(width: AppSpace.sm),
-                Text(
-                  'No spending',
-                  style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted),
-                ),
-              ],
-            ],
+          _SummaryBadge(
+            icon: Icons.arrow_downward_rounded,
+            color: BambooInk.jade,
           ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: _SummaryMetric(
-                  label: 'Money in',
-                  amount: totalIncoming,
-                  prefix: '+',
-                  color: BambooInk.jade,
-                ),
-              ),
-              const SizedBox(width: AppSpace.md),
-              Expanded(
-                child: _SummaryMetric(
-                  label: 'Money out',
-                  amount: totalOutgoing,
-                  prefix: '−',
-                  color: BambooInk.clay,
-                ),
-              ),
-            ],
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: _SummaryMetric(
+              label: 'Money in',
+              amount: totalIncoming,
+              prefix: '+',
+              color: BambooInk.jade,
+            ),
+          ),
+          Container(width: 1, height: 30, color: BambooInk.hairlineOnPaper),
+          const SizedBox(width: AppSpace.sm),
+          _SummaryBadge(
+            icon: Icons.arrow_upward_rounded,
+            color: BambooInk.clay,
+          ),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: _SummaryMetric(
+              label: 'Money out',
+              amount: totalOutgoing,
+              prefix: '−',
+              color: BambooInk.clay,
+            ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          Text(
+            count == 0
+                ? 'No activity'
+                : totalOutgoing.paise == 0
+                ? 'No spending'
+                : '$count txns',
+            style: BambooFonts.ui(11.5, color: BambooInk.ink500),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SummaryBadge extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+
+  const _SummaryBadge({required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, size: 16, color: color),
     );
   }
 }
@@ -2280,7 +2309,7 @@ class _SummaryMetric extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: BambooFonts.ui(11, color: BambooInk.onSlateMuted)),
+        Text(label, style: BambooFonts.ui(11, color: BambooInk.ink500)),
         const SizedBox(height: 2),
         FittedBox(
           fit: BoxFit.scaleDown,
@@ -2289,7 +2318,7 @@ class _SummaryMetric extends StatelessWidget {
             amount,
             prefix: prefix,
             confidence: Confidence.estimated,
-            style: BambooFonts.money(19, color: color),
+            style: BambooFonts.money(16, color: color),
             showConfidenceIcon: false,
             hidePaise: true,
             compact: useCompactDenomination,
@@ -2300,16 +2329,61 @@ class _SummaryMetric extends StatelessWidget {
   }
 }
 
+/// The tinted pill beside a transaction title — Refund, Reversal or Transfer.
+class _MovementChip extends StatelessWidget {
+  const _MovementChip({
+    required this.label,
+    required this.tint,
+    required this.fillAlpha,
+    required this.borderAlpha,
+    this.textColor,
+  });
+
+  final String label;
+  final Color tint;
+  final double fillAlpha;
+  final double borderAlpha;
+  final Color? textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: fillAlpha),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: tint.withValues(alpha: borderAlpha),
+          width: 0.8,
+        ),
+      ),
+      child: Text(
+        label,
+        style: BambooFonts.ui(
+          10.5,
+          weight: FontWeight.w700,
+          color: textColor ?? tint,
+        ),
+      ),
+    );
+  }
+}
+
 class _TransactionTile extends StatelessWidget {
   final TransactionEntry entry;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final List<String> tagNames;
+  final bool selecting;
+  final bool selected;
   const _TransactionTile(
     this.entry, {
     required this.onTap,
     this.onLongPress,
     this.tagNames = const [],
+    this.selecting = false,
+    this.selected = false,
   });
 
   @override
@@ -2352,6 +2426,16 @@ class _TransactionTile extends StatelessWidget {
           ? (entry.smsReceivedAt ?? entry.occurredAt)
           : entry.occurredAt,
     );
+    // SMS import stores a P2P transfer as "Transfer to <payee>". Showing the
+    // payee and moving "Transfer" into the chip slot keeps the cue when the
+    // list is scanned (docs/design/spending-activity-redesign-2026-10-20.html).
+    final merchantDisplay = entry.merchantName ?? entryLabel;
+    final transferPayee = MerchantIdentity.transferPayee(merchantDisplay);
+    // The payee-first title only exists to free the chip slot. When Refund or
+    // Reversal claims it, the name keeps its verb — a row must not lose the
+    // transfer cue and the chip in the same breath.
+    final showTransferChip = transferPayee != null && !isRefund && !isReversal;
+    final nameDisplay = showTransferChip ? transferPayee : merchantDisplay;
     final subtitleParts = <String>[
       isSmsImported ? '$timeLabel · SMS' : timeLabel,
       if (entry.entryKind != TxnEntryKind.spend || isInvestmentCategory)
@@ -2377,176 +2461,379 @@ class _TransactionTile extends StatelessWidget {
           entry.rewardState == 'estimated' &&
           (entry.source == 'sms' || entry.source == 'sms_bulk'))
         'Pending confirmation',
-      if (entry.categoryName != null) entry.categoryLabel,
+      // The Transfer chip is what replaces this segment, so the category goes
+      // only when the chip is actually on the row. `other` is one of the
+      // canonical fifteen and a user can pick it deliberately — nothing here
+      // can tell that apart from an auto-assigned one, and a real subcategory
+      // ("Other · UPI") still earns its place.
+      if (entry.categoryName != null &&
+          !(showTransferChip &&
+              entry.categoryName!.toLowerCase() == 'other' &&
+              entry.subcategoryName == null))
+        entry.categoryLabel,
     ];
     // See account_screen.dart's _AccountTile for why Pressable, not InkWell.
-    return Pressable(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Container(
-        decoration: BoxDecoration(
-          color: BambooInk.glassFillOnPaper,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: BambooInk.hairlineOnPaper),
-        ),
-        padding: const EdgeInsets.all(AppSpace.md),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: directionColor.withValues(alpha: isIgnored ? 0.12 : 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                isRefund
-                    ? Icons.replay_rounded
-                    : isReversal
-                    ? Icons.undo_rounded
-                    : isIgnored
-                    ? Icons.block_rounded
-                    : (isInvestmentCategory && isIncome)
-                    ? Icons.trending_up_rounded
-                    : isIncome
-                    ? Icons.arrow_downward_rounded
-                    : (entry.entryKind == TxnEntryKind.investment || isInvestmentCategory)
-                    ? Icons.trending_up_rounded
-                    : isMoneyOut
-                    ? Icons.arrow_upward_rounded
-                    : entry.entryKind == TxnEntryKind.transfer
-                    ? Icons.swap_horiz_rounded
-                    : Icons.trending_up_rounded,
-                size: 18,
-                color: directionColor,
-              ),
-            ),
-            const SizedBox(width: AppSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Semantics(
+      selected: selecting ? selected : null,
+      hint: selecting
+          ? (selected ? 'Double tap to deselect' : 'Double tap to select')
+          : null,
+      child: Pressable(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Container(
+          decoration: BoxDecoration(
+            color: BambooInk.glassFillOnPaper,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+          ),
+          // AppSpace.md stays the row's standard inset; density comes from the
+          // 34pt tile and the two-line clamps, not from off-scale padding.
+          padding: const EdgeInsets.all(AppSpace.md),
+          child: Row(
+            children: [
+              // The check sits on the tile's corner instead of in its own
+              // 40pt column, which used to eat the width the merchant name
+              // needed; tapping anywhere on the row still toggles selection.
+              Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          entry.merchantName ?? entryLabel,
-                          style: BambooFonts.heading(
-                            14.5,
-                            color: isIgnored ? BambooInk.ink700 : BambooInk.ink900,
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: directionColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: Icon(
+                      isRefund
+                          ? Icons.replay_rounded
+                          : isReversal
+                          ? Icons.undo_rounded
+                          : isIgnored
+                          ? Icons.block_rounded
+                          : (isInvestmentCategory && isIncome)
+                          ? Icons.trending_up_rounded
+                          : isIncome
+                          ? Icons.arrow_downward_rounded
+                          : (entry.entryKind == TxnEntryKind.investment ||
+                                  isInvestmentCategory)
+                          ? Icons.trending_up_rounded
+                          : isMoneyOut
+                          ? Icons.arrow_upward_rounded
+                          : entry.entryKind == TxnEntryKind.transfer
+                          ? Icons.swap_horiz_rounded
+                          : Icons.trending_up_rounded,
+                      size: 18,
+                      color: directionColor,
+                    ),
+                  ),
+                  if (selecting)
+                    Positioned(
+                      left: -5,
+                      top: -5,
+                      child: ExcludeSemantics(
+                        child: Container(
+                          key: ValueKey('activity-select-${entry.id}'),
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color:
+                                selected ? BambooInk.lime : BambooInk.paper,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: selected
+                                  ? BambooInk.lime
+                                  : BambooInk.ink300,
+                              width: 1.5,
+                            ),
                           ),
-                          overflow: TextOverflow.ellipsis,
+                          child: selected
+                              ? const Icon(
+                                  Icons.check_rounded,
+                                  size: 13,
+                                  color: BambooInk.ink900,
+                                )
+                              : null,
                         ),
                       ),
-                      if (isRefund) ...[
-                        const SizedBox(width: AppSpace.xs),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 1.5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: BambooInk.jade.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: BambooInk.jade.withValues(alpha: 0.3),
-                              width: 0.8,
-                            ),
-                          ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      // A wrapped name must not centre the Refund chip against
+                      // both lines; top-align it and nudge it onto line one.
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Flexible(
                           child: Text(
-                            'Refund',
-                            style: BambooFonts.ui(
-                              10.5,
-                              weight: FontWeight.w700,
-                              color: BambooInk.jade,
+                            nameDisplay,
+                            // Two lines of the real name beat one line of an
+                            // ellipsis — Indian merchant strings routinely need
+                            // the full 25 characters ("Shantesh gurudas gaude").
+                            maxLines: 2,
+                            style: BambooFonts.heading(
+                              14.5,
+                              color: isIgnored ? BambooInk.ink700 : BambooInk.ink900,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ] else if (isReversal) ...[
-                        const SizedBox(width: AppSpace.xs),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 1.5,
+                        if (isRefund) ...[
+                          const SizedBox(width: AppSpace.xs),
+                          const _MovementChip(
+                            label: 'Refund',
+                            tint: BambooInk.jade,
+                            fillAlpha: 0.12,
+                            borderAlpha: 0.3,
                           ),
-                          decoration: BoxDecoration(
-                            color: BambooInk.amber.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: BambooInk.amber.withValues(alpha: 0.35),
-                              width: 0.8,
-                            ),
+                        ] else if (isReversal) ...[
+                          const SizedBox(width: AppSpace.xs),
+                          const _MovementChip(
+                            label: 'Reversal',
+                            tint: BambooInk.amber,
+                            fillAlpha: 0.15,
+                            borderAlpha: 0.35,
                           ),
-                          child: Text(
-                            'Reversal',
-                            style: BambooFonts.ui(
-                              10.5,
-                              weight: FontWeight.w700,
-                              color: BambooInk.amber,
-                            ),
+                        ] else if (showTransferChip) ...[
+                          // Neutral: jade and amber stay reserved for the
+                          // Refund/Reversal money moves.
+                          const SizedBox(width: AppSpace.xs),
+                          const _MovementChip(
+                            label: 'Transfer',
+                            tint: BambooInk.ink900,
+                            fillAlpha: 0.07,
+                            borderAlpha: 0.14,
+                            textColor: BambooInk.ink700,
                           ),
-                        ),
+                        ],
                       ],
+                    ),
+                    if (subtitleParts.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitleParts.join(' · '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: BambooFonts.ui(12, color: BambooInk.ink500),
+                      ),
                     ],
+                    if (tagNames.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        tagNames.join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: BambooFonts.ui(11.5, color: BambooInk.jade),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  MoneyText(
+                    entry.amount,
+                    prefix: amountPrefix,
+                    confidence: Confidence.estimated,
+                    // The subtitle already carries "Pending confirmation", so the
+                    // hourglass only pushed the figure off the row's right edge.
+                    showConfidenceIcon: false,
+                    style: BambooFonts.money(
+                      15,
+                      color: isIgnored ? BambooInk.ink500 : directionColor,
+                    ).copyWith(
+                      decoration: isIgnored ? TextDecoration.lineThrough : null,
+                      decorationColor: BambooInk.ink500,
+                    ),
                   ),
-                  if (subtitleParts.isNotEmpty) ...[
+                  if (isRefund) ...[
                     const SizedBox(height: 2),
                     Text(
-                      subtitleParts.join(' · '),
-                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                      'Refunded',
+                      style: BambooFonts.ui(
+                        10.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.jade,
+                      ),
                     ),
-                  ],
-                  if (tagNames.isNotEmpty) ...[
-                    const SizedBox(height: 3),
+                  ] else if (isReversal) ...[
+                    const SizedBox(height: 2),
                     Text(
-                      tagNames.join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: BambooFonts.ui(11.5, color: BambooInk.jade),
+                      'Reversed',
+                      style: BambooFonts.ui(
+                        10.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.amber,
+                      ),
                     ),
                   ],
                 ],
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectionCountChip extends StatelessWidget {
+  final int count;
+  final VoidCallback? onCancel;
+
+  const _SelectionCountChip({required this.count, this.onCancel});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Cancel selection',
+      child: Pressable(
+        onTap: onCancel,
+        enforceMinTarget: false,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: BambooInk.slate,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.close_rounded, size: 16, color: BambooInk.onSlate),
+              const SizedBox(width: 6),
+              Text(
+                '$count selected',
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.onSlate,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The contextual bar the app shows while transactions are selected: one
+/// primary "Edit" entry that opens every bulk action in a sheet, plus the
+/// destructive shortcut. Count and Select all live in the list header, not
+/// here, so the bar stays one row tall.
+class _BulkActionBar extends StatelessWidget {
+  final int selectedCount;
+  final bool isBusy;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _BulkActionBar({
+    required this.selectedCount,
+    required this.isBusy,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = selectedCount > 0 && !isBusy;
+    return Padding(
+      // Activity is a full-screen pushed route (no shell nav pill here), so
+      // the bar docks to the bottom: system gesture inset + the same 16 gap
+      // the bar uses on its sides.
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        MediaQuery.of(context).padding.bottom + AppSpace.lg,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: BambooInk.slate,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: BambooInk.ink900.withValues(alpha: 0.25),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
             ),
-            const SizedBox(width: AppSpace.sm),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                MoneyText(
-                  entry.amount,
-                  prefix: amountPrefix,
-                  confidence: Confidence.estimated,
-                  style: BambooFonts.money(
-                    15,
-                    color: isIgnored ? BambooInk.ink500 : directionColor,
-                  ).copyWith(
-                    decoration: isIgnored ? TextDecoration.lineThrough : null,
-                    decorationColor: BambooInk.ink500,
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Pressable(
+                onTap: enabled ? onEdit : null,
+                child: Container(
+                  height: 52,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: BambooInk.lime.withValues(alpha: enabled ? 1 : 0.4),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.edit_rounded,
+                        size: 17,
+                        color: BambooInk.slate,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Edit $selectedCount '
+                          'transaction${selectedCount == 1 ? '' : 's'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: BambooFonts.ui(
+                            14,
+                            weight: FontWeight.w700,
+                            color: BambooInk.slate,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                if (isRefund) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    'Refunded',
-                    style: BambooFonts.ui(
-                      10.5,
-                      weight: FontWeight.w600,
-                      color: BambooInk.jade,
+              ),
+            ),
+            const SizedBox(width: AppSpace.xs),
+            Pressable(
+              onTap: enabled ? onDelete : null,
+              child: Container(
+                width: 56,
+                height: 52,
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.delete_outline_rounded,
+                      size: 21,
+                      color: BambooInk.clay.withValues(alpha: enabled ? 1 : 0.4),
                     ),
-                  ),
-                ] else if (isReversal) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    'Reversed',
-                    style: BambooFonts.ui(
-                      10.5,
-                      weight: FontWeight.w600,
-                      color: BambooInk.amber,
+                    Text(
+                      'Delete',
+                      style: BambooFonts.ui(
+                        10.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.clay.withValues(alpha: enabled ? 1 : 0.4),
+                      ),
                     ),
-                  ),
-                ],
-              ],
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -2555,134 +2842,152 @@ class _TransactionTile extends StatelessWidget {
   }
 }
 
-
-
-class _BulkActionBar extends StatelessWidget {
-  final int selectedCount;
-  final int totalCount;
-  final bool isBusy;
-  final VoidCallback onSelectAll;
+/// Every bulk action, labelled — the icon-only popup bar these replace gave
+/// no hint that tags had add *and* remove halves, or that assign-card exists.
+class _BulkEditSheet extends StatelessWidget {
+  final int count;
+  final bool tagsAvailable;
+  final VoidCallback onSetCategory;
   final VoidCallback? onAddTags;
   final VoidCallback? onRemoveTags;
-  final VoidCallback onSetCategory;
   final VoidCallback onAssignCard;
-  final VoidCallback onDelete;
 
-  const _BulkActionBar({
-    required this.selectedCount,
-    required this.totalCount,
-    required this.isBusy,
-    required this.onSelectAll,
+  const _BulkEditSheet({
+    required this.count,
+    required this.tagsAvailable,
+    required this.onSetCategory,
     this.onAddTags,
     this.onRemoveTags,
-    required this.onSetCategory,
     required this.onAssignCard,
-    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    final allSelected = totalCount > 0 && selectedCount == totalCount;
-    return Container(
-      decoration: BoxDecoration(
-        color: BambooInk.paper,
-        border: const Border(top: BorderSide(color: BambooInk.hairlineOnPaper)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D2B313A),
-            blurRadius: 12,
-            offset: Offset(0, -3),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
+    final n = '$count transaction${count == 1 ? '' : 's'}';
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          AppSpace.xs,
+          AppSpace.lg,
+          AppSpace.lg,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (isBusy) const LinearProgressIndicator(),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpace.lg,
-                vertical: AppSpace.xs,
+            Text('Edit $n', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+            const SizedBox(height: 2),
+            Text(
+              'Applies to every selected transaction',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _BulkEditTile(
+              icon: Icons.category_outlined,
+              title: 'Change category',
+              subtitle: 'Use one category for all $n',
+              onTap: onSetCategory,
+            ),
+            const SizedBox(height: AppSpace.xs),
+            _BulkEditTile(
+              icon: Icons.label_outline,
+              title: 'Add tags',
+              subtitle: 'Reimbursable, trip, family — all $n',
+              onTap: onAddTags,
+            ),
+            const SizedBox(height: AppSpace.xs),
+            _BulkEditTile(
+              icon: Icons.label_off_outlined,
+              title: 'Remove tags',
+              subtitle: 'Clear tags from all $n',
+              onTap: onRemoveTags,
+            ),
+            const SizedBox(height: AppSpace.xs),
+            _BulkEditTile(
+              icon: Icons.credit_card_outlined,
+              title: 'Assign to a card',
+              subtitle: 'Move all $n under one card',
+              onTap: onAssignCard,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BulkEditTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  const _BulkEditTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: BambooInk.wash,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
-              child: Row(
+              child: Icon(
+                icon,
+                size: 18,
+                color: BambooInk.jade.withValues(alpha: enabled ? 1 : 0.4),
+              ),
+            ),
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$selectedCount selected',
-                    style: BambooFonts.heading(13, color: BambooInk.ink700),
+                    title,
+                    style: BambooFonts.heading(
+                      14,
+                      color: BambooInk.ink900.withValues(alpha: enabled ? 1 : 0.4),
+                    ),
                   ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: isBusy ? null : onSelectAll,
-                    child: Text(allSelected ? 'Deselect all' : 'Select all'),
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.ui(
+                      11.5,
+                      color: BambooInk.ink500.withValues(alpha: enabled ? 1 : 0.4),
+                    ),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.sm,
-                0,
-                AppSpace.sm,
-                AppSpace.sm,
-              ),
-              child: Row(
-                children: [
-                  if (onAddTags != null || onRemoveTags != null)
-                    PopupMenuButton<bool>(
-                      enabled: selectedCount > 0 && !isBusy,
-                      icon: const Icon(Icons.label_outline),
-                      tooltip: 'Tags',
-                      onSelected: (remove) =>
-                          remove ? onRemoveTags?.call() : onAddTags?.call(),
-                      itemBuilder: (_) => [
-                        if (onAddTags != null)
-                          const PopupMenuItem(
-                            value: false,
-                            child: Row(
-                              children: [
-                                Icon(Icons.label_outline, size: 20),
-                                SizedBox(width: 8),
-                                Text('Add tags'),
-                              ],
-                            ),
-                          ),
-                        if (onRemoveTags != null)
-                          const PopupMenuItem(
-                            value: true,
-                            child: Row(
-                              children: [
-                                Icon(Icons.label_off_outlined, size: 20),
-                                SizedBox(width: 8),
-                                Text('Remove tags'),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  IconButton(
-                    onPressed:
-                        selectedCount > 0 && !isBusy ? onSetCategory : null,
-                    icon: const Icon(Icons.category_outlined),
-                    tooltip: 'Set category',
-                  ),
-                  IconButton(
-                    onPressed:
-                        selectedCount > 0 && !isBusy ? onAssignCard : null,
-                    icon: const Icon(Icons.credit_card_outlined),
-                    tooltip: 'Assign card',
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: selectedCount > 0 && !isBusy ? onDelete : null,
-                    icon: const Icon(Icons.delete_outline),
-                    color: AppColors.error,
-                    tooltip: 'Delete',
-                  ),
-                ],
-              ),
+            const SizedBox(width: AppSpace.sm),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: BambooInk.ink300.withValues(alpha: enabled ? 1 : 0.4),
             ),
           ],
         ),
