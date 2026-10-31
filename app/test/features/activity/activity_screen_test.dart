@@ -148,7 +148,7 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('hides prior rows during a transaction reload', (
+  testWidgets('keeps prior rows during a transaction refresh', (
     tester,
   ) async {
     final row = _txn(
@@ -181,8 +181,8 @@ void main() {
     container.invalidate(activityTransactionsProvider);
     await tester.pump();
     await tester.pump();
-    expect(find.text('Steady Merchant'), findsNothing);
-    expect(find.byType(SkeletonList), findsOneWidget);
+    expect(find.text('Steady Merchant'), findsOneWidget);
+    expect(find.byType(SkeletonList), findsNothing);
 
     pendingReload.complete([row]);
     await tester.pumpAndSettle();

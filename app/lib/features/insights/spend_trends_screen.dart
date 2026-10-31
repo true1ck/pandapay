@@ -259,7 +259,9 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
             ),
             Expanded(
               child: report.when(
-                skipLoadingOnRefresh: false,
+                // Keep the heading stable during an explicit refresh; a
+                // changed account or period still shows loading.
+                skipLoadingOnRefresh: true,
                 skipLoadingOnReload: false,
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, _) => ErrorState(

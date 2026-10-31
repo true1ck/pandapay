@@ -2047,6 +2047,46 @@ void main() {
     expect(header, findsOneWidget);
   });
 
+  testWidgets('report refresh keeps the current heading visible', (tester) async {
+    final refreshed = Completer<SpendReport?>();
+    const headerKey = ValueKey('spending-refresh-header');
+    var loads = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+          ),
+          spendReportProvider.overrideWith((ref, query) {
+            loads++;
+            return loads == 1 ? Future.value(_report()) : refreshed.future;
+          }),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => const [],
+          ),
+        ],
+        child: const MaterialApp(
+          home: SpendTrendsScreen(overviewKey: headerKey),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final header = find.byKey(headerKey);
+    expect(header, findsOneWidget);
+
+    final container = ProviderScope.containerOf(tester.element(header));
+    container.invalidate(
+      spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(header, findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    refreshed.complete(_report(spend: 43000));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets(
     'guest mode says to sign in rather than showing an empty report',
     (tester) async {

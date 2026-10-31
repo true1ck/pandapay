@@ -1,6 +1,6 @@
 # Performance engineering execution progress
 
-Updated 1 November 2026. Branch `codex/ios-shortcuts-prototype`, synchronized with origin through `5ce036ae`. Preserve unrelated untracked `.qoder/`, `vibe_images/`, and the local Perfetto trace. Read this file, `PERFORMANCE_BASELINE.md`, `PERFORMANCE_AUDIT.md` and the real-world test matrix before resuming.
+Updated 1 November 2026. Branch `codex/ios-shortcuts-prototype`, synchronized before this scoped follow-up. Preserve unrelated untracked `.qoder/`, `vibe_images/`, and the local Perfetto trace. Read this file, `PERFORMANCE_BASELINE.md`, `PERFORMANCE_AUDIT.md` and the real-world test matrix before resuming.
 
 ## Completed
 
@@ -12,10 +12,14 @@ Updated 1 November 2026. Branch `codex/ios-shortcuts-prototype`, synchronized wi
 - The parallel token-read experiment was tested in profile build 72: both reads completed together at 8.19 s and Home first frame was 9.71 s from Dart main, so it produced no demonstrated gain and was reverted.
 - Frame track: profile onboarding swipes reported UI p95 about 1.48–7.07 ms and raster p95 about 44.6–123 ms, with most sampled frames over 16.67 ms. This is not a Home/physical-device result; stable Home scrolling and Android/physical confirmation remain required.
 - DB track: a store-lifetime cache for completed AutoPay repair namespaces now avoids repeated marker/table checks on transaction reads and is committed in `5ce036ae`; the latest FinancialStore/request/sync focused run passed 59/59.
+- Authenticated startup validation: emulator Dev APK 73 was installed as an in-place update over 72 (same package, data preserved). The isolated local test account reached Home. A first force-stop launch reached Home in 1.471 s from Dart main; three repeats reached 0.866, 0.872 and 0.832 s. The first run logged 46 skipped frames. Native Activity/engine markers show engine configuration around 1.10 s on the first run and 0.46–0.58 s on repeats. This is evidence for variability and startup jank, not a release-device guarantee.
+- Flicker track: Activity and Spending keep their current content during explicit provider refreshes while dependency reloads still show loading. New focused refresh tests pass; date-dependent legacy fixtures remain separate failures.
+- Physical-device populated-account validation: installed Dev 8095 in place over 8094 after matching the Android Debug certificate; first-install time and account data were preserved. Dart reported Home frame at 510 ms, but device-side screencaps kept PandaMark visible at seconds 1–7 and showed Home at second 8. Android graphics stats contained one 4,950 ms GPU frame bucket and no slow UI-thread count. Initial raster p95 was 34.4 ms on Wallet, 23.4–32.2 ms on Insights and 28.3 ms on You; later batches were roughly 12–15 ms.
 
 ## Unresolved
 
-- Capture Android main-thread and Flutter CPU/frame traces around the rare 11.77 s launch; repeat swipe-away with PID verification. Do not blame secure storage alone because SharedPreferences also stalled.
+- Capture a fresh Android main-thread/Flutter trace specifically during a reproduced >=5 s launch if it recurs. The authenticated emulator runs above did not reproduce the old 5–7 s hold; do not blame secure storage alone because earlier SharedPreferences and secure-storage delays varied independently.
+- The physical 8095 reproduction now exists. Next isolate the 4,950 ms first-frame GPU bucket by comparing Impeller/Vulkan with Skia and profiling first-entry composition on populated Home, Wallet, Insights and You. Renderer changes are diagnostic first; image compression remains out of scope for this pass.
 - Measure scroll/navigation UI and raster p95/p99, CPU, memory, DB spans, request counts under SMS/sync workload on emulator and representative physical Android device. No smoothness claim is supported yet.
 - Three Subscriptions suite mandate/date expectation failures are confirmed on committed HEAD `c2479722` with no current screen/test diff. Track as a separate product regression; do not call the whole suite green.
 - Transaction reads still invoke repair hooks; full save and JSON conversion use synchronous sqlite3 on UI isolate. Profile 3k/10k rows before worker-owned DB design; preserve cursor and receipt atomicity.
@@ -27,7 +31,7 @@ Updated 1 November 2026. Branch `codex/ios-shortcuts-prototype`, synchronized wi
 
 ## Immediate next actions
 
-1. Review and test current dirty diff, then commit only scoped, passing changes. Keep unrelated user files untracked.
+1. Run the focused Flutter tests and analyzer on the current diff, then commit only scoped, passing changes. Keep unrelated user files untracked.
 2. Triage the three pre-existing Subscriptions mandate/date failures separately; add account-switch regression tests before restoring previous-data retention.
 3. Capture profile VM/Android thread traces for the long startup and frame timing during representative scrolling.
 4. Implement one measured DB/refresh fix at a time, rerun the same scenario, and record before/after in `FINAL_PERFORMANCE_COMPARISON.md` only when measured.

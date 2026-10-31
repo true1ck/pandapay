@@ -13,6 +13,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
+import android.os.SystemClock
+import android.os.Trace
+import android.util.Log
 import com.android.installreferrer.api.InstallReferrerClient
 import com.android.installreferrer.api.InstallReferrerStateListener
 import com.android.installreferrer.api.InstallReferrerClient.InstallReferrerResponse
@@ -53,6 +57,7 @@ class MainActivity : FlutterFragmentActivity() {
         const val REQUEST_CODE = 0x5091 // arbitrary, local to this Activity
         const val PHONE_NUMBER_HINT_REQUEST_CODE = 0x5092
         const val MAX_ICON_PX = 96
+        const val STARTUP_TAG = "PandaPayStartup"
     }
 
     private var pendingResult: MethodChannel.Result? = null
@@ -60,9 +65,30 @@ class MainActivity : FlutterFragmentActivity() {
     private var assistantChannel: MethodChannel? = null
     private var pendingInstallReferrerResult: MethodChannel.Result? = null
     private var installReferrerClient: InstallReferrerClient? = null
+    private val activityCreatedAtNs = SystemClock.elapsedRealtimeNanos()
+
+    private fun traceStartup(stage: String) {
+        // Monotonic timestamps allow logcat and Perfetto to be correlated
+        // across the native Activity and Dart startup markers. No account or
+        // credential information is logged. Keep production logs quiet.
+        if (packageName == "app.pandapay.pandapay.dev2") {
+            Log.i(
+                STARTUP_TAG,
+                "pid=${Process.myPid()} elapsedMs=${SystemClock.elapsedRealtimeNanos() / 1000000} " +
+                    "activityMs=${(SystemClock.elapsedRealtimeNanos() - activityCreatedAtNs) / 1000000} $stage",
+            )
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        traceStartup("onCreate start")
+        Trace.beginSection("PandaPay MainActivity.onCreate")
+        try {
+            super.onCreate(savedInstanceState)
+        } finally {
+            Trace.endSection()
+            traceStartup("onCreate complete")
+        }
         // The initial URI is read by Flutter after the engine is ready. Keep
         // the Android intent as the source of truth so a cold launch and a
         // warm singleTop launch behave consistently.
@@ -88,6 +114,17 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        traceStartup("configureFlutterEngine start")
+        Trace.beginSection("PandaPay configureFlutterEngine")
+        try {
+            configurePandaPayFlutterEngine(flutterEngine)
+        } finally {
+            Trace.endSection()
+            traceStartup("configureFlutterEngine complete")
+        }
+    }
+
+    private fun configurePandaPayFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         assistantChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ASSISTANT_CHANNEL)
         assistantChannel?.setMethodCallHandler { call, result ->
