@@ -130,6 +130,20 @@ const SUBSCRIPTION_STATUSES = Object.freeze([
 ]);
 const RENEWAL_GRACE_DAYS = 7;
 
+// Repetition alone does not make a payment a subscription. These descriptors
+// identify household bills/commitments or ordinary retail payments, so they
+// must not reach the subscription review candidate list.
+const BILL_OR_COMMITMENT_NAME = /\b(?:bill|electricity|power|water|utility|gas|broadband|mobile|telephone|telecom|postpaid|prepaid|recharge|insurance|policy|emi|loan|rent|municipal|property\s+tax|credit\s+card|bescom|tneb|msedcl|mahadiscom|bses|tata\s+power|adani\s+electricity|torrent\s+power|bwssb|jvvnl|cesc|mahanagar\s+gas|\bmgl\b|\bigl\b)\b/i;
+const RETAIL_PAYMENT_NAME = /\b(?:flipkart|myntra|ajio|meesho|nykaa|jiomart|dmart|bigbasket|blinkit|zepto)\b/i;
+const RETAIL_SERVICE_MARKER = /\b(?:plus|premium|membership|subscription|pass|prime)\b/i;
+
+function isNonSubscriptionRecurringName(name) {
+  const value = String(name || '').replace(/\s+/g, ' ').trim();
+  if (!value) return false;
+  if (BILL_OR_COMMITMENT_NAME.test(value)) return true;
+  return RETAIL_PAYMENT_NAME.test(value) && !RETAIL_SERVICE_MARKER.test(value);
+}
+
 /**
  * A bank alert can put a date, account number, or cadence label after
  * "for". Those values are not merchant names, even when the rest of the
@@ -141,6 +155,8 @@ function isUsableSubscriptionName(name) {
   const value = String(name || '').replace(/\s+/g, ' ').trim();
   if (value.length < 2 || value.length > 100) return false;
   if (!/[A-Za-z]{2,}/.test(value)) return false;
+
+  if (isNonSubscriptionRecurringName(value)) return false;
 
   // Raw UPI VPAs (containing '@') are peer/merchant transfer handles, not subscriptions
   if (value.includes('@')) return false;
@@ -721,6 +737,7 @@ module.exports = {
   nextExpectedAfter,
   utcDayStart,
   isUsableSubscriptionName,
+  isNonSubscriptionRecurringName,
   isDisplayableSubscriptionRecord,
   isInvestmentFundingMessage,
   isInvestmentFolioAllotment,

@@ -33,6 +33,7 @@ bool _isExcludedNonSubscription(String name) {
   if (isSubscriptionAutoPay(name)) {
     return false;
   }
+  if (isNonSubscriptionRecurringPayment(name)) return true;
   // 1. Demat / Broker / Trading / Investment / SIP / Mutual funds are money movements, NEVER subscriptions
   if (RegExp(
     r'\b(?:zerodha|groww|upstox|angel\s*one|dhan|paytm\s*money|indmoney|5paisa|motilal\s*oswal|icici\s*direct|hdfc\s*securities|hdfc\s*sky|kotak\s*securities|sharekhan|iifl|geojit|axis\s*direct|demat|trading|broker|portfolio|mutual\s*fund|sip|equity|investment|transfer)\b',
@@ -67,6 +68,13 @@ bool _isDisplayableSubscription(RecurringSeries series) {
     return false;
   }
   if (_isExcludedNonSubscription(name)) {
+    return false;
+  }
+  // A raw mandate is an authorization ceiling, not proof of a subscription
+  // charge. The provider normalizes genuine local setup evidence before it
+  // reaches this screen; keep the screen defensive for direct/API snapshots.
+  if ((series.isMandate || series.detectionSource == 'mandate') &&
+      !series.setupConfirmed) {
     return false;
   }
   // Daily repetitive spends (cadence < 6 days, like daily 10 Rs tea/groceries) must NEVER be subscriptions
@@ -163,16 +171,20 @@ class SubscriptionsScreen extends ConsumerWidget {
     final localMandates = cache == null
         ? <Map<String, dynamic>>[]
         : cache.financialStore
-            .entities(namespace, 'sms_observations')
-            .where((row) =>
-                row['event_type'] == 'autopay' &&
-                !(row['reason_codes'] is List &&
-                    (row['reason_codes'] as List).contains('explicit_subscription_service')) &&
-                (row['autopay_limit_paise'] is num ||
-                    row['amount_due_paise'] is num ||
-                    row['amount_paise'] is num) &&
-                isSubscriptionAutoPay(row['biller_name'] as String?))
-            .toList(growable: false);
+              .entities(namespace, 'sms_observations')
+              .where(
+                (row) =>
+                    row['event_type'] == 'autopay' &&
+                    !(row['reason_codes'] is List &&
+                        (row['reason_codes'] as List).contains(
+                          'explicit_subscription_service',
+                        )) &&
+                    (row['autopay_limit_paise'] is num ||
+                        row['amount_due_paise'] is num ||
+                        row['amount_paise'] is num) &&
+                    isSubscriptionAutoPay(row['biller_name'] as String?),
+              )
+              .toList(growable: false);
     final localMandateKeys = <String>{};
     final uniqueLocalMandates = <Map<String, dynamic>>[];
     for (final row in localMandates) {
@@ -182,18 +194,21 @@ class SubscriptionsScreen extends ConsumerWidget {
     }
 
     final snapshot = ref.watch(centralBillsProjectionProvider).valueOrNull;
-    final centralMandates = (snapshot?.available == true
-            ? snapshot!.projections
-            : const <BillProjection>[])
-        .where((row) =>
-            row.projectionKind == 'mandate' &&
-            isSubscriptionAutoPay(row.billerName ?? row.serviceName))
-        .where((row) {
-          final key =
-              '${_cleanIdentity(row.billerName ?? row.serviceName)}|${row.last4 ?? ''}';
-          return !localMandateKeys.contains(key);
-        })
-        .toList(growable: false);
+    final centralMandates =
+        (snapshot?.available == true
+                ? snapshot!.projections
+                : const <BillProjection>[])
+            .where(
+              (row) =>
+                  row.projectionKind == 'mandate' &&
+                  isSubscriptionAutoPay(row.billerName ?? row.serviceName),
+            )
+            .where((row) {
+              final key =
+                  '${_cleanIdentity(row.billerName ?? row.serviceName)}|${row.last4 ?? ''}';
+              return !localMandateKeys.contains(key);
+            })
+            .toList(growable: false);
     final centralMandateKeys = <String>{};
     final uniqueCentralMandates = <BillProjection>[];
     for (final row in centralMandates) {
@@ -263,54 +278,74 @@ class SubscriptionsScreen extends ConsumerWidget {
             final uniqueSubscriptionsMap = <String, RecurringSeries>{};
             for (final item in rawSubscriptions) {
               final k = recurringServiceKey(item.displayName);
-              final canonical = namedServiceAutoPayName(item.displayName) ?? item.displayName;
+              final canonical =
+                  namedServiceAutoPayName(item.displayName) ?? item.displayName;
               final normalizedItem = item.copyWith(displayName: canonical);
               final existing = uniqueSubscriptionsMap[k];
               if (existing == null) {
                 uniqueSubscriptionsMap[k] = normalizedItem;
               } else {
-                final bestName = namedServiceAutoPayName(existing.displayName) ??
+                final bestName =
+                    namedServiceAutoPayName(existing.displayName) ??
                     namedServiceAutoPayName(normalizedItem.displayName) ??
                     existing.displayName;
                 uniqueSubscriptionsMap[k] = existing.copyWith(
                   displayName: bestName,
-                  autopayLimit: existing.autopayLimit ?? normalizedItem.autopayLimit,
+                  autopayLimit:
+                      existing.autopayLimit ?? normalizedItem.autopayLimit,
                   startDate: existing.startDate ?? normalizedItem.startDate,
                   endDate: existing.endDate ?? normalizedItem.endDate,
-                  paymentMethod: existing.paymentMethod ?? normalizedItem.paymentMethod,
-                  typicalAmount: (existing.amountKnown && existing.typicalAmount.paise > 0)
+                  paymentMethod:
+                      existing.paymentMethod ?? normalizedItem.paymentMethod,
+                  typicalAmount:
+                      (existing.amountKnown && existing.typicalAmount.paise > 0)
                       ? existing.typicalAmount
                       : normalizedItem.typicalAmount,
-                  amountKnown: existing.amountKnown || normalizedItem.amountKnown,
-                  occurrenceCount: existing.occurrenceCount > normalizedItem.occurrenceCount
+                  amountKnown:
+                      existing.amountKnown || normalizedItem.amountKnown,
+                  occurrenceCount:
+                      existing.occurrenceCount > normalizedItem.occurrenceCount
                       ? existing.occurrenceCount
                       : normalizedItem.occurrenceCount,
-                  cadenceDays: existing.cadenceDays > 0 ? existing.cadenceDays : normalizedItem.cadenceDays,
-                  setupConfirmed: existing.setupConfirmed || normalizedItem.setupConfirmed,
-                  cadenceConfirmed: existing.cadenceConfirmed || normalizedItem.cadenceConfirmed,
+                  cadenceDays: existing.cadenceDays > 0
+                      ? existing.cadenceDays
+                      : normalizedItem.cadenceDays,
+                  setupConfirmed:
+                      existing.setupConfirmed || normalizedItem.setupConfirmed,
+                  cadenceConfirmed:
+                      existing.cadenceConfirmed ||
+                      normalizedItem.cadenceConfirmed,
                 );
               }
             }
-            final subscriptions = uniqueSubscriptionsMap.values.toList(growable: false);
+            final subscriptions = uniqueSubscriptionsMap.values.toList(
+              growable: false,
+            );
             final rawCandidates = data.series
                 .where((series) => series.reviewCandidate)
                 .where((series) => series.displayName.trim().length >= 2)
                 .where((series) => series.cadenceDays >= 20)
-                .where((series) => !_isExcludedNonSubscription(series.displayName))
+                .where(
+                  (series) => !_isExcludedNonSubscription(series.displayName),
+                )
                 .toList(growable: false);
             final uniqueCandidatesMap = <String, RecurringSeries>{};
             for (final item in rawCandidates) {
               final k = recurringServiceKey(item.displayName);
               final existing = uniqueCandidatesMap[k];
-              if (existing == null || item.occurrenceCount > existing.occurrenceCount) {
+              if (existing == null ||
+                  item.occurrenceCount > existing.occurrenceCount) {
                 uniqueCandidatesMap[k] = item;
               }
             }
-            final reviewCandidates = uniqueCandidatesMap.values.toList(growable: false);
+            final reviewCandidates = uniqueCandidatesMap.values.toList(
+              growable: false,
+            );
             if (subscriptions.isEmpty) {
               if (hasSubscriptionAutopays || reviewCandidates.isNotEmpty) {
                 return RefreshIndicator(
-                  onRefresh: () async => ref.invalidate(recurringReportProvider),
+                  onRefresh: () async =>
+                      ref.invalidate(recurringReportProvider),
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(
@@ -388,6 +423,40 @@ class SubscriptionsScreen extends ConsumerWidget {
             final filteredSubscriptions = subscriptions
                 .where((s) => _matchesCadence(s, filter))
                 .toList(growable: false);
+
+            Money? mandateLimitFor(RecurringSeries series) {
+              final serviceKey = recurringServiceKey(series.displayName);
+              bool matches(String? name) {
+                if (name == null || name.trim().isEmpty) return false;
+                final canonical = namedServiceAutoPayName(name) ?? name;
+                return recurringServiceKey(name) == serviceKey ||
+                    recurringServiceKey(canonical) == serviceKey;
+              }
+
+              for (final row in uniqueLocalMandates) {
+                final name =
+                    row['biller_name'] as String? ??
+                    row['service_name'] as String? ??
+                    row['merchant'] as String?;
+                if (!matches(name)) continue;
+                final raw =
+                    row['autopay_limit_paise'] ??
+                    row['amount_due_paise'] ??
+                    row['amount_paise'];
+                if (raw is num && raw > 0) return Money.fromPaise(raw.toInt());
+              }
+
+              for (final row in uniqueCentralMandates) {
+                if (!matches(row.billerName) && !matches(row.serviceName)) {
+                  continue;
+                }
+                final amount = row.authorizationLimitInr ?? row.amountInr;
+                if (amount != null && amount > 0) {
+                  return Money.fromRupees(amount);
+                }
+              }
+              return null;
+            }
 
             // The engine split them; the screen groups the same truth.
             final billing = filteredSubscriptions
@@ -628,14 +697,22 @@ class SubscriptionsScreen extends ConsumerWidget {
                     ),
                   const SizedBox(height: AppSpace.lg),
                   for (var i = 0; i < billing.length; i++) ...[
-                    _SeriesCard(series: billing[i], toneIndex: i),
+                    _SeriesCard(
+                      series: billing[i],
+                      toneIndex: i,
+                      authorizationLimit: mandateLimitFor(billing[i]),
+                    ),
                     const SizedBox(height: AppSpace.md),
                   ],
                   if (flagged.isNotEmpty) ...[
                     _SectionLabel('Flagged — watch or fix', Icons.flag_rounded),
                     const SizedBox(height: AppSpace.xs),
                     for (var i = 0; i < flagged.length; i++) ...[
-                      _SeriesCard(series: flagged[i], toneIndex: i),
+                      _SeriesCard(
+                        series: flagged[i],
+                        toneIndex: i,
+                        authorizationLimit: mandateLimitFor(flagged[i]),
+                      ),
                       const SizedBox(height: AppSpace.md),
                     ],
                   ],
@@ -646,7 +723,11 @@ class SubscriptionsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: AppSpace.xs),
                     for (var i = 0; i < needsCadence.length; i++) ...[
-                      _SeriesCard(series: needsCadence[i], toneIndex: i),
+                      _SeriesCard(
+                        series: needsCadence[i],
+                        toneIndex: i,
+                        authorizationLimit: mandateLimitFor(needsCadence[i]),
+                      ),
                       const SizedBox(height: AppSpace.md),
                     ],
                   ],
@@ -745,11 +826,15 @@ class _PossibleSubscriptionsSection extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Possible subscriptions',
-            style: BambooFonts.heading(16, color: BambooInk.ink900)),
+        Text(
+          'Recurring payments to review',
+          style: BambooFonts.heading(16, color: BambooInk.ink900),
+        ),
         const SizedBox(height: AppSpace.xs),
-        Text('Repeated payments can be regular shopping. Review these patterns before adding a subscription.',
-            style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+        Text(
+          'Repeated payments are not confirmed subscriptions. Review these patterns before adding one.',
+          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+        ),
         const SizedBox(height: AppSpace.sm),
         for (final item in series)
           Material(
@@ -757,7 +842,9 @@ class _PossibleSubscriptionsSection extends StatelessWidget {
             child: ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(item.displayName),
-              subtitle: Text('${item.occurrenceCount} similar payments · not confirmed'),
+              subtitle: Text(
+                '${item.occurrenceCount} similar payments · not confirmed',
+              ),
               trailing: Text(item.typicalAmount.format()),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -1470,8 +1557,7 @@ class _TotalCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                  ]
-                  else ...[
+                  ] else ...[
                     Text(
                       'Estimated annual cost',
                       style: BambooFonts.ui(
@@ -1528,8 +1614,16 @@ class _TotalCard extends StatelessWidget {
 class _SeriesCard extends ConsumerWidget {
   final RecurringSeries series;
   final int toneIndex;
+  final Money? authorizationLimit;
 
-  const _SeriesCard({required this.series, required this.toneIndex});
+  const _SeriesCard({
+    required this.series,
+    required this.toneIndex,
+    this.authorizationLimit,
+  });
+
+  Money? get _displayAuthorizationLimit =>
+      series.autopayLimit ?? authorizationLimit;
 
   bool get _setupOnly =>
       series.setupConfirmed &&
@@ -1585,7 +1679,8 @@ class _SeriesCard extends ConsumerWidget {
     final days = series.cadenceDays;
     final labelLower = series.cadenceLabel.toLowerCase();
 
-    if (labelLower.contains('as presented') || labelLower.contains('on-demand')) {
+    if (labelLower.contains('as presented') ||
+        labelLower.contains('on-demand')) {
       return 'As presented';
     }
     if (days >= 300 ||
@@ -1618,8 +1713,9 @@ class _SeriesCard extends ConsumerWidget {
   /// guessed cadence would bleed into the headline later.
   String get _costLine {
     if (_setupOnly || !series.amountKnown) {
-      if (series.autopayLimit != null && series.autopayLimit!.paise > 0) {
-        return 'AutoPay limit up to ${series.autopayLimit!.format(hidePaise: true)} • Awaiting first charge';
+      final limit = _displayAuthorizationLimit;
+      if (limit != null && limit.paise > 0) {
+        return 'AutoPay limit up to ${limit.format(hidePaise: true)} • Awaiting first charge';
       }
       if (series.hasActiveAutoPay ||
           series.autopayStatus == 'active' ||
@@ -1712,9 +1808,10 @@ class _SeriesCard extends ConsumerWidget {
                         style: BambooFonts.money(16, color: BambooInk.ink900),
                       ),
                     )
-                  else if (series.autopayLimit != null && series.autopayLimit!.paise > 0)
+                  else if (_displayAuthorizationLimit != null &&
+                      _displayAuthorizationLimit!.paise > 0)
                     Text(
-                      'Up to ${series.autopayLimit!.format(hidePaise: true)}',
+                      'Up to ${_displayAuthorizationLimit!.format(hidePaise: true)}',
                       style: BambooFonts.money(14, color: BambooInk.ink900),
                     )
                   else
@@ -2201,7 +2298,9 @@ class _SeriesCard extends ConsumerWidget {
     final amountChanged = amountInr != series.typicalAmount.rupees;
     final dateChanged =
         series.nextExpectedOn != null &&
-        !nextExpectedOn.toUtc().isAtSameMomentAs(series.nextExpectedOn!.toUtc());
+        !nextExpectedOn.toUtc().isAtSameMomentAs(
+          series.nextExpectedOn!.toUtc(),
+        );
     final nameChanged = displayName.trim() != series.displayName;
     if (!amountChanged &&
         !dateChanged &&
@@ -2214,8 +2313,9 @@ class _SeriesCard extends ConsumerWidget {
       sourceKey: series.sourceKey ?? '',
       action: 'edited',
       resolvedKind: 'bill',
-      occurredAtIso:
-          (series.lastSeenOn ?? DateTime.now()).toUtc().toIso8601String(),
+      occurredAtIso: (series.lastSeenOn ?? DateTime.now())
+          .toUtc()
+          .toIso8601String(),
       originalDecision: {
         'kind': 'bill_obligation',
         'origin': 'parser',
@@ -2236,8 +2336,8 @@ class _SeriesCard extends ConsumerWidget {
       correctionKind: amountChanged
           ? 'wrong_amount'
           : dateChanged
-              ? 'wrong_date'
-              : 'wrong_bill_fields',
+          ? 'wrong_date'
+          : 'wrong_bill_fields',
     );
   }
 
@@ -2250,8 +2350,9 @@ class _SeriesCard extends ConsumerWidget {
       sourceKey: series.sourceKey ?? '',
       action: 'dismissed',
       resolvedKind: 'bill',
-      occurredAtIso:
-          (series.lastSeenOn ?? DateTime.now()).toUtc().toIso8601String(),
+      occurredAtIso: (series.lastSeenOn ?? DateTime.now())
+          .toUtc()
+          .toIso8601String(),
       originalDecision: {
         'kind': 'bill_obligation',
         'origin': 'parser',
@@ -2264,9 +2365,8 @@ class _SeriesCard extends ConsumerWidget {
   }
 }
 
-String _cleanIdentity(String? value) => (value ?? '')
-    .toLowerCase()
-    .replaceAll(RegExp(r'[^a-z0-9]+'), '');
+String _cleanIdentity(String? value) =>
+    (value ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
 
 class _SubscriptionAutopaySection extends StatelessWidget {
   final List<Map<String, dynamic>> localMandates;

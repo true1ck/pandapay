@@ -59,6 +59,18 @@ test('regular merchant visits are review candidates, never confirmed evidence', 
   assert.equal(series[0].subscriptionEvidence, 'posted_payment_pattern');
 });
 
+test('bill payments and obvious retail payment descriptors are not recurring subscriptions', () => {
+  const rows = [
+    ...monthly('Axis Bill p', 914, '2026-05-03', 3),
+    ...monthly('BESCOM electricity bill', 1240, '2026-05-03', 3),
+    ...monthly('BESCOM', 1240, '2026-05-03', 3),
+    ...monthly('Jio mobile bill', 399, '2026-05-03', 3),
+    ...monthly('FLIPKART PA', 286, '2026-05-03', 4),
+  ];
+
+  assert.deepEqual(detectRecurringSeries(rows), []);
+});
+
 test('two anonymous charges are not enough', () => {
   // Two of anything is a coincidence waiting to be disproved — for
   // merchants without a brand-name match; known brands admit on two

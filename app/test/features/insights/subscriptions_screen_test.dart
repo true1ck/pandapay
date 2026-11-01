@@ -90,30 +90,75 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          recurringReportProvider.overrideWith((ref) async => RecurringReport(
-            series: [
-              RecurringSeries(
-                id: 'shop-pattern',
-                displayName: 'Blue Tokai',
-                typicalAmount: Money.fromRupees(350),
-                cadenceDays: 30,
-                occurrenceCount: 4,
-                annualCost: Money.fromRupees(4200),
-                reviewCandidate: true,
-              ),
-            ],
-            totalAnnual: Money.zero(),
-          )),
+          recurringReportProvider.overrideWith(
+            (ref) async => RecurringReport(
+              series: [
+                RecurringSeries(
+                  id: 'shop-pattern',
+                  displayName: 'Blue Tokai',
+                  typicalAmount: Money.fromRupees(350),
+                  cadenceDays: 30,
+                  occurrenceCount: 4,
+                  annualCost: Money.fromRupees(4200),
+                  reviewCandidate: true,
+                ),
+              ],
+              totalAnnual: Money.zero(),
+            ),
+          ),
         ],
         child: const MaterialApp(home: SubscriptionsScreen()),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Possible subscriptions'), findsOneWidget);
-    expect(find.textContaining('not confirmed'), findsOneWidget);
+    expect(find.text('Recurring payments to review'), findsOneWidget);
+    expect(find.text('4 similar payments · not confirmed'), findsOneWidget);
     expect(find.text('Your recurring spend'), findsNothing);
   });
+
+  testWidgets(
+    'does not surface bill payments or retail descriptors for review',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recurringReportProvider.overrideWith(
+              (ref) async => RecurringReport(
+                series: [
+                  RecurringSeries(
+                    id: 'axis-bill',
+                    displayName: 'Axis Bill p',
+                    typicalAmount: Money.fromRupees(914),
+                    cadenceDays: 30,
+                    occurrenceCount: 3,
+                    annualCost: Money.fromRupees(10968),
+                    reviewCandidate: true,
+                  ),
+                  RecurringSeries(
+                    id: 'flipkart-payment',
+                    displayName: 'FLIPKART PA',
+                    typicalAmount: Money.fromRupees(286),
+                    cadenceDays: 30,
+                    occurrenceCount: 4,
+                    annualCost: Money.fromRupees(3432),
+                    reviewCandidate: true,
+                  ),
+                ],
+                totalAnnual: Money.zero(),
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: SubscriptionsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Axis Bill p'), findsNothing);
+      expect(find.text('FLIPKART PA'), findsNothing);
+      expect(find.text('No subscriptions found yet'), findsOneWidget);
+    },
+  );
 
   testWidgets('shows the local calendar day for a UTC renewal timestamp', (
     tester,
@@ -121,22 +166,24 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          recurringReportProvider.overrideWith((ref) async => RecurringReport(
-            series: [
-              RecurringSeries(
-                id: 'notion-renewal',
-                displayName: 'Notion Plus',
-                typicalAmount: Money.fromRupees(799),
-                cadenceDays: 30,
-                occurrenceCount: 0,
-                annualCost: Money.fromRupees(9588),
-                nextExpectedOn: DateTime.utc(2026, 11, 28, 18, 30),
-                detectionSource: 'central_projection',
-                engineStatus: 'confirmed',
-              ),
-            ],
-            totalAnnual: Money.fromRupees(9588),
-          )),
+          recurringReportProvider.overrideWith(
+            (ref) async => RecurringReport(
+              series: [
+                RecurringSeries(
+                  id: 'notion-renewal',
+                  displayName: 'Notion Plus',
+                  typicalAmount: Money.fromRupees(799),
+                  cadenceDays: 30,
+                  occurrenceCount: 0,
+                  annualCost: Money.fromRupees(9588),
+                  nextExpectedOn: DateTime.utc(2026, 11, 28, 18, 30),
+                  detectionSource: 'central_projection',
+                  engineStatus: 'confirmed',
+                ),
+              ],
+              totalAnnual: Money.fromRupees(9588),
+            ),
+          ),
         ],
         child: const MaterialApp(home: SubscriptionsScreen()),
       ),
@@ -144,7 +191,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Notion Plus'), findsOneWidget);
     final localDay = DateTime.utc(2026, 11, 28, 18, 30).toLocal().day;
-    expect(find.textContaining('Next payment around $localDay Nov 2026'), findsOneWidget);
+    expect(
+      find.textContaining('Next payment around $localDay Nov 2026'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('shows named service setup without inventing paid terms', (
@@ -181,7 +231,10 @@ void main() {
 
     expect(find.text('OpenAI'), findsOneWidget);
     expect(find.text('Setup confirmed'), findsOneWidget);
-    expect(find.text('Setup confirmed • Awaiting first charge'), findsOneWidget);
+    expect(
+      find.text('Setup confirmed • Awaiting first charge'),
+      findsOneWidget,
+    );
     expect(find.text('Paid amount not known'), findsOneWidget);
     expect(find.textContaining('Renews around'), findsNothing);
     expect(find.textContaining('Next payment'), findsNothing);
@@ -201,30 +254,34 @@ void main() {
       'reason_codes': ['explicit_subscription_service'],
       'received_at': '2026-10-29T00:00:00.000Z',
     });
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        cacheNamespaceProvider.overrideWithValue('user:test'),
-        responseCacheProvider.overrideWith((ref) async => cache),
-        centralBillsProjectionProvider.overrideWith(
-          (ref) async => const BillProjectionSnapshot.unavailable(),
-        ),
-        recurringReportProvider.overrideWith((ref) async => RecurringReport(
-          series: [
-            RecurringSeries(
-              id: 'notion',
-              displayName: 'Notion Plus',
-              typicalAmount: Money.fromRupees(799),
-              cadenceDays: 30,
-              occurrenceCount: 1,
-              annualCost: Money.fromRupees(9588),
-              engineStatus: 'confirmed',
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          cacheNamespaceProvider.overrideWithValue('user:test'),
+          responseCacheProvider.overrideWith((ref) async => cache),
+          centralBillsProjectionProvider.overrideWith(
+            (ref) async => const BillProjectionSnapshot.unavailable(),
+          ),
+          recurringReportProvider.overrideWith(
+            (ref) async => RecurringReport(
+              series: [
+                RecurringSeries(
+                  id: 'notion',
+                  displayName: 'Notion Plus',
+                  typicalAmount: Money.fromRupees(799),
+                  cadenceDays: 30,
+                  occurrenceCount: 1,
+                  annualCost: Money.fromRupees(9588),
+                  engineStatus: 'confirmed',
+                ),
+              ],
+              totalAnnual: Money.fromRupees(9588),
             ),
-          ],
-          totalAnnual: Money.fromRupees(9588),
-        )),
-      ],
-      child: const MaterialApp(home: SubscriptionsScreen()),
-    ));
+          ),
+        ],
+        child: const MaterialApp(home: SubscriptionsScreen()),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Notion Plus'), findsOneWidget);
     expect(find.text('Autopay authorizations'), findsNothing);
@@ -582,10 +639,8 @@ void main() {
               (ref) async => const BillProjectionSnapshot.unavailable(),
             ),
             recurringReportProvider.overrideWith(
-              (ref) async => const RecurringReport(
-                series: [],
-                totalAnnual: Money.zero(),
-              ),
+              (ref) async =>
+                  const RecurringReport(series: [], totalAnnual: Money.zero()),
             ),
           ],
           child: const MaterialApp(home: SubscriptionsScreen()),
@@ -700,10 +755,8 @@ void main() {
               ),
             ),
             recurringReportProvider.overrideWith(
-              (ref) async => const RecurringReport(
-                series: [],
-                totalAnnual: Money.zero(),
-              ),
+              (ref) async =>
+                  const RecurringReport(series: [], totalAnnual: Money.zero()),
             ),
           ],
           child: const MaterialApp(home: SubscriptionsScreen()),
@@ -719,78 +772,135 @@ void main() {
   );
 
   testWidgets(
-    'rejects daily repetitive spends with cadence < 6 days',
+    'shows a known AutoPay limit on the subscription card before first charge',
     (tester) async {
+      final projection = BillProjection.fromJson({
+        'id': 'mandate-googleplay-card',
+        'projectionKind': 'mandate',
+        'projectionKey': 'mandate:googleplay-card',
+        'status': 'active',
+        'projection': {
+          'billerName': 'Google Asia Pacific Pte',
+          'serviceName': 'Google Play',
+          'authorizationLimitInr': 4000,
+        },
+      });
+
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            recurringReportProvider.overrideWith((ref) async {
-              return RecurringReport(
+            centralBillsProjectionProvider.overrideWith(
+              (ref) async => BillProjectionSnapshot(
+                available: true,
+                projections: [projection],
+              ),
+            ),
+            recurringReportProvider.overrideWith(
+              (ref) async => RecurringReport(
                 series: [
                   RecurringSeries(
-                    id: 'daily-chai',
-                    displayName: 'Chai Point',
-                    typicalAmount: Money.fromRupees(10),
-                    cadenceDays: 1,
-                    occurrenceCount: 30,
-                    annualCost: Money.fromRupees(3650),
-                    nextExpectedOn: DateTime(2026, 11, 1),
+                    id: 'google-play-setup',
+                    displayName: 'Google Play',
+                    typicalAmount: Money.zero(),
+                    amountKnown: false,
+                    setupConfirmed: true,
+                    cadenceConfirmed: true,
+                    cadenceDays: 0,
+                    occurrenceCount: 0,
+                    annualCost: Money.zero(),
+                    hasActiveAutoPay: true,
+                    autopayStatus: 'active',
                   ),
                 ],
                 totalAnnual: Money.zero(),
-              );
-            }),
+              ),
+            ),
           ],
           child: const MaterialApp(home: SubscriptionsScreen()),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Chai Point'), findsNothing);
-      expect(find.text('No subscriptions found yet'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'rejects demat broker account deposits from subscriptions',
-    (tester) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            recurringReportProvider.overrideWith((ref) async {
-              return RecurringReport(
-                series: [
-                  RecurringSeries(
-                    id: 'zerodha-deposit',
-                    displayName: 'Zerodha',
-                    typicalAmount: Money.fromRupees(5000),
-                    cadenceDays: 30,
-                    occurrenceCount: 6,
-                    annualCost: Money.fromRupees(60000),
-                    nextExpectedOn: DateTime(2026, 11, 1),
-                  ),
-                  RecurringSeries(
-                    id: 'groww-deposit',
-                    displayName: 'Groww',
-                    typicalAmount: Money.fromRupees(2000),
-                    cadenceDays: 30,
-                    occurrenceCount: 4,
-                    annualCost: Money.fromRupees(24000),
-                    nextExpectedOn: DateTime(2026, 11, 1),
-                  ),
-                ],
-                totalAnnual: Money.zero(),
-              );
-            }),
-          ],
-          child: const MaterialApp(home: SubscriptionsScreen()),
-        ),
+      expect(find.text('Google Play'), findsOneWidget);
+      expect(find.text('Up to ₹4,000'), findsOneWidget);
+      expect(
+        find.text('AutoPay limit up to ₹4,000 • Awaiting first charge'),
+        findsOneWidget,
       );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Zerodha'), findsNothing);
-      expect(find.text('Groww'), findsNothing);
-      expect(find.text('No subscriptions found yet'), findsOneWidget);
     },
   );
+
+  testWidgets('rejects daily repetitive spends with cadence < 6 days', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recurringReportProvider.overrideWith((ref) async {
+            return RecurringReport(
+              series: [
+                RecurringSeries(
+                  id: 'daily-chai',
+                  displayName: 'Chai Point',
+                  typicalAmount: Money.fromRupees(10),
+                  cadenceDays: 1,
+                  occurrenceCount: 30,
+                  annualCost: Money.fromRupees(3650),
+                  nextExpectedOn: DateTime(2026, 11, 1),
+                ),
+              ],
+              totalAnnual: Money.zero(),
+            );
+          }),
+        ],
+        child: const MaterialApp(home: SubscriptionsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chai Point'), findsNothing);
+    expect(find.text('No subscriptions found yet'), findsOneWidget);
+  });
+
+  testWidgets('rejects demat broker account deposits from subscriptions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recurringReportProvider.overrideWith((ref) async {
+            return RecurringReport(
+              series: [
+                RecurringSeries(
+                  id: 'zerodha-deposit',
+                  displayName: 'Zerodha',
+                  typicalAmount: Money.fromRupees(5000),
+                  cadenceDays: 30,
+                  occurrenceCount: 6,
+                  annualCost: Money.fromRupees(60000),
+                  nextExpectedOn: DateTime(2026, 11, 1),
+                ),
+                RecurringSeries(
+                  id: 'groww-deposit',
+                  displayName: 'Groww',
+                  typicalAmount: Money.fromRupees(2000),
+                  cadenceDays: 30,
+                  occurrenceCount: 4,
+                  annualCost: Money.fromRupees(24000),
+                  nextExpectedOn: DateTime(2026, 11, 1),
+                ),
+              ],
+              totalAnnual: Money.zero(),
+            );
+          }),
+        ],
+        child: const MaterialApp(home: SubscriptionsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Zerodha'), findsNothing);
+    expect(find.text('Groww'), findsNothing);
+    expect(find.text('No subscriptions found yet'), findsOneWidget);
+  });
 }
