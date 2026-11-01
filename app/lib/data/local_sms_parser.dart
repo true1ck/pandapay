@@ -499,9 +499,39 @@ class LocalSmsParser {
   /// Messages with a quoted price or a card name are not necessarily a
   /// payment. Apply this before either upload or manual review, including to
   /// rows captured by an older app version.
+  /// "Your refund of Rs 349 has been initiated / will reflect in 3-5 days"
+  /// is a status update. The money is the bank's credit alert, so counting
+  /// this too would be a duplicate (or, as before, a stuck review item).
+  static bool isRefundProgressNotice(String body) {
+    if (!_re(r'\brefund').hasMatch(body)) return false;
+    if (_re(
+      r'\b(?:has\s+been|have\s+been|was|is)\s+(?:successfully\s+)?credited\b|\bcredited\s+(?:to|in|into)\s+(?:your\s+)?(?:a\/?c|account|card|wallet)\b|\bcredited\s+with\b|\b(?:debited|withdrawn)\b',
+    ).hasMatch(body)) {
+      return false;
+    }
+    return _re(
+      r'\b(?:initiated|processed|approved|in\s+progress|will\s+(?:be\s+)?(?:credited|reflect|refunded|processed)|(?:within|in)\s+\d+(?:\s*[-–to]+\s*\d+)?\s+(?:business\s+|working\s+)?days?|original\s+payment\s+(?:method|source|mode))\b',
+    ).hasMatch(body);
+  }
+
+  /// EPFO / provident-fund passbook updates. Contributions sit in the PF
+  /// account, not the bank, and a settled claim arrives as its own bank
+  /// credit alert. Keyed on the sender or a UAN, which bank alerts never carry.
+  static bool isProvidentFundNotice(String sender, String body) {
+    final fromEpfo = _re(r'epfo|epfindia|uanmem|epf').hasMatch(sender);
+    final hasUan = _re(r'\buan\b').hasMatch(body);
+    if (!fromEpfo && !hasUan) return false;
+    return _re(
+      r'\b(?:passbook|contribution|claim|kyc|member|uan|pf\s+(?:balance|account|a\/c)|provident\s+fund|epf)\b',
+    ).hasMatch(body);
+  }
+
   static bool isNonTransactionNoise(String sender, String body) {
     if (isMerchantReceiptOrEbill(body) || isInvestmentFolioAllotment(body)) {
       return false;
+    }
+    if (isRefundProgressNotice(body) || isProvidentFundNotice(sender, body)) {
+      return true;
     }
     final cleanSender = sender.trim();
     if (cleanSender.isNotEmpty) {
@@ -976,19 +1006,36 @@ class LocalSmsParser {
   static bool _plainExternalBankCredit(String body) =>
       _incomingBankTransferCandidate(body) &&
       !_accountToAccountTransfer(body) &&
+      !_nonEarnedInstitutionalCredit(body) &&
       !_re(
         r'\b(?:refund(?:ed)?|reversal|reversed|chargeback|cashback|reward|rewards|points?|miles?|loan|investment|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
       ).hasMatch(body) &&
       _re(r'\b(?:utr|imps|neft|rtgs)\b').hasMatch(body);
+
+  /// Salary and payouts often name only the payer, with no "salary" word:
+  /// "credited ... by NEFT-ACMETECH SOLUTIONS PVT LTD-XXXX". A company payer
+  /// on a bank rail counts as earned income; lenders, AMCs, insurers, brokers
+  /// and payment gateways do not (loans, redemptions, claims and settlements).
+  static bool _nonEarnedInstitutionalCredit(String body) =>
+      _re(
+        r'\b(?:finance|finserv|capital|insurance|assurance|securities|broking|broker|amc|mutual\s+fund|nbfc|credit\s+(?:line|card|facility)|loan|personal\s+loan|emi|redemption|settlement|claim|gateway|razorpay|cashfree|paytm|phonepe|zomato|swiggy|amazon|flipkart|myntra)\b',
+      ).hasMatch(body);
+
+  static bool _employerStylePayer(String body) =>
+      _re(
+        r'\b(?:neft|rtgs|imps|ach)\b[\s\S]{0,12}?[-/:\s]\s*[A-Za-z0-9][A-Za-z0-9 .&\x27]{2,60}?\b(?:pvt\.?\s*ltd|private\s+limited|limited|ltd|llp|inc|corp(?:oration)?|technolog(?:y|ies)|solutions|services|systems|infotech|software|consulting|labs|enterprises)\b',
+      ).hasMatch(body) &&
+      !_nonEarnedInstitutionalCredit(body);
 
   static bool _earnedIncomeCredit(String body) =>
       !_re(
         r'\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|emi|equated\s+monthly\s+installment|instalment|investment|mutual\s+fund|shares|equity\s+shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
       ).hasMatch(body) &&
       !_re(r'\bsalary\s+advance\b').hasMatch(body) &&
-      _re(
-        r'\b(?:salary|wages?|payroll|pension|interest|dividend|rent|commission|consulting|business\s+(?:receipt|income)|invoice\s+paid)\b',
-      ).hasMatch(body);
+      (_re(
+            r'\b(?:salary|wages?|payroll|pension|interest|dividend|rent|commission|consulting|stipend|bonus|incentive|business\s+(?:receipt|income)|invoice\s+paid)\b|\bsal\b',
+          ).hasMatch(body) ||
+          _employerStylePayer(body));
 
   static bool _loanRepayment(String body) =>
       !_feeCharge(body) &&
