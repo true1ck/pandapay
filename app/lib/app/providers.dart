@@ -4927,9 +4927,18 @@ Future<List<TransactionEntry>?> _cachedTransactionsForReports(Ref ref) async {
   if (cache == null) return null;
   final namespace = ref.read(cacheNamespaceProvider);
   cache.financialStore.migrateLegacy(namespace);
-  return cache.financialStore
+  final local = cache.financialStore
       .transactions(namespace, const TransactionQuery())
       ?.rows;
+  if (local != null && local.isNotEmpty) return local;
+  final legacy = await _readLegacyTransactionSnapshots(
+    ref,
+    cache,
+    cacheKey: 'transactions:all',
+    filter: const TransactionQuery(),
+    useReportSnapshots: true,
+  );
+  return legacy ?? local;
 }
 
 /// Local SMS evidence can confirm that a named service has AutoPay enabled,
@@ -5963,6 +5972,104 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     }
     rethrow;
   }
+}
+
+/// Reads response-cache snapshots written before transactions were
+/// materialized into [FinancialStore]. This remains a read-only compatibility
+/// path: a valid empty snapshot is meaningful, while a missing/corrupt
+/// snapshot still allows the authoritative fetch to run.
+Future<List<TransactionEntry>?> _readLegacyTransactionSnapshots(
+  Ref ref,
+  ResponseCache? cache, {
+  required String cacheKey,
+  required TransactionQuery filter,
+  required bool useReportSnapshots,
+}) async {
+  if (cache == null) return null;
+  final namespace = ref.read(cacheNamespaceProvider);
+  final suffixes = <String>{cacheKey, 'transactions:all'};
+  if (useReportSnapshots) {
+    suffixes.add('insights_transactions:thisMonth:cached-range');
+    suffixes.add('insights_transactions:thisYear:cached-range');
+    final from = filter.from;
+    final to = filter.to ?? DateTime.now();
+    if (from != null) {
+      var month = DateTime(from.year, from.month);
+      final lastMonth = DateTime(to.year, to.month);
+      while (!month.isAfter(lastMonth)) {
+        suffixes.add(
+          'spend_detail:month:${month.year}-${month.month.toString().padLeft(2, '0')}',
+        );
+        month = DateTime(month.year, month.month + 1);
+      }
+    }
+  }
+
+  final rowsById = <String, TransactionEntry>{};
+  var foundSnapshot = false;
+  for (final suffix in suffixes) {
+    final snapshot = await _readCacheOrNull(
+      ref,
+      cache,
+      '$namespace:$suffix',
+    );
+    if (snapshot == null) continue;
+    try {
+      final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
+      final rawRows = body['transactions'];
+      if (rawRows is! List) continue;
+      foundSnapshot = true;
+      for (final raw in rawRows.whereType<Map<String, dynamic>>()) {
+        final row = TransactionEntry.fromJson(raw);
+        if (_matchesTransactionQuery(row, filter)) {
+          rowsById.putIfAbsent(row.id, () => row);
+        }
+      }
+    } catch (_) {
+      // A corrupt compatibility snapshot is ignored; another snapshot or the
+      // authoritative fetch may still provide a usable result.
+    }
+  }
+  return foundSnapshot ? rowsById.values.toList(growable: false) : null;
+}
+
+bool _matchesTransactionQuery(TransactionEntry row, TransactionQuery filter) {
+  if (filter.from != null && row.occurredAt.isBefore(filter.from!)) {
+    return false;
+  }
+  if (filter.to != null) {
+    final endExclusive = DateTime(
+      filter.to!.year,
+      filter.to!.month,
+      filter.to!.day + 1,
+    );
+    if (!row.occurredAt.isBefore(endExclusive)) return false;
+  }
+  if (filter.cardId != null && row.userCardId != filter.cardId) return false;
+  if (filter.categoryId != null &&
+      row.categoryId != filter.categoryId &&
+      row.parentCategoryId != filter.categoryId) {
+    return false;
+  }
+  if (filter.userCategoryId != null &&
+      row.userCategoryId != filter.userCategoryId &&
+      row.parentUserCategoryId != filter.userCategoryId) {
+    return false;
+  }
+  if (filter.source != null && row.source != filter.source) return false;
+  final query = filter.query?.trim().toLowerCase();
+  if (query != null && query.isNotEmpty) {
+    final haystack = [
+      row.merchantName,
+      row.merchantVpa,
+      row.categoryName,
+      row.subcategoryName,
+      row.note,
+      row.sourceKey,
+    ].whereType<String>().join(' ').toLowerCase();
+    if (!haystack.contains(query)) return false;
+  }
+  return true;
 }
 
 /// Returns one transaction from the last successful Activity snapshot without
