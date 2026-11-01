@@ -1143,7 +1143,11 @@ function parseBuiltInUpiDebit(sms) {
   const merchantMatch = towardsPartyMatch
     || body.match(/\bmerchant\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,;]|$|\r|\n)/i)
     || body.match(/\b(?:created\s+towards|subscription\s+to|initiated\s+by)\s+([A-Za-z0-9_][-A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|for|on|before|is|has|was|processed|successful|completed|approved|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,;]|$|\r|\n)/i)
-    || body.match(/\b(?:to|at|for)\s+(?!(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,]|$)/i);
+    || body.match(/\b(?:to|at|for)\s+(?!(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,]|$)/i)
+    // Indian bank alerts may print the payee in a regional script. Keep the
+    // same role markers and terminators, but do not restrict the token to
+    // Latin letters or silently drop a valid merchant.
+    || body.match(/\b(?:to|at|for)\s+(?!(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([\p{L}\p{N}][\p{L}\p{N}\p{M} ._&@*'\/-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|\s*\(|[.,]|$)/iu);
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:upi\s*)?(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
   const narrationParty = merchantMatch ? null : upiNarrationParty(body);

@@ -19,7 +19,10 @@ const { applyFactSpecialists } = require('./sms_facts_route');
 const smsFacts = require('./sms_facts');
 const smsObservationMigration = require('./sms_observation_migration');
 const crypto = require('crypto');
-const { verifyModelFacts } = require('./ai_fact_evidence');
+const {
+  verifyModelFacts,
+  validateNegativeDecisionEvidence,
+} = require('./ai_fact_evidence');
 const { providerLimits } = require('./ai_provider_quota_route');
 const { validateDecision } = require('./sms_decision');
 
@@ -244,16 +247,20 @@ function registerAiQueueRoutes(app, {
           return { status: 422, error: 'result lacks SMS evidence', details: evidence.errors };
         }
         const decisionValidation = validateDecision(decision, facts);
+        const negativeEvidence = validateNegativeDecisionEvidence(decision, job.payload?.body);
+        const acceptedDecisionValid = decisionValidation.valid && negativeEvidence.valid;
         // A malformed decision is not a rejected SMS. Keep any validated facts
         // as editable suggestions, but force the device to leave the source in
         // Needs Review. In particular, only a consistent explicit negative
         // decision may dismiss a row.
-        const acceptedDecision = decisionValidation.valid ? decision : null;
+        const queueDecision = decisionValidation.valid ? decision : null;
         const completion = await geminiQueue.completeJobWithResult(client, {
           job,
-          decision: acceptedDecision,
+          // Preserve a schema-valid but source-unsupported dismissal for the
+          // queue's audit result; the queue will null it while recording why.
+          decision: queueDecision,
           facts,
-          reviewRequired: decisionValidation.valid ? null : true,
+          reviewRequired: acceptedDecisionValid ? null : true,
           batchMetadata: {
             ...(typeof batchId === 'string' && /^[0-9a-f-]{36}$/i.test(batchId) ? { batchId } : {}),
             ...(Number.isInteger(batchSize) && batchSize >= 1 && batchSize <= 4 ? { batchSize } : {}),
@@ -266,7 +273,7 @@ function registerAiQueueRoutes(app, {
           status: 200,
           jobStatus: 'done',
           decision: completion.decision || null,
-          decisionValid: decisionValidation.valid,
+          decisionValid: acceptedDecisionValid,
           reviewRequired: completion.reviewRequired,
           confidenceScore: completion.confidenceScore,
         };

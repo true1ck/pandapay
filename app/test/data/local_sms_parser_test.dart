@@ -2126,5 +2126,24 @@ void main() {
       expect(parsed?.dueDate, DateTime(2026, 9, 3));
       expect(draft.merchantName, isNull);
     });
+
+    test(
+      'uses the payment payee instead of an issuer brand in a card alert',
+      () {
+        final parsed = LocalSmsParser.parse(
+          namespace: 'user:test',
+          sender: 'VM-HDFCBK-S',
+          body:
+              'Rs.200.00 spent on HDFC Swiggy Credit Card xx1234 at '
+              'BALAJI SPORTS on 01-11-26. Avl Bal Rs.5000.00',
+          receivedAt: DateTime(2026, 11, 1, 14),
+        );
+
+        final transaction = parsed?.transaction;
+        expect(transaction, isNotNull);
+        expect(transaction!.merchantName, 'BALAJI SPORTS');
+        expect(transaction.categoryId, isNot('dining'));
+      },
+    );
   });
 }

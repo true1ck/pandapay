@@ -376,6 +376,128 @@ function hasCompletionEvidence(body) {
   return true;
 }
 
+/**
+ * A negative AI decision is safe only when the redacted body does not itself
+ * contain a trackable financial event. This is deliberately a contradiction
+ * check, not a classifier: it does not decide the merchant or category and it
+ * never turns an ambiguous message into a positive fact.
+ */
+function financialEvidenceForDismissal(body) {
+  const text = String(body || '');
+  const hasAmount = moneyInMessage(text).length > 0 || currencylessMovementAmounts(text).length > 0;
+  const signals = [];
+  if (hasAmount && hasCompletionEvidence(text)) signals.push('posted_movement');
+  if (hasAmount && /\b(?:bill|amount\s+due|statement|minimum\s+due|outstanding|mandate|autopay|auto\.pay)\b/i.test(text)) {
+    signals.push('bill_or_authorization');
+  }
+  // Authorization lifecycle updates are evidence even when no ceiling or
+  // posted amount is printed (especially cancellations and revocations).
+  if (/\b(?:mandate|auto[- ]?pay|standing\s+instruction)\b/i.test(text) &&
+      /\b(?:(?:has|have)\s+been\s+(?:successfully\s+)?|(?:is|was)\s+(?:successfully\s+)?|successfully\s+)(?:created|registered|activated|approved|cancelled|canceled|revoked|paused|resumed|expired)\b/i.test(text)) {
+    signals.push('authorization_lifecycle');
+  }
+  return {
+    conflict: signals.length > 0,
+    reason: signals.length > 0 ? 'financial_evidence_present' : null,
+    signals,
+  };
+}
+
+// A dismissal is a model conclusion, not a fact that can be proven from an
+// amount alone. It still needs a source-side signal for the reason the model
+// supplied. Keep these predicates intentionally broad enough for unseen
+// senders, but narrow enough that an arbitrary/empty body cannot auto-dismiss
+// a candidate. Strong movement or bill evidence remains a contradiction even
+// when the reason keyword is present.
+const NEGATIVE_DECISION_RULES = Object.freeze({
+  telecom_carrier_deduction: {
+    topic: 'telecom_carrier_deduction',
+    pattern: /\b(?:mobile|telecom|carrier|prepaid|postpaid|recharge|sim|network|data\s+(?:pack|plan)|number\s+retention)\b/i,
+    signal: 'telecom_source_signal',
+  },
+  loan_upsell: {
+    topic: 'loan_upsell_or_offer',
+    pattern: /\b(?:loan|borrow|credit\s+line|personal\s+loan)\b[\s\S]{0,100}\b(?:offer|apply|pre[- ]?approved|eligible|instant|zero\s+paperwork|up\s+to)\b|\b(?:offer|apply|pre[- ]?approved|eligible|instant|zero\s+paperwork|up\s+to)\b[\s\S]{0,100}\b(?:loan|borrow|credit\s+line|personal\s+loan)\b/i,
+    signal: 'loan_offer_signal',
+  },
+  promotional_spam: {
+    topic: 'generic_promotional_spam',
+    pattern: /\b(?:offer|promo(?:tion)?|cashback|bonus|discount|sale|deal|reward|free|apply\s+now|limited\s+time|subscribe|advertis(?:e|ement|ing)?)\b/i,
+    signal: 'promotional_source_signal',
+  },
+  security_otp: {
+    topic: 'otp_or_security_code',
+    pattern: /\b(?:otp|one[- ]time\s+password|verification\s+code|security\s+code|login|netbanking|do\s+not\s+share|valid\s+for)\b/i,
+    signal: 'security_source_signal',
+  },
+  credit_limit_upsell: {
+    topic: 'credit_card_limit_upsell',
+    pattern: /\b(?:credit\s+limit|limit\s+(?:increase|enhancement|upgrade))\b[\s\S]{0,100}\b(?:offer|apply|eligible|increase|enhance|upgrade|pre[- ]?approved)\b|\b(?:offer|apply|eligible|increase|enhance|upgrade|pre[- ]?approved)\b[\s\S]{0,100}\b(?:credit\s+limit|limit\s+(?:increase|enhancement|upgrade))\b/i,
+    signal: 'credit_limit_offer_signal',
+  },
+  non_financial: {
+    topic: 'other_non_financial',
+    pattern: /\b(?:delivery|delivered|shipment|parcel|courier|appointment|booking|reservation|ticket|maintenance|survey|feedback|welcome|notification|reminder|service\s+alert|verification)\b/i,
+    signal: 'non_financial_source_signal',
+  },
+});
+
+/**
+ * Validates the source-side support for a negative model decision. This is a
+ * safety gate, not a second classifier: it only permits known rejection
+ * families when the redacted source contains a matching signal and no strong
+ * financial contradiction. Callers should keep invalid decisions in review.
+ */
+function validateNegativeDecisionEvidence(decision, body) {
+  if (decision?.shouldConsider !== false) {
+    return { valid: true, reason: null, errors: [], signals: [] };
+  }
+  const text = String(body || '').trim();
+  if (!text) {
+    return {
+      valid: false,
+      reason: 'source_sms_missing',
+      errors: ['negative decision requires source SMS evidence'],
+      signals: [],
+    };
+  }
+  const rule = NEGATIVE_DECISION_RULES[decision.rejectionReason];
+  if (!rule) {
+    return {
+      valid: false,
+      reason: 'unsupported_negative_reason',
+      errors: ['negative decision rejection reason has no source evidence rule'],
+      signals: [],
+    };
+  }
+  if (decision.topic !== rule.topic) {
+    return {
+      valid: false,
+      reason: 'negative_reason_topic_mismatch',
+      errors: ['negative decision topic does not match its rejection reason'],
+      signals: [],
+    };
+  }
+  if (!rule.pattern.test(text)) {
+    return {
+      valid: false,
+      reason: 'negative_reason_not_evidenced',
+      errors: ['negative decision rejection reason is not evidenced by the source SMS'],
+      signals: [],
+    };
+  }
+  const contradiction = financialEvidenceForDismissal(text);
+  if (contradiction.conflict) {
+    return {
+      valid: false,
+      reason: contradiction.reason,
+      errors: ['negative decision conflicts with financial evidence in the source SMS'],
+      signals: contradiction.signals,
+    };
+  }
+  return { valid: true, reason: null, errors: [], signals: [rule.signal] };
+}
+
 function verifyModelFacts(facts, payload) {
   const body = String(payload?.body || '');
   const lower = body.toLowerCase();
@@ -473,6 +595,8 @@ module.exports = {
   COMPLETED_TRANSACTION,
   coreTransactionClause,
   hasCompletionEvidence,
+  financialEvidenceForDismissal,
+  validateNegativeDecisionEvidence,
   currencylessMovementAmounts,
   isReceiptOnlyMessage,
   hasReceiptCompletion,

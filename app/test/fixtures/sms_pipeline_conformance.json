@@ -1,0 +1,116 @@
+{
+  "fixtureVersion": "sms-pipeline-conformance-v1",
+  "namespace": "audit-profile",
+  "cases": [
+    {
+      "id": "merchant_role_confusion",
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.200.00 spent on HDFC Swiggy Credit Card xx1234 at BALAJI SPORTS on 01-11-26. Avl Bal Rs.5000.00",
+      "candidateFact": {
+        "factType": "posted_movement",
+        "payload": {
+          "amountRole": "posted",
+          "entryKind": "spend",
+          "amountInr": 200,
+          "occurredAt": "2026-11-01T09:00:00.000Z",
+          "instrument": "credit_card",
+          "last4": "1234",
+          "merchant": "Swiggy",
+          "category": "travel",
+          "isComplete": true,
+          "confidence": 0.99
+        }
+      },
+      "expected": {
+        "merchant": "BALAJI SPORTS",
+        "category": null,
+        "requiresReview": true
+      }
+    },
+    {
+      "id": "category_drift_substring",
+      "variants": [
+        { "merchant": "KUBER HARDWARE", "expectedCategory": null },
+        { "merchant": "SPARK ELECTRICALS", "expectedCategory": null },
+        { "merchant": "SHELLY BOOK STORE", "expectedCategory": null },
+        { "merchant": "INDIGO PAINTS", "expectedCategory": null },
+        { "merchant": "AMAZON PRIME", "expectedCategory": "entertainment" },
+        { "merchant": "NEW LOCAL SHOP@jio", "expectedCategory": null }
+      ]
+    },
+    {
+      "id": "unicode_merchant_loss",
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.200 debited from A/c XX1234 to बालाजी स्पोर्ट्स via UPI on 01-11-26.",
+      "expected": {
+        "merchant": "बालाजी स्पोर्ट्स",
+        "parseShouldRemainFinancial": true
+      }
+    },
+    {
+      "id": "duplicate_identity_collision",
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.200 debited from A/c XX1234 to LOCAL SHOP via UPI.",
+      "events": [
+        { "receivedAt": "2026-11-01T09:00:00.000Z" },
+        { "receivedAt": "2026-11-02T09:00:00.000Z" }
+      ],
+      "expected": {
+        "differentFinancialOccurrencesNeedDisambiguation": true
+      }
+    },
+    {
+      "id": "ai_merge_conflict",
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.300 spent on credit card xx1234 at REAL SHOP on 01-11-26.",
+      "existingFact": {
+        "factType": "posted_movement",
+        "factIndex": 0,
+        "payload": {
+          "amountRole": "posted",
+          "entryKind": "spend",
+          "amountInr": 200,
+          "occurredAt": "2026-11-01T09:00:00.000Z",
+          "instrument": "credit_card",
+          "last4": "1234",
+          "merchant": "OLD SHOP",
+          "category": "dining",
+          "isComplete": true,
+          "confidence": 0.99
+        },
+        "provenance": { "channel": "sms" }
+      },
+      "proposedFact": {
+        "factType": "posted_movement",
+        "payload": {
+          "amountRole": "posted",
+          "entryKind": "spend",
+          "amountInr": 300,
+          "occurredAt": "2026-11-01T09:00:00.000Z",
+          "instrument": "credit_card",
+          "last4": "1234",
+          "merchant": "REAL SHOP",
+          "category": "other",
+          "isComplete": true,
+          "confidence": 0.99
+        }
+      },
+      "expected": {
+        "conflictRequiresReview": true
+      }
+    },
+    {
+      "id": "ambiguous_negative",
+      "sender": "VM-HDFCBK-S",
+      "body": "Your HDFC Bank card ending 1234 was charged Rs.200 at BALAJI SPORTS on 01-11-26.",
+      "negativeDecision": {
+        "topic": "generic_promotional_spam",
+        "shouldConsider": false,
+        "rejectionReason": "promotional_spam"
+      },
+      "expected": {
+        "financialEvidenceMustNotBeDismissed": true
+      }
+    }
+  ]
+}

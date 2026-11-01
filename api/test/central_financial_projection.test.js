@@ -56,6 +56,91 @@ test('named service mandate remains a setup presence when no ceiling is supplied
   assert.equal(decisions.some((item) => item.projectionKind === 'movement'), false);
 });
 
+test('balance observations with the same suffix stay distinct across issuers', () => {
+  const facts = [
+    {
+      id: 'balance-sbi',
+      factIndex: 0,
+      factType: 'balance_snapshot',
+      status: 'active',
+      payload: {
+        availableBalanceInr: 1000,
+        asOfAt: '2026-10-16T10:00:00.000Z',
+        accountLast4: '1234',
+        issuerName: 'State Bank of India',
+        instrument: 'upi_bank',
+      },
+    },
+    {
+      id: 'balance-hdfc',
+      factIndex: 1,
+      factType: 'balance_snapshot',
+      status: 'active',
+      payload: {
+        availableBalanceInr: 2000,
+        asOfAt: '2026-10-16T10:00:00.000Z',
+        accountLast4: '1234',
+        issuerName: 'HDFC Bank',
+        instrument: 'upi_bank',
+      },
+    },
+  ];
+
+  const decisions = projection.buildProjectionDecisions({
+    sourceId: 'source-balance-issuers',
+    sourceKey: 'balance-issuers'.repeat(4),
+    facts,
+  });
+
+  assert.equal(decisions.length, 2);
+  assert.notEqual(decisions[0].projectionKey, decisions[1].projectionKey);
+  assert.deepEqual(
+    decisions.map((item) => item.data.issuerName).sort(),
+    ['HDFC Bank', 'State Bank of India'],
+  );
+});
+
+test('balance observations without resolved account identity are source-scoped', () => {
+  const makeFact = (id, amount) => ({
+    id,
+    factIndex: 0,
+    factType: 'balance_snapshot',
+    status: 'active',
+    payload: {
+      availableBalanceInr: amount,
+      asOfAt: '2026-10-16T10:00:00.000Z',
+      accountLast4: '1234',
+      instrument: 'upi_bank',
+    },
+  });
+
+  const first = projection.buildProjectionDecisions({
+    sourceId: 'source-balance-a',
+    facts: [makeFact('balance-a', 1000)],
+  })[0];
+  const second = projection.buildProjectionDecisions({
+    sourceId: 'source-balance-b',
+    facts: [makeFact('balance-b', 2000)],
+  })[0];
+
+  assert.ok(first);
+  assert.ok(second);
+  assert.notEqual(first.projectionKey, second.projectionKey);
+});
+
+test('unresolved accounts within one source retain distinct balance projections', () => {
+  const facts = ['1234', '5678'].map((accountLast4, factIndex) => ({
+    id: `balance-${factIndex}`, factIndex, factType: 'balance_snapshot',
+    payload: { accountLast4, instrument: 'upi_bank', availableBalanceInr: 100 + factIndex,
+      asOfAt: '2026-11-01T09:00:00Z' },
+  }));
+  const decisions = projection.buildProjectionDecisions({ sourceId: 'one-sms', facts });
+  assert.equal(new Set(decisions.map(item => item.projectionKey)).size, 2);
+  const anonymous = facts.map(fact => ({ ...fact, payload: { ...fact.payload, accountLast4: undefined } }));
+  assert.equal(new Set(projection.buildProjectionDecisions({ sourceId: 'one-sms', facts: anonymous })
+    .map(item => item.projectionKey)).size, 2);
+});
+
 test('merchant spelling variants share one service identity', () => {
   const llc = projection.buildProjectionDecisions({ facts: [mandate()] })
     .find((item) => item.projectionKind === 'subscription');

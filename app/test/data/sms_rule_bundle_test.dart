@@ -6,6 +6,7 @@ import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/sms_rule_bundle.dart';
 import 'package:pandapay/data/local/sms_rule_bundle_store.dart';
 import 'package:pandapay/data/local_sms_parser.dart';
+import 'package:pandapay/data/sms_fact_contract.dart' show smsSpendCategories;
 import 'package:pandapay/data/user_cards_repository.dart';
 
 void main() {
@@ -171,77 +172,129 @@ void main() {
       expect(afterRollback, isNull);
     });
 
-    test('shared category parser accepts safe contextual tuples and canonical spend categories', () {
-      Map<String, dynamic> rule(String category) => {
-        'merchantKey': 'BUNDL TECHNOLOGIES',
-        'senderKey': 'TX-MNTPRO-S',
-        'contextKey': 'GROCERIES|SUPERMARKET',
-        'factFamily': 'posted_movement',
-        'categorySlug': category,
-        'supportCount': 10,
-        'agreementBp': 10000,
-      };
-      for (final slug in ['government', 'other']) {
-        expect(SmsSharedCategoryRule.fromJson(rule(slug)), isNotNull);
-      }
-      for (final slug in ['investments', 'income', 'cash', 'subscription']) {
-        expect(SmsSharedCategoryRule.fromJson(rule(slug)), isNull);
-      }
-      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'senderKey': 'HDFCBK'}), isNull);
-      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': ''}), isNull);
-      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': 'NONCONTEXTUAL'}), isNull);
-      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': 'GROCERY|GROCERY'}), isNull);
-      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'contextKey': 'CAB|DIESEL|DINING|EDUCATION|ELECTRICITY|EMI|ENTERTAINMENT|FLIGHT|FUEL'}), isNull);
-      expect(SmsSharedCategoryRule.fromJson({...rule('groceries'), 'factFamily': 'balance_snapshot'}), isNull);
-    });
+    test(
+      'shared category parser accepts safe contextual tuples and canonical spend categories',
+      () {
+        Map<String, dynamic> rule(String category) => {
+          'merchantKey': 'BUNDL TECHNOLOGIES',
+          'senderKey': 'TX-MNTPRO-S',
+          'contextKey': 'GROCERIES|SUPERMARKET',
+          'factFamily': 'posted_movement',
+          'categorySlug': category,
+          'supportCount': 10,
+          'agreementBp': 10000,
+        };
+        for (final slug in smsSpendCategories) {
+          expect(SmsSharedCategoryRule.fromJson(rule(slug)), isNotNull);
+        }
+        expect(
+          SmsSharedCategoryRule.allowedCategories,
+          smsSpendCategories.toSet(),
+        );
+        for (final slug in [
+          'sports',
+          'fitness',
+          'shopping',
+          'investments',
+          'income',
+          'cash',
+          'subscription',
+        ]) {
+          expect(SmsSharedCategoryRule.fromJson(rule(slug)), isNull);
+        }
+        expect(
+          SmsSharedCategoryRule.fromJson({
+            ...rule('groceries'),
+            'senderKey': 'HDFCBK',
+          }),
+          isNull,
+        );
+        expect(
+          SmsSharedCategoryRule.fromJson({
+            ...rule('groceries'),
+            'contextKey': '',
+          }),
+          isNull,
+        );
+        expect(
+          SmsSharedCategoryRule.fromJson({
+            ...rule('groceries'),
+            'contextKey': 'NONCONTEXTUAL',
+          }),
+          isNull,
+        );
+        expect(
+          SmsSharedCategoryRule.fromJson({
+            ...rule('groceries'),
+            'contextKey': 'GROCERY|GROCERY',
+          }),
+          isNull,
+        );
+        expect(
+          SmsSharedCategoryRule.fromJson({
+            ...rule('groceries'),
+            'contextKey':
+                'CAB|DIESEL|DINING|EDUCATION|ELECTRICITY|EMI|ENTERTAINMENT|FLIGHT|FUEL',
+          }),
+          isNull,
+        );
+        expect(
+          SmsSharedCategoryRule.fromJson({
+            ...rule('groceries'),
+            'factFamily': 'balance_snapshot',
+          }),
+          isNull,
+        );
+      },
+    );
 
-    test('context key uses allowlisted whole words and removes merchant tokens', () {
-      expect(
-        SmsSharedCategoryRule.contextKeyForBody(
-          'Paid TRAVELWORLD for petrol',
-          merchant: 'TRAVELWORLD',
-        ),
-        'PETROL',
-      );
-      expect(
-        SmsSharedCategoryRule.contextKeyForBody(
-          'Paid TRAVEL WORLD',
-          merchant: 'TRAVEL WORLD',
-        ),
-        isEmpty,
-      );
-      expect(
-        SmsSharedCategoryRule.contextKeyForBody(
-          'Paid at TRAVEL WORLD for groceries',
-          merchant: 'TRA-VEL WORLD',
-        ),
-        'GROCERIES',
-      );
-      expect(
-        SmsSharedCategoryRule.contextKeyForBody('Paid CabX'),
-        isEmpty,
-      );
-      expect(
-        SmsSharedCategoryRule.contextKeyForBody('Paid TRAVEL123'),
-        isEmpty,
-      );
-      expect(
-        SmsSharedCategoryRule.tupleKey(
-          merchantKey: 'A|B',
-          senderKey: 'TX-MNTPRO-S',
-          contextKey: 'GROCERY|TRAVEL',
-          factFamily: 'posted_movement',
-        ),
-        isNot(
+    test(
+      'context key uses allowlisted whole words and removes merchant tokens',
+      () {
+        expect(
+          SmsSharedCategoryRule.contextKeyForBody(
+            'Paid TRAVELWORLD for petrol',
+            merchant: 'TRAVELWORLD',
+          ),
+          'PETROL',
+        );
+        expect(
+          SmsSharedCategoryRule.contextKeyForBody(
+            'Paid TRAVEL WORLD',
+            merchant: 'TRAVEL WORLD',
+          ),
+          isEmpty,
+        );
+        expect(
+          SmsSharedCategoryRule.contextKeyForBody(
+            'Paid at TRAVEL WORLD for groceries',
+            merchant: 'TRA-VEL WORLD',
+          ),
+          'GROCERIES',
+        );
+        expect(SmsSharedCategoryRule.contextKeyForBody('Paid CabX'), isEmpty);
+        expect(
+          SmsSharedCategoryRule.contextKeyForBody('Paid TRAVEL123'),
+          isEmpty,
+        );
+        expect(
           SmsSharedCategoryRule.tupleKey(
-            merchantKey: 'A',
-            senderKey: 'B|TX-MNTPRO-S',
+            merchantKey: 'A|B',
+            senderKey: 'TX-MNTPRO-S',
             contextKey: 'GROCERY|TRAVEL',
             factFamily: 'posted_movement',
           ),
-        ),
-      );
-    });
+          isNot(
+            SmsSharedCategoryRule.tupleKey(
+              merchantKey: 'A',
+              senderKey: 'B|TX-MNTPRO-S',
+              contextKey: 'GROCERY|TRAVEL',
+              factFamily: 'posted_movement',
+            ),
+          ),
+        );
+      },
+    );
 
     test(
       'verifies and syncs a shared category rule bundle independently',
@@ -324,7 +377,19 @@ void main() {
         '''INSERT OR REPLACE INTO sms_shared_category_rule_bundles
            (id, raw_json, sha256, version, min_client_version, cached_at)
            VALUES (1, ?, ?, 1, ?, ?)''',
-        [jsonEncode([{'merchantKey': 'BUNDL TECHNOLOGIES', 'categorySlug': 'groceries', 'supportCount': 12, 'agreementBp': 10000}]), 'legacy-v1-hash', '1.0.0', DateTime.now().millisecondsSinceEpoch],
+        [
+          jsonEncode([
+            {
+              'merchantKey': 'BUNDL TECHNOLOGIES',
+              'categorySlug': 'groceries',
+              'supportCount': 12,
+              'agreementBp': 10000,
+            },
+          ]),
+          'legacy-v1-hash',
+          '1.0.0',
+          DateTime.now().millisecondsSinceEpoch,
+        ],
       );
       expect(store.loadSharedCategoryRulesSync(), isEmpty);
     });

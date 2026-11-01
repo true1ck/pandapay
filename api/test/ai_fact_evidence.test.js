@@ -12,6 +12,8 @@ const {
   MOVEMENT_VERBS,
   coreTransactionClause,
   hasCompletionEvidence,
+  financialEvidenceForDismissal,
+  validateNegativeDecisionEvidence,
 } = require('../src/ai_fact_evidence');
 const { validateFactSet } = require('../src/sms_facts');
 const { assessFacts } = require('../src/ai_fact_scoring');
@@ -181,7 +183,7 @@ test('normalizer fills only unambiguous bill fields and reaches auto-resolve evi
   assert.equal(movementFacts[0].payload.confidence, 0.9);
   assert.equal(validateFactSet(movementFacts).valid, true);
   assert.equal(verify(movementFacts, { body: movementBody, occurredAt }).valid, true);
-  assert.equal(assessFacts(movementFacts, movementBody, occurredAt).reviewRequired, false);
+  assert.equal(assessFacts(movementFacts, movementBody, occurredAt).reviewRequired, true);
 
   const contradictory = normalizeModelFacts([{
     factType: 'bill_payment',
@@ -257,4 +259,93 @@ test('genuine failures, tentative language and scheduled-only messages still fai
     assert.equal(verify([fact], { body }).valid, false, body);
     assert.equal(hasCompletionEvidence(body), false, body);
   }
+});
+
+test('dismissal contradiction detection is conservative and does not classify promotions or failures as posted money', () => {
+  assert.deepEqual(
+    financialEvidenceForDismissal('Sent Rs 420 to SWIGGY UPI successfully.'),
+    { conflict: true, reason: 'financial_evidence_present', signals: ['posted_movement'] },
+  );
+  assert.deepEqual(
+    financialEvidenceForDismissal('Your Rs 420 debit was declined.'),
+    { conflict: false, reason: null, signals: [] },
+  );
+  assert.deepEqual(
+    financialEvidenceForDismissal('Get Rs 500 cashback when you spend online.'),
+    { conflict: false, reason: null, signals: [] },
+  );
+});
+
+test('amount-free mandate lifecycle evidence cannot be dismissed as a notification', () => {
+  const decision = { topic: 'other_non_financial', shouldConsider: false, rejectionReason: 'non_financial' };
+  for (const body of [
+    'Notification: Your AutoPay mandate for Netflix has been cancelled successfully.',
+    'Notification: Your mandate for ACME has been registered.',
+    'Notification: Your e-mandate has been revoked.',
+  ]) {
+    assert.equal(validateNegativeDecisionEvidence(decision, body).valid, false, body);
+  }
+  assert.equal(validateNegativeDecisionEvidence(decision,
+    'Notification: Learn how to register an AutoPay mandate.').valid, true);
+});
+
+test('negative decisions require source-grounded rejection evidence', () => {
+  const promotionalSpam = {
+    topic: 'generic_promotional_spam',
+    shouldConsider: false,
+    rejectionReason: 'promotional_spam',
+  };
+  assert.equal(
+    validateNegativeDecisionEvidence(promotionalSpam, 'Limited-time cashback offer: apply now and get a bonus.').valid,
+    true,
+  );
+  assert.equal(
+    validateNegativeDecisionEvidence(promotionalSpam, '').valid,
+    false,
+    'an empty source cannot justify dismissal',
+  );
+  assert.equal(
+    validateNegativeDecisionEvidence(promotionalSpam, 'Your account was debited Rs 420 at SWIGGY.').valid,
+    false,
+    'a financial movement must not be dismissed as promotion',
+  );
+  assert.equal(
+    validateNegativeDecisionEvidence({
+      ...promotionalSpam,
+      topic: 'telecom_carrier_deduction',
+      rejectionReason: 'telecom_carrier_deduction',
+    }, 'Limited-time cashback offer: apply now and get a bonus.').valid,
+    false,
+    'a rejection reason must match the source topic',
+  );
+});
+
+test('source predicates cover every supported negative rejection family without sender hardcoding', () => {
+  const cases = [
+    ['telecom_carrier_deduction', 'telecom_carrier_deduction', 'Your prepaid mobile plan is ready for recharge.'],
+    ['loan_upsell_or_offer', 'loan_upsell', 'You are pre-approved for a personal loan offer. Apply now.'],
+    ['generic_promotional_spam', 'promotional_spam', 'Limited-time cashback offer: get a bonus today.'],
+    ['otp_or_security_code', 'security_otp', 'Your verification code is valid for 10 minutes.'],
+    ['credit_card_limit_upsell', 'credit_limit_upsell', 'You are eligible for a credit limit increase offer.'],
+    ['other_non_financial', 'non_financial', 'Your parcel delivery notification is available.'],
+  ];
+  for (const [topic, rejectionReason, body] of cases) {
+    const result = validateNegativeDecisionEvidence(
+      { topic, shouldConsider: false, rejectionReason },
+      body,
+    );
+    assert.equal(result.valid, true, `${rejectionReason}: ${result.errors.join('; ')}`);
+  }
+  assert.equal(
+    validateNegativeDecisionEvidence(
+      {
+        topic: 'telecom_carrier_deduction',
+        shouldConsider: false,
+        rejectionReason: 'telecom_carrier_deduction',
+      },
+      'Paid Rs 9.88 for mobile recharge via UPI.',
+    ).valid,
+    false,
+    'a source-grounded reason still cannot override a completed financial movement',
+  );
 });

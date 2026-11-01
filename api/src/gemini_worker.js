@@ -16,7 +16,11 @@ if (!process.env.GEMINI_API_KEY) {
 const crypto = require('crypto');
 const { safeErrorCode } = require('./safeErrorCode');
 const smsFacts = require('./sms_facts');
-const { verifyModelFacts, normalizeModelFacts } = require('./ai_fact_evidence');
+const {
+  verifyModelFacts,
+  normalizeModelFacts,
+  validateNegativeDecisionEvidence,
+} = require('./ai_fact_evidence');
 const { ACTIONABLE_FACT_TYPES } = require('./ai_fact_scoring');
 const { DECISION_TOPICS, REJECTION_REASONS, validateDecision } = require('./sms_decision');
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
@@ -31,11 +35,10 @@ const DEFAULT_BATCH_MAX = Math.min(4, Math.max(1, Number(process.env.AI_WORKER_B
 const DEFAULT_BATCH_WINDOW_MS = Math.min(500, Math.max(0, Number(process.env.AI_WORKER_BATCH_WINDOW_MS || 300)));
 const MAX_OUTPUT_TOKENS = 2048;
 
-const SPEND_CATEGORIES = [
-  'groceries', 'fuel', 'dining', 'online', 'travel', 'bills', 'rent',
-  'insurance', 'education', 'government', 'wallet', 'entertainment',
-  'health', 'emi', 'other',
-];
+// The fact contract owns the vocabulary. Keep the worker's schema, prompt,
+// and validation on the exact same array so a taxonomy update cannot land in
+// only one of the model-facing layers.
+const { SPEND_CATEGORIES } = smsFacts;
 
 const DECISION_SCHEMA = {
   type: 'OBJECT',
@@ -1010,6 +1013,17 @@ function providerRetryReason(error) {
   return 'provider_retry';
 }
 
+function validateWorkerDecision(decision, facts, body) {
+  const schema = validateDecision(decision, facts);
+  const source = schema.valid
+    ? validateNegativeDecisionEvidence(decision, body)
+    : { valid: true, errors: [] };
+  return {
+    valid: schema.valid && source.valid,
+    errors: [...schema.errors, ...source.errors],
+  };
+}
+
 async function runWorkerOnce({
   apiBaseUrl = DEFAULT_API_BASE_URL,
   workerToken = process.env.AI_WORKER_TOKEN,
@@ -1117,7 +1131,7 @@ async function runWorkerOnce({
       const { facts, actionableErrors } = prepareFactsForResult(modelFacts, job);
       const errors = [
         ...actionableErrors,
-        ...validateDecision(decision, facts).errors,
+        ...validateWorkerDecision(decision, facts, job.payload?.body).errors,
       ];
       if (errors.length > 0) {
         repairJobs.push(job);
@@ -1159,9 +1173,10 @@ async function runWorkerOnce({
         let decision = Array.isArray(itemResult) ? null : (itemResult?.decision || null);
         let prepared = prepareFactsForResult(modelFacts, job);
         let facts = prepared.facts;
+        let decisionValidation = validateWorkerDecision(decision, facts, job.payload?.body);
         let errors = [
           ...prepared.actionableErrors,
-          ...validateDecision(decision, facts).errors,
+          ...decisionValidation.errors,
         ];
         if (repairUnavailable.has(job.id)) {
           // Invalid facts are omitted below and the app keeps the SMS in
@@ -1172,7 +1187,8 @@ async function runWorkerOnce({
           // dismissal by accident.
           if (decision?.shouldConsider === false) decision = null;
         }
-        if (!validateDecision(decision, facts).valid) decision = null;
+        decisionValidation = validateWorkerDecision(decision, facts, job.payload?.body);
+        if (!decisionValidation.valid) decision = null;
         const result = await jsonRequest(fetchImpl, `${base}/ai/jobs/${encodeURIComponent(job.id)}/result`, workerToken, {
           decision,
           facts,

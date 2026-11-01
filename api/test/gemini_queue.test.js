@@ -783,7 +783,7 @@ const PARTIAL_FACT = {
   },
 };
 
-test('a high-confidence complete posted movement auto-resolves with a composite score', async () => {
+test('a high-confidence complete posted movement stays review-only with a composite score', async () => {
   const client = makeUserClient();
   const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
     sourceKey: SOURCE_KEY,
@@ -797,13 +797,13 @@ test('a high-confidence complete posted movement auto-resolves with a composite 
     facts: [SWIGGY_FACT],
   });
   assert.equal(job.status, 'done');
-  assert.equal(job.result.reviewRequired, false);
+  assert.equal(job.result.reviewRequired, true);
   assert.ok(job.result.confidenceScore >= 0.85, `score ${job.result.confidenceScore}`);
   assert.equal(job.result.scores.length, 1);
   assert.equal(job.result.scores[0].factType, 'posted_movement');
   assert.equal(job.result.scores[0].isComplete, true);
   assert.deepEqual(job.result.factTypes, ['posted_movement']);
-  assert.equal(outcome.reviewRequired, false);
+  assert.equal(outcome.reviewRequired, true);
   assert.equal(outcome.confidenceScore, job.result.confidenceScore);
 });
 
@@ -882,6 +882,71 @@ test('AI results only fill empty slots: device facts and overrides outrank the m
   });
   assert.equal(second.landed.length, 1);
   assert.equal(JSON.parse(source.facts.get(1).payload).balanceInr, 12000);
+});
+
+test('an AI fact that conflicts on amount, merchant, or category is not silently treated as the same fact', async () => {
+  const client = makeUserClient();
+  await smsFacts.upsertSmsSourceFacts(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    bodyHash: smsFacts.bodyHashOf('HDFCBK', SWIGGY_BODY),
+    facts: [SWIGGY_FACT],
+  });
+  const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: SWIGGY_BODY,
+  });
+  const job = client.state.jobs.get(accepted.jobId);
+  const conflicting = {
+    ...SWIGGY_FACT,
+    payload: {
+      ...SWIGGY_FACT.payload,
+      amountInr: 421,
+      merchant: 'Unrelated Vendor',
+      category: 'travel',
+    },
+  };
+  const outcome = await geminiQueue.completeJobWithResult(client, {
+    job,
+    facts: [conflicting],
+  });
+  assert.equal(outcome.landed.length, 0);
+  assert.equal(outcome.reviewRequired, true);
+  assert.deepEqual(outcome.conflicts, [{
+    existingFactIndex: 0,
+    incomingFactType: 'posted_movement',
+    fields: ['amountInr', 'merchant', 'category'],
+  }]);
+  assert.equal(job.result.reviewRequired, true);
+  assert.deepEqual(job.result.conflicts, outcome.conflicts);
+});
+
+test('financial evidence prevents a negative AI dismissal from auto-resolving', async () => {
+  const client = makeUserClient();
+  const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: SWIGGY_BODY,
+  });
+  const job = client.state.jobs.get(accepted.jobId);
+  const outcome = await geminiQueue.completeJobWithResult(client, {
+    job,
+    facts: [],
+    decision: {
+      topic: 'other_non_financial',
+      shouldConsider: false,
+      rejectionReason: 'non_financial',
+    },
+  });
+  assert.equal(outcome.reviewRequired, true);
+  assert.equal(outcome.decision, null);
+  assert.deepEqual(outcome.dismissalConflict, {
+    reason: 'financial_evidence_present',
+    signals: ['posted_movement'],
+  });
+  assert.equal(job.result.reviewRequired, true);
+  assert.equal(job.result.decision, null);
 });
 
 test('a cross-user result cannot redirect facts onto another profile source', async () => {
@@ -1334,7 +1399,7 @@ test('valid AI result endpoint completes review-only without invoking projection
   }
 });
 
-test('result endpoint carries the computed auto-resolution decision and score', async () => {
+test('result endpoint carries the computed review decision and score', async () => {
   const h = harness({});
   const accepted = await h.call('/ai/jobs', {
     userId: PROFILE_A,
@@ -1354,28 +1419,32 @@ test('result endpoint carries the computed auto-resolution decision and score', 
   });
   assert.equal(result.status, 200);
   assert.equal(result.body.jobStatus, 'done');
-  assert.equal(result.body.reviewRequired, false);
+  assert.equal(result.body.reviewRequired, true);
   assert.ok(result.body.confidenceScore >= 0.85);
-  assert.equal(job.result.reviewRequired, false);
+  assert.equal(job.result.reviewRequired, true);
   assert.equal(job.result.specialists, null);
   assert.equal(result.body.decision.topic, 'upi_debit');
   assert.equal(result.body.decisionValid, true);
   assert.equal(job.result.decision.topic, 'upi_debit');
 });
 
-test('noise rejection: shouldConsider=false forces reviewRequired=false and persists decision', async () => {
+test('source-grounded promotion rejection remains dismissible when no financial evidence is present', async () => {
   const h = harness({});
   const accepted = await h.call('/ai/jobs', {
     userId: PROFILE_A,
-    body: { sourceKey: SOURCE_KEY, sender: 'HDFCBK', body: SWIGGY_BODY },
+    body: {
+      sourceKey: SOURCE_KEY,
+      sender: 'HDFCBK',
+      body: 'Exclusive cashback offer: apply now for a bonus.',
+    },
   });
   const lease = await h.call('/ai/jobs/lease', { body: {} });
   const job = h.state.jobs.get(accepted.body.jobId);
   job.lease_expires_at = new Date(Date.now() + 600000);
   const decision = {
-    topic: 'telecom_carrier_deduction',
+    topic: 'generic_promotional_spam',
     shouldConsider: false,
-    rejectionReason: 'telecom_carrier_deduction',
+    rejectionReason: 'promotional_spam',
   };
   const result = await h.call('/ai/jobs/:id/result', {
     params: { id: job.id },
@@ -1387,6 +1456,70 @@ test('noise rejection: shouldConsider=false forces reviewRequired=false and pers
   assert.deepEqual(result.body.decision, decision);
   assert.deepEqual(job.result.decision, decision);
   assert.equal(job.result.reviewRequired, false);
+});
+
+test('result endpoint keeps a source-unsupported negative decision in review', async () => {
+  const h = harness({});
+  const accepted = await h.call('/ai/jobs', {
+    userId: PROFILE_A,
+    body: {
+      sourceKey: SOURCE_KEY,
+      sender: 'HDFCBK',
+      body: 'Your account notification was received.',
+    },
+  });
+  const lease = await h.call('/ai/jobs/lease', { body: {} });
+  const job = h.state.jobs.get(accepted.body.jobId);
+  job.lease_expires_at = new Date(Date.now() + 600000);
+  const result = await h.call('/ai/jobs/:id/result', {
+    params: { id: job.id },
+    body: {
+      profileId: PROFILE_A,
+      leaseToken: lease.body.job.leaseToken,
+      decision: {
+        topic: 'generic_promotional_spam',
+        shouldConsider: false,
+        rejectionReason: 'promotional_spam',
+      },
+      facts: [],
+    },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.decision, null);
+  assert.equal(result.body.decisionValid, false);
+  assert.equal(result.body.reviewRequired, true);
+  assert.deepEqual(job.result.dismissalEvidence, {
+    reason: 'negative_reason_not_evidenced',
+    signals: [],
+  });
+});
+
+test('negative dismissal without source SMS evidence remains in review', async () => {
+  const client = makeUserClient();
+  const accepted = await geminiQueue.acceptOneJob(client, PROFILE_A, {
+    sourceKey: SOURCE_KEY,
+    sender: 'HDFCBK',
+    body: 'A source message exists before the simulated payload loss.',
+  });
+  const job = client.state.jobs.get(accepted.jobId);
+  job.payload.body = '';
+  const outcome = await geminiQueue.completeJobWithResult(client, {
+    job,
+    facts: [],
+    decision: {
+      topic: 'generic_promotional_spam',
+      shouldConsider: false,
+      rejectionReason: 'promotional_spam',
+    },
+  });
+  assert.equal(outcome.reviewRequired, true);
+  assert.equal(outcome.decision, null);
+  assert.deepEqual(outcome.dismissalEvidence, {
+    reason: 'source_sms_missing',
+    signals: [],
+  });
+  assert.equal(job.result.reviewRequired, true);
+  assert.equal(job.result.decision, null);
 });
 
 test('invalid Gemini dismissal decision completes safely but remains in review', async () => {

@@ -51,12 +51,12 @@ const BUILTIN_CATEGORY_RULES = [
 
   { slug: 'travel', priority: 50, patterns: [
     'makemytrip', 'goibibo', 'cleartrip', 'easemytrip', 'irctc', 'redbus',
-    'airindia', 'indigo', 'vistara', 'oyorooms', 'bookingcom', 'agoda',
+    'airindia', 'indigo', 'indigoairlines', 'vistara', 'oyorooms', 'bookingcom', 'agoda',
     'olacabs', 'rapido', 'uber',
     'anitechnologies', 'roppen', 'roppentransportation', 'interglobeaviation',
     'spicejet', 'akasaair', 'fastag', 'netcfastag', 'tollplaza', 'nammayatri',
     'movingtech', 'dmrc', 'bmrcl', 'nammametro', 'abhibus', 'zingbus',
-  ] },
+  ], exactPatterns: ['indigo'] },
 
   { slug: 'entertainment', priority: 60, patterns: [
     'netflix', 'hotstar', 'disneyplus', 'spotify', 'bookmyshow', 'sonyliv',
@@ -120,18 +120,100 @@ function categoryMerchantVariants(value) {
   return [...variants];
 }
 
-function inferBuiltinCategory(merchantName) {
-  const variants = categoryMerchantVariants(merchantName);
-  if (variants.length === 0) return null;
+function categoryMerchantTokens(value) {
+  const raw = String(value || '').normalize('NFKC').toLowerCase();
+  // A provider suffix (`merchant@upi`, `merchant@ybl`, `merchant@jio`) is
+  // payment-rail metadata. It must not become the merchant token that drives
+  // a category assignment.
+  const businessPart = raw.split('@')[0];
+  return businessPart.match(/[\p{L}\p{N}]+/gu) || [];
+}
 
-  const ordered = [...BUILTIN_CATEGORY_RULES].sort((a, b) => a.priority - b.priority);
-  for (const rule of ordered) {
-    const matchedPattern = rule.patterns.find((pattern) =>
-      variants.some((variant) => variant === pattern || variant.includes(pattern))
-    );
-    if (matchedPattern) {
-      return { slug: rule.slug, pattern: matchedPattern, source: 'builtin_rule' };
+function categoryPatternMatch(value, pattern) {
+  const normalizedPattern = normalizeMerchant(pattern);
+  if (!normalizedPattern) return null;
+
+  const tokens = categoryMerchantTokens(value);
+  if (tokens.length === 0) return null;
+  const compact = normalizeMerchant(tokens.join(' '));
+  if (compact === normalizedPattern) {
+    return { matchType: 'exact', specificity: normalizedPattern.length };
+  }
+
+  // Certain short, overloaded brand labels are safe only when the complete
+  // captured merchant is exactly that label. The explicit rule metadata keeps
+  // this policy data-driven and leaves longer, distinctive forms usable.
+  const exactOnly = BUILTIN_CATEGORY_RULES.some((rule) =>
+    Array.isArray(rule.exactPatterns)
+      && rule.exactPatterns.some((candidate) => normalizeMerchant(candidate) === normalizedPattern)
+  );
+  if (exactOnly) return null;
+
+  if (tokens.includes(normalizedPattern)) {
+    return { matchType: 'token', specificity: normalizedPattern.length };
+  }
+
+  // Patterns are stored compactly (for example `amazonprime`). A contiguous
+  // token span allows that catalogue form to match `Amazon Prime Video` while
+  // still rejecting `KUBER` for the `uber` rule.
+  for (let start = 0; start < tokens.length; start += 1) {
+    let joined = '';
+    for (let end = start; end < tokens.length; end += 1) {
+      joined += tokens[end];
+      if (joined === normalizedPattern) {
+        return { matchType: 'phrase', specificity: normalizedPattern.length };
+      }
+      if (joined.length >= normalizedPattern.length) break;
     }
+  }
+  return null;
+}
+
+function categoryPatternMatches(value, pattern) {
+  return Boolean(categoryPatternMatch(value, pattern));
+}
+
+function inferBuiltinCategory(merchantName) {
+  if (categoryMerchantTokens(merchantName).length === 0) return null;
+
+  const matches = [];
+  BUILTIN_CATEGORY_RULES.forEach((rule, ruleIndex) => {
+    for (const pattern of rule.patterns) {
+      const match = categoryPatternMatch(merchantName, pattern);
+      if (!match) continue;
+      matches.push({ rule, pattern, match, ruleIndex });
+    }
+  });
+  matches.sort((a, b) => b.match.specificity - a.match.specificity
+    || a.rule.priority - b.rule.priority
+    || a.ruleIndex - b.ruleIndex);
+  const best = matches[0];
+  return best
+    ? {
+      slug: best.rule.slug,
+      pattern: best.pattern,
+      source: 'builtin_rule',
+      matchType: best.match.matchType,
+      specificity: best.match.specificity,
+    }
+    : null;
+}
+
+// Only markers that identify the payment party are allowed to feed a body
+// fallback. Scanning all SMS text lets issuer names, offer copy, and payment
+// rails masquerade as merchants when the parser did not capture a payee.
+const PAYMENT_PARTY_SPAN = /\b(?:at|to|towards?|in\s+favou?r\s+of|merchant|beneficiary|payee|fvg|favou?ring|created\s+towards|initiated\s+by|subscription\s+to)\s*[:#-]?\s*([^\n,.;()]{2,120}?)(?=\s+(?:from|on|via|using|upi|ref(?:erence)?|txn(?:action)?|bal(?:ance)?|avl|available|if\s+not|call|has|have|had|was|were|is|are|processed|successful|completed|approved|date)\b|[.,;]|$)/giu;
+
+function inferBuiltinCategoryFromMessage(messageText) {
+  const body = String(messageText || '');
+  if (!body.trim()) return null;
+  PAYMENT_PARTY_SPAN.lastIndex = 0;
+  let match;
+  while ((match = PAYMENT_PARTY_SPAN.exec(body)) !== null) {
+    const merchant = match[1].trim();
+    if (!merchant || /^(?:rs\.?|inr|rupees?)\b/i.test(merchant)) continue;
+    const inferred = inferBuiltinCategory(merchant);
+    if (inferred) return { ...inferred, merchant, source: 'builtin_role_rule' };
   }
   return null;
 }
@@ -159,7 +241,9 @@ function extractMcc(value) {
 module.exports = {
   BUILTIN_CATEGORY_RULES,
   categoryMerchantVariants,
+  categoryPatternMatches,
   inferBuiltinCategory,
+  inferBuiltinCategoryFromMessage,
   extractVpa,
   extractMcc,
 };

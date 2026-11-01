@@ -107,7 +107,12 @@ test('SBI transfer evidence accepts currencyless amount and compact date', () =>
   const scored = computeFactScore(fact, SBI);
   assert.equal(scored.merchantEvidenced, true);
   assert.equal(scored.completionEvidence, true);
-  assert.equal(assessFacts([fact], SBI).reviewRequired, false);
+  // Text evidence proves the transfer happened, but an AI-only spend/category
+  // interpretation still needs semantic review until a trusted parser fact
+  // supplies the transfer/category role.
+  const assessment = assessFacts([fact], SBI);
+  assert.equal(assessment.reviewRequired, true);
+  assert.equal(assessment.semanticReviewRequired, true);
 });
 
 test('merchant receipt proves completion but cannot auto-post an independent transaction', () => {

@@ -1676,6 +1676,19 @@ test('Axis UPI P2M narration names the merchant after a masked reference', () =>
   assert.equal(result.fields.merchant, 'MANYAM VISWANADA RE');
 });
 
+test('UPI payees with combining-script characters are retained', () => {
+  const payee = String.fromCodePoint(
+    0x092c, 0x093e, 0x0932, 0x093e, 0x091c, 0x0940, 0x0020,
+    0x0938, 0x094d, 0x092a, 0x094b, 0x0930, 0x094d, 0x091f, 0x094d, 0x0938,
+  );
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'VM-HDFCBK-S',
+    body: `Rs.200 debited from A/c XX1234 to ${payee} via UPI on 01-11-26.`,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.merchant, payee);
+});
+
 test('UPI P2M narration without a party token does not invent a merchant', () => {
   const body = 'INR 12.00 debited\nA/c no. XX2583\n21-10-26, 22:41:20\n'
     + 'UPI/P2M/**** 6977\nNot you? SMS BLOCKUPI Cust ID to **** 0002';

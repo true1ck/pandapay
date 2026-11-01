@@ -252,6 +252,52 @@ class LocalSmsParser {
     };
   }
 
+  /// Returns only text that is role-qualified as a payment party for built-in
+  /// merchant matching. A whole SMS is not safe input: issuer names, card
+  /// products, balance footers and promotional copy can contain a known brand
+  /// that is unrelated to the actual payee.
+  static String _categoryMatchText(String body, String? merchant) {
+    final direct = merchant?.trim();
+    const nonPayeeLabels = <String>{
+      'bank debit',
+      'money received',
+      'bank transfer',
+      'cash deposit',
+      'cash withdrawal',
+      'credit card bill payment',
+      'investment contribution',
+      'investment proceeds',
+      'loan disbursement',
+      'loan or emi repayment',
+      'refund',
+      'reversal',
+      'reward or cashback',
+      'salary',
+      'transfer between own accounts',
+      'wallet load',
+    };
+    if (direct != null &&
+        direct.isNotEmpty &&
+        !nonPayeeLabels.contains(direct.toLowerCase())) {
+      return direct;
+    }
+
+    final patterns = <RegExp>[
+      _re(
+        r"\b(?:at|to|towards?|payee|merchant)\s*[:\-]?\s*([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80}?)(?=\s+(?:on|via|using|for|from|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|[.,;]|$)",
+      ),
+      _re(
+        r"\bby\s+upi\s*[:\-]?\s*([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80}?)(?=\s+(?:ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available)\b|[.,;]|$)",
+      ),
+    ];
+    for (final pattern in patterns) {
+      final candidate = pattern.firstMatch(body)?.group(1);
+      final cleaned = MerchantIdentity.cleanName(candidate);
+      if (cleaned != null) return cleaned;
+    }
+    return '';
+  }
+
   static bool isInvestmentFolioAllotment(String body) {
     final text = body.toLowerCase();
     final hasAllotment = RegExp(
@@ -1451,7 +1497,10 @@ class LocalSmsParser {
     if (!localOnly && (merchant == null || merchant.isEmpty)) {
       final merchantMatch = _re(
         r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
-      ).firstMatch(body);
+      ).firstMatch(body) ??
+          _re(
+            r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([^\d\s][^\r\n]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+          ).firstMatch(body);
       merchant = merchantMatch?.group(1)?.trim();
     }
     if (merchant != null &&
@@ -2784,7 +2833,10 @@ class LocalSmsParser {
     if (merchant == null || merchant.isEmpty) {
       final merchantMatch = _re(
         r'\b(?:at|to|for|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:a\/?c\.?|account)\b|using\s+yono\b|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:for|by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
-      ).firstMatch(body);
+      ).firstMatch(body) ??
+          _re(
+            r'\b(?:at|to|for|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:a\/?c\.?|account)\b|using\s+yono\b|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([^\d\s][^\r\n]{1,80}?)(?=\s+(?:for|by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+          ).firstMatch(body);
       merchant = merchantMatch?.group(1)?.trim();
     }
 
@@ -2951,7 +3003,7 @@ class LocalSmsParser {
         ? _transactionTimestamp(body, parsedDate, receivedAt) ?? parsedDate
         : receivedAt;
     final key = smsSourceKey(namespace, sender, body);
-    final textForMatching = merchant != null ? '$merchant $body' : body;
+    final textForMatching = _categoryMatchText(body, merchant);
     final ftMatch = FlashTextMerchantExtractor.defaultExtractor.extractFirst(
       textForMatching,
     );
@@ -3149,7 +3201,7 @@ class LocalSmsParser {
       }
 
       final key = smsSourceKey(namespace, sender, body);
-      final textForMatching = merchant != null ? '$merchant $body' : body;
+      final textForMatching = _categoryMatchText(body, merchant);
       final ftMatch = FlashTextMerchantExtractor.defaultExtractor.extractFirst(
         textForMatching,
       );

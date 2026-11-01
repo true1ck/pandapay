@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart' as crypto;
+import '../sms_fact_contract.dart' show smsSpendCategories;
 
 enum SmsRuleFamily {
   postedMovement,
@@ -346,23 +347,12 @@ class SmsCandidateRuleBundle {
 /// Matching is exact after case/whitespace normalization to avoid applying a
 /// correction for one merchant to a similarly named merchant.
 class SmsSharedCategoryRule {
-  static const allowedCategories = <String>{
-    'groceries',
-    'dining',
-    'online',
-    'fuel',
-    'travel',
-    'bills',
-    'health',
-    'entertainment',
-    'rent',
-    'emi',
-    'insurance',
-    'education',
-    'government',
-    'wallet',
-    'other',
-  };
+  /// Shared category rules must accept exactly the same vocabulary as SMS
+  /// facts. Keep one mobile owner for the list instead of allowing the
+  /// learning/cache parser to drift from upload validation.
+  static final Set<String> allowedCategories = Set<String>.unmodifiable(
+    smsSpendCategories,
+  );
   static const _genericMerchants = <String>{
     'UNKNOWN',
     'OTHER',
@@ -394,12 +384,43 @@ class SmsSharedCategoryRule {
       value.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
 
   static const contextTokens = <String>{
-    'BROADBAND', 'CAB', 'DIESEL', 'DINING', 'EDUCATION', 'ELECTRICITY',
-    'EMI', 'ENTERTAINMENT', 'FLIGHT', 'FUEL', 'GROCERIES', 'GROCERY',
-    'HOSPITAL', 'HOTEL', 'INSURANCE', 'INVESTMENT', 'LOAN', 'MEDICAL',
-    'MOVIE', 'MUTUAL', 'PHARMACY', 'PETROL', 'RENEWAL', 'RENEWED', 'RENT',
-    'RESTAURANT', 'RIDE', 'SALARY', 'SCHOOL', 'SUBSCRIPTION', 'SUPERMARKET',
-    'TAX', 'TRAIN', 'TRAVEL', 'TUITION', 'UTILITY', 'WALLET',
+    'BROADBAND',
+    'CAB',
+    'DIESEL',
+    'DINING',
+    'EDUCATION',
+    'ELECTRICITY',
+    'EMI',
+    'ENTERTAINMENT',
+    'FLIGHT',
+    'FUEL',
+    'GROCERIES',
+    'GROCERY',
+    'HOSPITAL',
+    'HOTEL',
+    'INSURANCE',
+    'INVESTMENT',
+    'LOAN',
+    'MEDICAL',
+    'MOVIE',
+    'MUTUAL',
+    'PHARMACY',
+    'PETROL',
+    'RENEWAL',
+    'RENEWED',
+    'RENT',
+    'RESTAURANT',
+    'RIDE',
+    'SALARY',
+    'SCHOOL',
+    'SUBSCRIPTION',
+    'SUPERMARKET',
+    'TAX',
+    'TRAIN',
+    'TRAVEL',
+    'TUITION',
+    'UTILITY',
+    'WALLET',
   };
 
   static String contextKeyForBody(String body, {String? merchant}) {
@@ -422,17 +443,26 @@ class SmsSharedCategoryRule {
     final merchantTokens = contextTokens
         .where(compactMerchant.contains)
         .toSet();
-    final found = words
-        .map((match) => match.group(0)!)
-        .where((word) => contextTokens.contains(word) && !merchantTokens.contains(word))
-        .toSet()
-        .toList()
-      ..sort();
+    final found =
+        words
+            .map((match) => match.group(0)!)
+            .where(
+              (word) =>
+                  contextTokens.contains(word) &&
+                  !merchantTokens.contains(word),
+            )
+            .toSet()
+            .toList()
+          ..sort();
     return found.join('|');
   }
 
-  static String tupleKey({required String merchantKey, required String senderKey, required String contextKey, required String factFamily}) =>
-      jsonEncode([merchantKey, senderKey, contextKey, factFamily]);
+  static String tupleKey({
+    required String merchantKey,
+    required String senderKey,
+    required String contextKey,
+    required String factFamily,
+  }) => jsonEncode([merchantKey, senderKey, contextKey, factFamily]);
 
   static SmsSharedCategoryRule? fromJson(Map<String, dynamic> json) {
     final merchant = json['merchantKey'];
@@ -452,9 +482,12 @@ class SmsSharedCategoryRule {
       return null;
     }
     final key = normalizeMerchant(merchant);
-    final contextTokensInKey = context.isEmpty ? <String>[] : context.split('|');
+    final contextTokensInKey = context.isEmpty
+        ? <String>[]
+        : context.split('|');
     final senderPattern = RegExp(r'^[A-Z]{2}-[A-Z0-9]{3,10}(?:-[A-Z])?$');
-    final validContext = contextTokensInKey.isNotEmpty &&
+    final validContext =
+        contextTokensInKey.isNotEmpty &&
         contextTokensInKey.length <= 8 &&
         contextTokensInKey.toSet().length == contextTokensInKey.length &&
         contextTokensInKey.every(contextTokens.contains) &&

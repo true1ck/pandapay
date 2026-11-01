@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   inferBuiltinCategory,
+  inferBuiltinCategoryFromMessage,
   categoryMerchantVariants,
   extractVpa,
   extractMcc,
@@ -24,6 +25,40 @@ test('specific merchant rules win over broad brand rules', () => {
   assert.equal(inferBuiltinCategory('Gaddemma hadimani fruits').slug, 'groceries');
   assert.equal(inferBuiltinCategory('SUNDHA BHAVANI SWEETS AND GENE').slug, 'dining');
   assert.equal(inferBuiltinCategory('Sultan dresses').slug, 'online');
+});
+
+test('category rules do not match inside unrelated merchant tokens', () => {
+  for (const merchant of [
+    'KUBER HARDWARE',
+    'SUBER ENTERPRISES',
+    'SPARK ELECTRICALS',
+    'SHELLY BOOK STORE',
+  ]) {
+    assert.equal(inferBuiltinCategory(merchant), null, merchant);
+  }
+  assert.equal(inferBuiltinCategory('INDIGO PAINTS'), null);
+  assert.equal(inferBuiltinCategory('INDIGO').slug, 'travel');
+  assert.equal(inferBuiltinCategory('AMAZON PRIME').slug, 'entertainment');
+  assert.equal(inferBuiltinCategory('NEW LOCAL SHOP@jio'), null);
+});
+
+test('message fallback only considers explicit payment-party spans', () => {
+  assert.equal(
+    inferBuiltinCategoryFromMessage('Spent Rs 210 at QUALITY FUEL STATION on 2026-10-02').slug,
+    'fuel',
+  );
+  assert.equal(
+    inferBuiltinCategoryFromMessage('Rs 500 paid to SWIGGY on 2026-10-02').slug,
+    'dining',
+  );
+  assert.equal(
+    inferBuiltinCategoryFromMessage('Your card supports Amazon Prime benefits; Rs 500 debited from card.'),
+    null,
+  );
+  assert.equal(
+    inferBuiltinCategoryFromMessage('Rs 500 debited from HDFC Bank card. Offer from Amazon Prime.'),
+    null,
+  );
 });
 
 test('UPI handles retain a merchant variant without the handle suffix', () => {

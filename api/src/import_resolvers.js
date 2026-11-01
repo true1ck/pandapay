@@ -1,5 +1,9 @@
 const { normalizeMerchant } = require('./reward_math');
-const { inferBuiltinCategory } = require('./merchant_category');
+const {
+  categoryPatternMatches,
+  inferBuiltinCategory,
+  inferBuiltinCategoryFromMessage,
+} = require('./merchant_category');
 const {
   normalizeMerchantVpa,
   normalizeMerchantName,
@@ -780,20 +784,40 @@ async function resolveCategoryForImport(client, userId, {
     if (own.rows[0]) return own.rows[0].category_id;
   }
 
-  // 5. Shipped name-keyed map. Patterns are stored already-normalized, so
-  // this is a plain substring test against the normalized merchant, and
-  // `priority` is what lets 'amazonpay' (wallet) beat 'amazon' (online).
+  // 5. Shipped name-keyed map. The SQL position check is only a cheap
+  // candidate filter; the returned pattern is rechecked with merchant token
+  // boundaries so `uber` cannot match `KUBER`, and a VPA provider suffix
+  // cannot become a merchant. Keep all candidates because the first SQL row
+  // may be an unsafe substring collision.
   if (normalized) {
     const byName = await client.query(
-      `SELECT category_id FROM merchant_category_rules
+      `SELECT category_id, pattern, priority FROM merchant_category_rules
         WHERE is_active AND position(pattern in $1) > 0
         ORDER BY priority ASC, length(pattern) DESC
-        LIMIT 1`,
+        `,
       [normalized]
     );
-    if (byName.rows[0]) return byName.rows[0].category_id;
-
     const builtinHint = inferBuiltinCategory(merchantName);
+    const matchedByName = byName.rows.find((row) =>
+      row.pattern == null || categoryPatternMatches(merchantName, row.pattern)
+    );
+    if (matchedByName) {
+      // A more-specific built-in phrase is allowed to beat a broad legacy
+      // catalogue row, e.g. `Amazon Prime` over the generic `Amazon` rule.
+      // A row without pattern is retained for compatibility with older
+      // callers/tests that already supplied a resolved category.
+      const dbSpecificity = matchedByName.pattern == null
+        ? 0
+        : normalizeMerchant(matchedByName.pattern).length;
+      if (builtinHint && builtinHint.specificity > dbSpecificity) {
+        const builtin = await client.query(
+          `SELECT id FROM spend_categories WHERE slug = $1 LIMIT 1`,
+          [builtinHint.slug]
+        );
+        if (builtin.rows[0]) return builtin.rows[0].id;
+      }
+      return matchedByName.category_id;
+    }
     if (builtinHint) {
       const builtin = await client.query(
         `SELECT id FROM spend_categories WHERE slug = $1 LIMIT 1`,
@@ -808,8 +832,11 @@ async function resolveCategoryForImport(client, userId, {
   // Use the body only for the conservative built-in rules; do not use it for
   // the user's history, VPA lookup, or admin rules because those require a
   // real merchant key and must never learn from unrelated bank wording.
-  if (!inferBuiltinCategory(merchantName) && messageText) {
-    const builtinFromBody = inferBuiltinCategory(messageText);
+  // A body fallback is only safe when the parser did not provide a usable
+  // merchant at all. If it did provide `LOCAL SHOP`, scanning the remaining
+  // body must not replace that identity with an issuer/offer mention.
+  if (!normalized && messageText) {
+    const builtinFromBody = inferBuiltinCategoryFromMessage(messageText);
     if (builtinFromBody) {
       const builtin = await client.query(
         `SELECT id FROM spend_categories WHERE slug = $1 LIMIT 1`,

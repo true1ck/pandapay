@@ -1,0 +1,72 @@
+{
+  "contractId": "sms-category-vocabulary",
+  "version": 1,
+  "status": "frozen",
+  "canonicalSpendSlugs": [
+    "groceries",
+    "fuel",
+    "dining",
+    "online",
+    "travel",
+    "bills",
+    "rent",
+    "insurance",
+    "education",
+    "government",
+    "wallet",
+    "entertainment",
+    "health",
+    "emi",
+    "other"
+  ],
+  "referenceDisplayNames": {
+    "groceries": "Groceries",
+    "fuel": "Fuel",
+    "dining": "Dining",
+    "online": "Online Shopping",
+    "travel": "Travel",
+    "bills": "Bills & Utilities",
+    "rent": "Rent",
+    "insurance": "Insurance",
+    "education": "Education",
+    "government": "Government",
+    "wallet": "Wallet Load",
+    "entertainment": "Entertainment",
+    "health": "Health & Pharmacy",
+    "emi": "EMI",
+    "other": "Other"
+  },
+  "knownMobileDisplayDifferences": {
+    "health": "Health",
+    "emi": "EMI & Loans"
+  },
+  "legacyOutsideSmsSpendVocabulary": [
+    "investments",
+    "income",
+    "cash"
+  ],
+  "historicalSharedRuleAllowlist": [
+    "groceries",
+    "dining",
+    "online",
+    "fuel",
+    "travel",
+    "bills",
+    "health",
+    "entertainment",
+    "rent",
+    "investments",
+    "emi",
+    "insurance",
+    "education",
+    "income",
+    "wallet",
+    "cash"
+  ],
+  "notApprovedCandidates": [
+    "sports",
+    "sports_fitness",
+    "fitness",
+    "shopping"
+  ]
+}

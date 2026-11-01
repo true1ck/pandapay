@@ -274,15 +274,34 @@ async function completeJobWithResult(client, {
 }) {
   const smsFacts = require('./sms_facts');
   const aiFactScoring = require('./ai_fact_scoring');
+  const {
+    financialEvidenceForDismissal,
+    validateNegativeDecisionEvidence,
+  } = require('./ai_fact_evidence');
   const payload = job.payload || {};
+  const modelFacts = Array.isArray(facts) ? facts : [];
   // Composite confidence gate: reviewRequired is derived from the model facts
-  // and the redacted body. An explicit boolean from the caller still wins
-  // (e.g. a replayed job that was already triaged).
-  const assessment = aiFactScoring.assessFacts(facts, payload.body || '', payload.occurredAt || null);
+  // and the redacted body. An explicit boolean from the caller may force
+  // review, but cannot bypass semantic or dismissal safety gates.
+  const assessment = aiFactScoring.assessFacts(modelFacts, payload.body || '', payload.occurredAt || null);
+  const dismissalConflict = decision?.shouldConsider === false
+    ? financialEvidenceForDismissal(payload.body || '')
+    : null;
+  const dismissalEvidence = decision?.shouldConsider === false
+    ? validateNegativeDecisionEvidence(decision, payload.body || '')
+    : null;
+  const effectiveDecision = dismissalConflict?.conflict || dismissalEvidence?.valid === false
+    ? null
+    : decision;
+  const semanticReviewRequired = assessment.semanticReviewRequired === true;
   let effectiveReviewRequired = typeof reviewRequired === 'boolean'
     ? reviewRequired
     : assessment.reviewRequired;
-  if (decision?.shouldConsider === false) {
+  // Explicit caller overrides must not bypass a semantic or dismissal safety
+  // gate. They may still force review for other operational reasons.
+  if (semanticReviewRequired || dismissalConflict?.conflict || dismissalEvidence?.valid === false) {
+    effectiveReviewRequired = true;
+  } else if (effectiveDecision?.shouldConsider === false) {
     effectiveReviewRequired = false;
   }
   const existing = await smsFacts.loadSmsSourceFacts(client, job.profile_id, job.source_key);
@@ -305,8 +324,40 @@ async function completeJobWithResult(client, {
     if (a.account && b.account && a.account !== b.account) return false;
     return true;
   };
-  const openFacts = smsFacts.assignDeterministicIndices(facts)
-    .filter((fact) => !existingFacts.some((existingFact) => semanticallySame(existingFact, fact)));
+  const conflictingFields = (left, right) => {
+    const fields = [
+      'amountInr', 'amountDueInr', 'minimumDueInr', 'outstandingInr',
+      'limitInr', 'proposedAmountInr', 'merchant', 'transferParty',
+      'billerName', 'serviceName', 'category',
+    ];
+    return fields.filter((field) => {
+      const a = left?.payload?.[field];
+      const b = right?.payload?.[field];
+      if (a === null || a === undefined || b === null || b === undefined) return false;
+      if (typeof a === 'string' || typeof b === 'string') {
+        return String(a).trim().toLowerCase() !== String(b).trim().toLowerCase();
+      }
+      return a !== b;
+    });
+  };
+  const conflicts = [];
+  const openFacts = [];
+  for (const fact of smsFacts.assignDeterministicIndices(modelFacts)) {
+    const existingFact = existingFacts.find((candidate) => semanticallySame(candidate, fact));
+    if (!existingFact) {
+      openFacts.push(fact);
+      continue;
+    }
+    const fields = conflictingFields(existingFact, fact);
+    if (fields.length > 0) {
+      conflicts.push({
+        existingFactIndex: existingFact.factIndex,
+        incomingFactType: fact.factType,
+        fields,
+      });
+    }
+  }
+  if (conflicts.length > 0) effectiveReviewRequired = true;
   const maxExistingIndex = existingFacts.reduce(
     (max, fact) => Math.max(max, Number.isInteger(fact.factIndex) ? fact.factIndex : -1),
     -1,
@@ -333,7 +384,7 @@ async function completeJobWithResult(client, {
 
   let specialists = null;
   if (typeof applySpecialists === 'function') {
-    specialists = await applySpecialists(client, job.profile_id, { facts }, {
+    specialists = await applySpecialists(client, job.profile_id, { facts: modelFacts }, {
       occurred: job.occurred_at ? new Date(job.occurred_at) : null,
       persistSubscriptionMandate,
     });
@@ -345,27 +396,41 @@ async function completeJobWithResult(client, {
             lease_token = NULL, lease_expires_at = NULL, updated_at = now()
       WHERE id = $1`,
     [job.id, JSON.stringify({
-      decision: decision || null,
+      decision: effectiveDecision || null,
       landed,
       specialists,
       reviewRequired: effectiveReviewRequired,
       confidenceScore: assessment.composite,
       scores: assessment.perFact,
-      factTypes: facts.map((fact) => fact.factType),
+      factTypes: modelFacts.map((fact) => fact.factType),
+      conflicts,
+      dismissalConflict: dismissalConflict?.conflict
+        ? { reason: dismissalConflict.reason, signals: dismissalConflict.signals }
+        : null,
+      dismissalEvidence: dismissalEvidence?.valid === false
+        ? { reason: dismissalEvidence.reason, signals: dismissalEvidence.signals }
+        : null,
     }), JSON.stringify({ purged: true })],
   );
   await recordEvent(client, job.id, job.profile_id, 'result', {
     landed: landed.length,
-    skippedExisting: facts.length - openFacts.length,
+    skippedExisting: modelFacts.length - openFacts.length,
     ...(batchMetadata.batchId ? { batchId: batchMetadata.batchId } : {}),
     ...(Number.isInteger(batchMetadata.batchSize) ? { batchSize: batchMetadata.batchSize } : {}),
   });
   return {
-    decision: decision || null,
+    decision: effectiveDecision || null,
     landed,
     specialists,
     reviewRequired: effectiveReviewRequired,
     confidenceScore: assessment.composite,
+    conflicts,
+    dismissalConflict: dismissalConflict?.conflict
+      ? { reason: dismissalConflict.reason, signals: dismissalConflict.signals }
+      : null,
+    dismissalEvidence: dismissalEvidence?.valid === false
+      ? { reason: dismissalEvidence.reason, signals: dismissalEvidence.signals }
+      : null,
   };
 }
 

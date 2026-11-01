@@ -271,6 +271,26 @@ function disambiguationScore(payload, factType = null, body = '') {
 }
 
 /**
+ * Evidence validity can prove that a model copied a merchant-shaped token and
+ * a category enum. It cannot prove that the token is the transaction payee or
+ * that the category is semantically correct. Keep that distinction explicit:
+ * AI spend semantics remain suggestions until a separate trusted semantic
+ * source exists.
+ */
+function semanticAssessment(fact) {
+  const payload = fact?.payload || {};
+  if (fact?.factType !== 'posted_movement' || payload.entryKind !== 'spend') {
+    return { reviewRequired: false, reasons: [] };
+  }
+  const reasons = [];
+  if (merchantText(payload.merchant) || merchantText(payload.transferParty)) {
+    reasons.push('merchant_role_unverified');
+  }
+  if (hasValidCategory(payload)) reasons.push('category_unverified');
+  return { reviewRequired: reasons.length > 0, reasons };
+}
+
+/**
  * Hard gates that a composite score must never outvote:
  *
  *   - a posted spend/transfer needs completion language, not a promise or a
@@ -295,8 +315,17 @@ function autoResolveGate(fact, body) {
   const merchantEvidenced = !needsLedgerGate ||
     Boolean(party && merchantEvidence(party, body).ok);
   const completionEvidence = !needsLedgerGate || hasCompletionEvidence(body);
-  const ok = merchantEvidenced && completionEvidence && !receiptOnly;
-  return { merchantEvidenced, completionEvidence, receiptOnly, receiptCompletion, ok };
+  const semantic = semanticAssessment(fact);
+  const ok = merchantEvidenced && completionEvidence && !receiptOnly && !semantic.reviewRequired;
+  return {
+    merchantEvidenced,
+    completionEvidence,
+    receiptOnly,
+    receiptCompletion,
+    semanticReviewRequired: semantic.reviewRequired,
+    semanticReviewReasons: semantic.reasons,
+    ok,
+  };
 }
 
 /**
@@ -329,6 +358,8 @@ function computeFactScore(fact, body, receivedAt = null) {
     completionEvidence: gate.completionEvidence,
     receiptOnly: gate.receiptOnly,
     receiptCompletion: gate.receiptCompletion,
+    semanticReviewRequired: gate.semanticReviewRequired,
+    semanticReviewReasons: gate.semanticReviewReasons,
     autoResolveEligible: gate.ok,
   };
 }
@@ -353,10 +384,14 @@ function assessFacts(facts, body, receivedAt = null) {
     actionable.every((entry) => entry.isComplete === true) &&
     actionable.every((entry) => entry.autoResolveEligible !== false)
   );
+  const semanticReviewRequired = actionable.some((entry) => entry.semanticReviewRequired);
+  const semanticReviewReasons = [...new Set(actionable.flatMap((entry) => entry.semanticReviewReasons || []))];
   return {
     perFact,
     composite,
     reviewRequired,
+    semanticReviewRequired,
+    semanticReviewReasons,
     actionableCount: actionable.length,
   };
 }
@@ -369,6 +404,7 @@ module.exports = {
   computeFactScore,
   assessFacts,
   autoResolveGate,
+  semanticAssessment,
   // Exposed for focused tests and reuse by the route layer.
   amountAppears,
   dateAppears,

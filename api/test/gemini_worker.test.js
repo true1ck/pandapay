@@ -6,12 +6,25 @@ const {
   UNIVERSAL_SYSTEM_INSTRUCTION,
   UNIVERSAL_RESPONSE_SCHEMA,
   FEW_SHOT_EXAMPLES,
+  SPEND_CATEGORIES,
   buildGeminiPrompt,
   buildGeminiBatchPrompt,
   nextAdaptiveBatchSize,
   runWorkerOnce,
 } = require('../src/gemini_worker');
 const smsFacts = require('../src/sms_facts');
+
+test('Gemini schema and prompt use the fact contract category vocabulary', () => {
+  assert.strictEqual(SPEND_CATEGORIES, smsFacts.SPEND_CATEGORIES);
+  assert.strictEqual(
+    UNIVERSAL_RESPONSE_SCHEMA.properties.facts.items.properties.payload.properties.category.enum,
+    smsFacts.SPEND_CATEGORIES,
+  );
+  assert.match(
+    buildGeminiPrompt({ payload: { body: 'synthetic fixture' } }),
+    new RegExp(`Allowed category values for spend facts: ${smsFacts.SPEND_CATEGORIES.join(', ')}\\.`),
+  );
+});
 
 function response(body, status = 200, headers = {}) {
   return {
@@ -492,6 +505,62 @@ test('worker never turns a contradictory dismissal into a valid one by dropping 
   const posted = calls.find((call) => call.url.endsWith('/result'));
   assert.equal(posted.body.decision, null);
   assert.deepEqual(posted.body.facts, []);
+});
+
+test('worker keeps a negative decision in review when the source does not support it', async () => {
+  const calls = [];
+  const job = {
+    id: 'ungrounded-negative-job', profileId: 'profile-1', leaseToken: 'g'.repeat(64),
+    payload: { sender: 'BANK', body: 'synthetic message' },
+  };
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job });
+    return response({ jobStatus: 'done' });
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: {
+      classify: async () => ({
+        decision: {
+          topic: 'generic_promotional_spam',
+          shouldConsider: false,
+          rejectionReason: 'promotional_spam',
+        },
+        facts: [],
+      }),
+    },
+    reserveCapacity: async () => ({ allowed: true }),
+  });
+  assert.equal(result.completed, true);
+  const posted = calls.find((call) => call.url.endsWith('/result'));
+  assert.equal(posted.body.decision, null);
+});
+
+test('worker preserves a source-grounded negative decision', async () => {
+  const calls = [];
+  const job = {
+    id: 'grounded-negative-job', profileId: 'profile-1', leaseToken: 'h'.repeat(64),
+    payload: { sender: 'BANK', body: 'Limited-time cashback offer: apply now for a bonus.' },
+  };
+  const decision = {
+    topic: 'generic_promotional_spam',
+    shouldConsider: false,
+    rejectionReason: 'promotional_spam',
+  };
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/ai/jobs/lease')) return response({ leased: true, job });
+    return response({ jobStatus: 'done' });
+  };
+  const result = await runWorkerOnce({
+    apiBaseUrl: 'http://worker.test', workerToken: 'worker-token', fetchImpl,
+    provider: { classify: async () => ({ decision, facts: [] }) },
+    reserveCapacity: async () => ({ allowed: true }),
+  });
+  assert.equal(result.completed, true);
+  const posted = calls.find((call) => call.url.endsWith('/result'));
+  assert.deepEqual(posted.body.decision, decision);
 });
 
 test('provider 429 releases the same leased job for retry', async () => {

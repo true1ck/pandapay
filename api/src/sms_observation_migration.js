@@ -32,7 +32,8 @@ function extractFactsFromObservation(obs) {
   if (
     parsed.amountInr != null &&
     parsed.amountInr > 0 &&
-    (parsed.entryKind === 'spend' || parsed.entryKind === 'income' || parsed.entryKind === 'transfer')
+    (parsed.entryKind === 'spend' || parsed.entryKind === 'income' ||
+      parsed.entryKind === 'investment' || parsed.entryKind === 'transfer')
   ) {
     const payload = {
       amountRole: 'posted',
@@ -113,14 +114,13 @@ function extractFactsFromObservation(obs) {
     if (parsed.merchant) payload.merchant = String(parsed.merchant);
     if (parsed.last4) payload.last4 = String(parsed.last4);
     if (parsed.instrument) payload.instrument = parsed.instrument;
-    // registered mandate requires limitInr
-    if (parsed.mandateStatus !== 'registered' || payload.limitInr != null) {
-      facts.push({
-        factType: 'mandate_lifecycle',
-        payload,
-        provenance: { source: 'observation_migration', version: 1 },
-      });
-    }
+    // A registered mandate may omit its optional ceiling. The lifecycle fact
+    // still proves authorization and must not disappear during backfill.
+    facts.push({
+      factType: 'mandate_lifecycle',
+      payload,
+      provenance: { source: 'observation_migration', version: 1 },
+    });
   }
 
   // 5. Pending / failed attempts

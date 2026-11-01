@@ -32,6 +32,24 @@ test('extractFactsFromObservation extracts posted movement with correct amountRo
   assert.equal(validation.valid, true);
 });
 
+test('extractFactsFromObservation preserves investment posted movements', () => {
+  const facts = migration.extractFactsFromObservation({
+    sourceKey: 'investment'.repeat(8),
+    occurredAt: '2026-10-15T10:00:00.000Z',
+    parsed: {
+      amountInr: 2500,
+      entryKind: 'investment',
+      accountLast4: '4321',
+    },
+  });
+
+  assert.equal(facts.length, 1);
+  assert.equal(facts[0].factType, 'posted_movement');
+  assert.equal(facts[0].payload.entryKind, 'investment');
+  assert.equal(facts[0].payload.amountInr, 2500);
+  assert.equal(smsFacts.validateFactSet(facts).valid, true);
+});
+
 test('extractFactsFromObservation extracts both posted movement and balance snapshot from debit with balance', () => {
   const obs = {
     sourceKey: 'b'.repeat(64),
@@ -119,6 +137,25 @@ test('extractFactsFromObservation extracts mandate lifecycle and does not count 
   assert.equal(comparison.delta.newSpendInr, 0);
   assert.equal(comparison.delta.nonSpendFactsCount, 1);
   assert.equal(comparison.delta.valid, true);
+});
+
+test('extractFactsFromObservation preserves a registered mandate without a ceiling', () => {
+  const facts = migration.extractFactsFromObservation({
+    sourceKey: 'mandate-without-ceiling'.repeat(4),
+    occurredAt: '2026-10-12T14:30:00.000Z',
+    parsed: {
+      mandateStatus: 'registered',
+      merchant: 'Netflix',
+      last4: '4321',
+      instrument: 'credit_card',
+    },
+  });
+
+  assert.equal(facts.length, 1);
+  assert.equal(facts[0].factType, 'mandate_lifecycle');
+  assert.equal(facts[0].payload.mandateStatus, 'registered');
+  assert.equal(facts[0].payload.limitInr, undefined);
+  assert.equal(smsFacts.validateFactSet(facts).valid, true);
 });
 
 test('dryRunObservations accurately compares legacy spend vs new multi-fact spend', () => {

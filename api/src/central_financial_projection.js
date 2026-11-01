@@ -9,7 +9,9 @@
 
 const { brandFor } = require('./brand_catalog');
 
-const PROJECTION_VERSION = 1;
+// Bumped when projection identity changes so historical sources are replayed
+// and old account-observation keys are reconciled to the safer identity.
+const PROJECTION_VERSION = 2;
 
 const PROJECTION_KINDS = Object.freeze([
   'movement',
@@ -60,6 +62,26 @@ function normalizeIdentity(value) {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '');
+}
+
+function accountObservationIdentity(payload, fact, sourceId, sourceKey) {
+  const suffix = String(payload.accountLast4 || payload.last4 || '').trim();
+  const issuer = normalizeIdentity(payload.issuerName);
+  const instrument = normalizeIdentity(payload.instrument);
+  if (suffix && issuer) {
+    return [
+      issuer ? `issuer:${issuer}` : null,
+      instrument ? `instrument:${instrument}` : null,
+      `suffix:${suffix}`,
+    ].filter(Boolean).join(':');
+  }
+
+  // A suffix without an issuer is not a durable account identity; instrument
+  // type alone cannot distinguish two banks. Keep the observation
+  // source-scoped rather than merging unknown accounts that share four digits.
+  const source = sourceId || sourceKey || factIdOf(fact) || `fact-${fact?.factIndex ?? 'unknown'}`;
+  const factIdentity = factIdOf(fact) || `fact-${fact?.factIndex ?? 'unknown'}`;
+  return `source:${normalizeIdentity(source) || 'unknown'}:instrument:${instrument || 'unknown'}:suffix:${suffix || 'unknown'}:fact:${normalizeIdentity(factIdentity)}`;
 }
 
 function dateOnly(value) {
@@ -187,11 +209,14 @@ function accountDecision(fact, sourceId, sourceKey) {
   const payload = factPayload(fact);
   const balance = finiteNumber(payload.availableBalanceInr, { nonnegative: true });
   if (balance === null || !payload.asOfAt) return null;
-  const account = payload.accountLast4 ? `account:${payload.accountLast4}` : 'account:unknown';
+  const account = accountObservationIdentity(payload, fact, sourceId, sourceKey);
   return decision('account_observation', `${account}:${dateOnly(payload.asOfAt) || 'unknown'}`, 'observed', {
     availableBalanceInr: balance,
     asOfAt: payload.asOfAt,
     accountLast4: payload.accountLast4 || null,
+    last4: payload.last4 || null,
+    issuerName: payload.issuerName || null,
+    instrument: payload.instrument || null,
   }, fact, sourceId, sourceKey);
 }
 

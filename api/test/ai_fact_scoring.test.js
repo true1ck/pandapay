@@ -121,12 +121,22 @@ test('model confidence falls back to 0.8 when absent or out of range', () => {
   assert.equal(computeFactScore(outOfRange, SWIGGY_BODY).model, 0.8);
 });
 
-test('a complete high-confidence spend auto-resolves', () => {
+test('a complete high-confidence spend remains review-only without semantic provenance', () => {
   const assessment = assessFacts([swiggyFact], SWIGGY_BODY);
   assert.equal(assessment.actionableCount, 1);
   assert.ok(assessment.composite >= AUTO_RESOLVE);
   assert.equal(assessment.perFact[0].isComplete, true);
-  assert.equal(assessment.reviewRequired, false);
+  assert.equal(assessment.reviewRequired, true);
+});
+
+test('a complete spend with model-only merchant/category semantics stays in review', () => {
+  const assessment = assessFacts([swiggyFact], SWIGGY_BODY);
+  assert.equal(assessment.perFact[0].semanticReviewRequired, true);
+  assert.deepEqual(assessment.perFact[0].semanticReviewReasons, [
+    'merchant_role_unverified',
+    'category_unverified',
+  ]);
+  assert.equal(assessment.reviewRequired, true);
 });
 
 test('a complete high-confidence bill obligation auto-resolves', () => {
@@ -152,7 +162,7 @@ test('completed bill payment without printed date can auto-resolve using receipt
   assert.equal(assessment.perFact[0].evidence, 0.75);
 });
 
-test('completed posted movement without printed date can auto-resolve using SMS receipt time', () => {
+test('completed posted movement without printed date remains review-only using SMS receipt time', () => {
   const body = 'Rs 420.00 debited for Swiggy UPI successfully.';
   const receivedAt = '2026-10-24T12:30:00.000Z';
   const fact = {
@@ -164,7 +174,7 @@ test('completed posted movement without printed date can auto-resolve using SMS 
     },
   };
   const assessment = assessFacts([fact], body, receivedAt);
-  assert.equal(assessment.reviewRequired, false);
+  assert.equal(assessment.reviewRequired, true);
   assert.ok(assessment.composite >= AUTO_RESOLVE);
   assert.equal(assessment.perFact[0].evidence, 0.75);
 });

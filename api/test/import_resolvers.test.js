@@ -620,6 +620,66 @@ test('a merchant still present in the SMS body is classified when the parser omi
   assert.match(client.calls[0].sql, /slug = \$1/);
   assert.deepEqual(client.calls[0].params, ['fuel']);
 });
+
+test('body fallback does not classify incidental non-payee mentions', async () => {
+  const client = fakeClient([[{ id: 'other-category' }]]);
+  const result = await resolveCategoryForImport(client, 'user-1', {
+    merchantName: undefined,
+    messageText: 'Your card supports Amazon Prime benefits. Rs 500 debited from card.',
+    userMerchantRules: [],
+  });
+
+  assert.equal(result, 'other-category');
+  assert.equal(client.calls.length, 1);
+  assert.equal(client.calls[0].params, undefined);
+});
+
+test('body fallback never overrides a non-placeholder parsed merchant', async () => {
+  const client = fakeClient([[], [], [{ id: 'other-category' }]]);
+  const result = await resolveCategoryForImport(client, 'user-1', {
+    merchantName: 'LOCAL SHOP',
+    messageText: 'Rs 500 debited from HDFC Bank card at Amazon.',
+    userMerchantRules: [],
+  });
+
+  assert.equal(result, 'other-category');
+  assert.equal(client.calls.length, 3);
+});
+
+test('database category candidates use the same merchant boundaries as built-ins', async () => {
+  for (const [merchantName, pattern, expected] of [
+    ['KUBER HARDWARE', 'uber', 'other-category'],
+    ['SPARK ELECTRICALS', 'spar', 'other-category'],
+    ['SHELLY BOOK STORE', 'shell', 'other-category'],
+    ['INDIGO PAINTS', 'indigo', 'other-category'],
+    ['NEW LOCAL SHOP@jio', 'jio', 'other-category'],
+  ]) {
+    const client = fakeClient([
+      [],
+      [{ category_id: 'incorrect-category', pattern, priority: 1 }],
+      [{ id: 'other-category' }],
+    ]);
+    const result = await resolveCategoryForImport(client, 'user-1', {
+      merchantName,
+      userMerchantRules: [],
+    });
+    assert.equal(result, expected, merchantName);
+  }
+});
+
+test('a more-specific built-in phrase beats a broad database candidate', async () => {
+  const client = fakeClient([
+    [],
+    [{ category_id: 'online-category', pattern: 'amazon', priority: 1 }],
+    [{ id: 'entertainment-category' }],
+  ]);
+  const result = await resolveCategoryForImport(client, 'user-1', {
+    merchantName: 'AMAZON PRIME',
+    userMerchantRules: [],
+  });
+  assert.equal(result, 'entertainment-category');
+});
+
 test('placeholder merchant names never inherit a category from unrelated unknown purchases', async () => {
   const client = fakeClient([[{ id: 'other-category' }]]);
   const result = await resolveCategoryForImport(client, 'user-1', {merchantName:'Unknown merchant', userMerchantRules: []});
