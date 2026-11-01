@@ -27,7 +27,8 @@ elif args and args[0]=='log':
     print('synthetic-target')
 elif args and args[0]=='rev-parse':
     revision=args[-1]
-    if revision=='HEAD':
+    if revision=='--is-shallow-repository': print(os.environ.get('SHALLOW_REPOSITORY','false'))
+    elif revision=='HEAD':
         if os.environ.get('NO_SERVER_HEAD')=='1': sys.exit(1)
         print(os.environ.get('SERVER_HEAD_SHA','1111111111111111'))
     elif revision=='refs/remotes/origin/master': print(os.environ.get('ORIGIN_MASTER_SHA','0123456789abcdef'))
@@ -112,6 +113,19 @@ SLEEP_STUB = "#!/usr/bin/env bash\nexit 0\n"
 
 
 class DeploySecurityOrderTest(unittest.TestCase):
+    def test_shallow_history_is_completed_before_ancestry_check(self):
+        result, commands, _ = self.run_deploy(SHALLOW_REPOSITORY="true")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        fetch = self.command_index(commands, lambda c: c[0] == "git" and "--unshallow" in c[1])
+        ancestry = self.command_index(commands, lambda c: c[0] == "git" and "merge-base" in c[1])
+        self.assertLess(fetch, ancestry)
+        self.assertFalse(any(c[0] == "git" and any(arg.startswith("--depth") for arg in c[1]) for c in commands))
+
+    def test_complete_history_does_not_request_unshallow(self):
+        result, commands, _ = self.run_deploy()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(any(c[0] == "git" and "--unshallow" in c[1] for c in commands))
+
     def run_deploy(self, **settings):
         with tempfile.TemporaryDirectory() as folder:
             base = Path(folder)

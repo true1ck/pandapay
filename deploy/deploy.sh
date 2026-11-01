@@ -325,7 +325,13 @@ if [ ! -d .git ]; then
   git remote add origin "$REPO"
 fi
 git remote set-url origin "$REPO"
-git fetch -q --depth=50 origin "$SHA" 2>/dev/null || git fetch -q origin "$SOURCE_REF"
+# A depth-limited fetch can hide the deployed ancestor on a long-lived branch.
+# Restore complete history before evaluating ancestry; never waive the check.
+if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+  git fetch -q --unshallow origin "$SOURCE_REF"
+else
+  git fetch -q origin "$SOURCE_REF"
+fi
 # A delayed Actions run or manual rerun must never reset a newer deployment to
 # an older, though once-tested, source branch commit. Refresh the requested
 # source ref now and require the reviewed SHA to be its exact tip before
