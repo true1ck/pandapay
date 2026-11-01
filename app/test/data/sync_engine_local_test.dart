@@ -75,7 +75,22 @@ class _Api implements SyncApi {
 class _Repository implements UserCardsRepository {
   final bool fail;
   int fetches = 0;
+  int fullFetches = 0;
   _Repository({this.fail = false});
+  @override
+  Future<TransactionEntry> fetchTransaction(String id) async {
+    fetches++;
+    if (fail) throw StateError('network unavailable');
+    return TransactionEntry(
+      id: id,
+      amount: Money.fromRupees(50),
+      occurredAt: DateTime(2026, 10, 18),
+      note: 'server accepted',
+      source: 'manual',
+      status: 'active',
+    );
+  }
+
   @override
   Future<List<TransactionEntry>> fetchTransactions({
     DateTime? from,
@@ -86,6 +101,7 @@ class _Repository implements UserCardsRepository {
     String? source,
     String? query,
   }) async {
+    fullFetches++;
     fetches++;
     if (fail) throw StateError('network unavailable');
     return [
@@ -180,6 +196,7 @@ void main() {
         (scope.read(userCardsRepositoryProvider)! as _Repository).fetches,
         1,
       );
+      expect((scope.read(userCardsRepositoryProvider)! as _Repository).fullFetches, 0);
       expect(queue.lastServerSeq, 126);
       expect(api.acknowledgments, 1);
       expect(

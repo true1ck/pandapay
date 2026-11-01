@@ -12,6 +12,7 @@ import '../../data/local/sms_intake_repository.dart';
 import '../../data/local/sms_rule_exposure_outbox.dart';
 import '../../data/local/sync_queue.dart';
 import '../../data/sync_api.dart';
+import '../../data/sync_transaction_delta.dart';
 import 'split_sync.dart';
 import '../../data/local/financial_store.dart';
 import '../../data/user_categories_repository.dart';
@@ -57,8 +58,12 @@ class SyncResult {
 class SyncEngine {
   final Ref _ref;
   bool _running = false;
+  Timer? _continuation;
+  bool _pullHasMore = false;
 
-  SyncEngine(this._ref);
+  SyncEngine(this._ref) {
+    _ref.onDispose(() => _continuation?.cancel());
+  }
 
   static String get _platform {
     if (kIsWeb) return 'web';
@@ -85,6 +90,10 @@ class SyncEngine {
     if (api == null) return SyncResult.idle;
 
     _running = true;
+    _continuation?.cancel();
+    _pullHasMore = false;
+    final namespace = _ref.read(cacheNamespaceProvider);
+    final token = _ref.read(accessTokenProvider);
     try {
       await (await _ref.read(
         splitRepositoryProvider.future,
@@ -112,6 +121,7 @@ class SyncEngine {
         ranToCompletion: true,
       );
     } catch (_) {
+      _pullHasMore = false;
       // Offline, or the server is unreachable. Everything the user did is
       // still in the local queue; the next trigger tries again.
       return const SyncResult(
@@ -122,6 +132,16 @@ class SyncEngine {
       );
     } finally {
       _running = false;
+      if (_pullHasMore) {
+        // Yield after a bounded catch-up pass, then resume its durable cursor.
+        _continuation = Timer(const Duration(milliseconds: 100), () {
+          if (_ref.read(cacheNamespaceProvider) == namespace &&
+              _ref.read(accessTokenProvider) == token &&
+              _ref.read(isOnlineProvider).valueOrNull != false) {
+            unawaited(sync());
+          }
+        });
+      }
     }
   }
 
@@ -296,22 +316,39 @@ class SyncEngine {
     var totalConflicts = 0;
     var since = queue.lastServerSeq;
     final entities = <String>{};
+    final transactionChanges = <Map<String, dynamic>>[];
+    final namespace = queue.namespace;
+    final sessionToken = _ref.read(accessTokenProvider);
+    bool isCurrent() =>
+        _ref.read(cacheNamespaceProvider) == namespace &&
+        _ref.read(accessTokenProvider) == sessionToken;
 
-    // Loops on `hasMore` so a device returning after a long absence catches up
-    // fully instead of one page per trigger. Bounded so a pathological
-    // backlog can't spin here forever holding the UI's refresh.
-    for (var page = 0; page < 20; page++) {
-      final batch = await api.pull(deviceId: deviceId, since: since);
+    // Bound both request count and rows fetched in one pass. A successful
+    // pass schedules a continuation after yielding when the backlog remains.
+    for (var page = 0; page < 4; page++) {
+      if (!isCurrent()) throw StateError('Account changed during sync');
+      final batch = await api.pull(deviceId: deviceId, since: since, limit: 25);
+      if (!isCurrent()) throw StateError('Account changed during sync');
       totalConflicts += batch.conflicts.length;
 
-      if (batch.changes.isEmpty) break;
+      if (batch.changes.isEmpty) {
+        _pullHasMore = false;
+        break;
+      }
+      if (batch.changes.length > 25 || batch.latestServerSeq <= since) {
+        throw const FormatException('Invalid sync pull progress');
+      }
 
       // Gather the bounded backlog before fetching authoritative snapshots.
       // Fetching the entire transaction history once per page multiplies
       // startup I/O and UI-isolate work without adding any durable coverage.
       entities.addAll(batch.changes.map((c) => c['entity'] as String));
+      transactionChanges.addAll(
+        batch.changes.where((c) => c['entity'] == 'transactions'),
+      );
       since = batch.latestServerSeq;
       totalPulled += batch.changes.length;
+      _pullHasMore = batch.hasMore;
 
       if (!batch.hasMore) break;
     }
@@ -320,9 +357,25 @@ class SyncEngine {
       // Neither the persisted cursor nor the server acknowledgment advances
       // until every affected entity has been committed. Failure replays the
       // backlog safely on the next cycle.
-      await _materialize(api, entities, queue);
+      final repository = _ref.read(userCardsRepositoryProvider);
+      if (repository == null) throw StateError('Sign in to sync');
+      final delta = await fetchSyncTransactionDelta(
+        transactionChanges,
+        fetch: repository.fetchTransaction,
+        isCurrent: isCurrent,
+      );
+      // Other entity snapshots retain their existing authoritative path.
+      await _materialize(api, entities.difference({'transactions'}), queue);
+      if (!isCurrent()) throw StateError('Account changed during sync');
+      final cache = await _ref.read(responseCacheProvider.future);
+      if (!isCurrent()) throw StateError('Account changed during sync');
+      cache.financialStore.commitTransactionDelta(
+        namespace,
+        delta.rows,
+        delta.deletedIds,
+        serverSeq: since,
+      );
       _invalidateFor(entities);
-      queue.lastServerSeq = since;
       await api.ack(deviceId: deviceId, serverSeq: since);
     }
 

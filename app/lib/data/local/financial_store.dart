@@ -1100,6 +1100,35 @@ class FinancialStore {
     if (changed) _notify(ns);
   }
 
+  /// Commits an explicit sync delta and its pull cursor together. Missing IDs
+  /// never imply deletion; queued/provisional local edits survive tombstones.
+  void commitTransactionDelta(
+    String ns,
+    List<TransactionEntry> rows,
+    Set<String> deletedIds, {
+    required int serverSeq,
+  }) {
+    if (serverSeq < 0) throw ArgumentError.value(serverSeq, 'serverSeq');
+    batch(() {
+      _transaction(() {
+        saveTransactions(ns, rows);
+        for (final id in deletedIds) {
+          database.db.execute(
+            "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=? AND pending=0 "
+            "AND NOT EXISTS (SELECT 1 FROM sync_pending_changes p WHERE p.namespace=? AND p.entity='transactions' AND p.entity_id=?)",
+            [ns, id, ns, id],
+          );
+          if (database.db.updatedRows > 0) _notify(ns);
+        }
+        database.db.execute(
+          'INSERT INTO account_sync_state(namespace,last_server_seq,last_synced_at) VALUES (?,?,?) '
+          'ON CONFLICT(namespace) DO UPDATE SET last_server_seq=excluded.last_server_seq,last_synced_at=excluded.last_synced_at',
+          [ns, serverSeq, DateTime.now().millisecondsSinceEpoch],
+        );
+      });
+    });
+  }
+
   TransactionPageProgress? transactionPageProgress(
     String ns,
     TransactionQuery query,
