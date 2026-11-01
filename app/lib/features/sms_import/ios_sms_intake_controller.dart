@@ -75,6 +75,14 @@ class IosSmsIntakeState {
         .length;
   }
 
+  /// Every date range already imported for this account (local time).
+  List<(DateTime, DateTime)> get importedRanges => [
+    for (final row in _rows(snapshot['coverage']))
+      if (DateTime.tryParse(row['start'] as String? ?? '') case final s?)
+        if (DateTime.tryParse(row['end'] as String? ?? '') case final e?)
+          (s.toLocal(), e.toLocal()),
+  ];
+
   bool get partial => currentWindows.any((w) => w['state'] == 'partial');
 
   /// The active job's windows in date order. A window that hit the 500

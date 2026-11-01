@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -269,8 +270,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Custom dates'), findsOneWidget);
         expect(service.createdJobs, isEmpty);
-        await _scrollTo(tester, find.text('Start new import'));
-        await tester.tap(find.text('Start new import'));
+        await _scrollTo(tester, find.byKey(const ValueKey('ios-sms-start-import')));
+        await tester.tap(find.byKey(const ValueKey('ios-sms-start-import')));
         await tester.pumpAndSettle();
         expect(service.createdJobs.single['replacingJobID'], 'catchup');
         expect(service.createdJobs.single['kind'], 'history');
@@ -305,7 +306,8 @@ void main() {
       await tester.tap(find.text('Import & Sync'));
       await tester.pumpAndSettle();
       await _scrollTo(tester, find.text('Custom dates'));
-      expect(find.text('Start new import'), findsOneWidget);
+      // Nothing is imported in this test, so it offers all 24 months.
+      expect(find.text('Import 24 missing months'), findsOneWidget);
       expect(service.calls, isNot(contains('control')));
       expect(service.calls, isNot(contains('runShortcut')));
       expect(tester.takeException(), isNull);
@@ -417,9 +419,9 @@ void main() {
   ) async {
     final service = _SharingBridge();
     await _pumpImport(tester, service);
-    await _scrollTo(tester, find.text('Start import'));
+    await _scrollTo(tester, find.byKey(const ValueKey('ios-sms-start-import')));
     FilledButton saveButton() => tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Start import'),
+      find.byKey(const ValueKey('ios-sms-start-import')),
     );
     expect(saveButton().onPressed, isNull);
     expect(service.calls, isNot(contains('createJob')));
@@ -442,9 +444,9 @@ void main() {
     );
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
-    await _scrollTo(tester, find.text('Start import'));
+    await _scrollTo(tester, find.byKey(const ValueKey('ios-sms-start-import')));
     expect(saveButton().onPressed, isNotNull);
-    await tester.tap(find.text('Start import'));
+    await tester.tap(find.byKey(const ValueKey('ios-sms-start-import')));
     await tester.pumpAndSettle();
     expect(service.calls.where((call) => call == 'createJob'), hasLength(1));
     expect(service.calls.where((call) => call == 'runShortcut'), hasLength(1));
@@ -671,41 +673,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('month history shows plain statuses for each month', (tester) async {
+  testWidgets('the month strip shows coverage and imports a tapped month', (tester) async {
     SharedPreferences.setMockInitialValues({iosSmsSharingAcknowledgementKey: true});
     final service = MemoryBridge();
-    service.snapshot['jobs'] = [
-      {'id': 'h', 'kind': 'history', 'state': 'active'},
-    ];
-    Map<String, Object?> month(int ordinal, String label, String state,
-            {String? attempt, int enumerated = 0}) =>
-        {
-          'id': 'w$ordinal', 'job_id': 'h', 'ordinal': ordinal, 'state': state,
-          'month_label': label, 'start': '$label-01T00:00:00Z',
-          'end': '$label-28T00:00:00Z', 'attempt': ?attempt, 'enumerated': enumerated,
-          'limit_off': 1,
-        };
-    service.snapshot['windows'] = [
-      month(0, '2026-05', 'complete', attempt: 'a', enumerated: 412),
-      month(1, '2026-06', 'complete'),
-      month(2, '2026-07', 'partial', attempt: 'b', enumerated: 3),
-      month(3, '2026-08', 'waiting', attempt: 'c'),
-      month(4, '2026-09', 'queued'),
+    final now = DateTime.now();
+    final lastMonth = DateTime(now.year, now.month - 1);
+    // Everything imported except last month.
+    service.snapshot['coverage'] = [
+      {
+        'start': DateTime(now.year, now.month - 23).toUtc().toIso8601String(),
+        'end': lastMonth.toUtc().toIso8601String(),
+      },
+      {
+        'start': DateTime(now.year, now.month).toUtc().toIso8601String(),
+        'end': now.toUtc().toIso8601String(),
+      },
     ];
     await _pumpImport(tester, service);
-    final card = find.text('Your message history');
-    await _scrollTo(tester, card);
-    expect(find.text('2 of 5 months imported · 415 messages'), findsOneWidget);
-    for (final text in [
-      'Imported · 412 messages',
-      'Already imported',
-      'Needs another try',
-      'Importing now…',
-      'Waiting',
-    ]) {
-      await _scrollTo(tester, find.text(text));
-      expect(find.text(text), findsOneWidget, reason: text);
-    }
-    expect(tester.takeException(), isNull);
+    final summary = find.text('23 of 24 months imported · tap a month to import it');
+    await _scrollTo(tester, summary);
+    expect(summary, findsOneWidget);
+    expect(find.text('Import 1 missing month'), findsOneWidget);
+    final cell = find.bySemanticsLabel(RegExp('^${DateFormat('MMMM yyyy').format(lastMonth)}: Not imported'));
+    await tester.ensureVisible(cell);
+    await tester.tap(cell);
+    await tester.pumpAndSettle();
+    expect(find.text('Import this month'), findsOneWidget);
+    await tester.tap(find.text('Import this month'));
+    await tester.pumpAndSettle();
+    expect(service.calls, contains('createJob'));
+    final window = (service.createdJobs.single['windows'] as List).first as Map;
+    expect(DateTime.parse(window['start'] as String).toLocal(), lastMonth);
   });
 }

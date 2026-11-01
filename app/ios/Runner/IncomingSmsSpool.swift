@@ -423,6 +423,10 @@ final class IncomingSmsSpool {
       FROM windows w WHERE w.job_id IN (SELECT id FROM jobs ORDER BY rowid DESC LIMIT 20) ORDER BY w.ordinal
       """)
     for row in try query(db, "SELECT * FROM settings WHERE key NOT IN ('last_intent_attempt','last_handoff_attempt','last_receiver_attempt','last_sender_attempt')") { result[row["key"] as! String] = row["value"] }
+    if let generation = account["generation"] as? String {
+      // Everything ever imported for this account, for the month overview.
+      result["coverage"] = try coveredRanges(db, generation: generation).map { ["start": stamp($0.0), "end": stamp($0.1)] }
+    }
     return result
   }
 
@@ -464,14 +468,20 @@ final class IncomingSmsSpool {
   /// completely (earlier imports or daily catch-up). Fully covered windows are
   /// done at once; partly covered ones shrink to the missing dates. Messages
   /// in overlaps would only be found again as already saved.
-  private func skipImportedRanges(_ db: OpaquePointer, generation: String, jobID: String) throws {
+  /// Date ranges this account has fully imported (merged), from any history
+  /// import or daily catch-up. A range whose messages arrived without senders
+  /// (older builds) is not counted: importing it again brings real senders.
+  private func coveredRanges(_ db: OpaquePointer, generation: String, excludingJob: String? = nil) throws -> [(Date, Date)] {
     var covered: [(Date, Date)] = []
-    // A range whose messages arrived without senders (older builds) is not
-    // treated as imported: importing it again brings the real senders.
-    for row in try query(db, "SELECT w.start, w.end FROM windows w JOIN jobs j ON j.id=w.job_id WHERE j.generation=? AND j.id<>? AND w.state='complete' AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.attempt=w.attempt AND r.outcome IN ('saved_without_sender','missing_sender')) ORDER BY w.start", [generation, jobID]) {
+    for row in try query(db, "SELECT w.start, w.end FROM windows w JOIN jobs j ON j.id=w.job_id WHERE j.generation=? AND j.id<>? AND w.state='complete' AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.attempt=w.attempt AND r.outcome IN ('saved_without_sender','missing_sender')) ORDER BY w.start", [generation, excludingJob ?? ""]) {
       guard let s = Self.date(row["start"] as? String ?? ""), let e = Self.date(row["end"] as? String ?? ""), s < e else { continue }
       if let last = covered.last, s <= last.1 { covered[covered.count - 1].1 = max(last.1, e) } else { covered.append((s, e)) }
     }
+    return covered
+  }
+
+  private func skipImportedRanges(_ db: OpaquePointer, generation: String, jobID: String) throws {
+    let covered = try coveredRanges(db, generation: generation, excludingJob: jobID)
     guard !covered.isEmpty else { return }
     for row in try query(db, "SELECT id, start, end FROM windows WHERE job_id=? ORDER BY ordinal", [jobID]) {
       guard var s = Self.date(row["start"] as! String), var e = Self.date(row["end"] as! String) else { continue }

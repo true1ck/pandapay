@@ -403,3 +403,19 @@ do {
   require(try store.issue(generation: g) != nil, "sender-less range is imported again")
   print("PASS: ranges imported without senders are imported again")
 }
+
+do {
+  // The snapshot reports everything imported, merged across imports.
+  let store = IncomingSmsSpool(directory: root.appendingPathComponent("coverage"), maxPending: 2000, now: { time })
+  let g = try store.configure(namespace: "user:coverage", enabled: true)["generation"] as! String
+  let d0 = time.addingTimeInterval(-2 * 86_400), d1 = time.addingTimeInterval(-86_400)
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(d0), "end": iso(d1)], ["start": iso(d1), "end": iso(time)]])
+  for _ in 0..<2 {
+    let request = try store.issue(generation: g)!
+    _ = try store.finish(request: request, found: 0, limitOff: true, warning: false)
+  }
+  let coverage = try store.snapshot()["coverage"] as! [[String: String]]
+  require(coverage.count == 1, "adjacent imported ranges merge")
+  require(IncomingSmsSpool.date(coverage[0]["start"]!) == d0 && IncomingSmsSpool.date(coverage[0]["end"]!) == time, "coverage spans both days")
+  print("PASS: snapshot reports merged imported coverage")
+}

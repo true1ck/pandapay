@@ -11,6 +11,7 @@ import '../../app/design/widgets.dart';
 import 'ios_sms_intake_controller.dart';
 import 'ios_sms_intake_providers.dart';
 import 'ios_sms_intake_service.dart';
+import 'ios_history_coverage.dart';
 import 'ios_shortcut_links.dart';
 import 'ios_sms_sharing_setup.dart';
 
@@ -130,6 +131,22 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
         : DateTime(_custom!.end.year, _custom!.end.month, _custom!.end.day + 1);
     final end = _months == 0 && selectedEnd.isBefore(now) ? selectedEnd : now;
     final active = state.activeJob != null;
+    final history = buildHistoryMonths(
+      now: now,
+      coverage: state.importedRanges,
+      jobWindows: state.currentWindows,
+    );
+    final pastMonths = history
+        .where((m) => m.status != MonthCoverage.future)
+        .length;
+    final importedMonths = history
+        .where((m) => m.status == MonthCoverage.imported)
+        .length;
+    final toImport = history
+        .where(
+          (m) => m.canImport && m.end.isAfter(start) && m.start.isBefore(end),
+        )
+        .length;
     return AppBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -216,19 +233,33 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
               _progress(state, controller),
               const SizedBox(height: AppSpace.lg),
             ],
-            if (_historyMonths(state) case final months when months.isNotEmpty) ...[
-              _historyCard(months),
-              const SizedBox(height: AppSpace.lg),
-            ],
             SmsSetupPanel(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Import your history',
+                    'Your SMS history',
                     style: BambooFonts.heading(18, color: BambooInk.ink900),
                   ),
+                  const SizedBox(height: AppSpace.xs),
+                  Text(
+                    '$importedMonths of $pastMonths months imported'
+                    '${importedMonths < pastMonths ? ' · tap a month to import it' : ''}',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+                  ),
                   const SizedBox(height: AppSpace.md),
+                  HistoryCoverageStrip(
+                    months: history,
+                    onTap: (month) => _showMonth(month, state, controller),
+                  ),
+                  const SizedBox(height: AppSpace.lg),
+                  const Divider(height: 1, color: BambooInk.hairlineOnPaper),
+                  const SizedBox(height: AppSpace.md),
+                  Text(
+                    'Import your history',
+                    style: BambooFonts.heading(15, color: BambooInk.ink900),
+                  ),
+                  const SizedBox(height: AppSpace.sm),
                   Wrap(
                     spacing: AppSpace.sm,
                     runSpacing: AppSpace.xs,
@@ -278,8 +309,13 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                   ),
                   const SizedBox(height: AppSpace.sm),
                   FilledButton(
+                    key: const ValueKey('ios-sms-start-import'),
                     style: _primaryStyle,
-                    onPressed: _busy || !state.enabled || !_sharingConfirmed
+                    onPressed:
+                        _busy ||
+                            !state.enabled ||
+                            !_sharingConfirmed ||
+                            (_months != 0 && toImport == 0)
                         ? null
                         : () => _run(() async {
                             await controller.startHistory(
@@ -292,6 +328,10 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                     child: Text(
                       _busy
                           ? 'Starting…'
+                          : _months != 0 && toImport == 0
+                          ? 'All these months are imported'
+                          : toImport > 0
+                          ? 'Import $toImport missing ${toImport == 1 ? 'month' : 'months'}'
                           : active
                           ? 'Start new import'
                           : 'Start import',
@@ -369,10 +409,12 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                     style: BambooFonts.ui(13, color: BambooInk.ink700),
                   ),
                   children: [
-                    for (final window in [...state.latestWindows]..sort(
-                      (a, b) => (a['ordinal'] as int? ?? 0)
-                          .compareTo(b['ordinal'] as int? ?? 0),
-                    ))
+                    for (final window
+                        in [...state.latestWindows]..sort(
+                          (a, b) => (a['ordinal'] as int? ?? 0).compareTo(
+                            b['ordinal'] as int? ?? 0,
+                          ),
+                        ))
                       _windowDetails(state, window),
                     if (state.lastCompletedJob != null &&
                         state.lastCompletedJob?['id'] !=
@@ -468,140 +510,106 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
       ? '1 message'
       : '${NumberFormat.decimalPattern('en_IN').format(count)} messages';
 
-  /// One row per month of the latest history import, in date order.
-  static List<_HistoryMonth> _historyMonths(IosSmsIntakeState state) {
-    final job = state.activeJob ??
-        state.jobs.where((j) => j['kind'] == 'history').firstOrNull;
-    if (job == null || job['kind'] != 'history') return const [];
-    final windows = state.windows.where((w) => w['job_id'] == job['id']).toList()
-      ..sort((a, b) => (a['ordinal'] as int? ?? 0).compareTo(b['ordinal'] as int? ?? 0));
-    final months = <String, List<Map<String, Object?>>>{};
-    for (final window in windows) {
-      final label = window['month_label'] as String? ??
-          (window['start'] as String? ?? '').padRight(7).substring(0, 7);
-      (months[label] ??= []).add(window);
-    }
-    return [
-      for (final MapEntry(key: label, value: rows) in months.entries)
-        _HistoryMonth(
-          month: DateTime.tryParse('$label-01'),
-          status: _monthStatus(rows),
-          messages: _sum(rows, 'enumerated'),
+  void _showMonth(
+    HistoryMonth month,
+    IosSmsIntakeState state,
+    IosSmsIntakeController controller,
+  ) {
+    final ready = state.enabled && _sharingConfirmed;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheet) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpace.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                month.label,
+                style: BambooFonts.heading(20, color: BambooInk.ink900),
+              ),
+              const SizedBox(height: AppSpace.xs),
+              Text(switch (month.status) {
+                MonthCoverage.imported =>
+                  'Imported. New messages arrive through live alerts.',
+                MonthCoverage.partial =>
+                  'Partly imported. Import the missing days to complete it.',
+                MonthCoverage.missing => 'Not imported yet.',
+                MonthCoverage.importing => 'Importing now…',
+                MonthCoverage.waiting =>
+                  'Waiting its turn in the current import.',
+                MonthCoverage.future => '',
+              }, style: BambooFonts.ui(13.5, color: BambooInk.ink700)),
+              if (month.canImport) ...[
+                const SizedBox(height: AppSpace.lg),
+                FilledButton(
+                  style: _primaryStyle,
+                  onPressed: !ready || _busy
+                      ? null
+                      : () {
+                          Navigator.pop(sheet);
+                          final now = DateTime.now();
+                          _run(() async {
+                            await controller.startHistory(
+                              month.start,
+                              month.end.isAfter(now) ? now : month.end,
+                              replacingJobId: state.activeJob?['id'] as String?,
+                            );
+                            await _launch();
+                          });
+                        },
+                  child: Text(
+                    month.status == MonthCoverage.partial
+                        ? 'Import missing days'
+                        : 'Import this month',
+                  ),
+                ),
+                if (!ready) ...[
+                  const SizedBox(height: AppSpace.sm),
+                  Text(
+                    !state.enabled
+                        ? 'Turn on live bank alerts first.'
+                        : 'Complete History permissions first.',
+                    style: BambooFonts.ui(12, color: BambooInk.ink700),
+                  ),
+                ],
+              ],
+            ],
+          ),
         ),
-    ];
-  }
-
-  static _MonthStatus _monthStatus(List<Map<String, Object?>> rows) {
-    final states = rows.map((w) => w['state']).toSet();
-    if (states.contains('partial')) return _MonthStatus.needsLook;
-    if (states.any((s) => const ['waiting', 'running', 'finished'].contains(s))) {
-      return _MonthStatus.importing;
-    }
-    if (states.every((s) => s == 'complete')) {
-      // Months skipped because an earlier import covered them never ran.
-      return rows.every((w) => w['attempt'] == null)
-          ? _MonthStatus.alreadyImported
-          : _MonthStatus.imported;
-    }
-    return states.contains('complete') ? _MonthStatus.importing : _MonthStatus.waiting;
-  }
-
-  Widget _historyCard(List<_HistoryMonth> months) {
-    final done = months
-        .where((m) => m.status == _MonthStatus.imported || m.status == _MonthStatus.alreadyImported)
-        .length;
-    final total = months.fold(0, (sum, m) => sum + m.messages);
-    return SmsSetupPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Your message history',
-            style: BambooFonts.heading(18, color: BambooInk.ink900),
-          ),
-          const SizedBox(height: AppSpace.xs),
-          Text(
-            '$done of ${months.length} months imported'
-            '${total > 0 ? ' · ${_messages(total)}' : ''}',
-            style: BambooFonts.ui(12.5, color: BambooInk.ink700),
-          ),
-          const SizedBox(height: AppSpace.md),
-          for (final (index, month) in months.indexed) ...[
-            if (index > 0)
-              const Divider(height: 1, color: BambooInk.hairlineOnPaper),
-            _monthRow(month),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _monthRow(_HistoryMonth month) {
-    final (icon, color, text) = switch (month.status) {
-      _MonthStatus.imported => (
-        Icons.check_circle_rounded,
-        BambooInk.jade,
-        month.messages == 0 ? 'Imported · no messages' : 'Imported · ${_messages(month.messages)}',
-      ),
-      _MonthStatus.alreadyImported => (
-        Icons.check_circle_outline_rounded,
-        BambooInk.jade,
-        'Already imported',
-      ),
-      _MonthStatus.importing => (
-        Icons.sync_rounded,
-        BambooInk.ink700,
-        month.messages == 0 ? 'Importing now…' : 'Importing · ${_messages(month.messages)} so far',
-      ),
-      _MonthStatus.needsLook => (
-        Icons.error_outline_rounded,
-        BambooInk.clayInk,
-        'Needs another try',
-      ),
-      _MonthStatus.waiting => (
-        Icons.radio_button_unchecked_rounded,
-        BambooInk.ink300,
-        'Waiting',
-      ),
-    };
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: Text(
-              month.month == null ? 'Dates' : DateFormat('MMMM yyyy').format(month.month!),
-              style: BambooFonts.ui(14, color: BambooInk.ink900, weight: FontWeight.w600),
-            ),
-          ),
-          Text(text, style: BambooFonts.ui(12.5, color: BambooInk.ink700)),
-        ],
       ),
     );
   }
 
   static String _day(DateTime value, {bool year = false}) =>
-      (year ? DateFormat('d MMM yyyy') : DateFormat('d MMM')).format(value.toLocal());
+      (year ? DateFormat('d MMM yyyy') : DateFormat('d MMM')).format(
+        value.toLocal(),
+      );
 
   /// "1 Aug – 18 Aug 2026". The end is exclusive, so show the last instant
   /// inside the range.
   static String _range(Map<String, Object?> window) {
     final start = DateTime.tryParse(window['start'] as String? ?? '');
-    final end = DateTime.tryParse(window['end'] as String? ?? '')
-        ?.subtract(const Duration(milliseconds: 1));
+    final end = DateTime.tryParse(
+      window['end'] as String? ?? '',
+    )?.subtract(const Duration(milliseconds: 1));
     if (start == null) return 'Date range';
     if (end == null || end.isBefore(start)) return _day(start, year: true);
     return '${_day(start)} – ${_day(end, year: true)}';
   }
 
-  static String _rangeVerb(Map<String, Object?> window) => switch (window['state']) {
-    'waiting' || 'running' => 'Now importing',
-    'finished' => 'Saving messages from',
-    'partial' => 'Stopped at',
-    _ => 'Next:',
-  };
+  static String _rangeVerb(Map<String, Object?> window) =>
+      switch (window['state']) {
+        'waiting' || 'running' => 'Now importing',
+        'finished' => 'Saving messages from',
+        'partial' => 'Stopped at',
+        _ => 'Next:',
+      };
 
   static String _statusLabel(Object? state) => switch (state) {
     'complete' => 'Done',
@@ -840,19 +848,6 @@ class SmsSetupPanel extends StatelessWidget {
   );
 }
 
-enum _MonthStatus { imported, alreadyImported, importing, needsLook, waiting }
-
-class _HistoryMonth {
-  final DateTime? month;
-  final _MonthStatus status;
-  final int messages;
-  const _HistoryMonth({
-    required this.month,
-    required this.status,
-    required this.messages,
-  });
-}
-
 /// One-tap install of PandaPay's Shortcuts. Hidden until a link is set, so
 /// nobody sees a button that goes nowhere.
 class IosShortcutInstallPanel extends StatelessWidget {
@@ -868,8 +863,9 @@ class IosShortcutInstallPanel extends StatelessWidget {
 
   Future<void> _open(BuildContext context, Uri uri) async {
     final messenger = ScaffoldMessenger.maybeOf(context);
-    final opened = await (open ??
-        (u) => launchUrl(u, mode: LaunchMode.externalApplication))(uri);
+    final opened =
+        await (open ??
+            (u) => launchUrl(u, mode: LaunchMode.externalApplication))(uri);
     if (!opened) {
       messenger?.showSnackBar(
         const SnackBar(content: Text('Couldn’t open Shortcuts. Try again.')),
