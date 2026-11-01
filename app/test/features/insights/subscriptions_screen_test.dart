@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/bills_projection_api.dart';
 import 'package:pandapay/data/local/app_database.dart';
@@ -9,6 +10,21 @@ import 'package:pandapay/data/spend_reports_repository.dart';
 import 'package:pandapay/features/insights/central_bills_section.dart';
 import 'package:pandapay/features/insights/subscriptions_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+
+/// These tests were written around 25 Oct 2026. Every date moves forward by
+/// the days since then, so renewals stay as far ahead as the tests intend
+/// instead of turning into past dates as the calendar moves on.
+final int _offsetDays = () {
+  final days = DateTime.now().difference(DateTime(2026, 10, 25)).inDays;
+  return days > 0 ? days : 0;
+}();
+DateTime _d(int y, int m, int d) => DateTime(y, m, d + _offsetDays);
+DateTime _utc(int y, int m, int d, [int h = 0, int min = 0]) =>
+    DateTime.utc(y, m, d + _offsetDays, h, min);
+String _iso(String value) => DateTime.parse(
+  value,
+).add(Duration(days: _offsetDays)).toUtc().toIso8601String();
+String _day(DateTime value) => DateFormat('d MMM yyyy').format(value);
 
 void main() {
   testWidgets(
@@ -46,7 +62,7 @@ void main() {
                   cadenceDays: 30,
                   occurrenceCount: 1,
                   annualCost: Money.fromRupees(24333.33),
-                  nextExpectedOn: DateTime(2026, 11, 1),
+                  nextExpectedOn: _d(2026, 11, 1),
                 ),
                 RecurringSeries(
                   id: 'bad-label',
@@ -55,7 +71,7 @@ void main() {
                   cadenceDays: 30,
                   occurrenceCount: 1,
                   annualCost: Money.fromRupees(20000),
-                  nextExpectedOn: DateTime(2026, 11, 1),
+                  nextExpectedOn: _d(2026, 11, 1),
                 ),
                 RecurringSeries(
                   id: 'openai',
@@ -64,7 +80,7 @@ void main() {
                   cadenceDays: 30,
                   occurrenceCount: 3,
                   annualCost: Money.fromRupees(24321.17),
-                  nextExpectedOn: DateTime(2026, 11, 1),
+                  nextExpectedOn: _d(2026, 11, 1),
                 ),
               ],
               totalAnnual: Money.fromRupees(68654.50),
@@ -78,7 +94,10 @@ void main() {
 
     expect(find.text('1 active'), findsOneWidget);
     expect(find.text('OpenAI'), findsOneWidget);
-    expect(find.textContaining('Renews around 1 Nov 2026'), findsOneWidget);
+    expect(
+      find.textContaining('Renews around ${_day(_d(2026, 11, 1))}'),
+      findsOneWidget,
+    );
     expect(find.text('7308080808'), findsNothing);
     expect(find.text('MONTHLY'), findsNothing);
     expect(find.text('Not a subscription'), findsNothing);
@@ -176,7 +195,7 @@ void main() {
                   cadenceDays: 30,
                   occurrenceCount: 0,
                   annualCost: Money.fromRupees(9588),
-                  nextExpectedOn: DateTime.utc(2026, 11, 28, 18, 30),
+                  nextExpectedOn: _utc(2026, 11, 28, 18, 30),
                   detectionSource: 'central_projection',
                   engineStatus: 'confirmed',
                 ),
@@ -190,9 +209,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Notion Plus'), findsOneWidget);
-    final localDay = DateTime.utc(2026, 11, 28, 18, 30).toLocal().day;
+    final local = _utc(2026, 11, 28, 18, 30).toLocal();
     expect(
-      find.textContaining('Next payment around $localDay Nov 2026'),
+      find.textContaining('Next payment around ${_day(local)}'),
       findsOneWidget,
     );
   });
@@ -252,7 +271,7 @@ void main() {
       'biller_name': 'Notion Plus',
       'amount_due_paise': 79900,
       'reason_codes': ['explicit_subscription_service'],
-      'received_at': '2026-10-29T00:00:00.000Z',
+      'received_at': _iso('2026-10-29T00:00:00.000Z'),
     });
     await tester.pumpWidget(
       ProviderScope(
@@ -305,7 +324,7 @@ void main() {
                   cadenceDays: 8,
                   occurrenceCount: 5,
                   annualCost: Money.fromRupees(9581.25),
-                  nextExpectedOn: DateTime(2026, 11, 1),
+                  nextExpectedOn: _d(2026, 11, 1),
                 ),
                 RecurringSeries(
                   id: 'fuel-charge',
@@ -314,7 +333,7 @@ void main() {
                   cadenceDays: 70,
                   occurrenceCount: 4,
                   annualCost: Money.fromRupees(2570.42),
-                  nextExpectedOn: DateTime(2026, 12, 17),
+                  nextExpectedOn: _d(2026, 12, 17),
                 ),
                 RecurringSeries(
                   id: 'openai-mandate',
@@ -323,7 +342,7 @@ void main() {
                   cadenceDays: 30,
                   occurrenceCount: 1,
                   annualCost: Money.fromRupees(24321.17),
-                  nextExpectedOn: DateTime(2026, 11, 19),
+                  nextExpectedOn: _d(2026, 11, 19),
                   cardName: 'Axis Bank Card XX7105',
                   isMandate: true,
                   detectionSource: 'mandate',
@@ -478,7 +497,7 @@ void main() {
                     cadenceDays: 30,
                     occurrenceCount: 3,
                     annualCost: Money.fromRupees(7788),
-                    nextExpectedOn: DateTime(2026, 11, 15),
+                    nextExpectedOn: _d(2026, 11, 15),
                     isMandate: false,
                     autopayStatus: 'unknown',
                   ),
@@ -489,7 +508,7 @@ void main() {
                     cadenceDays: 365,
                     occurrenceCount: 2,
                     annualCost: Money.fromRupees(1499),
-                    nextExpectedOn: DateTime(2027, 5, 20),
+                    nextExpectedOn: _d(2027, 5, 20),
                     isMandate: false,
                     autopayStatus: 'unknown',
                   ),
@@ -500,7 +519,7 @@ void main() {
                     cadenceDays: 30,
                     occurrenceCount: 2,
                     annualCost: Money.fromRupees(14400),
-                    nextExpectedOn: DateTime(2026, 11, 10),
+                    nextExpectedOn: _d(2026, 11, 10),
                     isMandate: false,
                     autopayStatus: 'unknown',
                   ),
@@ -577,7 +596,7 @@ void main() {
                     cadenceDays: 30,
                     occurrenceCount: 1,
                     annualCost: Money.fromRupees(24321.17),
-                    nextExpectedOn: DateTime(2026, 11, 19),
+                    nextExpectedOn: _d(2026, 11, 19),
                     cardName: 'Card XX7105',
                     isMandate: true,
                     autopayStatus: 'active',
@@ -612,14 +631,14 @@ void main() {
         'biller_name': 'OpenAI LLC',
         'card_last4': '7105',
         'autopay_limit_paise': 199900,
-        'received_at': '2026-10-18T09:00:00Z',
+        'received_at': _iso('2026-10-18T09:00:00Z'),
       });
       cache.financialStore.saveObservation('user:test', 'sms:googleplay', {
         'event_type': 'autopay',
         'biller_name': 'Google Play',
         'card_last4': '7105',
         'autopay_limit_paise': 185000,
-        'received_at': '2026-10-18T09:00:00Z',
+        'received_at': _iso('2026-10-18T09:00:00Z'),
       });
       // Non-subscription autopay should NOT be shown on subscriptions screen
       cache.financialStore.saveObservation('user:test', 'sms:bescom', {
@@ -627,7 +646,7 @@ void main() {
         'biller_name': 'BESCOM',
         'card_last4': '7105',
         'autopay_limit_paise': 250000,
-        'received_at': '2026-10-18T09:00:00Z',
+        'received_at': _iso('2026-10-18T09:00:00Z'),
       });
 
       await tester.pumpWidget(
@@ -673,7 +692,7 @@ void main() {
         'biller_name': 'OpenAI LLC',
         'card_last4': '7105',
         'autopay_limit_paise': 199900,
-        'received_at': '2026-10-18T09:00:00Z',
+        'received_at': _iso('2026-10-18T09:00:00Z'),
       });
 
       await tester.pumpWidget(
@@ -694,7 +713,7 @@ void main() {
                     cadenceDays: 30,
                     occurrenceCount: 3,
                     annualCost: Money.fromRupees(7788),
-                    nextExpectedOn: DateTime(2026, 11, 15),
+                    nextExpectedOn: _d(2026, 11, 15),
                     setupConfirmed: true,
                     cadenceConfirmed: true,
                     engineStatus: 'confirmed',
@@ -730,7 +749,7 @@ void main() {
         'projection': {
           'billerName': 'Google Play',
           'authorizationLimitInr': 1850,
-          'asOfAt': '2026-10-23T00:00:00Z',
+          'asOfAt': _iso('2026-10-23T00:00:00Z'),
         },
       });
       final projectionUtility = BillProjection.fromJson({
@@ -741,7 +760,7 @@ void main() {
         'projection': {
           'billerName': 'HDFC Life',
           'authorizationLimitInr': 5000,
-          'asOfAt': '2026-10-23T00:00:00Z',
+          'asOfAt': _iso('2026-10-23T00:00:00Z'),
         },
       });
 
@@ -847,7 +866,7 @@ void main() {
                   cadenceDays: 1,
                   occurrenceCount: 30,
                   annualCost: Money.fromRupees(3650),
-                  nextExpectedOn: DateTime(2026, 11, 1),
+                  nextExpectedOn: _d(2026, 11, 1),
                 ),
               ],
               totalAnnual: Money.zero(),
@@ -879,7 +898,7 @@ void main() {
                   cadenceDays: 30,
                   occurrenceCount: 6,
                   annualCost: Money.fromRupees(60000),
-                  nextExpectedOn: DateTime(2026, 11, 1),
+                  nextExpectedOn: _d(2026, 11, 1),
                 ),
                 RecurringSeries(
                   id: 'groww-deposit',
@@ -888,7 +907,7 @@ void main() {
                   cadenceDays: 30,
                   occurrenceCount: 4,
                   annualCost: Money.fromRupees(24000),
-                  nextExpectedOn: DateTime(2026, 11, 1),
+                  nextExpectedOn: _d(2026, 11, 1),
                 ),
               ],
               totalAnnual: Money.zero(),
