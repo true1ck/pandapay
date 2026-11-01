@@ -252,10 +252,10 @@ class DeploySecurityOrderTest(unittest.TestCase):
                 self.assertFalse(any(c[0] == "docker" and "stop" in c[1] for c in commands))
                 self.assertTrue(running.issuperset(WRITERS))
 
-    def test_stale_target_that_is_not_current_master_fails_before_build_or_downtime(self):
+    def test_stale_target_that_is_not_current_source_ref_fails_before_build_or_downtime(self):
         result, commands, running = self.run_deploy(ORIGIN_MASTER_SHA="fedcba9876543210")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("must equal current origin/master", result.stderr)
+        self.assertIn("must equal the current source ref tip", result.stderr)
         self.assertFalse(any(c[0] == "docker" and "build" in c[1] for c in commands))
         self.assertFalse(any(c[0] == "docker" and "stop" in c[1] for c in commands))
         self.assertTrue(running.issuperset(WRITERS))

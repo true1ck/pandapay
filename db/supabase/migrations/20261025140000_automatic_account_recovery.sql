@@ -6,8 +6,8 @@ begin
     into v_prior from pg_catalog.pg_auth_members m
     where m.roleid = 'account_recovery_owner'::regrole
       and m.member = current_user::regrole and m.grantor = current_user::regrole;
-  perform pg_catalog.set_config('pandapay.recovery_owner_prior_grant', coalesce(v_prior::text,'null'),true);
-  perform pg_catalog.set_config('pandapay.recovery_migration_role',current_user,true);
+  perform pg_catalog.set_config('pandapay.recovery_owner_prior_grant', coalesce(v_prior::text,'null'),false);
+  perform pg_catalog.set_config('pandapay.recovery_migration_role',current_user,false);
   execute pg_catalog.format('grant account_recovery_owner to %I with inherit false granted by %I',current_user,current_user);
   execute pg_catalog.format('grant account_recovery_owner to %I with set true granted by %I',current_user,current_user);
 end $$;

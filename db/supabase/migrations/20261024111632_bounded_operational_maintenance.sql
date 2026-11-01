@@ -17,8 +17,8 @@ do $$ declare r text; prior jsonb; begin
  select pg_catalog.jsonb_build_object('inherit',m.inherit_option,'set',m.set_option) into prior
   from pg_catalog.pg_auth_members m where m.roleid='maintenance_owner'::regrole
   and m.member=current_user::regrole and m.grantor=current_user::regrole;
- perform pg_catalog.set_config('pandapay.maintenance_prior_grant',coalesce(prior::text,'null'),true);
- perform pg_catalog.set_config('pandapay.maintenance_migration_role',current_user,true);
+ perform pg_catalog.set_config('pandapay.maintenance_prior_grant',coalesce(prior::text,'null'),false);
+ perform pg_catalog.set_config('pandapay.maintenance_migration_role',current_user,false);
  execute pg_catalog.format('grant maintenance_owner to %I with inherit false granted by %I',current_user,current_user);
  execute pg_catalog.format('grant maintenance_owner to %I with set true granted by %I',current_user,current_user);
 end $$;
