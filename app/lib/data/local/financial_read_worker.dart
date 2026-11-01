@@ -230,6 +230,10 @@ class FinancialReadWorker {
           final limit = values[3] as int;
           final after = values[4] as List?;
           changed = <String>{};
+          // Legacy response snapshots are still present on upgraded devices.
+          // Migrate them beside the query so the caller isolate does not have
+          // to decode and rewrite the complete historical snapshot first.
+          owner.migrateLegacy(namespace);
           final snapshot = owner.transactions(namespace, query);
           final rows = snapshot?.rows ?? <TransactionEntry>[];
           rows.sort((a, b) {

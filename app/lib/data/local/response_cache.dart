@@ -2,6 +2,7 @@ import 'dart:convert';
 import '../user_cards_repository.dart';
 import 'app_database.dart';
 import 'financial_store.dart';
+import 'financial_read_worker.dart';
 
 class CachedResponse {
   final String rawJson;
@@ -15,8 +16,46 @@ class CachedResponse {
 /// parsed domain objects.
 class ResponseCache {
   final AppDatabase _db;
-  ResponseCache(this._db);
+  final FinancialReadWorker? financialReadWorker;
+  ResponseCache(this._db, {this.financialReadWorker});
   late final FinancialStore financialStore = FinancialStore(_db);
+
+  /// Reads transaction history off the caller isolate when this cache owns a
+  /// file-backed [FinancialReadWorker]. In-memory databases deliberately keep
+  /// the synchronous path so test fakes and existing unit tests do not need a
+  /// second SQLite connection.
+  Future<LocalTransactionSnapshot?> readTransactions(
+    String namespace,
+    TransactionQuery query, {
+    bool Function()? isCurrent,
+  }) async {
+    final worker = financialReadWorker;
+    if (worker == null) return financialStore.transactions(namespace, query);
+
+    final rows = <TransactionEntry>[];
+    final changedEntities = <String>{};
+    String? cursor;
+    LocalTransactionPage? last;
+    do {
+      last = await worker.readTransactions(
+        namespace,
+        query,
+        limit: 200,
+        cursor: cursor,
+        isCurrent: isCurrent,
+      );
+      rows.addAll(last.rows);
+      changedEntities.addAll(last.changedEntities);
+      cursor = last.nextCursor;
+    } while (cursor != null);
+
+    if (changedEntities.isNotEmpty) {
+      financialStore.notifyExternalChanges(namespace, changedEntities);
+    }
+    final fetchedAt = last?.fetchedAt;
+    if (fetchedAt == null) return null;
+    return LocalTransactionSnapshot(rows, fetchedAt, last!.hasStoredCoverage);
+  }
   void markAccountStale(String namespace) {
     _db.db.execute(
       'INSERT OR IGNORE INTO cache_refresh_requests SELECT key FROM cached_responses WHERE substr(key,1,length(?))=?',

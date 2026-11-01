@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_read_worker.dart';
 import 'package:pandapay/data/local/financial_store.dart';
+import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
 import 'package:pandapay/data/portable_backup/account_recovery_operation_gate.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -198,4 +200,42 @@ void main() {
     expect(first.rows.single.id, 'a');
     expect(second.rows.single.id, 'z');
   });
+
+  test(
+    'ResponseCache adopts the worker for complete history and legacy snapshots',
+    () async {
+      final cache = ResponseCache(
+        database,
+        financialReadWorker: worker,
+      );
+      final legacy = transaction('legacy', day: 4);
+      await cache.put(
+        'user:a:transactions:all',
+        jsonEncode({
+          'transactions': [legacy.toJson()],
+        }),
+      );
+      final migrated = await cache.readTransactions(
+        'user:a',
+        const TransactionQuery(),
+      );
+      expect(migrated!.rows.map((row) => row.id), ['legacy']);
+      store.saveTransactions(
+        'user:a',
+        [
+          for (var i = 0; i < 205; i++) transaction('row-$i', day: i + 10),
+        ],
+        completeQuery: const TransactionQuery(),
+      );
+
+      final snapshot = await cache.readTransactions(
+        'user:a',
+        const TransactionQuery(),
+      );
+
+      expect(snapshot, isNotNull);
+      expect(snapshot!.complete, isTrue);
+      expect(snapshot.rows, hasLength(205));
+    },
+  );
 }

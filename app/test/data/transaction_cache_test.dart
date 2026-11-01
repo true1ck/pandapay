@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/local/app_database.dart';
@@ -13,6 +15,10 @@ import 'package:pandapay/features/insights/payments_due_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 class _AuthFailingRepository implements UserCardsRepository {
+  ApiException _authFailure() => ApiException(
+    'GET /transactions failed: 401 {"error":"Missing or invalid access token"}',
+  );
+
   @override
   Future<List<TransactionEntry>> fetchTransactions({
     DateTime? from,
@@ -23,9 +29,22 @@ class _AuthFailingRepository implements UserCardsRepository {
     String? source,
     String? query,
   }) async {
-    throw ApiException(
-      'GET /transactions failed: 401 {"error":"Missing or invalid access token"}',
-    );
+    throw _authFailure();
+  }
+
+  @override
+  Future<TransactionPage> fetchTransactionPage({
+    int pageSize = 200,
+    String? cursor,
+    DateTime? from,
+    DateTime? to,
+    String? cardId,
+    String? categoryId,
+    String? userCategoryId,
+    String? source,
+    String? query,
+  }) async {
+    throw _authFailure();
   }
 
   @override
@@ -73,6 +92,61 @@ class _BlockingTransactionRepository implements UserCardsRepository {
 }
 
 void main() {
+  test(
+    'transactions provider adopts bounded pages for a cold history refresh',
+    () async {
+      final database = openInMemoryForTesting();
+      addTearDown(database.close);
+      final cache = ResponseCache(database);
+      final requests = <Uri>[];
+      TransactionEntry row(String id) => TransactionEntry(
+        id: id,
+        amount: Money.fromRupees(100),
+        occurredAt: DateTime(2026, 11, id == 'new' ? 1 : 0),
+        source: 'manual',
+        status: 'active',
+      );
+      final repo = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'token',
+        client: MockClient((request) async {
+          requests.add(request.url);
+          final cursor = request.url.queryParameters['cursor'];
+          return http.Response(
+            jsonEncode({
+              'transactions': [row(cursor == null ? 'new' : 'older').toJson()],
+              'pageInfo': {
+                'hasMore': cursor == null,
+                'nextCursor': cursor == null ? 'cursor-1' : null,
+              },
+            }),
+            200,
+          );
+        }),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          accessTokenProvider.overrideWith((ref) => 'token'),
+          responseCacheProvider.overrideWith((ref) async => cache),
+          userCardsRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final rows = await container.read(transactionsProvider.future);
+
+      expect(rows.map((entry) => entry.id), ['new', 'older']);
+      expect(requests, hasLength(2));
+      expect(
+        requests.map((uri) => uri.queryParameters),
+        [
+          {'pageSize': '200'},
+          {'pageSize': '200', 'cursor': 'cursor-1'},
+        ],
+      );
+    },
+  );
+
   test(
     'shares a cold transaction materialization across identical consumers',
     () async {

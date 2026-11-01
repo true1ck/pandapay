@@ -38,6 +38,7 @@ import '../data/local/recovery_deferred_sms.dart';
 import '../data/portable_backup/account_recovery_operation_gate.dart';
 import '../data/local/response_cache.dart';
 import '../data/local/financial_store.dart';
+import '../data/local/financial_read_worker.dart';
 import '../data/local/auto_resolved_history_repository.dart';
 import '../data/local/sms_auto_resolution_controller.dart';
 import '../data/local/sms_rule_bundle.dart';
@@ -54,6 +55,7 @@ import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
 import '../data/local_user_cards_repository.dart';
+import '../data/transaction_page_refresh.dart';
 import '../data/merchant_category_rules_repository.dart';
 import '../data/merchant_issue_rules_repository.dart';
 import '../data/merchant_search_repository.dart';
@@ -2476,6 +2478,10 @@ final transactionsProvider = FutureProvider<List<TransactionEntry>>((
     ref,
     repo: repo,
     cacheKey: '$_transactionsCacheKey:all',
+    // Activity is the one broad history surface that can safely render a
+    // partial, newest-first snapshot. Keep cold starts bounded and let the
+    // durable page cursor resume older history on a later refresh.
+    useBoundedRefresh: true,
   );
 });
 
@@ -4510,9 +4516,20 @@ final appDatabaseProvider = FutureProvider<AppDatabase>((ref) async {
 });
 
 final responseCacheProvider = FutureProvider<ResponseCache>((ref) async {
-  final cache = ResponseCache(await ref.watch(appDatabaseProvider.future));
+  final database = await ref.watch(appDatabaseProvider.future);
+  // AppDatabase.open() is in-memory under flutter_test and for test fakes.
+  // Only production's file-backed database can be reopened safely by the
+  // read isolate.
+  final worker = database.filePath == null
+      ? null
+      : FinancialReadWorker(database.filePath!);
+  final cache = ResponseCache(database, financialReadWorker: worker);
   final store = cache.financialStore;
   ref.onDispose(store.dispose);
+  ref.onDispose(() {
+    final activeWorker = cache.financialReadWorker;
+    if (activeWorker != null) unawaited(activeWorker.close());
+  });
   return cache;
 });
 
@@ -5777,6 +5794,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   String? query,
   bool preferCached = false,
   bool useReportSnapshots = true,
+  bool useBoundedRefresh = false,
   FutureOr<void> Function()? onBackgroundRefresh,
 }) async {
   var ready = false;
@@ -5795,17 +5813,69 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   );
   final cache = await _cacheOrNull(ref);
   final store = cache?.financialStore;
-  store?.migrateLegacy(namespace);
-  final local = store?.transactions(namespace, filter);
+  final worker = cache?.financialReadWorker;
+  LocalTransactionSnapshot? local;
+  if (worker == null) {
+    // In-memory test databases cannot be reopened by another isolate and
+    // retain the established synchronous fake-friendly behavior.
+    store?.migrateLegacy(namespace);
+    local = store?.transactions(namespace, filter);
+  } else {
+    var current = true;
+    ref.onDispose(() => current = false);
+    try {
+      local = await cache?.readTransactions(
+        namespace,
+        filter,
+        isCurrent: () =>
+            current && ref.read(cacheNamespaceProvider) == namespace,
+      );
+    } catch (_) {
+      // A worker startup/storage failure must not make an otherwise healthy
+      // online consumer unusable. The authoritative fetch below can still
+      // repopulate the file-backed store.
+      local = null;
+    }
+  }
+  final legacy = worker == null && (local == null || local.rows.isEmpty)
+      ? await _readLegacyTransactionSnapshots(
+          ref,
+          cache,
+          cacheKey: cacheKey,
+          filter: filter,
+          useReportSnapshots: useReportSnapshots,
+        )
+      : null;
   // Keep the single-flight scope inside one repository/cache owner. The
   // namespace prevents account crossover, while the repository identity
   // prevents an in-flight request from one ProviderContainer (or test cache)
   // being reused by a different owner that happens to use the same namespace.
-  final key = '${identityHashCode(repo)}:$namespace:${filter.key}';
+  // Keep bounded and authoritative full reads in separate single-flight
+  // lanes. A page pass is deliberately partial and must never satisfy a
+  // consumer that still requires complete-query coverage.
+  final fetchMode = useBoundedRefresh && store != null ? 'paged' : 'full';
+  final key = '${identityHashCode(repo)}:$namespace:${filter.key}:$fetchMode';
 
   Future<List<TransactionEntry>> fetchAndStore() async {
     final requestedAt = DateTime.now();
     try {
+      if (useBoundedRefresh && store != null) {
+        final refresh = TransactionPageRefresh(
+          namespace: namespace,
+          // Repository instances are stable across access-token rotation but
+          // are recreated when the account/session changes. Including their
+          // identity prevents an opaque cursor from one session being reused
+          // by a later login of the same account.
+          sessionGeneration: '$namespace:${identityHashCode(repo)}',
+          query: filter,
+          repository: repo,
+          store: store,
+          isCurrent: () => ref.read(cacheNamespaceProvider) == namespace,
+        );
+        await refresh.refresh();
+        if (ref.read(cacheNamespaceProvider) != namespace) return const [];
+        return store.transactions(namespace, filter)?.rows ?? const [];
+      }
       final rows = await repo.fetchTransactions(
         from: from,
         to: to,
@@ -5859,7 +5929,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
 
   // A known empty result has coverage too. Reading any surface never waits
   // for a network refresh when its saved content is available.
-  if (local != null) {
+  if (local != null && legacy == null) {
     if (!_isKnownOffline() &&
         (!preferCached ||
             DateTime.now().difference(local.fetchedAt) >=
@@ -5878,6 +5948,10 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     }
     ready = true;
     return local.rows;
+  }
+  if (legacy != null) {
+    ready = true;
+    return legacy;
   }
   try {
     final rows = await fetchShared();
