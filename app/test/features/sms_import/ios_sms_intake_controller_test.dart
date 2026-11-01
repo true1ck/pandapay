@@ -113,6 +113,30 @@ class MemoryBridge extends IosSmsIntakeService {
 }
 
 void main() {
+  setUpAll(() => IosSmsIntakeController.drainRetryDelay = Duration.zero);
+
+  test('a batch that fails once is retried without showing an error', () async {
+    final service = MemoryBridge()..rows.add({'id': 'one'});
+    var failures = 1;
+    final controller = IosSmsIntakeController(
+      service: service,
+      namespace: () => 'user:a',
+      requestUpload: () {},
+      capture: (_, _, rows) async {
+        if (failures-- > 0) throw StateError('database is locked');
+        return [
+          {'id': 'one'},
+        ];
+      },
+    );
+    addTearDown(controller.dispose);
+    final errors = <String?>[];
+    controller.addListener(() => errors.add(controller.state.error));
+    await controller.refresh();
+    expect(service.rows, isEmpty);
+    expect(errors, everyElement(isNull));
+  });
+
   testWidgets(
     'five-second inactivity nudges the same run without completing or reissuing it',
     (tester) async {
@@ -792,23 +816,30 @@ void main() {
   );
 
   test('the strip text stays the same while one range is imported', () {
-    IosSmsIntakeState at({bool processing = false, bool launching = false, String state = 'waiting'}) =>
-        IosSmsIntakeState(
-          processing: processing,
-          launching: launching,
-          snapshot: {
-            'enabled': true,
-            'jobs': [
-              {'id': 'h', 'kind': 'history', 'state': 'active'},
-            ],
-            'windows': [
-              {
-                'id': 'w', 'job_id': 'h', 'ordinal': 0, 'state': state,
-                'start': '2025-11-01T18:41:17Z', 'end': '2025-11-30T18:30:00Z',
-              },
-            ],
+    IosSmsIntakeState at({
+      bool processing = false,
+      bool launching = false,
+      String state = 'waiting',
+    }) => IosSmsIntakeState(
+      processing: processing,
+      launching: launching,
+      snapshot: {
+        'enabled': true,
+        'jobs': [
+          {'id': 'h', 'kind': 'history', 'state': 'active'},
+        ],
+        'windows': [
+          {
+            'id': 'w',
+            'job_id': 'h',
+            'ordinal': 0,
+            'state': state,
+            'start': '2025-11-01T18:41:17Z',
+            'end': '2025-11-30T18:30:00Z',
           },
-        );
+        ],
+      },
+    );
     final labels = {
       at(launching: true).label,
       at().label,
@@ -819,6 +850,8 @@ void main() {
     expect(labels.single, startsWith('Importing history · '));
     expect(labels.single, endsWith('2025'), reason: 'the year is always named');
   });
+
+  _loopMonitorTests();
 
   group('stopped ranges and app restarts', () {
     Future<(MemoryBridge, IosSmsIntakeController)> started({
@@ -912,7 +945,9 @@ void main() {
       expect(restarted.automaticallyAdvancing, isTrue);
     });
 
-    testWidgets('an idle import resumes by itself after five seconds', (tester) async {
+    testWidgets('an idle import resumes by itself after five seconds', (
+      tester,
+    ) async {
       final service = MemoryBridge();
       final controller = IosSmsIntakeController(
         service: service,
@@ -941,22 +976,31 @@ void main() {
       controller.dispose();
     });
 
-    test('a Shortcuts error after a finished range does not stop the import', () async {
-      final (service, controller) = await started();
-      final window = (service.snapshot['windows'] as List).first as Map;
-      window['state'] = 'complete';
-      service.shortcutReturn = {'attempt': window['attempt'], 'status': 'error'};
-      service.calls.clear();
-      await controller.refresh();
-      expect(controller.state.error, isNull);
-      expect(service.calls, contains('runShortcut'));
-      expect(controller.automaticallyAdvancing, isTrue);
-    });
+    test(
+      'a Shortcuts error after a finished range does not stop the import',
+      () async {
+        final (service, controller) = await started();
+        final window = (service.snapshot['windows'] as List).first as Map;
+        window['state'] = 'complete';
+        service.shortcutReturn = {
+          'attempt': window['attempt'],
+          'status': 'error',
+        };
+        service.calls.clear();
+        await controller.refresh();
+        expect(controller.state.error, isNull);
+        expect(service.calls, contains('runShortcut'));
+        expect(controller.automaticallyAdvancing, isTrue);
+      },
+    );
 
     test('a Shortcuts error before the range finished still stops', () async {
       final (service, controller) = await started();
       final window = (service.snapshot['windows'] as List).first as Map;
-      service.shortcutReturn = {'attempt': window['attempt'], 'status': 'error'};
+      service.shortcutReturn = {
+        'attempt': window['attempt'],
+        'status': 'error',
+      };
       await controller.refresh();
       expect(controller.state.error, contains('Shortcuts stopped'));
       expect(controller.automaticallyAdvancing, isFalse);
@@ -980,6 +1024,159 @@ void main() {
       await controller.refresh();
       await tester.pump(const Duration(seconds: 10));
       expect(service.calls, isNot(contains('runShortcut')));
+    });
+  });
+}
+
+void _loopMonitorTests() {
+  group('looping import monitored from PandaPay', () {
+    Future<(MemoryBridge, IosSmsIntakeController)> looping(
+      WidgetTester tester,
+    ) async {
+      final service = MemoryBridge();
+      final controller = IosSmsIntakeController(
+        service: service,
+        namespace: () => 'user:a',
+        capture: (_, _, _) async => [],
+        requestUpload: () {},
+        sessionStore: _MemorySessionStore(),
+      );
+      await controller.refresh();
+      await controller.startHistory(DateTime(2024, 1), DateTime(2024, 4));
+      await controller.continueImport('PANDAPAY SMS HISTORY');
+      final job = (service.snapshot['jobs'] as List).first as Map;
+      service.snapshot['loop_job'] = job['id'];
+      final windows = (service.snapshot['windows'] as List).cast<Map>();
+      windows.first['enumerated'] = 3;
+      service.calls.clear();
+      await controller.refresh();
+      return (service, controller);
+    }
+
+    testWidgets('kicks Shortcuts after five quiet seconds', (tester) async {
+      final (service, controller) = await looping(tester);
+      await tester.pump(const Duration(seconds: 4));
+      expect(service.resumedRequests, isEmpty);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(service.resumedRequests, hasLength(1));
+      expect(service.resumedRequests.single['stalled'], isTrue);
+      expect(
+        service.resumedRequests.single['received'],
+        3,
+        reason: 'counted across the import',
+      );
+      controller.dispose();
+    });
+
+    testWidgets('progress anywhere in the import resets the wait', (
+      tester,
+    ) async {
+      final (service, controller) = await looping(tester);
+      await tester.pump(const Duration(seconds: 4));
+      // The loop moved on and captured in a later month.
+      final windows = (service.snapshot['windows'] as List).cast<Map>();
+      windows[1]
+        ..['state'] = 'running'
+        ..['attempt'] = 'loop-2'
+        ..['enumerated'] = 7;
+      await controller.refresh();
+      await tester.pump(const Duration(seconds: 4));
+      expect(service.resumedRequests, isEmpty);
+      controller.dispose();
+    });
+
+    testWidgets('starts a fresh run when two kicks bring nothing', (
+      tester,
+    ) async {
+      final (service, controller) = await looping(tester);
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 9));
+      await tester.pumpAndSettle();
+      expect(service.resumedRequests, hasLength(2));
+      expect(service.calls, isNot(contains('runShortcut')));
+      await tester.pump(const Duration(seconds: 9));
+      await tester.pumpAndSettle();
+      expect(service.calls, contains('runShortcut'));
+      controller.dispose();
+    });
+
+    testWidgets('an error stays on screen while refreshes keep coming', (
+      tester,
+    ) async {
+      final (service, controller) = await looping(tester);
+      service
+        ..failAck = true
+        ..rows.add({
+          'id': 'r1',
+          'namespace': 'user:a',
+          'generation': 'g1',
+          'body': 'x',
+        });
+      await controller.refresh();
+      expect(controller.state.error, isNotNull);
+      final seen = <String?>[];
+      controller.addListener(() => seen.add(controller.state.error));
+      for (var i = 0; i < 3; i++) {
+        await controller.refresh();
+      }
+      expect(seen, isNotEmpty);
+      expect(
+        seen,
+        everyElement(isNotNull),
+        reason: 'no flicker to a clean state',
+      );
+      expect(controller.state.label, 'Import needs a check');
+      // Once the messages save, the error goes by itself.
+      service.rows.clear();
+      await controller.refresh();
+      expect(controller.state.error, isNull);
+      controller.dispose();
+    });
+
+    testWidgets('a loop still running after a stop is followed again', (
+      tester,
+    ) async {
+      final (service, controller) = await looping(tester);
+      service.shortcutReturn = {'attempt': 'attempt-1', 'status': 'error'};
+      await controller.refresh();
+      expect(controller.automaticallyAdvancing, isFalse);
+      expect(controller.state.error, isNotNull);
+      // No new messages: still stopped, error steady.
+      await controller.refresh();
+      expect(controller.automaticallyAdvancing, isFalse);
+      expect(controller.state.error, isNotNull);
+      // The Shortcut keeps capturing in the background.
+      ((service.snapshot['windows'] as List).first as Map)['enumerated'] = 9;
+      await controller.refresh();
+      expect(controller.automaticallyAdvancing, isTrue);
+      expect(controller.state.error, isNull);
+      controller.dispose();
+    });
+
+    testWidgets('an error after the last range is not a failure', (
+      tester,
+    ) async {
+      final (service, controller) = await looping(tester);
+      for (final w in (service.snapshot['windows'] as List).cast<Map>()) {
+        w['state'] = 'complete';
+      }
+      ((service.snapshot['jobs'] as List).first as Map)['state'] = 'complete';
+      service.shortcutReturn = {'attempt': 'attempt-1', 'status': 'error'};
+      await controller.refresh();
+      expect(controller.state.error, isNull);
+      controller.dispose();
+    });
+
+    testWidgets('stays quiet while Shortcuts is in front', (tester) async {
+      final (service, controller) = await looping(tester);
+      service.foreground = false;
+      await tester.pump(const Duration(seconds: 30));
+      await tester.pumpAndSettle();
+      expect(service.resumedRequests, isEmpty);
+      expect(service.calls, isNot(contains('runShortcut')));
+      controller.dispose();
     });
   });
 }

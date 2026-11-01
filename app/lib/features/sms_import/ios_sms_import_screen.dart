@@ -351,7 +351,8 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                 ],
               ),
             ),
-            if (_error != null || state.error != null)
+            // With an import open, its card shows the error instead.
+            if (_error != null || (state.error != null && !active))
               Padding(
                 padding: const EdgeInsets.only(top: AppSpace.md),
                 child: Text(
@@ -693,7 +694,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
             '$done of $total ${state.activeJob?['kind'] == 'history' ? 'months' : 'date windows'} done',
             style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
           ),
-          if (state.stopReason case final reason?) ...[
+          if (state.error ?? state.stopReason case final reason?) ...[
             const SizedBox(height: AppSpace.sm),
             Text(reason, style: BambooFonts.ui(13, color: BambooInk.lime)),
           ],
@@ -719,7 +720,10 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                 minimumSize: const Size.fromHeight(46),
                 textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
               ),
-              onPressed: _busy || state.processing || !_sharingConfirmed
+              // Not tied to batch processing, which comes and goes every
+              // few seconds during an import and made the button blink. A
+              // tap simply waits for the current batch to finish.
+              onPressed: _busy || !_sharingConfirmed
                   ? null
                   : () => _run(_launch),
               child: const Text('Resume import'),

@@ -247,14 +247,25 @@ final class IncomingSmsSpool {
   /// Safe acquisition metadata only. Returning to Shortcuts is admitted only
   /// after every receipt and shared processing acknowledgement has committed.
   @discardableResult
+  /// Whether two issued requests belong to the same active import.
+  func sameImport(_ first: String, _ second: String) -> Bool {
+    (try? transaction { db in
+      let a = try window(db, request: first), b = try window(db, request: second)
+      return a["job_id"] as? String == b["job_id"] as? String
+    }) ?? false
+  }
+
   func observeHandoff(request: String, stage: SmsHandoffStage, expectedReceived: Int? = nil) throws -> Bool {
     try transaction { db in
       let row = try window(db, request: request)
       if stage == .resumeRequested && row["state"] as? String != "complete" { return false }
       if stage == .resumeStalled {
-        guard ["waiting", "running", "finished"].contains(row["state"] as? String ?? ""),
-              let expectedReceived, expectedReceived >= 0,
-              try query(db, "SELECT COUNT(*) AS count FROM receipts WHERE attempt=?", [row["attempt"]]).first?["count"] as? Int == expectedReceived else { return false }
+        // A looping run moves on to later ranges, so judge the whole import:
+        // it must still have a range in progress and no new message since
+        // PandaPay last looked.
+        guard let expectedReceived, expectedReceived >= 0,
+              try query(db, "SELECT 1 FROM windows WHERE job_id=? AND state IN ('waiting','running','finished') LIMIT 1", [row["job_id"]]).first != nil,
+              try query(db, "SELECT COUNT(*) AS count FROM receipts r JOIN windows w ON w.attempt=r.attempt WHERE w.job_id=?", [row["job_id"]]).first?["count"] as? Int == expectedReceived else { return false }
       }
       if stage == .appReturnRequested || stage == .appReturnUnavailable {
         guard ["waiting", "running", "finished"].contains(row["state"] as? String ?? "") else { return false }
@@ -501,7 +512,9 @@ final class IncomingSmsSpool {
   func issue(generation: String) throws -> String? {
     try transaction { db in
       _ = try owner(db, generation: generation)
-      guard let row = try query(db, "SELECT w.* FROM windows w JOIN jobs j ON j.id=w.job_id WHERE j.state='active' AND w.state<>'complete' ORDER BY w.ordinal LIMIT 1").first else { return nil }
+      // A range already searched and only waiting for PandaPay to process it
+      // is not searched again; the next one is offered instead.
+      guard let row = try query(db, "SELECT w.* FROM windows w JOIN jobs j ON j.id=w.job_id WHERE j.state='active' AND w.state NOT IN ('complete','finished') ORDER BY w.ordinal LIMIT 1").first else { return nil }
       var token = row["attempt"] as? String
       if row["state"] as? String == "queued" {
         token = UUID().uuidString
@@ -522,6 +535,10 @@ final class IncomingSmsSpool {
   func issueNextRange() throws -> String? {
     try transaction { db in
       guard let account = try? owner(db), let generation = account["generation"] as? String else { return nil }
+      if let job = try query(db, "SELECT id FROM jobs WHERE state='active' AND kind='history' AND generation=? ORDER BY rowid DESC LIMIT 1", [generation]).first {
+        // Tells PandaPay this import runs as one looping Shortcut run.
+        try execute(db, "INSERT INTO settings VALUES('loop_job',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [job["id"]])
+      }
       guard let row = try query(db, "SELECT w.* FROM windows w JOIN jobs j ON j.id=w.job_id WHERE j.state='active' AND j.kind='history' AND j.generation=? AND w.state IN ('queued','waiting','running') ORDER BY w.ordinal LIMIT 1", [generation]).first else { return nil }
       var token = row["attempt"] as? String
       if row["state"] as? String == "queued" {

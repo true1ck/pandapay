@@ -206,8 +206,6 @@ struct NextPandaPayHistoryRangeIntent: AppIntent {
   static var description = IntentDescription("Returns the next date range to import, or nothing when the import is done. Use its result as the Import request for Window Start, Window End, Capture and Finish PandaPay SMS Window inside a Repeat, and stop when it is empty.")
   static var openAppWhenRun = false
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
-    // The loop stays in Shortcuts: captures must not jump back to PandaPay.
-    await MainActor.run { IncomingSmsBridge.releaseForegroundReturn() }
     let value = (try? IncomingSmsSpool.shared.issueNextRange()) ?? nil
     IncomingSmsBridge.notifyReady()
     SmsImportLiveActivityHost.refresh()
@@ -347,15 +345,13 @@ enum IncomingSmsBridge {
     DispatchQueue.main.async { channel?.invokeMethod("ready", arguments: nil) }
   }
 
-  /// A looping history Shortcut stays in Shortcuts; drop any pending
-  /// "return to PandaPay" for the range PandaPay launched.
-  @MainActor
-  static func releaseForegroundReturn() { foregroundReturn = nil }
-
   @MainActor
   static func claimForegroundReturn(request: String) -> Bool {
-    guard pendingLaunch?.request == request, returned == nil else { return false }
-    return foregroundReturn?.claim(request: request, appIsActive: UIApplication.shared.applicationState == .active) == true
+    guard let launch = pendingLaunch, returned == nil else { return false }
+    // A looping run captures later ranges of the same import: they may bring
+    // PandaPay back too, once per launch or runner resume.
+    guard launch.request == request || IncomingSmsSpool.shared.sameImport(launch.request, request) else { return false }
+    return foregroundReturn?.claim(request: launch.request, appIsActive: UIApplication.shared.applicationState == .active) == true
   }
 
   static func handleReturnURL(_ url: URL) -> Bool {

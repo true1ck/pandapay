@@ -10,12 +10,13 @@
 ///   --dart-define=PANDAPAY_IOS_HISTORY_SHORTCUT_URL=https://www.icloud.com/shortcuts/…
 ///   --dart-define=PANDAPAY_IOS_LIVE_SHORTCUT_URL=https://www.icloud.com/shortcuts/…
 abstract final class IosShortcutLinks {
-  /// PANDAPAY SMS HISTORY: Sender mapped to Repeat Item → Conversation,
-  /// Find Messages oldest first, "Find Messages limit is off" on.
+  /// PANDAPAY SMS HISTORY (looping): Repeat 500 × Next PandaPay History
+  /// Range → Window Start/End → Find Messages oldest first → Capture each
+  /// (Sender = Repeat Item → Conversation) → Finish.
   static const history = String.fromEnvironment(
     'PANDAPAY_IOS_HISTORY_SHORTCUT_URL',
     defaultValue:
-        'https://www.icloud.com/shortcuts/4570a63b84e24d9baa1938b7f36db8a1',
+        'https://www.icloud.com/shortcuts/f8e3a510ba904480886fbaa475f38b2c',
   );
   static const live = String.fromEnvironment(
     'PANDAPAY_IOS_LIVE_SHORTCUT_URL',

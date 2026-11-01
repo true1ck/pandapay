@@ -87,10 +87,11 @@ class IosSmsIntakeState {
 
   /// The active job's windows in date order. A window that hit the 500
   /// message cap is followed by its continuation.
-  List<Map<String, Object?>> get orderedWindows =>
-      [...currentWindows]..sort(
-        (a, b) => (a['ordinal'] as int? ?? 0).compareTo(b['ordinal'] as int? ?? 0),
-      );
+  List<Map<String, Object?>> get orderedWindows => [...currentWindows]
+    ..sort(
+      (a, b) =>
+          (a['ordinal'] as int? ?? 0).compareTo(b['ordinal'] as int? ?? 0),
+    );
 
   /// End of the unbroken run of finished date ranges from the job's start.
   DateTime? get importedThrough {
@@ -112,7 +113,8 @@ class IosSmsIntakeState {
     final end = DateTime.tryParse(activeJob?['end'] as String? ?? '');
     if (start == null || end == null || !end.isAfter(start)) return null;
     final through = importedThrough ?? start;
-    return (through.difference(start).inSeconds / end.difference(start).inSeconds)
+    return (through.difference(start).inSeconds /
+            end.difference(start).inSeconds)
         .clamp(0.0, 1.0);
   }
 
@@ -143,6 +145,7 @@ class IosSmsIntakeState {
     }
     return 'This range needs another try. Resume to import it again.';
   }
+
   int get missingSenders => currentWindows.fold(
     0,
     (total, window) => total + (window['missing_sender'] as int? ?? 0),
@@ -154,15 +157,19 @@ class IosSmsIntakeState {
   bool get visible =>
       enabled &&
       (processing || activeJob != null || error != null || pending > 0);
+
   /// "1 Jul – 31 Jul" for a window; the end is exclusive.
   static String rangeLabel(Map<String, Object?> window) {
     final start = DateTime.tryParse(window['start'] as String? ?? '');
-    final end = DateTime.tryParse(window['end'] as String? ?? '')
-        ?.subtract(const Duration(milliseconds: 1));
+    final end = DateTime.tryParse(
+      window['end'] as String? ?? '',
+    )?.subtract(const Duration(milliseconds: 1));
     if (start == null) return 'the next dates';
     // Always name the year: "2 Nov – 30 Nov 2025" must not read as this month.
     final day = DateFormat('d MMM'), dayYear = DateFormat('d MMM yyyy');
-    if (end == null || end.isBefore(start)) return dayYear.format(start.toLocal());
+    if (end == null || end.isBefore(start)) {
+      return dayYear.format(start.toLocal());
+    }
     return '${day.format(start.toLocal())} – ${dayYear.format(end.toLocal())}';
   }
 
@@ -179,7 +186,12 @@ class IosSmsIntakeState {
   }
 
   String get label {
-    if (error != null) return 'Message update needs attention';
+    if (error != null) {
+      // Same words as the import card, so the two never disagree.
+      return activeJob?['kind'] == 'history'
+          ? 'Import needs a check'
+          : 'Message update needs attention';
+    }
     if (paused) return 'Message update paused';
     if (partial) {
       return missingSenders > 0
@@ -328,12 +340,81 @@ class IosSmsIntakeController extends ChangeNotifier {
               namespace() == expected &&
               _automaticJob == job) {
             _endAutomaticSession();
-            _publish(
-              IosSmsIntakeState(
-                snapshot: state.snapshot,
-                error: 'Import paused. Resume when you’re ready.',
-              ),
-            );
+            _halt(_pausedMessage);
+          }
+        }),
+      );
+    });
+  }
+
+  /// Messages received and ranges searched across the whole import.
+  int get _importReceived => state.currentWindows.fold(
+    0,
+    (total, window) => total + (window['enumerated'] as int? ?? 0),
+  );
+  String get _importProgressKey =>
+      '$_importReceived:${state.currentWindows.where((w) => const ['complete', 'finished'].contains(w['state'])).length}';
+  String? _loopProgress;
+  int _loopKicks = 0;
+
+  /// While PandaPay is on screen during a looping import: when nothing new
+  /// arrives for a few seconds, iOS has paused Shortcuts in the background.
+  /// Kick it (Shortcuts flashes, then PandaPay comes back with the next
+  /// message). If two kicks bring nothing, the run has died: start a fresh
+  /// one, which carries on from the first range not yet searched.
+  void _watchImportProgress(String expected, int revision, String job) {
+    final key = _importProgressKey;
+    if (key != _loopProgress) {
+      _loopProgress = key;
+      _loopKicks = 0;
+      _idleTimer?.cancel();
+      _idleTimer = null;
+    }
+    if (_idleTimer != null) return;
+    _idleTimer = Timer(Duration(seconds: _loopKicks == 0 ? 5 : 8), () {
+      _idleTimer = null;
+      unawaited(
+        _serialize(() async {
+          if (_disposed ||
+              revision != _revision ||
+              namespace() != expected ||
+              _automaticJob != job ||
+              !state.enabled ||
+              state.paused ||
+              state.partial ||
+              _returnedAttempt == _issuedAttempt) {
+            return;
+          }
+          if (_importProgressKey != key) {
+            _watchImportProgress(expected, revision, job);
+            return;
+          }
+          // Only act while the person is looking at PandaPay; while
+          // Shortcuts is in front it is working.
+          if (await service.call('isForeground') != true) return;
+          _check(expected, revision);
+          if (_loopKicks < 2) {
+            _loopKicks++;
+            final kicked = await service.call('resumeShortcut', {
+              'attempt': _issuedAttempt,
+              'stalled': true,
+              'received': _importReceived,
+            });
+            if (kicked == true) {
+              unawaited(refresh());
+              return;
+            }
+          }
+          // Kicks didn't help (or the run is gone): start a fresh run.
+          _loopKicks = 0;
+          await _launch(expected, revision, allowSame: true);
+        }).catchError((Object _) {
+          if (!_disposed &&
+              revision == _revision &&
+              namespace() == expected &&
+              _automaticJob == job) {
+            _endAutomaticSession();
+            _halt(_pausedMessage);
           }
         }),
       );
@@ -386,12 +467,8 @@ class IosSmsIntakeController extends ChangeNotifier {
               namespace() == expected &&
               _automaticJob == job) {
             _endAutomaticSession();
-            _publish(
-              IosSmsIntakeState(
-                snapshot: state.snapshot,
-                error:
-                    'Return to Shortcuts to finish this month, then resume in PandaPay.',
-              ),
+            _halt(
+              'Return to Shortcuts to finish this month, then resume in PandaPay.',
             );
           }
         }),
@@ -417,17 +494,85 @@ class IosSmsIntakeController extends ChangeNotifier {
           _savedSessionLoaded = true;
           // Without a saved session (for example a fresh launch), use the
           // shortcut name chosen on the import screen, or the default.
-          _lastShortcut ??= saved?.shortcut ?? await this.sessionStore.shortcutName();
+          _lastShortcut ??=
+              saved?.shortcut ?? await this.sessionStore.shortcutName();
           if (!_disposed) unawaited(refresh());
         }),
       );
     }
   }
 
+  /// An error stays on screen until it is resolved. Every refresh publishes
+  /// several intermediate states; carrying the error through them keeps the
+  /// card and status strip from flipping between two messages.
+  ///
+  /// [_haltError]: the automatic import stopped and waits for the person (or
+  /// for the Shortcut to show progress again). [_drainError]: saved messages
+  /// could not be processed; cleared by the next successful drain.
+  static const _drainRetries = 2;
+
+  /// Pause before retrying a failed batch; zero in widget tests.
+  @visibleForTesting
+  static Duration drainRetryDelay = const Duration(milliseconds: 400);
+
+  String? _haltError;
+  static const _pausedMessage = 'Import paused. Resume when you’re ready.';
+  String? _haltProgress;
+  String? _drainError;
+
   void _publish(IosSmsIntakeState value) {
     if (_disposed) return;
-    _state = value;
+    final error = value.error ?? _drainError ?? _haltError;
+    _state = identical(error, value.error)
+        ? value
+        : IosSmsIntakeState(
+            snapshot: value.snapshot,
+            processing: value.processing,
+            launching: value.launching,
+            error: error,
+          );
     notifyListeners();
+  }
+
+  void _halt(String message) {
+    _haltError = message;
+    _haltProgress = _importProgressKey;
+    _publish(IosSmsIntakeState(snapshot: state.snapshot));
+  }
+
+  /// The person acted (resume, pause, stop, a new import): old errors go.
+  void _clearErrors() {
+    _haltError = null;
+    _haltProgress = null;
+    _drainError = null;
+  }
+
+  /// A looping Shortcut keeps importing in the background even after PandaPay
+  /// lost track of it: an error report, or iOS closing PandaPay. While its
+  /// ranges are running, follow it again (and restart it if it stalls)
+  /// instead of offering Resume next to an import that is still moving.
+  void _adoptRunningLoop() {
+    final job = state.activeJob?['id'] as String?;
+    if (_automaticJob != null ||
+        job == null ||
+        _lastShortcut == null ||
+        _drainError != null ||
+        !state.enabled ||
+        state.paused ||
+        state.partial ||
+        !state.waiting ||
+        state.snapshot['loop_job'] != job) {
+      return;
+    }
+    // After a stop, only fresh progress shows the run is alive.
+    if (_haltError != null && _importProgressKey == _haltProgress) return;
+    _haltError = null;
+    _haltProgress = null;
+    _automaticJob = job;
+    _automaticShortcut = _lastShortcut;
+    _issuedAttempt = state.currentWindow?['attempt'] as String?;
+    _returnedAttempt = null;
+    _publish(IosSmsIntakeState(snapshot: state.snapshot));
   }
 
   void _check(String expected, int revision) {
@@ -478,7 +623,7 @@ class IosSmsIntakeController extends ChangeNotifier {
               if (returned['status'] == 'cancel') {
                 // A cancel is the person's choice: wait for them.
                 _endAutomaticSession();
-                returnError = 'Import paused. Resume when you’re ready.';
+                returnError = _pausedMessage;
               } else {
                 // Decide after reading native state: an error reported after
                 // the range already finished loses nothing.
@@ -514,16 +659,43 @@ class IosSmsIntakeController extends ChangeNotifier {
                       ),
                     );
                   }
-                  final outcomes = await capture(expected, generation, rows);
-                  _check(expected, revision);
-                  if (outcomes.length != rows.length) {
-                    throw StateError('Incomplete SMS processing receipt');
+                  // The capture worker and the app share one database; a
+                  // write from the app at the same moment can make a batch
+                  // fail with "database is locked". Saving is idempotent
+                  // (decisions and acknowledgements are keyed per message),
+                  // so retry the same batch before reporting anything.
+                  for (var attempt = 0; ; attempt++) {
+                    try {
+                      final outcomes = await capture(
+                        expected,
+                        generation,
+                        rows,
+                      );
+                      _check(expected, revision);
+                      if (outcomes.length != rows.length) {
+                        throw StateError('Incomplete SMS processing receipt');
+                      }
+                      await service.call('acknowledge', {
+                        'generation': generation,
+                        'outcomes': outcomes,
+                      });
+                      _check(expected, revision);
+                      break;
+                    } catch (error) {
+                      if (attempt >= _drainRetries ||
+                          _disposed ||
+                          namespace() != expected ||
+                          revision != _revision) {
+                        rethrow;
+                      }
+                      debugPrint('SMS batch retry ${attempt + 1}: $error');
+                      if (drainRetryDelay > Duration.zero) {
+                        await Future<void>.delayed(
+                          drainRetryDelay * (attempt + 1),
+                        );
+                      }
+                    }
                   }
-                  await service.call('acknowledge', {
-                    'generation': generation,
-                    'outcomes': outcomes,
-                  });
-                  _check(expected, revision);
                   drained = true;
                   // Let frames render between batches.
                   await Future<void>.delayed(const Duration(milliseconds: 16));
@@ -531,6 +703,7 @@ class IosSmsIntakeController extends ChangeNotifier {
               } while (_refreshAgain);
               // One upload pass for the whole drain, not one per batch.
               if (drained) requestUpload();
+              _drainError = null;
               await _load();
               _check(expected, revision);
               // Queue catch-up without launching another app. An active historical
@@ -541,37 +714,41 @@ class IosSmsIntakeController extends ChangeNotifier {
                 await _load();
               }
             });
+            // With the import finished (or stopped), an earlier stop no
+            // longer applies.
+            if (state.activeJob == null) {
+              _haltError = null;
+              _haltProgress = null;
+            }
             if (errorAttempt != null) {
               final window = state.currentWindows
                   .where((w) => w['attempt'] == errorAttempt)
                   .firstOrNull;
-              if (window?['state'] == 'complete') {
+              // A looping Shortcut that runs past the last range ends with an
+              // error once the import is already complete: nothing was lost.
+              if (window?['state'] == 'complete' || state.activeJob == null) {
                 _returnedAttempt = errorAttempt;
               } else {
                 _endAutomaticSession();
-                returnError = 'Shortcuts stopped. Check its setup, then resume.';
+                returnError =
+                    'Shortcuts stopped. Check its setup, then resume.';
               }
             }
             if (returnError != null) {
-              _publish(
-                IosSmsIntakeState(snapshot: state.snapshot, error: returnError),
-              );
+              _halt(returnError);
             } else {
               await _advance(expected, revision);
             }
             _scheduleAutoResume(expected, revision);
-          } catch (_) {
+          } catch (error) {
+            debugPrint('SMS refresh failed: $error');
             _endAutomaticSession();
             if (!_disposed &&
                 namespace() == expected &&
                 revision == _revision) {
-              _publish(
-                IosSmsIntakeState(
-                  snapshot: state.snapshot,
-                  error:
-                      'Saved messages remain pending. Retry when storage and your account are available.',
-                ),
-              );
+              _drainError =
+                  'Saved messages remain pending. Retry when storage and your account are available.';
+              _publish(IosSmsIntakeState(snapshot: state.snapshot));
             }
           }
         }).whenComplete(() {
@@ -585,6 +762,7 @@ class IosSmsIntakeController extends ChangeNotifier {
 
   Future<void> setEnabled(bool enabled) => _serialize(() async {
     if (!enabled) _endAutomaticSession();
+    _clearErrors();
     final expected = namespace(), revision = _revision;
     _check(expected, revision);
     final snapshot = await service.configure(expected, enabled: enabled);
@@ -596,6 +774,7 @@ class IosSmsIntakeController extends ChangeNotifier {
   /// revocation completes, so an in-flight drain cannot acknowledge another owner.
   Future<void> accountChanged() {
     _endAutomaticSession();
+    _clearErrors();
     _issuedAttempt = null;
     _returnedAttempt = null;
     _revision++;
@@ -632,6 +811,7 @@ class IosSmsIntakeController extends ChangeNotifier {
     });
     _check(expected, revision);
     _endAutomaticSession();
+    _clearErrors();
     _issuedAttempt = null;
     _returnedAttempt = null;
     await _load();
@@ -639,6 +819,7 @@ class IosSmsIntakeController extends ChangeNotifier {
 
   Future<void> control(String command) {
     _endAutomaticSession();
+    _clearErrors();
     return _serialize(() async {
       final expected = namespace(), revision = _revision;
       _check(expected, revision);
@@ -660,6 +841,7 @@ class IosSmsIntakeController extends ChangeNotifier {
     final expected = namespace(), revision = _revision;
     _check(expected, revision);
     if (!state.enabled || state.activeJob == null) return;
+    _clearErrors();
     // A user-started session is bounded to this job and account. It does not
     // survive process death or admit unrelated app-open/daily jobs.
     if (state.paused || state.waiting || state.partial) {
@@ -701,8 +883,10 @@ class IosSmsIntakeController extends ChangeNotifier {
         job == null ||
         job['kind'] != 'history' ||
         job['state'] == 'paused' ||
-        // A cancel in Shortcuts or a reported error waits for the person.
-        state.error != null ||
+        // A cancel in Shortcuts, or saved messages that could not be
+        // processed, wait for the person. Other stops retry by themselves.
+        _drainError != null ||
+        _haltError == _pausedMessage ||
         state.processing ||
         state.launching ||
         state.waiting ||
@@ -779,6 +963,7 @@ class IosSmsIntakeController extends ChangeNotifier {
   Future<void> _advance(String expected, int revision) async {
     await _restoreSession();
     _check(expected, revision);
+    _adoptRunningLoop();
     final job = _automaticJob;
     if (job == null) return;
     if (state.activeJob?['id'] == job &&
@@ -823,6 +1008,13 @@ class IosSmsIntakeController extends ChangeNotifier {
       return;
     }
     if (_issuedAttempt == null) return;
+    // A looping Shortcut imports every range in one run while PandaPay stays
+    // on screen. Watch the whole import until that run returns.
+    if (state.snapshot['loop_job'] == job &&
+        _returnedAttempt != _issuedAttempt) {
+      _watchImportProgress(expected, revision, job);
+      return;
+    }
     final previous = state.currentWindows
         .where((w) => w['attempt'] == _issuedAttempt)
         .firstOrNull;
@@ -840,13 +1032,7 @@ class IosSmsIntakeController extends ChangeNotifier {
       }
       if (_returnedAttempt == _issuedAttempt) {
         _endAutomaticSession();
-        _publish(
-          IosSmsIntakeState(
-            snapshot: state.snapshot,
-            error:
-                'This month did not finish. Check the Shortcut, then resume.',
-          ),
-        );
+        _halt('This month did not finish. Check the Shortcut, then resume.');
       }
       return;
     }
@@ -867,7 +1053,11 @@ class IosSmsIntakeController extends ChangeNotifier {
     await _launch(expected, revision);
   }
 
-  Future<void> _launch(String expected, int revision) async {
+  Future<void> _launch(
+    String expected,
+    int revision, {
+    bool allowSame = false,
+  }) async {
     final job = _automaticJob;
     if (job == null) return;
     final generation = state.generation;
@@ -879,7 +1069,7 @@ class IosSmsIntakeController extends ChangeNotifier {
       return;
     }
     final attempt = (jsonDecode(request) as Map)['attempt'];
-    if (attempt is! String || attempt == _issuedAttempt) {
+    if (attempt is! String || (!allowSame && attempt == _issuedAttempt)) {
       _endAutomaticSession();
       throw StateError('Import has not advanced');
     }
@@ -909,12 +1099,8 @@ class IosSmsIntakeController extends ChangeNotifier {
     }
     if (launched != true) {
       _endAutomaticSession();
-      _publish(
-        IosSmsIntakeState(
-          snapshot: state.snapshot,
-          error:
-              'Could not open Shortcuts. Check the history Shortcut name and try again.',
-        ),
+      _halt(
+        'Could not open Shortcuts. Check the history Shortcut name and try again.',
       );
     }
   }
@@ -952,7 +1138,10 @@ class IosImportSessionStore {
   Future<void> save(String job, String shortcut) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_key, jsonEncode({'job': job, 'shortcut': shortcut}));
+      await prefs.setString(
+        _key,
+        jsonEncode({'job': job, 'shortcut': shortcut}),
+      );
     } catch (_) {}
   }
 
@@ -962,8 +1151,13 @@ class IosImportSessionStore {
       final raw = prefs.getString(_key);
       if (raw == null) return null;
       final value = jsonDecode(raw);
-      if (value is Map && value['job'] is String && value['shortcut'] is String) {
-        return (job: value['job'] as String, shortcut: value['shortcut'] as String);
+      if (value is Map &&
+          value['job'] is String &&
+          value['shortcut'] is String) {
+        return (
+          job: value['job'] as String,
+          shortcut: value['shortcut'] as String,
+        );
       }
     } catch (_) {}
     return null;

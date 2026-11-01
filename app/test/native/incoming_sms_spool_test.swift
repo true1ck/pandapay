@@ -448,3 +448,23 @@ do {
   require(try store.finish(request: request, found: 0, limitOff: false, warning: false) == "complete", "a range under 500 completes without the toggle")
   print("PASS: completion depends on the count, not the Limit toggle")
 }
+
+do {
+  // PandaPay monitors a looping run across the whole import.
+  let store = IncomingSmsSpool(directory: root.appendingPathComponent("loop-monitor"), maxPending: 2000, now: { time })
+  let g = try store.configure(namespace: "user:loop-monitor", enabled: true)["generation"] as! String
+  let d0 = time.addingTimeInterval(-2 * 86_400), d1 = time.addingTimeInterval(-86_400)
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(d0), "end": iso(d1)], ["start": iso(d1), "end": iso(time)]])
+  let launched = try store.issue(generation: g)!
+  require(try store.issueNextRange() == launched, "the loop starts with the range PandaPay launched")
+  require(try store.snapshot()["loop_job"] != nil, "PandaPay can tell the import runs as a loop")
+  _ = try store.capture(body: "INR 5 spent at SHOP.", sender: "ICICIT-S", receivedAt: d0.addingTimeInterval(60), provenance: "original", request: launched, useMessageReceipt: true)
+  _ = try store.finish(request: launched, found: 1, limitOff: true, warning: false)
+  let second = try store.issueNextRange()!
+  require(store.sameImport(launched, second), "later ranges belong to the same import")
+  require(try store.issue(generation: g) == second, "a fresh launch skips the searched range")
+  require(try store.observeHandoff(request: launched, stage: .resumeStalled, expectedReceived: 1), "no new messages across the import: stalled")
+  _ = try store.capture(body: "INR 6 spent at SHOP.", sender: "ICICIT-S", receivedAt: d1.addingTimeInterval(60), provenance: "original", request: second, useMessageReceipt: true)
+  require(try !store.observeHandoff(request: launched, stage: .resumeStalled, expectedReceived: 1), "a message in a later range counts as progress")
+  print("PASS: a looping run is monitored across the whole import")
+}
