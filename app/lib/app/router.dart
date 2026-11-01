@@ -423,6 +423,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
 
       final signedIn = ref.read(accessTokenProvider) != null;
       final complete = onboarding.valueOrNull ?? false;
+      if (kProfileMode && path == AppRoute.splash) {
+        debugPrint(
+          'PandaPay redirect splash session_loading=${sessionInit.isLoading} '
+          'session_value=${sessionInit.hasValue} '
+          'onboarding_loading=${onboarding.isLoading} '
+          'onboarding_value=${onboarding.hasValue} signed_in=$signedIn '
+          'onboarding_complete=$complete',
+        );
+      }
       // A cold Shortcuts callback has no live continuation session. Send it
       // through the ordinary account/setup gates rather than an unknown page.
       if (state.uri.scheme == 'pandapay' && state.uri.host == 'sms-import') {
@@ -961,6 +970,7 @@ class _AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<_AppShell> {
   bool _scanning = false;
   bool _lifecycleStarted = false;
+  Timer? _lifecycleStartTimer;
   int _tutorialNavigationRevision = 0;
   bool _finishingTutorial = false;
 
@@ -987,9 +997,21 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // background pipeline. Child pages remain local-first and can render from
     // their own cached providers immediately.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _lifecycleStarted = true);
+      // A post-frame callback still runs in the same event turn as the first
+      // authenticated raster pass. Give that pass a short scheduling window
+      // before opening SQLite/network listeners and SMS plumbing; none of these
+      // tasks is required to decide the already-resolved route.
+      _lifecycleStartTimer = Timer(const Duration(milliseconds: 500), () {
+        if (!mounted) return;
+        setState(() => _lifecycleStarted = true);
+      });
     });
+  }
+
+  @override
+  void dispose() {
+    _lifecycleStartTimer?.cancel();
+    super.dispose();
   }
 
   // Labels match the design doc's own nav copy ("02 Wallet" / "05 You")

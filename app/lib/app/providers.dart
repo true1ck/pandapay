@@ -913,6 +913,7 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
         .refresh()
         .then<void>((_) {}, onError: (_, _) {}),
   );
+  markStartup('session init complete');
 });
 
 /// Keeps a signed-in session alive for as long as the app stays open, not

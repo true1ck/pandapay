@@ -231,6 +231,13 @@ class FinancialStore {
   // isolate. Cache only a fully completed namespace for this store lifetime;
   // clear(ns) removes the entry so account reset remains safe.
   final _completedAutoPayRepairs = <String>{};
+  // Legacy snapshot migration and card-date projection are read-path helpers,
+  // not part of every transaction query. Keep their completed state in this
+  // store instance and use a cheap entity fingerprint to notice genuinely new
+  // local observations/cards without rescanning the full history each frame.
+  final _completedLegacyMigrations = <String>{};
+  final _cardDateSyncFingerprints = <String, String>{};
+  final _transactionRepairFingerprints = <String, String>{};
   int _batchDepth = 0;
   final _batchedChanges = <(String, String)>{};
   void batch(void Function() work) {
@@ -276,6 +283,38 @@ class FinancialStore {
     for (final entity in entities.toSet()) {
       _notify(ns, entity: entity);
     }
+  }
+
+  String _repairFingerprint(String ns) {
+    try {
+      final row = database.db.select(
+        "SELECT COUNT(*) AS row_count, "
+        "COALESCE(MAX(observed_at), 0) AS latest "
+        "FROM financial_entities WHERE namespace=? "
+        "AND entity IN ('cards', 'transactions', 'sms_observations')",
+        [ns],
+      ).single;
+      return '${row['row_count']}:${row['latest']}';
+    } catch (_) {
+      // A partially-created test/upgrade database should retain the existing
+      // best-effort repair behavior rather than making a read fail.
+      return 'unavailable';
+    }
+  }
+
+  void _syncCardDatesIfNeeded(String ns) {
+    final before = _repairFingerprint(ns);
+    if (_cardDateSyncFingerprints[ns] == before) return;
+    syncCardDatesFromObservations(ns);
+    _cardDateSyncFingerprints[ns] = _repairFingerprint(ns);
+  }
+
+  void _runTransactionRepairsIfNeeded(String ns) {
+    final before = _repairFingerprint(ns);
+    if (_transactionRepairFingerprints[ns] == before) return;
+    _repairProvisionalMerchantNames(ns);
+    _deleteProvisionalDeclineTransactions(ns);
+    _transactionRepairFingerprints[ns] = _repairFingerprint(ns);
   }
 
   bool hasPendingTransactions(String ns) => database.db.select(
@@ -387,8 +426,7 @@ class FinancialStore {
   }) {
     repairAutoPayArtifacts(ns);
     if (entity == 'transactions') {
-      _repairProvisionalMerchantNames(ns);
-      _deleteProvisionalDeclineTransactions(ns);
+      _runTransactionRepairsIfNeeded(ns);
     }
     final args = <Object?>[ns, entity];
     var range = '';
@@ -477,11 +515,15 @@ class FinancialStore {
           [ns, row['id']],
         );
         if (stored.isEmpty || stored.single['pending'] != 0) continue;
-        if (database.db.select(
-          'SELECT 1 FROM local_auto_resolved_history '
-          'WHERE namespace=? AND source_key=? AND is_user_modified=1 LIMIT 1',
-          [ns, sourceKey],
-        ).isNotEmpty) continue;
+        if (database.db
+            .select(
+              'SELECT 1 FROM local_auto_resolved_history '
+              'WHERE namespace=? AND source_key=? AND is_user_modified=1 LIMIT 1',
+              [ns, sourceKey],
+            )
+            .isNotEmpty) {
+          continue;
+        }
         final captures = database.db.select(
           'SELECT sender, body, received_at FROM sms_captured_messages '
           'WHERE namespace=? AND id=? LIMIT 1',
@@ -1375,7 +1417,7 @@ class FinancialStore {
         }, timestamp);
       }
     });
-    syncCardDatesFromObservations(ns);
+    _syncCardDatesIfNeeded(ns);
     if (before != jsonEncode(entities(ns, 'cards'))) {
       _notify(ns, entity: 'cards');
     }
@@ -1679,7 +1721,7 @@ class FinancialStore {
 
       // Use the same matching, date-evidence and user-source safeguards as a
       // wallet refresh instead of patching every card sharing a suffix here.
-      syncCardDatesFromObservations(ns);
+      _syncCardDatesIfNeeded(ns);
       database.db.execute(
         'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
         [ns, 'bill_and_autopay_repair_v6'],
@@ -2006,12 +2048,17 @@ class FinancialStore {
   /// Import old snapshots once, oldest first. Only the canonical unfiltered
   /// endpoint establishes full coverage; visiting a report does not.
   void migrateLegacy(String ns) {
+    if (_completedLegacyMigrations.contains(ns)) {
+      _syncCardDatesIfNeeded(ns);
+      return;
+    }
     repairAutoPayArtifacts(ns);
-    syncCardDatesFromObservations(ns);
+    _syncCardDatesIfNeeded(ns);
     if (database.db.select(
       'SELECT 1 FROM financial_migrations WHERE namespace=?',
       [ns],
     ).isNotEmpty) {
+      _completedLegacyMigrations.add(ns);
       return;
     }
     final snapshots = database.db.select(
@@ -2061,11 +2108,15 @@ class FinancialStore {
       }
     }
     database.db.execute('INSERT INTO financial_migrations VALUES (?)', [ns]);
+    _completedLegacyMigrations.add(ns);
   }
 
   void clear(String ns) {
     _transientStatus.remove(ns);
     _completedAutoPayRepairs.remove(ns);
+    _completedLegacyMigrations.remove(ns);
+    _cardDateSyncFingerprints.remove(ns);
+    _transactionRepairFingerprints.remove(ns);
     _transaction(() {
       for (final table in [
         'financial_entities',

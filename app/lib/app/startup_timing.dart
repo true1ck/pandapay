@@ -16,8 +16,17 @@ void installProfileFrameTiming() {
   final ui = <int>[];
   final raster = <int>[];
   var slow60Hz = 0;
+  var earlyFrameCount = 0;
   SchedulerBinding.instance.addTimingsCallback((timings) {
     for (final frame in timings) {
+      if (earlyFrameCount < 8) {
+        debugPrint(
+          'PandaPay frame index=${earlyFrameCount + 1} '
+          'build_us=${frame.buildDuration.inMicroseconds} '
+          'raster_us=${frame.rasterDuration.inMicroseconds}',
+        );
+        earlyFrameCount++;
+      }
       final uiUs = frame.buildDuration.inMicroseconds;
       final rasterUs = frame.rasterDuration.inMicroseconds;
       ui.add(uiUs);

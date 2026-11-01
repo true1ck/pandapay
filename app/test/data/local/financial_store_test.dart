@@ -419,6 +419,34 @@ void main() {
     },
   );
 
+  test('legacy repair checks again when a newer local observation is stored', () {
+    final card = UserCard(
+      id: 'c-refresh',
+      cardProductId: 'axis_fk',
+      cardName: 'Flipkart Axis Bank Credit Card',
+      isDefault: false,
+      last4: '7105',
+      statementDay: 26,
+      statementDaySource: 'sms',
+      dueDay: 2,
+      dueDaySource: 'sms',
+    );
+    store.replaceCards('a', [card]);
+    store.migrateLegacy('a');
+    store.saveObservation('a', 'obs-refresh', {
+      'event_type': 'bill',
+      'card_last4': '7105',
+      'statement_date': '2026-10-14T00:00:00.000',
+      'statement_date_explicit': true,
+      'due_date': '2026-11-02T00:00:00.000',
+      'received_at': '2026-10-14T10:00:00.000',
+    });
+    store.migrateLegacy('a');
+    final updated = store.entities('a', 'cards').single;
+    expect(updated['statement_day'], 14);
+    expect(updated['due_day'], 2);
+  });
+
   test(
     'syncCardDatesFromObservations heals due day from verified AutoPay alert',
     () {

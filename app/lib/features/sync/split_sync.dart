@@ -60,9 +60,10 @@ final splitSyncLifecycleProvider = Provider<void>((ref) {
   // Split sync performs SQLite reads/writes and can be expensive on a
   // populated account. Let the first authenticated frame get onto the screen
   // before the initial drain starts; resume/connectivity syncs remain eager.
-  Future<void>.delayed(const Duration(milliseconds: 250), () {
+  final startTimer = Timer(const Duration(milliseconds: 250), () {
     if (!disposed) unawaited(repository.sync());
   });
+  ref.onDispose(startTimer.cancel);
   ref.listen<AsyncValue<bool>>(isOnlineProvider, (before, after) {
     if (before?.valueOrNull == false && after.valueOrNull == true) {
       unawaited(repository.sync(reconnect: true));

@@ -69,7 +69,11 @@ class HttpAppStatusRepository implements AppStatusRepository {
 
   @override
   Future<AppStatus> fetchStatus() async {
-    final response = await _client.get(Uri.parse('$baseUrl/app-status'));
+    // This is a fail-open advisory check. It must not leave an HTTP socket or
+    // router refresh alive indefinitely when the API is unreachable.
+    final response = await _client
+        .get(Uri.parse('$baseUrl/app-status'))
+        .timeout(const Duration(seconds: 2));
     if (response.statusCode != 200) {
       throw ApiException('GET /app-status failed: ${response.statusCode} ${response.body}');
     }
