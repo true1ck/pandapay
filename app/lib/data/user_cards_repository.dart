@@ -1350,6 +1350,23 @@ DateTime? _optionalDateTime(Map<String, dynamic> json, List<String> keys) {
   return value == null ? null : DateTime.tryParse(value);
 }
 
+/// One bounded response. Continuation pages never establish whole-query
+/// coverage, even when [hasMore] is false. Keyset pages are not a consistent
+/// snapshot and must only be applied as non-destructive upserts.
+class TransactionPage {
+  final List<TransactionEntry> rows;
+  final bool hasMore;
+  final String? nextCursor;
+  final bool coversQuery;
+
+  TransactionPage._({
+    required List<TransactionEntry> rows,
+    required this.hasMore,
+    required this.nextCursor,
+    required this.coversQuery,
+  }) : rows = List.unmodifiable(rows);
+}
+
 class UserCardsRepository {
   final List<DismissalQueueEntry> _dismissalRetryQueue = [];
   final Future<SmsDismissalOutbox> Function()? dismissalOutbox;
@@ -1363,6 +1380,7 @@ class UserCardsRepository {
   final String accessToken;
   final http.Client _client;
   final Map<String, Future<List<TransactionEntry>>> _inFlightTransactions = {};
+  final Map<String, Future<TransactionPage>> _inFlightTransactionPages = {};
 
   /// The server accepted this stable manual mutation, including an outbox
   /// retry. Local tag links can now move from local-outbox:<mutation> to id.
@@ -2356,7 +2374,86 @@ class UserCardsRepository {
     String? source,
     String? query,
   }) {
+    final uri = _transactionUri(
+      from: from,
+      to: to,
+      cardId: cardId,
+      categoryId: categoryId,
+      userCategoryId: userCategoryId,
+      source: source,
+      query: query,
+    );
+    final key = uri.toString();
+    final existing = _inFlightTransactions[key];
+    if (existing != null) return existing;
+    final request = _fetchTransactions(uri);
+    _inFlightTransactions[key] = request;
+    request.whenComplete(() {
+      if (identical(_inFlightTransactions[key], request)) {
+        _inFlightTransactions.remove(key);
+      }
+    }).ignore();
+    return request;
+  }
+
+  /// Fetches one bounded page without changing local coverage or deleting
+  /// absent rows. Full-response consumers keep using [fetchTransactions]
+  /// until their store and refresh coordinator support partial coverage.
+  Future<TransactionPage> fetchTransactionPage({
+    int pageSize = 200,
+    String? cursor,
+    DateTime? from,
+    DateTime? to,
+    String? cardId,
+    String? categoryId,
+    String? userCategoryId,
+    String? source,
+    String? query,
+  }) {
+    if (pageSize < 1 || pageSize > 500) {
+      throw ArgumentError.value(pageSize, 'pageSize');
+    }
+    if (cursor != null && (cursor.isEmpty || cursor.length > 2048)) {
+      throw ArgumentError.value(cursor, 'cursor');
+    }
+    final uri = _transactionUri(
+      from: from,
+      to: to,
+      cardId: cardId,
+      categoryId: categoryId,
+      userCategoryId: userCategoryId,
+      source: source,
+      query: query,
+      pageSize: pageSize,
+      cursor: cursor,
+    );
+    final key = uri.toString();
+    final existing = _inFlightTransactionPages[key];
+    if (existing != null) return existing;
+    final request = _fetchTransactionPage(uri, firstPage: cursor == null);
+    _inFlightTransactionPages[key] = request;
+    request.whenComplete(() {
+      if (identical(_inFlightTransactionPages[key], request)) {
+        _inFlightTransactionPages.remove(key);
+      }
+    }).ignore();
+    return request;
+  }
+
+  Uri _transactionUri({
+    DateTime? from,
+    DateTime? to,
+    String? cardId,
+    String? categoryId,
+    String? userCategoryId,
+    String? source,
+    String? query,
+    int? pageSize,
+    String? cursor,
+  }) {
     final params = <String, String>{
+      if (pageSize != null) 'pageSize': '$pageSize',
+      'cursor': ?cursor,
       if (from != null) 'from': _dateOnly(from),
       if (to != null) 'to': _dateOnly(to),
       'cardId': ?cardId,
@@ -2371,20 +2468,43 @@ class UserCardsRepository {
       // rather than a query that matches everything with a wildcard.
       if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
     };
-    final uri = Uri.parse(
+    return Uri.parse(
       '$apiBaseUrl/transactions',
     ).replace(queryParameters: params.isEmpty ? null : params);
-    final key = uri.toString();
-    final existing = _inFlightTransactions[key];
-    if (existing != null) return existing;
-    final request = _fetchTransactions(uri);
-    _inFlightTransactions[key] = request;
-    request.whenComplete(() {
-      if (identical(_inFlightTransactions[key], request)) {
-        _inFlightTransactions.remove(key);
-      }
-    }).ignore();
-    return request;
+  }
+
+  Future<TransactionPage> _fetchTransactionPage(
+    Uri uri, {
+    required bool firstPage,
+  }) async {
+    final response = await _client
+        .get(uri, headers: _headers)
+        .timeout(_transactionRequestTimeout);
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'GET /transactions page failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final info = body['pageInfo'];
+    if (info is! Map || info['hasMore'] is! bool) {
+      throw const FormatException('Missing transaction page coverage');
+    }
+    final hasMore = info['hasMore'] as bool;
+    final nextCursor = info['nextCursor'];
+    if ((hasMore && (nextCursor is! String || nextCursor.isEmpty)) ||
+        (!hasMore && nextCursor != null)) {
+      throw const FormatException('Invalid transaction page continuation');
+    }
+    return TransactionPage._(
+      rows: (body['transactions'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(TransactionEntry.fromJson)
+          .toList(),
+      hasMore: hasMore,
+      nextCursor: nextCursor as String?,
+      coversQuery: firstPage && !hasMore,
+    );
   }
 
   Future<List<TransactionEntry>> _fetchTransactions(Uri uri) async {
