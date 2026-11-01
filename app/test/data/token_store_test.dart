@@ -13,6 +13,8 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final store = await TokenStore.load();
       await store.save(accessToken: 'access', refreshToken: 'refresh');
+      final prefsAfterSave = await SharedPreferences.getInstance();
+      expect(prefsAfterSave.getBool(TokenStore.sessionPresenceKey), isTrue);
       final first = await store.refreshRequestId('refresh');
       final restarted = await TokenStore.load();
       expect(await restarted.refreshRequestId('refresh'), first);
@@ -22,6 +24,10 @@ void main() {
       );
       expect(await restarted.refreshRequestId('next-refresh'), isNot(first));
       await restarted.clear();
+      expect(
+        prefsAfterSave.getBool(TokenStore.sessionPresenceKey),
+        isFalse,
+      );
       expect(await restarted.refreshRequestId('refresh'), isNot(first));
     },
   );
@@ -37,6 +43,7 @@ void main() {
     expect(store.accessToken, 'legacy-access');
     expect(store.refreshToken, 'legacy-refresh');
     final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(TokenStore.sessionPresenceKey), isTrue);
     expect(prefs.containsKey('pandapay_app.access_token'), isFalse);
     expect(prefs.containsKey('pandapay_app.refresh_token'), isFalse);
   });
@@ -59,6 +66,7 @@ void main() {
       expect(store.accessToken, 'secure-access');
       expect(store.refreshToken, 'legacy-refresh');
       final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool(TokenStore.sessionPresenceKey), isTrue);
       expect(prefs.containsKey('pandapay_app.access_token'), isFalse);
       expect(prefs.containsKey('pandapay_app.refresh_token'), isFalse);
     },

@@ -250,6 +250,9 @@ abstract final class AppRoute {
 class _RouterRefreshNotifier extends ChangeNotifier {
   _RouterRefreshNotifier(Ref ref) {
     ref.listen(sessionInitProvider, (_, _) => notifyListeners());
+    // The hint only controls the temporary warm-shell route while secure
+    // storage is restoring; the real access token still decides auth below.
+    ref.listen(sessionPresenceHintProvider, (_, _) => notifyListeners());
     // Redirects only care whether the account changed, not whether a healthy
     // session rotated its short-lived access token. Listening to the raw token
     // made GoRouter re-evaluate the whole shell every refresh interval.
@@ -416,6 +419,32 @@ final goRouterProvider = Provider<GoRouter>((ref) {
 
       final sessionInit = ref.read(sessionInitProvider);
       final onboarding = ref.read(onboardingCompleteProvider);
+      final sessionPresenceHint = ref.read(sessionPresenceHintProvider);
+      final biometricLock = ref.read(biometricLockProvider);
+
+      // Android Keystore reads can take several seconds on a cold process.
+      // If this install previously had a session and onboarding is already
+      // complete, paint Home's local shell immediately while secure storage
+      // restores the authoritative token. This is a presentation shortcut,
+      // not an authentication bypass: Home's account providers see the
+      // signed-out namespace until sessionInit publishes the token, and the
+      // redirect below sends the user to Welcome if restoration ultimately
+      // fails. Do not bypass the biometric gate while its preference is still
+      // loading or enabled.
+      final warmHomeShell =
+          (path == AppRoute.splash || path == AppRoute.home) &&
+          sessionInit.isLoading &&
+          onboarding.valueOrNull == true &&
+          sessionPresenceHint.valueOrNull == true &&
+          !biometricLock.isLoading &&
+          biometricLock.valueOrNull != true;
+      if (warmHomeShell) {
+        markStartup('warm Home shell');
+        // Once redirected, allow /home to remain mounted until secure
+        // restoration resolves; otherwise the generic loading guard below
+        // would immediately bounce it back to /splash and recreate the delay.
+        return path == AppRoute.splash ? AppRoute.home : null;
+      }
 
       if (sessionInit.isLoading || onboarding.isLoading) {
         return path == AppRoute.splash ? null : AppRoute.splash;

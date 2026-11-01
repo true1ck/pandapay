@@ -47,6 +47,12 @@ class TransactionOutboxEntry {
 /// real the next time [flush] runs (wired to isOnlineProvider transitioning
 /// to true — see providers.dart's outboxFlushProvider).
 class TransactionOutboxRepository {
+  /// Keep one foreground/lifecycle flush bounded. The next scheduler pass
+  /// resumes from the oldest remaining row, so a large offline backlog cannot
+  /// monopolise the UI isolate or hold the recovery gate for an unbounded
+  /// amount of time.
+  static const defaultFlushBatchSize = 20;
+
   final AppDatabase _appDb;
   final String namespace;
   final FinancialStore? financialStore;
@@ -151,9 +157,12 @@ class TransactionOutboxRepository {
     );
   }
 
-  Future<List<TransactionOutboxEntry>> pending() async {
+  Future<List<TransactionOutboxEntry>> pending({int? limit}) async {
+    final boundedLimit = limit?.clamp(1, 200);
+    final limitClause = boundedLimit == null ? '' : ' LIMIT $boundedLimit';
     final rows = _appDb.db.select(
-      'SELECT * FROM transaction_outbox_entries WHERE namespace=? ORDER BY created_at ASC',
+      'SELECT * FROM transaction_outbox_entries WHERE namespace=? '
+      'ORDER BY created_at ASC$limitClause',
       [namespace],
     );
     return rows.map((row) {
@@ -182,17 +191,25 @@ class TransactionOutboxRepository {
   /// Attempts every queued entry once. A success removes the row; a
   /// failure records [TransactionOutboxEntry.lastError] and leaves it
   /// queued for the next flush — never silently drops a queued transaction.
-  Future<int> flush(UserCardsRepository repo) async {
+  Future<int> flush(
+    UserCardsRepository repo, {
+    int maxEntries = defaultFlushBatchSize,
+  }) async {
     try {
-      return await AccountRecoveryOperationGate.process.run(() => _flush(repo));
+      return await AccountRecoveryOperationGate.process.run(
+        () => _flush(repo, maxEntries: maxEntries),
+      );
     } on AccountRecoveryBusy {
       return 0;
     }
   }
 
-  Future<int> _flush(UserCardsRepository repo) async {
+  Future<int> _flush(
+    UserCardsRepository repo, {
+    required int maxEntries,
+  }) async {
     var sent = 0;
-    for (final entry in await pending()) {
+    for (final entry in await pending(limit: maxEntries)) {
       try {
         final id = await repo.logTransaction(
           userCardId: entry.userCardId,
@@ -236,6 +253,9 @@ class TransactionOutboxRepository {
           [e.toString(), entry.id],
         );
       }
+      // Let Flutter service pending input and paint work between network/DB
+      // items when this is called from a lifecycle or connectivity callback.
+      await Future<void>.delayed(Duration.zero);
     }
     return sent;
   }

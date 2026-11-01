@@ -91,6 +91,23 @@ void main() {
     expect(await outbox.pending(), isEmpty);
   });
 
+  test('flush bounds a large backlog and resumes oldest entries', () async {
+    for (var i = 0; i < 25; i++) {
+      await outbox.enqueue(
+        userCardId: 'uc$i',
+        amount: Money.fromRupees(i + 1),
+        clientMutationId: 'mutation-$i',
+      );
+    }
+    final repo = _FakeUserCardsRepository();
+
+    expect(await outbox.flush(repo, maxEntries: 20), 20);
+    expect(repo.sent, hasLength(20));
+    expect(await outbox.pending(), hasLength(5));
+    expect(await outbox.flush(repo, maxEntries: 20), 5);
+    expect(await outbox.pending(), isEmpty);
+  });
+
   test('flush preserves the original mutation id across retries', () async {
     await outbox.enqueue(userCardId: 'uc1', amount: Money.fromRupees(100), clientMutationId: 'fixed-mutation-id');
     final repo = _FakeUserCardsRepository();

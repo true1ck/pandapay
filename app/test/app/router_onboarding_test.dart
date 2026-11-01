@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,9 +31,12 @@ Future<void> _pumpApp(
   WidgetTester tester, {
   required bool onboardingComplete,
   required bool signedIn,
+  bool sessionLoading = false,
+  bool sessionHint = false,
 }) async {
   SharedPreferences.setMockInitialValues({
     'pandapay_app.onboarding_complete_v1': onboardingComplete,
+    'pandapay_app.session_presence_hint_v1': sessionHint,
   });
   await tester.pumpWidget(
     ProviderScope(
@@ -42,7 +47,10 @@ Future<void> _pumpApp(
         categoryRepositoryProvider.overrideWithValue(
           _EmptyCategoryRepository(),
         ),
-        sessionInitProvider.overrideWith((ref) async {}),
+        sessionInitProvider.overrideWith(
+          (ref) =>
+              sessionLoading ? Completer<void>().future : Future<void>.value(),
+        ),
         accessTokenProvider.overrideWith(
           (ref) => signedIn ? 'test-token' : null,
         ),
@@ -82,6 +90,22 @@ void main() {
 
       expect(find.text('A little less\ncard chaos.'), findsOneWidget);
       expect(find.byType(HomeScreen), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a persisted session hint mounts Home while secure storage restores',
+    (tester) async {
+      await _pumpApp(
+        tester,
+        onboardingComplete: true,
+        signedIn: false,
+        sessionLoading: true,
+        sessionHint: true,
+      );
+
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.text('A little less\ncard chaos.'), findsNothing);
     },
   );
 

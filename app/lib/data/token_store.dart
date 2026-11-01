@@ -23,6 +23,13 @@ class TokenStore {
   static const _refreshKey = 'pandapay_app.refresh_token';
   static const _requestKey = 'pandapay_app.refresh_request';
 
+  /// A non-sensitive, best-effort hint that this install previously had a
+  /// persisted session. It is never used to authorize an API call. The
+  /// router uses it only to paint the authenticated shell while the (occasionally
+  /// very slow) Android Keystore read is still in flight; secure storage remains
+  /// the hard authentication gate.
+  static const sessionPresenceKey = 'pandapay_app.session_presence_hint_v1';
+
   final FlutterSecureStorage _secureStorage;
   String? _cachedAccessToken;
   String? _cachedRefreshToken;
@@ -76,6 +83,14 @@ class TokenStore {
       await prefs.remove(_refreshKey);
     }
 
+    // Keep the hint in sync for installs upgraded from the old plaintext
+    // implementation too. A false value is equally important: an interrupted
+    // sign-out must never leave a future cold start looking authenticated.
+    await prefs.setBool(
+      sessionPresenceKey,
+      accessToken != null || refreshToken != null,
+    );
+
     markStartup('token load complete');
     return TokenStore(
       secureStorage,
@@ -116,9 +131,29 @@ class TokenStore {
     }
     _cachedAccessToken = accessToken;
     await _secureStorage.write(key: _accessKey, value: accessToken);
+
+    // Do this only after both secure writes have succeeded. The hint can
+    // shorten the next launch, but it must never make a partially persisted
+    // login look durable.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(sessionPresenceKey, true);
+    } catch (_) {
+      // Secure credentials are authoritative; a preferences failure only
+      // forfeits the warm-shell optimization on the next process start.
+    }
   }
 
   Future<void> clear() async {
+    // Clear the non-sensitive hint before deleting credentials. If a secure
+    // delete is interrupted, the conservative next launch path waits for the
+    // authoritative Keystore read instead of exposing a warm shell.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(sessionPresenceKey, false);
+    } catch (_) {
+      // Credential deletion below remains the source of truth.
+    }
     // Revoke the capture-time account before removing its credentials. A cold
     // Shortcut must never keep saving under a signed-out account.
     await IosSmsIntakeService().revoke('signed-out');

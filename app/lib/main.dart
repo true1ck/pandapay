@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/design/app_theme.dart';
 import 'app/env.dart';
@@ -26,6 +27,13 @@ void main() {
   if (kProfileMode) {
     developer.Timeline.instantSync('PandaPay startup: Dart main');
   }
+  // Start the platform preferences read while the Flutter engine and plugin
+  // registrant are still initializing. The router's session/onboarding gate
+  // depends on this same SharedPreferences instance; prewarming it here lets
+  // that read overlap engine startup instead of leaving the native splash on
+  // screen until the first provider is constructed after runApp().
+  WidgetsFlutterBinding.ensureInitialized();
+  unawaited(SharedPreferences.getInstance());
   // error_handling.dart: catches the class of error that isn't caught by
   // Flutter's own build-error recovery (a stray unawaited Future, a
   // platform-channel callback) and would otherwise silently kill the whole

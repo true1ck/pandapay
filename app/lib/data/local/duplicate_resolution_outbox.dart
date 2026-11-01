@@ -54,6 +54,11 @@ class DuplicateResolutionOutboxEntry {
 /// connectivity/lifecycle flush, up to five attempts; then they wait for an
 /// explicit retry from Sync & backup.
 class DuplicateResolutionOutboxRepository {
+  /// Automatic flushes are deliberately bounded. A later scheduler pass can
+  /// continue from the oldest durable intent, keeping duplicate resolution
+  /// work from starving input/raster frames during reconnect or resume.
+  static const defaultFlushBatchSize = 20;
+
   DuplicateResolutionOutboxRepository(
     this._appDb, {
     this.namespace = 'legacy',
@@ -108,11 +113,16 @@ class DuplicateResolutionOutboxRepository {
     );
   }
 
-  List<DuplicateResolutionOutboxEntry> pending({bool includeBlocked = true}) {
+  List<DuplicateResolutionOutboxEntry> pending({
+    bool includeBlocked = true,
+    int? limit,
+  }) {
     final blockedClause = includeBlocked ? '' : ' AND attempts < 5';
+    final boundedLimit = limit?.clamp(1, 200);
+    final limitClause = boundedLimit == null ? '' : ' LIMIT $boundedLimit';
     final rows = _appDb.db.select(
       'SELECT * FROM duplicate_resolution_outbox '
-      'WHERE namespace=?$blockedClause ORDER BY created_at ASC, id ASC',
+      'WHERE namespace=?$blockedClause ORDER BY created_at ASC, id ASC$limitClause',
       [namespace],
     );
     return rows.map((row) {
@@ -174,9 +184,12 @@ class DuplicateResolutionOutboxRepository {
     return count;
   }
 
-  Future<int> flush(UserCardsRepository repository) async {
+  Future<int> flush(
+    UserCardsRepository repository, {
+    int maxEntries = defaultFlushBatchSize,
+  }) async {
     var sent = 0;
-    for (final entry in pending(includeBlocked: false)) {
+    for (final entry in pending(includeBlocked: false, limit: maxEntries)) {
       try {
         await repository.resolveDuplicateCandidate(
           entry.candidateId,
@@ -197,6 +210,9 @@ class DuplicateResolutionOutboxRepository {
           );
         }
       }
+      // Yield between entries so a reconnect/resume flush cannot monopolise
+      // the Dart isolate while it drains a backlog.
+      await Future<void>.delayed(Duration.zero);
     }
     return sent;
   }

@@ -66,6 +66,19 @@ void main() {
     expect(repo.sent.single['keepTransactionId'], 'txn-a');
   });
 
+  test('flush bounds a large backlog and resumes oldest intents', () async {
+    for (var i = 0; i < 25; i++) {
+      outbox.enqueue(candidateId: 'pair-$i', resolution: 'kept_both');
+    }
+    final repo = _FakeUserCardsRepository();
+
+    expect(await outbox.flush(repo, maxEntries: 20), 20);
+    expect(repo.sent, hasLength(20));
+    expect(outbox.pending(), hasLength(5));
+    expect(await outbox.flush(repo, maxEntries: 20), 5);
+    expect(outbox.pending(), isEmpty);
+  });
+
   test(
     'already-resolved responses are treated as successful retries',
     () async {

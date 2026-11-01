@@ -195,6 +195,26 @@ final tokenStoreProvider = FutureProvider<TokenStore>(
   (ref) => TokenStore.load(),
 );
 
+/// A non-sensitive local hint used only to avoid holding the native splash
+/// while Android Keystore restores the real credentials. It is deliberately
+/// separate from [accessTokenProvider]: this value never authorizes a request
+/// or exposes account data. The router may paint the shell optimistically, but
+/// it still redirects to the account gate when [sessionInitProvider] resolves
+/// without a valid secure token.
+final sessionPresenceHintProvider = FutureProvider<bool>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final hint = prefs.getBool(TokenStore.sessionPresenceKey);
+  if (hint != null) return hint;
+
+  // Builds before the dedicated hint was introduced already persisted this
+  // account-scoped namespace for the SMS listener. It is only a hash-derived
+  // namespace, never a credential, and gives existing signed-in installs the
+  // same warm-shell behavior without waiting one more cold start for the new
+  // marker to be written.
+  final legacyNamespace = prefs.getString(smsCaptureNamespaceKey);
+  return legacyNamespace != null && legacyNamespace != 'signed-out';
+});
+
 /// This install's stable device identifier — see device_identity.dart's
 /// own doc-comment for why this exists (every install used to send the
 /// same literal `'app-mobile'` string, so there was nothing real to
