@@ -31,12 +31,16 @@ void main() {
     expect(state.stopReason, isNull);
   });
 
-  test('a stop explains the limit toggle', () {
+  test('a field-mapping problem is explained', () {
     final state = stateWith([
-      window(0, '2026-08-01T00:00:00Z', '2026-09-01T00:00:00Z', 'partial',
-          found: 500, limitOff: 0, enumerated: 500),
+      {
+        ...window(0, '2026-08-01T00:00:00Z', '2026-09-01T00:00:00Z', 'partial',
+            found: 40, limitOff: 0, enumerated: 40),
+        'incomplete': 30,
+      },
     ]);
     expect(state.importedThrough, isNull);
-    expect(state.stopReason, contains('Find Messages limit is off'));
+    expect(state.stopReason, contains('Body and Date fields'));
+    expect(state.currentStopIsRetryable, isFalse);
   });
 }

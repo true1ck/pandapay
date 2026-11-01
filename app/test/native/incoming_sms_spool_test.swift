@@ -438,3 +438,13 @@ do {
   require(try store.issueNextRange() == nil, "nothing left to search")
   print("PASS: a looping Shortcut moves through ranges while PandaPay is closed")
 }
+
+do {
+  // The 500 cap comes from Find Messages itself; the Limit toggle is ignored.
+  let store = IncomingSmsSpool(directory: root.appendingPathComponent("no-toggle"), maxPending: 2000, now: { time })
+  let g = try store.configure(namespace: "user:no-toggle", enabled: true)["generation"] as! String
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(time.addingTimeInterval(-86_400)), "end": iso(time)]])
+  let request = try store.issue(generation: g)!
+  require(try store.finish(request: request, found: 0, limitOff: false, warning: false) == "complete", "a range under 500 completes without the toggle")
+  print("PASS: completion depends on the count, not the Limit toggle")
+}

@@ -587,7 +587,10 @@ final class IncomingSmsSpool {
       let unusable = receipts.filter { ["missing_sender", "missing_date", "invalid_body"].contains($0["outcome"] as? String ?? "") }.count
       let invalid = unusable > 2 && unusable * 20 > receipts.count
       let found = row["found"] as? Int ?? 0
-      let consistent = found == receipts.count && row["limit_off"] as? Int == 1 && row["warning"] as? Int == 0 && !invalid
+      // Find Messages returns at most 500 whatever its Limit setting, so the
+      // count alone tells a complete range (under 500) from a capped one; the
+      // "limit is off" toggle is no longer needed.
+      let consistent = found == receipts.count && row["warning"] as? Int == 0 && !invalid
       // A window that already queued its continuation has issued_end set.
       var capped = found >= Self.findMessagesCap && row["issued_end"] as? String == nil
       // Find Messages returns at most 500, oldest first. When a window hits

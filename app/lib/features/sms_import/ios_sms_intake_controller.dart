@@ -123,7 +123,7 @@ class IosSmsIntakeState {
   bool get currentStopIsRetryable {
     final window = currentWindow;
     if (window == null || window['state'] != 'partial') return false;
-    if (window['limit_off'] != 1 || window['warning'] == 1) return false;
+    if (window['warning'] == 1) return false;
     final unusable = window['incomplete'] as int? ?? 0;
     if (unusable > 2 && unusable * 20 > (window['enumerated'] as int? ?? 0)) {
       return false;
@@ -134,9 +134,6 @@ class IosSmsIntakeState {
   String? get stopReason {
     final window = currentWindow;
     if (window == null || window['state'] != 'partial') return null;
-    if (window['limit_off'] != 1) {
-      return 'In the Shortcut, turn on “Find Messages limit is off” in Finish PandaPay History Import, then resume.';
-    }
     final unusable = window['incomplete'] as int? ?? 0;
     if (unusable > 2 && unusable * 20 > (window['enumerated'] as int? ?? 0)) {
       return 'Many messages arrived without text or a date. Check the Shortcut’s Body and Date fields, then resume.';

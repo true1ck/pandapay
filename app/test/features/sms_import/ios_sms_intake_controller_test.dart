@@ -839,13 +839,14 @@ void main() {
       return (service, controller);
     }
 
-    void stop(MemoryBridge service, {required int limitOff}) {
+    void stop(MemoryBridge service, {required int limitOff, int warning = 0}) {
       final window = (service.snapshot['windows'] as List).first as Map;
       window
         ..['state'] = 'partial'
         ..['found'] = 3
         ..['enumerated'] = 2
-        ..['limit_off'] = limitOff;
+        ..['limit_off'] = limitOff
+        ..['warning'] = warning;
       service.shortcutReturn = {
         'attempt': window['attempt'],
         'status': 'success',
@@ -864,12 +865,20 @@ void main() {
 
     test('a Shortcut setup problem is not retried', () async {
       final (service, controller) = await started();
-      stop(service, limitOff: 0);
+      stop(service, limitOff: 1, warning: 1);
       service.calls.clear();
       await controller.refresh();
       expect(service.calls, isNot(contains('runShortcut')));
       expect(controller.automaticallyAdvancing, isFalse);
-      expect(controller.state.stopReason, contains('Find Messages limit is off'));
+    });
+
+    test('the Limit toggle no longer matters', () async {
+      final (service, controller) = await started();
+      stop(service, limitOff: 0);
+      service.calls.clear();
+      await controller.refresh();
+      expect(service.calls.where((c) => c == 'runShortcut'), hasLength(1));
+      expect(controller.state.stopReason ?? '', isNot(contains('limit')));
     });
 
     test('retries stop after two attempts', () async {
