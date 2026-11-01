@@ -301,6 +301,7 @@ CREATE INDEX IF NOT EXISTS idx_user_merchant_rules_namespace
 ''';
 
 class AppDatabase {
+  static const _schemaVersion = 1;
   static final Set<AppDatabase> _connections = {};
   static final Set<String> _recoveryPaths = {};
   final Database db;
@@ -311,29 +312,38 @@ class AppDatabase {
     // SQLite serialize commits rather than losing a message to SQLITE_BUSY.
     db.execute('PRAGMA busy_timeout = 3000');
     db.execute('PRAGMA journal_mode = WAL');
-    db.execute(_schema);
-    _ensureUserCategoriesSchema();
-    _ensureLocalUserCardsSchema();
-    _ensureAutoResolvedHistorySchema();
-    _ensureOutboxSchema();
-    if (!db
-        .select('PRAGMA table_info(sync_pending_changes)')
-        .any((c) => c['name'] == 'in_flight')) {
-      db.execute(
-        'ALTER TABLE sync_pending_changes ADD COLUMN in_flight INTEGER NOT NULL DEFAULT 0',
-      );
-    }
-    for (final table in [
-      'transaction_outbox_entries',
-      'sync_pending_changes',
-    ]) {
+    final version =
+        (db.select('PRAGMA user_version').single.values.first as int);
+    if (version < _schemaVersion) {
+      // The static schema and compatibility checks are intentionally guarded
+      // by SQLite's user_version. Existing installs still run this block once
+      // (including all legacy repairs); a known-good database avoids replaying
+      // hundreds of CREATE/PRAGMA checks on every first route/provider open.
+      db.execute(_schema);
+      _ensureUserCategoriesSchema();
+      _ensureLocalUserCardsSchema();
+      _ensureAutoResolvedHistorySchema();
+      _ensureOutboxSchema();
       if (!db
-          .select('PRAGMA table_info($table)')
-          .any((c) => c['name'] == 'namespace')) {
+          .select('PRAGMA table_info(sync_pending_changes)')
+          .any((c) => c['name'] == 'in_flight')) {
         db.execute(
-          "ALTER TABLE $table ADD COLUMN namespace TEXT NOT NULL DEFAULT 'legacy'",
+          'ALTER TABLE sync_pending_changes ADD COLUMN in_flight INTEGER NOT NULL DEFAULT 0',
         );
       }
+      for (final table in [
+        'transaction_outbox_entries',
+        'sync_pending_changes',
+      ]) {
+        if (!db
+            .select('PRAGMA table_info($table)')
+            .any((c) => c['name'] == 'namespace')) {
+          db.execute(
+            "ALTER TABLE $table ADD COLUMN namespace TEXT NOT NULL DEFAULT 'legacy'",
+          );
+        }
+      }
+      db.execute('PRAGMA user_version = $_schemaVersion');
     }
     _connections.add(this);
   }

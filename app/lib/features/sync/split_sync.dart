@@ -58,12 +58,13 @@ final splitSyncLifecycleProvider = Provider<void>((ref) {
   ref.onDispose(() => WidgetsBinding.instance.removeObserver(observer));
 
   // Split sync performs SQLite reads/writes and can be expensive on a
-  // populated account. Let the first authenticated frame get onto the screen
-  // before the initial drain starts; resume/connectivity syncs remain eager.
-  final startTimer = Timer(const Duration(milliseconds: 250), () {
-    if (!disposed) unawaited(repository.sync());
+  // populated account. Queue the initial drain with the shared scheduler so
+  // it cannot overlap the other startup maintenance jobs; resume/connectivity
+  // syncs remain eager.
+  final startup = ref.read(startupWorkSchedulerProvider);
+  startup.enqueue('split-sync', () {
+    if (!disposed) return repository.sync();
   });
-  ref.onDispose(startTimer.cancel);
   ref.listen<AsyncValue<bool>>(isOnlineProvider, (before, after) {
     if (before?.valueOrNull == false && after.valueOrNull == true) {
       unawaited(repository.sync(reconnect: true));

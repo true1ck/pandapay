@@ -12,6 +12,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'startup_timing.dart';
+import 'startup_work_scheduler.dart';
 
 import '../data/acceptance_reports_repository.dart';
 import '../data/analytics.dart';
@@ -149,6 +150,17 @@ bool _isExplicitAiRefusal(Object error) {
 final authApiProvider = Provider<AuthApi>(
   (ref) => AuthApi(authBaseUrl: _authBaseUrl, versionedOtpEnabled: Env.versionedOtpEnabled),
 );
+
+/// Owns the short post-authentication idle window used to serialize
+/// non-critical maintenance. This prevents sync, outbox, notification and
+/// SMS reconciliation from all opening SQLite and publishing invalidations
+/// during the first interactive frame. User-visible actions and live SMS
+/// paths deliberately bypass this scheduler.
+final startupWorkSchedulerProvider = Provider<StartupWorkScheduler>((ref) {
+  final scheduler = StartupWorkScheduler();
+  ref.onDispose(scheduler.dispose);
+  return scheduler;
+});
 
 /// One shared retrying client for all authenticated repositories. Keeping the
 /// refresh coordination here prevents a screen with several report requests
@@ -2761,7 +2773,9 @@ final displayDataSyncLifecycleProvider = Provider<void>((ref) {
 
   ref.listen<String>(cacheNamespaceProvider, (previous, next) {
     if (previous == 'signed-out' && next != 'signed-out') {
-      unawaited(refreshWhenPossible(force: true));
+      ref
+          .read(startupWorkSchedulerProvider)
+          .enqueue('display-refresh', () => refreshWhenPossible(force: true));
     }
   });
   ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) {
@@ -2863,8 +2877,7 @@ final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
 final outboxFlushProvider = Provider<void>((ref) {
   var running = false;
   var disposed = false;
-  Timer? namespaceFlushTimer;
-  ref.onDispose(() => namespaceFlushTimer?.cancel());
+  final startup = ref.read(startupWorkSchedulerProvider);
   Future<void> flush() async {
     if (running || disposed) return;
     final namespace = ref.read(cacheNamespaceProvider);
@@ -2903,17 +2916,15 @@ final outboxFlushProvider = Provider<void>((ref) {
   });
   ref.listen(cacheNamespaceProvider, (_, next) {
     if (next == 'signed-out') {
-      namespaceFlushTimer?.cancel();
       return;
     }
     // Outbox delivery opens the account database and can publish several
     // invalidations.  Do not put that work on the same turn as the first
     // authenticated Home frame; resume/reconnect and explicit writes still
     // flush immediately through their existing listeners.
-    namespaceFlushTimer?.cancel();
-    namespaceFlushTimer = Timer(const Duration(milliseconds: 350), () {
+    startup.enqueue('outbox-flush', () {
       if (!disposed && ref.read(cacheNamespaceProvider) == next) {
-        unawaited(flush());
+        return flush();
       }
     });
   });
@@ -2922,9 +2933,9 @@ final outboxFlushProvider = Provider<void>((ref) {
     disposed = true;
     lifecycle.dispose();
   });
-  namespaceFlushTimer = Timer(const Duration(milliseconds: 350), () {
+  startup.enqueue('outbox-flush', () {
     if (!disposed && ref.read(cacheNamespaceProvider) != 'signed-out') {
-      unawaited(flush());
+      return flush();
     }
   });
 });
@@ -4505,7 +4516,9 @@ final transactionTagsProvider =
           ref.invalidate(budgetsProvider);
         },
       );
-      Future.microtask(repository.sync);
+      // SyncEngine owns the account-level tag sync. Starting a second sync
+      // from repository construction opens a network request and a SQLite
+      // write transaction during the first authenticated interaction window.
       return repository;
     });
 
@@ -6449,12 +6462,15 @@ final notificationTriggerRunnerProvider = Provider<NotificationTriggerRunner>((
 /// wiring in router.dart.
 final notificationTriggerLifecycleProvider = Provider<void>((ref) {
   final runner = ref.read(notificationTriggerRunnerProvider);
+  final startup = ref.read(startupWorkSchedulerProvider);
 
   final listener = AppLifecycleListener(onResume: () => runner.runAll());
   ref.onDispose(listener.dispose);
 
   ref.listen<AsyncValue<List<UserCard>>>(userCardsProvider, (previous, next) {
-    if (next.hasValue) runner.runAll();
+    if (next.hasValue) {
+      startup.enqueue('notification-sweep', runner.runAll);
+    }
   });
 });
 
@@ -6480,6 +6496,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   var coalescedRequests = 0;
   final pendingReasons = <String>{};
   var disposed = false;
+  final startup = ref.read(startupWorkSchedulerProvider);
   ref.onDispose(() => disposed = true);
   Timer? inFlightPollTimer;
   ref.onDispose(() => inFlightPollTimer?.cancel());
@@ -7014,8 +7031,6 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   // while there is no repository yet, so retry again as soon as the token is
   // restored instead of leaving valid SMS spends stranded in the old local
   // review queue.
-  Timer? namespaceFlushTimer;
-  ref.onDispose(() => namespaceFlushTimer?.cancel());
   ref.listen<String>(cacheNamespaceProvider, (previous, next) {
     unawaited(
       SharedPreferences.getInstance().then(
@@ -7029,14 +7044,13 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       // defer only this automatic namespace pass until the shell has had a
       // chance to paint. Resume, reconnect, manual and live-message paths
       // remain immediate.
-      namespaceFlushTimer?.cancel();
-      namespaceFlushTimer = Timer(const Duration(milliseconds: 500), () {
+      startup.enqueue('sms-background', () {
         if (!disposed && ref.read(cacheNamespaceProvider) == next) {
-          unawaited(flushAndRetry('namespace'));
+          return flushAndRetry('namespace');
         }
       });
     } else if (next == 'signed-out') {
-      namespaceFlushTimer?.cancel();
+      // A queued callback checks the current namespace before doing work.
     }
   });
 
@@ -7059,12 +7073,13 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     (_) => unawaited(flushAndRetry('periodic')),
   );
   ref.onDispose(aiReconcileTimer.cancel);
-  // Once at startup too: defer by 2 seconds so cold launch entrance animations
-  // and biometric lock settle cleanly without competing for CPU or DB locks.
-  final startupTimer = Timer(const Duration(seconds: 2), () {
-    if (!disposed) unawaited(flushAndRetry('startup'));
+  // Once at startup too: the shared scheduler waits for the first interactive
+  // window and serializes this scan behind other non-critical maintenance.
+  startup.enqueue('sms-background', () {
+    if (!disposed && ref.read(cacheNamespaceProvider) != 'signed-out') {
+      return flushAndRetry('startup');
+    }
   });
-  ref.onDispose(startupTimer.cancel);
 });
 
 /// Owns the one live SMS registration for the whole app. The old listener

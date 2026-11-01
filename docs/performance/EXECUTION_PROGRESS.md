@@ -4,6 +4,38 @@ Updated 1 November 2026. Branch `codex/ios-shortcuts-prototype`, synchronized be
 
 ## Completed
 
+- Startup contention follow-up (1 November 2026): added a lifecycle-owned
+  `StartupWorkScheduler` that coalesces and serializes non-critical startup
+  work behind a three-second interactive window. Automatic account sync,
+  split sync, display refresh, outbox delivery, notification sweeps and the
+  broad SMS reconciliation pass now share that queue; live SMS, reconnect,
+  resume, explicit refresh and user mutations remain eager. Transaction-tag
+  repository construction no longer starts a duplicate microtask sync because
+  `SyncEngine` already owns the account-level tag sync.
+- Local SQLite startup follow-up (1 November 2026): `AppDatabase` now uses a
+  `PRAGMA user_version` gate. Existing version-zero installs still run the
+  complete schema and legacy repair block once, then record schema version 1;
+  later opens skip the repeated static CREATE/PRAGMA/migration checks. The
+  legacy outbox migration and schema-version tests pass.
+- Validation for this follow-up: the scheduler and local DB suites passed
+  (12 tests), and the focused transaction-tags, sync-engine, split repository,
+  FinancialStore, sync-status, provider and router suites passed (98 tests).
+  Targeted Dart analysis of every changed source/test file reported no issues.
+- Profile APK `1.0.21-dev` build `8110` was built with hosted production
+  endpoints and installed with `adb install -r` on `emulator-5554`; the prior
+  `firstInstallTime` (`2026-11-01 00:21:28`) was preserved. No uninstall or
+  app-data clear was performed.
+- A true force-stop launch on the emulator measured Android
+  `am start -W TotalTime=12,452ms`. PandaPay's activity `onCreate` began only
+  after the emulator had spent several seconds in native/display startup;
+  from Dart main, token restore completed at `1,439ms`. The app showed the
+  onboarding screen because the saved hosted session was rejected, so this is
+  not an authenticated Home/scroll measurement. A gfxinfo sample during the
+  same stress run recorded 3 rendered frames, 2 janky frames, 150ms p90/p95,
+  1 slow UI-thread frame, 2 missed frame deadlines and an intermittent
+  4,950ms GPU bucket. This supports a separate emulator renderer/system stall
+  in addition to the app-side contention fixed above.
+
 - Startup follow-up (1 November 2026): `TokenStore.load()` now uses the
   `flutter_secure_storage` `readAll()` platform operation, so access and
   refresh credentials are restored in one native keystore call instead of
@@ -58,6 +90,14 @@ Updated 1 November 2026. Branch `codex/ios-shortcuts-prototype`, synchronized be
 - Activity list virtualization: Activity now uses `ListView.builder` over lightweight row metadata instead of eagerly constructing every transaction tile and tag projection. Summary, selection, grouping, tap, long-press and bulk-action behavior are preserved while large histories only build visible transaction tiles.
 
 ## Unresolved
+
+- The current emulator has no valid authenticated hosted session. An
+  authorized test account/OTP is required before claiming authenticated Home,
+  first-click, bottom-scroll reversal or page-to-page p95 results. No unknown
+  OTP was guessed and no data was reset.
+- The installed physical device is not connected in this pass, so the prior
+  physical-device evidence remains historical; repeat the profile build on the
+  device before making a device-specific smoothness claim.
 
 - Capture a fresh Android main-thread/Flutter trace specifically during a reproduced >=5 s launch if it recurs. The authenticated emulator runs above did not reproduce the old 5–7 s hold; do not blame secure storage alone because earlier SharedPreferences and secure-storage delays varied independently.
 - The physical 8095 reproduction now exists. Next isolate the 4,950 ms first-frame GPU bucket by comparing Impeller/Vulkan with Skia and profiling first-entry composition on populated Home, Wallet, Insights and You. Renderer changes are diagnostic first; image compression remains out of scope for this pass.
