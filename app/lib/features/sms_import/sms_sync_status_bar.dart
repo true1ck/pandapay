@@ -22,7 +22,11 @@ _StatusView _statusView(IosSmsIntakeController controller) {
   return (
     enabled: state.enabled,
     visible: state.visible,
-    label: state.label,
+    label:
+        controller.automaticallyAdvancing &&
+            state.activeJob?['kind'] == 'history'
+        ? '${state.label}\nSwitching to Shortcuts and back is normal.'
+        : state.label,
     busy: state.processing || state.launching,
     // Rounded so receipt-level changes don't rebuild the strip.
     progress: state.activeJob?['kind'] == 'history' && state.coverage != null

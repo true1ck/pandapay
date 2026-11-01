@@ -644,8 +644,8 @@ void main() {
     expect(state.currentWindows, hasLength(3));
     expect(state.monthCount, 2);
     expect(state.completedMonths, 1);
-    // These windows have no dates, so the strip names no date yet.
-    expect(state.label, 'Importing history · starting');
+    // A range is being read; these test windows carry no dates.
+    expect(state.label, 'Shortcuts is reading the next dates…');
   });
   test(
     'drain is bounded, acknowledges shared receipts, never auto-opens Shortcuts',

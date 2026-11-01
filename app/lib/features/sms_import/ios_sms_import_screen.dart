@@ -213,6 +213,10 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
               _progress(state, controller),
               const SizedBox(height: AppSpace.lg),
             ],
+            if (_historyMonths(state) case final months when months.isNotEmpty) ...[
+              _historyCard(months),
+              const SizedBox(height: AppSpace.lg),
+            ],
             SmsSetupPanel(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -358,7 +362,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                 ExpansionTile(
                   key: const PageStorageKey('ios-sms-details'),
                   title: Text(
-                    'Import details',
+                    'Troubleshooting details',
                     style: BambooFonts.ui(13, color: BambooInk.ink700),
                   ),
                   children: [
@@ -409,7 +413,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                     const SizedBox(width: AppSpace.sm),
                     Expanded(
                       child: Text(
-                        'Last completed import\n${state.countsFor(state.lastCompletedWindows)}',
+                        'Last import finished · ${_messages(_sum(state.lastCompletedWindows, 'enumerated'))} read',
                         style: BambooFonts.ui(13, color: BambooInk.jade),
                       ),
                     ),
@@ -450,6 +454,127 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
       subtitle: Text(
         '${window['found'] == null ? '' : '${window['found']} found${(window['found'] as int) >= 500 ? ' (Shortcuts limit, continued below)' : ''} · '}${state.countsFor([window])}\n${window['duplicates'] ?? 0} already saved · ${window['security_excluded'] ?? 0} security excluded · ${window['ignored'] ?? 0} ignored\n$senderDetails$buildDetails$inputDetails\nShortcut: ${_historyStageLabel(window['last_stage'])}${_handoffLabel(window['handoff_stage'])}',
         style: BambooFonts.ui(12, color: BambooInk.ink700),
+      ),
+    );
+  }
+
+  static int _sum(Iterable<Map<String, Object?>> rows, String key) =>
+      rows.fold(0, (total, row) => total + (row[key] as int? ?? 0));
+
+  static String _messages(int count) => count == 1
+      ? '1 message'
+      : '${NumberFormat.decimalPattern('en_IN').format(count)} messages';
+
+  /// One row per month of the latest history import, in date order.
+  static List<_HistoryMonth> _historyMonths(IosSmsIntakeState state) {
+    final job = state.activeJob ??
+        state.jobs.where((j) => j['kind'] == 'history').firstOrNull;
+    if (job == null || job['kind'] != 'history') return const [];
+    final windows = state.windows.where((w) => w['job_id'] == job['id']).toList()
+      ..sort((a, b) => (a['ordinal'] as int? ?? 0).compareTo(b['ordinal'] as int? ?? 0));
+    final months = <String, List<Map<String, Object?>>>{};
+    for (final window in windows) {
+      final label = window['month_label'] as String? ??
+          (window['start'] as String? ?? '').padRight(7).substring(0, 7);
+      (months[label] ??= []).add(window);
+    }
+    return [
+      for (final MapEntry(key: label, value: rows) in months.entries)
+        _HistoryMonth(
+          month: DateTime.tryParse('$label-01'),
+          status: _monthStatus(rows),
+          messages: _sum(rows, 'enumerated'),
+        ),
+    ];
+  }
+
+  static _MonthStatus _monthStatus(List<Map<String, Object?>> rows) {
+    final states = rows.map((w) => w['state']).toSet();
+    if (states.contains('partial')) return _MonthStatus.needsLook;
+    if (states.any((s) => const ['waiting', 'running', 'finished'].contains(s))) {
+      return _MonthStatus.importing;
+    }
+    if (states.every((s) => s == 'complete')) {
+      // Months skipped because an earlier import covered them never ran.
+      return rows.every((w) => w['attempt'] == null)
+          ? _MonthStatus.alreadyImported
+          : _MonthStatus.imported;
+    }
+    return states.contains('complete') ? _MonthStatus.importing : _MonthStatus.waiting;
+  }
+
+  Widget _historyCard(List<_HistoryMonth> months) {
+    final done = months
+        .where((m) => m.status == _MonthStatus.imported || m.status == _MonthStatus.alreadyImported)
+        .length;
+    final total = months.fold(0, (sum, m) => sum + m.messages);
+    return SmsSetupPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Your message history',
+            style: BambooFonts.heading(18, color: BambooInk.ink900),
+          ),
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            '$done of ${months.length} months imported'
+            '${total > 0 ? ' · ${_messages(total)}' : ''}',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+          ),
+          const SizedBox(height: AppSpace.md),
+          for (final (index, month) in months.indexed) ...[
+            if (index > 0)
+              const Divider(height: 1, color: BambooInk.hairlineOnPaper),
+            _monthRow(month),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _monthRow(_HistoryMonth month) {
+    final (icon, color, text) = switch (month.status) {
+      _MonthStatus.imported => (
+        Icons.check_circle_rounded,
+        BambooInk.jade,
+        month.messages == 0 ? 'Imported · no messages' : 'Imported · ${_messages(month.messages)}',
+      ),
+      _MonthStatus.alreadyImported => (
+        Icons.check_circle_outline_rounded,
+        BambooInk.jade,
+        'Already imported',
+      ),
+      _MonthStatus.importing => (
+        Icons.sync_rounded,
+        BambooInk.ink700,
+        month.messages == 0 ? 'Importing now…' : 'Importing · ${_messages(month.messages)} so far',
+      ),
+      _MonthStatus.needsLook => (
+        Icons.error_outline_rounded,
+        BambooInk.clayInk,
+        'Needs another try',
+      ),
+      _MonthStatus.waiting => (
+        Icons.radio_button_unchecked_rounded,
+        BambooInk.ink300,
+        'Waiting',
+      ),
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Text(
+              month.month == null ? 'Dates' : DateFormat('MMMM yyyy').format(month.month!),
+              style: BambooFonts.ui(14, color: BambooInk.ink900, weight: FontWeight.w600),
+            ),
+          ),
+          Text(text, style: BambooFonts.ui(12.5, color: BambooInk.ink700)),
+        ],
       ),
     );
   }
@@ -543,6 +668,15 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
               style: BambooFonts.ui(13, color: BambooInk.onSlateSubtle),
             ),
           ],
+          if (automatic) ...[
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              'PandaPay opens Shortcuts for each date range and comes back '
+              'by itself. If you leave or lock your phone, it carries on when '
+              'you return to PandaPay.',
+              style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
+            ),
+          ],
           const SizedBox(height: AppSpace.xs),
           Text(
             '$done of $total ${state.activeJob?['kind'] == 'history' ? 'months' : 'date windows'} done',
@@ -554,16 +688,10 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
           ],
           const SizedBox(height: AppSpace.sm),
           Text(
-            state.countsFor(state.currentWindows),
+            '${_messages(_sum(state.currentWindows, 'enumerated'))} read'
+            '${_sum(state.currentWindows, 'needs_review') > 0 ? ' · ${_sum(state.currentWindows, 'needs_review')} to review' : ''}',
             style: BambooFonts.ui(13, color: BambooInk.onSlateSubtle),
           ),
-          if (state.partial && state.missingSenders > 0) ...[
-            const SizedBox(height: AppSpace.sm),
-            Text(
-              '${state.missingSenders} ${state.missingSenders == 1 ? 'message arrived' : 'messages arrived'} without a sender.',
-              style: BambooFonts.ui(13, color: BambooInk.onSlateSubtle),
-            ),
-          ],
           const SizedBox(height: AppSpace.lg),
           LinearProgressIndicator(
             value: state.coverage ?? (total == 0 ? null : done / total),
@@ -707,4 +835,17 @@ class SmsSetupPanel extends StatelessWidget {
     ),
     child: child,
   );
+}
+
+enum _MonthStatus { imported, alreadyImported, importing, needsLook, waiting }
+
+class _HistoryMonth {
+  final DateTime? month;
+  final _MonthStatus status;
+  final int messages;
+  const _HistoryMonth({
+    required this.month,
+    required this.status,
+    required this.messages,
+  });
 }

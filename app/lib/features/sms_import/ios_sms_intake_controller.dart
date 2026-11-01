@@ -149,6 +149,17 @@ class IosSmsIntakeState {
   bool get visible =>
       enabled &&
       (processing || activeJob != null || error != null || pending > 0);
+  /// "1 Jul – 31 Jul" for a window; the end is exclusive.
+  static String rangeLabel(Map<String, Object?> window) {
+    final start = DateTime.tryParse(window['start'] as String? ?? '');
+    final end = DateTime.tryParse(window['end'] as String? ?? '')
+        ?.subtract(const Duration(milliseconds: 1));
+    if (start == null) return 'the next dates';
+    final day = DateFormat('d MMM');
+    if (end == null || end.isBefore(start)) return day.format(start.toLocal());
+    return '${day.format(start.toLocal())} – ${day.format(end.toLocal())}';
+  }
+
   /// "through 18 Aug" once a range is done, else the first range's start.
   String get historyPosition {
     final through = importedThrough;
@@ -169,7 +180,25 @@ class IosSmsIntakeState {
           ? 'Messages need sender details'
           : 'Some dates need another check';
     }
-    if (activeJob?['kind'] == 'history') return 'Importing history · $historyPosition';
+    if (activeJob?['kind'] == 'history') {
+      // Say what is happening at each hand-off, so switching between
+      // PandaPay and Shortcuts doesn't look like the phone glitching.
+      final window = currentWindow;
+      final range = window == null ? null : rangeLabel(window);
+      if (launching && range != null) {
+        return 'Opening Shortcuts to read $range…';
+      }
+      if (processing) {
+        return range == null
+            ? 'Saving imported messages…'
+            : 'Saving messages from $range…';
+      }
+      if (range != null &&
+          const ['waiting', 'running'].contains(window!['state'])) {
+        return 'Shortcuts is reading $range…';
+      }
+      return 'Importing history · $historyPosition';
+    }
     if (waiting) return 'Waiting for message import…';
     if (activeJob != null) return 'Recent-message check pending';
     if (processing) return 'Updating recent activity…';
@@ -388,11 +417,13 @@ class IosSmsIntakeController extends ChangeNotifier {
     // Load once, in the background; the import loop never waits on storage.
     if (service.supported) {
       unawaited(
-        this.sessionStore.load().then((saved) {
+        this.sessionStore.load().then((saved) async {
           _savedSession = saved;
           _savedSessionLoaded = true;
-          _lastShortcut ??= saved?.shortcut;
-          if (saved != null && !_disposed) unawaited(refresh());
+          // Without a saved session (for example a fresh launch), use the
+          // shortcut name chosen on the import screen, or the default.
+          _lastShortcut ??= saved?.shortcut ?? await this.sessionStore.shortcutName();
+          if (!_disposed) unawaited(refresh());
         }),
       );
     }
@@ -910,6 +941,18 @@ class IosSmsIntakeController extends ChangeNotifier {
 class IosImportSessionStore {
   const IosImportSessionStore();
   static const _key = 'pandapay.ios_sms_auto_import_session_v1';
+  // Same key and default as the import screen's shortcut-name field.
+  static const _shortcutNameKey = 'pandapay_app.ios_history_shortcut_name_v1';
+  static const defaultShortcutName = 'PANDAPAY SMS HISTORY';
+
+  Future<String> shortcutName() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final name = prefs.getString(_shortcutNameKey)?.trim();
+      if (name != null && name.isNotEmpty) return name;
+    } catch (_) {}
+    return defaultShortcutName;
+  }
 
   Future<void> save(String job, String shortcut) async {
     try {

@@ -107,8 +107,8 @@ void main() {
     await _scrollTo(tester, find.text('Import options'));
     await tester.tap(find.text('Import options'));
     await tester.pumpAndSettle();
-    await _scrollTo(tester, find.text('Import details'));
-    await tester.tap(find.text('Import details'));
+    await _scrollTo(tester, find.text('Troubleshooting details'));
+    await tester.tap(find.text('Troubleshooting details'));
     await tester.pumpAndSettle();
     final evidence = find.textContaining(
       'Valid inputs: 1 sender received · 20 sender missing',
@@ -148,8 +148,8 @@ void main() {
     await _scrollTo(tester, find.text('Import options'));
     await tester.tap(find.text('Import options'));
     await tester.pumpAndSettle();
-    await _scrollTo(tester, find.text('Import details'));
-    await tester.tap(find.text('Import details'));
+    await _scrollTo(tester, find.text('Troubleshooting details'));
+    await tester.tap(find.text('Troubleshooting details'));
     await tester.pumpAndSettle();
     final evidence = find.textContaining(
       'Last sender input: Message sender supplied without an address',
@@ -198,8 +198,8 @@ void main() {
         await _scrollTo(tester, find.text('Import options'));
         await tester.tap(find.text('Import options'));
         await tester.pumpAndSettle();
-        await _scrollTo(tester, find.text('Import details'));
-        await tester.tap(find.text('Import details'));
+        await _scrollTo(tester, find.text('Troubleshooting details'));
+        await tester.tap(find.text('Troubleshooting details'));
         await tester.pumpAndSettle();
         expect(find.textContaining('No messages received yet'), findsOneWidget);
         expect(
@@ -227,7 +227,7 @@ void main() {
         );
         if (currentState == 'stopped') {
           final completedSummary = find.text(
-            'Last completed import\n24 received · 21 processed · 11 need review',
+            'Last import finished · 24 messages read',
           );
           await _scrollTo(tester, completedSummary);
           expect(completedSummary, findsOneWidget);
@@ -262,15 +262,8 @@ void main() {
           },
         ];
         await _pumpImport(tester, service);
-        expect(
-          find.text('37 messages arrived without a sender.'),
-          findsOneWidget,
-        );
         expect(find.text('Split busy dates'), findsNothing);
-        expect(
-          find.text('79 received · 30 processed · 4 need review'),
-          findsOneWidget,
-        );
+        expect(find.text('79 messages read · 4 to review'), findsOneWidget);
         await _scrollTo(tester, find.text('3 months'));
         await tester.tap(find.text('3 months'));
         await tester.pumpAndSettle();
@@ -342,8 +335,8 @@ void main() {
       await _scrollTo(tester, find.text('Import options'));
       await tester.tap(find.text('Import options'));
       await tester.pumpAndSettle();
-      await _scrollTo(tester, find.text('Import details'));
-      await tester.tap(find.text('Import details'));
+      await _scrollTo(tester, find.text('Troubleshooting details'));
+      await tester.tap(find.text('Troubleshooting details'));
       await tester.pumpAndSettle();
       await _scrollTo(tester, find.textContaining('End reached PandaPay'));
       expect(find.textContaining('End reached PandaPay'), findsOneWidget);
@@ -675,6 +668,44 @@ void main() {
     await work;
     await tester.pumpWidget(const SizedBox.shrink());
     text.dispose();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('month history shows plain statuses for each month', (tester) async {
+    SharedPreferences.setMockInitialValues({iosSmsSharingAcknowledgementKey: true});
+    final service = MemoryBridge();
+    service.snapshot['jobs'] = [
+      {'id': 'h', 'kind': 'history', 'state': 'active'},
+    ];
+    Map<String, Object?> month(int ordinal, String label, String state,
+            {String? attempt, int enumerated = 0}) =>
+        {
+          'id': 'w$ordinal', 'job_id': 'h', 'ordinal': ordinal, 'state': state,
+          'month_label': label, 'start': '$label-01T00:00:00Z',
+          'end': '$label-28T00:00:00Z', 'attempt': ?attempt, 'enumerated': enumerated,
+          'limit_off': 1,
+        };
+    service.snapshot['windows'] = [
+      month(0, '2026-05', 'complete', attempt: 'a', enumerated: 412),
+      month(1, '2026-06', 'complete'),
+      month(2, '2026-07', 'partial', attempt: 'b', enumerated: 3),
+      month(3, '2026-08', 'waiting', attempt: 'c'),
+      month(4, '2026-09', 'queued'),
+    ];
+    await _pumpImport(tester, service);
+    final card = find.text('Your message history');
+    await _scrollTo(tester, card);
+    expect(find.text('2 of 5 months imported · 415 messages'), findsOneWidget);
+    for (final text in [
+      'Imported · 412 messages',
+      'Already imported',
+      'Needs another try',
+      'Importing now…',
+      'Waiting',
+    ]) {
+      await _scrollTo(tester, find.text(text));
+      expect(find.text(text), findsOneWidget, reason: text);
+    }
     expect(tester.takeException(), isNull);
   });
 }
