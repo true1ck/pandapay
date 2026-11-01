@@ -64,6 +64,19 @@ jobs:
               print(f'{tool}: installed={shutil.which(tool) is not None}')
           result = subprocess.run(['docker', 'ps', '-aq', '--filter', 'label=com.docker.compose.project=pandapay-prod', '--filter', 'label=com.docker.compose.service=backup'], capture_output=True, text=True)
           print(f'Backup containers: query_ok={result.returncode == 0}, count={len(result.stdout.splitlines())}')
+          ids = result.stdout.splitlines()
+          if result.returncode == 0 and len(ids) == 1:
+              inspected = subprocess.run(['docker', 'inspect', ids[0]], capture_output=True, text=True, check=True)
+              container = json.loads(inspected.stdout)[0]
+              print('Existing backup container running=' + str(container.get('State', {}).get('Running', False)))
+              environment = dict(item.split('=', 1) for item in container.get('Config', {}).get('Env', []) if '=' in item)
+              for key in ('BACKUP_AGE_RECIPIENTS_FILE', 'BACKUP_DESTINATION_A', 'BACKUP_DESTINATION_B'):
+                  print(f'  container {key}: nonempty={bool(environment.get(key))}')
+              for target in ('/run/secrets/backup-recipients.txt', '/offhost/a', '/offhost/b'):
+                  mappings = [m for m in container.get('Mounts', []) if m.get('Destination') == target]
+                  print(f'  expected mount {target}: count={len(mappings)}')
+                  if len(mappings) == 1:
+                      print(f'    bind={mappings[0].get("Type") == "bind"}, source_exists={Path(mappings[0]["Source"]).exists()}')
           PY
 
   verify:
