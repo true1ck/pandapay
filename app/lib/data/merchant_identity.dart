@@ -76,8 +76,24 @@ class MerchantIdentity {
     caseSensitive: false,
   );
 
+  // Merchant names repeat across thousands of rows and every read/save
+  // cleaned them again with many regexes on the UI thread. Results depend
+  // only on the input text, so they are remembered (bounded).
+  static final _cleanCache = <String, String?>{};
+  static final _weakCache = <String, bool>{};
+  static void _bound(Map<String, Object?> cache) {
+    if (cache.length > 10000) cache.clear();
+  }
+
   static String? cleanName(String? value) {
     if (value == null) return null;
+    final cached = _cleanCache[value];
+    if (cached != null || _cleanCache.containsKey(value)) return cached;
+    _bound(_cleanCache);
+    return _cleanCache[value] = _cleanNameUncached(value);
+  }
+
+  static String? _cleanNameUncached(String value) {
     var text = _normalize(value);
     for (var pass = 0; pass < 3; pass++) {
       final before = text;
@@ -108,6 +124,13 @@ class MerchantIdentity {
 
   static bool isWeakName(String? value) {
     if (value == null) return true;
+    final cached = _weakCache[value];
+    if (cached != null) return cached;
+    _bound(_weakCache);
+    return _weakCache[value] = _isWeakNameUncached(value);
+  }
+
+  static bool _isWeakNameUncached(String value) {
     final text = _normalize(value);
     return text.isEmpty || _urlRe.hasMatch(text) ||
         _boilerplateRe.hasMatch(text) ||

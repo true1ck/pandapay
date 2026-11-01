@@ -103,14 +103,17 @@ try spool.acknowledge(generation: next, outcomes: [["id": rows[0]["id"]!, "sourc
 require(try spool.snapshot()["reconciledThrough"] as? String == iso(time), "intentional ignore completes handoff")
 require(try spool.finish(request: second, found: 1, limitOff: true, warning: false) == "complete", "idempotent finish")
 
-try spool.createJob(generation: next, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(start), "end": iso(time)]])
+// The catch-up above already imported start..time, and new history imports
+// skip imported dates, so exercise the dense split on the day before it.
+let earlier = start.addingTimeInterval(-86_400), earlierMiddle = start.addingTimeInterval(-43_200)
+try spool.createJob(generation: next, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(earlier), "end": iso(start)]])
 let history = try spool.issue(generation: next)!
 _ = try spool.capture(body: body, sender: sender, receivedAt: time, provenance: "original", request: history, itemID: "1")
 require(try spool.finish(request: history, found: 2, limitOff: true, warning: false) == "partial", "mismatched count never complete")
 try spool.control(generation: next, command: "split")
 fails { _ = try spool.boundary(request: history, end: false) }
 let child = try spool.issue(generation: next)!
-require(try spool.boundary(request: child, end: true) == middle, "dense window split has adjacent exact halves")
+require(try spool.boundary(request: child, end: true) == earlierMiddle, "dense window split has adjacent exact halves")
 let splitSnapshot = try spool.snapshot()
 let latestJob = (splitSnapshot["jobs"] as! [[String: Any]])[0]["id"] as! String
 let splitWindows = (splitSnapshot["windows"] as! [[String: Any]]).filter { $0["job_id"] as? String == latestJob }
@@ -146,7 +149,9 @@ do {
   let oldRequest = try store.issue(generation: g)!
   _ = try store.capture(body: body, sender: sender, receivedAt: receive, provenance: "original", request: oldRequest, itemID: "1")
   _ = try store.capture(body: body, sender: sender, receivedAt: nil, provenance: "original", request: oldRequest, itemID: "2")
-  require(try store.finish(request: oldRequest, found: 2, limitOff: true, warning: false) == "partial", "missing metadata leaves the old check partial")
+  // One message without a date is skipped, not blocking; a count mismatch
+  // (Find reported more than arrived) leaves the old check partial.
+  require(try store.finish(request: oldRequest, found: 3, limitOff: true, warning: false) == "partial", "count mismatch leaves the old check partial")
   require((try store.snapshot()["windows"] as! [[String: Any]])[0]["incomplete"] as? Int == 1, "partial status exposes missing required metadata without message contents")
   fails { try store.createJob(generation: g, id: newID, kind: "history", zone: "UTC", windows: range) }
   fails { try store.createJob(generation: g, id: newID, kind: "history", zone: "UTC", windows: range, replacingJobID: UUID().uuidString) }
@@ -195,7 +200,8 @@ do {
   require(resultWindow["sender_input"] as? String == "person_without_handle", "person without handle is distinguished from absent input after acknowledgement")
   require(try store.pending(generation: g).isEmpty, "raw input clears only after durable shared review")
   require(try store.capture(body: secret, sender: nil, receivedAt: receive, provenance: "original") == "excluded_security", "security input never enters missing-sender review")
-  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(start), "end": iso(time)]])
+  // start..time is already imported; a new attempt needs dates not yet covered.
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(start.addingTimeInterval(-86_400)), "end": iso(start)]])
   let nextRequest = try store.issue(generation: g)!
   _ = try store.boundary(request: nextRequest, end: false, observingIntent: true)
   let nextAttempt = (try JSONSerialization.jsonObject(with: Data(nextRequest.utf8)) as! [String: Any])["attempt"] as! String
@@ -216,7 +222,8 @@ do {
   let g = account["generation"] as! String
   func request() throws -> String {
     try store.control(generation: g, command: "stop")
-    try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(start), "end": iso(time)]])
+    // This block re-imports the same range on purpose to test duplicates.
+    try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(start), "end": iso(time)]], skipImported: false)
     return try store.issue(generation: g)!
   }
   func window(_ request: String) throws -> [String: Any] {
@@ -328,4 +335,71 @@ do {
   windows = (try store.snapshot()["windows"] as! [[String: Any]])
   require(windows.count == 2, "under-cap continuation does not split again")
   print("PASS: Find Messages 500 cap continues from the newest captured message")
+}
+
+do {
+  // One message with no text (photo/MMS) must not block a whole range; many
+  // unusable messages (a mapping problem) still stop it.
+  let store = IncomingSmsSpool(directory: root.appendingPathComponent("unusable"), maxPending: 2000, now: { time })
+  let g = try store.configure(namespace: "user:unusable", enabled: true)["generation"] as! String
+  let windowStart = time.addingTimeInterval(-86_400)
+  func run(messages: Int, empty: Int) throws -> String {
+    try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(windowStart), "end": iso(time)]], replacingJobID: (try store.snapshot()["jobs"] as! [[String: Any]]).first(where: { ["active", "paused", "partial"].contains($0["state"] as? String ?? "") })?["id"] as? String, skipImported: false)
+    let request = try store.issue(generation: g)!
+    for index in 0..<messages {
+      _ = try store.capture(body: "INR \(index + 1) spent at SHOP \(index) \(UUID().uuidString).", sender: "ICICIT-S",
+        receivedAt: windowStart.addingTimeInterval(Double(index + 1)), provenance: "original", request: request, useMessageReceipt: true)
+    }
+    for _ in 0..<empty {
+      require(try store.capture(body: "  ", sender: "ICICIT-S", receivedAt: windowStart.addingTimeInterval(5), provenance: "original",
+        request: request, useMessageReceipt: true) == "invalid_body", "empty body is rejected")
+    }
+    while true {
+      let rows = try store.pending(generation: g, limit: 50)
+      if rows.isEmpty { break }
+      try store.acknowledge(generation: g, outcomes: rows.map { ["id": $0["id"]!, "sourceKey": String(repeating: "b", count: 64), "parserVersion": 26, "outcome": "captured"] })
+    }
+    return try store.finish(request: request, found: messages + empty, limitOff: true, warning: false)
+  }
+  require(try run(messages: 40, empty: 1) == "complete", "one photo/MMS message does not block the range")
+  require(try run(messages: 10, empty: 5) == "partial", "many unusable messages still stop the range")
+  print("PASS: a few unusable messages are skipped; a broken mapping still stops")
+}
+
+do {
+  // Importing 3 days after 1 day was already imported only fetches the rest.
+  let store = IncomingSmsSpool(directory: root.appendingPathComponent("skip-imported"), maxPending: 2000, now: { time })
+  let g = try store.configure(namespace: "user:skip-imported", enabled: true)["generation"] as! String
+  let d0 = time.addingTimeInterval(-3 * 86_400), d1 = time.addingTimeInterval(-2 * 86_400), d2 = time.addingTimeInterval(-86_400)
+  let first = UUID().uuidString
+  try store.createJob(generation: g, id: first, kind: "history", zone: "UTC", windows: [["start": iso(d0), "end": iso(d1)]])
+  let request = try store.issue(generation: g)!
+  require(try store.finish(request: request, found: 0, limitOff: true, warning: false) == "complete", "first day imported")
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [
+    ["start": iso(d0), "end": iso(d1)], ["start": iso(d1), "end": iso(d2)], ["start": iso(d2), "end": iso(time)],
+  ])
+  let snapshot = try store.snapshot()
+  let latest = (snapshot["jobs"] as! [[String: Any]])[0]["id"] as! String
+  let windows = (snapshot["windows"] as! [[String: Any]]).filter { $0["job_id"] as? String == latest }
+    .sorted { ($0["ordinal"] as! Int) < ($1["ordinal"] as! Int) }
+  require(windows.map { $0["state"] as! String } == ["complete", "queued", "queued"], "already imported day is done without running")
+  let next = try JSONSerialization.jsonObject(with: Data((try store.issue(generation: g)!).utf8)) as! [String: Any]
+  require(IncomingSmsSpool.date(next["start_inclusive"] as! String) == d1, "import continues from the first missing day")
+  print("PASS: new imports skip date ranges already imported")
+}
+
+do {
+  // A range imported by an older build without senders is imported again.
+  let store = IncomingSmsSpool(directory: root.appendingPathComponent("reimport-senderless"), maxPending: 2000, now: { time })
+  let g = try store.configure(namespace: "user:senderless", enabled: true)["generation"] as! String
+  let d0 = time.addingTimeInterval(-86_400)
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(d0), "end": iso(time)]])
+  let request = try store.issue(generation: g)!
+  _ = try store.capture(body: "INR 5 spent at SHOP.", sender: nil, receivedAt: d0.addingTimeInterval(60), provenance: "original", request: request, useMessageReceipt: true)
+  let rows = try store.pending(generation: g)
+  try store.acknowledge(generation: g, outcomes: rows.map { ["id": $0["id"]!, "sourceKey": String(repeating: "d", count: 64), "parserVersion": 26, "outcome": "review"] })
+  require(try store.finish(request: request, found: 1, limitOff: true, warning: false) == "complete", "sender-less range completed")
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(d0), "end": iso(time)]])
+  require(try store.issue(generation: g) != nil, "sender-less range is imported again")
+  print("PASS: ranges imported without senders are imported again")
 }

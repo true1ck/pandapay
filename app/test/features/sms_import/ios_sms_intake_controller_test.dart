@@ -329,7 +329,9 @@ void main() {
         capture: (_, _, _) async => [],
         requestUpload: () {},
       );
-      if (interruption != 'dispose') addTearDown(controller.dispose);
+      if (interruption != 'dispose' && interruption != 'error') {
+        addTearDown(controller.dispose);
+      }
       await controller.refresh();
       await controller.startHistory(DateTime(2024, 1), DateTime(2024, 3));
       await controller.continueImport('PANDAPAY SMS HISTORY');
@@ -351,7 +353,13 @@ void main() {
       }
       await tester.pump(const Duration(seconds: 2));
       expect(service.calls, isNot(contains('resumeShortcut')));
-      expect(service.calls.where((c) => c == 'runShortcut'), hasLength(1));
+      // An error reported after the month already finished loses nothing,
+      // so the import moves on to the next month; other interruptions stop.
+      expect(
+        service.calls.where((c) => c == 'runShortcut'),
+        hasLength(interruption == 'error' ? 2 : 1),
+      );
+      if (interruption == 'error') controller.dispose();
     });
   }
 
@@ -782,4 +790,169 @@ void main() {
       expect(days.last.end, DateTime(2026, 3, 10, 12));
     },
   );
+
+  group('stopped ranges and app restarts', () {
+    Future<(MemoryBridge, IosSmsIntakeController)> started({
+      IosImportSessionStore? store,
+    }) async {
+      final service = MemoryBridge();
+      final controller = IosSmsIntakeController(
+        service: service,
+        namespace: () => 'user:a',
+        capture: (_, _, _) async => [],
+        requestUpload: () {},
+        sessionStore: store ?? _MemorySessionStore(),
+      );
+      addTearDown(controller.dispose);
+      await controller.refresh();
+      await controller.startHistory(DateTime(2024, 1), DateTime(2024, 3));
+      await controller.continueImport('PANDAPAY SMS HISTORY');
+      return (service, controller);
+    }
+
+    void stop(MemoryBridge service, {required int limitOff}) {
+      final window = (service.snapshot['windows'] as List).first as Map;
+      window
+        ..['state'] = 'partial'
+        ..['found'] = 3
+        ..['enumerated'] = 2
+        ..['limit_off'] = limitOff;
+      service.shortcutReturn = {
+        'attempt': window['attempt'],
+        'status': 'success',
+      };
+    }
+
+    test('an interrupted range is retried automatically', () async {
+      final (service, controller) = await started();
+      stop(service, limitOff: 1);
+      service.calls.clear();
+      await controller.refresh();
+      expect(service.calls, contains('control'));
+      expect(service.calls.where((c) => c == 'runShortcut'), hasLength(1));
+      expect(controller.automaticallyAdvancing, isTrue);
+    });
+
+    test('a Shortcut setup problem is not retried', () async {
+      final (service, controller) = await started();
+      stop(service, limitOff: 0);
+      service.calls.clear();
+      await controller.refresh();
+      expect(service.calls, isNot(contains('runShortcut')));
+      expect(controller.automaticallyAdvancing, isFalse);
+      expect(controller.state.stopReason, contains('Find Messages limit is off'));
+    });
+
+    test('retries stop after two attempts', () async {
+      final (service, controller) = await started();
+      for (var i = 0; i < 3; i++) {
+        stop(service, limitOff: 1);
+        await controller.refresh();
+      }
+      expect(controller.automaticallyAdvancing, isFalse);
+    });
+
+    test('an import continues by itself after the app restarts', () async {
+      final store = _MemorySessionStore();
+      final (service, first) = await started(store: store);
+      // iOS closes PandaPay; the next range is waiting to be issued.
+      final window = (service.snapshot['windows'] as List).first as Map;
+      window['state'] = 'complete';
+      // Process death: no dispose, so the saved session survives.
+      expect(first.automaticallyAdvancing, isTrue);
+      final restarted = IosSmsIntakeController(
+        service: service,
+        namespace: () => 'user:a',
+        capture: (_, _, _) async => [],
+        requestUpload: () {},
+        sessionStore: store,
+      );
+      addTearDown(restarted.dispose);
+      service.calls.clear();
+      await restarted.refresh();
+      expect(service.calls, contains('runShortcut'));
+      expect(restarted.automaticallyAdvancing, isTrue);
+    });
+
+    testWidgets('an idle import resumes by itself after five seconds', (tester) async {
+      final service = MemoryBridge();
+      final controller = IosSmsIntakeController(
+        service: service,
+        namespace: () => 'user:a',
+        capture: (_, _, _) async => [],
+        requestUpload: () {},
+        sessionStore: _MemorySessionStore(),
+      );
+      await controller.refresh();
+      await controller.startHistory(DateTime(2024, 1), DateTime(2024, 3));
+      await controller.continueImport('PANDAPAY SMS HISTORY');
+      // The first range finished; the session was lost (for example, iOS).
+      final windows = (service.snapshot['windows'] as List).cast<Map>();
+      windows.first['state'] = 'complete';
+      await controller.control('pause');
+      await controller.control('resume');
+      expect(controller.automaticallyAdvancing, isFalse);
+      service.calls.clear();
+      await controller.refresh();
+      await tester.pump(const Duration(seconds: 4));
+      expect(service.calls, isNot(contains('runShortcut')));
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(service.calls, contains('runShortcut'));
+      // Stops the relaunched run's normal stall watchdog.
+      controller.dispose();
+    });
+
+    test('a Shortcuts error after a finished range does not stop the import', () async {
+      final (service, controller) = await started();
+      final window = (service.snapshot['windows'] as List).first as Map;
+      window['state'] = 'complete';
+      service.shortcutReturn = {'attempt': window['attempt'], 'status': 'error'};
+      service.calls.clear();
+      await controller.refresh();
+      expect(controller.state.error, isNull);
+      expect(service.calls, contains('runShortcut'));
+      expect(controller.automaticallyAdvancing, isTrue);
+    });
+
+    test('a Shortcuts error before the range finished still stops', () async {
+      final (service, controller) = await started();
+      final window = (service.snapshot['windows'] as List).first as Map;
+      service.shortcutReturn = {'attempt': window['attempt'], 'status': 'error'};
+      await controller.refresh();
+      expect(controller.state.error, contains('Shortcuts stopped'));
+      expect(controller.automaticallyAdvancing, isFalse);
+    });
+
+    testWidgets('a paused import does not resume by itself', (tester) async {
+      final service = MemoryBridge();
+      final controller = IosSmsIntakeController(
+        service: service,
+        namespace: () => 'user:a',
+        capture: (_, _, _) async => [],
+        requestUpload: () {},
+        sessionStore: _MemorySessionStore(),
+      );
+      addTearDown(controller.dispose);
+      await controller.refresh();
+      await controller.startHistory(DateTime(2024, 1), DateTime(2024, 3));
+      await controller.continueImport('PANDAPAY SMS HISTORY');
+      await controller.control('pause');
+      service.calls.clear();
+      await controller.refresh();
+      await tester.pump(const Duration(seconds: 10));
+      expect(service.calls, isNot(contains('runShortcut')));
+    });
+  });
+}
+
+class _MemorySessionStore extends IosImportSessionStore {
+  ({String job, String shortcut})? value;
+  @override
+  Future<void> save(String job, String shortcut) async =>
+      value = (job: job, shortcut: shortcut);
+  @override
+  Future<({String job, String shortcut})?> load() async => value;
+  @override
+  Future<void> clear() async => value = null;
 }

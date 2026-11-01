@@ -428,7 +428,7 @@ final class IncomingSmsSpool {
 
   func snapshot() throws -> [String: Any] { try transaction { try snapshot($0) } }
 
-  func createJob(generation: String, id: String, kind: String, zone: String, windows: [[String: String]], replacingJobID: String? = nil) throws {
+  func createJob(generation: String, id: String, kind: String, zone: String, windows: [[String: String]], replacingJobID: String? = nil, skipImported: Bool = true) throws {
     try transaction { db in
       _ = try owner(db, generation: generation)
       guard UUID(uuidString: id) != nil, ["history", "catchup"].contains(kind), !zone.isEmpty,
@@ -455,6 +455,33 @@ final class IncomingSmsSpool {
         try execute(db, "INSERT INTO windows(id,job_id,ordinal,start,end,state,logical_id,month_label) VALUES(?,?,?,?,?,'queued',?,?)", [logicalID, id, index, start, end, logicalID, monthFormatter.string(from: s)])
       }
       try execute(db, "INSERT INTO jobs VALUES(?, ?, ?, 'active', ?, ?, ?)", [id, generation, kind, windows.first!["start"], windows.last!["end"], zone])
+      if kind == "history" && skipImported { try skipImportedRanges(db, generation: generation, jobID: id) }
+      try reconcile(db)
+    }
+  }
+
+  /// A new history import skips date ranges this account already imported
+  /// completely (earlier imports or daily catch-up). Fully covered windows are
+  /// done at once; partly covered ones shrink to the missing dates. Messages
+  /// in overlaps would only be found again as already saved.
+  private func skipImportedRanges(_ db: OpaquePointer, generation: String, jobID: String) throws {
+    var covered: [(Date, Date)] = []
+    // A range whose messages arrived without senders (older builds) is not
+    // treated as imported: importing it again brings the real senders.
+    for row in try query(db, "SELECT w.start, w.end FROM windows w JOIN jobs j ON j.id=w.job_id WHERE j.generation=? AND j.id<>? AND w.state='complete' AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.attempt=w.attempt AND r.outcome IN ('saved_without_sender','missing_sender')) ORDER BY w.start", [generation, jobID]) {
+      guard let s = Self.date(row["start"] as? String ?? ""), let e = Self.date(row["end"] as? String ?? ""), s < e else { continue }
+      if let last = covered.last, s <= last.1 { covered[covered.count - 1].1 = max(last.1, e) } else { covered.append((s, e)) }
+    }
+    guard !covered.isEmpty else { return }
+    for row in try query(db, "SELECT id, start, end FROM windows WHERE job_id=? ORDER BY ordinal", [jobID]) {
+      guard var s = Self.date(row["start"] as! String), var e = Self.date(row["end"] as! String) else { continue }
+      for (cs, ce) in covered where cs <= s && ce > s { s = ce }
+      for (cs, ce) in covered.reversed() where cs < e && ce >= e { e = cs }
+      if s >= e {
+        try execute(db, "UPDATE windows SET state='complete',found=0,limit_off=1 WHERE id=?", [row["id"]])
+      } else if stamp(s) != row["start"] as? String || stamp(e) != row["end"] as? String {
+        try execute(db, "UPDATE windows SET start=?,end=? WHERE id=?", [stamp(s), stamp(e), row["id"]])
+      }
     }
   }
 
@@ -492,7 +519,13 @@ final class IncomingSmsSpool {
   private func reconcile(_ db: OpaquePointer) throws {
     for row in try query(db, "SELECT * FROM windows WHERE state='finished'") {
       let receipts = try query(db, "SELECT r.outcome,c.state AS capture_state FROM receipts r LEFT JOIN captures c ON c.id=r.capture_id WHERE r.attempt=?", [row["attempt"]])
-      let invalid = receipts.contains { ["missing_sender", "missing_date", "invalid_body"].contains($0["outcome"] as? String ?? "") }
+      // A message with no text (photo/MMS, empty) or no usable date can never
+      // be imported, so retrying the range cannot help: a few such messages
+      // are counted and skipped. Many of them usually means the Shortcut's
+      // fields are mapped wrongly, which must stop the range instead of
+      // silently dropping real messages.
+      let unusable = receipts.filter { ["missing_sender", "missing_date", "invalid_body"].contains($0["outcome"] as? String ?? "") }.count
+      let invalid = unusable > 2 && unusable * 20 > receipts.count
       let found = row["found"] as? Int ?? 0
       let consistent = found == receipts.count && row["limit_off"] as? Int == 1 && row["warning"] as? Int == 0 && !invalid
       // A window that already queued its continuation has issued_end set.

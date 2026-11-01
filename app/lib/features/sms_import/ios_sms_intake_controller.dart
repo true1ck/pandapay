@@ -1,10 +1,9 @@
 import 'dart:async';
-
-import 'package:intl/intl.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../data/portable_backup/account_recovery_operation_gate.dart';
@@ -110,14 +109,29 @@ class IosSmsIntakeState {
   }
 
   /// Why the current range stopped, in words the user can act on.
+  /// A stopped range that a plain retry (or a split) can fix: the run was cut
+  /// short, or a 500-message batch could not advance. Shortcut setup issues
+  /// are excluded, since retrying cannot fix them.
+  bool get currentStopIsRetryable {
+    final window = currentWindow;
+    if (window == null || window['state'] != 'partial') return false;
+    if (window['limit_off'] != 1 || window['warning'] == 1) return false;
+    final unusable = window['incomplete'] as int? ?? 0;
+    if (unusable > 2 && unusable * 20 > (window['enumerated'] as int? ?? 0)) {
+      return false;
+    }
+    return true;
+  }
+
   String? get stopReason {
     final window = currentWindow;
     if (window == null || window['state'] != 'partial') return null;
     if (window['limit_off'] != 1) {
       return 'In the Shortcut, turn on “Find Messages limit is off” in Finish PandaPay History Import, then resume.';
     }
-    if ((window['missing_sender'] as int? ?? 0) > 0) {
-      return 'Some messages arrived without a sender. Check the Shortcut’s Sender field, then resume.';
+    final unusable = window['incomplete'] as int? ?? 0;
+    if (unusable > 2 && unusable * 20 > (window['enumerated'] as int? ?? 0)) {
+      return 'Many messages arrived without text or a date. Check the Shortcut’s Body and Date fields, then resume.';
     }
     if ((window['found'] as int? ?? 0) != (window['enumerated'] as int? ?? 0)) {
       return 'Shortcuts found ${window['found']} messages but PandaPay received ${window['enumerated']}. Resume to try this range again.';
@@ -162,11 +176,16 @@ class IosSmsIntakeState {
     return 'Recent messages checked';
   }
 
-  static List<Map<String, Object?>> _rows(Object? value) => value is List
-      ? value
-            .map((e) => Map<String, Object?>.from(e as Map))
-            .toList(growable: false)
-      : const [];
+  /// Converted once per snapshot list. The progress card and status strip
+  /// read jobs/windows many times per frame; copying every row on each read
+  /// cost seconds of UI-thread time during imports.
+  static final _rowsCache = Expando<List<Map<String, Object?>>>();
+  static List<Map<String, Object?>> _rows(Object? value) {
+    if (value is! List) return const [];
+    return _rowsCache[value] ??= value
+        .map((e) => Map<String, Object?>.unmodifiable(e as Map))
+        .toList(growable: false);
+  }
 }
 
 /// Serial controller. It observes native durable authority; losing this Dart
@@ -177,6 +196,17 @@ class IosSmsIntakeController extends ChangeNotifier {
   final IosSmsCapture capture;
   final DateTime Function() now;
   final void Function() requestUpload;
+
+  /// Remembers an automatic import across app restarts. iOS may close
+  /// PandaPay while Shortcuts runs; the import must carry on by itself.
+  final IosImportSessionStore sessionStore;
+  final _autoRetries = <String, int>{};
+  static const _maxAutoRetries = 2;
+  ({String job, String shortcut})? _savedSession;
+  bool _savedSessionLoaded = false;
+  String? _lastShortcut;
+  Timer? _autoResumeTimer;
+  static const _autoResumeDelay = Duration(seconds: 5);
   IosSmsIntakeState _state = const IosSmsIntakeState();
   IosSmsIntakeState get state => _state;
   Future<void> _tail = Future.value();
@@ -195,7 +225,8 @@ class IosSmsIntakeController extends ChangeNotifier {
   String? _idleProgress;
   String? _idleResumedProgress;
 
-  void _endAutomaticSession() {
+  void _endAutomaticSession({bool forget = true}) {
+    if (forget && _automaticJob != null) unawaited(sessionStore.clear());
     _automaticJob = null;
     _handoffTimer?.cancel();
     _handoffTimer = null;
@@ -350,8 +381,21 @@ class IosSmsIntakeController extends ChangeNotifier {
     required this.capture,
     required this.requestUpload,
     DateTime Function()? now,
-  }) : now = now ?? DateTime.now {
+    IosImportSessionStore? sessionStore,
+  }) : now = now ?? DateTime.now,
+       sessionStore = sessionStore ?? const IosImportSessionStore() {
     if (service.supported) service.listen(refresh);
+    // Load once, in the background; the import loop never waits on storage.
+    if (service.supported) {
+      unawaited(
+        this.sessionStore.load().then((saved) {
+          _savedSession = saved;
+          _savedSessionLoaded = true;
+          _lastShortcut ??= saved?.shortcut;
+          if (saved != null && !_disposed) unawaited(refresh());
+        }),
+      );
+    }
   }
 
   void _publish(IosSmsIntakeState value) {
@@ -401,13 +445,19 @@ class IosSmsIntakeController extends ChangeNotifier {
               _returnedAttempt = _issuedAttempt;
             }
             String? returnError;
+            String? errorAttempt;
             if (returned is Map &&
                 returned['attempt'] == _issuedAttempt &&
                 returned['status'] != 'success') {
-              _endAutomaticSession();
-              returnError = returned['status'] == 'cancel'
-                  ? 'Import paused. Resume when you’re ready.'
-                  : 'Shortcuts stopped. Check its setup, then resume.';
+              if (returned['status'] == 'cancel') {
+                // A cancel is the person's choice: wait for them.
+                _endAutomaticSession();
+                returnError = 'Import paused. Resume when you’re ready.';
+              } else {
+                // Decide after reading native state: an error reported after
+                // the range already finished loses nothing.
+                errorAttempt = _issuedAttempt;
+              }
             }
             await AccountRecoveryOperationGate.process.run(() async {
               _check(expected, revision);
@@ -465,6 +515,17 @@ class IosSmsIntakeController extends ChangeNotifier {
                 await _load();
               }
             });
+            if (errorAttempt != null) {
+              final window = state.currentWindows
+                  .where((w) => w['attempt'] == errorAttempt)
+                  .firstOrNull;
+              if (window?['state'] == 'complete') {
+                _returnedAttempt = errorAttempt;
+              } else {
+                _endAutomaticSession();
+                returnError = 'Shortcuts stopped. Check its setup, then resume.';
+              }
+            }
             if (returnError != null) {
               _publish(
                 IosSmsIntakeState(snapshot: state.snapshot, error: returnError),
@@ -472,6 +533,7 @@ class IosSmsIntakeController extends ChangeNotifier {
             } else {
               await _advance(expected, revision);
             }
+            _scheduleAutoResume(expected, revision);
           } catch (_) {
             _endAutomaticSession();
             if (!_disposed &&
@@ -563,7 +625,12 @@ class IosSmsIntakeController extends ChangeNotifier {
     });
   }
 
-  Future<void> continueImport(String shortcutName) => _serialize(() async {
+  /// [automatic] is true for PandaPay's own auto-resume; only a person's tap
+  /// resets the per-range retry limit.
+  Future<void> continueImport(
+    String shortcutName, {
+    bool automatic = false,
+  }) => _serialize(() async {
     final expected = namespace(), revision = _revision;
     _check(expected, revision);
     if (!state.enabled || state.activeJob == null) return;
@@ -579,8 +646,14 @@ class IosSmsIntakeController extends ChangeNotifier {
     }
     _automaticJob = state.activeJob?['id'] as String?;
     _automaticShortcut = shortcutName.trim();
+    _lastShortcut = _automaticShortcut;
     _issuedAttempt = null;
     _returnedAttempt = null;
+    if (!automatic) _autoRetries.clear();
+    if (_automaticJob != null) {
+      _savedSession = null;
+      unawaited(sessionStore.save(_automaticJob!, _automaticShortcut!));
+    }
     try {
       await _launch(expected, revision);
     } catch (_) {
@@ -589,14 +662,138 @@ class IosSmsIntakeController extends ChangeNotifier {
     }
   });
 
+  /// A history import that is not paused or stopped, with nothing running
+  /// for a few seconds while PandaPay is on screen, continues by itself:
+  /// the person should not have to tap Resume. Shortcut setup problems that
+  /// a retry cannot fix are left for the person.
+  bool _canAutoResume() {
+    final job = state.activeJob;
+    if (_disposed ||
+        _automaticJob != null ||
+        _lastShortcut == null ||
+        !state.enabled ||
+        job == null ||
+        job['kind'] != 'history' ||
+        job['state'] == 'paused' ||
+        // A cancel in Shortcuts or a reported error waits for the person.
+        state.error != null ||
+        state.processing ||
+        state.launching ||
+        state.waiting ||
+        state.pending > 0) {
+      return false;
+    }
+    final window = state.currentWindow;
+    if (window == null) return false;
+    if (window['state'] == 'queued') return true;
+    if (window['state'] == 'partial') {
+      return state.currentStopIsRetryable &&
+          (_autoRetries['${window['id']}'] ?? 0) < _maxAutoRetries;
+    }
+    return false;
+  }
+
+  void _scheduleAutoResume(String expected, int revision) {
+    if (!_canAutoResume()) {
+      _autoResumeTimer?.cancel();
+      _autoResumeTimer = null;
+      return;
+    }
+    _autoResumeTimer ??= Timer(_autoResumeDelay, () {
+      _autoResumeTimer = null;
+      unawaited(() async {
+        try {
+          if (revision != _revision ||
+              namespace() != expected ||
+              !_canAutoResume() ||
+              await service.call('isForeground') != true ||
+              !_canAutoResume()) {
+            return;
+          }
+          final window = state.currentWindow;
+          if (window?['state'] == 'partial') {
+            final key = '${window!['id']}';
+            _autoRetries[key] = (_autoRetries[key] ?? 0) + 1;
+          }
+          await continueImport(_lastShortcut!, automatic: true);
+        } catch (_) {
+          // The normal error state already reflects a failed launch.
+        }
+      }());
+    });
+  }
+
+  /// After iOS restarts PandaPay mid-import, pick up the saved session for
+  /// the same active job and continue from the current range.
+  Future<void> _restoreSession() async {
+    if (_automaticJob != null || !_savedSessionLoaded) return;
+    final saved = _savedSession;
+    final active = state.activeJob;
+    if (saved == null) return;
+    if (active == null ||
+        active['id'] != saved.job ||
+        state.paused ||
+        state.error != null) {
+      if (active == null || active['id'] != saved.job) {
+        _savedSession = null;
+        unawaited(sessionStore.clear());
+      }
+      return;
+    }
+    _savedSession = null;
+    _automaticJob = saved.job;
+    _automaticShortcut = saved.shortcut;
+    final current = state.currentWindow;
+    final attempt = current?['attempt'] as String?;
+    _issuedAttempt = attempt;
+    // A range only completes after the Shortcut's Finish ran, so it returned.
+    _returnedAttempt = current?['state'] == 'complete' ? attempt : null;
+  }
+
   Future<void> _advance(String expected, int revision) async {
+    await _restoreSession();
+    _check(expected, revision);
     final job = _automaticJob;
     if (job == null) return;
+    if (state.activeJob?['id'] == job &&
+        state.partial &&
+        !state.paused &&
+        state.error == null &&
+        state.currentStopIsRetryable) {
+      // Retry (or split a dense 500-message range) by itself a few times
+      // before asking the person to step in.
+      final window = state.currentWindow!;
+      final key = '${window['id']}';
+      final tries = _autoRetries[key] ?? 0;
+      if (tries < _maxAutoRetries &&
+          await service.call('isForeground') == true) {
+        _autoRetries[key] = tries + 1;
+        final dense = (window['found'] as int? ?? 0) >= 500;
+        await service.call('control', {
+          'generation': state.generation,
+          'command': dense ? 'split' : 'retry',
+        });
+        _check(expected, revision);
+        await _load();
+        _check(expected, revision);
+        await _launch(expected, revision);
+        return;
+      }
+    }
     if (state.activeJob?['id'] != job ||
         state.paused ||
         state.partial ||
         state.error != null) {
       _endAutomaticSession();
+      return;
+    }
+    if (_issuedAttempt == null) {
+      // Restored before this range was issued: start it now.
+      if (state.currentWindow?['state'] == 'queued' &&
+          await service.call('isForeground') == true) {
+        _check(expected, revision);
+        await _launch(expected, revision);
+      }
       return;
     }
     if (_issuedAttempt == null) return;
@@ -699,9 +896,45 @@ class IosSmsIntakeController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _endAutomaticSession();
+    _autoResumeTimer?.cancel();
+    // Teardown is not the person stopping the import: keep the saved session.
+    _endAutomaticSession(forget: false);
     _revision++;
     if (service.supported) service.listen(null);
     super.dispose();
+  }
+}
+
+/// Saved "an automatic import is running" marker. Storage failures only mean
+/// the person may need to tap Resume, never a wrong import.
+class IosImportSessionStore {
+  const IosImportSessionStore();
+  static const _key = 'pandapay.ios_sms_auto_import_session_v1';
+
+  Future<void> save(String job, String shortcut) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_key, jsonEncode({'job': job, 'shortcut': shortcut}));
+    } catch (_) {}
+  }
+
+  Future<({String job, String shortcut})?> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_key);
+      if (raw == null) return null;
+      final value = jsonDecode(raw);
+      if (value is Map && value['job'] is String && value['shortcut'] is String) {
+        return (job: value['job'] as String, shortcut: value['shortcut'] as String);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> clear() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_key);
+    } catch (_) {}
   }
 }
