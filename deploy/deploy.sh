@@ -375,6 +375,14 @@ fi
 # Reviewed JSON files are deliberately gitignored. Use the host's protected
 # directory for the archived target as well as after the source replacement.
 export MIGRATION_BASELINES_DIR="$APP_DIR/deploy/migration-baselines"
+# Legacy checkouts predate this required bind mount. Create only its empty
+# protected directory; reviewed manifests and adoption remain operator-owned.
+if [ ! -e "$MIGRATION_BASELINES_DIR" ]; then
+  mkdir -m 700 -p "$MIGRATION_BASELINES_DIR"
+fi
+[ -d "$MIGRATION_BASELINES_DIR" ] && [ ! -L "$MIGRATION_BASELINES_DIR" ] || {
+  echo 'FATAL: migration baseline mount must be a real directory' >&2; exit 1;
+}
 echo "==> Building target images before the maintenance window"
 "${TARGET_COMPOSE[@]}" build api auth rewards-worker backup db-migrate gemini-worker sms-learning-worker
 
