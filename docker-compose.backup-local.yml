@@ -1,0 +1,15 @@
+# Explicit host opt-in only. Requires Docker Compose 2.24.4+ (!override).
+services:
+  backup:
+    environment:
+      BACKUP_MODE: local
+      BACKUP_DESTINATION_A: ""
+      BACKUP_DESTINATION_B: ""
+    volumes: !override
+      - backups:/var/backups/pandapay
+      - type: bind
+        source: "${BACKUP_AGE_RECIPIENTS_FILE:?}"
+        target: /run/secrets/backup-recipients.txt
+        read_only: true
+        bind:
+          create_host_path: false

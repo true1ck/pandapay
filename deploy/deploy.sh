@@ -50,6 +50,7 @@ SOURCE_REPLACEMENT_STARTED=0
 DEPLOY_BACKUP_STAGE=''
 DEPLOY_TARGET_STAGE=''
 OLD_WRITER_CONTAINER_IDS=()
+BACKUP_COMPOSE_FILES=()
 
 remaining_maintenance_seconds() {
   local remaining=$((MAINTENANCE_DEADLINE - SECONDS))
@@ -71,7 +72,7 @@ run_in_maintenance_window() {
 stop_writer_services_best_effort() {
   local compose_stop_failed=0 query_failed=0 container_id active_output
   if ! timeout --kill-after=10s --foreground 60s docker compose --profile sms-ai --profile sms-learning \
-    -f docker-compose.prod.yml --env-file .env stop --timeout 30 "${WRITE_SERVICES[@]}"; then
+    -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env stop --timeout 30 "${WRITE_SERVICES[@]}"; then
     compose_stop_failed=1
   fi
 
@@ -79,7 +80,7 @@ stop_writer_services_best_effort() {
   # any still-running target containers and stop them directly by ID.
   local -a active_ids=()
   if active_output="$(timeout --kill-after=10s --foreground 20s docker compose --profile sms-ai --profile sms-learning \
-    -f docker-compose.prod.yml --env-file .env ps -q "${WRITE_SERVICES[@]}" 2>/dev/null)"; then
+    -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env ps -q "${WRITE_SERVICES[@]}" 2>/dev/null)"; then
     while IFS= read -r container_id; do
       [ -n "$container_id" ] && active_ids+=("$container_id")
     done <<< "$active_output"
@@ -177,10 +178,29 @@ for key in \
   IMAP_ENCRYPTION_KEY \
   CORS_ALLOWED_ORIGINS \
   ENCRYPTION_KEY \
-  BACKUP_AGE_RECIPIENTS_FILE \
-  BACKUP_DESTINATION_A \
-  BACKUP_DESTINATION_B; do
+  BACKUP_AGE_RECIPIENTS_FILE; do
   check_single_env_key "$key"
+done
+
+# Only the host file may opt into local storage; inherited shell values must
+# not silently relax the offhost default. Reject ambiguity before downtime.
+BACKUP_MODE=offhost
+if grep -q '^BACKUP_MODE=' .env; then
+  check_single_env_key BACKUP_MODE
+  BACKUP_MODE="$(sed -n 's/^BACKUP_MODE=//p' .env | sed 's/^"//; s/"$//')"
+fi
+case "$BACKUP_MODE" in
+  local|offhost) ;;
+  *) echo 'FATAL: BACKUP_MODE must be local or offhost' >&2; exit 1 ;;
+esac
+export BACKUP_MODE
+if [ "$BACKUP_MODE" = local ] && [ -s docker-compose.backup-local.yml ]; then
+  BACKUP_COMPOSE_FILES=(-f docker-compose.backup-local.yml)
+fi
+for key in BACKUP_DESTINATION_A BACKUP_DESTINATION_B; do
+  if [ "$BACKUP_MODE" = offhost ] || grep -q "^${key}=" .env; then
+    check_single_env_key "$key"
+  fi
 done
 
 for key in DATABASE_URL JWT_ISSUER JWT_AUDIENCE JWT_ACTIVE_KEY_ID; do
@@ -340,6 +360,12 @@ SHA="$TARGET_COMMIT"
 DEPLOY_TARGET_STAGE="$(mktemp -d)"
 git archive "$SHA" | tar -x -C "$DEPLOY_TARGET_STAGE"
 TARGET_COMPOSE=(docker compose --profile sms-ai --profile sms-learning -f "$DEPLOY_TARGET_STAGE/docker-compose.prod.yml" --env-file "$APP_DIR/.env")
+if [ "$BACKUP_MODE" = local ]; then
+  test -s "$DEPLOY_TARGET_STAGE/docker-compose.backup-local.yml" || {
+    echo 'FATAL: target is missing the local backup override' >&2; exit 1;
+  }
+  TARGET_COMPOSE+=(-f "$DEPLOY_TARGET_STAGE/docker-compose.backup-local.yml")
+fi
 # Reviewed JSON files are deliberately gitignored. Use the host's protected
 # directory for the archived target as well as after the source replacement.
 export MIGRATION_BASELINES_DIR="$APP_DIR/deploy/migration-baselines"
@@ -377,7 +403,7 @@ done <<< "$active_services"
 
 echo "==> Fencing API/auth and background writer services before the paired backup"
 for service in "${WRITE_SERVICES[@]}"; do
-  container_ids="$(docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env ps -q "$service")" || {
+  container_ids="$(docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env ps -q "$service")" || {
     echo "FATAL: could not inventory the existing $service container; refusing to fence writers without a recovery list." >&2
     exit 1
   }
@@ -389,7 +415,7 @@ MAINTENANCE_DEADLINE=$((SECONDS + MAINTENANCE_WINDOW_SECONDS))
 SERVICES_FENCED=1
 run_in_maintenance_window 'Stopping writer services with a 30-second graceful timeout' \
   docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env \
-    stop --timeout 30 "${WRITE_SERVICES[@]}"
+    "${BACKUP_COMPOSE_FILES[@]}" stop --timeout 30 "${WRITE_SERVICES[@]}"
 
 echo "==> Creating and verifying the paired encrypted product/auth backup"
 run_in_maintenance_window 'Paired backup' \
@@ -399,12 +425,15 @@ echo "==> Backup copies verified; syncing working source"
 SOURCE_REPLACEMENT_STARTED=1
 git reset -q --hard "$SHA"
 git clean -qfd -e .env -e .env.prod -e node_modules
+if [ "$BACKUP_MODE" = local ]; then
+  BACKUP_COMPOSE_FILES=(-f docker-compose.backup-local.yml)
+fi
 echo "    now at: $(git log --oneline -1)"
 
 # db-migrate is a one-shot service; --exit-code-from surfaces a failed
 # migration as a failed deploy instead of a container that quietly exited 1.
 run_in_maintenance_window 'Applying migrations' \
-  docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env \
+  docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml "${BACKUP_COMPOSE_FILES[@]}" --env-file .env \
     up --no-build --abort-on-container-exit --exit-code-from db-migrate db-migrate
 
 echo "==> Rebuilding and restarting services"
@@ -422,7 +451,9 @@ for i in $(seq 1 30); do
   if [ "$i" -lt 30 ]; then sleep 10; fi
 done
 echo "FATAL: services did not become healthy"
-docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env logs --tail=40 api auth
+files=()
+if [ "$BACKUP_MODE" = local ]; then files=(-f docker-compose.backup-local.yml); fi
+docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml "${files[@]}" --env-file .env logs --tail=40 api auth
 exit 1
 FINAL_HEALTH_CHECK
 SERVICES_FENCED=0

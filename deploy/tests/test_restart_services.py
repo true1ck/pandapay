@@ -8,6 +8,11 @@ import unittest
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "restart-services.sh"
+BACKUP_ENV = (
+    "BACKUP_AGE_RECIPIENTS_FILE=/synthetic/public-recipients.txt\n"
+    "BACKUP_DESTINATION_A=/synthetic/offhost-a\n"
+    "BACKUP_DESTINATION_B=/synthetic/offhost-b\n"
+)
 STUB = r'''#!/usr/bin/env python3
 import json,os,sys
 from pathlib import Path
@@ -30,7 +35,8 @@ class SequentialRolloutTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder)
             env_content = settings.pop("ENV_CONTENT", "")
-            (directory / ".env").write_text(env_content)
+            backup_env = settings.pop("BACKUP_ENV_CONTENT", BACKUP_ENV)
+            (directory / ".env").write_text(backup_env + env_content)
             for name in ("docker", "curl", "sleep"):
                 command = directory / name
                 command.write_text(STUB)
@@ -67,6 +73,41 @@ class SequentialRolloutTest(unittest.TestCase):
             self.assertTrue(any(name == "curl" and any(marker in arg for arg in args)
                                 for name, args, _ in commands[:start]))
 
+    def test_missing_backup_recipient_blocks_before_docker(self):
+        result, commands = self.rollout(BACKUP_ENV_CONTENT="BACKUP_MODE=local\n")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("BACKUP_AGE_RECIPIENTS_FILE", result.stderr)
+        self.assertFalse(commands)
+
+    def test_default_offhost_missing_either_destination_blocks_before_docker(self):
+        for key in ("BACKUP_DESTINATION_A", "BACKUP_DESTINATION_B"):
+            with self.subTest(key=key):
+                backup_env = "".join(line for line in BACKUP_ENV.splitlines(True)
+                                     if not line.startswith(key + "="))
+                result, commands = self.rollout(BACKUP_ENV_CONTENT=backup_env)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(key, result.stderr)
+                self.assertFalse(commands)
+
+    def test_local_without_destinations_selects_override_for_all_compose_calls(self):
+        result, commands = self.rollout(BACKUP_ENV_CONTENT=
+            "BACKUP_MODE=local\nBACKUP_AGE_RECIPIENTS_FILE=/synthetic/public.txt\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        compose_calls = [args for name, args, _ in commands
+                         if name == "docker" and args[0] == "compose"]
+        self.assertTrue(compose_calls)
+        self.assertTrue(all("docker-compose.backup-local.yml" in args for args in compose_calls))
+
+    def test_invalid_duplicate_or_empty_backup_settings_block_before_docker(self):
+        for extra in ("BACKUP_MODE=invalid\n", "BACKUP_MODE=\n",
+                      "BACKUP_MODE=local\nBACKUP_MODE=offhost\n",
+                      "BACKUP_AGE_RECIPIENTS_FILE=duplicate\n",
+                      "BACKUP_DESTINATION_A=duplicate\n"):
+            with self.subTest(extra=extra):
+                result, commands = self.rollout(ENV_CONTENT=extra)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(commands)
+
     def test_failed_build_leaves_running_services_untouched(self):
         result, commands = self.rollout(FAIL_BUILD="api")
         self.assertNotEqual(result.returncode, 0)
@@ -101,7 +142,7 @@ class SequentialRolloutTest(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder)
-            (directory / ".env").write_text("".join(f"{k}={v}\n" for k, v in values.items()))
+            (directory / ".env").write_text(BACKUP_ENV + "".join(f"{k}={v}\n" for k, v in values.items()))
             for name in ("docker", "curl", "sleep"):
                 command = directory / name
                 command.write_text(STUB)

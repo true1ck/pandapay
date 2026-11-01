@@ -361,6 +361,7 @@ services:
       DB_SSL: "${DB_SSL:-true}"
       DB_SSL_CA: "${DB_SSL_CA:-}"
       BACKUP_DIR: /var/backups/pandapay
+      BACKUP_MODE: "${BACKUP_MODE:-offhost}"
       BACKUP_AGE_RECIPIENTS_FILE: /run/secrets/backup-recipients.txt
       BACKUP_DESTINATION_A: /offhost/a
       BACKUP_DESTINATION_B: /offhost/b
@@ -378,12 +379,14 @@ services:
         bind:
           create_host_path: false
       - type: bind
-        source: "${BACKUP_DESTINATION_A:?}"
+        # A path beneath /dev/null cannot be mounted; fail closed when absent.
+        # Interpolation must allow local mode to replace this mount entirely.
+        source: "${BACKUP_DESTINATION_A:-/dev/null/backup-destination-a-required}"
         target: /offhost/a
         bind:
           create_host_path: false
       - type: bind
-        source: "${BACKUP_DESTINATION_B:?}"
+        source: "${BACKUP_DESTINATION_B:-/dev/null/backup-destination-b-required}"
         target: /offhost/b
         bind:
           create_host_path: false

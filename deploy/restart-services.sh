@@ -5,6 +5,29 @@ set -euo pipefail
 
 export COMPOSE_PARALLEL_LIMIT=1
 COMPOSE=(docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env)
+BACKUP_MODE=offhost
+mode_count="$(awk '/^BACKUP_MODE=/ { n++ } END { print n+0 }' .env)"
+if [ "$mode_count" -gt 1 ]; then
+  echo 'FATAL: duplicate BACKUP_MODE entries' >&2; exit 1
+elif [ "$mode_count" -eq 1 ]; then
+  BACKUP_MODE="$(sed -n 's/^BACKUP_MODE=//p' .env | sed 's/^"//; s/"$//')"
+fi
+case "$BACKUP_MODE" in
+  local) COMPOSE+=(-f docker-compose.backup-local.yml) ;;
+  offhost) ;;
+  *) echo 'FATAL: BACKUP_MODE must be local or offhost' >&2; exit 1 ;;
+esac
+export BACKUP_MODE
+backup_keys=(BACKUP_AGE_RECIPIENTS_FILE)
+if [ "$BACKUP_MODE" = offhost ]; then
+  backup_keys+=(BACKUP_DESTINATION_A BACKUP_DESTINATION_B)
+fi
+for key in "${backup_keys[@]}"; do
+  count="$(awk -v key="$key" 'index($0, key "=") == 1 { n++ } END { print n+0 }' .env)"
+  if [ "$count" -ne 1 ] || ! grep -Eq "^${key}=.+" .env; then
+    echo "FATAL: expected exactly one nonempty $key" >&2; exit 1
+  fi
+done
 ATTEMPTS="${DEPLOY_HEALTH_ATTEMPTS:-30}"
 INTERVAL="${DEPLOY_HEALTH_INTERVAL_SECONDS:-5}"
 [[ "$ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || { echo 'FATAL: invalid health attempts'; exit 1; }

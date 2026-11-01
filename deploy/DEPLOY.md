@@ -1,5 +1,28 @@
 # Deploying api/ and auth/
 
+## Opt-in encrypted backups on the existing server
+
+Offhost storage remains the default and requires both `BACKUP_DESTINATION_A`
+and `BACKUP_DESTINATION_B`. An operator may explicitly set `BACKUP_MODE=local`
+in the host `.env` to retain encrypted paired product/auth backups in the
+existing `backups` volume without external mounts. This protects migration
+recovery but does not protect against losing the server or its disk.
+
+Both modes require `BACKUP_AGE_RECIPIENTS_FILE` pointing to a readable public
+age recipient file. Keep the private recovery identity separately and verify
+that it can decrypt a backup. Never mount the private identity in production.
+Key provisioning is separate from deployment.
+
+Local mode requires Docker Compose 2.24.4+ for `!override` and automatically
+selects `docker-compose.backup-local.yml` during target builds, paired backups,
+migrations and service restarts. Scheduled backups receive the same local
+mode. For manual Compose commands include both files in order:
+`docker compose -f docker-compose.prod.yml -f docker-compose.backup-local.yml --env-file .env ...`.
+The override replaces all backup mounts with only the backups volume and public
+recipient mount. Invalid or duplicate mode settings fail before writer downtime.
+To return to offhost mode, provision both independent destinations and set
+`BACKUP_MODE=offhost` (or remove the mode entry), then deploy/restart normally.
+
 ## Security foundation deployment requirements — 22 October 2026
 
 The current security batch requires paired encrypted product/auth backups

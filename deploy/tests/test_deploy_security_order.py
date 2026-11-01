@@ -20,6 +20,9 @@ if args and args[0]=='archive':
         info=tarfile.TarInfo('docker-compose.prod.yml')
         info.size=0
         archive.addfile(info, io.BytesIO())
+        info=tarfile.TarInfo('docker-compose.backup-local.yml')
+        info.size=1
+        archive.addfile(info, io.BytesIO(b'\n'))
 elif args and args[0]=='log':
     print('synthetic-target')
 elif args and args[0]=='rev-parse':
@@ -135,6 +138,10 @@ class DeploySecurityOrderTest(unittest.TestCase):
             ))
             with env_file.open("a") as output:
                 output.write("AI_WORKER_TOKEN=\nGEMINI_API_KEY=\n")
+                output.write(settings.pop("HOST_BACKUP_CONFIG", ""))
+            if settings.pop("OMIT_DESTINATIONS", "0") == "1":
+                env_file.write_text("".join(line for line in env_file.read_text().splitlines(True)
+                                           if not line.startswith("BACKUP_DESTINATION_")))
             bin_dir = base / "bin"
             bin_dir.mkdir()
             for name, body in (("git", GIT_STUB), ("docker", DOCKER_STUB),
@@ -166,6 +173,55 @@ class DeploySecurityOrderTest(unittest.TestCase):
     @staticmethod
     def command_index(commands, predicate):
         return next(i for i, command in enumerate(commands) if predicate(command))
+
+    def test_default_offhost_requires_destinations_before_downtime(self):
+        result, commands, _ = self.run_deploy(OMIT_DESTINATIONS="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("BACKUP_DESTINATION_A", result.stdout)
+        self.assertFalse(any(c[0] == "docker" for c in commands))
+
+    def test_local_without_destinations_selects_override_only_for_target(self):
+        result, commands, _ = self.run_deploy(
+            HOST_BACKUP_CONFIG="BACKUP_MODE=local\n", OMIT_DESTINATIONS="1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        reset = self.command_index(commands, lambda c: c[0] == "git" and c[1][0] == "reset")
+        for i, (tool, args) in enumerate(commands):
+            if tool != "docker" or "compose" not in args:
+                continue
+            has_override = any(a.endswith("docker-compose.backup-local.yml") for a in args)
+            target = any("/tmp/" in a and a.endswith("docker-compose.prod.yml") for a in args)
+            self.assertEqual(has_override, target or i > reset, args)
+
+    def test_invalid_or_duplicate_mode_blocks_before_downtime(self):
+        for config in ("BACKUP_MODE=invalid\n", "BACKUP_MODE=\n",
+                       "BACKUP_MODE=local\nBACKUP_MODE=offhost\n"):
+            with self.subTest(config=config):
+                result, commands, _ = self.run_deploy(HOST_BACKUP_CONFIG=config)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(any(c[0] == "docker" for c in commands))
+
+    def test_local_backup_failure_preserves_original_writer_recovery(self):
+        result, commands, running = self.run_deploy(
+            HOST_BACKUP_CONFIG="BACKUP_MODE=local\n", OMIT_DESTINATIONS="1", FAIL_BACKUP="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(running.issuperset(WRITERS))
+        self.assertFalse(any(c[0] == "git" and c[1][0] == "reset" for c in commands))
+
+    def test_duplicate_backup_keys_block_before_downtime(self):
+        for key in ("BACKUP_AGE_RECIPIENTS_FILE", "BACKUP_DESTINATION_A", "BACKUP_DESTINATION_B"):
+            result, commands, _ = self.run_deploy(
+                HOST_BACKUP_CONFIG=f"BACKUP_MODE=local\n{key}=duplicate\n")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(key, result.stdout)
+            self.assertFalse(any(c[0] == "docker" for c in commands))
+
+    def test_local_migration_failure_keeps_fence_and_uses_override(self):
+        result, commands, running = self.run_deploy(
+            HOST_BACKUP_CONFIG="BACKUP_MODE=local\n", OMIT_DESTINATIONS="1", FAIL_MIGRATION="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(running.isdisjoint(WRITERS))
+        stops = [c[1] for c in commands if c[0] == "docker" and "compose" in c[1] and "stop" in c[1]]
+        self.assertIn("docker-compose.backup-local.yml", stops[-1])
 
     def test_fences_all_writers_before_backup_and_migration_then_starts_target(self):
         result, commands, _ = self.run_deploy()
