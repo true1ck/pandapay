@@ -15,6 +15,7 @@ import '../../data/sync_api.dart';
 import '../../data/sync_transaction_delta.dart';
 import 'split_sync.dart';
 import '../../data/local/financial_store.dart';
+import '../../data/local/self_transfer_rules.dart';
 import '../../data/user_categories_repository.dart';
 import '../../data/portable_backup/account_recovery_operation_gate.dart';
 import 'dart:convert';
@@ -112,6 +113,7 @@ class SyncEngine {
 
       final pushed = await _push(api, queue, deviceId);
       final (pulled, conflicts) = await _pullAndApply(api, queue, deviceId);
+      await _refreshSelfTransferRules(api, queue);
       await _ref.read(transactionTagsProvider)?.sync();
 
       return SyncResult(
@@ -381,6 +383,14 @@ class SyncEngine {
 
     _ref.read(unacknowledgedConflictsProvider.notifier).state = totalConflicts;
     return (totalPulled, totalConflicts);
+  }
+
+  Future<void> _refreshSelfTransferRules(SyncApi api, SyncQueue queue) async {
+    final remote = await api.fetchSelfTransferRules();
+    if (remote == null) return;
+    final cache = await _ref.read(responseCacheProvider.future);
+    SelfTransferRules(cache.financialStore.database, namespace: queue.namespace)
+        .replaceRemote(remote);
   }
 
   Future<void> _materialize(

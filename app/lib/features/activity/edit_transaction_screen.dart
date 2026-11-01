@@ -16,6 +16,10 @@ import '../../data/local/sms_feedback_outbox.dart';
 import '../../data/local/auto_resolved_history_repository.dart';
 import '../../data/merchant_category_rules_repository.dart';
 import '../../data/user_cards_repository.dart';
+import '../../data/self_transfer.dart';
+import '../../data/local/financial_store.dart' show canonicalBankSender;
+import '../../data/local/self_transfer_rules.dart';
+import '../../data/local/sms_intake_repository.dart';
 import 'category_bulk_review_sheet.dart';
 import 'merchant_future_rule_sheet.dart';
 import 'sms_learning_capture.dart';
@@ -51,6 +55,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   DateTime? _occurredAt;
   TxnInstrument? _instrument;
   TxnEntryKind _entryKind = TxnEntryKind.spend;
+  SelfTransferDestination? _selfTransfer;
+  SelfTransferDestination? _clearedSelfTransfer;
+  bool _rememberSelfTransferChoice = false;
+  bool _applyHistoricalSelfTransferChoice = false;
   TxnRail _rail = TxnRail.unknown;
   bool _initialized = false;
   bool _saving = false;
@@ -80,6 +88,14 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     _categoryId = entry.categoryId;
     _occurredAt = entry.occurredAt;
     _entryKind = entry.entryKind;
+    final destination = entry.selfTransferRule?['destination'];
+    if (entry.entryKind == TxnEntryKind.transfer && destination is Map &&
+        destination['bank'] is String && destination['accountLast4'] is String) {
+      _selfTransfer = SelfTransferDestination(
+        bank: destination['bank'] as String,
+        accountLast4: destination['accountLast4'] as String,
+      );
+    }
     _instrument = entry.instrumentKnown ? entry.instrument : null;
     _rail = entry.rail;
     // The bottom action is built before the body's AsyncValue builder runs.
@@ -97,12 +113,22 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       setState(() => _error = 'Enter a valid amount greater than zero.');
       return;
     }
+    if ((_selfTransfer != null || _clearedSelfTransfer != null) &&
+        ref.read(isOnlineProvider).valueOrNull == false) {
+      setState(
+        () => _error =
+            'Connect to the internet to confirm or undo this self-transfer.',
+      );
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
     });
     final original = _originalEntry;
     final financialChanged =
+        _selfTransfer != null ||
+        _clearedSelfTransfer != null ||
         original == null ||
         original.amount != Money.fromRupees(amount) ||
         original.categoryId != _categoryId ||
@@ -129,13 +155,17 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       }
       if (financialChanged) {
         await _submitEdit(amount);
-        await _recordSmsEditFeedbackSafely(amount);
+        await _rememberSelfTransfer();
+        if (_selfTransfer == null && _clearedSelfTransfer == null) await _recordSmsEditFeedbackSafely(amount);
       }
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
       ref.invalidate(homeSummaryProvider);
+      ref.invalidate(spendReportProvider);
+      ref.invalidate(categorySpendProvider);
+      ref.invalidate(budgetsProvider);
 
       // The original row is saved before this optional bulk flow starts. A
       // preview is only useful for a real online category change; tags and
@@ -170,7 +200,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // rejection five times before dropping it, while telling the user it
       // was saved.
       final offline = ref.read(isOnlineProvider).valueOrNull == false;
-      if (offline) {
+      if (offline && _selfTransfer == null && _clearedSelfTransfer == null) {
         final queue = await ref.read(syncQueueProvider.future);
         final clientSeq = queue.enqueueUpdate(
           entity: 'transactions',
@@ -214,14 +244,19 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
               .refresh();
           if (refreshed != null && refreshed.isNotEmpty) {
             await _submitEdit(amount);
+            await _rememberSelfTransfer();
             if (financialChanged) {
-              await _recordSmsEditFeedbackSafely(amount);
+              if (_selfTransfer == null)
+                await _recordSmsEditFeedbackSafely(amount);
             }
             ref.invalidate(userCardsProvider);
             ref.invalidate(myCardsProvider);
             ref.invalidate(transactionsProvider);
             ref.invalidate(utilizationTransactionsProvider);
             ref.invalidate(homeSummaryProvider);
+            ref.invalidate(spendReportProvider);
+            ref.invalidate(categorySpendProvider);
+            ref.invalidate(budgetsProvider);
             if (mounted) context.pop(true);
             return;
           }
@@ -257,9 +292,111 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           ? null
           : _merchantController.text.trim(),
       userCardId: _userCardId,
-      instrument: _instrument,
+      instrument: _selfTransfer != null ? TxnInstrument.upiBank : _instrument,
       entryKind: _entryKind,
+      selfTransfer: _selfTransfer == null && _clearedSelfTransfer == null
+          ? null
+          : {
+              ...(_selfTransfer ?? _clearedSelfTransfer!).toJson(),
+              if (_selfTransfer != null)
+                'remember': _rememberSelfTransferChoice,
+              if (_selfTransfer != null && _applyHistoricalSelfTransferChoice)
+                'applyHistorical': true,
+              if (_selfTransfer == null) 'action': 'disable',
+            },
       rail: _rail,
+    );
+  }
+
+  Future<void> _rememberSelfTransfer() async {
+    // The server has already committed. A local cache failure must not turn
+    // a successful financial correction into a failed save.
+    try {
+      final original = _originalEntry;
+      if (original?.sourceKey == null) return;
+      final cache = await ref.read(responseCacheProvider.future);
+      final namespace = ref.read(cacheNamespaceProvider);
+      final captured = SmsIntakeRepository(
+        cache.financialStore.database,
+      ).capturedById(namespace, original!.sourceKey!);
+      if (captured == null) return;
+      final rules = SelfTransferRules(
+        cache.financialStore.database,
+        namespace: namespace,
+      );
+      if (_selfTransfer != null && _rememberSelfTransferChoice) {
+        rules.remember(
+          sender: captured.message.sender,
+          body: captured.message.body,
+          destination: _selfTransfer!,
+        );
+      } else if (_selfTransfer == null && _entryKind != TxnEntryKind.transfer) {
+        rules.forget(
+          sender: captured.message.sender,
+          body: captured.message.body,
+        );
+      }
+    } catch (_) {
+      // Future server imports still use the committed personal confirmation.
+    }
+  }
+
+  Widget _selfTransferPicker(TransactionEntry entry) {
+    if (entry.instrument != TxnInstrument.upiBank ||
+        entry.accountLast4 == null ||
+        (entry.source != 'sms' && entry.source != 'sms_bulk') ||
+        (_entryKind != TxnEntryKind.spend &&
+            _entryKind != TxnEntryKind.transfer)) {
+      return const SizedBox.shrink();
+    }
+    final accounts =
+        ref.watch(bankAccountSummariesProvider).valueOrNull ?? const [];
+    final choices = <String, SelfTransferDestination>{
+      for (final account in accounts)
+        if (account.issuerSlug != null && account.accountLast4 != entry.accountLast4)
+          '${canonicalBankSender(account.issuerSlug)}:${account.accountLast4}':
+              SelfTransferDestination(
+                accountLast4: account.accountLast4,
+                bank: canonicalBankSender(account.issuerSlug),
+              ),
+    };
+    if (choices.isEmpty) return const SizedBox.shrink();
+    final selected = _selfTransfer == null
+        ? null
+        : '${_selfTransfer!.bank}:${_selfTransfer!.accountLast4}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.lg),
+      child: DropdownButtonFormField<String>(
+        key: ValueKey('self-transfer-account:$selected'),
+        initialValue: selected,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Mark as self-transfer',
+          helperText:
+              'Excluded from spending. Choose the receiving account; remembering is optional.',
+          helperMaxLines: 2,
+        ),
+        hint: const Text('Choose receiving account'),
+        items: [
+          for (final choice in choices.entries)
+            DropdownMenuItem(
+              value: choice.key,
+              child: Text(
+                '${selfTransferBankLabel(choice.value.bank)} •${choice.value.accountLast4}',
+              ),
+            ),
+        ],
+        onChanged: _saving
+            ? null
+            : (value) {
+                if (value == null) return;
+                setState(() {
+                  _selfTransfer = choices[value];
+                  _entryKind = TxnEntryKind.transfer;
+                  _merchantController.text = _selfTransfer!.label;
+                });
+              },
+      ),
     );
   }
 
@@ -661,6 +798,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                     ),
                     const SizedBox(height: AppSpace.lg),
                     DropdownButtonFormField<TxnEntryKind>(
+                      key: ValueKey(_entryKind),
                       initialValue: _entryKind,
                       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                       decoration: inputDecoration('Kind'),
@@ -675,6 +813,13 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         if (value == null) return;
                         setState(() {
                           _entryKind = value;
+                          if (value != TxnEntryKind.transfer &&
+                              _selfTransfer != null) {
+                            _clearedSelfTransfer = _selfTransfer;
+                            _selfTransfer = null;
+                            _merchantController.text =
+                                _originalEntry?.merchantName ?? '';
+                          }
                           if (_entryKind != TxnEntryKind.spend &&
                               _instrument == TxnInstrument.creditCard) {
                             _instrument = TxnInstrument.upiBank;
@@ -684,6 +829,39 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       },
                     ),
                     const SizedBox(height: AppSpace.lg),
+                    _selfTransferPicker(entry),
+                    if (_selfTransfer != null)
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _rememberSelfTransferChoice,
+                        onChanged: _saving
+                            ? null
+                            : (value) => setState(
+                                () => _rememberSelfTransferChoice =
+                                    value ?? false,
+                              ),
+                        title: const Text('Remember for similar transfers'),
+                        subtitle: const Text(
+                          'Use this exact source account and recipient only.',
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                    if (_selfTransfer != null)
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _applyHistoricalSelfTransferChoice,
+                        onChanged: _saving
+                            ? null
+                            : (value) => setState(
+                                () => _applyHistoricalSelfTransferChoice =
+                                    value ?? false,
+                              ),
+                        title: const Text('Apply to previous matching transfers'),
+                        subtitle: const Text(
+                          'Reclassifies older matching bank SMS rows; user-locked rows are left unchanged.',
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
                     DropdownButtonFormField<TxnInstrument?>(
                       initialValue: _instrument,
                       hint: const Text('Unknown — choose a method'),

@@ -45,6 +45,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     String? userCardId,
     TxnInstrument? instrument,
     TxnEntryKind? entryKind,
+    Map<String, dynamic>? selfTransfer,
     bool clearCategory = false,
   }) async {
     editCalls++;
@@ -61,6 +62,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
       'userCardId': userCardId,
       'instrument': instrument,
       'entryKind': entryKind,
+      'selfTransfer': selfTransfer,
     };
   }
 
@@ -122,6 +124,54 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('reopening a self-transfer retains its destination for undo', (tester) async {
+    final repo = _FakeUserCardsRepository(TransactionEntry(
+      id: 't1', amount: Money.fromRupees(10000), occurredAt: DateTime(2026, 11, 1),
+      merchantName: 'Self-transfer to Slice •5799', accountLast4: '1797',
+      instrument: TxnInstrument.upiBank, entryKind: TxnEntryKind.transfer,
+      source: 'sms', status: 'active',
+      selfTransferRule: const {'destination': {'bank': 'slcbnk', 'accountLast4': '5799'}},
+    ));
+    await _pump(tester, repo: repo, withRouter: true, overrides: [
+      bankAccountSummariesProvider.overrideWith((ref) async => const [
+        BankAccountSummary(accountLast4: '5799', availableBalance: null,
+          latestSmsAt: null, smsCount: 1, issuerSlug: 'slcbnk'),
+      ]),
+    ]);
+    await tester.tap(find.byKey(const ValueKey(TxnEntryKind.transfer)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(TxnEntryKind.spend.label).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(repo.lastEditArgs?['entryKind'], TxnEntryKind.spend);
+    expect(repo.lastEditArgs?['selfTransfer'], {
+      'bank': 'slcbnk', 'accountLast4': '5799', 'action': 'disable',
+    });
+  });
+  testWidgets('confirms the receiving owned account and saves a neutral self-transfer', (tester) async {
+    final repo = _FakeUserCardsRepository(TransactionEntry(
+      id: 't1', amount: Money.fromRupees(10000), occurredAt: DateTime(2026, 11, 1),
+      merchantName: 'Transfer to slice small finance bank', accountLast4: '1797',
+      instrument: TxnInstrument.upiBank, source: 'sms', status: 'active',
+    ));
+    await _pump(tester, repo: repo, withRouter: true, overrides: [
+      bankAccountSummariesProvider.overrideWith((ref) async => const [
+        BankAccountSummary(accountLast4: '5799', availableBalance: null,
+          latestSmsAt: null, smsCount: 1, issuerSlug: 'slcbnk'),
+      ]),
+    ]);
+    await tester.tap(find.byKey(const ValueKey('self-transfer-account:null')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Slice •5799').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(repo.lastEditArgs?['entryKind'], TxnEntryKind.transfer);
+    expect(repo.lastEditArgs?['merchantName'], 'Self-transfer to Slice •5799');
+    expect(repo.lastEditArgs?['selfTransfer'], {'bank': 'slcbnk', 'accountLast4': '5799', 'remember': false});
+  });
+
   testWidgets('pre-fills amount and merchant from the existing transaction', (
     tester,
   ) async {

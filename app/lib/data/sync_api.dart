@@ -239,6 +239,27 @@ class SyncApi {
     }
   }
 
+  /// Returns the account's active self-transfer relationships. Older API
+  /// deployments do not have the additive rule migration yet; null means
+  /// "leave the existing local cache alone and retry later", not "clear it".
+  Future<List<Map<String, dynamic>>?> fetchSelfTransferRules() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/self-transfer-rules'),
+      headers: _headers,
+    );
+    if (response.statusCode == 404 || response.statusCode == 503) return null;
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'GET /self-transfer-rules failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['rules'] as List? ?? const [])
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
   Future<List<SpendCategory>> fetchUserCategories() async {
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/user-categories'),

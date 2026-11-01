@@ -2576,6 +2576,7 @@ class UserCardsRepository {
     String? userCardId,
     TxnInstrument? instrument,
     TxnEntryKind? entryKind,
+    Map<String, dynamic>? selfTransfer,
   }) async {
     if (clearCategory && (categoryId != null || userCategoryId != null)) {
       throw ArgumentError(
@@ -2603,6 +2604,7 @@ class UserCardsRepository {
       'userCardId': ?userCardId,
       if (instrument != null) 'instrument': instrument.wireValue,
       if (entryKind != null) 'entryKind': entryKind.wireValue,
+      if (selfTransfer != null) 'selfTransfer': selfTransfer,
     };
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/transactions/$id'),
@@ -3212,6 +3214,7 @@ class TransactionTag {
 }
 
 class TransactionEntry {
+  final Map<String, dynamic>? selfTransferRule;
   final String? sourceKey;
   final String id;
   final Money amount;
@@ -3291,6 +3294,7 @@ class TransactionEntry {
   final Money? rewardValue;
 
   const TransactionEntry({
+    this.selfTransferRule,
     this.sourceKey,
     required this.id,
     required this.amount,
@@ -3355,6 +3359,7 @@ class TransactionEntry {
       'rail': instrumentKnown ? _railToJson(rail) : null,
       'instrument': instrumentKnown ? instrument.wireValue : null,
       'entry_kind': entryKind.wireValue,
+      'self_transfer_rule': selfTransferRule,
       'source': source,
       'sms_received_at': smsReceivedAt?.toIso8601String(),
       'observations': observations
@@ -3371,14 +3376,17 @@ class TransactionEntry {
   TransactionEntry copyWith({
     String? status,
     String? note,
+    String? merchantName,
+    TxnEntryKind? entryKind,
     bool clearNote = false,
   }) {
     return TransactionEntry(
+      selfTransferRule: selfTransferRule,
       sourceKey: sourceKey,
       id: id,
       amount: amount,
       occurredAt: occurredAt,
-      merchantName: merchantName,
+      merchantName: merchantName ?? this.merchantName,
       merchantVpa: merchantVpa,
       categoryId: categoryId,
       parentCategoryId: parentCategoryId,
@@ -3393,7 +3401,7 @@ class TransactionEntry {
       rail: rail,
       instrument: instrument,
       instrumentKnown: instrumentKnown,
-      entryKind: entryKind,
+      entryKind: entryKind ?? this.entryKind,
       source: source,
       smsReceivedAt: smsReceivedAt,
       observations: observations,
@@ -3423,6 +3431,7 @@ class TransactionEntry {
     final rawCategoryId = json['category_id'] as String?;
     final userCategoryId = json['user_category_id'] as String?;
     return TransactionEntry(
+      selfTransferRule: (json['self_transfer_rule'] as Map?)?.cast<String, dynamic>(),
       sourceKey: json['source_key'] as String?,
       id: json['id'] as String,
       amount: Money.fromRupees(_num(json['amount_inr'])),

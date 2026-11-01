@@ -80,6 +80,10 @@
       "disposition": "exported_v1",
       "section": "transaction_observations"
     },
+    "self_transfer_rules": {
+      "disposition": "exported_v1",
+      "section": "self_transfer_rules"
+    },
     "transaction_tags": {
       "disposition": "exported_v1",
       "section": "transaction_tags"

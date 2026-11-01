@@ -33,6 +33,9 @@ class _CardApi implements SyncApi {
   }
 
   @override
+  Future<List<Map<String, dynamic>>?> fetchSelfTransferRules() async => null;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

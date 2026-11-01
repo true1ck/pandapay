@@ -2587,8 +2587,8 @@ class _TransactionTile extends StatelessWidget {
                           // Neutral: jade and amber stay reserved for the
                           // Refund/Reversal money moves.
                           const SizedBox(width: AppSpace.xs),
-                          const _MovementChip(
-                            label: 'Transfer',
+                          _MovementChip(
+                            label: entry.entryKind == TxnEntryKind.transfer ? 'Transfer' : 'Payment',
                             tint: BambooInk.ink900,
                             fillAlpha: 0.07,
                             borderAlpha: 0.14,

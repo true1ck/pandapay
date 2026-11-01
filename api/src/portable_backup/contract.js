@@ -27,6 +27,7 @@ const PORTABLE_SECTIONS = Object.freeze([
     cursor: 't.id',
   },
   { name: 'transaction_observations', table: 'transaction_observations', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id' },
+  { name: 'self_transfer_rules', table: 'self_transfer_rules', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id' },
   { name: 'transaction_tags', table: 'transaction_tags', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id' },
   { name: 'transaction_tag_links', table: 'transaction_tag_links', alias: 't', filter: 't.profile_id = $1', orderBy: 't.transaction_id, t.tag_id', cursor: null },
   { name: 'points_ledger', table: 'points_ledger', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id' },

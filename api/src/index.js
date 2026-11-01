@@ -1,5 +1,6 @@
 const { createStatementImportHandler, statementImportResponseRow } = require('./statement_import');
 const { safeErrorCode } = require('./safeErrorCode');
+const selfTransfers = require('./self_transfer');
 require('dotenv').config();
 const crypto = require('crypto');
 const express = require('express');
@@ -1603,6 +1604,41 @@ app.get('/sync/pull', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('GET /sync/pull error', safeErrorCode(err));
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /self-transfer-rules — the small profile-scoped relationship snapshot
+ * used by every signed-in device. This is intentionally independent of the
+ * generic change log: a rule is created by the transaction domain route, and
+ * a newly installed device must be able to hydrate it even when it has no
+ * local sync cursor yet.
+ */
+app.get('/self-transfer-rules', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const available = await client.query("SELECT to_regclass('public.self_transfer_rules') AS relation");
+      if (!available.rows[0]?.relation) return null;
+      return client.query(
+        `SELECT source_sender AS "sourceSender",
+                source_account_last4 AS "sourceAccountLast4",
+                transfer_party AS party,
+                destination_bank AS bank,
+                destination_account_last4 AS "accountLast4",
+                version, updated_at AS "updatedAt"
+           FROM self_transfer_rules
+          WHERE profile_id=$1 AND is_active=true
+          ORDER BY updated_at DESC, id DESC`,
+        [req.userId],
+      );
+    });
+    if (result == null) {
+      return res.status(503).json({ error: 'self_transfer_rules_migration_required' });
+    }
+    res.json({ rules: result.rows });
+  } catch (err) {
+    console.error('GET /self-transfer-rules error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3442,6 +3478,10 @@ async function importParsedMessage(client, userId, {
   parsed, patternIssuerId, sender, rawText, source, occurred, sourceKey, backfill, observedAt,
   explicitUserCardId, explicitCategoryId, rail, vpa, mcc, observationMetadata,
 }) {
+  if (selfTransfers.transferIdentity(sender, parsed.fields)) {
+    parsed = selfTransfers.applySelfTransferRule(parsed, sender,
+      await selfTransfers.confirmedSelfTransferRules(client, userId));
+  }
   const parsedVpa = vpa || extractVpa(parsed.fields.merchant) || extractVpa(rawText);
   const parsedMcc = mcc || parsed.fields.mcc || extractMcc(rawText);
   const accountIdentity = parsed.fields.accountLast4
@@ -3459,6 +3499,11 @@ async function importParsedMessage(client, userId, {
     ...(parsed.fields.reference ? { bankReference: parsed.fields.reference } : {}),
     ...(parsed.fields.transferParty ? { transferParty: parsed.fields.transferParty } : {}),
     ...(parsed.fields.transferKind ? { transferKind: parsed.fields.transferKind } : {}),
+    ...(parsed.fields.transferSubtype ? { transferSubtype: parsed.fields.transferSubtype } : {}),
+    ...(parsed.fields.selfTransferRule ? { selfTransferRule: parsed.fields.selfTransferRule } : {}),
+    ...(parsed.fields.transferSubtype === 'self_transfer'
+      ? { classificationSource: 'remembered_self_transfer', classificationEvidenceVersion: 1 }
+      : {}),
     ...(parsed.fields.entryKind ? { parserEntryKind: parsed.fields.entryKind } : {}),
     ...(parsed.fields.destinationAccountLast4
       ? { destinationAccountLast4: parsed.fields.destinationAccountLast4 }
@@ -5813,6 +5858,9 @@ app.get('/transactions', requireAuth, async (req, res) => {
                 t.rail, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
+                (SELECT o.metadata->'selfTransferRule' FROM transaction_observations o
+                  WHERE o.transaction_id=t.id AND o.profile_id=t.profile_id
+                    AND o.metadata->'selfTransferRule' IS NOT NULL LIMIT 1) AS self_transfer_rule,
                 (SELECT MAX(o.observed_at)
                    FROM transaction_observations o
                   WHERE o.transaction_id = t.id
@@ -5894,6 +5942,9 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
           HAVING COUNT(*) = 1
         )
         SELECT t.id, t.source_key, COALESCE(replacement.active_card_id, t.user_card_id) AS user_card_id,
+               (SELECT o.metadata->'selfTransferRule' FROM transaction_observations o
+                 WHERE o.transaction_id=t.id AND o.profile_id=t.profile_id
+                   AND o.metadata->'selfTransferRule' IS NOT NULL LIMIT 1) AS self_transfer_rule,
                t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, t.user_category_id,
                 ucat.parent_user_category_id AS parent_user_category_id,
@@ -6177,8 +6228,16 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
 app.patch('/transactions/:id', requireAuth, async (req, res) => {
   const {
     amountInr, occurredAt, categoryId, userCategoryId, rail, merchantName, userCardId,
-    instrument, entryKind,
+    instrument, entryKind, selfTransfer,
   } = req.body || {};
+  const disablingSelfTransfer = selfTransfer?.action === 'disable';
+  if (selfTransfer !== undefined && ((!disablingSelfTransfer && entryKind !== 'transfer')
+      || instrument !== 'upi_bank'
+      || !selfTransfer || typeof selfTransfer !== 'object'
+      || typeof selfTransfer.accountLast4 !== 'string' || !/^\d{4}$/.test(selfTransfer.accountLast4)
+      || typeof selfTransfer.bank !== 'string' || !/^[a-z0-9]{2,30}$/.test(selfTransfer.bank))) {
+    return res.status(400).json({ error: 'selfTransfer requires a destination bank account, transfer kind and upi_bank instrument' });
+  }
   if (instrument !== undefined && !TXN_INSTRUMENTS.includes(instrument)) {
     return res.status(400).json({ error: `instrument must be one of ${TXN_INSTRUMENTS.join(', ')}` });
   }
@@ -6215,6 +6274,51 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
       const old = existing.rows[0];
       if (old.status !== 'active') {
         return { status: 409, error: `cannot edit a transaction with status '${old.status}'` };
+      }
+      let selfTransferRule = null;
+      if (selfTransfer !== undefined) {
+        if (disablingSelfTransfer || selfTransfer.remember === true) {
+          const schema = await client.query("SELECT to_regclass('public.self_transfer_rules') AS relation");
+          if (!schema.rows[0]?.relation) {
+            return { status: 503, error: 'Self-transfer memory requires the database migration' };
+          }
+        }
+        if (old.instrument !== 'upi_bank') {
+          return { status: 400, error: 'Only bank-account transactions can be confirmed as self-transfers' };
+        }
+        try {
+          selfTransferRule = await selfTransfers.confirmSelfTransfer(client, req.userId, old.id, selfTransfer);
+        } catch (error) {
+          return { status: 400, error: error.message };
+        }
+        if (disablingSelfTransfer) {
+          try {
+            await selfTransfers.disableSelfTransferRule(client, req.userId, {
+              ...selfTransferRule,
+              destination: {
+                bank: selfTransfer.bank,
+                accountLast4: selfTransfer.accountLast4,
+              },
+            });
+          } catch (error) {
+            if (error.code !== '42P01') throw error;
+          }
+        } else if (selfTransfer.remember === true) {
+          try {
+            await selfTransfers.saveSelfTransferRule(client, req.userId, {
+              ...selfTransferRule,
+              destination: {
+                bank: selfTransfer.bank,
+                accountLast4: selfTransfer.accountLast4,
+              },
+            });
+          } catch (error) {
+            if (error.code === '42P01') {
+              return { status: 503, error: 'Self-transfer memory is not available until the database migration is applied' };
+            }
+            throw error;
+          }
+        }
       }
 
       if (amountInr !== undefined) {
@@ -6289,7 +6393,9 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
           : categoryId !== undefined ? categoryId : old.category_id,
         userCategoryId: userCategoryId !== undefined ? userCategoryId : old.user_category_id,
         rail: rail ?? old.rail,
-        merchantName: merchantName !== undefined ? merchantName : old.merchant_name,
+        merchantName: selfTransferRule && !disablingSelfTransfer
+          ? selfTransfers.selfTransferLabel(selfTransferRule.destination)
+          : merchantName !== undefined ? merchantName : old.merchant_name,
         instrument: newInstrument,
         entryKind: newEntryKind,
       };
@@ -6326,6 +6432,28 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
             WHERE profile_id = $1 AND transaction_id = $2`,
           [req.userId, old.id],
         );
+        if (selfTransferRule && !disablingSelfTransfer) {
+          await client.query(
+            `UPDATE transaction_observations SET metadata = metadata || $3::jsonb
+              WHERE profile_id=$1 AND transaction_id=$2`,
+            [req.userId, old.id, JSON.stringify({
+              selfTransferRule,
+              selfTransferRemembered: selfTransfer.remember === true,
+              transferSubtype: 'self_transfer',
+              classificationEvidenceVersion: 1,
+            })],
+          );
+        } else if (entryKind !== 'transfer' || disablingSelfTransfer) {
+          await client.query(
+            `UPDATE transaction_observations SET metadata = metadata - 'selfTransferRule' - 'transferSubtype' - 'classificationEvidenceVersion'
+              WHERE profile_id=$1 AND transaction_id=$2`, [req.userId, old.id]);
+        }
+      }
+      let historicalApplied = 0;
+      if (selfTransferRule && !disablingSelfTransfer && selfTransfer.applyHistorical === true) {
+        historicalApplied = await selfTransfers.applySelfTransferRuleHistorically(
+          client, req.userId, selfTransferRule, old.id, selfTransfer.remember === true,
+        );
       }
       if (merchantName !== undefined) {
         await client.query(
@@ -6350,7 +6478,7 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         await client.query(`UPDATE transactions SET state_applied = true WHERE id = $1`, [old.id]);
       }
 
-      return { status: 200, transaction: updated.rows[0], ...stateUpdates };
+      return { status: 200, transaction: updated.rows[0], historicalApplied, ...stateUpdates };
     });
 
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
