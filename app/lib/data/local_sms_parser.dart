@@ -973,6 +973,14 @@ class LocalSmsParser {
           (_re(r'\b(?:credited|received|deposited)\b').hasMatch(body) &&
               _re(r'\b(?:bank|a\/?c\.?|account|savings)\b').hasMatch(body)));
 
+  static bool _plainExternalBankCredit(String body) =>
+      _incomingBankTransferCandidate(body) &&
+      !_accountToAccountTransfer(body) &&
+      !_re(
+        r'\b(?:refund(?:ed)?|reversal|reversed|chargeback|cashback|reward|rewards|points?|miles?|loan|investment|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
+      ).hasMatch(body) &&
+      _re(r'\b(?:utr|imps|neft|rtgs)\b').hasMatch(body);
+
   static bool _earnedIncomeCredit(String body) =>
       !_re(
         r'\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|emi|equated\s+monthly\s+installment|instalment|investment|mutual\s+fund|shares|equity\s+shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
@@ -2853,7 +2861,8 @@ class LocalSmsParser {
         ? TxnEntryKind.spend
         : investmentDebit
         ? TxnEntryKind.investment
-        : credit && !_earnedIncomeCredit(body)
+        : credit && !_earnedIncomeCredit(body) &&
+              !_plainExternalBankCredit(body)
         ? TxnEntryKind.transfer
         : credit
         ? TxnEntryKind.income

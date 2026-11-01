@@ -572,7 +572,10 @@ function parseBuiltInAccountCredit(sms) {
     && !investmentProceeds
     && !cashDeposit
     && !giftCredit
-    && !reimbursementCredit;
+    && !reimbursementCredit
+    && /\b(?:credited|received|deposited)\b/i.test(body)
+    && /\b(?:bank|a\/c\.?|account|savings)\b/i.test(body)
+    && /\b(?:utr|imps|neft|rtgs)\b/i.test(body);
   const incomingBankTransferCandidate = !ownTransfer
     && !walletLoad
     && !brokerSettlement
@@ -669,7 +672,6 @@ function parseBuiltInAccountCredit(sms) {
         : {}),
       entryKind: (earnedIncomeCredit && !ownTransfer)
         || externalVpaCredit
-        || (incomingBankTransferCandidate && !accountToAccountTransfer)
         || plainExternalBankCredit
         ? 'income'
         : 'transfer',

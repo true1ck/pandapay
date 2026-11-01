@@ -1904,8 +1904,8 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  RichText(
-                    text: TextSpan(
+                  Text.rich(
+                    TextSpan(
                       style: BambooFonts.ui(14, color: BambooInk.ink900),
                       children: [
                         TextSpan(
