@@ -514,6 +514,56 @@ final class IncomingSmsSpool {
     }
   }
 
+  /// For a history Shortcut that loops through every range in one run: the
+  /// next range not yet searched, or nil when none is left. Ranges already
+  /// searched but still waiting for PandaPay to process them are skipped, so
+  /// the loop carries on while PandaPay itself is closed. Stopped ranges are
+  /// left for PandaPay to retry.
+  func issueNextRange() throws -> String? {
+    try transaction { db in
+      guard let account = try? owner(db), let generation = account["generation"] as? String else { return nil }
+      guard let row = try query(db, "SELECT w.* FROM windows w JOIN jobs j ON j.id=w.job_id WHERE j.state='active' AND j.kind='history' AND j.generation=? AND w.state IN ('queued','waiting','running') ORDER BY w.ordinal LIMIT 1", [generation]).first else { return nil }
+      var token = row["attempt"] as? String
+      if row["state"] as? String == "queued" {
+        token = UUID().uuidString
+        try execute(db, "UPDATE windows SET state='waiting',attempt=? WHERE id=?", [token, row["id"]])
+      }
+      guard let token else { return nil }
+      let value: [String: Any] = ["version": 3, "attempt": token, "generation": generation,
+                                  "start_inclusive": row["start"]!, "end_exclusive": row["end"]!]
+      return String(decoding: try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]), as: UTF8.self)
+    }
+  }
+
+  /// Progress of the latest history import, for the Lock Screen activity:
+  /// state is importing, paused, stopped, complete or none.
+  func importProgress() throws -> [String: Any] {
+    try transaction { db in
+      guard let account = try? owner(db), let generation = account["generation"] as? String,
+            let job = try query(db, "SELECT * FROM jobs WHERE kind='history' AND generation=? ORDER BY rowid DESC LIMIT 1", [generation]).first else {
+        return ["state": "none"]
+      }
+      let windows = try query(db, "SELECT start,end,state,COALESCE(logical_id,id) AS month FROM windows WHERE job_id=? ORDER BY ordinal", [job["id"]])
+      var months: [String] = [], open = Set<String>()
+      for row in windows {
+        let month = row["month"] as! String
+        if !months.contains(month) { months.append(month) }
+        if !["complete", "finished"].contains(row["state"] as? String ?? "") { open.insert(month) }
+      }
+      let current = windows.first { !["complete", "finished"].contains($0["state"] as? String ?? "") }
+      let state: String
+      switch job["state"] as? String {
+      case "complete": state = "complete"
+      case "paused": state = "paused"
+      case "stopped": state = "stopped"
+      default: state = current == nil ? "complete" : (current?["state"] as? String == "partial" ? "paused" : "importing")
+      }
+      var result: [String: Any] = ["state": state, "done": months.count - open.count, "total": months.count]
+      if let current { result["start"] = current["start"]; result["end"] = current["end"] }
+      return result
+    }
+  }
+
   func finish(request: String, found: Int, limitOff: Bool, warning: Bool) throws -> String {
     try transaction { db in
       let row = try window(db, request: request)

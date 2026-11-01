@@ -172,6 +172,7 @@ struct FinishPandaPaySmsWindowIntent: AppIntent {
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
     let value = try IncomingSmsSpool.shared.finish(request: request, found: found, limitOff: limitOff, warning: warning)
     IncomingSmsBridge.notifyReady()
+    SmsImportLiveActivityHost.refresh()
     return .result(value: value)
   }
 }
@@ -192,6 +193,25 @@ struct FinishPandaPayHistoryImportIntent: AppIntent {
     let value = try IncomingSmsSpool.shared.finish(request: request, found: found, limitOff: limitOff, warning: warning)
     IncomingSmsBridge.notifyReady()
     return .result(value: value)
+  }
+}
+
+/// For a history Shortcut that imports every range in one run, so PandaPay
+/// does not have to come back between months (it can even be closed). Loop:
+/// Next range → (stop when empty) → Window Start/End → Find Messages →
+/// Capture as Text → Finish PandaPay SMS Window.
+@available(iOS 16.0, *)
+struct NextPandaPayHistoryRangeIntent: AppIntent {
+  static var title: LocalizedStringResource = "Next PandaPay History Range"
+  static var description = IntentDescription("Returns the next date range to import, or nothing when the import is done. Use its result as the Import request for Window Start, Window End, Capture and Finish PandaPay SMS Window inside a Repeat, and stop when it is empty.")
+  static var openAppWhenRun = false
+  func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    // The loop stays in Shortcuts: captures must not jump back to PandaPay.
+    await MainActor.run { IncomingSmsBridge.releaseForegroundReturn() }
+    let value = (try? IncomingSmsSpool.shared.issueNextRange()) ?? nil
+    IncomingSmsBridge.notifyReady()
+    SmsImportLiveActivityHost.refresh()
+    return .result(value: value ?? "")
   }
 }
 
@@ -260,6 +280,8 @@ enum IncomingSmsBridge {
             DispatchQueue.main.async {
               pendingLaunch = launch; returned = nil
               foregroundReturn = SmsShortcutForegroundReturn(request: request)
+              // Shown on the Lock Screen and Dynamic Island while it imports.
+              SmsImportLiveActivityHost.start()
               UIApplication.shared.open(launch.url, options: [:]) { opened in
                 if !opened { pendingLaunch = nil; foregroundReturn = nil }
                 result(opened)
@@ -291,6 +313,7 @@ enum IncomingSmsBridge {
           case "acknowledge":
             guard let generation = args["generation"] as? String, let outcomes = args["outcomes"] as? [[String: Any]] else { throw IncomingSmsError.invalid }
             try spool.acknowledge(generation: generation, outcomes: outcomes)
+            SmsImportLiveActivityHost.refresh()
           case "createJob":
             guard let generation = args["generation"] as? String, let id = args["id"] as? String,
                   let kind = args["kind"] as? String, let zone = args["zone"] as? String,
@@ -307,6 +330,7 @@ enum IncomingSmsBridge {
           case "control":
             guard let generation = args["generation"] as? String, let command = args["command"] as? String else { throw IncomingSmsError.invalid }
             try spool.control(generation: generation, command: command)
+            SmsImportLiveActivityHost.refresh()
             DispatchQueue.main.async { pendingLaunch = nil; foregroundReturn = nil; returned = nil }
           default: DispatchQueue.main.async { result(FlutterMethodNotImplemented) }; return
           }
@@ -322,6 +346,11 @@ enum IncomingSmsBridge {
   static func notifyReady() {
     DispatchQueue.main.async { channel?.invokeMethod("ready", arguments: nil) }
   }
+
+  /// A looping history Shortcut stays in Shortcuts; drop any pending
+  /// "return to PandaPay" for the range PandaPay launched.
+  @MainActor
+  static func releaseForegroundReturn() { foregroundReturn = nil }
 
   @MainActor
   static func claimForegroundReturn(request: String) -> Bool {

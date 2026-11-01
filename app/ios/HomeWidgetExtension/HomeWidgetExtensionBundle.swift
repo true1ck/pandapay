@@ -10,5 +10,8 @@ struct HomeWidgetExtensionBundle: WidgetBundle {
         PandaPayCombinedWidget()
         PandaPaySpendingWidget()
         BestCardWidget()
+        if #available(iOS 16.2, *) {
+            SmsImportLiveActivity()
+        }
     }
 }

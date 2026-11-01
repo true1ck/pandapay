@@ -419,3 +419,22 @@ do {
   require(IncomingSmsSpool.date(coverage[0]["start"]!) == d0 && IncomingSmsSpool.date(coverage[0]["end"]!) == time, "coverage spans both days")
   print("PASS: snapshot reports merged imported coverage")
 }
+
+do {
+  // A looping Shortcut moves through ranges without PandaPay processing them.
+  let store = IncomingSmsSpool(directory: root.appendingPathComponent("loop"), maxPending: 2000, now: { time })
+  let g = try store.configure(namespace: "user:loop", enabled: true)["generation"] as! String
+  let d0 = time.addingTimeInterval(-2 * 86_400), d1 = time.addingTimeInterval(-86_400)
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(d0), "end": iso(d1)], ["start": iso(d1), "end": iso(time)]])
+  require(try store.importProgress()["done"] as? Int == 0 && store.importProgress()["total"] as? Int == 2, "progress starts at 0 of 2")
+  let first = try store.issueNextRange()!
+  require(try store.issueNextRange() == first, "the same unsearched range is offered until it is searched")
+  _ = try store.capture(body: "INR 5 spent at SHOP.", sender: "ICICIT-S", receivedAt: d0.addingTimeInterval(60), provenance: "original", request: first, useMessageReceipt: true)
+  require(try store.finish(request: first, found: 1, limitOff: true, warning: false) == "finished", "searched, waiting for PandaPay")
+  let second = try store.issueNextRange()!
+  require(second != first, "the loop moves on while PandaPay has not processed the first range")
+  require(try store.importProgress()["done"] as? Int == 1, "a searched range counts as done for progress")
+  require(try store.finish(request: second, found: 0, limitOff: true, warning: false) == "complete", "empty range completes")
+  require(try store.issueNextRange() == nil, "nothing left to search")
+  print("PASS: a looping Shortcut moves through ranges while PandaPay is closed")
+}

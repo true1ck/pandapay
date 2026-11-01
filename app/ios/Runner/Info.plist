@@ -4,6 +4,9 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- SMS history import progress on the Lock Screen and Dynamic Island. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<!-- UA-4 (Chunk 30): camera/QR card scanning. Usage-description plumbing
 	     only — could not be verified to actually prompt/grant on a real
 	     device/simulator in this sandbox. See PROGRESS.md. -->
