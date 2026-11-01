@@ -1609,217 +1609,218 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         ? projectSpendingTags(_visibleEntries, tagsFor: _tagsFor)
         : const <SpendingTagGroup>[];
 
+    // Keep row metadata cheap. Transaction filtering and widget construction
+    // for breakdown rows happen only when the row enters the viewport/cache.
+    final rowBuilders = <WidgetBuilder>[
+      if (_tagFilters.isNotEmpty || _untagged) ...[
+        (context) => Wrap(
+          spacing: 6,
+          children: [
+            if (_untagged)
+              InputChip(
+                label: const Text('Untagged'),
+                onDeleted: () {
+                  setState(() => _untagged = false);
+                  _notifyFilters();
+                },
+              ),
+            for (final tag in _allTags)
+              if (_tagFilters.contains(tag.id))
+                InputChip(
+                  label: Text(tag.name),
+                  onDeleted: () {
+                    setState(() => _tagFilters.remove(tag.id));
+                    _notifyFilters();
+                  },
+                ),
+          ],
+        ),
+        (context) => const SizedBox(height: AppSpace.sm),
+      ],
+      (context) => Column(
+        key: widget.overviewKey,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (categoryRows.isNotEmpty) ...[
+            SpendingMixCard(
+              rows: categoryRows,
+              total: total,
+              compact: multiMonth,
+              rangeLabel: multiMonth ? _reportRangeLabel(report) : null,
+              change: !_filtersActive && !multiMonth
+                  ? report.changeVsPrevious
+                  : null,
+              comparisonLabel: report.previousDisplayLabel,
+              onViewAll: multiMonth ? _showAllCategories : null,
+            ),
+            const SizedBox(height: AppSpace.lg),
+          ],
+          _SpendMetricsCard(
+            report: _filtersActive ? _filteredReport(report, total) : report,
+          ),
+          const SizedBox(height: AppSpace.lg),
+          if (multiMonth) ...[
+            _MonthlyComparisonCard(series: series),
+            const SizedBox(height: AppSpace.lg),
+          ],
+        ],
+      ),
+      (context) => KeyedSubtree(
+        key: _spendingTabsKey,
+        child: _SpendingTabs(
+          selected: _tab,
+          onChanged: (tab) => setState(() => _tab = tab),
+        ),
+      ),
+      (context) => const SizedBox(height: AppSpace.md),
+      if (showFilteredLoading)
+        (context) => const Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpace.xl),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else ...[
+        if (_tab == _SpendingTab.tags) ...[
+          (context) => const _SectionHeader('Tags'),
+          (context) => Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
+            child: Text(
+              'A transaction can have several tags. Tag totals can overlap.',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+          ),
+          for (final group in tagGroups)
+            (context) => _ExpandableTagRow(
+              tag: group.tag,
+              total: group.total,
+              txnCount: group.entries.length,
+              categories: group.categories,
+              entriesForCategory: group.entriesForCategory,
+              detailsLoading: widget.transactionDetailsLoading,
+              onCategoryTap: (category) =>
+                  _openTagCategoryTransactions(group.tag, category),
+            ),
+          if (tagGroups.isEmpty)
+            (context) => const _EmptyTabState(
+              message: 'No tags on these transactions yet.',
+            ),
+        ] else if (_tab == _SpendingTab.categories &&
+            categoryRows.isNotEmpty) ...[
+          (context) => const _SectionHeader('Categories'),
+          for (final row in categoryRows)
+            (context) => _ExpandableCategoryRow(
+              row: row,
+              total: total,
+              entries: categoryEntries(row),
+              detailsLoading: widget.transactionDetailsLoading,
+              initiallyExpanded:
+                  widget.initialCategory != null &&
+                  (widget.initialCategory == row.categoryId ||
+                      widget.initialCategory!.toLowerCase() ==
+                          row.label.toLowerCase()),
+            ),
+          if (instrumentRows.isNotEmpty) ...[
+            (context) => const SizedBox(height: AppSpace.md),
+            (context) => _BreakdownPanel(
+              title: 'Payment method',
+              visual: const SpendingVisual(
+                icon: Icons.payments_rounded,
+                accent: BambooChartColors.blue,
+              ),
+              child: Column(
+                children: [
+                  for (final row in instrumentRows)
+                    _ExpandableInstrumentRow(
+                      row: row,
+                      total: total,
+                      entries: _transactionsForInstrument(row),
+                      detailsLoading: widget.transactionDetailsLoading,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ] else if (_tab == _SpendingTab.merchants &&
+            merchantRows.isNotEmpty) ...[
+          (context) => const _SectionHeader('Merchants'),
+          for (final row in merchantRows.take(20))
+            (context) => _ExpandableMerchantRow(
+              row: row,
+              total: total,
+              entries: _transactionsForMerchant(row),
+              detailsLoading: widget.transactionDetailsLoading,
+            ),
+        ] else if (_tab == _SpendingTab.accounts && cardRows.isNotEmpty) ...[
+          (context) => const _SectionHeader('Accounts'),
+          for (final row in cardRows)
+            (context) => _AccountRow(
+              row: row,
+              total: total,
+              entries: _transactionsForCard(row),
+              detailsLoading: widget.transactionDetailsLoading,
+            ),
+        ] else if (!_filtersActive && cardRows.isNotEmpty) ...[
+          // A useful fallback for older reports that have card totals but
+          // no category rows yet.
+          (context) => const _SectionHeader('Accounts'),
+          for (final row in cardRows)
+            (context) => _AccountRow(
+              row: row,
+              total: total,
+              entries: _transactionsForCard(row),
+              detailsLoading: widget.transactionDetailsLoading,
+            ),
+        ] else if (instrumentRows.isNotEmpty) ...[
+          (context) => _BreakdownPanel(
+            title: 'Payment method',
+            visual: const SpendingVisual(
+              icon: Icons.payments_rounded,
+              accent: BambooChartColors.blue,
+            ),
+            child: Column(
+              children: [
+                for (final row in instrumentRows)
+                  _ExpandableInstrumentRow(
+                    row: row,
+                    total: total,
+                    entries: _transactionsForInstrument(row),
+                    detailsLoading: widget.transactionDetailsLoading,
+                  ),
+              ],
+            ),
+          ),
+        ] else
+          (context) => _EmptyTabState(
+            message: _filtersActive
+                ? 'No transactions match these filters.'
+                : 'There is no breakdown available for this period yet.',
+          ),
+      ],
+      (context) => const SizedBox(height: AppSpace.lg),
+      (context) => OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          foregroundColor: BambooInk.ink900,
+          side: const BorderSide(color: BambooInk.hairlineOnPaper),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        icon: const Icon(Icons.receipt_long_rounded, size: 18),
+        label: const Text('See every transaction'),
+        onPressed: () => context.push(AppRoute.activity),
+      ),
+    ];
     return RefreshIndicator(
       onRefresh: () async => widget.onRefresh(),
-      child: ListView(
+      child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(
           AppSpace.lg,
           AppSpace.sm,
           AppSpace.lg,
           AppSpace.xl,
         ),
-        children: [
-          if (_tagFilters.isNotEmpty || _untagged) ...[
-            Wrap(
-              spacing: 6,
-              children: [
-                if (_untagged)
-                  InputChip(
-                    label: const Text('Untagged'),
-                    onDeleted: () {
-                      setState(() => _untagged = false);
-                      _notifyFilters();
-                    },
-                  ),
-                for (final tag in _allTags)
-                  if (_tagFilters.contains(tag.id))
-                    InputChip(
-                      label: Text(tag.name),
-                      onDeleted: () {
-                        setState(() => _tagFilters.remove(tag.id));
-                        _notifyFilters();
-                      },
-                    ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.sm),
-          ],
-          Column(
-            key: widget.overviewKey,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (categoryRows.isNotEmpty) ...[
-                SpendingMixCard(
-                  rows: categoryRows,
-                  total: total,
-                  compact: multiMonth,
-                  rangeLabel: multiMonth ? _reportRangeLabel(report) : null,
-                  change: !_filtersActive && !multiMonth
-                      ? report.changeVsPrevious
-                      : null,
-                  comparisonLabel: report.previousDisplayLabel,
-                  onViewAll: multiMonth ? _showAllCategories : null,
-                ),
-                const SizedBox(height: AppSpace.lg),
-              ],
-              _SpendMetricsCard(
-                report: _filtersActive
-                    ? _filteredReport(report, total)
-                    : report,
-              ),
-              const SizedBox(height: AppSpace.lg),
-              if (multiMonth) ...[
-                _MonthlyComparisonCard(series: series),
-                const SizedBox(height: AppSpace.lg),
-              ],
-            ],
-          ),
-          KeyedSubtree(
-            key: _spendingTabsKey,
-            child: _SpendingTabs(
-              selected: _tab,
-              onChanged: (tab) => setState(() => _tab = tab),
-            ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          if (showFilteredLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpace.xl),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else ...[
-            if (_tab == _SpendingTab.tags) ...[
-              const _SectionHeader('Tags'),
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.md),
-                child: Text(
-                  'A transaction can have several tags. Tag totals can overlap.',
-                  style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                ),
-              ),
-              for (final group in tagGroups)
-                _ExpandableTagRow(
-                  tag: group.tag,
-                  total: group.total,
-                  txnCount: group.entries.length,
-                  categories: group.categories,
-                  entriesForCategory: group.entriesForCategory,
-                  detailsLoading: widget.transactionDetailsLoading,
-                  onCategoryTap: (category) =>
-                      _openTagCategoryTransactions(group.tag, category),
-                ),
-              if (tagGroups.isEmpty)
-                const _EmptyTabState(
-                  message: 'No tags on these transactions yet.',
-                ),
-            ] else if (_tab == _SpendingTab.categories &&
-                categoryRows.isNotEmpty) ...[
-              _SectionHeader('Categories'),
-              for (final row in categoryRows)
-                _ExpandableCategoryRow(
-                  row: row,
-                  total: total,
-                  entries: categoryEntries(row),
-                  detailsLoading: widget.transactionDetailsLoading,
-                  initiallyExpanded:
-                      widget.initialCategory != null &&
-                      (widget.initialCategory == row.categoryId ||
-                          widget.initialCategory!.toLowerCase() ==
-                              row.label.toLowerCase()),
-                ),
-              if (instrumentRows.isNotEmpty) ...[
-                const SizedBox(height: AppSpace.md),
-                _BreakdownPanel(
-                  title: 'Payment method',
-                  visual: const SpendingVisual(
-                    icon: Icons.payments_rounded,
-                    accent: BambooChartColors.blue,
-                  ),
-                  child: Column(
-                    children: [
-                      for (final row in instrumentRows)
-                        _ExpandableInstrumentRow(
-                          row: row,
-                          total: total,
-                          entries: _transactionsForInstrument(row),
-                          detailsLoading: widget.transactionDetailsLoading,
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ] else if (_tab == _SpendingTab.merchants &&
-                merchantRows.isNotEmpty) ...[
-              _SectionHeader('Merchants'),
-              for (final row in merchantRows.take(20))
-                _ExpandableMerchantRow(
-                  row: row,
-                  total: total,
-                  entries: _transactionsForMerchant(row),
-                  detailsLoading: widget.transactionDetailsLoading,
-                ),
-            ] else if (_tab == _SpendingTab.accounts &&
-                cardRows.isNotEmpty) ...[
-              _SectionHeader('Accounts'),
-              for (final row in cardRows)
-                _AccountRow(
-                  row: row,
-                  total: total,
-                  entries: _transactionsForCard(row),
-                  detailsLoading: widget.transactionDetailsLoading,
-                ),
-            ] else if (!_filtersActive && cardRows.isNotEmpty) ...[
-              // A useful fallback for older reports that have card totals but
-              // no category rows yet.
-              _SectionHeader('Accounts'),
-              for (final row in cardRows)
-                _AccountRow(
-                  row: row,
-                  total: total,
-                  entries: _transactionsForCard(row),
-                  detailsLoading: widget.transactionDetailsLoading,
-                ),
-            ] else if (instrumentRows.isNotEmpty) ...[
-              _BreakdownPanel(
-                title: 'Payment method',
-                visual: const SpendingVisual(
-                  icon: Icons.payments_rounded,
-                  accent: BambooChartColors.blue,
-                ),
-                child: Column(
-                  children: [
-                    for (final row in instrumentRows)
-                      _ExpandableInstrumentRow(
-                        row: row,
-                        total: total,
-                        entries: _transactionsForInstrument(row),
-                        detailsLoading: widget.transactionDetailsLoading,
-                      ),
-                  ],
-                ),
-              ),
-            ] else
-              _EmptyTabState(
-                message: _filtersActive
-                    ? 'No transactions match these filters.'
-                    : 'There is no breakdown available for this period yet.',
-              ),
-          ],
-          const SizedBox(height: AppSpace.lg),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              foregroundColor: BambooInk.ink900,
-              side: const BorderSide(color: BambooInk.hairlineOnPaper),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            icon: const Icon(Icons.receipt_long_rounded, size: 18),
-            label: const Text('See every transaction'),
-            onPressed: () => context.push(AppRoute.activity),
-          ),
-        ],
+        itemCount: rowBuilders.length,
+        itemBuilder: (context, index) => rowBuilders[index](context),
       ),
     );
   }
