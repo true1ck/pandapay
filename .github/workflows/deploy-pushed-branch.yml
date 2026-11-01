@@ -20,6 +20,29 @@ permissions:
   packages: write
 
 jobs:
+  prepare-local-backup:
+    name: Configure approved local encrypted backup
+    if: contains(github.event.head_commit.message, '[prepare-local-backup]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install public backup recipient and local mode
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+          SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+          PUBLIC_RECIPIENT: ${{ secrets.PROD_BACKUP_PUBLIC_RECIPIENT }}
+        run: |
+          [[ "$PUBLIC_RECIPIENT" =~ ^age1[a-z0-9]{50,80}$ ]]
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$DEPLOY_USER@$HOST" "python3 - '$PUBLIC_RECIPIENT'" < deploy/prepare_local_backup.py
+
   inspect-backups:
     name: Read-only backup setting check
     if: contains(github.event.head_commit.message, '[inspect-backups]')
