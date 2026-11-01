@@ -27,44 +27,31 @@ void main() {
   if (kProfileMode) {
     developer.Timeline.instantSync('PandaPay startup: Dart main');
   }
-  // Start the platform preferences read while the Flutter engine and plugin
-  // registrant are still initializing. The router's session/onboarding gate
-  // depends on this same SharedPreferences instance; prewarming it here lets
-  // that read overlap engine startup instead of leaving the native splash on
-  // screen until the first provider is constructed after runApp().
-  WidgetsFlutterBinding.ensureInitialized();
-  unawaited(SharedPreferences.getInstance());
-  // error_handling.dart: catches the class of error that isn't caught by
-  // Flutter's own build-error recovery (a stray unawaited Future, a
-  // platform-channel callback) and would otherwise silently kill the whole
-  // app on a real device — "unexpectedly shuts down" from the user's side.
-  // Installed before anything else runs, so no early failure slips past it.
-  installGlobalErrorHandlers();
-
-  // Replaces the widget shown in place of one whose build() threw. Debug
-  // builds keep Flutter's own red screen (a developer tool no real user
-  // ever sees); every other build gets a widget that can't itself crash
-  // from being handed unexpected constraints — see AppErrorWidget's doc.
-  if (!kDebugMode) {
-    ErrorWidget.builder = (details) => AppErrorWidget(details: details);
-  }
-
-  // Plan Phase 0.3: refuse to start a release build that was compiled
-  // without the backend --dart-defines, rather than shipping one that can
-  // only ever show users a network error. No-op in debug/profile and in any
-  // correctly-configured release. See app/env.dart.
-  //
-  // Deliberately OUTSIDE runGuarded below: this throw is meant to be loud
-  // and fatal — "a crash on the first frame with an actionable message is
-  // strictly better than shipping a build that can only ever show users a
-  // network error" (env.dart's own words). Inside the zone guard, that
-  // exception would just become a silent CrashLog entry behind a blank
-  // screen, which is the opposite of what this check exists for.
-  // A malformed release APK must render an actionable error instead of
-  // throwing before runApp(), which leaves Android's native splash visible.
-  final configurationError = Env.releaseConfigurationError;
-
   runGuarded(() {
+    // Keep binding initialization, plugin prewarming and runApp in the same
+    // zone. Initializing the binding in the root zone and calling runApp from
+    // runZonedGuarded produces Flutter's zone-mismatch warning and can make
+    // platform callbacks observe different zone state during cold startup.
+    // Start the preferences read while the engine and plugin registrant are
+    // still initializing so the session/onboarding gate overlaps that work.
+    WidgetsFlutterBinding.ensureInitialized();
+    unawaited(SharedPreferences.getInstance());
+
+    // error_handling.dart: catches errors outside Flutter's build recovery
+    // (unawaited futures and platform callbacks) before the first frame.
+    installGlobalErrorHandlers();
+
+    // Replaces the widget shown in place of one whose build() threw. Debug
+    // builds keep Flutter's own red screen; release/profile builds get a
+    // widget that is safe under arbitrary constraints.
+    if (!kDebugMode) {
+      ErrorWidget.builder = (details) => AppErrorWidget(details: details);
+    }
+
+    // Plan Phase 0.3: refuse to start a release build that was compiled
+    // without hosted backend defines. A malformed release APK renders an
+    // actionable error instead of leaving the native splash on screen.
+    final configurationError = Env.releaseConfigurationError;
     if (configurationError != null) {
       runApp(_BuildConfigurationErrorApp(message: configurationError));
       return;
