@@ -180,8 +180,8 @@ void main() {
       reason: 'Receipt updates cannot rebuild the page',
     );
     expect(
-      // Processing names the range; exact days depend on the time zone.
-      find.textContaining('Saving messages from '),
+      // One steady sentence naming the range; days depend on the time zone.
+      find.textContaining('Importing history · '),
       findsOneWidget,
     );
     controller.emit(_status());

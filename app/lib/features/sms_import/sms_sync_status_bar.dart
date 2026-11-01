@@ -25,7 +25,7 @@ _StatusView _statusView(IosSmsIntakeController controller) {
     label:
         controller.automaticallyAdvancing &&
             state.activeJob?['kind'] == 'history'
-        ? '${state.label}\nSwitching to Shortcuts and back is normal.'
+        ? '${state.label}\nPandaPay and Shortcuts take turns until it’s done.'
         : state.label,
     busy: state.processing || state.launching,
     // Rounded so receipt-level changes don't rebuild the strip.

@@ -163,9 +163,10 @@ class IosSmsIntakeState {
     final end = DateTime.tryParse(window['end'] as String? ?? '')
         ?.subtract(const Duration(milliseconds: 1));
     if (start == null) return 'the next dates';
-    final day = DateFormat('d MMM');
-    if (end == null || end.isBefore(start)) return day.format(start.toLocal());
-    return '${day.format(start.toLocal())} – ${day.format(end.toLocal())}';
+    // Always name the year: "2 Nov – 30 Nov 2025" must not read as this month.
+    final day = DateFormat('d MMM'), dayYear = DateFormat('d MMM yyyy');
+    if (end == null || end.isBefore(start)) return dayYear.format(start.toLocal());
+    return '${day.format(start.toLocal())} – ${dayYear.format(end.toLocal())}';
   }
 
   /// "through 18 Aug" once a range is done, else the first range's start.
@@ -189,23 +190,12 @@ class IosSmsIntakeState {
           : 'Some dates need another check';
     }
     if (activeJob?['kind'] == 'history') {
-      // Say what is happening at each hand-off, so switching between
-      // PandaPay and Shortcuts doesn't look like the phone glitching.
+      // One steady sentence; only the dates change, when the import moves on
+      // to the next range. Per-step wording flickered as batches came in.
       final window = currentWindow;
-      final range = window == null ? null : rangeLabel(window);
-      if (launching && range != null) {
-        return 'Opening Shortcuts to read $range…';
-      }
-      if (processing) {
-        return range == null
-            ? 'Saving imported messages…'
-            : 'Saving messages from $range…';
-      }
-      if (range != null &&
-          const ['waiting', 'running'].contains(window!['state'])) {
-        return 'Shortcuts is reading $range…';
-      }
-      return 'Importing history · $historyPosition';
+      return window == null
+          ? 'Importing history'
+          : 'Importing history · ${rangeLabel(window)}';
     }
     if (waiting) return 'Waiting for message import…';
     if (activeJob != null) return 'Recent-message check pending';

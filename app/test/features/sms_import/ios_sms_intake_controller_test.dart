@@ -644,8 +644,8 @@ void main() {
     expect(state.currentWindows, hasLength(3));
     expect(state.monthCount, 2);
     expect(state.completedMonths, 1);
-    // A range is being read; these test windows carry no dates.
-    expect(state.label, 'Shortcuts is reading the next dates…');
+    // A range is being imported; these test windows carry no dates.
+    expect(state.label, 'Importing history · the next dates');
   });
   test(
     'drain is bounded, acknowledges shared receipts, never auto-opens Shortcuts',
@@ -790,6 +790,35 @@ void main() {
       expect(days.last.end, DateTime(2026, 3, 10, 12));
     },
   );
+
+  test('the strip text stays the same while one range is imported', () {
+    IosSmsIntakeState at({bool processing = false, bool launching = false, String state = 'waiting'}) =>
+        IosSmsIntakeState(
+          processing: processing,
+          launching: launching,
+          snapshot: {
+            'enabled': true,
+            'jobs': [
+              {'id': 'h', 'kind': 'history', 'state': 'active'},
+            ],
+            'windows': [
+              {
+                'id': 'w', 'job_id': 'h', 'ordinal': 0, 'state': state,
+                'start': '2025-11-01T18:41:17Z', 'end': '2025-11-30T18:30:00Z',
+              },
+            ],
+          },
+        );
+    final labels = {
+      at(launching: true).label,
+      at().label,
+      at(state: 'running').label,
+      at(processing: true, state: 'finished').label,
+    };
+    expect(labels, hasLength(1));
+    expect(labels.single, startsWith('Importing history · '));
+    expect(labels.single, endsWith('2025'), reason: 'the year is always named');
+  });
 
   group('stopped ranges and app restarts', () {
     Future<(MemoryBridge, IosSmsIntakeController)> started({
