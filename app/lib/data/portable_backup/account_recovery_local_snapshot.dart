@@ -32,6 +32,9 @@ class AccountRecoveryLocalSnapshot {
     // Device registration and pull cursors must never be replayed on a new
     // device. Pending mutation rows above retain their original UUIDs.
     'sync_state',
+    // Keyset traversal progress belongs to one device/session, rather than
+    // the account's financial history restored on another device.
+    'financial_transaction_pages',
     // Ciphertext requires this phone's independent import key; do not call
     // an archive complete while pending work cannot be restored elsewhere.
     'statement_import_sessions',

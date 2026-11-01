@@ -89,6 +89,7 @@ class LocalPortableRestoreWriter implements PortableLocalRestoreWriter {
       requireNoPendingStatementImports(_db, namespace);
       for (final statement in <String>[
       'DELETE FROM financial_entities WHERE namespace IN (?, ?)',
+      'DELETE FROM financial_transaction_pages WHERE namespace IN (?, ?)',
       'DELETE FROM sync_pending_changes WHERE namespace IN (?, ?)',
       'DELETE FROM transaction_tags WHERE namespace IN (?, ?)',
       'DELETE FROM user_categories WHERE namespace IN (?, ?)',

@@ -218,6 +218,22 @@ class FinancialChange {
   const FinancialChange(this.namespace, this.entity);
 }
 
+/// Durable progress of a non-destructive keyset traversal. Reaching its end
+/// does not establish complete query coverage: records can move between pages.
+class TransactionPageProgress {
+  final String sessionGeneration;
+  final String? nextCursor;
+  final bool exhausted;
+  final DateTime fetchedAt;
+
+  const TransactionPageProgress({
+    required this.sessionGeneration,
+    required this.nextCursor,
+    required this.exhausted,
+    required this.fetchedAt,
+  });
+}
+
 /// Durable account-scoped entity store. Endpoint blobs are migration inputs,
 /// never competing transaction histories. A complete response replaces only
 /// its query scope; provisional device records survive until acknowledged.
@@ -341,6 +357,12 @@ class FinancialStore {
         ON financial_entities(namespace, entity, observed_at);
       CREATE TABLE IF NOT EXISTS financial_coverage (
         namespace TEXT NOT NULL, query_key TEXT NOT NULL, fetched_at INTEGER NOT NULL,
+        PRIMARY KEY(namespace, query_key)
+      );
+      CREATE TABLE IF NOT EXISTS financial_transaction_pages (
+        namespace TEXT NOT NULL, query_key TEXT NOT NULL,
+        session_generation TEXT NOT NULL, next_cursor TEXT,
+        exhausted INTEGER NOT NULL, fetched_at INTEGER NOT NULL,
         PRIMARY KEY(namespace, query_key)
       );
       CREATE TABLE IF NOT EXISTS financial_migrations (
@@ -1076,6 +1098,67 @@ class FinancialStore {
       }
     });
     if (changed) _notify(ns);
+  }
+
+  TransactionPageProgress? transactionPageProgress(
+    String ns,
+    TransactionQuery query,
+  ) {
+    final rows = database.db.select(
+      'SELECT session_generation, next_cursor, exhausted, fetched_at '
+      'FROM financial_transaction_pages WHERE namespace=? AND query_key=?',
+      [ns, query.key],
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.single;
+    return TransactionPageProgress(
+      sessionGeneration: row['session_generation'] as String,
+      nextCursor: row['next_cursor'] as String?,
+      exhausted: row['exhausted'] == 1,
+      fetchedAt: DateTime.fromMillisecondsSinceEpoch(row['fetched_at'] as int),
+    );
+  }
+
+  /// Upserts one page and advances its progress in the same SQLite commit.
+  /// No page, including the final page, deletes absent records or installs
+  /// complete-query coverage. Full authoritative snapshots retain that role.
+  void applyTransactionPage(
+    String ns,
+    TransactionQuery query,
+    TransactionPage page, {
+    required String sessionGeneration,
+    required String? requestedCursor,
+    DateTime? at,
+  }) {
+    final timestamp = at ?? DateTime.now();
+    batch(() {
+      _transaction(() {
+        final previous = transactionPageProgress(ns, query);
+        if (requestedCursor != null &&
+            (previous == null ||
+                previous.sessionGeneration != sessionGeneration ||
+                previous.exhausted ||
+                previous.nextCursor != requestedCursor)) {
+          throw StateError('Transaction page cursor is no longer current');
+        }
+        saveTransactions(ns, page.rows, at: timestamp);
+        database.db.execute(
+          'INSERT INTO financial_transaction_pages VALUES (?, ?, ?, ?, ?, ?) '
+          'ON CONFLICT(namespace,query_key) DO UPDATE SET '
+          'session_generation=excluded.session_generation, '
+          'next_cursor=excluded.next_cursor, exhausted=excluded.exhausted, '
+          'fetched_at=excluded.fetched_at',
+          [
+            ns,
+            query.key,
+            sessionGeneration,
+            page.nextCursor,
+            page.hasMore ? 0 : 1,
+            timestamp.millisecondsSinceEpoch,
+          ],
+        );
+      });
+    });
   }
 
   void saveProvisional(String ns, TransactionEntry row) {
@@ -2121,6 +2204,7 @@ class FinancialStore {
       for (final table in [
         'financial_entities',
         'financial_coverage',
+        'financial_transaction_pages',
         'financial_migrations',
         'financial_sync_status',
         'financial_source_receipts',
