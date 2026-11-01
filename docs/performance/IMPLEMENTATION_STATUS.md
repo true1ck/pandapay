@@ -4,7 +4,7 @@ Updated 1 November 2026 on `codex/ios-shortcuts-prototype`.
 
 | Packet | Owner | Status | Evidence |
 | --- | --- | --- | --- |
-| P0 baseline and trace | Lead/QA | in progress | Existing evidence is historical; current authenticated process-cold run is still required |
+| P0 baseline and trace | Lead/QA | measured, jank remains | Profile APK 8125 on `emulator-5554` (local API/auth: `10.0.2.2:4001`/`10.0.2.2:3210`) preserved the existing install/session and reached signed-in Home in `TotalTime: 3960 ms`; frame trace still recorded 93/157 skipped-frame bursts and a 1.58 s HWUI frame. Artifacts: `artifacts/verification-20261101/cold-launch-profile8125-*` |
 | P1 network policies | Network agent | implemented-unverified | `app/test/data/authenticated_http_client_test.dart`: 9 focused tests passed; targeted analyzer and formatting passed. Integrated Flutter invocation in this Windows checkout produced no output and was stopped, so release verification remains open |
 | P2 bounded jobs/SMS/outbox | Jobs agent + lead integration | implemented-unverified | Scheduler/scanner focused tests: 13 passed; provider startup capture uses one bounded slice plus zero-delay continuations; intake sync is capped at 8 x 50 ready rows and schedules a guarded continuation. Provider analyzer passed; controller/device regression remains open |
 | P3 opt-in transaction paging | Lead + API-client agent | implemented-unverified | API paging: 6/6 tests passed; client `TransactionPage` seam: 8/8 focused tests passed and analyzer clean of errors. Activity's broad `transactionsProvider` now opts into the bounded page path; route/device verification remains open |
@@ -14,3 +14,5 @@ Updated 1 November 2026 on `codex/ios-shortcuts-prototype`.
 | P7 Activity/Spending projections | Activity + Spending agents | implemented-unverified | Activity projection cache memoizes grouping/totals/rows; 23 Activity tests passed. Spending tag/category projection resolves each visible row once; 43 Spending screen tests plus 3 projection tests passed. Broader Spending list virtualization remains open |
 
 This is an implementation ledger, not a release sign-off. A packet becomes `verified` only after its focused tests complete and the integrated regression/device evidence is recorded. Unrelated dirty SMS/AI/recurring/subscription work remains outside this ledger and must not be staged with performance packets.
+
+Latest focused regression run (1 November 2026): 21 sync/worker tests and 63 Activity/Spending/Insights tests passed. The Activity suite emitted one existing non-fatal hit-test warning; it did not fail the run. The emulator profile trace confirms that the remaining cold-launch complaint is still real UI/rendering jank, not a data reset: `firstInstallTime` stayed `2026-11-01 00:21:28`, the installed profile build was `versionCode=8125`, and the screenshot showed the authenticated Home page.
