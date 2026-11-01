@@ -6,6 +6,8 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/home/home_screen.dart';
+import 'package:pandapay/features/insights/payments_due_screen.dart'
+    show paymentsDueProvider;
 import 'package:pandapay/features/settings/account_settings_screen.dart'
     show biometricLockProvider;
 import 'package:pandapay/features/system/biometric_lock_screen.dart';
@@ -56,6 +58,19 @@ Future<void> _pumpApp(
           _EmptyCategoryRepository(),
         ),
         userCardsProvider.overrideWith((ref) async => const []),
+        myCardsProvider.overrideWith((ref) async => const []),
+        transactionsProvider.overrideWith((ref) async => const []),
+        utilizationTransactionsProvider.overrideWith((ref) async => const []),
+        homeSummaryProvider.overrideWith((ref) async => null),
+        bankAccountSummariesProvider.overrideWith((ref) async => const []),
+        cardOverridesProvider.overrideWith((ref) async => const []),
+        rankedRecommendationsProvider.overrideWith(
+          (ref) => const AsyncValue.data(<Recommendation>[]),
+        ),
+        spendReportProvider.overrideWith((ref, query) async => null),
+        paymentsDueProvider.overrideWith((ref) async => const []),
+        homeEngagementCheckInProvider.overrideWith((ref, day) async {}),
+        homeDataRefreshProvider.overrideWith((ref) async {}),
         sessionInitProvider.overrideWith((ref) async {}),
         sessionKeepAliveProvider.overrideWith((ref) {}),
         smsBackgroundFlushProvider.overrideWith((ref) {}),
@@ -152,6 +167,21 @@ void main() {
             _EmptyCategoryRepository(),
           ),
           userCardsProvider.overrideWith((ref) async => const []),
+          myCardsProvider.overrideWith((ref) async => const []),
+          transactionsProvider.overrideWith((ref) async => const []),
+          utilizationTransactionsProvider.overrideWith(
+            (ref) async => const [],
+          ),
+          homeSummaryProvider.overrideWith((ref) async => null),
+          bankAccountSummariesProvider.overrideWith((ref) async => const []),
+          cardOverridesProvider.overrideWith((ref) async => const []),
+          rankedRecommendationsProvider.overrideWith(
+            (ref) => const AsyncValue.data(<Recommendation>[]),
+          ),
+          spendReportProvider.overrideWith((ref, query) async => null),
+          paymentsDueProvider.overrideWith((ref) async => const []),
+          homeEngagementCheckInProvider.overrideWith((ref, day) async {}),
+          homeDataRefreshProvider.overrideWith((ref) async {}),
           sessionInitProvider.overrideWith((ref) async {}),
           sessionKeepAliveProvider.overrideWith((ref) {}),
           smsBackgroundFlushProvider.overrideWith((ref) {}),

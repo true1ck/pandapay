@@ -10,6 +10,10 @@ import 'package:pandapay/app/router.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/auth/product_activation_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
+import 'package:pandapay/features/insights/insights_overview.dart'
+    show InsightsOverview, insightsOverviewProvider;
+import 'package:pandapay/features/insights/payments_due_screen.dart'
+    show paymentsDueProvider;
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -51,6 +55,23 @@ Future<void> _pumpApp(
           (ref) =>
               sessionLoading ? Completer<void>().future : Future<void>.value(),
         ),
+        userCardsProvider.overrideWith((ref) async => const []),
+        myCardsProvider.overrideWith((ref) async => const []),
+        transactionsProvider.overrideWith((ref) async => const []),
+        utilizationTransactionsProvider.overrideWith((ref) async => const []),
+        cardOverridesProvider.overrideWith((ref) async => const []),
+        homeSummaryProvider.overrideWith((ref) async => null),
+        bankAccountSummariesProvider.overrideWith((ref) async => const []),
+        rankedRecommendationsProvider.overrideWith(
+          (ref) => const AsyncValue.data(<Recommendation>[]),
+        ),
+        spendReportProvider.overrideWith((ref, query) async => null),
+        insightsOverviewProvider.overrideWith(
+          (ref, period) async => InsightsOverview.empty,
+        ),
+        paymentsDueProvider.overrideWith((ref) async => const []),
+        homeEngagementCheckInProvider.overrideWith((ref, day) async {}),
+        homeDataRefreshProvider.overrideWith((ref) async {}),
         accessTokenProvider.overrideWith(
           (ref) => signedIn ? 'test-token' : null,
         ),
@@ -138,7 +159,12 @@ void main() {
       // a stale deep link. The guard must bounce it straight back to Home.
       final context = tester.element(find.byType(Scaffold).first);
       GoRouter.of(context).go(AppRoute.welcome);
-      await tester.pumpAndSettle();
+      // Home owns an indeterminate progress animation in some deferred
+      // sections, so settling every frame can never complete. The redirect
+      // itself is synchronous; a bounded pump is the relevant assertion.
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
 
       expect(find.byType(HomeScreen), findsOneWidget);
       expect(find.text('Make every\ncard count.'), findsNothing);

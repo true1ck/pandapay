@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
+import 'package:pandapay/data/consents_api.dart';
 import 'package:pandapay/data/product_access_api.dart';
 import 'package:pandapay/features/home/home_screen.dart';
 import 'package:pandapay/features/onboarding/all_set_screen.dart';
@@ -130,6 +131,11 @@ void main() {
           accessToken: 'test-token',
           client: client,
         ),
+        consentsApi: ConsentsApi(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'test-token',
+          client: client,
+        ),
       );
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('wallet-sentinel', 'keep');
@@ -204,6 +210,11 @@ void main() {
           accessToken: 'test-token',
           client: client,
         ),
+        consentsApi: ConsentsApi(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'test-token',
+          client: client,
+        ),
       );
 
       expect(find.byType(AllSetScreen), findsOneWidget);
@@ -258,6 +269,11 @@ void main() {
           accessToken: 'test-token',
           client: client,
         ),
+        consentsApi: ConsentsApi(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'test-token',
+          client: client,
+        ),
       );
 
       await tester.tap(find.text('Take me Home'));
@@ -294,11 +310,13 @@ void main() {
 Future<ProviderContainer> _pumpFlow(
   WidgetTester tester, {
   ProductAccessRepository? api,
+  ConsentsApi? consentsApi,
 }) async {
   final fakeApi = api ?? _FakeProductAccess();
   final container = ProviderContainer(
     overrides: [
       productAccessApiProvider.overrideWithValue(fakeApi),
+      consentsApiProvider.overrideWithValue(consentsApi),
       ownedCardsWithProductProvider.overrideWithValue(
         const AsyncValue.data([]),
       ),
@@ -314,6 +332,7 @@ Future<ProviderContainer> _pumpFlow(
       categoriesProvider.overrideWith((ref) async => []),
       userCardsProvider.overrideWith((ref) async => []),
       userCardsRepositoryProvider.overrideWithValue(null),
+      cardOverridesProvider.overrideWith((ref) async => []),
       spendReportsRepositoryProvider.overrideWithValue(null),
     ],
   );

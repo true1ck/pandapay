@@ -481,4 +481,92 @@ void main() {
       expect(rows.map((row) => row.id).toSet(), {'old', 'new'});
     },
   );
+
+  test('legacy snapshots keep valid rows after a malformed row', () async {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final cache = ResponseCache(database);
+    final container = ProviderContainer(
+      overrides: [
+        accessTokenProvider.overrideWith((ref) => 'test-token'),
+        responseCacheProvider.overrideWith((ref) async => cache),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final namespace = container.read(cacheNamespaceProvider);
+    final valid = TransactionEntry(
+      id: 'valid-after-malformed',
+      amount: Money.fromRupees(100),
+      occurredAt: DateTime(2026, 10, 15),
+      source: 'sms',
+      status: 'active',
+    );
+    await cache.put(
+      '$namespace:spend_detail:month:2026-10',
+      jsonEncode({
+        'transactions': [
+          {'malformed': true},
+          valid.toJson(),
+        ],
+      }),
+    );
+
+    final loader = FutureProvider<List<TransactionEntry>>(
+      (ref) => loadTransactionsWithOfflineCache(
+        ref,
+        repo: _AuthFailingRepository(),
+        cacheKey: 'transactions:filtered',
+        from: DateTime(2026, 10, 1),
+        useReportSnapshots: true,
+      ),
+    );
+    final rows = await container.read(loader.future);
+
+    expect(rows.map((row) => row.id), ['valid-after-malformed']);
+  });
+
+  test('a legacy snapshot outside the filter does not hide a failed fetch', () async {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final cache = ResponseCache(database);
+    final container = ProviderContainer(
+      overrides: [
+        accessTokenProvider.overrideWith((ref) => 'test-token'),
+        responseCacheProvider.overrideWith((ref) async => cache),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final namespace = container.read(cacheNamespaceProvider);
+    await cache.put(
+      '$namespace:spend_detail:month:2026-09',
+      jsonEncode({
+        'transactions': [
+          TransactionEntry(
+            id: 'outside-filter',
+            amount: Money.fromRupees(100),
+            occurredAt: DateTime(2026, 9, 15),
+            source: 'sms',
+            status: 'active',
+          ).toJson(),
+        ],
+      }),
+    );
+
+    final loader = FutureProvider<List<TransactionEntry>>(
+      (ref) => loadTransactionsWithOfflineCache(
+        ref,
+        repo: _AuthFailingRepository(),
+        cacheKey: 'transactions:filtered',
+        from: DateTime(2026, 10, 1),
+        useReportSnapshots: true,
+      ),
+    );
+
+    await expectLater(
+      container.read(loader.future),
+      throwsA(isA<AuthenticationUnavailableException>()),
+    );
+  });
 }

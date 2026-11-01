@@ -50,6 +50,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // package_info_plus resolves through a platform channel; give its mock
+    // response one deterministic frame before exercising submission.
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('Feedback & Support'), findsOneWidget);
     expect(find.text('What kind of feedback is this?'), findsOneWidget);
@@ -65,8 +68,10 @@ void main() {
     await tester.tap(find.text('Send'));
     // Pump frames to complete async submit and present dialog
     await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
     await tester.pump(const Duration(milliseconds: 500));
 
+    expect(capturedRequest, isNotNull);
     // Dialog displayed
     expect(find.text('Thanks for letting us know'), findsOneWidget);
 

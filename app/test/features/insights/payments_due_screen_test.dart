@@ -66,6 +66,7 @@ Future<void> _pumpBills(
         sessionInitProvider.overrideWith((ref) async {}),
         isOnlineProvider.overrideWith((ref) => Stream.value(true)),
         categoriesProvider.overrideWith((ref) async => const []),
+        myCardsProvider.overrideWith((ref) async => const []),
         ...overrides,
       ],
       child: const MaterialApp(home: Scaffold(body: BillsAndCommitmentsTab())),

@@ -8,6 +8,10 @@ import 'package:pandapay/app/tutorial_keys.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/account/account_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
+import 'package:pandapay/features/insights/payments_due_screen.dart'
+    show paymentsDueProvider;
+import 'package:pandapay/features/insights/insights_overview.dart'
+    show InsightsOverview, insightsOverviewProvider;
 import 'package:pandapay/features/insights/insights_hub_screen.dart';
 import 'package:pandapay/features/cards/my_cards_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -48,6 +52,27 @@ Future<void> _pumpApp(WidgetTester tester, {TutorialKeys? tutorialKeys}) async {
           _EmptyCategoryRepository(),
         ),
         userCardsProvider.overrideWith((ref) async => const []),
+        myCardsProvider.overrideWith((ref) async => const []),
+        transactionsProvider.overrideWith((ref) async => const []),
+        utilizationTransactionsProvider.overrideWith((ref) async => const []),
+        homeSummaryProvider.overrideWith((ref) async => null),
+        bankAccountSummariesProvider.overrideWith((ref) async => const []),
+        cardOverridesProvider.overrideWith((ref) async => const []),
+        duplicateCandidatesProvider.overrideWith((ref) async => const []),
+        needsReviewCountProvider.overrideWith((ref) async => 0),
+        profileProvider.overrideWith((ref) async => null),
+        budgetsProvider.overrideWith((ref) async => const []),
+        recurringReportProvider.overrideWith((ref) async => null),
+        rankedRecommendationsProvider.overrideWith(
+          (ref) => const AsyncValue.data(<Recommendation>[]),
+        ),
+        spendReportProvider.overrideWith((ref, query) async => null),
+        insightsOverviewProvider.overrideWith(
+          (ref, period) async => InsightsOverview.empty,
+        ),
+        paymentsDueProvider.overrideWith((ref) async => const []),
+        homeEngagementCheckInProvider.overrideWith((ref, day) async {}),
+        homeDataRefreshProvider.overrideWith((ref) async {}),
         sessionInitProvider.overrideWith((ref) async {}),
         sessionKeepAliveProvider.overrideWith((ref) {}),
         accessTokenProvider.overrideWith((ref) => 'test-token'),

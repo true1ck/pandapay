@@ -9,6 +9,8 @@ import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/system/forced_upgrade_screen.dart';
 import 'package:pandapay/features/system/maintenance_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
+import 'package:pandapay/features/insights/payments_due_screen.dart'
+    show paymentsDueProvider;
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -41,6 +43,19 @@ Future<void> _pumpApp(
           _EmptyCategoryRepository(),
         ),
         userCardsProvider.overrideWith((ref) async => const []),
+        myCardsProvider.overrideWith((ref) async => const []),
+        transactionsProvider.overrideWith((ref) async => const []),
+        utilizationTransactionsProvider.overrideWith((ref) async => const []),
+        homeSummaryProvider.overrideWith((ref) async => null),
+        bankAccountSummariesProvider.overrideWith((ref) async => const []),
+        cardOverridesProvider.overrideWith((ref) async => const []),
+        rankedRecommendationsProvider.overrideWith(
+          (ref) => const AsyncValue.data(<Recommendation>[]),
+        ),
+        spendReportProvider.overrideWith((ref, query) async => null),
+        paymentsDueProvider.overrideWith((ref) async => const []),
+        homeEngagementCheckInProvider.overrideWith((ref, day) async {}),
+        homeDataRefreshProvider.overrideWith((ref) async {}),
         sessionInitProvider.overrideWith((ref) async {}),
         sessionKeepAliveProvider.overrideWith((ref) {}),
         accessTokenProvider.overrideWith((ref) => 'test-token'),

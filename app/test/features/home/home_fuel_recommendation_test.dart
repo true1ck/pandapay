@@ -69,6 +69,16 @@ void main() {
           accessTokenProvider.overrideWith((ref) => 'mock-token'),
           sessionInitProvider.overrideWith((ref) async {}),
           cardOverridesProvider.overrideWith((ref) async => const []),
+          userCardsRepositoryProvider.overrideWithValue(null),
+          myCardsProvider.overrideWith((ref) async => const []),
+          transactionsProvider.overrideWith((ref) async => const []),
+          utilizationTransactionsProvider.overrideWith(
+            (ref) async => const [],
+          ),
+          homeSummaryProvider.overrideWith((ref) async => null),
+          bankAccountSummariesProvider.overrideWith((ref) async => const []),
+          homeEngagementCheckInProvider.overrideWith((ref, day) async {}),
+          homeDataRefreshProvider.overrideWith((ref) async {}),
           catalogueRepositoryProvider.overrideWithValue(
             _MockCatalogueRepository([moneybackCard]),
           ),

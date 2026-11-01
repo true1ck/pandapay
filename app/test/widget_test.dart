@@ -83,6 +83,12 @@ Widget _appWithFakeCatalogue(
       ),
       categoryRepositoryProvider.overrideWithValue(_FakeCategoryRepository()),
       userCardsProvider.overrideWith((ref) async => const []),
+      userCardsRepositoryProvider.overrideWithValue(null),
+      homeSummaryProvider.overrideWith((ref) async => null),
+      bankAccountSummariesProvider.overrideWith((ref) async => const []),
+      cardOverridesProvider.overrideWith((ref) async => const []),
+      homeEngagementCheckInProvider.overrideWith((ref, day) async {}),
+      homeDataRefreshProvider.overrideWith((ref) async {}),
       _noSessionInit,
       sessionKeepAliveProvider.overrideWith((ref) {}),
       accessTokenProvider.overrideWith((ref) => 'fake-access-token'),
@@ -130,6 +136,12 @@ void main() {
             _FakeCategoryRepository(),
           ),
           userCardsProvider.overrideWith((ref) async => const []),
+          userCardsRepositoryProvider.overrideWithValue(null),
+          homeSummaryProvider.overrideWith((ref) async => null),
+          bankAccountSummariesProvider.overrideWith((ref) async => const []),
+          cardOverridesProvider.overrideWith((ref) async => const []),
+          homeEngagementCheckInProvider.overrideWith((ref, day) async {}),
+          homeDataRefreshProvider.overrideWith((ref) async {}),
           accessTokenProvider.overrideWith((ref) => 'fake-access-token'),
           _noSessionInit,
           sessionKeepAliveProvider.overrideWith((ref) {}),
@@ -436,7 +448,14 @@ void main() {
   testWidgets('Chunk 15: Account tab does not show a guest banner', (
     tester,
   ) async {
-    await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
+    await tester.pumpWidget(
+      _appWithFakeCatalogue(
+        [_rupayCard()],
+        extraOverrides: [
+          profileProvider.overrideWith((ref) async => {'id': 'profile-123'}),
+        ],
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(_navTab('You'));
@@ -455,6 +474,12 @@ void main() {
           [_rupayCard()],
           extraOverrides: [
             accessTokenProvider.overrideWith((ref) => 'fake-access-token'),
+            myCardsProvider.overrideWith((ref) async => const []),
+            transactionsProvider.overrideWith((ref) async => const []),
+            homeSummaryProvider.overrideWith((ref) async => null),
+            bankAccountSummariesProvider.overrideWith((ref) async => const []),
+            cardOverridesProvider.overrideWith((ref) async => const []),
+            homeDataRefreshProvider.overrideWith((ref) async {}),
             profileApiProvider.overrideWithValue(
               ProfileApi(
                 apiBaseUrl: 'http://test',

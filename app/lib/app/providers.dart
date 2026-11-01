@@ -5786,6 +5786,65 @@ String _recurringServiceKey(String name) {
 String? namedServiceAutoPayName(String? raw) => _namedServiceAutoPayName(raw);
 String recurringServiceKey(String name) => _recurringServiceKey(name);
 
+/// Rehydrates the legacy response-cache transaction snapshots used by older
+/// builds. The durable FinancialStore is authoritative for current builds,
+/// but in-memory test databases and upgraded installs may still have only
+/// these account-scoped snapshots available.
+Future<List<TransactionEntry>?> _readLegacyTransactionSnapshots(
+  Ref ref,
+  ResponseCache? cache, {
+  required String cacheKey,
+  required TransactionQuery filter,
+  required bool useReportSnapshots,
+}) async {
+  if (cache == null) return null;
+
+  final prefixes = <String>[
+    _scopedCacheKey(ref, cacheKey),
+    _scopedCacheKey(ref, '$_transactionsCacheKey:'),
+  ];
+  if (useReportSnapshots) {
+    prefixes
+      ..add(_scopedCacheKey(ref, 'spend_detail:'))
+      ..add(_scopedCacheKey(ref, 'insights_transactions:'));
+  }
+
+  final snapshots = <CachedResponse>[];
+  for (final prefix in prefixes.toSet()) {
+    snapshots.addAll(await cache.readPrefix(prefix));
+  }
+  snapshots.sort((a, b) => b.fetchedAt.compareTo(a.fetchedAt));
+  if (snapshots.isEmpty) return null;
+
+  final byId = <String, TransactionEntry>{};
+  var decodedAny = false;
+  for (final snapshot in snapshots) {
+    try {
+      final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
+      final rows = body['transactions'];
+      if (rows is! List) continue;
+      var snapshotCoversFilter = rows.isEmpty;
+      for (final raw in rows) {
+        try {
+          if (raw is! Map) continue;
+          final row = TransactionEntry.fromJson(
+            Map<String, dynamic>.from(raw),
+          );
+          if (!filter.matches(row)) continue;
+          snapshotCoversFilter = true;
+          byId.putIfAbsent(row.id, () => row);
+        } catch (_) {
+          // One malformed row must not discard valid rows in the same snapshot.
+        }
+      }
+      decodedAny = decodedAny || snapshotCoversFilter;
+    } catch (_) {
+      // A malformed legacy snapshot must not hide another valid range.
+    }
+  }
+  return decodedAny ? byId.values.toList() : null;
+}
+
 /// Shared stale-safe transaction loader for Activity, Insights, and the
 /// period detail rows in Spending. The server remains authoritative, but a
 /// successful response is persisted before it is rendered so a cold offline
@@ -5846,7 +5905,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
       local = null;
     }
   }
-  final legacy = worker == null && (local == null || local.rows.isEmpty)
+  final legacy = worker == null && (local == null || !local.complete)
       ? await _readLegacyTransactionSnapshots(
           ref,
           cache,
@@ -5938,6 +5997,12 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
 
   // A known empty result has coverage too. Reading any surface never waits
   // for a network refresh when its saved content is available.
+  if (local != null && !local.complete && legacy == null) {
+    // FinancialStore can contain rows migrated from an older response cache
+    // without a query-coverage record. Those rows are useful candidates, but
+    // an empty filtered view must not be mistaken for a complete empty result.
+    local = null;
+  }
   if (local != null && legacy == null) {
     if (!_isKnownOffline() &&
         (!preferCached ||
