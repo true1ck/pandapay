@@ -2862,6 +2862,8 @@ final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
 final outboxFlushProvider = Provider<void>((ref) {
   var running = false;
   var disposed = false;
+  Timer? namespaceFlushTimer;
+  ref.onDispose(() => namespaceFlushTimer?.cancel());
   Future<void> flush() async {
     if (running || disposed) return;
     final namespace = ref.read(cacheNamespaceProvider);
@@ -2899,14 +2901,31 @@ final outboxFlushProvider = Provider<void>((ref) {
     if (next.valueOrNull == true) unawaited(flush());
   });
   ref.listen(cacheNamespaceProvider, (_, next) {
-    if (next != 'signed-out') unawaited(flush());
+    if (next == 'signed-out') {
+      namespaceFlushTimer?.cancel();
+      return;
+    }
+    // Outbox delivery opens the account database and can publish several
+    // invalidations.  Do not put that work on the same turn as the first
+    // authenticated Home frame; resume/reconnect and explicit writes still
+    // flush immediately through their existing listeners.
+    namespaceFlushTimer?.cancel();
+    namespaceFlushTimer = Timer(const Duration(milliseconds: 350), () {
+      if (!disposed && ref.read(cacheNamespaceProvider) == next) {
+        unawaited(flush());
+      }
+    });
   });
   final lifecycle = AppLifecycleListener(onResume: () => unawaited(flush()));
   ref.onDispose(() {
     disposed = true;
     lifecycle.dispose();
   });
-  unawaited(flush());
+  namespaceFlushTimer = Timer(const Duration(milliseconds: 350), () {
+    if (!disposed && ref.read(cacheNamespaceProvider) != 'signed-out') {
+      unawaited(flush());
+    }
+  });
 });
 
 /// Task D-5: pending duplicate-candidate pairs; empty (not an error) when
@@ -6994,6 +7013,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   // while there is no repository yet, so retry again as soon as the token is
   // restored instead of leaving valid SMS spends stranded in the old local
   // review queue.
+  Timer? namespaceFlushTimer;
+  ref.onDispose(() => namespaceFlushTimer?.cancel());
   ref.listen<String>(cacheNamespaceProvider, (previous, next) {
     unawaited(
       SharedPreferences.getInstance().then(
@@ -7001,7 +7022,20 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       ),
     );
     if (next != 'signed-out' && next != previous) {
-      unawaited(flushAndRetry('namespace'));
+      // Inbox reconciliation can scan many provider rows and performs
+      // synchronous local-store publication between upload batches. Token
+      // restoration already happens during the splash-to-Home handoff, so
+      // defer only this automatic namespace pass until the shell has had a
+      // chance to paint. Resume, reconnect, manual and live-message paths
+      // remain immediate.
+      namespaceFlushTimer?.cancel();
+      namespaceFlushTimer = Timer(const Duration(milliseconds: 500), () {
+        if (!disposed && ref.read(cacheNamespaceProvider) == next) {
+          unawaited(flushAndRetry('namespace'));
+        }
+      });
+    } else if (next == 'signed-out') {
+      namespaceFlushTimer?.cancel();
     }
   });
 

@@ -4,6 +4,35 @@ Updated 1 November 2026. Branch `codex/ios-shortcuts-prototype`, synchronized be
 
 ## Completed
 
+- Startup follow-up (1 November 2026): `TokenStore.load()` now uses the
+  `flutter_secure_storage` `readAll()` platform operation, so access and
+  refresh credentials are restored in one native keystore call instead of
+  two sequential calls. Legacy SharedPreferences migration remains
+  independent per credential and secure-storage semantics are unchanged.
+  The authenticated namespace listeners for split sync, outbox delivery and
+  SMS reconciliation now defer only their automatic sign-in pass by 350–500
+  ms, allowing the local Home shell to paint first; resume, reconnect, manual
+  and live-message triggers remain immediate and account-fenced.
+- A/B profile APK `1.0.18-dev` build `8104` was installed in place over the
+  existing emulator account (first-install time/data preserved). Four
+  repeated process-cold runs reached Home at 1.564, 1.023, 1.457, 1.082 and
+  0.966 seconds from Dart startup across the five-run sample; token/session
+  readiness was 0.906–1.400 seconds. The prior current-source sample had a
+  2.03-second Home outlier and a 2.7-second token outlier. This is an emulator
+  A/B improvement, not a physical-release p95 guarantee.
+- The same run's Android graphics counters showed a 14 ms GPU sample with no
+  4,950 ms GPU bucket; a prior run showed the 4,950 ms bucket, proving that
+  the long compositor stall is intermittent emulator/renderer pressure, not
+  a deterministic image decode path. Profile frame telemetry still reported
+  high raster p95 during the long scroll sample (roughly 48–84 ms), so real
+  device scroll profiling and renderer comparison remain open work.
+- Final APK page smoke after the in-place update reached Home, Wallet and
+  Insights without a crash or ANR. You rendered its expected connection error
+  because this dev build targets the unavailable local API and has no cached
+  profile; this is covered by the existing profile-provider test and is not a
+  performance regression. The emulator log contained no fatal
+  `AndroidRuntime`, unhandled Flutter exception or ANR marker.
+
 - Final current-source emulator verification: profile APK `1.0.15-dev` build `8101` was built from this branch and installed in place without clearing the existing package data (`firstInstallTime` was preserved). On a process-cold launch, Dart main started at 0 ms, the first Flutter frame arrived at about 83 ms, token/session readiness completed around 1.8 s, Home reached its first-frame marker around 2.03 s, and Android reported the displayed activity around 4.22 s. The run still logged skipped-frame bursts (64/38/96/48/32), so the remaining visible startup delay is not caused by the Home route alone; native/display/renderer work still needs a dedicated trace.
 - Live SMS verification on build `8101`: two identical synthetic bank-debit SMS messages containing `PANDAPAY_LIVE_TEST_8101` produced one Activity transaction (`−₹37.00`, SMS source, bank account ending `1234`), confirming local capture and duplicate suppression. A tagged OTP/security SMS (`PANDAPAY_OTP_TEST_8101`) was ignored. The app's local SQLite WAL advanced after capture. Upload/sync was not exercised because this dev APK points to `10.0.2.2:4000`, where no local API was running.
 - Current-source page smoke: Home, Activity, Wallet, Insights, and You navigation were exercised after the in-place install; Activity scroll/selection behavior and repeated navigation remained stable. The You page showed its designed connection error state because the dev API was unavailable and no cached profile existed; `profile_provider_test.dart` explicitly covers this behavior. No fatal exception, ANR, or unhandled Flutter error appeared in the emulator log.

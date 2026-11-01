@@ -34,9 +34,17 @@ class TokenStore {
   static Future<TokenStore> load() async {
     markStartup('token load start');
     const secureStorage = FlutterSecureStorage();
-    var accessToken = await secureStorage.read(key: _accessKey);
+    // Restore the session in one native platform call.  The Android plugin
+    // runs each method on its secure-storage worker and two sequential
+    // `read` calls pay the platform/keystore boundary twice before the
+    // router can leave the splash.  `readAll`
+    // returns only this plugin's prefixed keys, keeps the same encrypted
+    // storage and error behavior, and still lets the legacy migration below
+    // repair either credential independently.
+    final secureValues = await secureStorage.readAll();
+    var accessToken = secureValues[_accessKey];
     markStartup('access token read complete');
-    var refreshToken = await secureStorage.read(key: _refreshKey);
+    var refreshToken = secureValues[_refreshKey];
     markStartup('refresh token read complete');
 
     // Migrate each credential independently. An interrupted first migration

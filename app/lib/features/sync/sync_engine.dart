@@ -446,11 +446,24 @@ final unacknowledgedConflictsProvider = StateProvider<int>((ref) => 0);
 final syncLifecycleProvider = Provider<void>((ref) {
   ref.watch(transactionTagsProvider);
   ref.watch(splitSyncLifecycleProvider);
+  Timer? namespaceSyncTimer;
+  ref.onDispose(() => namespaceSyncTimer?.cancel());
   ref.listen<String>(cacheNamespaceProvider, (previous, next) async {
     if (previous != next && next != 'signed-out') {
-      await ref.read(syncEngineProvider).sync();
+      // Token restoration changes the account namespace while Home is still
+      // handing off from the splash.  Starting the full split sync in the
+      // same frame competes with the first local paint (and its synchronous
+      // sqlite materialization).  Keep sign-in/resume/reconnect semantics,
+      // but give the authenticated shell a short scheduling window first.
+      namespaceSyncTimer?.cancel();
+      namespaceSyncTimer = Timer(const Duration(milliseconds: 350), () {
+        if (ref.read(cacheNamespaceProvider) == next) {
+          unawaited(ref.read(syncEngineProvider).sync());
+        }
+      });
     }
     if (previous != 'signed-out' && next == 'signed-out') {
+      namespaceSyncTimer?.cancel();
       // Sign-out: the queue and cursor belong to the account that just left.
       final db = await ref.read(appDatabaseProvider.future);
       SyncQueue(db, namespace: previous!).resetCursor();
