@@ -2,6 +2,11 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
 const {createLifecycleJournal,initializeJournal,readLifecycleJournal,genesis}=require('../src/account_lifecycle_journal');
 const {createAccountLifecycleWorker,CLAIM_SQL,CHECKPOINT_SQL,ADVANCE_SQL}=require('../src/account_lifecycle_worker');
+// The journal's private-root and owned-file checks intentionally use POSIX
+// mode/uid semantics. Windows ACLs are not represented by Node's portable
+// stat mode/uid fields, so these filesystem-security tests belong on the
+// Linux deployment/test runner rather than silently weakening the checks.
+const posixOnly=process.platform==='win32'?{skip:'requires POSIX private-directory ownership semantics'}:undefined;
 async function fixture(t){
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'pp-denial-journal-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));
  const options={roots:[path.join(root,'one'),path.join(root,'two')],checkpointRoot:path.join(root,'separate-checkpoint'),journalId:crypto.randomBytes(32).toString('hex'),signingKey:crypto.randomBytes(32).toString('base64'),encrypt:async b=>Buffer.from('encrypted-fixture:'+b.toString('base64'))};
@@ -10,14 +15,14 @@ async function fixture(t){
  return {root,options,checkpoint,journal,decrypt};
 }
 const intent=()=>({request_id:crypto.randomUUID(),user_id:crypto.randomUUID(),generation:'1'});
-test('journal requires separate retained key, stable identity and two distinct private roots',async t=>{
+test('journal requires separate retained key, stable identity and two distinct private roots',posixOnly,async t=>{
  assert.throws(()=>createLifecycleJournal({}),/required/);
  const f=await fixture(t);assert.deepEqual(await f.journal.inspect(),f.checkpoint);
  await assert.rejects(initializeJournal(f.options),/EEXIST/);
  const bad=createLifecycleJournal({...f.options,roots:[f.options.roots[0],f.options.roots[0]]});await assert.rejects(bad.inspect(),/distinct/);
  await fs.chmod(f.options.roots[0],0o755);await assert.rejects(f.journal.inspect(),/private/);
 });
-test('journal authenticates chain, preserves stable intent and verifies complete copies before replay',async t=>{
+test('journal authenticates chain, preserves stable intent and verifies complete copies before replay',posixOnly,async t=>{
  const f=await fixture(t),value=intent();const head=await f.journal.append(value,f.checkpoint);
  assert.equal(head.sequence,1);assert.notEqual(head.head,genesis(f.options.journalId));
  const replay=await readLifecycleJournal(f.options,{expectedCheckpoint:head,decrypt:f.decrypt});assert.deepEqual(replay.intents,[value]);assert.deepEqual(replay.checkpoint,head);assert.equal(replay.checkpoint_heads[1],head.head);
@@ -26,7 +31,7 @@ test('journal authenticates chain, preserves stable intent and verifies complete
  // Old independently retained checkpoint cannot certify a longer/shorter log.
  await assert.rejects(readLifecycleJournal(f.options,{expectedCheckpoint:f.checkpoint,decrypt:f.decrypt}),/rollback/);
 });
-test('single-copy loss, tampering, symlink and truncation all fail closed',async t=>{
+test('single-copy loss, tampering, symlink and truncation all fail closed',posixOnly,async t=>{
  const f=await fixture(t),head=await f.journal.append(intent(),f.checkpoint);
  const a=path.join(f.options.roots[0],'00000001.json'),b=path.join(f.options.roots[1],'00000001.json'),original=await fs.readFile(a);
  await fs.writeFile(a,Buffer.from(original.toString().replace('ciphertext','Ciphertext')));await assert.rejects(f.journal.inspect(),/authentication/);
@@ -34,12 +39,12 @@ test('single-copy loss, tampering, symlink and truncation all fail closed',async
  await fs.symlink(a,b);await assert.rejects(f.journal.inspect());await fs.unlink(b);await fs.unlink(a);
  await assert.rejects(readLifecycleJournal(f.options,{expectedCheckpoint:head,decrypt:f.decrypt}),/rollback|checkpoint disagree/);
 });
-test('encryption failure leaves both copies empty and never emits plaintext on disk',async t=>{
+test('encryption failure leaves both copies empty and never emits plaintext on disk',posixOnly,async t=>{
  const f=await fixture(t),value=intent(),broken=createLifecycleJournal({...f.options,encrypt:async()=>{throw Error('private error');}});
  await assert.rejects(broken.append(value,f.checkpoint));assert.deepEqual(await f.journal.inspect(),f.checkpoint);
  for(const root of f.options.roots){const names=await fs.readdir(root);assert.deepEqual(names,['journal.json']);}
 });
-test('concurrent append is refused and conflicting irreversible histories cannot be replayed',async t=>{
+test('concurrent append is refused and conflicting irreversible histories cannot be replayed',posixOnly,async t=>{
  const f=await fixture(t);let release;const hold=new Promise(r=>{release=r;});
  const journal=createLifecycleJournal({...f.options,encrypt:async b=>{await hold;return f.options.encrypt(b);}}),value=intent();
  const first=journal.append(value,f.checkpoint);await assert.rejects(journal.append(intent(),f.checkpoint),/busy/);release();const one=await first;

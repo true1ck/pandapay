@@ -8,7 +8,7 @@
 # blob of shell inside a YAML step.
 #
 # Also safe to run by hand on the host:
-#     bash deploy/deploy.sh <commit-sha>
+#     bash deploy/deploy.sh <commit-sha> [source-ref]
 #
 # IDEMPOTENT. Re-running on the same commit re-applies migrations (they are
 # all `if not exists` / `or replace`), rebuilds identical images, and
@@ -26,7 +26,8 @@
 #   notification-provider values explicitly; never the whole file is replaced.
 set -euo pipefail
 
-SHA="${1:?usage: deploy.sh <commit-sha>}"
+SHA="${1:?usage: deploy.sh <commit-sha> [source-ref]}"
+SOURCE_REF="${2:-master}"
 APP_DIR="/home/ubuntu/apps/pandapay"
 REPO="https://github.com/true1ck/pandapay.git"
 
@@ -292,6 +293,9 @@ fi
 
 echo "==> Fetching the reviewed deployment commit"
 [[ "$SHA" =~ ^[a-fA-F0-9]{7,40}$ ]] || { echo 'FATAL: expected a commit SHA'; exit 1; }
+git check-ref-format --branch "$SOURCE_REF" >/dev/null 2>&1 || {
+  echo 'FATAL: expected a valid source branch/ref'; exit 1;
+}
 if [ ! -d .git ]; then
   # First run converts the copied directory into a real checkout in place.
   # `git init` + fetch + reset (rather than a fresh clone) is what preserves
@@ -301,21 +305,22 @@ if [ ! -d .git ]; then
   git remote add origin "$REPO"
 fi
 git remote set-url origin "$REPO"
-git fetch -q --depth=50 origin "$SHA" 2>/dev/null || git fetch -q origin master
+git fetch -q --depth=50 origin "$SHA" 2>/dev/null || git fetch -q origin "$SOURCE_REF"
 # A delayed Actions run or manual rerun must never reset a newer deployment to
-# an older, though once-tested, master commit. Refresh origin/master now and
-# require the reviewed SHA to be its exact tip before building anything.
-git fetch -q origin master
+# an older, though once-tested, source branch commit. Refresh the requested
+# source ref now and require the reviewed SHA to be its exact tip before
+# building anything.
+git fetch -q origin "$SOURCE_REF"
 TARGET_COMMIT="$(git rev-parse --verify "${SHA}^{commit}")" || {
   echo 'FATAL: reviewed target commit is unavailable locally.' >&2
   exit 1
 }
-MASTER_COMMIT="$(git rev-parse --verify refs/remotes/origin/master)" || {
-  echo 'FATAL: could not resolve the current origin/master tip.' >&2
+SOURCE_COMMIT="$(git rev-parse --verify "refs/remotes/origin/$SOURCE_REF")" || {
+  echo 'FATAL: could not resolve the current source ref tip.' >&2
   exit 1
 }
-if [ "$TARGET_COMMIT" != "$MASTER_COMMIT" ]; then
-  echo 'FATAL: refusing a stale deployment target; it must equal current origin/master.' >&2
+if [ "$TARGET_COMMIT" != "$SOURCE_COMMIT" ]; then
+  echo 'FATAL: refusing a stale deployment target; it must equal the current source ref tip.' >&2
   exit 1
 fi
 # A copied legacy directory has no verifiable ancestry. Reconcile it to a

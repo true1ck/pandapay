@@ -1,0 +1,81 @@
+# One-shot production replacement for the explicitly approved pushed branch.
+#
+# This workflow intentionally does not alter master or the normal master-only
+# production workflow. It is armed only by a commit message containing the
+# exact marker `[deploy-prod]`, so ordinary future branch pushes run no deploy.
+# The target is still the existing production host and database; this is a
+# production replacement, not an isolated staging deployment.
+name: Deploy approved pushed branch to production
+
+on:
+  push:
+    branches: [codex/ios-shortcuts-prototype]
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Full Build and test gate
+    if: contains(github.event.head_commit.message, '[deploy-prod]')
+    uses: ./.github/workflows/build-and-test.yml
+
+  deploy:
+    name: Replace production with pushed branch
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy exact branch commit
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+          SHA: ${{ github.sha }}
+          SOURCE_REF: ${{ github.ref_name }}
+          NOTIFICATION_SERVICE_URL: ${{ secrets.NOTIFICATION_SERVICE_URL }}
+          NOTIFICATION_SERVICE_API_KEY: ${{ secrets.NOTIFICATION_SERVICE_API_KEY }}
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_FALLBACK_API_KEY: ${{ secrets.GEMINI_FALLBACK_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          GEMINI_FALLBACK_MODEL: ${{ secrets.GEMINI_FALLBACK_MODEL }}
+          AI_WORKER_TOKEN: ${{ secrets.AI_WORKER_TOKEN }}
+        run: |
+          test -n "$NOTIFICATION_SERVICE_URL"
+          test -n "$NOTIFICATION_SERVICE_API_KEY"
+          {
+            printf 'export NOTIFICATION_SERVICE_URL=%q\n' "$NOTIFICATION_SERVICE_URL"
+            printf 'export NOTIFICATION_SERVICE_API_KEY=%q\n' "$NOTIFICATION_SERVICE_API_KEY"
+            if [ -n "$GOOGLE_PLACES_API_KEY" ]; then printf 'export GOOGLE_PLACES_API_KEY=%q\n' "$GOOGLE_PLACES_API_KEY"; fi
+            if [ -n "$GEMINI_API_KEY" ]; then printf 'export GEMINI_API_KEY=%q\n' "$GEMINI_API_KEY"; fi
+            if [ -n "$GEMINI_FALLBACK_API_KEY" ]; then printf 'export GEMINI_FALLBACK_API_KEY=%q\n' "$GEMINI_FALLBACK_API_KEY"; fi
+            if [ -n "$GEMINI_MODEL" ]; then printf 'export GEMINI_MODEL=%q\n' "$GEMINI_MODEL"; fi
+            if [ -n "$GEMINI_FALLBACK_MODEL" ]; then printf 'export GEMINI_FALLBACK_MODEL=%q\n' "$GEMINI_FALLBACK_MODEL"; fi
+            if [ -n "$AI_WORKER_TOKEN" ]; then printf 'export AI_WORKER_TOKEN=%q\n' "$AI_WORKER_TOKEN"; fi
+            cat deploy/deploy.sh
+          } | ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
+            "bash -s -- $SHA $SOURCE_REF"
+
+      - name: Verify production health
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
+            'curl -fsS -m 10 http://127.0.0.1:4000/ready && echo && curl -fsS -m 10 http://127.0.0.1:3210/ready'

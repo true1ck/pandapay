@@ -2,14 +2,16 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
 const helpers=require('../src/sync_request_validation');
-const source=fs.readFileSync(require.resolve('../src/index'),'utf8');
+// Keep source-section boundaries stable on Windows checkouts, where Git may
+// materialize CRLF while the markers below intentionally use LF.
+const source=fs.readFileSync(require.resolve('../src/index'),'utf8').replace(/\r\n/g,'\n');
 const user='10000000-0000-4000-8000-000000000001';
 const device='20000000-0000-4000-8000-000000000001';
 const entityId='30000000-0000-4000-8000-000000000001';
 // Execute the actual route registrations without booting index.js, loading
 // dotenv, starting workers or opening a configured database/provider.
 const sections=[
- ["app.post('/sync/register-device'",'/**\n * POST /notification-devices'],
+ ["app.post('/sync/register-device'","app.post('/notification-devices'"],
  ["app.post('/sync/push'",'/**\n * GET /sync/pull?'],
  ["app.get('/sync/pull'",'/** POST /sync/ack'],
  ["app.post('/sync/ack'",'/** POST /sync/conflicts'],
