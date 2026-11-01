@@ -101,7 +101,11 @@ String _reviewTypeLabel(NeedsReviewItem item) {
     final type = first['factType'];
     return switch (type) {
       'balance_snapshot' => 'Bank balance alert',
-      'bill_obligation' => 'Card bill alert',
+      'bill_obligation' =>
+        RegExp(r'\b(?:credit\s+)?card\b', caseSensitive: false)
+                .hasMatch(item.body)
+            ? 'Card bill alert'
+            : 'Bill reminder',
       'mandate_lifecycle' => 'AutoPay mandate alert',
       'posted_movement' => 'Possible transaction',
       'security_or_service_alert' => 'Security or service alert',

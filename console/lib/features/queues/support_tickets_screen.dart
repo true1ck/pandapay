@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/admin_design.dart';
 import '../../app/providers.dart';
 
 /// User Feedback & Support Tickets queue (H9 support_tickets).
@@ -23,38 +24,23 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
     final ticketsAsync = ref.watch(supportTicketsProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('User Feedback & Support Tickets'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(supportTicketsProvider),
-          ),
-        ],
-      ),
       body: ticketsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Failed to load support tickets: $err'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(supportTicketsProvider),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
+        error: (err, _) => AdminLoadError(
+          title: 'Support queue is unavailable',
+          error: err,
+          onRetry: () => ref.invalidate(supportTicketsProvider),
         ),
         data: (ticketList) {
-          final pendingCount =
-              ticketList.where((t) => t['state'] == 'pending').length;
-          final resolvedCount =
-              ticketList.where((t) => t['state'] == 'resolved').length;
-          final dismissedCount =
-              ticketList.where((t) => t['state'] == 'dismissed').length;
+          final pendingCount = ticketList
+              .where((t) => t['state'] == 'pending')
+              .length;
+          final resolvedCount = ticketList
+              .where((t) => t['state'] == 'resolved')
+              .length;
+          final dismissedCount = ticketList
+              .where((t) => t['state'] == 'dismissed')
+              .length;
 
           final filtered = ticketList.where((t) {
             if (_selectedState != 'all' && t['state'] != _selectedState) {
@@ -131,13 +117,16 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
               const Divider(height: 1),
               Expanded(
                 child: filtered.isEmpty
-                    ? Center(
-                        child: Text(
-                          ticketList.isEmpty
-                              ? 'No support tickets or feedback recorded yet.'
-                              : 'No tickets match the selected filters.',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
+                    ? AdminEmptyState(
+                        icon: ticketList.isEmpty
+                            ? Icons.support_agent_outlined
+                            : Icons.filter_alt_off_outlined,
+                        title: ticketList.isEmpty
+                            ? 'No feedback has arrived yet'
+                            : 'No tickets match these filters',
+                        message: ticketList.isEmpty
+                            ? 'New reports from PandaPay users will appear here with their category and status.'
+                            : 'Change the status or category filters to see other support tickets.',
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.all(12),
@@ -159,8 +148,7 @@ class _SupportTicketCard extends ConsumerStatefulWidget {
   const _SupportTicketCard(this.ticket);
 
   @override
-  ConsumerState<_SupportTicketCard> createState() =>
-      _SupportTicketCardState();
+  ConsumerState<_SupportTicketCard> createState() => _SupportTicketCardState();
 }
 
 class _SupportTicketCardState extends ConsumerState<_SupportTicketCard> {
@@ -242,12 +230,14 @@ class _SupportTicketCardState extends ConsumerState<_SupportTicketCard> {
 
     try {
       final ticketId = widget.ticket['id'] as String;
-      await ref.read(adminApiProvider)!.resolveSupportTicket(
-        ticketId,
-        responseText: responseController.text.trim().isEmpty
-            ? null
-            : responseController.text.trim(),
-      );
+      await ref
+          .read(adminApiProvider)!
+          .resolveSupportTicket(
+            ticketId,
+            responseText: responseController.text.trim().isEmpty
+                ? null
+                : responseController.text.trim(),
+          );
       ref.invalidate(supportTicketsProvider);
     } catch (e) {
       setState(() => _error = e.toString());
@@ -299,12 +289,14 @@ class _SupportTicketCardState extends ConsumerState<_SupportTicketCard> {
 
     try {
       final ticketId = widget.ticket['id'] as String;
-      await ref.read(adminApiProvider)!.dismissSupportTicket(
-        ticketId,
-        reason: reasonController.text.trim().isEmpty
-            ? null
-            : reasonController.text.trim(),
-      );
+      await ref
+          .read(adminApiProvider)!
+          .dismissSupportTicket(
+            ticketId,
+            reason: reasonController.text.trim().isEmpty
+                ? null
+                : reasonController.text.trim(),
+          );
       ref.invalidate(supportTicketsProvider);
     } catch (e) {
       setState(() => _error = e.toString());
@@ -333,8 +325,10 @@ class _SupportTicketCardState extends ConsumerState<_SupportTicketCard> {
             Row(
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _kindColor(kind).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
@@ -353,14 +347,16 @@ class _SupportTicketCardState extends ConsumerState<_SupportTicketCard> {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: isPending
                         ? Colors.amber.shade100
                         : (t['state'] == 'resolved'
-                            ? Colors.green.shade100
-                            : Colors.grey.shade200),
+                              ? Colors.green.shade100
+                              : Colors.grey.shade200),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -371,16 +367,18 @@ class _SupportTicketCardState extends ConsumerState<_SupportTicketCard> {
                       color: isPending
                           ? Colors.amber.shade900
                           : (t['state'] == 'resolved'
-                              ? Colors.green.shade900
-                              : Colors.grey.shade800),
+                                ? Colors.green.shade900
+                                : Colors.grey.shade800),
                     ),
                   ),
                 ),
                 if (isStale) ...[
                   const SizedBox(width: 8),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.orange.shade100,
                       borderRadius: BorderRadius.circular(6),
@@ -515,8 +513,9 @@ class _SupportTicketCardState extends ConsumerState<_SupportTicketCard> {
                   child: Text(
                     diagnostics is String
                         ? diagnostics
-                        : const JsonEncoder.withIndent('  ')
-                            .convert(diagnostics),
+                        : const JsonEncoder.withIndent(
+                            '  ',
+                          ).convert(diagnostics),
                     style: const TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 12,

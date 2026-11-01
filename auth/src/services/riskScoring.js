@@ -15,6 +15,19 @@ const BLOCKED_IP_RANGES = (process.env.BLOCKED_IP_RANGES || '')
   .map(r => r.trim())
   .filter(Boolean);
 
+// A PC-only development stack reaches ordinary email verification through a
+// loopback proxy. Opt in explicitly; hosted/unknown environments must retain
+// the default block and must never accept this development setting.
+const loopbackSignInSetting = process.env.AUTH_ALLOW_LOOPBACK_SIGNIN;
+if (loopbackSignInSetting !== undefined && !['true', 'false'].includes(loopbackSignInSetting)) {
+  throw new Error('AUTH_ALLOW_LOOPBACK_SIGNIN must be true or false');
+}
+const allowLoopbackSignIn = loopbackSignInSetting === 'true';
+if (allowLoopbackSignIn && !['development', 'test'].includes(process.env.NODE_ENV)) {
+  throw new Error('AUTH_ALLOW_LOOPBACK_SIGNIN is restricted to development/test');
+}
+const localSignInAddresses = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
 // === SECURITY HARDENING: IP/DEVICE RISK ===
 // Whether to require OTP re-verification on suspicious refresh
 const REQUIRE_OTP_ON_SUSPICIOUS_REFRESH = process.env.REQUIRE_OTP_ON_SUSPICIOUS_REFRESH === 'true';
@@ -32,6 +45,8 @@ function isIpBlocked(ip) {
       return true;
     }
   }
+
+  if (allowLoopbackSignIn && localSignInAddresses.has(ip)) return false;
 
   // Block common private/test ranges by default
   const privateRanges = [

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/admin_design.dart';
 import '../../app/providers.dart';
 import '../../widgets/confirm_dialog.dart';
 
@@ -17,7 +18,12 @@ class ConflictsScreen extends StatelessWidget {
       length: 2,
       child: Column(
         children: [
-          const TabBar(tabs: [Tab(text: 'Merchant conflicts'), Tab(text: 'Abuse signals')]),
+          const TabBar(
+            tabs: [
+              Tab(text: 'Merchant conflicts'),
+              Tab(text: 'Abuse signals'),
+            ],
+          ),
           const Expanded(
             child: TabBarView(children: [_ConflictsTab(), _AbuseSignalsTab()]),
           ),
@@ -35,9 +41,20 @@ class _ConflictsTab extends ConsumerWidget {
     final conflicts = ref.watch(merchantConflictsProvider);
     return conflicts.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('Failed to load conflicts: $err')),
+      error: (err, _) => AdminLoadError(
+        title: 'Merchant conflict queue is unavailable',
+        error: err,
+        onRetry: () => ref.invalidate(merchantConflictsProvider),
+      ),
       data: (rows) {
-        if (rows.isEmpty) return const Center(child: Text('No pending conflicts.'));
+        if (rows.isEmpty) {
+          return const AdminEmptyState(
+            icon: Icons.handshake_outlined,
+            title: 'No merchant conflicts',
+            message:
+                'Conflicting merchant claims will appear here with the values and evidence needed to resolve them.',
+          );
+        }
         return ListView.builder(
           padding: const EdgeInsets.all(12),
           itemCount: rows.length,
@@ -64,7 +81,8 @@ class _ConflictTileState extends ConsumerState<_ConflictTile> {
     final confirmed = await confirmAdminAction(
       context,
       title: 'Resolve this conflict?',
-      message: 'Set "${widget.conflict['field']}" to "$value"? Resolved conflicts leave the queue.',
+      message:
+          'Set "${widget.conflict['field']}" to "$value"? Resolved conflicts leave the queue.',
       confirmLabel: 'Resolve',
     );
     if (!confirmed || !mounted) return;
@@ -73,7 +91,9 @@ class _ConflictTileState extends ConsumerState<_ConflictTile> {
       _error = null;
     });
     try {
-      await ref.read(adminApiProvider)!.resolveMerchantConflict(
+      await ref
+          .read(adminApiProvider)!
+          .resolveMerchantConflict(
             widget.conflict['id'] as String,
             value,
             reason: 'console resolve',
@@ -101,16 +121,23 @@ class _ConflictTileState extends ConsumerState<_ConflictTile> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${c['merchant_display_name'] ?? c['vpa']} — field: ${c['field']}',
-                style: Theme.of(context).textTheme.titleMedium),
-            Text(c['vpa'] as String, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(
+              '${c['merchant_display_name'] ?? c['vpa']} — field: ${c['field']}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            Text(
+              c['vpa'] as String,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               children: [
                 for (final v in values)
                   OutlinedButton(
-                    onPressed: _busy ? null : () => _resolve(v['value'] as String),
+                    onPressed: _busy
+                        ? null
+                        : () => _resolve(v['value'] as String),
                     child: Text('${v['value']} (${v['count']}×)'),
                   ),
               ],
@@ -118,7 +145,10 @@ class _ConflictTileState extends ConsumerState<_ConflictTile> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
               ),
           ],
         ),
@@ -135,9 +165,20 @@ class _AbuseSignalsTab extends ConsumerWidget {
     final signals = ref.watch(abuseSignalsProvider);
     return signals.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('Failed to load abuse signals: $err')),
+      error: (err, _) => AdminLoadError(
+        title: 'Abuse signals are unavailable',
+        error: err,
+        onRetry: () => ref.invalidate(abuseSignalsProvider),
+      ),
       data: (rows) {
-        if (rows.isEmpty) return const Center(child: Text('No open abuse signals.'));
+        if (rows.isEmpty) {
+          return const AdminEmptyState(
+            icon: Icons.shield_outlined,
+            title: 'No abuse signals to review',
+            message:
+                'Signals that pass the server’s review threshold will be listed here for investigation.',
+          );
+        }
         return ListView.builder(
           padding: const EdgeInsets.all(12),
           itemCount: rows.length,
@@ -164,7 +205,8 @@ class _AbuseSignalTileState extends ConsumerState<_AbuseSignalTile> {
     final confirmed = await confirmAdminAction(
       context,
       title: 'Block this device?',
-      message: 'Blocks every abuse signal for this device and reverts its merchant contributions. This is not reversible from the console.',
+      message:
+          'Blocks every abuse signal for this device and reverts its merchant contributions. This is not reversible from the console.',
       confirmLabel: 'Block device',
     );
     if (!confirmed || !mounted) return;
@@ -173,7 +215,12 @@ class _AbuseSignalTileState extends ConsumerState<_AbuseSignalTile> {
       _error = null;
     });
     try {
-      await ref.read(adminApiProvider)!.blockAbuseSignal(widget.signal['id'] as String, reason: 'console block');
+      await ref
+          .read(adminApiProvider)!
+          .blockAbuseSignal(
+            widget.signal['id'] as String,
+            reason: 'console block',
+          );
       ref.invalidate(abuseSignalsProvider);
     } catch (e) {
       setState(() => _error = e.toString());

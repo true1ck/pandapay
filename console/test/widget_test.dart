@@ -33,7 +33,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('PandaPay Console'), findsOneWidget);
-    expect(find.text('Send OTP'), findsOneWidget);
+    expect(find.text('Send verification code'), findsOneWidget);
   });
 
   testWidgets('a signed-in non-admin token is redirected to the dead end, not the catalogue',
@@ -382,7 +382,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Never shows the login screen — session resumed silently.
-    expect(find.text('Send OTP'), findsNothing);
+    expect(find.text('Send verification code'), findsNothing);
     expect(find.text('Catalogue'), findsOneWidget);
   });
 
@@ -491,7 +491,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Send OTP'), findsOneWidget);
+    expect(find.text('Send verification code'), findsOneWidget);
     final preferences = await SharedPreferences.getInstance();
     expect(preferences.getString('pandapay_console.refresh_token'), isNull);
     expect(preferences.getString('pandapay_console.access_token'), isNull);
@@ -540,7 +540,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Your sign-in is still saved. Try again in a moment.'), findsOneWidget);
-    expect(find.text('Send OTP'), findsNothing);
+    expect(find.text('Send verification code'), findsNothing);
     var preferences = await SharedPreferences.getInstance();
     expect(preferences.getString('pandapay_console.refresh_token'), 'stored-refresh-token');
     expect(preferences.getString('pandapay_console.access_token'), 'stored-access-token');

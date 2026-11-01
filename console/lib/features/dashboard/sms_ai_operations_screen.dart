@@ -16,44 +16,33 @@ class SmsAiOperationsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
       length: 5,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('SMS AI Operations'),
-          actions: [
-            IconButton(
-              tooltip: 'Refresh all',
-              onPressed: () {
-                ref.invalidate(smsAiSummaryProvider);
-                ref.invalidate(smsAiJobsProvider);
-                ref.invalidate(smsAiQuotaProvider);
-                ref.invalidate(smsLearningCandidatesProvider);
-                ref.invalidate(smsLearningOperationsProvider);
-                ref.invalidate(smsRolloutProvider);
-                ref.invalidate(smsRuleBundlesProvider);
-              },
-              icon: const Icon(Icons.refresh),
+      child: Column(
+        children: [
+          const Material(
+            color: Colors.white,
+            child: TabBar(
+              isScrollable: true,
+              tabs: [
+                Tab(text: 'Overview'),
+                Tab(text: 'Jobs'),
+                Tab(text: 'Learning'),
+                Tab(text: 'Rules & rollout'),
+                Tab(text: 'Dry run'),
+              ],
             ),
-          ],
-          bottom: const TabBar(
-            isScrollable: true,
-            tabs: [
-              Tab(text: 'Overview'),
-              Tab(text: 'Jobs'),
-              Tab(text: 'Learning'),
-              Tab(text: 'Rules & rollout'),
-              Tab(text: 'Dry run'),
-            ],
           ),
-        ),
-        body: const TabBarView(
-          children: [
-            _OverviewTab(),
-            _JobsTab(),
-            _LearningTab(),
-            _RulesTab(),
-            _DryRunTab(),
-          ],
-        ),
+          const Expanded(
+            child: TabBarView(
+              children: [
+                _OverviewTab(),
+                _JobsTab(),
+                _LearningTab(),
+                _RulesTab(),
+                _DryRunTab(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -74,7 +63,8 @@ class _OverviewTab extends ConsumerWidget {
       children: [
         summary.when(
           loading: () => const LinearProgressIndicator(),
-          error: (error, _) => _ErrorBlock(label: 'Summary failed', error: error),
+          error: (error, _) =>
+              _ErrorBlock(label: 'Summary failed', error: error),
           data: (data) => _SummaryCard(data: data),
         ),
         const SizedBox(height: 24),
@@ -87,13 +77,15 @@ class _OverviewTab extends ConsumerWidget {
         const SizedBox(height: 24),
         const _SectionHeader(
           title: 'Active rule bundle',
-          description: 'The newest active bundle is what devices download. Older active bundles remain available as rollback targets.',
+          description:
+              'The newest active bundle is what devices download. Older active bundles remain available as rollback targets.',
         ),
         const _ActiveBundleCard(),
         const SizedBox(height: 24),
         const _SectionHeader(
           title: 'Autonomous learning worker',
-          description: 'A worker that stops reporting is the first sign that learned rules have stopped advancing.',
+          description:
+              'A worker that stops reporting is the first sign that learned rules have stopped advancing.',
         ),
         const _WorkerRunsCard(),
         const SizedBox(height: 24),
@@ -134,10 +126,13 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final counts = (data['statusCounts'] as Map?)?.cast<String, dynamic>() ?? const {};
-    final capacity = (data['providerCapacity'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final counts =
+        (data['statusCounts'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final capacity =
+        (data['providerCapacity'] as Map?)?.cast<String, dynamic>() ?? const {};
     final failureReasons =
-        (data['failureReasons24h'] as Map?)?.cast<String, dynamic>() ?? const {};
+        (data['failureReasons24h'] as Map?)?.cast<String, dynamic>() ??
+        const {};
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -152,23 +147,49 @@ class _SummaryCard extends StatelessWidget {
                 _Metric(label: 'Leased', value: '${counts['leased'] ?? 0}'),
                 _Metric(label: 'Done', value: '${counts['done'] ?? 0}'),
                 _Metric(label: 'Failed', value: '${counts['failed'] ?? 0}'),
-                _Metric(label: 'Oldest queue (s)', value: '${data['oldestAgeSeconds'] ?? 0}'),
+                _Metric(
+                  label: 'Oldest queue (s)',
+                  value: '${data['oldestAgeSeconds'] ?? 0}',
+                ),
                 _Metric(label: 'Retries', value: '${data['retryCount'] ?? 0}'),
-                _Metric(label: 'Done today', value: '${data['doneToday'] ?? 0}'),
-                _Metric(label: 'Auto-resolved today', value: '${data['autoResolvedToday'] ?? 0}'),
-                _Metric(label: 'Needs review today', value: '${data['reviewRequiredToday'] ?? 0}'),
-                _Metric(label: 'Failed (24h)', value: '${data['failureCount24h'] ?? 0}'),
-                _Metric(label: 'Batches today', value: '${data['batchesToday'] ?? 0}'),
-                _Metric(label: 'Jobs in multi-SMS batches', value: '${data['batchedJobsToday'] ?? 0}'),
+                _Metric(
+                  label: 'Done today',
+                  value: '${data['doneToday'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Auto-resolved today',
+                  value: '${data['autoResolvedToday'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Needs review today',
+                  value: '${data['reviewRequiredToday'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Failed (24h)',
+                  value: '${data['failureCount24h'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Batches today',
+                  value: '${data['batchesToday'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Jobs in multi-SMS batches',
+                  value: '${data['batchedJobsToday'] ?? 0}',
+                ),
                 _Metric(
                   label: 'Provider requests / min',
-                  value: '${capacity['requestsLastMinute'] ?? '—'} / ${capacity['requestsPerMinuteLimit'] ?? '—'}',
+                  value:
+                      '${capacity['requestsLastMinute'] ?? '—'} / ${capacity['requestsPerMinuteLimit'] ?? '—'}',
                 ),
                 _Metric(
                   label: 'Estimated tokens / min',
-                  value: '${capacity['tokensLastMinute'] ?? '—'} / ${capacity['tokensPerMinuteLimit'] ?? '—'}',
+                  value:
+                      '${capacity['tokensLastMinute'] ?? '—'} / ${capacity['tokensPerMinuteLimit'] ?? '—'}',
                 ),
-                _Metric(label: 'Capacity waits (last min)', value: '${capacity['waitingLastMinute'] ?? '—'}'),
+                _Metric(
+                  label: 'Capacity waits (last min)',
+                  value: '${capacity['waitingLastMinute'] ?? '—'}',
+                ),
                 _Metric(
                   label: 'Permanently blocked (last min)',
                   value: '${capacity['permanentlyBlockedLastMinute'] ?? '—'}',
@@ -177,7 +198,10 @@ class _SummaryCard extends StatelessWidget {
             ),
             if (failureReasons.isNotEmpty) ...[
               const SizedBox(height: 16),
-              Text('Failure reasons (24h)', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Failure reasons (24h)',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 4),
               Wrap(
                 spacing: 8,
@@ -212,8 +236,13 @@ class _RolloutPanelState extends ConsumerState<_RolloutPanel> {
       loading: () => const LinearProgressIndicator(),
       error: (error, _) => _ErrorBlock(label: 'Rollout failed', error: error),
       data: (data) {
-        final resolved = (data['rollout'] as Map?)?.cast<String, dynamic>() ?? const {};
-        final flags = (data['flags'] as List?)?.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList() ??
+        final resolved =
+            (data['rollout'] as Map?)?.cast<String, dynamic>() ?? const {};
+        final flags =
+            (data['flags'] as List?)
+                ?.whereType<Map>()
+                .map((e) => e.cast<String, dynamic>())
+                .toList() ??
             const <Map<String, dynamic>>[];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,17 +251,37 @@ class _RolloutPanelState extends ConsumerState<_RolloutPanel> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _FlagChip(label: 'Master', enabled: resolved['masterEnabled'] == true),
-                _FlagChip(label: 'Spend facts', enabled: resolved['spendFamilyEnabled'] == true),
-                _FlagChip(label: 'Balance facts', enabled: resolved['balanceFamilyEnabled'] == true),
-                _FlagChip(label: 'Bill facts', enabled: resolved['billFamilyEnabled'] == true),
-                _FlagChip(label: 'Mandate facts', enabled: resolved['mandateFamilyEnabled'] == true),
-                _FlagChip(label: 'AI queue', enabled: resolved['aiQueueEnabled'] == true),
+                _FlagChip(
+                  label: 'Master',
+                  enabled: resolved['masterEnabled'] == true,
+                ),
+                _FlagChip(
+                  label: 'Spend facts',
+                  enabled: resolved['spendFamilyEnabled'] == true,
+                ),
+                _FlagChip(
+                  label: 'Balance facts',
+                  enabled: resolved['balanceFamilyEnabled'] == true,
+                ),
+                _FlagChip(
+                  label: 'Bill facts',
+                  enabled: resolved['billFamilyEnabled'] == true,
+                ),
+                _FlagChip(
+                  label: 'Mandate facts',
+                  enabled: resolved['mandateFamilyEnabled'] == true,
+                ),
+                _FlagChip(
+                  label: 'AI queue',
+                  enabled: resolved['aiQueueEnabled'] == true,
+                ),
               ],
             ),
             const SizedBox(height: 12),
             if (flags.isEmpty)
-              const Text('No sms_* feature flags are configured. The pipeline falls back to defaults.')
+              const Text(
+                'No sms_* feature flags are configured. The pipeline falls back to defaults.',
+              )
             else
               _WideTable(
                 child: DataTable(
@@ -255,20 +304,29 @@ class _RolloutPanelState extends ConsumerState<_RolloutPanel> {
                               value: flag['is_enabled'] == true,
                               onChanged: _savingKey == flag['key']
                                   ? null
-                                  : (value) => _toggle(flag['key'] as String, value),
+                                  : (value) =>
+                                        _toggle(flag['key'] as String, value),
                             ),
                           ),
                           DataCell(
                             InkWell(
                               onTap: () => _editPercent(flag),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                child: Text('${flag['rollout_percent'] ?? 0}%  ✎'),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                child: Text(
+                                  '${flag['rollout_percent'] ?? 0}%  ✎',
+                                ),
                               ),
                             ),
                           ),
                           DataCell(Text('${flag['min_app_version'] ?? '—'}')),
-                          DataCell(Text((flag['platforms'] as List?)?.join(', ') ?? '—')),
+                          DataCell(
+                            Text(
+                              (flag['platforms'] as List?)?.join(', ') ?? '—',
+                            ),
+                          ),
                           DataCell(Text('${flag['updated_at'] ?? '—'}')),
                         ],
                       ),
@@ -289,7 +347,11 @@ class _RolloutPanelState extends ConsumerState<_RolloutPanel> {
     }
     setState(() => _savingKey = key);
     try {
-      await api.updateSmsRolloutFlag(key, isEnabled: value, reason: 'admin_console_toggle');
+      await api.updateSmsRolloutFlag(
+        key,
+        isEnabled: value,
+        reason: 'admin_console_toggle',
+      );
       ref.invalidate(smsRolloutProvider);
       _showMessage('$key ${value ? 'enabled' : 'disabled'}.');
     } catch (error) {
@@ -300,7 +362,9 @@ class _RolloutPanelState extends ConsumerState<_RolloutPanel> {
   }
 
   Future<void> _editPercent(Map<String, dynamic> flag) async {
-    final controller = TextEditingController(text: '${flag['rollout_percent'] ?? 0}');
+    final controller = TextEditingController(
+      text: '${flag['rollout_percent'] ?? 0}',
+    );
     final value = await showDialog<int>(
       context: context,
       builder: (context) => AlertDialog(
@@ -312,9 +376,13 @@ class _RolloutPanelState extends ConsumerState<_RolloutPanel> {
           decoration: const InputDecoration(labelText: '0–100'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, int.tryParse(controller.text.trim())),
+            onPressed: () =>
+                Navigator.pop(context, int.tryParse(controller.text.trim())),
             child: const Text('Save'),
           ),
         ],
@@ -345,7 +413,9 @@ class _RolloutPanelState extends ConsumerState<_RolloutPanel> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -360,7 +430,9 @@ class _FlagChip extends StatelessWidget {
       avatar: Icon(
         enabled ? Icons.check_circle_outline : Icons.remove_circle_outline,
         size: 18,
-        color: enabled ? Colors.green.shade700 : Theme.of(context).colorScheme.outline,
+        color: enabled
+            ? Colors.green.shade700
+            : Theme.of(context).colorScheme.outline,
       ),
       label: Text('$label · ${enabled ? 'on' : 'off'}'),
     );
@@ -375,7 +447,8 @@ class _ActiveBundleCard extends ConsumerWidget {
     final operations = ref.watch(smsLearningOperationsProvider);
     return operations.when(
       loading: () => const LinearProgressIndicator(),
-      error: (error, _) => _ErrorBlock(label: 'Active bundle failed', error: error),
+      error: (error, _) =>
+          _ErrorBlock(label: 'Active bundle failed', error: error),
       data: (data) {
         final bundle = (data['activeBundle'] as Map?)?.cast<String, dynamic>();
         if (bundle == null) return const Text('No active rule bundle.');
@@ -386,10 +459,22 @@ class _ActiveBundleCard extends ConsumerWidget {
               spacing: 24,
               runSpacing: 12,
               children: [
-                _Metric(label: 'Bundle version', value: '${bundle['bundle_version'] ?? '—'}'),
-                _Metric(label: 'Min client version', value: '${bundle['min_client_ver'] ?? '—'}'),
-                _Metric(label: 'Published', value: '${bundle['published_at'] ?? '—'}'),
-                _Metric(label: 'SHA-256', value: _shortHash(bundle['sha256']?.toString())),
+                _Metric(
+                  label: 'Bundle version',
+                  value: '${bundle['bundle_version'] ?? '—'}',
+                ),
+                _Metric(
+                  label: 'Min client version',
+                  value: '${bundle['min_client_ver'] ?? '—'}',
+                ),
+                _Metric(
+                  label: 'Published',
+                  value: '${bundle['published_at'] ?? '—'}',
+                ),
+                _Metric(
+                  label: 'SHA-256',
+                  value: _shortHash(bundle['sha256']?.toString()),
+                ),
               ],
             ),
           ),
@@ -407,12 +492,15 @@ class _WorkerRunsCard extends ConsumerWidget {
     final operations = ref.watch(smsLearningOperationsProvider);
     return operations.when(
       loading: () => const LinearProgressIndicator(),
-      error: (error, _) => _ErrorBlock(label: 'Worker history failed', error: error),
+      error: (error, _) =>
+          _ErrorBlock(label: 'Worker history failed', error: error),
       data: (data) {
         final worker = (data['worker'] as Map?)?.cast<String, dynamic>();
         final runs = (worker?['runs'] as List?) ?? const [];
         if (runs.isEmpty) {
-          return const Text('No worker runs recorded. The worker health table may not exist on this database yet.');
+          return const Text(
+            'No worker runs recorded. The worker health table may not exist on this database yet.',
+          );
         }
         return _WideTable(
           child: DataTable(
@@ -503,20 +591,36 @@ class _JobsTab extends ConsumerWidget {
         Row(
           children: [
             Expanded(
-              child: Text('Recent jobs', style: Theme.of(context).textTheme.titleLarge),
+              child: Text(
+                'Recent jobs',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
             ),
             const SizedBox(width: 12),
             DropdownButton<String?>(
               value: ref.watch(smsAiJobStatusFilterProvider),
               hint: const Text('All statuses'),
               items: const [
-                DropdownMenuItem<String?>(value: null, child: Text('All statuses')),
-                DropdownMenuItem<String?>(value: 'queued', child: Text('Queued')),
-                DropdownMenuItem<String?>(value: 'leased', child: Text('Leased')),
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('All statuses'),
+                ),
+                DropdownMenuItem<String?>(
+                  value: 'queued',
+                  child: Text('Queued'),
+                ),
+                DropdownMenuItem<String?>(
+                  value: 'leased',
+                  child: Text('Leased'),
+                ),
                 DropdownMenuItem<String?>(value: 'done', child: Text('Done')),
-                DropdownMenuItem<String?>(value: 'failed', child: Text('Failed')),
+                DropdownMenuItem<String?>(
+                  value: 'failed',
+                  child: Text('Failed'),
+                ),
               ],
-              onChanged: (value) => ref.read(smsAiJobStatusFilterProvider.notifier).state = value,
+              onChanged: (value) =>
+                  ref.read(smsAiJobStatusFilterProvider.notifier).state = value,
             ),
           ],
         ),
@@ -554,7 +658,9 @@ class _JobsTable extends ConsumerWidget {
               ),
               onExpansionChanged: (expanded) {
                 if (expanded && item['id'] is String) {
-                  ref.invalidate(smsAiJobTimelineProvider(item['id'] as String));
+                  ref.invalidate(
+                    smsAiJobTimelineProvider(item['id'] as String),
+                  );
                 }
               },
               children: [
@@ -563,11 +669,14 @@ class _JobsTable extends ConsumerWidget {
                 Consumer(
                   builder: (context, ref, _) {
                     final id = item['id'];
-                    if (id is! String) return const ListTile(title: Text('Job ID unavailable'));
+                    if (id is! String) {
+                      return const ListTile(title: Text('Job ID unavailable'));
+                    }
                     final timeline = ref.watch(smsAiJobTimelineProvider(id));
                     return timeline.when(
                       loading: () => const LinearProgressIndicator(),
-                      error: (error, _) => ListTile(title: Text('Timeline unavailable: $error')),
+                      error: (error, _) =>
+                          ListTile(title: Text('Timeline unavailable: $error')),
                       data: (events) => events.isEmpty
                           ? const ListTile(title: Text('No events'))
                           : Column(
@@ -575,7 +684,9 @@ class _JobsTable extends ConsumerWidget {
                                 for (final event in events)
                                   ListTile(
                                     dense: true,
-                                    title: Text('${event['event_type'] ?? 'event'}'),
+                                    title: Text(
+                                      '${event['event_type'] ?? 'event'}',
+                                    ),
                                     subtitle: Text(
                                       '${event['created_at'] ?? ''}  ${_safeEventSummary(event['payload'])}',
                                     ),
@@ -600,13 +711,16 @@ class _JobsTable extends ConsumerWidget {
     return 'decision $topic';
   }
 
-  String _shortSource(String value) =>
-      value.length <= 16 ? value : '${value.substring(0, 8)}…${value.substring(value.length - 8)}';
+  String _shortSource(String value) => value.length <= 16
+      ? value
+      : '${value.substring(0, 8)}…${value.substring(value.length - 8)}';
 
   String _elapsed(dynamic created, dynamic updated) {
     final start = DateTime.tryParse(created?.toString() ?? '');
     final end = DateTime.tryParse(updated?.toString() ?? '');
-    if (start == null || end == null || end.isBefore(start)) return 'unavailable';
+    if (start == null || end == null || end.isBefore(start)) {
+      return 'unavailable';
+    }
     final seconds = end.difference(start).inSeconds;
     if (seconds < 60) return '${seconds}s (queue + processing)';
     return '${seconds ~/ 60}m ${seconds % 60}s (queue + processing)';
@@ -631,7 +745,12 @@ class _JobsTable extends ConsumerWidget {
     ];
     return payload.entries
         .where((entry) => allowed.contains(entry.key))
-        .where((entry) => entry.value is num || entry.value is bool || entry.value is String)
+        .where(
+          (entry) =>
+              entry.value is num ||
+              entry.value is bool ||
+              entry.value is String,
+        )
         .map((entry) => '${entry.key}: ${entry.value}')
         .join(' · ');
   }
@@ -647,30 +766,46 @@ class _JobOutcome extends StatelessWidget {
   Widget build(BuildContext context) {
     final result = item['result'];
     if (result is! Map) return const SizedBox.shrink();
-    final typeSummary = _stringList(item['fact_types'] ?? result['factTypes']).join(', ');
+    final typeSummary = _stringList(
+      item['fact_types'] ?? result['factTypes'],
+    ).join(', ');
     final review = item['review_required'] ?? result['reviewRequired'];
     final decision = item['decision'] ?? result['decision'];
-    final decisionMap = decision is Map ? decision.cast<String, dynamic>() : const <String, dynamic>{};
+    final decisionMap = decision is Map
+        ? decision.cast<String, dynamic>()
+        : const <String, dynamic>{};
     final reviewLabel = review == false
         ? 'Safely auto-resolved'
         : review == true
-            ? 'Still needs user review'
-            : 'Review status unavailable';
+        ? 'Still needs user review'
+        : 'Review status unavailable';
     return ListTile(
       dense: true,
-      leading: Icon(review == false ? Icons.check_circle_outline : Icons.rate_review_outlined),
+      leading: Icon(
+        review == false
+            ? Icons.check_circle_outline
+            : Icons.rate_review_outlined,
+      ),
       title: Text(reviewLabel),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(typeSummary.isEmpty ? 'No fact type summary' : 'Fact types: $typeSummary'),
+          Text(
+            typeSummary.isEmpty
+                ? 'No fact type summary'
+                : 'Fact types: $typeSummary',
+          ),
           if (decisionMap.isNotEmpty)
             Text(
               [
-                if (decisionMap['topic'] != null) 'topic: ${decisionMap['topic']}',
-                if (decisionMap['shouldConsider'] != null) 'shouldConsider: ${decisionMap['shouldConsider']}',
-                if (decisionMap['confidence'] != null) 'confidence: ${decisionMap['confidence']}',
-                if (decisionMap['rejectionReason'] != null) 'rejected: ${decisionMap['rejectionReason']}',
+                if (decisionMap['topic'] != null)
+                  'topic: ${decisionMap['topic']}',
+                if (decisionMap['shouldConsider'] != null)
+                  'shouldConsider: ${decisionMap['shouldConsider']}',
+                if (decisionMap['confidence'] != null)
+                  'confidence: ${decisionMap['confidence']}',
+                if (decisionMap['rejectionReason'] != null)
+                  'rejected: ${decisionMap['rejectionReason']}',
               ].join(' · '),
             ),
         ],
@@ -692,9 +827,13 @@ class _JobFailure extends StatelessWidget {
     return ListTile(
       dense: true,
       leading: const Icon(Icons.error_outline),
-      title: Text(reason == null ? 'Failure reason unavailable' : 'Failure: $reason'),
+      title: Text(
+        reason == null ? 'Failure reason unavailable' : 'Failure: $reason',
+      ),
       subtitle: details.isEmpty
-          ? (item['next_attempt_at'] == null ? null : Text('Next attempt: ${item['next_attempt_at']}'))
+          ? (item['next_attempt_at'] == null
+                ? null
+                : Text('Next attempt: ${item['next_attempt_at']}'))
           : Text(details.join(' · ')),
     );
   }
@@ -738,9 +877,13 @@ class _AutonomousLearningSection extends ConsumerWidget {
     final operations = ref.watch(smsLearningOperationsProvider);
     return operations.when(
       loading: () => const LinearProgressIndicator(),
-      error: (error, _) => _ErrorBlock(label: 'Autonomous learning monitor failed', error: error),
+      error: (error, _) => _ErrorBlock(
+        label: 'Autonomous learning monitor failed',
+        error: error,
+      ),
       data: (data) {
-        final candidates = (data['candidates'] as List?)
+        final candidates =
+            (data['candidates'] as List?)
                 ?.whereType<Map>()
                 .map((item) => item.cast<String, dynamic>())
                 .toList() ??
@@ -753,7 +896,8 @@ class _AutonomousLearningSection extends ConsumerWidget {
         }
         return Column(
           children: [
-            for (final candidate in candidates) _AutonomousCandidateCard(candidate: candidate),
+            for (final candidate in candidates)
+              _AutonomousCandidateCard(candidate: candidate),
           ],
         );
       },
@@ -766,10 +910,12 @@ class _AutonomousCandidateCard extends ConsumerStatefulWidget {
   const _AutonomousCandidateCard({required this.candidate});
 
   @override
-  ConsumerState<_AutonomousCandidateCard> createState() => _AutonomousCandidateCardState();
+  ConsumerState<_AutonomousCandidateCard> createState() =>
+      _AutonomousCandidateCardState();
 }
 
-class _AutonomousCandidateCardState extends ConsumerState<_AutonomousCandidateCard> {
+class _AutonomousCandidateCardState
+    extends ConsumerState<_AutonomousCandidateCard> {
   bool _busy = false;
   bool _showEvidence = false;
 
@@ -779,20 +925,27 @@ class _AutonomousCandidateCardState extends ConsumerState<_AutonomousCandidateCa
   Widget build(BuildContext context) {
     final id = candidate['candidate_id']?.toString();
     final state = candidate['state']?.toString() ?? 'unknown';
-    final metrics = (candidate['stage_metrics'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final metrics =
+        (candidate['stage_metrics'] as Map?)?.cast<String, dynamic>() ??
+        const {};
     final eval = (metrics['eval'] as Map?)?.cast<String, dynamic>();
-    final summary = '${candidate['family'] ?? 'unknown'} · ${candidate['issuer'] ?? 'unknown issuer'}\n'
+    final summary =
+        '${candidate['family'] ?? 'unknown'} · ${candidate['issuer'] ?? 'unknown issuer'}\n'
         'state $state · bundle ${candidate['bundle_version'] ?? '—'} · '
         'confidence ${candidate['confidence'] ?? '—'}\n'
         '${candidate['exposures'] ?? 0} exposures · ${candidate['comparisons'] ?? 0} comparisons · '
         '${candidate['distinct_users'] ?? 0} users · ${candidate['corrections'] ?? 0} corrections · '
         '${candidate['false_discards'] ?? 0} false discards';
     final extra = <String>[
-      if (candidate['sender_pattern'] != null) 'sender ${candidate['sender_pattern']}',
-      if (candidate['min_client_ver'] != null) 'min client ${candidate['min_client_ver']}',
-      if (eval?['failureReason'] != null) 'last gate: ${eval!['failureReason']}',
+      if (candidate['sender_pattern'] != null)
+        'sender ${candidate['sender_pattern']}',
+      if (candidate['min_client_ver'] != null)
+        'min client ${candidate['min_client_ver']}',
+      if (eval?['failureReason'] != null)
+        'last gate: ${eval!['failureReason']}',
       if (metrics['pause_reason'] != null) 'pause: ${metrics['pause_reason']}',
-      if (metrics['rollback_reason'] != null) 'rollback: ${metrics['rollback_reason']}',
+      if (metrics['rollback_reason'] != null)
+        'rollback: ${metrics['rollback_reason']}',
     ];
     return Card(
       child: Column(
@@ -800,7 +953,9 @@ class _AutonomousCandidateCardState extends ConsumerState<_AutonomousCandidateCa
         children: [
           ListTile(
             title: Text(id ?? 'candidate'),
-            subtitle: Text(extra.isEmpty ? summary : '$summary\n${extra.join(' · ')}'),
+            subtitle: Text(
+              extra.isEmpty ? summary : '$summary\n${extra.join(' · ')}',
+            ),
             isThreeLine: true,
             trailing: id == null
                 ? null
@@ -809,17 +964,24 @@ class _AutonomousCandidateCardState extends ConsumerState<_AutonomousCandidateCa
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       TextButton(
-                        onPressed: () => setState(() => _showEvidence = !_showEvidence),
-                        child: Text(_showEvidence ? 'Hide evidence' : 'Evidence'),
+                        onPressed: () =>
+                            setState(() => _showEvidence = !_showEvidence),
+                        child: Text(
+                          _showEvidence ? 'Hide evidence' : 'Evidence',
+                        ),
                       ),
                       if (state != 'paused')
                         OutlinedButton(
-                          onPressed: _busy ? null : () => _changeState(id, pause: true),
+                          onPressed: _busy
+                              ? null
+                              : () => _changeState(id, pause: true),
                           child: const Text('Pause'),
                         )
                       else
                         FilledButton.tonal(
-                          onPressed: _busy ? null : () => _changeState(id, pause: false),
+                          onPressed: _busy
+                              ? null
+                              : () => _changeState(id, pause: false),
                           child: const Text('Resume shadow'),
                         ),
                     ],
@@ -864,12 +1026,18 @@ class _AutonomousCandidateCardState extends ConsumerState<_AutonomousCandidateCa
       ref.invalidate(smsLearningOperationsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(pause ? 'Candidate paused.' : 'Candidate resumed in shadow.')),
+          SnackBar(
+            content: Text(
+              pause ? 'Candidate paused.' : 'Candidate resumed in shadow.',
+            ),
+          ),
         );
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update candidate: $error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update candidate: $error')),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -885,10 +1053,13 @@ class _LearningCandidatesSection extends ConsumerWidget {
     final candidates = ref.watch(smsLearningCandidatesProvider);
     return candidates.when(
       loading: () => const LinearProgressIndicator(),
-      error: (error, _) => _ErrorBlock(label: 'Learning candidates failed', error: error),
+      error: (error, _) =>
+          _ErrorBlock(label: 'Learning candidates failed', error: error),
       data: (items) {
         if (items.isEmpty) {
-          return const Text('No eligible candidates yet. Candidates require feedback from multiple users.');
+          return const Text(
+            'No eligible candidates yet. Candidates require feedback from multiple users.',
+          );
         }
         return Column(
           key: const ValueKey('shared-learning-candidates'),
@@ -897,7 +1068,9 @@ class _LearningCandidatesSection extends ConsumerWidget {
               Card(
                 key: ValueKey('learning-${item['id']}'),
                 child: ListTile(
-                  title: Text('${item['fact_family'] ?? 'unknown'} · ${item['corrected_field'] ?? 'unknown field'}'),
+                  title: Text(
+                    '${item['fact_family'] ?? 'unknown'} · ${item['corrected_field'] ?? 'unknown field'}',
+                  ),
                   subtitle: Text(
                     '${item['distinct_users'] ?? 0} users · ${item['feedback_count'] ?? 0} corrections · '
                     'last feedback ${item['last_feedback_at'] ?? 'unknown'}'
@@ -909,13 +1082,23 @@ class _LearningCandidatesSection extends ConsumerWidget {
                           children: [
                             OutlinedButton(
                               onPressed: item['id'] is String
-                                  ? () => _decide(context, ref, item['id'] as String, 'reject')
+                                  ? () => _decide(
+                                      context,
+                                      ref,
+                                      item['id'] as String,
+                                      'reject',
+                                    )
                                   : null,
                               child: const Text('Reject'),
                             ),
                             FilledButton.tonal(
                               onPressed: item['id'] is String
-                                  ? () => _decide(context, ref, item['id'] as String, 'manual_pattern_authoring')
+                                  ? () => _decide(
+                                      context,
+                                      ref,
+                                      item['id'] as String,
+                                      'manual_pattern_authoring',
+                                    )
                                   : null,
                               child: const Text('Send to pattern authoring'),
                             ),
@@ -930,7 +1113,12 @@ class _LearningCandidatesSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _decide(BuildContext context, WidgetRef ref, String id, String decision) async {
+  Future<void> _decide(
+    BuildContext context,
+    WidgetRef ref,
+    String id,
+    String decision,
+  ) async {
     final api = ref.read(adminApiProvider);
     if (api == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -939,7 +1127,11 @@ class _LearningCandidatesSection extends ConsumerWidget {
       return;
     }
     try {
-      await api.decideSmsLearningCandidate(id, decision, reason: 'admin_console_decision');
+      await api.decideSmsLearningCandidate(
+        id,
+        decision,
+        reason: 'admin_console_decision',
+      );
       ref.invalidate(smsLearningCandidatesProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -954,7 +1146,9 @@ class _LearningCandidatesSection extends ConsumerWidget {
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update candidate: $error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update candidate: $error')),
+        );
       }
     }
   }
@@ -980,9 +1174,12 @@ class _RulesTab extends ConsumerWidget {
         ),
         bundles.when(
           loading: () => const LinearProgressIndicator(),
-          error: (error, _) => _ErrorBlock(label: 'Bundle history failed', error: error),
+          error: (error, _) =>
+              _ErrorBlock(label: 'Bundle history failed', error: error),
           data: (items) {
-            if (items.isEmpty) return const Text('No rule bundles have been published.');
+            if (items.isEmpty) {
+              return const Text('No rule bundles have been published.');
+            }
             return _WideTable(
               child: DataTable(
                 columnSpacing: 20,
@@ -1002,8 +1199,12 @@ class _RulesTab extends ConsumerWidget {
                         DataCell(Text('v${item['bundle_version']}')),
                         DataCell(
                           Icon(
-                            item['is_active'] == true ? Icons.check_circle : Icons.remove_circle_outline,
-                            color: item['is_active'] == true ? Colors.green.shade700 : null,
+                            item['is_active'] == true
+                                ? Icons.check_circle
+                                : Icons.remove_circle_outline,
+                            color: item['is_active'] == true
+                                ? Colors.green.shade700
+                                : null,
                           ),
                         ),
                         DataCell(Text('${item['rule_count'] ?? 0}')),
@@ -1015,12 +1216,20 @@ class _RulesTab extends ConsumerWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               TextButton(
-                                onPressed: () => _showRules(context, ref, item['bundle_version'] as int),
+                                onPressed: () => _showRules(
+                                  context,
+                                  ref,
+                                  item['bundle_version'] as int,
+                                ),
                                 child: const Text('View rules'),
                               ),
                               if (item['is_active'] == true)
                                 TextButton(
-                                  onPressed: () => _rollback(context, ref, item['bundle_version'] as int),
+                                  onPressed: () => _rollback(
+                                    context,
+                                    ref,
+                                    item['bundle_version'] as int,
+                                  ),
                                   child: const Text('Roll back'),
                                 ),
                             ],
@@ -1037,12 +1246,17 @@ class _RulesTab extends ConsumerWidget {
     );
   }
 
-  Future<void> _showRules(BuildContext context, WidgetRef ref, int version) async {
+  Future<void> _showRules(
+    BuildContext context,
+    WidgetRef ref,
+    int version,
+  ) async {
     final api = ref.read(adminApiProvider);
     if (api == null) return;
     try {
       final bundle = await api.fetchSmsRuleBundle(version);
-      final rules = (bundle['rules'] as List?)?.whereType<Map>().toList() ?? const [];
+      final rules =
+          (bundle['rules'] as List?)?.whereType<Map>().toList() ?? const [];
       if (!context.mounted) return;
       await showDialog<void>(
         context: context,
@@ -1058,13 +1272,20 @@ class _RulesTab extends ConsumerWidget {
                       for (final rule in rules)
                         ExpansionTile(
                           key: ValueKey('bundle-rule-${rule['id']}'),
-                          title: Text('${rule['id'] ?? 'rule'} · ${rule['family'] ?? 'unknown family'}'),
-                          subtitle: Text('confidence ${rule['confidence'] ?? '—'}'),
+                          title: Text(
+                            '${rule['id'] ?? 'rule'} · ${rule['family'] ?? 'unknown family'}',
+                          ),
+                          subtitle: Text(
+                            'confidence ${rule['confidence'] ?? '—'}',
+                          ),
                           childrenPadding: const EdgeInsets.all(12),
                           children: [
                             SelectableText(
                               const JsonEncoder.withIndent('  ').convert(rule),
-                              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
@@ -1072,18 +1293,27 @@ class _RulesTab extends ConsumerWidget {
                   ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
           ],
         ),
       );
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not load bundle: $error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load bundle: $error')),
+        );
       }
     }
   }
 
-  Future<void> _rollback(BuildContext context, WidgetRef ref, int version) async {
+  Future<void> _rollback(
+    BuildContext context,
+    WidgetRef ref,
+    int version,
+  ) async {
     final reasonController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1099,12 +1329,17 @@ class _RulesTab extends ConsumerWidget {
             const SizedBox(height: 12),
             TextField(
               controller: reasonController,
-              decoration: const InputDecoration(labelText: 'Reason (recorded in the audit log)'),
+              decoration: const InputDecoration(
+                labelText: 'Reason (recorded in the audit log)',
+              ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Roll back'),
@@ -1118,7 +1353,10 @@ class _RulesTab extends ConsumerWidget {
     final api = ref.read(adminApiProvider);
     if (api == null) return;
     try {
-      final result = await api.rollbackSmsRuleBundle(version, reason: reason.isEmpty ? null : reason);
+      final result = await api.rollbackSmsRuleBundle(
+        version,
+        reason: reason.isEmpty ? null : reason,
+      );
       ref.invalidate(smsRuleBundlesProvider);
       ref.invalidate(smsLearningOperationsProvider);
       ref.invalidate(smsAiSummaryProvider);
@@ -1136,7 +1374,9 @@ class _RulesTab extends ConsumerWidget {
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Rollback failed: $error')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Rollback failed: $error')));
       }
     }
   }
@@ -1154,7 +1394,9 @@ class _DryRunTab extends ConsumerStatefulWidget {
 }
 
 class _DryRunTabState extends ConsumerState<_DryRunTab> {
-  late final TextEditingController _controller = TextEditingController(text: _sample);
+  late final TextEditingController _controller = TextEditingController(
+    text: _sample,
+  );
   Map<String, dynamic>? _report;
   String? _error;
   bool _running = false;
@@ -1208,12 +1450,20 @@ class _DryRunTabState extends ConsumerState<_DryRunTab> {
               label: const Text('Run dry run'),
             ),
             const SizedBox(width: 12),
-            if (_running) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            if (_running)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
           ],
         ),
         if (_error != null) ...[
           const SizedBox(height: 12),
-          Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          Text(
+            _error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
         ],
         if (_report != null) ...[
           const SizedBox(height: 20),
@@ -1232,8 +1482,13 @@ class _DryRunTabState extends ConsumerState<_DryRunTab> {
     List<Map<String, dynamic>> observations;
     try {
       final decoded = jsonDecode(_controller.text);
-      if (decoded is! List) throw const FormatException('Top level must be a JSON array.');
-      observations = decoded.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
+      if (decoded is! List) {
+        throw const FormatException('Top level must be a JSON array.');
+      }
+      observations = decoded
+          .whereType<Map>()
+          .map((e) => e.cast<String, dynamic>())
+          .toList();
     } catch (error) {
       setState(() {
         _error = 'Invalid JSON: $error';
@@ -1267,7 +1522,8 @@ class _DryRunReport extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final deltas = (report['deltas'] as List?)?.whereType<Map>().toList() ?? const [];
+    final deltas =
+        (report['deltas'] as List?)?.whereType<Map>().toList() ?? const [];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1278,14 +1534,38 @@ class _DryRunReport extends StatelessWidget {
               spacing: 24,
               runSpacing: 12,
               children: [
-                _Metric(label: 'Observations', value: '${report['totalObservations'] ?? 0}'),
-                _Metric(label: 'Legacy spend ₹', value: '${report['totalLegacySpendInr'] ?? 0}'),
-                _Metric(label: 'Fact spend ₹', value: '${report['totalNewSpendInr'] ?? 0}'),
-                _Metric(label: 'Net difference ₹', value: '${report['netSpendDifferenceInr'] ?? 0}'),
-                _Metric(label: 'Equal spend rows', value: '${report['equalSpendCount'] ?? 0}'),
-                _Metric(label: 'Spend reductions', value: '${report['spendReductionCount'] ?? 0}'),
-                _Metric(label: 'Non-spend facts', value: '${report['nonSpendFactsExtracted'] ?? 0}'),
-                _Metric(label: 'Invalid fact sets', value: '${report['invalidFactSetsCount'] ?? 0}'),
+                _Metric(
+                  label: 'Observations',
+                  value: '${report['totalObservations'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Legacy spend ₹',
+                  value: '${report['totalLegacySpendInr'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Fact spend ₹',
+                  value: '${report['totalNewSpendInr'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Net difference ₹',
+                  value: '${report['netSpendDifferenceInr'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Equal spend rows',
+                  value: '${report['equalSpendCount'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Spend reductions',
+                  value: '${report['spendReductionCount'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Non-spend facts',
+                  value: '${report['nonSpendFactsExtracted'] ?? 0}',
+                ),
+                _Metric(
+                  label: 'Invalid fact sets',
+                  value: '${report['invalidFactSetsCount'] ?? 0}',
+                ),
               ],
             ),
           ),
@@ -1309,17 +1589,26 @@ class _DryRunReport extends StatelessWidget {
                 for (final delta in deltas)
                   DataRow(
                     cells: [
-                      DataCell(Text(_shortSource(delta['sourceKey']?.toString()))),
+                      DataCell(
+                        Text(_shortSource(delta['sourceKey']?.toString())),
+                      ),
                       DataCell(Text('${delta['legacySpendInr'] ?? 0}')),
                       DataCell(Text('${delta['newSpendInr'] ?? 0}')),
                       DataCell(Text('${delta['spendDifferenceInr'] ?? 0}')),
                       DataCell(Text('${delta['factsProduced'] ?? 0}')),
-                      DataCell(Text((delta['nonSpendTypes'] as List?)?.join(', ') ?? '—')),
+                      DataCell(
+                        Text(
+                          (delta['nonSpendTypes'] as List?)?.join(', ') ?? '—',
+                        ),
+                      ),
                       DataCell(Text(delta['valid'] == true ? 'yes' : 'no')),
                       DataCell(
                         ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 320),
-                          child: Text((delta['validationErrors'] as List?)?.join('; ') ?? '—'),
+                          child: Text(
+                            (delta['validationErrors'] as List?)?.join('; ') ??
+                                '—',
+                          ),
                         ),
                       ),
                     ],
@@ -1342,12 +1631,12 @@ class _Metric extends StatelessWidget {
   const _Metric({required this.label, required this.value});
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value, style: Theme.of(context).textTheme.headlineSmall),
-          Text(label),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(value, style: Theme.of(context).textTheme.headlineSmall),
+      Text(label),
+    ],
+  );
 }
 
 class _WideTable extends StatelessWidget {
@@ -1374,14 +1663,20 @@ class _ErrorBlock extends StatelessWidget {
       color: Theme.of(context).colorScheme.errorContainer,
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Text('$label: $error', style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer)),
+        child: Text(
+          '$label: $error',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onErrorContainer,
+          ),
+        ),
       ),
     );
   }
 }
 
-List<String> _stringList(dynamic value) =>
-    value is List ? value.whereType<String>().toList(growable: false) : const [];
+List<String> _stringList(dynamic value) => value is List
+    ? value.whereType<String>().toList(growable: false)
+    : const [];
 
 String _compactJson(dynamic value) {
   if (value == null) return '—';
@@ -1392,10 +1687,13 @@ String _compactJson(dynamic value) {
   }
 }
 
-String _shortHash(String? value) =>
-    value == null || value.isEmpty ? '—' : (value.length <= 12 ? value : value.substring(0, 12));
+String _shortHash(String? value) => value == null || value.isEmpty
+    ? '—'
+    : (value.length <= 12 ? value : value.substring(0, 12));
 
 String _shortSource(String? value) {
   if (value == null || value.isEmpty) return '—';
-  return value.length <= 16 ? value : '${value.substring(0, 8)}…${value.substring(value.length - 8)}';
+  return value.length <= 16
+      ? value
+      : '${value.substring(0, 8)}…${value.substring(value.length - 8)}';
 }

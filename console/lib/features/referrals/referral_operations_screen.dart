@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/admin_design.dart';
 import '../../app/providers.dart';
 
 class ReferralOperationsScreen extends ConsumerStatefulWidget {
@@ -19,30 +20,12 @@ class _ReferralOperationsScreenState
   Widget build(BuildContext context) {
     final state = ref.watch(referralOperationsProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Referral operations'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(referralOperationsProvider),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Could not load referral operations: $error'),
-              const SizedBox(height: 8),
-              FilledButton(
-                onPressed: () => ref.invalidate(referralOperationsProvider),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
+        error: (error, _) => AdminLoadError(
+          title: 'Referral operations are unavailable',
+          error: error,
+          onRetry: () => ref.invalidate(referralOperationsProvider),
         ),
         data: (operations) => _buildOperations(operations),
       ),

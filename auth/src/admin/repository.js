@@ -95,6 +95,12 @@ function createAdminRepository({ pool, environment = 'local', sessionEpoch } = {
         AND g.consumed_at IS NULL AND g.expires_at>$7 AND ep.consumed_at IS NULL AND ep.expires_at>$7`,[grantDigest,loginId,env,origin,rpId,preauthCookieDigest,now]);
       return r.rows[0]?{userId:r.rows[0].user_id,slot:r.rows[0].slot,grantDigest}:null;
     },
+    async prepareApprovedEnrollment({loginId,preauthCookieDigest,environment:env=environment,grantDigest}) {
+      const r=await pool.query('SELECT * FROM admin_private.prepare_approved_enrollment($1,$2,$3,$4)',
+        [loginId,preauthCookieDigest,env,grantDigest]);
+      const row=r.rows[0];
+      return row?{userId:row.user_id,slot:row.slot,grantDigest:row.grant_digest}:null;
+    },
     async consumeEnrollmentGrant({ grantDigest,loginId,preauthCookieDigest,userId,environment:env=environment,origin,rpId,slot,now=new Date() }, client=pool) {
       const r=await client.query(`UPDATE admin_private.enrollment_grants g SET consumed_at=$7 FROM admin_private.email_proofs ep
         WHERE g.grant_digest=$1 AND g.user_id=coalesce($2::uuid,ep.user_id) AND ep.login_id=$8 AND ep.user_id=g.user_id AND ep.preauth_cookie_digest=$9

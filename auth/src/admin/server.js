@@ -81,6 +81,7 @@ function createSmtpClient(env) {
 
 async function createAdminGatewayRuntime({ env = process.env, routeManifest, listen = false } = {}) {
   if (env.ADMIN_GATEWAY_ENABLED !== 'true') throw new Error('ADMIN_GATEWAY_ENABLED must be true for the private admin gateway');
+  if (!['true','false'].includes(env.ADMIN_APPROVED_BROWSER_ENROLLMENT || 'false')) throw new Error('ADMIN_APPROVED_BROWSER_ENROLLMENT must be true or false');
   const origin = readRequired(env, 'ADMIN_BROWSER_ORIGIN');
   const rpId = readRequired(env, 'ADMIN_WEBAUTHN_RP_ID');
   if (origin !== 'https://localhost:8443' || rpId !== 'localhost') throw new Error('admin browser origin/RP configuration does not match the v1 contract');
@@ -99,7 +100,7 @@ async function createAdminGatewayRuntime({ env = process.env, routeManifest, lis
       if (response.status !== 200 || response.body?.isAdmin !== true || !Array.isArray(response.body?.permissions)) return null;
       return { active: true, email: response.body.email, role: response.body.role, permissions: response.body.permissions };
     } };
-    const config = { enabled: true, environment: readRequired(env, 'ADMIN_ENVIRONMENT'), origin, rpId, tokenLookupKey: readRequired(env, 'ADMIN_TOKEN_LOOKUP_KEY'), introspectionSecret: apiSecret, sessionEncryptionKey: key32(env, 'CONSOLE_SESSION_ENCRYPTION_KEY') };
+    const config = { enabled: true, approvedBrowserEnrollment: env.ADMIN_APPROVED_BROWSER_ENROLLMENT === 'true', environment: readRequired(env, 'ADMIN_ENVIRONMENT'), origin, rpId, tokenLookupKey: readRequired(env, 'ADMIN_TOKEN_LOOKUP_KEY'), introspectionSecret: apiSecret, sessionEncryptionKey: key32(env, 'CONSOLE_SESSION_ENCRYPTION_KEY') };
     const app = createAdminGatewayApp({ repository, emailClient: createSmtpClient(env), membershipClient, privateApi, routeManifest, config, webauthn: createSimpleWebAuthn() });
     if (!listen) return { app, pool, repository, privateApi };
     const host = env.ADMIN_GATEWAY_HOST || '127.0.0.1';

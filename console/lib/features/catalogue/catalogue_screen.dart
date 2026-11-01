@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/admin_design.dart';
 import '../../app/providers.dart';
 import '../../widgets/confirm_dialog.dart';
 
@@ -24,10 +25,19 @@ class CatalogueScreen extends ConsumerWidget {
 
     return cards.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('Failed to load catalogue: $err')),
+      error: (err, _) => AdminLoadError(
+        title: 'Catalogue could not be loaded',
+        error: err,
+        onRetry: () => ref.invalidate(adminCardsProvider),
+      ),
       data: (cardList) {
         if (cardList.isEmpty) {
-          return const Center(child: Text('No cards found.'));
+          return const AdminEmptyState(
+            icon: Icons.credit_card_off_outlined,
+            title: 'No card products in this workspace',
+            message:
+                'No catalogue records have been loaded into this environment yet. Card editing and review will appear here once product data is available.',
+          );
         }
         return ListView.builder(
           padding: const EdgeInsets.all(12),
@@ -63,11 +73,15 @@ class _CardEditorTileState extends ConsumerState<_CardEditorTile> {
     if (nextStatus == 'published' || nextStatus == 'archived') {
       final confirmed = await confirmAdminAction(
         context,
-        title: nextStatus == 'published' ? 'Publish this card?' : 'Archive this card?',
+        title: nextStatus == 'published'
+            ? 'Publish this card?'
+            : 'Archive this card?',
         message: nextStatus == 'published'
             ? 'Publishing marks the card verified and makes it visible to users.'
             : 'Archiving removes the card from circulation for users.',
-        confirmLabel: nextStatus == 'published' ? 'Verify & publish' : 'Archive',
+        confirmLabel: nextStatus == 'published'
+            ? 'Verify & publish'
+            : 'Archive',
       );
       if (!confirmed || !mounted) return;
     }
@@ -80,7 +94,9 @@ class _CardEditorTileState extends ConsumerState<_CardEditorTile> {
       await api.changeCardStatus(
         widget.card['id'] as String,
         nextStatus,
-        reason: nextStatus == 'published' ? 'Console: human-verified and published' : 'Console status change',
+        reason: nextStatus == 'published'
+            ? 'Console: human-verified and published'
+            : 'Console status change',
       );
       ref.invalidate(adminCardsProvider);
     } catch (e) {
@@ -100,9 +116,11 @@ class _CardEditorTileState extends ConsumerState<_CardEditorTile> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
         title: Text('${card['name']} — $status'),
-        subtitle: Text('${card['network']} · data_version ${card['data_version']}'
-            '${card['is_upi_linkable'] == true ? ' · UPI-linkable' : ''}'
-            '${verifiedAt != null ? ' · verified $verifiedAt' : ' · not verified'}'),
+        subtitle: Text(
+          '${card['network']} · data_version ${card['data_version']}'
+          '${card['is_upi_linkable'] == true ? ' · UPI-linkable' : ''}'
+          '${verifiedAt != null ? ' · verified $verifiedAt' : ' · not verified'}',
+        ),
         onExpansionChanged: (v) => setState(() => _expanded = v),
         children: [
           if (nextOptions.isNotEmpty || _statusError != null)
@@ -116,24 +134,32 @@ class _CardEditorTileState extends ConsumerState<_CardEditorTile> {
                     children: [
                       for (final next in nextOptions)
                         OutlinedButton(
-                          onPressed: _changingStatus ? null : () => _changeStatus(next),
-                          child: Text(_changingStatus
-                              ? '...'
-                              : next == 'published'
-                                  ? 'Verify & publish'
-                                  : 'Move to $next'),
+                          onPressed: _changingStatus
+                              ? null
+                              : () => _changeStatus(next),
+                          child: Text(
+                            _changingStatus
+                                ? '...'
+                                : next == 'published'
+                                ? 'Verify & publish'
+                                : 'Move to $next',
+                          ),
                         ),
                     ],
                   ),
                   if (_statusError != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
-                      child: Text(_statusError!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                      child: Text(
+                        _statusError!,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
                     ),
                 ],
               ),
             ),
-          if (_expanded) SizedBox(height: 520, child: _CardRuleFamilyTabs(card: card)),
+          if (_expanded)
+            SizedBox(height: 520, child: _CardRuleFamilyTabs(card: card)),
         ],
       ),
     );
@@ -172,39 +198,50 @@ class _CardRuleFamilyTabs extends StatelessWidget {
           Expanded(
             child: TabBarView(
               children: [
-                _RewardsTab(cardId: cardId, rewardRules: (card['reward_rules'] as List).cast<Map<String, dynamic>>()),
+                _RewardsTab(
+                  cardId: cardId,
+                  rewardRules: (card['reward_rules'] as List)
+                      .cast<Map<String, dynamic>>(),
+                ),
                 _RuleFamilyListTab(
                   cardId: cardId,
                   urlSegment: 'cap-rules',
                   auditEntity: 'cap_rule',
-                  rows: (card['cap_rules'] as List? ?? const []).cast<Map<String, dynamic>>(),
+                  rows: (card['cap_rules'] as List? ?? const [])
+                      .cast<Map<String, dynamic>>(),
                   fields: _capRuleFields,
                 ),
                 _RuleFamilyListTab(
                   cardId: cardId,
                   urlSegment: 'milestone-rules',
                   auditEntity: 'milestone_rule',
-                  rows: (card['milestone_rules'] as List? ?? const []).cast<Map<String, dynamic>>(),
+                  rows: (card['milestone_rules'] as List? ?? const [])
+                      .cast<Map<String, dynamic>>(),
                   fields: _milestoneRuleFields,
                 ),
                 _RuleFamilyListTab(
                   cardId: cardId,
                   urlSegment: 'fee-waiver-rules',
                   auditEntity: 'fee_waiver_rule',
-                  rows: (card['fee_waiver_rules'] as List? ?? const []).cast<Map<String, dynamic>>(),
+                  rows: (card['fee_waiver_rules'] as List? ?? const [])
+                      .cast<Map<String, dynamic>>(),
                   fields: _feeWaiverRuleFields,
                 ),
                 _RuleFamilyListTab(
                   cardId: cardId,
                   urlSegment: 'card-benefits',
                   auditEntity: 'card_benefit',
-                  rows: (card['benefits'] as List? ?? const []).cast<Map<String, dynamic>>(),
+                  rows: (card['benefits'] as List? ?? const [])
+                      .cast<Map<String, dynamic>>(),
                   fields: _cardBenefitFields,
                 ),
                 ListView(
                   padding: const EdgeInsets.all(12),
                   children: [
-                    Text('Forex', style: Theme.of(context).textTheme.labelLarge),
+                    Text(
+                      'Forex',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
                     _RuleFamilySingleEditor(
                       cardId: cardId,
                       urlSegment: 'forex-rules',
@@ -213,7 +250,10 @@ class _CardRuleFamilyTabs extends StatelessWidget {
                       fields: _forexRuleFields,
                     ),
                     const SizedBox(height: 20),
-                    Text('Fuel surcharge', style: Theme.of(context).textTheme.labelLarge),
+                    Text(
+                      'Fuel surcharge',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
                     _RuleFamilySingleEditor(
                       cardId: cardId,
                       urlSegment: 'fuel-surcharge-rules',
@@ -239,7 +279,8 @@ class _CardRuleFamilyTabs extends StatelessWidget {
                   cardId: cardId,
                   urlSegment: 'redemption-options',
                   auditEntity: 'redemption_option',
-                  rows: (card['redemption_options'] as List? ?? const []).cast<Map<String, dynamic>>(),
+                  rows: (card['redemption_options'] as List? ?? const [])
+                      .cast<Map<String, dynamic>>(),
                   fields: _redemptionOptionFields,
                 ),
               ],
@@ -278,81 +319,336 @@ class _RuleField {
 }
 
 const _rewardUnits = [
-  'cashback_percent', 'points_per_100', 'points_per_150', 'points_per_200',
-  'miles_per_100', 'flat_points', 'discount_percent',
+  'cashback_percent',
+  'points_per_100',
+  'points_per_150',
+  'points_per_200',
+  'miles_per_100',
+  'flat_points',
+  'discount_percent',
 ];
-const _capPeriods = ['statement_cycle', 'calendar_month', 'quarter', 'half_year', 'annual', 'lifetime'];
+const _capPeriods = [
+  'statement_cycle',
+  'calendar_month',
+  'quarter',
+  'half_year',
+  'annual',
+  'lifetime',
+];
 const _capMeasures = ['reward_value', 'spend_amount', 'txn_count'];
 const _benefitKinds = [
-  'lounge_domestic', 'lounge_international', 'golf', 'concierge', 'insurance_travel',
-  'insurance_purchase', 'extended_warranty', 'dining_program', 'movie', 'fuel_surcharge',
-  'roadside_assistance', 'other',
+  'lounge_domestic',
+  'lounge_international',
+  'golf',
+  'concierge',
+  'insurance_travel',
+  'insurance_purchase',
+  'extended_warranty',
+  'dining_program',
+  'movie',
+  'fuel_surcharge',
+  'roadside_assistance',
+  'other',
 ];
-const _milestoneAnchors = ['card_anniversary', 'calendar_year', 'fiscal_year', 'statement_cycle'];
+const _milestoneAnchors = [
+  'card_anniversary',
+  'calendar_year',
+  'fiscal_year',
+  'statement_cycle',
+];
 
 const _capRuleFields = [
-  _RuleField(writeKey: 'label', readKey: 'label', label: 'Label', type: _FieldType.text, required: true),
-  _RuleField(writeKey: 'measure', readKey: 'measure', label: 'Measure', type: _FieldType.dropdown, options: _capMeasures, required: true),
-  _RuleField(writeKey: 'period', readKey: 'period', label: 'Period', type: _FieldType.dropdown, options: _capPeriods, required: true),
-  _RuleField(writeKey: 'capValue', readKey: 'cap_value', label: 'Cap value', type: _FieldType.number, required: true),
-  _RuleField(writeKey: 'postCapUnit', readKey: 'post_cap_unit', label: 'Post-cap unit', type: _FieldType.dropdown, options: _rewardUnits),
-  _RuleField(writeKey: 'postCapRate', readKey: 'post_cap_rate', label: 'Post-cap rate', type: _FieldType.number),
-  _RuleField(writeKey: 'resetsOnDay', readKey: 'resets_on_day', label: 'Resets on day', type: _FieldType.integer),
+  _RuleField(
+    writeKey: 'label',
+    readKey: 'label',
+    label: 'Label',
+    type: _FieldType.text,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'measure',
+    readKey: 'measure',
+    label: 'Measure',
+    type: _FieldType.dropdown,
+    options: _capMeasures,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'period',
+    readKey: 'period',
+    label: 'Period',
+    type: _FieldType.dropdown,
+    options: _capPeriods,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'capValue',
+    readKey: 'cap_value',
+    label: 'Cap value',
+    type: _FieldType.number,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'postCapUnit',
+    readKey: 'post_cap_unit',
+    label: 'Post-cap unit',
+    type: _FieldType.dropdown,
+    options: _rewardUnits,
+  ),
+  _RuleField(
+    writeKey: 'postCapRate',
+    readKey: 'post_cap_rate',
+    label: 'Post-cap rate',
+    type: _FieldType.number,
+  ),
+  _RuleField(
+    writeKey: 'resetsOnDay',
+    readKey: 'resets_on_day',
+    label: 'Resets on day',
+    type: _FieldType.integer,
+  ),
 ];
 
 const _milestoneRuleFields = [
-  _RuleField(writeKey: 'label', readKey: 'label', label: 'Label', type: _FieldType.text, required: true),
-  _RuleField(writeKey: 'period', readKey: 'period', label: 'Period', type: _FieldType.dropdown, options: _capPeriods),
-  _RuleField(writeKey: 'thresholdSpendInr', readKey: 'threshold_spend_inr', label: 'Threshold spend (INR)', type: _FieldType.number, required: true),
-  _RuleField(writeKey: 'rewardDescription', readKey: 'reward_description', label: 'Reward description', type: _FieldType.text, required: true),
-  _RuleField(writeKey: 'rewardValueInr', readKey: 'reward_value_inr', label: 'Reward value (INR)', type: _FieldType.number, required: true),
-  _RuleField(writeKey: 'isRepeatable', readKey: 'is_repeatable', label: 'Repeatable', type: _FieldType.boolean),
-  _RuleField(writeKey: 'maxRepeats', readKey: 'max_repeats', label: 'Max repeats', type: _FieldType.integer),
-  _RuleField(writeKey: 'anchor', readKey: 'anchor', label: 'Anchor', type: _FieldType.dropdown, options: _milestoneAnchors),
+  _RuleField(
+    writeKey: 'label',
+    readKey: 'label',
+    label: 'Label',
+    type: _FieldType.text,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'period',
+    readKey: 'period',
+    label: 'Period',
+    type: _FieldType.dropdown,
+    options: _capPeriods,
+  ),
+  _RuleField(
+    writeKey: 'thresholdSpendInr',
+    readKey: 'threshold_spend_inr',
+    label: 'Threshold spend (INR)',
+    type: _FieldType.number,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'rewardDescription',
+    readKey: 'reward_description',
+    label: 'Reward description',
+    type: _FieldType.text,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'rewardValueInr',
+    readKey: 'reward_value_inr',
+    label: 'Reward value (INR)',
+    type: _FieldType.number,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'isRepeatable',
+    readKey: 'is_repeatable',
+    label: 'Repeatable',
+    type: _FieldType.boolean,
+  ),
+  _RuleField(
+    writeKey: 'maxRepeats',
+    readKey: 'max_repeats',
+    label: 'Max repeats',
+    type: _FieldType.integer,
+  ),
+  _RuleField(
+    writeKey: 'anchor',
+    readKey: 'anchor',
+    label: 'Anchor',
+    type: _FieldType.dropdown,
+    options: _milestoneAnchors,
+  ),
 ];
 
 const _feeWaiverRuleFields = [
-  _RuleField(writeKey: 'thresholdSpendInr', readKey: 'threshold_spend_inr', label: 'Threshold spend (INR)', type: _FieldType.number, required: true),
-  _RuleField(writeKey: 'period', readKey: 'period', label: 'Period', type: _FieldType.dropdown, options: _capPeriods),
-  _RuleField(writeKey: 'waivesFeeInr', readKey: 'waives_fee_inr', label: 'Waives fee (INR)', type: _FieldType.number, required: true),
-  _RuleField(writeKey: 'notes', readKey: 'notes', label: 'Notes', type: _FieldType.text),
+  _RuleField(
+    writeKey: 'thresholdSpendInr',
+    readKey: 'threshold_spend_inr',
+    label: 'Threshold spend (INR)',
+    type: _FieldType.number,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'period',
+    readKey: 'period',
+    label: 'Period',
+    type: _FieldType.dropdown,
+    options: _capPeriods,
+  ),
+  _RuleField(
+    writeKey: 'waivesFeeInr',
+    readKey: 'waives_fee_inr',
+    label: 'Waives fee (INR)',
+    type: _FieldType.number,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'notes',
+    readKey: 'notes',
+    label: 'Notes',
+    type: _FieldType.text,
+  ),
 ];
 
 const _cardBenefitFields = [
-  _RuleField(writeKey: 'kind', readKey: 'kind', label: 'Kind', type: _FieldType.dropdown, options: _benefitKinds, required: true),
-  _RuleField(writeKey: 'label', readKey: 'label', label: 'Label', type: _FieldType.text, required: true),
-  _RuleField(writeKey: 'description', readKey: 'description', label: 'Description', type: _FieldType.text),
-  _RuleField(writeKey: 'quotaCount', readKey: 'quota_count', label: 'Quota count', type: _FieldType.integer),
-  _RuleField(writeKey: 'quotaPeriod', readKey: 'quota_period', label: 'Quota period', type: _FieldType.dropdown, options: _capPeriods),
-  _RuleField(writeKey: 'networkProgram', readKey: 'network_program', label: 'Network program', type: _FieldType.text),
-  _RuleField(writeKey: 'valueEstimateInr', readKey: 'value_estimate_inr', label: 'Value estimate (INR)', type: _FieldType.number),
+  _RuleField(
+    writeKey: 'kind',
+    readKey: 'kind',
+    label: 'Kind',
+    type: _FieldType.dropdown,
+    options: _benefitKinds,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'label',
+    readKey: 'label',
+    label: 'Label',
+    type: _FieldType.text,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'description',
+    readKey: 'description',
+    label: 'Description',
+    type: _FieldType.text,
+  ),
+  _RuleField(
+    writeKey: 'quotaCount',
+    readKey: 'quota_count',
+    label: 'Quota count',
+    type: _FieldType.integer,
+  ),
+  _RuleField(
+    writeKey: 'quotaPeriod',
+    readKey: 'quota_period',
+    label: 'Quota period',
+    type: _FieldType.dropdown,
+    options: _capPeriods,
+  ),
+  _RuleField(
+    writeKey: 'networkProgram',
+    readKey: 'network_program',
+    label: 'Network program',
+    type: _FieldType.text,
+  ),
+  _RuleField(
+    writeKey: 'valueEstimateInr',
+    readKey: 'value_estimate_inr',
+    label: 'Value estimate (INR)',
+    type: _FieldType.number,
+  ),
 ];
 
 const _redemptionOptionFields = [
-  _RuleField(writeKey: 'programName', readKey: 'program_name', label: 'Program name', type: _FieldType.text, required: true),
-  _RuleField(writeKey: 'method', readKey: 'method', label: 'Method', type: _FieldType.text, required: true),
-  _RuleField(writeKey: 'valuePerPointInr', readKey: 'value_per_point_inr', label: 'Value per point (INR)', type: _FieldType.number, required: true),
-  _RuleField(writeKey: 'minPoints', readKey: 'min_points', label: 'Min points', type: _FieldType.integer),
-  _RuleField(writeKey: 'notes', readKey: 'notes', label: 'Notes', type: _FieldType.text),
+  _RuleField(
+    writeKey: 'programName',
+    readKey: 'program_name',
+    label: 'Program name',
+    type: _FieldType.text,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'method',
+    readKey: 'method',
+    label: 'Method',
+    type: _FieldType.text,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'valuePerPointInr',
+    readKey: 'value_per_point_inr',
+    label: 'Value per point (INR)',
+    type: _FieldType.number,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'minPoints',
+    readKey: 'min_points',
+    label: 'Min points',
+    type: _FieldType.integer,
+  ),
+  _RuleField(
+    writeKey: 'notes',
+    readKey: 'notes',
+    label: 'Notes',
+    type: _FieldType.text,
+  ),
 ];
 
 const _forexRuleFields = [
-  _RuleField(writeKey: 'markupPercent', readKey: 'markup_percent', label: 'Markup %', type: _FieldType.number, required: true),
-  _RuleField(writeKey: 'gstOnMarkup', readKey: 'gst_on_markup', label: 'GST on markup', type: _FieldType.boolean),
-  _RuleField(writeKey: 'waiverNotes', readKey: 'waiver_notes', label: 'Waiver notes', type: _FieldType.text),
+  _RuleField(
+    writeKey: 'markupPercent',
+    readKey: 'markup_percent',
+    label: 'Markup %',
+    type: _FieldType.number,
+    required: true,
+  ),
+  _RuleField(
+    writeKey: 'gstOnMarkup',
+    readKey: 'gst_on_markup',
+    label: 'GST on markup',
+    type: _FieldType.boolean,
+  ),
+  _RuleField(
+    writeKey: 'waiverNotes',
+    readKey: 'waiver_notes',
+    label: 'Waiver notes',
+    type: _FieldType.text,
+  ),
 ];
 
 const _fuelSurchargeRuleFields = [
-  _RuleField(writeKey: 'surchargePercent', readKey: 'surcharge_percent', label: 'Surcharge %', type: _FieldType.number),
-  _RuleField(writeKey: 'waiverPercent', readKey: 'waiver_percent', label: 'Waiver %', type: _FieldType.number),
-  _RuleField(writeKey: 'minTxnInr', readKey: 'min_txn_inr', label: 'Min txn (INR)', type: _FieldType.number),
-  _RuleField(writeKey: 'maxTxnInr', readKey: 'max_txn_inr', label: 'Max txn (INR)', type: _FieldType.number),
-  _RuleField(writeKey: 'monthlyWaiverCap', readKey: 'monthly_waiver_cap', label: 'Monthly waiver cap (INR)', type: _FieldType.number),
+  _RuleField(
+    writeKey: 'surchargePercent',
+    readKey: 'surcharge_percent',
+    label: 'Surcharge %',
+    type: _FieldType.number,
+  ),
+  _RuleField(
+    writeKey: 'waiverPercent',
+    readKey: 'waiver_percent',
+    label: 'Waiver %',
+    type: _FieldType.number,
+  ),
+  _RuleField(
+    writeKey: 'minTxnInr',
+    readKey: 'min_txn_inr',
+    label: 'Min txn (INR)',
+    type: _FieldType.number,
+  ),
+  _RuleField(
+    writeKey: 'maxTxnInr',
+    readKey: 'max_txn_inr',
+    label: 'Max txn (INR)',
+    type: _FieldType.number,
+  ),
+  _RuleField(
+    writeKey: 'monthlyWaiverCap',
+    readKey: 'monthly_waiver_cap',
+    label: 'Monthly waiver cap (INR)',
+    type: _FieldType.number,
+  ),
 ];
 
 const _billingCycleRuleFields = [
-  _RuleField(writeKey: 'gracePeriodDays', readKey: 'grace_period_days', label: 'Grace period (days)', type: _FieldType.integer),
-  _RuleField(writeKey: 'cycleNotes', readKey: 'cycle_notes', label: 'Cycle notes', type: _FieldType.text),
+  _RuleField(
+    writeKey: 'gracePeriodDays',
+    readKey: 'grace_period_days',
+    label: 'Grace period (days)',
+    type: _FieldType.integer,
+  ),
+  _RuleField(
+    writeKey: 'cycleNotes',
+    readKey: 'cycle_notes',
+    label: 'Cycle notes',
+    type: _FieldType.text,
+  ),
 ];
 
 // ---- Generic "many rows per card" tab (Caps/Milestones/Fees/Benefits/Redemption) ----
@@ -455,7 +751,9 @@ class _RuleFamilyRowFormState extends ConsumerState<_RuleFamilyRowForm> {
         case _FieldType.dropdown:
           _dropdownValues[field.writeKey] = existing as String?;
         default:
-          _controllers[field.writeKey] = TextEditingController(text: existing == null ? '' : '$existing');
+          _controllers[field.writeKey] = TextEditingController(
+            text: existing == null ? '' : '$existing',
+          );
       }
     }
   }
@@ -534,10 +832,20 @@ class _RuleFamilyRowFormState extends ConsumerState<_RuleFamilyRowForm> {
       if (body == null) return;
       final api = ref.read(adminApiProvider)!;
       if (widget.existingRow == null) {
-        await api.createRuleFamilyRow(widget.urlSegment, cardProductId: widget.cardId, fields: body, reason: 'Console edit');
+        await api.createRuleFamilyRow(
+          widget.urlSegment,
+          cardProductId: widget.cardId,
+          fields: body,
+          reason: 'Console edit',
+        );
         widget.onCreated?.call();
       } else {
-        await api.updateRuleFamilyRow(widget.urlSegment, widget.existingRow!['id'] as String, fields: body, reason: 'Console edit');
+        await api.updateRuleFamilyRow(
+          widget.urlSegment,
+          widget.existingRow!['id'] as String,
+          fields: body,
+          reason: 'Console edit',
+        );
       }
       ref.invalidate(adminCardsProvider);
     } catch (e) {
@@ -551,7 +859,11 @@ class _RuleFamilyRowFormState extends ConsumerState<_RuleFamilyRowForm> {
     setState(() => _deleting = true);
     try {
       final api = ref.read(adminApiProvider)!;
-      await api.deleteRuleFamilyRow(widget.urlSegment, widget.existingRow!['id'] as String, reason: 'Console delete');
+      await api.deleteRuleFamilyRow(
+        widget.urlSegment,
+        widget.existingRow!['id'] as String,
+        reason: 'Console delete',
+      );
       ref.invalidate(adminCardsProvider);
     } catch (e) {
       setState(() {
@@ -582,7 +894,11 @@ class _RuleFamilyRowFormState extends ConsumerState<_RuleFamilyRowForm> {
               children: [
                 FilledButton(
                   onPressed: _saving ? null : _save,
-                  child: Text(_saving ? '...' : (widget.existingRow == null ? 'Create' : 'Save')),
+                  child: Text(
+                    _saving
+                        ? '...'
+                        : (widget.existingRow == null ? 'Create' : 'Save'),
+                  ),
                 ),
                 if (widget.existingRow != null) ...[
                   const SizedBox(width: 8),
@@ -596,7 +912,10 @@ class _RuleFamilyRowFormState extends ConsumerState<_RuleFamilyRowForm> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
               ),
           ],
         ),
@@ -615,7 +934,8 @@ class _RuleFamilyRowFormState extends ConsumerState<_RuleFamilyRowForm> {
             controlAffinity: ListTileControlAffinity.leading,
             title: Text(field.label),
             value: _boolValues[field.writeKey] ?? false,
-            onChanged: (v) => setState(() => _boolValues[field.writeKey] = v ?? false),
+            onChanged: (v) =>
+                setState(() => _boolValues[field.writeKey] = v ?? false),
           ),
         );
       case _FieldType.dropdown:
@@ -627,9 +947,13 @@ class _RuleFamilyRowFormState extends ConsumerState<_RuleFamilyRowForm> {
             decoration: InputDecoration(labelText: field.label, isDense: true),
             items: [
               for (final opt in field.options!)
-                DropdownMenuItem(value: opt, child: Text(opt, overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(
+                  value: opt,
+                  child: Text(opt, overflow: TextOverflow.ellipsis),
+                ),
             ],
-            onChanged: (v) => setState(() => _dropdownValues[field.writeKey] = v),
+            onChanged: (v) =>
+                setState(() => _dropdownValues[field.writeKey] = v),
           ),
         );
       case _FieldType.number:
@@ -638,7 +962,9 @@ class _RuleFamilyRowFormState extends ConsumerState<_RuleFamilyRowForm> {
           width: 160,
           child: TextField(
             controller: _controllers[field.writeKey],
-            keyboardType: TextInputType.numberWithOptions(decimal: field.type == _FieldType.number),
+            keyboardType: TextInputType.numberWithOptions(
+              decimal: field.type == _FieldType.number,
+            ),
             decoration: InputDecoration(labelText: field.label, isDense: true),
           ),
         );
@@ -672,7 +998,12 @@ class _RuleFamilySingleEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SinglePerCardForm(cardId: cardId, urlSegment: urlSegment, existingRow: row, fields: fields);
+    return _SinglePerCardForm(
+      cardId: cardId,
+      urlSegment: urlSegment,
+      existingRow: row,
+      fields: fields,
+    );
   }
 }
 
@@ -706,7 +1037,9 @@ class _SinglePerCardFormState extends ConsumerState<_SinglePerCardForm> {
       if (field.type == _FieldType.boolean) {
         _boolValues[field.writeKey] = existing as bool? ?? false;
       } else {
-        _controllers[field.writeKey] = TextEditingController(text: existing == null ? '' : '$existing');
+        _controllers[field.writeKey] = TextEditingController(
+          text: existing == null ? '' : '$existing',
+        );
       }
     }
   }
@@ -758,7 +1091,12 @@ class _SinglePerCardFormState extends ConsumerState<_SinglePerCardForm> {
         }
       }
       final api = ref.read(adminApiProvider)!;
-      await api.upsertSinglePerCardRuleFamily(widget.urlSegment, cardProductId: widget.cardId, fields: body, reason: 'Console edit');
+      await api.upsertSinglePerCardRuleFamily(
+        widget.urlSegment,
+        cardProductId: widget.cardId,
+        fields: body,
+        reason: 'Console edit',
+      );
       ref.invalidate(adminCardsProvider);
     } catch (e) {
       setState(() => _error = e.toString());
@@ -786,7 +1124,9 @@ class _SinglePerCardFormState extends ConsumerState<_SinglePerCardForm> {
                     controlAffinity: ListTileControlAffinity.leading,
                     title: Text(field.label),
                     value: _boolValues[field.writeKey] ?? false,
-                    onChanged: (v) => setState(() => _boolValues[field.writeKey] = v ?? false),
+                    onChanged: (v) => setState(
+                      () => _boolValues[field.writeKey] = v ?? false,
+                    ),
                   ),
                 )
               else
@@ -796,8 +1136,13 @@ class _SinglePerCardFormState extends ConsumerState<_SinglePerCardForm> {
                     controller: _controllers[field.writeKey],
                     keyboardType: field.type == _FieldType.number
                         ? const TextInputType.numberWithOptions(decimal: true)
-                        : (field.type == _FieldType.integer ? TextInputType.number : TextInputType.text),
-                    decoration: InputDecoration(labelText: field.label, isDense: true),
+                        : (field.type == _FieldType.integer
+                              ? TextInputType.number
+                              : TextInputType.text),
+                    decoration: InputDecoration(
+                      labelText: field.label,
+                      isDense: true,
+                    ),
                   ),
                 ),
           ],
@@ -810,7 +1155,10 @@ class _SinglePerCardFormState extends ConsumerState<_SinglePerCardForm> {
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+            child: Text(
+              _error!,
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
           ),
       ],
     );
@@ -828,7 +1176,10 @@ class _RewardsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(12),
-      children: [for (final rule in rewardRules) _RewardRuleRow(cardId: cardId, rule: rule)],
+      children: [
+        for (final rule in rewardRules)
+          _RewardRuleRow(cardId: cardId, rule: rule),
+      ],
     );
   }
 }
@@ -865,8 +1216,14 @@ class _RewardRuleRowState extends ConsumerState<_RewardRuleRow> {
     });
     try {
       final api = ref.read(adminApiProvider);
-      await api!.updateRewardRuleRate(widget.rule['id'] as String, rate, reason: 'Console edit');
-      ref.invalidate(adminCardsProvider); // AD-1.1.5-adjacent: refetch so data_version/rate are current
+      await api!.updateRewardRuleRate(
+        widget.rule['id'] as String,
+        rate,
+        reason: 'Console edit',
+      );
+      ref.invalidate(
+        adminCardsProvider,
+      ); // AD-1.1.5-adjacent: refetch so data_version/rate are current
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -885,8 +1242,13 @@ class _RewardRuleRowState extends ConsumerState<_RewardRuleRow> {
             width: 100,
             child: TextField(
               controller: _rateController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Rate', isDense: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Rate',
+                isDense: true,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -897,7 +1259,10 @@ class _RewardRuleRowState extends ConsumerState<_RewardRuleRow> {
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(left: 8),
-              child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
             ),
         ],
       ),

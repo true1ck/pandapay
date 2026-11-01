@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/admin_design.dart';
 import '../../app/providers.dart';
 
 /// AD-9.1: latest result + full history over `anonymization_audit_runs`.
@@ -13,10 +14,12 @@ class AnonymizationAuditScreen extends ConsumerStatefulWidget {
   const AnonymizationAuditScreen({super.key});
 
   @override
-  ConsumerState<AnonymizationAuditScreen> createState() => _AnonymizationAuditScreenState();
+  ConsumerState<AnonymizationAuditScreen> createState() =>
+      _AnonymizationAuditScreenState();
 }
 
-class _AnonymizationAuditScreenState extends ConsumerState<AnonymizationAuditScreen> {
+class _AnonymizationAuditScreenState
+    extends ConsumerState<AnonymizationAuditScreen> {
   bool _running = false;
   String? _error;
 
@@ -40,7 +43,11 @@ class _AnonymizationAuditScreenState extends ConsumerState<AnonymizationAuditScr
     final runs = ref.watch(anonymizationAuditRunsProvider);
     return runs.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('Failed to load audit runs: $err')),
+      error: (err, _) => AdminLoadError(
+        title: 'Anonymization audit history is unavailable',
+        error: err,
+        onRetry: () => ref.invalidate(anonymizationAuditRunsProvider),
+      ),
       data: (rows) {
         final latest = rows.isEmpty ? null : rows.first;
         return Column(
@@ -52,7 +59,9 @@ class _AnonymizationAuditScreenState extends ConsumerState<AnonymizationAuditScr
                 children: [
                   Expanded(
                     child: latest == null
-                        ? const Text('No audit runs yet.')
+                        ? const Text(
+                            'No audit runs yet. Start one to check the current privacy safeguards.',
+                          )
                         : _LatestResultCard(latest),
                   ),
                   const SizedBox(width: 12),
@@ -67,12 +76,20 @@ class _AnonymizationAuditScreenState extends ConsumerState<AnonymizationAuditScr
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
               ),
             const Divider(height: 1),
             Expanded(
               child: rows.isEmpty
-                  ? const Center(child: Text('History will appear here after the first run.'))
+                  ? const AdminEmptyState(
+                      icon: Icons.privacy_tip_outlined,
+                      title: 'Audit history will appear here',
+                      message:
+                          'Run the audit to check privacy controls and add the first result to this history.',
+                    )
                   : ListView.builder(
                       padding: const EdgeInsets.all(12),
                       itemCount: rows.length,
@@ -95,20 +112,27 @@ class _LatestResultCard extends StatelessWidget {
     final passed = run['passed'] == true;
     return Card(
       color: passed
-          ? Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.4)
+          ? Theme.of(
+              context,
+            ).colorScheme.secondaryContainer.withValues(alpha: 0.4)
           : Theme.of(context).colorScheme.errorContainer,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            Icon(passed ? Icons.check_circle : Icons.error, color: passed ? Colors.green : Colors.red),
+            Icon(
+              passed ? Icons.check_circle : Icons.error,
+              color: passed ? Colors.green : Colors.red,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(passed ? 'Latest: PASSED' : 'Latest: FAILED',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    passed ? 'Latest: PASSED' : 'Latest: FAILED',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   Text(
                     '${run['checks_total']} checks, ${run['checks_failed']} failed · '
                     '${run['ran_at']} · sha: ${run['git_sha'] ?? '—'} · by: ${run['run_by']}',
@@ -133,12 +157,24 @@ class _RunTile extends StatelessWidget {
     final passed = run['passed'] == true;
     final findings = (run['findings'] as List?) ?? const [];
     return ListTile(
-      leading: Icon(passed ? Icons.check_circle_outline : Icons.error_outline, color: passed ? Colors.green : Colors.red),
-      title: Text('${run['ran_at']} — ${run['checks_failed']}/${run['checks_total']} failed'),
+      leading: Icon(
+        passed ? Icons.check_circle_outline : Icons.error_outline,
+        color: passed ? Colors.green : Colors.red,
+      ),
+      title: Text(
+        '${run['ran_at']} — ${run['checks_failed']}/${run['checks_total']} failed',
+      ),
       subtitle: findings.isEmpty
           ? null
-          : Text(findings.map((f) => '${f['check']} (${f['violations']})').join(', ')),
-      trailing: Text(run['git_sha'] as String? ?? '—', style: const TextStyle(fontSize: 12)),
+          : Text(
+              findings
+                  .map((f) => '${f['check']} (${f['violations']})')
+                  .join(', '),
+            ),
+      trailing: Text(
+        run['git_sha'] as String? ?? '—',
+        style: const TextStyle(fontSize: 12),
+      ),
     );
   }
 }

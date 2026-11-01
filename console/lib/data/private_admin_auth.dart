@@ -15,6 +15,17 @@ class PrivateAdminAuthApi extends AuthApi {
   final AdminPasskey _passkey;
   String? _loginId, _csrfToken, _email;
   bool enrollmentRequired = false;
+  bool approvedBrowserEnrollment = false;
+  Set<String> _enrolledFactorSlots = {};
+  bool get primaryKeyRegistered => _enrolledFactorSlots.contains('primary');
+  bool get backupKeyRegistered => _enrolledFactorSlots.contains('backup');
+  bool get awaitingActivation => primaryKeyRegistered && backupKeyRegistered;
+  Set<String> _factorSlots(Object? value) => value is List
+      ? value
+            .whereType<String>()
+            .where((slot) => slot == 'primary' || slot == 'backup')
+            .toSet()
+      : {};
   Map<String, dynamic>? administrator;
   PrivateAdminAuthApi({http.Client? client, AdminPasskey? passkey})
     : _http = client ?? http.Client(),
@@ -31,6 +42,57 @@ class PrivateAdminAuthApi extends AuthApi {
     'X-Admin-Protocol': '1',
     'X-CSRF-Token': ?_csrfToken,
   };
+
+  /// The provisioning CLI issues 32 random bytes encoded as unpadded base64url.
+  static String? validateEnrollmentGrant(String? value) {
+    final grant = value?.trim() ?? '';
+    if (grant.isEmpty) {
+      return 'Enter the enrollment grant provided for your account.';
+    }
+    if (!RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(grant)) {
+      return 'Paste the full 43-character enrollment grant, not your email code.';
+    }
+    return null;
+  }
+
+  String _failureMessage(String path, http.Response response) {
+    // Use only known protocol codes; never display server bodies or credentials.
+    String? code;
+    try {
+      final data = jsonDecode(response.body);
+      if (data is Map && data['version'] == 1 && data['error'] is String) {
+        code = data['error'] as String;
+      }
+    } on FormatException {
+      // A proxy can return HTML instead of a gateway error envelope.
+    }
+    if (response.statusCode == 429) {
+      return 'Too many attempts. Please wait and retry.';
+    }
+    if (code == 'preauth_required') {
+      return 'This sign-in attempt is no longer valid. Start again to request a new email code.';
+    }
+    if (path == 'enrollment/options' && code == 'enrollment_denied') {
+      return 'Enrollment was not authorized. Your grant or email verification may have expired. Start again with a fresh grant and email code.';
+    }
+    if (code == 'enrollment_not_approved') {
+      return 'Passkey setup is not approved for this sign-in, or your email verification expired. Request a new email code. If it continues, contact your administrator.';
+    }
+    if (path == 'enrollment/verify' &&
+        (response.statusCode == 401 || response.statusCode == 403)) {
+      return 'Security-key registration could not be verified. Start again with a fresh grant and email code.';
+    }
+    if (path == 'login/verify-email' && code == 'invalid_credentials') {
+      return 'The email code is incorrect or has expired. Start again to request a new code.';
+    }
+    if (response.statusCode == 503) {
+      return 'The admin service is temporarily unavailable. Please retry.';
+    }
+    return response.statusCode == 401
+        ? 'Your admin session expired. Sign in again.'
+        : 'Admin request could not be completed.';
+  }
+
   Future<Map<String, dynamic>> _call(
     String path, [
     Map<String, dynamic>? body,
@@ -47,11 +109,7 @@ class PrivateAdminAuthApi extends AuthApi {
             .timeout(const Duration(seconds: 15));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AdminApiException(
-        response.statusCode == 401
-            ? 'Your admin session expired. Sign in again.'
-            : response.statusCode == 429
-            ? 'Too many attempts. Please wait and retry.'
-            : 'Admin request could not be completed.',
+        _failureMessage(path, response),
         statusCode: response.statusCode,
       );
     }
@@ -82,6 +140,8 @@ class PrivateAdminAuthApi extends AuthApi {
   }) async {
     _loginId = null;
     enrollmentRequired = false;
+    _enrolledFactorSlots = {};
+    approvedBrowserEnrollment = false;
     _email = email.trim().toLowerCase();
     final data = await _call('login/start', {'email': _email});
     if (data['loginId'] is! String) {
@@ -115,6 +175,8 @@ class PrivateAdminAuthApi extends AuthApi {
       'code': code,
     });
     if (data['next'] == 'enrollment') {
+      approvedBrowserEnrollment = data['enrollmentMode'] == 'approved';
+      _enrolledFactorSlots = _factorSlots(data['enrolledSlots']);
       enrollmentRequired = true;
       throw AdminApiException(
         'A one-use enrollment grant is required to register your security key.',
@@ -135,22 +197,55 @@ class PrivateAdminAuthApi extends AuthApi {
     );
   }
 
-  Future<void> enroll(String grant) async {
+  Future<void> enroll([String grant = '']) async {
     if (!enrollmentRequired || _loginId == null) {
       throw AdminApiException('Verify your admin email first.');
     }
+    if (awaitingActivation) {
+      throw AdminApiException(
+        'Both security keys are registered. Activate your account through the setup helper before signing in.',
+      );
+    }
+    final registeringSlot = primaryKeyRegistered ? 'backup' : 'primary';
+    final validationError = approvedBrowserEnrollment
+        ? null
+        : validateEnrollmentGrant(grant);
+    if (validationError != null) throw AdminApiException(validationError);
     final data = await _call('enrollment/options', {
       'loginId': _loginId,
-      'grant': grant.trim(),
+      if (approvedBrowserEnrollment)
+        'mode': 'approved'
+      else
+        'grant': grant.trim(),
     });
-    final credential = await _passkey(
-      (data['options'] as Map).cast<String, dynamic>(),
-      register: true,
-    );
-    await _call('enrollment/verify', {
+    if (data['options'] is! Map) {
+      throw AdminApiException(
+        'Security-key registration is unavailable. Please retry.',
+      );
+    }
+    final Map<String, dynamic> credential;
+    try {
+      credential = await _passkey(
+        (data['options'] as Map).cast<String, dynamic>(),
+        register: true,
+      );
+    } catch (_) {
+      throw AdminApiException(
+        'Passkey registration was cancelled or unavailable. Retry in Chrome and complete its security prompt.',
+      );
+    }
+    final result = await _call('enrollment/verify', {
       'loginId': _loginId,
       'credential': credential,
     });
+    if (result['enrolled'] != true) {
+      throw AdminApiException(
+        'Security-key registration was not confirmed. Please retry.',
+      );
+    }
+    _enrolledFactorSlots = result['enrolledSlots'] is List
+        ? _factorSlots(result['enrolledSlots'])
+        : {..._enrolledFactorSlots, registeringSlot};
     _loginId = null;
     enrollmentRequired = false;
   }

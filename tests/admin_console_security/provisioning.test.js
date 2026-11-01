@@ -4,7 +4,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { Client } = require('../../auth/node_modules/pg');
+const { Client, Pool } = require('../../auth/node_modules/pg');
+const {createAdminRepository} = require('../../auth/src/admin/repository');
+const {configureAdminGatewayRuntime} = require('../../auth/scripts/adminGatewayPermissions');
 const { buildPlan, executePlan, resumeOperation, planHash, operationId } = require('../../db/scripts/admin_provisioning');
 
 const socket = process.env.ADMIN_TEST_PG_SOCKET;
@@ -25,7 +27,7 @@ test('operator provisioning survives crashes and cannot replay later revoked aut
     await control.end();
   });
   await auth.query('CREATE TABLE users(id uuid PRIMARY KEY,email text,is_active boolean DEFAULT true,deleted boolean DEFAULT false,is_email_verified boolean DEFAULT true)');
-  for (const name of ['0012_private_admin_access.sql','0013_admin_provisioning_journal.sql']) {
+  for (const name of ['0012_private_admin_access.sql','0013_admin_provisioning_journal.sql','0014_approved_browser_enrollment.sql']) {
     await auth.query(fs.readFileSync(path.resolve(__dirname,'../../auth/db/migrations',name),'utf8'));
   }
   await product.query(`CREATE TABLE admin_users(id uuid PRIMARY KEY,email text NOT NULL,role text NOT NULL,is_active boolean NOT NULL DEFAULT true);
@@ -48,6 +50,44 @@ test('operator provisioning survives crashes and cannot replay later revoked aut
       VALUES($1,$2,$3,$4,'singleDevice')`,[crypto.randomUUID(),id,Buffer.from('synthetic-public-key-'+slot),slot]);
   }
   const failAt = stage => async current => { if (current === stage) throw new Error('simulated_process_exit'); };
+  await t.test('browser-managed initial enrollment requires completed operator intent, current proof and missing slots',async () => {
+    await configureAdminGatewayRuntime(auth,{ADMIN_GATEWAY_DB_PASSWORD:'synthetic-runtime-secret-'.repeat(2)});
+    const runtime=new Pool({...connection,database:'private_admin_provision_auth_test',user:'admin_gateway_runtime',options:'-c role=pandapay_admin_gateway',max:2});
+    try {
+      const repo=createAdminRepository({pool:runtime,environment:'local',sessionEpoch:'synthetic-epoch-'.repeat(3)});
+      async function proof(args) {
+        const loginId=crypto.randomUUID(),cookie=crypto.randomBytes(32).toString('hex'),code=crypto.randomBytes(32).toString('hex');
+        await repo.createLoginChallenge({loginId,email:args.email,preauthCookieDigest:cookie,codeDigest:code,expiresAt:new Date(Date.now()+120000)});
+        assert.equal((await repo.consumeEmailChallenge({loginId,preauthCookieDigest:cookie,codeDigest:code})).ok,true);
+        return {loginId,preauthCookieDigest:cookie,grantDigest:crypto.randomBytes(32).toString('hex')};
+      }
+      const unapproved=await identity();
+      await auth.query("INSERT INTO admin_private.principals(user_id,state) VALUES($1,'pending')",[unapproved['user-id']]);
+      assert.equal(await repo.prepareApprovedEnrollment(await proof(unapproved)),null);
+      const args=await identity(),p=await plan(args,'grant');await apply(p);
+      const primaryProof=await proof(args);
+      assert.equal(await repo.prepareApprovedEnrollment({...primaryProof,preauthCookieDigest:'0'.repeat(64)}),null);
+      assert.equal(await repo.prepareApprovedEnrollment({...primaryProof,environment:'production'}),null);
+      const primary=await repo.prepareApprovedEnrollment(primaryProof);assert.equal(primary.slot,'primary');assert.equal(primary.userId,p.userId);
+      const retry=await repo.prepareApprovedEnrollment({...primaryProof,grantDigest:'a'.repeat(64)});assert.equal(retry.slot,'primary');
+      assert.equal((await row('SELECT consumed_at IS NOT NULL AS consumed FROM admin_private.enrollment_grants WHERE grant_digest=$1',[primary.grantDigest])).consumed,true);
+      const challenge=crypto.randomBytes(32).toString('hex');
+      await repo.createWebAuthnChallenge({userId:p.userId,loginId:primaryProof.loginId,preauthCookieDigest:primaryProof.preauthCookieDigest,purpose:'enrollment',challengeDigest:challenge,challengeValue:'fixture',grantDigest:retry.grantDigest,origin:'https://localhost:8443',rpId:'localhost',expiresAt:new Date(Date.now()+120000)});
+      assert.ok(await repo.addCredential({...primaryProof,challengeDigest:challenge,credentialId:crypto.randomUUID(),publicKey:Buffer.from('synthetic-primary'),deviceType:'singleDevice',origin:'https://localhost:8443',rpId:'localhost'}));
+      assert.equal(await repo.prepareApprovedEnrollment(primaryProof),null);
+      const backupProof=await proof(args);
+      assert.equal((await repo.prepareApprovedEnrollment(backupProof)).slot,'backup');
+      await auth.query("UPDATE admin_private.email_proofs SET expires_at=now()-interval '1 second' WHERE login_id=$1",[backupProof.loginId]);
+      assert.equal(await repo.prepareApprovedEnrollment(backupProof),null);
+      await auth.query("INSERT INTO admin_private.credentials(credential_id,user_id,public_key,device_type,slot) VALUES($1,$2,$3,'singleDevice','backup')",[crypto.randomUUID(),p.userId,Buffer.from('synthetic-backup')]);
+      assert.equal(await repo.prepareApprovedEnrollment(await proof(args)),null);
+      await assert.rejects(runtime.query('UPDATE admin_private.principals SET state=\'enabled\''),/permission denied/);
+      assert.equal((await row('SELECT state FROM admin_private.principals WHERE user_id=$1',[p.userId])).state,'pending');
+      assert.equal((await product.query('SELECT is_active FROM admin_users WHERE id=$1',[p.userId])).rows[0].is_active,false);
+      await auth.query("UPDATE admin_private.credentials SET revoked_at=now() WHERE user_id=$1 AND slot='backup'",[p.userId]);
+      assert.equal(await repo.prepareApprovedEnrollment(await proof(args)),null);
+    } finally {await runtime.end();}
+  });
   for (const stage of ['after_auth_commit','after_product_commit','after_product_ack','after_complete']) {
     await t.test(stage, async () => {
       const args = await identity(), p = await plan(args,'grant');

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/admin_design.dart';
 import '../../app/providers.dart';
 
 /// AD-4.2: the unified policy-change alert queue. Evidence and any
@@ -20,10 +21,19 @@ class AlertsScreen extends ConsumerWidget {
 
     return alerts.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('Failed to load alerts: $err')),
+      error: (err, _) => AdminLoadError(
+        title: 'Policy alerts are unavailable',
+        error: err,
+        onRetry: () => ref.invalidate(alertsProvider),
+      ),
       data: (alertList) {
         if (alertList.isEmpty) {
-          return const Center(child: Text('No policy-change alerts.'));
+          return const AdminEmptyState(
+            icon: Icons.notifications_none_outlined,
+            title: 'No policy changes to review',
+            message:
+                'Detected issuer policy changes and their source evidence will appear here when a scrape finds an update.',
+          );
         }
         return ListView.builder(
           padding: const EdgeInsets.all(12),
@@ -53,7 +63,9 @@ class _AlertTileState extends ConsumerState<_AlertTile> {
     if (_detail != null) return;
     setState(() => _loadingDetail = true);
     try {
-      final detail = await ref.read(adminApiProvider)!.fetchAlertDetail(widget.alert['id'] as String);
+      final detail = await ref
+          .read(adminApiProvider)!
+          .fetchAlertDetail(widget.alert['id'] as String);
       setState(() => _detail = detail);
     } catch (e) {
       setState(() => _error = e.toString());
@@ -68,7 +80,9 @@ class _AlertTileState extends ConsumerState<_AlertTile> {
       _error = null;
     });
     try {
-      await ref.read(adminApiProvider)!.decideAlert(widget.alert['id'] as String, decision);
+      await ref
+          .read(adminApiProvider)!
+          .decideAlert(widget.alert['id'] as String, decision);
       ref.invalidate(alertsProvider);
     } catch (e) {
       setState(() => _error = e.toString());
@@ -93,7 +107,11 @@ class _AlertTileState extends ConsumerState<_AlertTile> {
           '(${a['distinct_signal_kinds']} kinds) · corroboration: ${a['corroboration_score']}',
         ),
         children: [
-          if (_loadingDetail) const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()),
+          if (_loadingDetail)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(),
+            ),
           if (_detail != null) ..._buildDetail(_detail!),
           if (isOpen)
             Padding(
@@ -111,7 +129,9 @@ class _AlertTileState extends ConsumerState<_AlertTile> {
                     child: const Text('Reject'),
                   ),
                   OutlinedButton(
-                    onPressed: _busy ? null : () => _decide('needs_more_evidence'),
+                    onPressed: _busy
+                        ? null
+                        : () => _decide('needs_more_evidence'),
                     child: const Text('Needs more evidence'),
                   ),
                 ],
@@ -120,7 +140,10 @@ class _AlertTileState extends ConsumerState<_AlertTile> {
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(left: 12, bottom: 12),
-              child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
             ),
         ],
       ),
@@ -129,18 +152,28 @@ class _AlertTileState extends ConsumerState<_AlertTile> {
 
   List<Widget> _buildDetail(Map<String, dynamic> detail) {
     final evidence = (detail['evidence'] as List).cast<Map<String, dynamic>>();
-    final proposals = (detail['proposals'] as List).cast<Map<String, dynamic>>();
+    final proposals = (detail['proposals'] as List)
+        .cast<Map<String, dynamic>>();
     return [
       const Padding(
         padding: EdgeInsets.fromLTRB(12, 0, 12, 4),
-        child: Align(alignment: Alignment.centerLeft, child: Text('Evidence', style: TextStyle(fontWeight: FontWeight.bold))),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Evidence',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
       ),
       for (final e in evidence)
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: Text('[${e['signal']}] ${e['excerpt']}', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+            child: Text(
+              '[${e['signal']}] ${e['excerpt']}',
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
           ),
         ),
       if (proposals.isNotEmpty) ...[
@@ -148,8 +181,10 @@ class _AlertTileState extends ConsumerState<_AlertTile> {
           padding: EdgeInsets.fromLTRB(12, 4, 12, 4),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: Text('Proposed fields (heuristic regex, not AI — verify before applying)',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(
+              'Proposed fields (heuristic regex, not AI — verify before applying)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ),
         for (final p in proposals)

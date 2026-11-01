@@ -2463,6 +2463,38 @@ class NeedsReviewRepository {
             continue;
           }
 
+          // The next reminder of an existing recurring bill (same biller and
+          // account, or same biller and amount when no account is named)
+          // moves that commitment forward instead of adding one per month.
+          // Insurance stays per policy, so it never merges here.
+          final sameSeries =
+              !isOldGeneric &&
+              title != 'Subscription / Mandate' &&
+              oldTitle.toLowerCase() == title.toLowerCase() &&
+              old.category != CommitmentCategory.insurance &&
+              (parsed.accountLast4 != null
+                  ? old.identifier == '••••${parsed.accountLast4}'
+                  : old.identifier == null &&
+                        old.amount != null &&
+                        old.amount?.paise == amount?.paise);
+          if (sameSeries) {
+            final nextDue = parsed.dueDate ?? item.receivedAt;
+            if (nextDue.isAfter(old.dueOn)) {
+              final moved = old.copyWith(
+                dueOn: nextDue,
+                amount: amount,
+                anchorDay: nextDue.day,
+                status: CommitmentStatus.due,
+              );
+              database.db.execute(
+                'UPDATE local_commitments SET payload = ? WHERE namespace = ? AND id = ?',
+                [jsonEncode(moved.toJson()), namespace, existingId],
+              );
+              _notify(database, namespace, 'commitments');
+            }
+            return;
+          }
+
           if (isOldGeneric && title != 'Subscription / Mandate') {
             final oldAmountPaise = old.amount?.paise;
             final oldAnchorDay = old.anchorDay;

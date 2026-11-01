@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/admin_design.dart';
 import '../../app/providers.dart';
 
 /// AD-2.1: New Card Request queue, grouped by issuer+product with counts so
@@ -15,15 +16,25 @@ class CardRequestsScreen extends ConsumerWidget {
 
     return groups.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('Failed to load card requests: $err')),
+      error: (err, _) => AdminLoadError(
+        title: 'Card request queue is unavailable',
+        error: err,
+        onRetry: () => ref.invalidate(cardRequestGroupsProvider),
+      ),
       data: (groupList) {
         if (groupList.isEmpty) {
-          return const Center(child: Text('No open card requests.'));
+          return const AdminEmptyState(
+            icon: Icons.playlist_add_check_outlined,
+            title: 'No requests are waiting',
+            message:
+                'New card requests from PandaPay users will be grouped by issuer and product here.',
+          );
         }
         return ListView.builder(
           padding: const EdgeInsets.all(12),
           itemCount: groupList.length,
-          itemBuilder: (context, index) => _CardRequestGroupTile(groupList[index]),
+          itemBuilder: (context, index) =>
+              _CardRequestGroupTile(groupList[index]),
         );
       },
     );
@@ -35,7 +46,8 @@ class _CardRequestGroupTile extends ConsumerStatefulWidget {
   const _CardRequestGroupTile(this.group);
 
   @override
-  ConsumerState<_CardRequestGroupTile> createState() => _CardRequestGroupTileState();
+  ConsumerState<_CardRequestGroupTile> createState() =>
+      _CardRequestGroupTileState();
 }
 
 class _CardRequestGroupTileState extends ConsumerState<_CardRequestGroupTile> {
@@ -87,9 +99,11 @@ class _CardRequestGroupTileState extends ConsumerState<_CardRequestGroupTile> {
             Row(
               children: [
                 Flexible(
-                  child: Text('${g['issuer_name']} — ${g['product_name']}',
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium),
+                  child: Text(
+                    '${g['issuer_name']} — ${g['product_name']}',
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
                 if (isStale) ...[
                   const SizedBox(width: 8),
@@ -101,15 +115,20 @@ class _CardRequestGroupTileState extends ConsumerState<_CardRequestGroupTile> {
                 ],
               ],
             ),
-            Text('${g['total_requests']} requests · ${g['distinct_reporters']} reporters'
-                '${g['network_guess'] != null ? ' · ${g['network_guess']}' : ''}'),
+            Text(
+              '${g['total_requests']} requests · ${g['distinct_reporters']} reporters'
+              '${g['network_guess'] != null ? ' · ${g['network_guess']}' : ''}',
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _urlController,
-                    decoration: const InputDecoration(labelText: 'Bank page URL', isDense: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Bank page URL',
+                      isDense: true,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -122,7 +141,10 @@ class _CardRequestGroupTileState extends ConsumerState<_CardRequestGroupTile> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
               ),
           ],
         ),

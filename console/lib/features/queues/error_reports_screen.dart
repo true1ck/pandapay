@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/admin_design.dart';
 import '../../app/providers.dart';
 
 /// AD-2.2: User-Reported Data Error queue — shown vs claimed side by side
@@ -17,10 +18,19 @@ class ErrorReportsScreen extends ConsumerWidget {
 
     return reports.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('Failed to load error reports: $err')),
+      error: (err, _) => AdminLoadError(
+        title: 'Error report queue is unavailable',
+        error: err,
+        onRetry: () => ref.invalidate(errorReportsProvider),
+      ),
       data: (reportList) {
         if (reportList.isEmpty) {
-          return const Center(child: Text('No open data error reports.'));
+          return const AdminEmptyState(
+            icon: Icons.fact_check_outlined,
+            title: 'No corrections need review',
+            message:
+                'User-reported card data issues will appear here with the current value, claimed value, and source evidence.',
+          );
         }
         return ListView.builder(
           padding: const EdgeInsets.all(12),
@@ -74,9 +84,11 @@ class _ErrorReportTileState extends ConsumerState<_ErrorReportTile> {
             Row(
               children: [
                 Flexible(
-                  child: Text('${r['card_name']} — ${r['field_path']}',
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium),
+                  child: Text(
+                    '${r['card_name']} — ${r['field_path']}',
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
                 if (isStale) ...[
                   const SizedBox(width: 8),
@@ -96,7 +108,10 @@ class _ErrorReportTileState extends ConsumerState<_ErrorReportTile> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Shown (report time)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const Text(
+                        'Shown (report time)',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
                       Text('${r['shown_value']}'),
                     ],
                   ),
@@ -106,7 +121,10 @@ class _ErrorReportTileState extends ConsumerState<_ErrorReportTile> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Claimed', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const Text(
+                        'Claimed',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
                       Text('${r['claimed_value']}'),
                     ],
                   ),
@@ -116,7 +134,10 @@ class _ErrorReportTileState extends ConsumerState<_ErrorReportTile> {
             if (r['source_url'] != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text('${r['source_url']}', style: const TextStyle(fontSize: 12)),
+                child: Text(
+                  '${r['source_url']}',
+                  style: const TextStyle(fontSize: 12),
+                ),
               ),
             const SizedBox(height: 8),
             if (isPending)
@@ -125,14 +146,22 @@ class _ErrorReportTileState extends ConsumerState<_ErrorReportTile> {
                   FilledButton(
                     onPressed: _busy
                         ? null
-                        : () => _act(() => ref.read(adminApiProvider)!.approveErrorReport(r['id'] as String)),
+                        : () => _act(
+                            () => ref
+                                .read(adminApiProvider)!
+                                .approveErrorReport(r['id'] as String),
+                          ),
                     child: Text(_busy ? '...' : 'Approve'),
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton(
                     onPressed: _busy
                         ? null
-                        : () => _act(() => ref.read(adminApiProvider)!.rejectErrorReport(r['id'] as String)),
+                        : () => _act(
+                            () => ref
+                                .read(adminApiProvider)!
+                                .rejectErrorReport(r['id'] as String),
+                          ),
                     child: const Text('Reject'),
                   ),
                 ],
@@ -140,7 +169,10 @@ class _ErrorReportTileState extends ConsumerState<_ErrorReportTile> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
               ),
           ],
         ),

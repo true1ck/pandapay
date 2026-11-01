@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/admin_design.dart';
 import '../../app/providers.dart';
 
 /// AD-4.1/AD-4.2 change-detection + diff review — previously only
@@ -21,10 +22,19 @@ class ScrapeDiffReviewScreen extends ConsumerWidget {
 
     return runs.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('Failed to load scrape runs: $err')),
+      error: (err, _) => AdminLoadError(
+        title: 'Scrape history is unavailable',
+        error: err,
+        onRetry: () => ref.invalidate(scrapeRunsProvider),
+      ),
       data: (runList) {
         if (runList.isEmpty) {
-          return const Center(child: Text('No scrape runs yet.'));
+          return const AdminEmptyState(
+            icon: Icons.difference_outlined,
+            title: 'No scrape history yet',
+            message:
+                'Once an approved source has run, recent results and changed pages will be available here for review.',
+          );
         }
         // One entry per distinct source, newest run first — the operator
         // picks a source to drill into its pages/snapshots, not a run
@@ -40,18 +50,24 @@ class ScrapeDiffReviewScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             for (final run in runList.take(20)) _RunTile(run),
             const SizedBox(height: 24),
-            Text('Browse a source\'s pages', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Browse a source\'s pages',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             for (final entry in bySource.entries)
               ListTile(
                 title: Text(entry.value['source_name'] as String? ?? entry.key),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => _SourcePagesScreen(
-                    sourceId: entry.key,
-                    sourceName: entry.value['source_name'] as String? ?? entry.key,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => _SourcePagesScreen(
+                      sourceId: entry.key,
+                      sourceName:
+                          entry.value['source_name'] as String? ?? entry.key,
+                    ),
                   ),
-                )),
+                ),
               ),
           ],
         );
@@ -77,9 +93,14 @@ class _RunTile extends StatelessWidget {
       dense: true,
       leading: Icon(Icons.circle, size: 10, color: color),
       title: Text('${run['source_name']} — $status'),
-      subtitle: Text('${run['pages_fetched'] ?? 0} fetched · ${run['pages_changed'] ?? 0} changed'
-          '${run['error_text'] != null ? ' · ${run['error_text']}' : ''}'),
-      trailing: Text(run['started_at'] as String? ?? '', style: Theme.of(context).textTheme.bodySmall),
+      subtitle: Text(
+        '${run['pages_fetched'] ?? 0} fetched · ${run['pages_changed'] ?? 0} changed'
+        '${run['error_text'] != null ? ' · ${run['error_text']}' : ''}',
+      ),
+      trailing: Text(
+        run['started_at'] as String? ?? '',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
     );
   }
 }
@@ -99,21 +120,43 @@ class _SourcePagesScreen extends ConsumerWidget {
           : FutureBuilder<List<Map<String, dynamic>>>(
               future: api.fetchSourcePages(sourceId),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                if (snapshot.hasError) return Center(child: Text('Failed to load pages: ${snapshot.error}'));
+                if (snapshot.hasError) {
+                  return AdminLoadError(
+                    title: 'Source pages are unavailable',
+                    error: snapshot.error!,
+                  );
+                }
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
                 final pages = snapshot.data!;
-                if (pages.isEmpty) return const Center(child: Text('No pages registered for this source.'));
+                if (pages.isEmpty) {
+                  return const AdminEmptyState(
+                    icon: Icons.web_asset_off_outlined,
+                    title: 'No pages registered',
+                    message: 'This source has no page records to compare yet.',
+                  );
+                }
                 return ListView.builder(
                   itemCount: pages.length,
                   itemBuilder: (context, index) {
                     final page = pages[index];
                     return ListTile(
                       title: Text(page['page_role'] as String? ?? ''),
-                      subtitle: Text(page['url'] as String? ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(
+                        page['url'] as String? ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => _SnapshotDiffScreen(sourcePageId: page['id'] as String, pageRole: page['page_role'] as String? ?? ''),
-                      )),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => _SnapshotDiffScreen(
+                            sourcePageId: page['id'] as String,
+                            pageRole: page['page_role'] as String? ?? '',
+                          ),
+                        ),
+                      ),
                     );
                   },
                 );
@@ -126,7 +169,10 @@ class _SourcePagesScreen extends ConsumerWidget {
 class _SnapshotDiffScreen extends ConsumerWidget {
   final String sourcePageId;
   final String pageRole;
-  const _SnapshotDiffScreen({required this.sourcePageId, required this.pageRole});
+  const _SnapshotDiffScreen({
+    required this.sourcePageId,
+    required this.pageRole,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -138,11 +184,23 @@ class _SnapshotDiffScreen extends ConsumerWidget {
           : FutureBuilder<List<Map<String, dynamic>>>(
               future: api.fetchSourcePageSnapshots(sourcePageId),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                if (snapshot.hasError) return Center(child: Text('Failed to load snapshots: ${snapshot.error}'));
+                if (snapshot.hasError) {
+                  return AdminLoadError(
+                    title: 'Page snapshots are unavailable',
+                    error: snapshot.error!,
+                  );
+                }
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
                 final snapshots = snapshot.data!;
                 if (snapshots.isEmpty) {
-                  return const Center(child: Text('No snapshots captured for this page yet.'));
+                  return const AdminEmptyState(
+                    icon: Icons.photo_library_outlined,
+                    title: 'No snapshots captured yet',
+                    message:
+                        'Run the source collector to capture a baseline before reviewing page changes.',
+                  );
                 }
                 if (snapshots.length == 1) {
                   return Padding(
@@ -150,33 +208,57 @@ class _SnapshotDiffScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Only one snapshot exists — nothing to diff against yet.'),
+                        Text(
+                          'Only one snapshot exists — nothing to diff against yet.',
+                        ),
                         const SizedBox(height: 12),
-                        Expanded(child: SingleChildScrollView(child: Text(snapshots.first['extracted_text'] as String? ?? ''))),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Text(
+                              snapshots.first['extracted_text'] as String? ??
+                                  '',
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   );
                 }
                 final newest = snapshots[0];
                 final previous = snapshots[1];
-                final changed = newest['content_hash'] != previous['content_hash'];
+                final changed =
+                    newest['content_hash'] != previous['content_hash'];
                 return Column(
                   children: [
                     Container(
                       width: double.infinity,
-                      color: changed ? Colors.orange.shade100 : Colors.green.shade100,
+                      color: changed
+                          ? Colors.orange.shade100
+                          : Colors.green.shade100,
                       padding: const EdgeInsets.all(8),
-                      child: Text(changed
-                          ? 'Content changed between these two snapshots'
-                          : 'No content change between these two snapshots'),
+                      child: Text(
+                        changed
+                            ? 'Content changed between these two snapshots'
+                            : 'No content change between these two snapshots',
+                      ),
                     ),
                     Expanded(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(child: _SnapshotColumn(title: 'Previous — ${previous['captured_at']}', text: previous['extracted_text'] as String? ?? '')),
+                          Expanded(
+                            child: _SnapshotColumn(
+                              title: 'Previous — ${previous['captured_at']}',
+                              text: previous['extracted_text'] as String? ?? '',
+                            ),
+                          ),
                           const VerticalDivider(width: 1),
-                          Expanded(child: _SnapshotColumn(title: 'Newest — ${newest['captured_at']}', text: newest['extracted_text'] as String? ?? '')),
+                          Expanded(
+                            child: _SnapshotColumn(
+                              title: 'Newest — ${newest['captured_at']}',
+                              text: newest['extracted_text'] as String? ?? '',
+                            ),
+                          ),
                         ],
                       ),
                     ),

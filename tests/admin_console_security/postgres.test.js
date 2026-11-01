@@ -45,8 +45,17 @@ test('real PostgreSQL runtime identities, challenges, enrollment and revocation 
  const attempts=await Promise.all([repo.consumeEmailChallenge({loginId,codeDigest:code,preauthCookieDigest:cookie}),repo.consumeEmailChallenge({loginId,codeDigest:code,preauthCookieDigest:cookie})]);assert.equal(attempts.filter(x=>x.ok).length,1);
  await auth.query("INSERT INTO admin_private.enrollment_grants(grant_digest,user_id,environment,origin,rp_id,slot,expires_at) VALUES($1,$2,'test','https://localhost:8443','localhost','primary',now()+interval '10 minutes')",[grant,actor]);
  assert.equal((await repo.getEnrollmentGrant({grantDigest:grant,loginId,preauthCookieDigest:cookie,origin:'https://localhost:8443',rpId:'localhost'})).userId,actor);
+ assert.equal(await repo.getEnrollmentGrant({grantDigest:'0'.repeat(64),loginId,preauthCookieDigest:cookie,origin:'https://localhost:8443',rpId:'localhost'}),null);
  await repo.createWebAuthnChallenge({userId:actor,loginId,preauthCookieDigest:cookie,purpose:'enrollment',challengeDigest:challenge,challengeValue:'test-challenge',grantDigest:grant,origin:'https://localhost:8443',rpId:'localhost',expiresAt:new Date(Date.now()+120000)});
+ // A grant expiring after options were issued must still fail at the atomic
+ // credential write, even while the email proof and challenge remain valid.
+ await auth.query("UPDATE admin_private.enrollment_grants SET expires_at=now()-interval '1 second' WHERE grant_digest=$1",[grant]);
+ assert.equal(await repo.getEnrollmentGrant({grantDigest:grant,loginId,preauthCookieDigest:cookie,origin:'https://localhost:8443',rpId:'localhost'}),null);
+ assert.equal(await repo.addCredential({loginId,preauthCookieDigest:cookie,challengeDigest:challenge,credentialId:'expired-grant-test',publicKey:Buffer.from('synthetic-key'),deviceType:'singleDevice',origin:'https://localhost:8443',rpId:'localhost'}),null);
+ assert.equal((await auth.query('SELECT count(*)::int AS count FROM admin_private.credentials WHERE user_id=$1',[actor])).rows[0].count,0);
+ await auth.query("UPDATE admin_private.enrollment_grants SET expires_at=now()+interval '10 minutes' WHERE grant_digest=$1",[grant]);
  const credential=await repo.addCredential({loginId,preauthCookieDigest:cookie,challengeDigest:challenge,credentialId:'primary-test',publicKey:Buffer.from('synthetic-key'),deviceType:'singleDevice',origin:'https://localhost:8443',rpId:'localhost'});assert.equal(credential.user_id,actor);
+ assert.equal(await repo.getEnrollmentGrant({grantDigest:grant,loginId,preauthCookieDigest:cookie,origin:'https://localhost:8443',rpId:'localhost'}),null);
  assert.equal(await repo.addCredential({loginId,preauthCookieDigest:cookie,challengeDigest:challenge,credentialId:'replay-test',publicKey:Buffer.from('synthetic-key'),deviceType:'singleDevice',origin:'https://localhost:8443',rpId:'localhost'}),null);
  await auth.query("INSERT INTO admin_private.credentials(credential_id,user_id,public_key,device_type,slot) VALUES('backup-test',$1,$2,'singleDevice','backup')",[actor,Buffer.from('synthetic-key')]);
  await auth.query("UPDATE admin_private.principals SET state='enabled',enabled_at=now() WHERE user_id=$1",[actor]);
@@ -76,6 +85,30 @@ test('real PostgreSQL runtime identities, challenges, enrollment and revocation 
  t.after(()=>{apiServer.closeAllConnections();apiServer.close();gatewayServer.closeAllConnections();gatewayServer.close();});
  async function request(route,body,cookie,csrf,method='POST'){
    return new Promise((resolve,reject)=>{const data=body===undefined?'':JSON.stringify(body);const req=http.request({hostname:'127.0.0.1',port:gatewayPort,path:route,method,headers:{host:'localhost:8443',origin:cfg.origin,'x-admin-protocol':'1','x-console-request':'1','content-type':'application/json','content-length':Buffer.byteLength(data),...(cookie?{cookie}:{}),...(csrf?{'x-csrf-token':csrf}:{})}},res=>{let raw='';res.on('data',x=>raw+=x);res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(raw),cookie:(res.headers['set-cookie']||[]).filter(x=>!x.includes('Max-Age=0')).map(x=>x.split(';')[0]).join('; ')}));});req.on('error',reject);req.end(data);});
+ }
+ // Correctly shaped input is insufficient: the actual HTTP gateway rejects
+ // unknown and expired grants after a pending fixture has proved its email.
+ const pendingActor=crypto.randomUUID();
+ await auth.query('INSERT INTO users(id,email) VALUES($1,$2)',[pendingActor,'pending@example.test']);
+ await auth.query("INSERT INTO admin_private.principals(user_id,state) VALUES($1,'pending')",[pendingActor]);
+ const pendingStart=await request('/browser/login/start',{email:'pending@example.test'});assert.equal(pendingStart.status,202);
+ const pendingEmail=await request('/browser/login/verify-email',{loginId:pendingStart.body.loginId,code:deliveredCode},pendingStart.cookie);assert.equal(pendingEmail.status,200);assert.equal(pendingEmail.body.next,'enrollment');
+ assert.deepEqual(pendingEmail.body.enrolledSlots,[]);
+ const invented=await request('/browser/enrollment/options',{loginId:pendingStart.body.loginId,grant:'x'.repeat(43)},pendingStart.cookie);
+ assert.equal(invented.status,403);assert.equal(invented.body.error,'enrollment_denied');assert.equal(invented.cookie,'');
+ const expiredGrant=crypto.randomBytes(32).toString('base64url');
+ await auth.query("INSERT INTO admin_private.enrollment_grants(grant_digest,user_id,environment,origin,rp_id,slot,expires_at) VALUES($1,$2,'test','https://localhost:8443','localhost','primary',now()-interval '1 second')",[crypto.createHash('sha256').update(expiredGrant).digest('hex'),pendingActor]);
+ const expired=await request('/browser/enrollment/options',{loginId:pendingStart.body.loginId,grant:expiredGrant},pendingStart.cookie);
+ assert.equal(expired.status,403);assert.equal(expired.body.error,'enrollment_denied');assert.equal(expired.cookie,'');
+ assert.equal((await auth.query("SELECT count(*)::int AS count FROM admin_private.challenges WHERE user_id=$1 AND purpose='enrollment'",[pendingActor])).rows[0].count,0);
+ assert.equal((await auth.query('SELECT count(*)::int AS count FROM admin_private.credentials WHERE user_id=$1',[pendingActor])).rows[0].count,0);
+ assert.equal((await auth.query('SELECT count(*)::int AS count FROM admin_private.sessions WHERE user_id=$1',[pendingActor])).rows[0].count,0);
+ for(const slot of ['primary','backup']) {
+   await auth.query("INSERT INTO admin_private.credentials(credential_id,user_id,public_key,device_type,slot) VALUES($1,$2,$3,'singleDevice',$4)",[`${slot}-progress-fixture`,pendingActor,Buffer.from('synthetic-progress-key'),slot]);
+   const progressStart=await request('/browser/login/start',{email:'pending@example.test'});assert.equal(progressStart.status,202);
+   const progressEmail=await request('/browser/login/verify-email',{loginId:progressStart.body.loginId,code:deliveredCode},progressStart.cookie);assert.equal(progressEmail.status,200);
+   assert.equal(progressEmail.body.next,'enrollment');assert.deepEqual(progressEmail.body.enrolledSlots,slot==='primary'?['primary']:['primary','backup']);
+   assert.equal(progressEmail.cookie,'');
  }
  const start=await request('/browser/login/start',{email:'owner@example.test'});assert.equal(start.status,202);assert.match(deliveredCode,/^\d{6}$/);
  const emailProof=await request('/browser/login/verify-email',{loginId:start.body.loginId,code:deliveredCode},start.cookie);assert.equal(emailProof.status,200);assert.equal(emailProof.body.next,'webauthn');

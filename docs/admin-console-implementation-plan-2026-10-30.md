@@ -8,20 +8,20 @@ This is the implementation companion to the [reviewed design](admin-console-loca
 
 ### Implemented, remaining and first-owner status
 
-This table records source implementation, not activation. The [verification report](admin-console-source-verification-2026-10-30.md) contains the executed evidence; the [runbook](../deploy/admin/RUNBOOK.md) contains operator commands.
+This table records source implementation and the current local activation state. The [verification report](admin-console-source-verification-2026-10-30.md) contains the earlier executed evidence; the [runbook](../deploy/admin/RUNBOOK.md) contains operator commands.
 
 | Area | Already implemented | Still to implement or verify |
 | --- | --- | --- |
 | Public/private boundary | Separate auth/API factories and entrypoints; public `/admin`, `/browser` and introspection denial; legacy QA OTP/session minting retired | Built-image, edge/direct-origin, LAN/IPv6 denial and complete customer regressions on the intended target |
-| Authentication | Six-digit email proof plus user-verified WebAuthn; purpose/cookie/origin/RP binding; atomic enrollment-grant consumption; primary/backup enrollment checks | Physical-key/browser acceptance, later-factor management and offline recovery; real provider delivery/shared quotas |
+| Authentication | Six-digit email proof plus user-verified WebAuthn; purpose/cookie/origin/RP binding; atomic enrollment authority; primary/backup enrollment; real local passkey sign-in verified | Hardware-key-specific acceptance, later-factor management and offline recovery; real provider delivery/shared quotas |
 | Sessions | HttpOnly browser cookie, CSRF, server-encrypted opaque upstream tokens, idle/absolute expiry, step-up, logout, principal/factor revocation and external restore epoch | Multi-replica renewal/revocation races, key rotation/custody, restored-state reconciliation and bounded retention |
 | Authorization and data | 92 classified method/path policies; current membership rechecked; dedicated NOINHERIT runtimes; forward auth/product migrations; DB rejects customer-asserted admin context | Every populated-table/role/mutation combination, definer-function owners/grants and full restored-target upgrade acceptance |
-| Provisioning | Explicit target preview/apply; maintenance-only auth journal and product receipts; status/resume; stale/changed-state refusal; pending enrollment; primary/backup grants; auth enabled last | Restored-target/non-owner maintenance role acceptance, further distributed failure/recovery review, real owner enrollment and access review |
-| Existing console | Private email/passkey/enrollment flow; target/role display; fresh-factor action; server logout; local WebAuthn assets; release build | Complete readonly/permission-aware UI, expired-session/error flows and physical-device end-to-end checks |
-| PC/private deployment | Local-only TLS/Nginx/SSH launcher; protected config; start/status/stop; opt-in isolated Compose profile and SSH template | Exact host/network/trust setup, patched image/version pinning, image/network tests, installation and approved activation |
-| Verification | Auth 362, API 1,326 (3 existing skips), DB/script 233 and console 57 tests passed; clean/repeated full-schema migration rehearsal, all admin GET routes and representative audited writes passed | Every mutation, real-data performance, external exposure, independent review and encrypted recovery rehearsal (`age` unavailable on this Mac) |
+| Provisioning | Explicit target preview/apply; maintenance-only auth journal and product receipts; status/resume; stale/changed-state refusal; primary/backup enrollment; the local owner is explicitly enabled and a passkey login has reached the console | Restored-target/non-owner maintenance role acceptance, broader distributed failure/recovery review, backup-factor recovery exercise and access review |
+| Existing console | Private email/passkey/enrollment flow; target/role display; fresh-factor action; server logout; local WebAuthn assets; release build; real local owner sign-in verified | Complete readonly/permission-aware UI, expired-session/error flows and permission-aware action gating |
+| PC/private deployment | Local-only TLS/Nginx/SSH launcher; protected config; local CA trust; start/status/stop; four loopback services ready; local owner activated | Production host/network, exact image/version pinning, external/LAN/direct-origin denial, production installation and release acceptance |
+| Verification | Auth 372, API 1,374 (3 skipped), console 70; private PostgreSQL migration/provisioning/security checks, Flutter analysis and release build passed; served bundle matches local build | Every mutation, populated-data performance, production exposure, independent review and encrypted recovery rehearsal (`age` unavailable on this Mac) |
 
-**Requested first owner:** `chandresh.kerkar1@gmail.com`, **local development only**, as explicitly selected by the user. This is an operator enrollment request, not an email allowlist embedded in the app, an automatic seed, or an active grant. A second administrator can be added later with a separate verified UUID and separate credentials.
+**Requested first owner:** the operator email verified during local setup, **local development only**. This is an operator enrollment request, not an email allowlist embedded in the app, an automatic seed, or an active grant. A second administrator can be added later with a separate verified UUID and separate credentials.
 
 Local inspection on 30 October 2026 found the paired databases `pandapay` and `pandapay_auth` on loopback port 5432. The product database contains an older active owner membership for this email; the local auth database contains no matching user. Neither local database has the new private-admin schema yet. The API `.env` points at an unavailable local port while auth `.env` points at a hosted database; these files must not be combined for enrollment. **No administrator was created, enabled or reconciled during this documentation update.** Prepare the matching local stack, complete normal email verification there, and then use the explicit reconciliation flow in §5.1. Do not reuse the orphan membership UUID to manufacture an auth identity.
 
@@ -144,7 +144,7 @@ These choices are v1 defaults. Changes require an explicit contract revision by 
 - Login requires a CSPRNG-generated, six-digit, purpose-bound email OTP **and** a registered WebAuthn credential with user verification. This is a separate privileged flow; do not reuse the public QA OTP path or make public mobile OTP issuance an admin session. The private runtime has no fixed-code environment switch.
 - Use a maintained WebAuthn verification library, preferably `@simplewebauthn/server`, and a compatible browser adapter bundled locally. The current upstream server documentation describes Node 22+ support. The coordinator pins reviewed package versions, records them, and resolves CommonJS/ESM compatibility; do not use floating CDN scripts or implement signature verification manually.
 - Server checks challenge, principal, credential ownership, purpose, expected origin, RP ID, expiry and user verification. Origin/RP ID are configuration, never client authority. Follow library handling for counters and backed-up credentials rather than assuming every authenticator increments a counter.
-- A first credential requires both verified email proof and an explicit, one-use enrollment grant from the provisioning CLI. Grant TTL is 10 minutes and is bound to user, environment, origin, RP ID and factor slot. A public signup cannot issue it. Initial setup issues separate primary and backup grants; consuming a grant enrolls one credential but does not enable the principal. The principal remains pending until two distinct credentials are enrolled, product membership is consistent and the operator explicitly enables admission. Pending principals can prove email and enroll only; they cannot obtain an admin session. Adding/removing later factors requires fresh existing-factor authentication or the reviewed offline recovery procedure.
+- A first credential requires verified email proof and operator-approved enrollment authority. **1 November user-requested contract revision:** opt-in `ADMIN_APPROVED_BROWSER_ENROLLMENT=true` lets the portal prepare an internal one-use grant under a completed maintenance `grant`/`reconcile` intent bound to the current principal version and environment. Forward migration `0014` exposes only this bounded routine; the runtime cannot create/complete operator intents or enable accounts. No grant string reaches the browser in this mode. Default/manual mode retains the provisioning CLI grant file. Grant TTL remains 10 minutes and is bound to user, environment, origin, RP ID and factor slot. A public signup cannot issue it. Separate primary/backup grants each enroll one credential; admission remains pending until two distinct credentials exist, product membership is consistent and the operator explicitly enables it. Adding/removing later factors requires fresh existing-factor authentication or the reviewed offline recovery procedure.
 - Prove the selected browser/hardware supports the localhost RP/origin. If it does not, stop and revise the contract; do not disable verification or expose a public site.
 - Before live enablement, register a primary and independent backup factor and verify recovery. There is no OTP-only, SMS-only, fixed-code or shared-password fallback for administration.
 
@@ -174,10 +174,10 @@ All routes below are **proposed private contracts**, served through the local pr
 | Route | Input | Result / authority |
 | --- | --- | --- |
 | `POST /browser/login/start` | `{email}` | Generic 202 `{loginId, expiresIn:120}`; no account enumeration or full session |
-| `POST /browser/login/verify-email` | `{loginId, code}` | `{next:"webauthn", options}` for enabled principals or `{next:"enrollment"}` for explicitly approved pending principals; neither creates a privileged session |
+| `POST /browser/login/verify-email` | `{loginId, code}` | `{next:"webauthn", options}` for enabled principals or `{next:"enrollment", enrolledSlots, enrollmentMode?}` for explicitly approved pending principals; `enrollmentMode:"approved"` selects opt-in server-managed registration; neither creates a privileged session |
 | `POST /browser/login/verify-passkey` | `{loginId, credential}` | Consume bound challenge and create full session; return authenticated metadata + CSRF |
-| `POST /browser/enrollment/options` | `{loginId, grant}` after verified email | One-use enrollment scope only; returns WebAuthn registration options |
-| `POST /browser/enrollment/verify` | `{loginId, credential}` | Consume grant/challenge and store credential atomically; require normal full login afterward |
+| `POST /browser/enrollment/options` | `{loginId, grant}` or opt-in `{loginId, mode:"approved"}` after verified email | One-use enrollment scope only; approved mode checks completed operator intent and prepares a missing initial slot internally; returns WebAuthn registration options without a grant secret |
+| `POST /browser/enrollment/verify` | `{loginId, credential}` | Consume grant/challenge and store credential atomically; return `enrolledSlots` to show remaining backup/activation steps; require normal full login afterward |
 | `GET /browser/session` | Cookie; console request header | 200 `{authenticated:true, admin:{email,role,permissions}, csrfToken, expiresAt}` or 401 |
 | `POST /browser/step-up/options` | Session + CSRF | New bound assertion challenge |
 | `POST /browser/step-up/verify` | `{credential}` + session/CSRF | Updates verified MFA time, without extending absolute session age |
@@ -509,6 +509,7 @@ Build the console using the supported Flutter release flags already documented b
 ### Implemented source foundation
 
 - [x] Existing console reused with private email/WebAuthn login, enrollment, step-up and server logout; local browser assets bundled.
+- [x] Admin console shell restyled to the PandaPay slate-and-lime visual language, with responsive grouped navigation for all 16 operations areas, contextual page descriptions, and shared informative empty/error states.
 - [x] Private auth/API entrypoints and 92-route policy manifest delivered; public ingress denies administrative paths and customer tokens cannot establish admin authority.
 - [x] Durable challenge/session/rate state, CSRF, opaque introspection, expiry, revocation and restore epoch implemented and covered by local protocol tests.
 - [x] Forward migrations and explicit private runtime capabilities delivered; clean/repeat full-schema and representative permission/write checks pass.
@@ -526,11 +527,12 @@ Build the console using the supported Flutter release flags already documented b
 
 ### Local owner and deployment acceptance
 
-- [ ] Local auth account for the requested owner exists and its email has been normally verified.
-- [ ] Local schemas/migration history accepted; old orphan membership reconciled without moving audit attribution.
-- [ ] Separate primary/backup factors enrolled and tested; final enable performed for the verified local UUID.
-- [ ] Target-specific owners/grants, installed local trust, private network, images and external/LAN denial accepted.
+- [x] Local auth account for the requested owner exists and its email has been normally verified.
+- [ ] Local schemas/migration history accepted; any old orphan membership reconciled without moving audit attribution.
+- [x] Primary and backup factors registered; the reviewed local enable plan was applied; first passkey sign-in reached the console.
+- [ ] Backup-factor recovery/login separately exercised; target-specific grants, production private network/images and external/LAN denial accepted.
 - [ ] Restored-data, replica/race, customer/resource regressions and independent security review pass.
-- [ ] Test grants retired; revoke/rollback/recovery rehearsed and accountable operator approves activation.
+- [x] Local activation was explicitly reviewed and approved by the operator.
+- [ ] Test grants retired; revoke/rollback/recovery rehearsed; separate production release approved.
 
-Report the exact state: **source foundation implemented; remaining implementation and activation pending**. The local owner is requested but not yet provisioned. Neither a localhost dashboard nor a large user count establishes security by itself.
+Report the exact state: **source foundation implemented; local owner enrollment and activation complete; feature implementation and production acceptance remain partial**. The verified login is limited to the isolated localhost stack. Neither a localhost dashboard nor a large user count establishes security by itself.

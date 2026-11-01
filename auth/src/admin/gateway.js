@@ -56,6 +56,7 @@ function assertDeps(deps) {
   if (!repository || !emailClient || typeof emailClient.sendAdminOtp !== 'function' || !membershipClient || typeof membershipClient.getAdminMembership !== 'function') throw new Error('admin gateway dependencies are incomplete');
   const required = ['findVerifiedPrincipalByEmail','createLoginChallenge','consumeEmailChallenge','createWebAuthnChallenge','consumeWebAuthnChallenge','getWebAuthnChallenge','listCredentials','getEnrollmentGrant','createEnrollmentGrant','consumeEnrollmentGrant','addCredential','createAdminSession','resolveAdminSessionByToken','loadSession','touchAdminSession','revokeAdminSession','revokeAllAdminSessions','updateAdminSessionVerification','rateLimit','rotateAccessToken','updateCredentialCounter'];
   for (const method of required) if (typeof repository[method] !== 'function') throw new Error(`admin repository missing ${method}`);
+  if (config?.approvedBrowserEnrollment === true && typeof repository.prepareApprovedEnrollment !== 'function') throw new Error('Approved enrollment repository is required');
   if (!config || config.enabled !== true || config.origin !== 'https://localhost:8443' || config.rpId !== 'localhost' || typeof config.tokenLookupKey !== 'string' || Buffer.byteLength(config.tokenLookupKey) < 32 || typeof config.introspectionSecret !== 'string' || Buffer.byteLength(config.introspectionSecret) < 32 || !Buffer.isBuffer(config.sessionEncryptionKey) || config.sessionEncryptionKey.length !== 32) throw new Error('admin gateway configuration is incomplete or unsafe');
   if (!webauthn || typeof webauthn.registrationOptions !== 'function' || typeof webauthn.verifyRegistration !== 'function' || typeof webauthn.authenticationOptions !== 'function' || typeof webauthn.verifyAuthentication !== 'function') throw new Error('WebAuthn implementation is required');
   if (!Array.isArray(deps.routeManifest) || deps.routeManifest.length === 0 || !deps.privateApi || typeof deps.privateApi.request !== 'function') throw new Error('private API route manifest/client is required');
@@ -177,7 +178,12 @@ function createAdminGatewayApp(deps) {
       const result = await repo.consumeEmailChallenge({ loginId: req.body?.loginId, codeDigest: digest(`${req.body?.loginId}:${req.body?.code}`, config.tokenLookupKey), preauthCookieDigest: digest(preCookie, config.tokenLookupKey) });
       if (!result?.ok || !result.principal || !result.principal.accountActive || !result.principal.emailVerified || result.principal.principalStatus === 'revoked') return fail(res, 401, 'invalid_credentials');
       const p = result.principal;
-      if (p.principalStatus === 'pending') return res.json({ version: 1, next: 'enrollment' });
+      if (p.principalStatus === 'pending') {
+        const credentials = await repo.listCredentials(p.userId);
+        const enrolledSlots = ['primary', 'backup'].filter(slot => credentials.some(c => c.slot === slot));
+        return res.json({ version: 1, next: 'enrollment', enrolledSlots,
+          ...(config.approvedBrowserEnrollment === true ? {enrollmentMode:'approved'} : {}) });
+      }
       if (p.principalStatus !== 'enabled') return fail(res, 401, 'invalid_credentials');
       const creds = await repo.listCredentials(p.userId);
       if (!creds?.length) return fail(res, 403, 'admin_access_denied');
@@ -208,9 +214,12 @@ function createAdminGatewayApp(deps) {
   app.post('/browser/enrollment/options', async (req, res) => {
     try {
       if (!preauth(req, res)) return fail(res, 403, 'preauth_required');
-      const grantDigest = crypto.createHash('sha256').update(String(req.body?.grant || '')).digest('hex');
-      const grant = await repo.getEnrollmentGrant({ grantDigest, preauthCookieDigest: digest(cookieValue(req.headers.cookie, PREAUTH), config.tokenLookupKey), loginId: req.body?.loginId, environment: config.environment, origin: config.origin, rpId: config.rpId, now: new Date() });
-      if (!grant) return fail(res, 403, 'enrollment_denied');
+      const approved = req.body?.mode === 'approved';
+      if (approved && config.approvedBrowserEnrollment !== true) return fail(res,403,'enrollment_not_approved');
+      const grantDigest = approved ? crypto.randomBytes(32).toString('hex') : crypto.createHash('sha256').update(String(req.body?.grant || '')).digest('hex');
+      const enrollmentRequest = { grantDigest, preauthCookieDigest: digest(cookieValue(req.headers.cookie, PREAUTH), config.tokenLookupKey), loginId: req.body?.loginId, environment: config.environment, origin: config.origin, rpId: config.rpId, now: new Date() };
+      const grant = approved ? await repo.prepareApprovedEnrollment(enrollmentRequest) : await repo.getEnrollmentGrant(enrollmentRequest);
+      if (!grant) return fail(res, 403, approved ? 'enrollment_not_approved' : 'enrollment_denied');
       const options = await webauthn.registrationOptions({ rpName: 'PandaPay Admin', rpID: config.rpId, userID: Buffer.from(grant.userId), userName: grant.userId, attestationType: 'none', authenticatorSelection: { userVerification: 'required', residentKey: 'preferred' }, excludeCredentials: (await repo.listCredentials(grant.userId)).map(c => ({ id: c.credentialId, transports: c.transports })) });
       await repo.createWebAuthnChallenge({ loginId: req.body.loginId, userId: grant.userId, purpose: 'enrollment', challengeValue: options.challenge, challengeDigest: digest(options.challenge, config.tokenLookupKey), grantDigest: grantDigest, preauthCookieDigest: digest(cookieValue(req.headers.cookie, PREAUTH), config.tokenLookupKey), expiresAt: new Date(Date.now() + LIMITS.preauthMs), origin: config.origin, rpId: config.rpId, credentialIds: [] });
       return res.json({ version: 1, options });
@@ -229,7 +238,9 @@ function createAdminGatewayApp(deps) {
       const info = verified.registrationInfo;
       const added = await repo.addCredential({ loginId: req.body.loginId, challengeDigest: digest(challengeValue, config.tokenLookupKey), preauthCookieDigest: digest(cookieValue(req.headers.cookie, PREAUTH), config.tokenLookupKey), credentialId: info.credential.id, publicKey: info.credential.publicKey, counter: info.credential.counter, transports: req.body.credential.response?.transports || [], deviceType: info.credentialDeviceType, backedUp: info.credentialBackedUp, origin: config.origin, rpId: config.rpId, now: new Date(), environment: config.environment });
       if (!added) return fail(res, 403, 'enrollment_denied');
-      return res.json({ version: 1, enrolled: true, next: 'login' });
+      const credentials = await repo.listCredentials(c.userId);
+      const enrolledSlots = ['primary', 'backup'].filter(slot => credentials.some(c => c.slot === slot));
+      return res.json({ version: 1, enrolled: true, next: 'login', enrolledSlots });
     } catch { return fail(res, 503, 'temporarily_unavailable'); }
   });
 

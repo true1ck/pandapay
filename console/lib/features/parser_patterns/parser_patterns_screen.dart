@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/admin_design.dart';
 import '../../app/providers.dart';
 import '../../widgets/confirm_dialog.dart';
 
@@ -21,17 +22,23 @@ class ParserPatternsScreen extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Padding(
-          padding: EdgeInsets.all(16),
-          child: _NewPatternForm(),
-        ),
+        const Padding(padding: EdgeInsets.all(16), child: _NewPatternForm()),
         const Divider(height: 1),
         Expanded(
           child: patterns.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => Center(child: Text('Failed to load parser patterns: $err')),
+            error: (err, _) => AdminLoadError(
+              title: 'Parser patterns are unavailable',
+              error: err,
+              onRetry: () => ref.invalidate(parserPatternsProvider),
+            ),
             data: (rows) => rows.isEmpty
-                ? const Center(child: Text('No parser patterns yet — add one above.'))
+                ? const AdminEmptyState(
+                    icon: Icons.rule_folder_outlined,
+                    title: 'No parser rules have been created',
+                    message:
+                        'Add a pattern above to recognize the supported SMS formats. New rules should be checked carefully before activation.',
+                  )
                 : ListView.builder(
                     padding: const EdgeInsets.all(12),
                     itemCount: rows.length,
@@ -78,7 +85,9 @@ class _PatternTileState extends ConsumerState<_PatternTile> {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
-        title: Text('${p['channel']} · ${p['sender_pattern'] ?? '(any sender)'} · v${p['version']}'),
+        title: Text(
+          '${p['channel']} · ${p['sender_pattern'] ?? '(any sender)'} · v${p['version']}',
+        ),
         subtitle: Text(
           '${p['success_count']} matched · ${p['failure_count']} failed'
           '${isActive ? '' : ' · INACTIVE'}',
@@ -90,13 +99,21 @@ class _PatternTileState extends ConsumerState<_PatternTile> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('regex: ${p['regex']}', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                Text(
+                  'regex: ${p['regex']}',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
                 const SizedBox(height: 4),
-                Text('fieldMap: ${jsonEncode(p['field_map'])}',
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                Text(
+                  'fieldMap: ${jsonEncode(p['field_map'])}',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
                 if (p['sample_text'] != null) ...[
                   const SizedBox(height: 4),
-                  Text('sample: ${p['sample_text']}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(
+                    'sample: ${p['sample_text']}',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ],
                 const SizedBox(height: 8),
                 Row(
@@ -104,10 +121,17 @@ class _PatternTileState extends ConsumerState<_PatternTile> {
                     OutlinedButton(
                       onPressed: _busy
                           ? null
-                          : () => _act(() => ref
-                              .read(adminApiProvider)!
-                              .updateParserPattern(p['id'] as String, isActive: !isActive)),
-                      child: Text(_busy ? '...' : (isActive ? 'Deactivate' : 'Activate')),
+                          : () => _act(
+                              () => ref
+                                  .read(adminApiProvider)!
+                                  .updateParserPattern(
+                                    p['id'] as String,
+                                    isActive: !isActive,
+                                  ),
+                            ),
+                      child: Text(
+                        _busy ? '...' : (isActive ? 'Deactivate' : 'Activate'),
+                      ),
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton(
@@ -117,13 +141,20 @@ class _PatternTileState extends ConsumerState<_PatternTile> {
                               final confirmed = await confirmAdminAction(
                                 context,
                                 title: 'Delete this parser pattern?',
-                                message: 'New SMS messages will no longer be parsed with this pattern. This cannot be undone from the console.',
+                                message:
+                                    'New SMS messages will no longer be parsed with this pattern. This cannot be undone from the console.',
                                 confirmLabel: 'Delete',
                               );
                               if (!confirmed || !mounted) return;
-                              await _act(() => ref.read(adminApiProvider)!.deleteParserPattern(p['id'] as String));
+                              await _act(
+                                () => ref
+                                    .read(adminApiProvider)!
+                                    .deleteParserPattern(p['id'] as String),
+                              );
                             },
-                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                      ),
                       child: const Text('Delete'),
                     ),
                   ],
@@ -131,7 +162,10 @@ class _PatternTileState extends ConsumerState<_PatternTile> {
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
                   ),
               ],
             ),
@@ -152,19 +186,30 @@ class _NewPatternFormState extends ConsumerState<_NewPatternForm> {
   String _channel = 'sms';
   final _senderController = TextEditingController();
   final _regexController = TextEditingController();
-  final _fieldMapController = TextEditingController(text: '{"amount": 1, "merchant": 2}');
+  final _fieldMapController = TextEditingController(
+    text: '{"amount": 1, "merchant": 2}',
+  );
   final _sampleController = TextEditingController();
   bool _adding = false;
   String? _error;
 
-  static const _channels = ['sms', 'sms_bulk', 'email', 'statement', 'imported'];
+  static const _channels = [
+    'sms',
+    'sms_bulk',
+    'email',
+    'statement',
+    'imported',
+  ];
 
   Future<void> _add() async {
     Map<String, dynamic> fieldMap;
     try {
       fieldMap = jsonDecode(_fieldMapController.text) as Map<String, dynamic>;
     } catch (_) {
-      setState(() => _error = 'fieldMap must be valid JSON, e.g. {"amount": 1, "merchant": 2}');
+      setState(
+        () => _error =
+            'fieldMap must be valid JSON, e.g. {"amount": 1, "merchant": 2}',
+      );
       return;
     }
     if (_regexController.text.trim().isEmpty) {
@@ -176,12 +221,18 @@ class _NewPatternFormState extends ConsumerState<_NewPatternForm> {
       _error = null;
     });
     try {
-      await ref.read(adminApiProvider)!.createParserPattern(
+      await ref
+          .read(adminApiProvider)!
+          .createParserPattern(
             channel: _channel,
             regex: _regexController.text.trim(),
             fieldMap: fieldMap,
-            senderPattern: _senderController.text.trim().isEmpty ? null : _senderController.text.trim(),
-            sampleText: _sampleController.text.trim().isEmpty ? null : _sampleController.text.trim(),
+            senderPattern: _senderController.text.trim().isEmpty
+                ? null
+                : _senderController.text.trim(),
+            sampleText: _sampleController.text.trim().isEmpty
+                ? null
+                : _sampleController.text.trim(),
             reason: 'Console: new parser pattern',
           );
       _senderController.clear();
@@ -200,20 +251,29 @@ class _NewPatternFormState extends ConsumerState<_NewPatternForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Add a parser pattern', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Add a parser pattern',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: 8),
         Row(
           children: [
             DropdownButton<String>(
               value: _channel,
-              items: [for (final c in _channels) DropdownMenuItem(value: c, child: Text(c))],
+              items: [
+                for (final c in _channels)
+                  DropdownMenuItem(value: c, child: Text(c)),
+              ],
               onChanged: (v) => setState(() => _channel = v ?? _channel),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: _senderController,
-                decoration: const InputDecoration(labelText: 'Sender pattern (optional)', isDense: true),
+                decoration: const InputDecoration(
+                  labelText: 'Sender pattern (optional)',
+                  isDense: true,
+                ),
               ),
             ),
           ],
@@ -227,13 +287,19 @@ class _NewPatternFormState extends ConsumerState<_NewPatternForm> {
         const SizedBox(height: 8),
         TextField(
           controller: _fieldMapController,
-          decoration: const InputDecoration(labelText: 'Field map (JSON: field -> capture group index)', isDense: true),
+          decoration: const InputDecoration(
+            labelText: 'Field map (JSON: field -> capture group index)',
+            isDense: true,
+          ),
           style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _sampleController,
-          decoration: const InputDecoration(labelText: 'Sample SMS text (optional)', isDense: true),
+          decoration: const InputDecoration(
+            labelText: 'Sample SMS text (optional)',
+            isDense: true,
+          ),
         ),
         const SizedBox(height: 8),
         Row(
@@ -246,7 +312,10 @@ class _NewPatternFormState extends ConsumerState<_NewPatternForm> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(left: 8),
-                  child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
                 ),
               ),
           ],

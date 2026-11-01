@@ -1824,6 +1824,20 @@ class LocalSmsParser {
         r'\b(?:was|were|is|has\s+been|have\s+been|got)\s+(?:declined|rejected|marked\s+(?:failed|unsuccessful)|not\s+processed)\b',
       ).hasMatch(body);
 
+  static String? _telecomBillerName(String body) {
+    final m = _re(
+      r'\b(jio\s?home|jio\s?fiber|airtel\s+xstream|airtel\s+airfiber)\b',
+    ).firstMatch(body);
+    if (m == null) return null;
+    final t = m.group(1)!.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    return switch (t) {
+      'jiohome' => 'JioHome',
+      'jiofiber' => 'JioFiber',
+      'airtelxstream' => 'Airtel Xstream',
+      _ => 'Airtel AirFiber',
+    };
+  }
+
   static LocalSmsObservation? parse({
     required String namespace,
     required String sender,
@@ -2047,6 +2061,8 @@ class LocalSmsParser {
       // broader `due` matcher so the earlier amount cannot shadow the date.
       r'\bdue\s+date\s*(?:is|on|by)?\s*[:\-]?\s*',
       r'\bdue\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
+      // "is due for payment on 02-10-2026" (Jio, broadband and telecom bills).
+      r'\bdue\s+for\s+payment\s*(?:on|by)?\s*[:\-]?\s*',
       r'\bpay\s+by\s*[:\-]?\s*',
       r'\b(?:payment|bill|amount)\s+due\s+date\b[\s\S]{0,120}?\b(?:is|on|by)\s*[:\-]?\s*',
       r'\b(?:renew(?:s|al|ing)?|expires?)\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
@@ -2086,6 +2102,13 @@ class LocalSmsParser {
         final candidate = DateTime(receivedAt.year, receivedAt.month, day);
         if (candidate.month == receivedAt.month) due = candidate;
       }
+    }
+    // "due for payment today" carries no calendar date; the SMS day is the day.
+    if (due == null &&
+        _re(
+          r'\bdue\s+for\s+payment\s+(?:today|now|immediately)\b|\bpayment\s+(?:is\s+)?due\s+today\b',
+        ).hasMatch(body)) {
+      due = DateTime(receivedAt.year, receivedAt.month, receivedAt.day);
     }
     if (due == null && isActionableInsuranceRenewal(body)) {
       final relative = _re(
@@ -2255,6 +2278,7 @@ class LocalSmsParser {
               ? 'Axio Pay Later'
               : 'Pay Later')
         : extractBillerName(body) ??
+              _telecomBillerName(body) ??
               (isInsuranceReminder ? 'Insurance policy' : null);
     final cadenceHint =
         _re(r'\b(?:as\s*presented|aspresented|as\s+and\s+when\s+presented|on\s+demand)\b').hasMatch(body)
@@ -2275,6 +2299,9 @@ class LocalSmsParser {
         : null;
     final amountDue = money(
       _re(
+            r'\b(?:total\s+)?amount\s+payable\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1) ??
+          _re(
             r'\b(?:total|full|statement|amount|premium)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
@@ -2356,7 +2383,7 @@ class LocalSmsParser {
     final hasBillMarker =
         due != null ||
         _re(
-          r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\b(?:statement|bill|invoice)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b|\b(?:subscription|membership)\b[\s\S]{0,50}\b(?:renew|renewal|due|expires?)\b|\bautopay\s+(?:alert|reminder)\b|\b(?:auto[- ]?debited|auto[- ]?deducted)\b[\s\S]{0,60}?\b(?:dues?|bill)\b',
+          r'\bdue\s+for\s+payment\b|\b(?:total\s+)?amount\s+payable\b|\bto\s+pay\s+(?:your\s+|now\b)[\s\S]{0,20}?\bbill\b|\b(?:payment|amount|minimum|total|premium)\s+due\b|\b(?:statement|bill|invoice)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b|\b(?:subscription|membership)\b[\s\S]{0,50}\b(?:renew|renewal|due|expires?)\b|\bautopay\s+(?:alert|reminder)\b|\b(?:auto[- ]?debited|auto[- ]?deducted)\b[\s\S]{0,60}?\b(?:dues?|bill)\b',
         ).hasMatch(body);
     // "No money was debited" makes the debit word a negation, not evidence
     // of movement — failure notices from banks print exactly this sentence.
@@ -2392,7 +2419,7 @@ class LocalSmsParser {
                 ).hasMatch(movementBody)));
     final isDueReminder =
         _re(
-          r'\b(?:is\s+due\s+on|payment\s+is\s+due|bill\s+is\s+due|due\s+date\s+is|payment\s+due\s+date)\b|\b(?:payment|bill|amount)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[*xX]*[\d,.]+\b[\s\S]{0,80}\bis\s+due\b|\b(?:minimum|total)\s+amount\s+due\b',
+          r'\b(?:is\s+due\s+on|is\s+due\s+for\s+payment|payment\s+is\s+due|bill\s+is\s+due|due\s+date\s+is|payment\s+due\s+date)\b|\b(?:payment|bill|amount)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[*xX]*[\d,.]+\b[\s\S]{0,80}\bis\s+due\b|\b(?:minimum|total)\s+amount\s+due\b',
         ).hasMatch(body) &&
         !_re(
           r'\b(?:debited|withdrawn|charged|deducted)\b',
@@ -2545,7 +2572,7 @@ class LocalSmsParser {
       final isInsuranceOrUtility =
           isInsuranceReminder ||
           _re(
-            r'\b(?:broadband|fiber|telecom|yojana|pension|subscription|utility|electricity|power|water|gas|dth|cable)\b',
+            r'\b(?:broadband|fiber|fibre|telecom|yojana|pension|subscription|utility|electricity|power|water|gas|dth|cable|jiohome|jiofiber|jiofixedvoice|airfiber|landline|postpaid)\b',
           ).hasMatch(body);
       final isCardStatement = cardLast4 != null;
       // A due date alone does not prove recurrence. Generic invoices and

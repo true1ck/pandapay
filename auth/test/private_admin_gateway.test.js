@@ -75,3 +75,53 @@ test('introspection requires the dedicated service secret and returns auth-only 
     assert.equal('permissions' in accepted.body, false);
   });
 });
+
+for (const slots of [[], ['primary'], ['primary', 'backup']]) {
+  test(`pending email proof reports enrolled slots ${slots} without admission`, async () => {
+    let sessionCreated = false;
+    const principal = { userId: 'pending-user', accountActive: true, emailVerified: true, principalStatus: 'pending' };
+    const app = createAdminGatewayApp(dependencies({ repository: {
+      consumeEmailChallenge: async () => ({ok: true, principal}),
+      listCredentials: async () => slots.map(slot => ({slot})),
+      createAdminSession: async () => { sessionCreated = true; throw new Error('Pending admission is forbidden'); },
+    }}));
+    await withServer(app, async port => {
+      const start = await post(port, '/browser/login/start', {body: {email: 'pending@example.test'}});
+      const cookie = start.headers['set-cookie'].map(v => v.split(';')[0]).join('; ');
+      const verified = await post(port, '/browser/login/verify-email', {headers: {cookie}, body: {loginId: start.body.loginId, code: '123456'}});
+      assert.equal(verified.status, 200);
+      assert.deepEqual(verified.body, {version: 1, next: 'enrollment', enrolledSlots: slots});
+      assert.equal(verified.headers['set-cookie'], undefined);
+      assert.equal(sessionCreated, false);
+    });
+  });
+}
+
+test('approved browser setup issues options without a client grant and never returns its internal token',async () => {
+  let prepared;
+  const deps=dependencies({config:{...config,approvedBrowserEnrollment:true},repository:{
+    prepareApprovedEnrollment:async input=>{prepared=input;return{userId:'approved-user',slot:'backup',grantDigest:input.grantDigest};},
+    listCredentials:async()=>[],
+  }});
+  deps.webauthn.registrationOptions=async()=>({challenge:'synthetic-registration-challenge'});
+  const app=createAdminGatewayApp(deps);
+  await withServer(app,async port=>{
+    const start=await post(port,'/browser/login/start',{body:{email:'owner@example.test'}});
+    const cookie=start.headers['set-cookie'].map(v=>v.split(';')[0]).join('; ');
+    const response=await post(port,'/browser/enrollment/options',{headers:{cookie},body:{loginId:start.body.loginId,mode:'approved'}});
+    assert.equal(response.status,200);assert.match(prepared.grantDigest,/^[0-9a-f]{64}$/);
+    assert.deepEqual(response.body,{version:1,options:{challenge:'synthetic-registration-challenge'}});
+    assert.equal(response.headers['set-cookie'],undefined);
+  });
+});
+test('approved browser setup cannot be selected when disabled or denied by the repository',async () => {
+  for(const enabled of [false,true]) {
+    const app=createAdminGatewayApp(dependencies({config:{...config,approvedBrowserEnrollment:enabled},repository:{prepareApprovedEnrollment:async()=>null}}));
+    await withServer(app,async port=>{
+      const start=await post(port,'/browser/login/start',{body:{email:'owner@example.test'}});
+      const cookie=start.headers['set-cookie'].map(v=>v.split(';')[0]).join('; ');
+      const response=await post(port,'/browser/enrollment/options',{headers:{cookie},body:{loginId:start.body.loginId,mode:'approved'}});
+      assert.equal(response.status,403);assert.equal(response.body.error,'enrollment_not_approved');
+    });
+  }
+});

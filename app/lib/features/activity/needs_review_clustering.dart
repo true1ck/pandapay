@@ -72,6 +72,15 @@ String normalizeBodyForClustering(String body) {
     ),
     '<DATE>',
   );
+  // Month/year periods ("09/2026", "Sep'26") change every cycle but never
+  // change what the message is.
+  text = text.replaceAll(
+    RegExp(
+      r"\b\d{1,2}[-/]\d{4}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s'\-/,]*\d{2,4}\b",
+      caseSensitive: false,
+    ),
+    '<DATE>',
+  );
   text = text.replaceAll(
     RegExp(r'\b\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m|\s*hrs)?\b', caseSensitive: false),
     '<TIME>',
@@ -86,6 +95,14 @@ String normalizeBodyForClustering(String body) {
     '<ACCT>',
   );
   text = text.replaceAll(RegExp(r'\b\d{4,}\b'), '<NUM>');
+  // Mixed letter+digit reference ids (txn/claim/ticket codes).
+  text = text.replaceAll(
+    RegExp(
+      r'\b(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]{8,}\b',
+      caseSensitive: false,
+    ),
+    '<REF>',
+  );
   return text.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
 }
 

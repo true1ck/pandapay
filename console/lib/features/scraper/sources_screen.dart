@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/admin_design.dart';
 import '../../app/providers.dart';
 
 /// AD-3.1/AD-3.2 scraper source registry — previously read-only-at-the-
@@ -27,10 +28,24 @@ class SourcesScreen extends ConsumerWidget {
       ),
       body: sources.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Failed to load sources: $err')),
+        error: (err, _) => AdminLoadError(
+          title: 'Source registry is unavailable',
+          error: err,
+          onRetry: () => ref.invalidate(sourcesProvider),
+        ),
         data: (sourceList) {
           if (sourceList.isEmpty) {
-            return const Center(child: Text('No sources registered.'));
+            return AdminEmptyState(
+              icon: Icons.language_outlined,
+              title: 'No collection sources yet',
+              message:
+                  'Register a candidate source here, review its terms, then enable it before scraping can begin.',
+              action: FilledButton.icon(
+                onPressed: () => _showAddSourceDialog(context, ref),
+                icon: const Icon(Icons.add),
+                label: const Text('Add source'),
+              ),
+            );
           }
           return ListView.builder(
             padding: const EdgeInsets.all(12),
@@ -43,7 +58,10 @@ class SourcesScreen extends ConsumerWidget {
   }
 
   void _showAddSourceDialog(BuildContext context, WidgetRef ref) {
-    showDialog(context: context, builder: (_) => _AddSourceDialog(ref: ref));
+    showDialog(
+      context: context,
+      builder: (_) => _AddSourceDialog(ref: ref),
+    );
   }
 }
 
@@ -63,7 +81,9 @@ class _SourceTileState extends ConsumerState<_SourceTile> {
   @override
   void initState() {
     super.initState();
-    _noteController = TextEditingController(text: widget.source['tos_note'] as String? ?? '');
+    _noteController = TextEditingController(
+      text: widget.source['tos_note'] as String? ?? '',
+    );
   }
 
   @override
@@ -98,13 +118,21 @@ class _SourceTileState extends ConsumerState<_SourceTile> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
         leading: Icon(
-          isEnabled ? Icons.check_circle : (tosReviewed ? Icons.pause_circle_outline : Icons.warning_amber_rounded),
-          color: isEnabled ? Colors.green : (tosReviewed ? Colors.grey : Colors.orange),
+          isEnabled
+              ? Icons.check_circle
+              : (tosReviewed
+                    ? Icons.pause_circle_outline
+                    : Icons.warning_amber_rounded),
+          color: isEnabled
+              ? Colors.green
+              : (tosReviewed ? Colors.grey : Colors.orange),
         ),
         title: Text(source['name'] as String? ?? ''),
-        subtitle: Text('${source['kind']} · ${source['base_url']} · ${source['page_count']} pages'
-            '${tosReviewed ? ' · ToS reviewed' : ' · ToS NOT reviewed'}'
-            '${isEnabled ? ' · enabled' : ' · disabled'}'),
+        subtitle: Text(
+          '${source['kind']} · ${source['base_url']} · ${source['page_count']} pages'
+          '${tosReviewed ? ' · ToS reviewed' : ' · ToS NOT reviewed'}'
+          '${isEnabled ? ' · enabled' : ' · disabled'}',
+        ),
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -113,7 +141,10 @@ class _SourceTileState extends ConsumerState<_SourceTile> {
               children: [
                 TextField(
                   controller: _noteController,
-                  decoration: const InputDecoration(labelText: 'ToS review note', isDense: true),
+                  decoration: const InputDecoration(
+                    labelText: 'ToS review note',
+                    isDense: true,
+                  ),
                   maxLines: 2,
                 ),
                 const SizedBox(height: 8),
@@ -124,33 +155,45 @@ class _SourceTileState extends ConsumerState<_SourceTile> {
                       FilledButton(
                         onPressed: _busy || api == null
                             ? null
-                            : () => _act(() => api.updateSource(
+                            : () => _act(
+                                () => api.updateSource(
                                   source['id'] as String,
                                   tosReviewed: true,
-                                  tosNote: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+                                  tosNote: _noteController.text.trim().isEmpty
+                                      ? null
+                                      : _noteController.text.trim(),
                                   reason: 'Console: ToS reviewed',
-                                )),
+                                ),
+                              ),
                         child: const Text('Mark ToS reviewed'),
                       ),
                     if (tosReviewed)
                       OutlinedButton(
                         onPressed: _busy || api == null
                             ? null
-                            : () => _act(() => api.updateSource(
+                            : () => _act(
+                                () => api.updateSource(
                                   source['id'] as String,
                                   isEnabled: !isEnabled,
-                                  reason: isEnabled ? 'Console: disabled' : 'Console: enabled',
-                                )),
+                                  reason: isEnabled
+                                      ? 'Console: disabled'
+                                      : 'Console: enabled',
+                                ),
+                              ),
                         child: Text(isEnabled ? 'Disable' : 'Enable'),
                       ),
                     OutlinedButton(
                       onPressed: _busy || api == null
                           ? null
-                          : () => _act(() => api.updateSource(
+                          : () => _act(
+                              () => api.updateSource(
                                 source['id'] as String,
-                                tosNote: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+                                tosNote: _noteController.text.trim().isEmpty
+                                    ? null
+                                    : _noteController.text.trim(),
                                 reason: 'Console: updated ToS note',
-                              )),
+                              ),
+                            ),
                       child: const Text('Save note'),
                     ),
                   ],
@@ -158,7 +201,10 @@ class _SourceTileState extends ConsumerState<_SourceTile> {
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
                   ),
               ],
             ),
@@ -189,7 +235,8 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
   Future<void> _save() async {
     final api = widget.ref.read(adminApiProvider);
     if (api == null) return;
-    if (_nameController.text.trim().isEmpty || _urlController.text.trim().isEmpty) {
+    if (_nameController.text.trim().isEmpty ||
+        _urlController.text.trim().isEmpty) {
       setState(() => _error = 'Name and URL are required');
       return;
     }
@@ -222,28 +269,46 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Name')),
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
             const SizedBox(height: 8),
-            TextField(controller: _urlController, decoration: const InputDecoration(labelText: 'Base URL')),
+            TextField(
+              controller: _urlController,
+              decoration: const InputDecoration(labelText: 'Base URL'),
+            ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               initialValue: _kind,
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Kind'),
-              items: [for (final k in _kinds) DropdownMenuItem(value: k, child: Text(k))],
+              items: [
+                for (final k in _kinds)
+                  DropdownMenuItem(value: k, child: Text(k)),
+              ],
               onChanged: (v) => setState(() => _kind = v ?? _kind),
             ),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
               ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-        FilledButton(onPressed: _saving ? null : _save, child: Text(_saving ? '...' : 'Create')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: Text(_saving ? '...' : 'Create'),
+        ),
       ],
     );
   }
