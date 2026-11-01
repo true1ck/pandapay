@@ -13,6 +13,8 @@
 
 begin;
 
+select set_config('app.user_id', '11110000-0000-0000-0000-00000000aaaa', true);
+
 insert into profiles (id) values
   ('11110000-0000-0000-0000-00000000aaaa'),   -- the user
   ('22220000-0000-0000-0000-00000000bbbb');   -- an unrelated account
