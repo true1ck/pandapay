@@ -361,8 +361,8 @@ class SyncEngine {
       if (_ref.read(cacheNamespaceProvider) != namespace) {
         throw StateError('Account changed during sync');
       }
-      cache.financialStore.replaceCards(namespace, cards);
-      cache.financialStore.replaceCards(namespace, archived, archived: true);
+      // Publishing these snapshots also materializes their card scopes in
+      // ResponseCache.put. A direct replace here repeats the same SQL work.
       await cache.put(
         '$namespace:user_cards',
         jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
