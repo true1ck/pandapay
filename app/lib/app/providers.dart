@@ -7490,10 +7490,10 @@ class SmsAutoImportController {
             : SmsIntakeRepository(
                 cache.financialStore.database,
               ).nextRetryAt(namespace);
-        if (next != null &&
+        if ((_uploadAgainRequested || next != null) &&
             _ref.read(userCardsRepositoryProvider) != null &&
             _ref.read(isOnlineProvider).valueOrNull != false) {
-          final wait = next.difference(DateTime.now());
+          final wait = next?.difference(DateTime.now()) ?? Duration.zero;
           final delay = wait.isNegative || wait == Duration.zero
               ? (_uploadAgainRequested
                     ? const Duration(milliseconds: 100)
@@ -7548,17 +7548,28 @@ class SmsAutoImportController {
     await SmsBackgroundQueue.clear(prefs);
     final now = DateTime.now();
     final currentMonth = DateTime(now.year, now.month);
-    for (var batch = 0; batch < 100; batch++) {
+    // Keep one admitted sync pass small enough that a large inbox cannot
+    // monopolize the UI isolate. The caller already schedules another pass
+    // when durable work remains, so this is a responsiveness bound rather
+    // than a data-loss bound.
+    const intakeBatchLimit = 50;
+    const maxIntakeBatchesPerPass = 8;
+    var intakePassExhausted = true;
+    for (var batch = 0; batch < maxIntakeBatchesPerPass; batch++) {
       if (_ref.read(cacheNamespaceProvider) != namespace ||
           _ref.read(isOnlineProvider).valueOrNull == false) {
         break;
       }
       final pending = intake.pending(
         namespace,
+        limit: intakeBatchLimit,
         readyOnly: true,
         billingPriority: true,
       );
-      if (pending.isEmpty) break;
+      if (pending.isEmpty) {
+        intakePassExhausted = false;
+        break;
+      }
       try {
         // Historical statement alerts must reach the server before the
         // current-month fallback. Otherwise a current reminder can fill
@@ -7614,6 +7625,18 @@ class SmsAutoImportController {
         break;
       }
       await Future<void>.delayed(Duration.zero);
+    }
+    if (intakePassExhausted &&
+        intake.pending(
+          namespace,
+          limit: 1,
+          readyOnly: true,
+          billingPriority: true,
+        ).isNotEmpty) {
+      // _syncPendingMessagesAdmitted schedules one guarded retry from this
+      // flag. This keeps the bounded pass from stranding ready rows while
+      // retaining the single-flight/account/online checks in that owner.
+      _uploadAgainRequested = true;
     }
     // Phase 2: drain the typed-facts outbox (balance snapshots, autopay
     // mandate life-cycle, failed attempts). Raw bodies never ride this
