@@ -6,6 +6,7 @@
 -- Non-ASCII case, accents, punctuation and all other discriminators stay exact.
 -- Repeated supported migration-runner calls skip this checksummed migration.
 -- A manual SQL replay refuses existing v1 names for operator review.
+BEGIN;
 SET LOCAL lock_timeout='2s';
 SET LOCAL statement_timeout='30s';
 SET LOCAL row_security=off;
@@ -37,5 +38,6 @@ BEGIN
 END $guard$;
 CREATE UNIQUE INDEX uq_cap_rules_label_identity_v1 ON public.cap_rules (card_product_id,reward_rule_id,category_id,benefit_kind,(pg_catalog.translate(pg_catalog.btrim(pg_catalog.regexp_replace(label, E'[\011-\015 ]+', ' ', 'g')), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')) COLLATE "C",measure,period,cap_value,post_cap_unit,post_cap_rate,resets_on_day) NULLS NOT DISTINCT;
 CREATE UNIQUE INDEX uq_card_benefits_label_identity_v1 ON public.card_benefits (card_product_id,kind,(pg_catalog.translate(pg_catalog.btrim(pg_catalog.regexp_replace(label, E'[\011-\015 ]+', ' ', 'g')), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')) COLLATE "C",description,quota_count,quota_period,network_program,value_estimate_inr,conditions) NULLS NOT DISTINCT;
+COMMIT;
 -- No new function, definer, trigger, table or grant is introduced. Expression
 -- indexes apply to every existing writer and preserve NULLS NOT DISTINCT.
