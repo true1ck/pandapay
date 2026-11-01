@@ -70,6 +70,11 @@ const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
 const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
 const { AMOUNT_TOLERANCE_INR, MAX_CROSS_SOURCE_CANDIDATE_MS, bestDuplicate } = require('./transaction_dedup');
+const {
+  cursorPredicate: transactionCursorPredicate,
+  normalizePageRequest: normalizeTransactionPageRequest,
+  pageInfo: transactionPageInfo,
+} = require('./transaction_paging');
 const { emailSourceKey } = require('./source_identity');
 const { resolveTrustProxyHops, rejectMalformedClientIp } = require('./proxyTrust');
 const spendReports = require('./spend_reports');
@@ -5668,6 +5673,28 @@ app.get('/transactions', requireAuth, async (req, res) => {
   if (!['active', 'deleted'].includes(status)) {
     return res.status(400).json({ error: 'status must be active or deleted' });
   }
+  const pagingScope = JSON.stringify({
+    profileId: req.userId,
+    from: from || null,
+    to: to || null,
+    cardId: cardId || null,
+    categoryId: categoryId || null,
+    userCategoryId: userCategoryId || null,
+    source: source || null,
+    q: typeof q === 'string' ? q.trim() || null : q || null,
+    status,
+    tagFilter: tagFilter || null,
+  });
+  let pageRequest;
+  try {
+    pageRequest = normalizeTransactionPageRequest(req.query, {
+      secret: config.jwtAccessSecret,
+      scope: pagingScope,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'transaction_paging_unavailable' });
+  }
+  if (pageRequest.error) return res.status(400).json({ error: pageRequest.error });
   // Keep transaction-list consumers aligned with spend reports even before a
   // background reconciliation has run. Only a unique archived -> active
   // physical-card match is eligible; ambiguity remains visible as unmatched.
@@ -5742,11 +5769,16 @@ app.get('/transactions', requireAuth, async (req, res) => {
     params.push(source);
     conditions.push(`t.source = $${params.length}`);
   }
-  // Activity is the canonical transaction-history surface. Do not silently
-  // hide older incoming or outgoing movements behind an unfiltered "last 50"
-  // cap; callers can still constrain the result with date/card/category/source
-  // filters when they need a narrower view.
-  const limitClause = '';
+  let limitClause = '';
+  if (pageRequest.paged) {
+    const cursor = transactionCursorPredicate(pageRequest.cursor, params.length + 1);
+    if (cursor.sql) {
+      conditions.push(cursor.sql);
+      params.push(...cursor.params);
+    }
+    params.push(pageRequest.pageSize + 1);
+    limitClause = `LIMIT $${params.length}`;
+  }
 
   try {
     const result = await withUserClient(req.userId, (client) =>
@@ -5808,12 +5840,21 @@ app.get('/transactions', requireAuth, async (req, res) => {
            LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
            LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
           WHERE ${conditions.join(' AND ')}
-          ORDER BY t.occurred_at DESC ${limitClause}`,
+          ORDER BY t.occurred_at DESC, t.id DESC ${limitClause}`,
         params
       )
     );
-    const rows = await withUserClient(req.userId, (client) => transactionTags.attachTags(client, req.userId, result.rows));
-    res.json({ transactions: rows });
+    const paged = pageRequest.paged
+      ? transactionPageInfo(result.rows, pageRequest.pageSize, {
+          secret: config.jwtAccessSecret,
+          scope: pagingScope,
+        })
+      : { rows: result.rows, pageInfo: null };
+    const rows = await withUserClient(req.userId, (client) => transactionTags.attachTags(client, req.userId, paged.rows));
+    res.json({
+      transactions: rows,
+      ...(pageRequest.paged ? { pageInfo: paged.pageInfo } : {}),
+    });
   } catch (err) {
     console.error('GET /transactions error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
