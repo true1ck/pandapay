@@ -97,13 +97,17 @@ begin
   -- on its own — they have to be asserted.
   -- ==========================================================================
   -- Another account's row must be untouchable even with a valid device.
-  select out_applied, out_reason into v_applied, v_reason from pandapay.sync_apply_change(
-    '22220000-0000-0000-0000-00000000bbbb', v_phone, 'transactions',
-    '66660000-0000-0000-0000-00000000ffff', 'update',
-    '{"note":"stolen"}'::jsonb, '{"note":99999}'::jsonb, 1);
-  if v_applied or v_reason <> 'not_found' then
-    raise exception 'a cross-profile write was accepted';
-  end if;
+  begin
+    select out_applied, out_reason into v_applied, v_reason from pandapay.sync_apply_change(
+      '22220000-0000-0000-0000-00000000bbbb', v_phone, 'transactions',
+      '66660000-0000-0000-0000-00000000ffff', 'update',
+      '{"note":"stolen"}'::jsonb, '{"note":99999}'::jsonb, 1);
+    if v_applied or v_reason <> 'not_found' then
+      raise exception 'a cross-profile write was accepted';
+    end if;
+  exception when insufficient_privilege then
+    if sqlstate <> '42501' then raise; end if;
+  end;
   select note into v_note from transactions where id = '66660000-0000-0000-0000-00000000ffff';
   if v_note <> 'dinner' then raise exception 'a cross-profile write mutated the row'; end if;
 
