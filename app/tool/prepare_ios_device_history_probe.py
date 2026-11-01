@@ -49,7 +49,7 @@ while pending:
 
 (target / 'pubspec.yaml').write_text(f'''name: pandapay
 publish_to: none
-version: 1.0.0+1
+version: 1.0.0+12
 environment:
   sdk: ^3.12.2
 dependencies:
@@ -130,6 +130,20 @@ if 'SmsSecurityPolicy.swift in Sources' not in text:
     text = text.replace('/* Begin PBXFileReference section */', '/* Begin PBXFileReference section */\n        6A170530A000000000000001 /* SmsSecurityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmsSecurityPolicy.swift; sourceTree = "<group>"; };')
     text = re.sub(r'(\s+\w+ /\* AppDelegate.swift \*/,)', r'\1\n                6A170530A000000000000001 /* SmsSecurityPolicy.swift */,', text)
     text = re.sub(r'(\s+\w+ /\* AppDelegate.swift in Sources \*/,)', r'\1\n                6A170530A000000000000002 /* SmsSecurityPolicy.swift in Sources */,', text)
+# File export is probe-only; the main Xcode project is never modified.
+shutil.copyfile(source / 'ios/Runner/ProbeDiagnosticsExport.swift', target / 'ios/Runner/ProbeDiagnosticsExport.swift')
+if 'ProbeDiagnosticsExport.swift in Sources' not in text:
+    text = text.replace('/* Begin PBXBuildFile section */', '/* Begin PBXBuildFile section */\n        6A170510A000000000000008 /* ProbeDiagnosticsExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A170510A000000000000007 /* ProbeDiagnosticsExport.swift */; };')
+    text = text.replace('/* Begin PBXFileReference section */', '/* Begin PBXFileReference section */\n        6A170510A000000000000007 /* ProbeDiagnosticsExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProbeDiagnosticsExport.swift; sourceTree = "<group>"; };')
+    text = re.sub(r'(\s+\w+ /\* AppDelegate.swift \*/,)', r'\1\n                6A170510A000000000000007 /* ProbeDiagnosticsExport.swift */,', text)
+    text = re.sub(r'(\s+\w+ /\* AppDelegate.swift in Sources \*/,)', r'\1\n                6A170510A000000000000008 /* ProbeDiagnosticsExport.swift in Sources */,', text)
+# Explicit Person-to-String conversion is compiled only into this lab wrapper.
+shutil.copyfile(source / 'ios/Runner/ProbeSenderTextResolver.swift', target / 'ios/Runner/ProbeSenderTextResolver.swift')
+if 'ProbeSenderTextResolver.swift in Sources' not in text:
+    text = text.replace('/* Begin PBXBuildFile section */', '/* Begin PBXBuildFile section */\n        6A170510A000000000000010 /* ProbeSenderTextResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A170510A000000000000009 /* ProbeSenderTextResolver.swift */; };')
+    text = text.replace('/* Begin PBXFileReference section */', '/* Begin PBXFileReference section */\n        6A170510A000000000000009 /* ProbeSenderTextResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProbeSenderTextResolver.swift; sourceTree = "<group>"; };')
+    text = re.sub(r'(\s+\w+ /\* AppDelegate.swift \*/,)', r'\1\n                6A170510A000000000000009 /* ProbeSenderTextResolver.swift */,', text)
+    text = re.sub(r'(\s+\w+ /\* AppDelegate.swift in Sources \*/,)', r'\1\n                6A170510A000000000000010 /* ProbeSenderTextResolver.swift in Sources */,', text)
 project.write_text(text)
 
 info = target / 'ios/Runner/Info.plist'
@@ -146,7 +160,8 @@ if 'PANDAPAY_DEVICE_IMPORT_PROBE' not in settings:
     'packages': sorted(packages),
     'bundleId': 'app.pandapay.iosimportprobe',
     'rawMessageStorage': 'process memory only',
-    'nativeFiles': ['ios/Runner/PrototypeBankMessageIntent.swift', 'ios/Runner/DeviceHistoryRange.swift', 'ios/Runner/DeviceLiveMessageInbox.swift', 'ios/Runner/SmsSecurityPolicy.swift'],
-    'rangeShortcut': 'PANDAPAY SELECTED RANGE V2',
+    'nativeFiles': ['ios/Runner/PrototypeBankMessageIntent.swift', 'ios/Runner/DeviceHistoryRange.swift', 'ios/Runner/DeviceLiveMessageInbox.swift', 'ios/Runner/SmsSecurityPolicy.swift', 'ios/Runner/ProbeDiagnosticsExport.swift', 'ios/Runner/ProbeSenderTextResolver.swift'],
+    'rangeShortcut': 'PANDAPAY SENDER CHECK',
+    'baselineShortcut': 'PANDAPAY SELECTED RANGE V2',
 }, indent=2) + '\n')
 print(f'Prepared {len(copied)} current Dart source files in {target}')

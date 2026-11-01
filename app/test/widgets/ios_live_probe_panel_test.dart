@@ -110,7 +110,7 @@ void main() {
               .dy,
         ),
       );
-      expect(calls, ['readPending', 'acknowledge']);
+      expect(calls, ['readDiagnosticReplay', 'readPending']);
       await tester.pumpWidget(const SizedBox());
     },
   );
@@ -181,12 +181,12 @@ void main() {
           'records_received': 1,
           'pending': done ? 0 : 1,
           'processed': done ? 1 : 0,
-          'retained_new': done ? 1 : 0,
+          'needs_review': done ? 1 : 0,
         },
         'events': [
           {
             'id': 'live1',
-            'state': done ? 'retained_new' : 'pending',
+            'state': done ? 'needs_review' : 'pending',
             'handler': 'person_sender',
           },
         ],
@@ -203,7 +203,7 @@ void main() {
         }
         if (call.method == 'completeLive') {
           ackAttempts++;
-          expect((call.arguments as List).single['outcome'], 'retained_new');
+          expect((call.arguments as List).single['outcome'], 'needs_review');
           if (ackAttempts == 1) {
             throw PlatformException(code: 'synthetic_ack_failure');
           }
@@ -234,6 +234,11 @@ void main() {
       await tester.tap(find.text('Refresh / retry live handoffs'));
       await tester.pumpAndSettle();
       expect(ackAttempts, 2);
+      await tester.scrollUntilVisible(
+        find.text('Pending: 0 · Processed and acknowledged: 1'),
+        -300,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(
         find.text('Pending: 0 · Processed and acknowledged: 1'),
         findsOneWidget,
@@ -295,6 +300,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(reads, 2);
+      await tester.scrollUntilVisible(find.text('Live incoming SMS'), 350);
       expect(find.textContaining('Sensitive rejected: 1'), findsOneWidget);
       calls = 2;
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);

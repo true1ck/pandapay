@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'commitments_repository.dart';
@@ -197,6 +198,33 @@ bool _capturesReviewableFinancial(NeedsReviewItem item) {
   };
 }
 
+/// Removes the "sender unavailable" review copy of an SMS once the same
+/// message is captured again with a sender. Returns true when one was removed.
+bool removeSenderUnavailableReviewSync(
+  AppDatabase database,
+  String namespace,
+  String id,
+) {
+  database.db.execute(
+    'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+  );
+  final rows = database.db.select(
+    'SELECT payload FROM local_needs_review WHERE namespace=? AND id=?',
+    [namespace, id],
+  );
+  if (rows.isEmpty) return false;
+  final payload = jsonDecode(rows.first['payload'] as String);
+  if (payload is! Map || payload['reason'] != 'sender_unavailable') {
+    return false;
+  }
+  database.db.execute(
+    'DELETE FROM local_needs_review WHERE namespace=? AND id=?',
+    [namespace, id],
+  );
+  NeedsReviewRepository._notify(database, namespace, 'needs_review');
+  return true;
+}
+
 /// Synchronous capture path used by the local SMS parser, which deliberately
 /// remains synchronous so foreground/background capture share one transaction.
 /// The stable SMS id makes this insert idempotent.
@@ -376,6 +404,180 @@ void addNeedsReviewSync(
 /// Plain on-device store, same SharedPreferences mechanism
 /// dueDateRemindersProvider (providers.dart) already uses for a similar
 /// "no server round-trip needed, this is purely local" case.
+/// Text-only facts about one stored review item: its resolved type and the
+/// yes/no checks fetchAll needs. They depend only on the item's saved payload
+/// and the parser version, so they are computed once, saved in the database,
+/// and recomputed only when the item or the parser changes. Checks that
+/// compare against transactions are never cached.
+class _ReviewFacts {
+  _ReviewFacts._(
+    this.namespace,
+    this.original,
+    this.resolved, {
+    required this.noiseOrStale,
+    required this.folio,
+    required this.receipt,
+    required this.refund,
+    required this.mandateReview,
+    required this.nonTransactionNoise,
+    required this.securityAlert,
+  });
+
+  final String namespace;
+  final NeedsReviewItem original;
+  final NeedsReviewItem resolved;
+  final bool noiseOrStale;
+  final bool folio, receipt, refund, mandateReview;
+  final bool nonTransactionNoise, securityAlert;
+
+  /// The parser output can depend on today's date, so it is kept in memory
+  /// only, for the current day.
+  late final LocalSmsObservation? parsed = LocalSmsParser.parse(
+    body: resolved.body,
+    sender: resolved.sender,
+    receivedAt: resolved.receivedAt,
+    namespace: namespace,
+  );
+
+  static final _memory = <String, _ReviewFacts>{};
+  static String _day = '';
+  static final _tableReady = Expando<bool>();
+
+  static _ReviewFacts of(
+    AppDatabase db,
+    String namespace,
+    String payload,
+    bool Function(NeedsReviewItem) noiseCheck,
+  ) {
+    final now = DateTime.now();
+    final day = '${now.year}-${now.month}-${now.day}';
+    if (day != _day || _memory.length > 4000) {
+      _memory.clear();
+      _day = day;
+    }
+    final hash = sha256.convert(utf8.encode(payload)).toString();
+    final memoryKey = '$namespace\u0000$hash';
+    final cached = _memory[memoryKey];
+    if (cached != null) return cached;
+
+    final original = NeedsReviewItem.fromJson(
+      jsonDecode(payload) as Map<String, dynamic>,
+    );
+    final saved = _load(db, namespace, hash);
+    final facts = saved != null
+        ? _ReviewFacts._(
+            namespace,
+            original,
+            original.copyWith(
+              kind: NeedsReviewKind.values.byName(saved['kind'] as String),
+            ),
+            noiseOrStale: saved['noise'] == 1,
+            folio: saved['folio'] == 1,
+            receipt: saved['receipt'] == 1,
+            refund: saved['refund'] == 1,
+            mandateReview: saved['mandate'] == 1,
+            nonTransactionNoise: saved['non_txn'] == 1,
+            securityAlert: saved['security'] == 1,
+          )
+        : _compute(namespace, original, noiseCheck);
+    if (saved == null) _save(db, namespace, hash, facts);
+    return _memory[memoryKey] = facts;
+  }
+
+  static _ReviewFacts _compute(
+    String namespace,
+    NeedsReviewItem original,
+    bool Function(NeedsReviewItem) noiseCheck,
+  ) {
+    final resolved = NeedsReviewRepository.resolveItemKind(original);
+    final body = resolved.body;
+    return _ReviewFacts._(
+      namespace,
+      original,
+      resolved,
+      noiseOrStale: noiseCheck(resolved),
+      folio: isInvestmentFolioAllotment(body),
+      receipt: NeedsReviewRepository.isMerchantReceiptOrEbill(body),
+      refund: NeedsReviewRepository.isRefundOrReversal(body),
+      mandateReview: NeedsReviewRepository.isMandateReview(body),
+      nonTransactionNoise: LocalSmsParser.isNonTransactionNoise(
+        resolved.sender,
+        body,
+      ),
+      securityAlert: NeedsReviewRepository.isSecurityOrServiceAlert(body),
+    );
+  }
+
+  static void _ensureTable(AppDatabase db) {
+    if (_tableReady[db] == true) return;
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS review_item_facts('
+      'namespace TEXT NOT NULL, payload_hash TEXT NOT NULL, '
+      'parser_version INTEGER NOT NULL, kind TEXT NOT NULL, '
+      'noise INTEGER NOT NULL, folio INTEGER NOT NULL, '
+      'receipt INTEGER NOT NULL, refund INTEGER NOT NULL, '
+      'mandate INTEGER NOT NULL, non_txn INTEGER NOT NULL, '
+      'security INTEGER NOT NULL, PRIMARY KEY(namespace, payload_hash))',
+    );
+    // Facts from an older parser are never reused.
+    db.db.execute(
+      'DELETE FROM review_item_facts WHERE parser_version<>?',
+      [LocalSmsParser.version],
+    );
+    _tableReady[db] = true;
+  }
+
+  static Map<String, Object?>? _load(
+    AppDatabase db,
+    String namespace,
+    String hash,
+  ) {
+    try {
+      _ensureTable(db);
+      final rows = db.db.select(
+        'SELECT * FROM review_item_facts '
+        'WHERE namespace=? AND payload_hash=? AND parser_version=?',
+        [namespace, hash, LocalSmsParser.version],
+      );
+      return rows.isEmpty ? null : rows.single;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void _save(
+    AppDatabase db,
+    String namespace,
+    String hash,
+    _ReviewFacts facts,
+  ) {
+    try {
+      _ensureTable(db);
+      db.db.execute(
+        'INSERT OR REPLACE INTO review_item_facts VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        [
+          namespace,
+          hash,
+          LocalSmsParser.version,
+          facts.resolved.kind.name,
+          for (final flag in [
+            facts.noiseOrStale,
+            facts.folio,
+            facts.receipt,
+            facts.refund,
+            facts.mandateReview,
+            facts.nonTransactionNoise,
+            facts.securityAlert,
+          ])
+            flag ? 1 : 0,
+        ],
+      );
+    } catch (_) {
+      // Saving is an optimisation; a failure only means recomputing later.
+    }
+  }
+}
+
 class NeedsReviewRepository {
   static final _changes = Expando<StreamController<FinancialChange>>();
 
@@ -536,6 +738,8 @@ class NeedsReviewRepository {
         [namespace],
       );
       final items = <NeedsReviewItem>[];
+      // Per-item text checks, remembered across loads (see _ReviewFacts).
+      final facts = <String, _ReviewFacts>{};
       final toUpdate = <NeedsReviewItem>[];
       final corruptIds = <String>[];
       var readCount = 0;
@@ -545,10 +749,10 @@ class NeedsReviewRepository {
         }
         try {
           final raw = r['payload'] as String;
-          final original = NeedsReviewItem.fromJson(
-            jsonDecode(raw) as Map<String, dynamic>,
-          );
-          final resolved = resolveItemKind(original);
+          final fact = _ReviewFacts.of(db, namespace, raw, _isNoiseOrStale);
+          final original = fact.original;
+          final resolved = fact.resolved;
+          facts[resolved.id] = fact;
           if (resolved.kind != original.kind) {
             toUpdate.add(resolved);
           }
@@ -577,12 +781,11 @@ class NeedsReviewRepository {
           db.db.execute('RELEASE SAVEPOINT update_resolved_kinds');
         }
       }
-      final noise = items
-          .where(_isNoiseOrStale)
-          .map((item) => item.id)
-          .toList();
+      bool noiseOrStale(NeedsReviewItem item) =>
+          facts[item.id]?.noiseOrStale ?? _isNoiseOrStale(item);
+      final noise = items.where(noiseOrStale).map((item) => item.id).toList();
       if (noise.isNotEmpty) await removeAll(noise);
-      final nonNoise = items.where((item) => !_isNoiseOrStale(item)).toList();
+      final nonNoise = items.where((item) => !noiseOrStale(item)).toList();
       final kept = <NeedsReviewItem>[];
       final toRemove = <String>[];
       final now = DateTime.now();
@@ -597,12 +800,8 @@ class NeedsReviewRepository {
           kept.add(item);
           continue;
         }
-        final parsed = LocalSmsParser.parse(
-          body: item.body,
-          sender: item.sender,
-          receivedAt: item.receivedAt,
-          namespace: namespace,
-        );
+        final fact = facts[item.id]!;
+        final parsed = fact.parsed;
         if (item.kind == NeedsReviewKind.payLaterDrawdown) {
           kept.add(item);
           continue;
@@ -623,9 +822,9 @@ class NeedsReviewRepository {
           }
         }
         final needsTransactions =
-            isInvestmentFolioAllotment(item.body) ||
-            isMerchantReceiptOrEbill(item.body) ||
-            isRefundOrReversal(item.body) ||
+            fact.folio ||
+            fact.receipt ||
+            fact.refund ||
             (parsed?.eventType == LocalSmsEventType.bill &&
                 parsed?.dueDate != null &&
                 parsed!.dueDate!.isBefore(now));
@@ -648,7 +847,7 @@ class NeedsReviewRepository {
                 jsonEncode(item.toJson())) {
           continue;
         }
-        if (isInvestmentFolioAllotment(item.body)) {
+        if (fact.folio) {
           if (_hasMatchingInvestmentTransaction(
             item,
             database: db,
@@ -659,7 +858,7 @@ class NeedsReviewRepository {
             continue;
           }
         }
-        if (isMerchantReceiptOrEbill(item.body)) {
+        if (fact.receipt) {
           final linkedId = matchingSpendTransactionIdSync(
             db,
             namespace,
@@ -694,7 +893,7 @@ class NeedsReviewRepository {
           }
         }
 
-        if (isRefundOrReversal(item.body)) {
+        if (fact.refund) {
           if (_hasMatchingRefundDebit(
             item,
             database: db,
@@ -730,7 +929,7 @@ class NeedsReviewRepository {
                   parsed.reasonCodes.contains('mandate_notice') ||
                   parsed.reasonCodes.contains('commitment_detected') ||
                   item.kind == NeedsReviewKind.mandate ||
-                  isMandateReview(item.body));
+                  fact.mandateReview);
           if (isMandateOrAutopay) {
             _persistResolvedCommitmentSync(db, namespace, parsed, item);
             toRemove.add(item.id);
@@ -738,8 +937,8 @@ class NeedsReviewRepository {
           }
 
           if (parsed.disposition == LocalSmsDisposition.localIgnore ||
-              LocalSmsParser.isNonTransactionNoise(item.sender, item.body) ||
-              isSecurityOrServiceAlert(item.body)) {
+              fact.nonTransactionNoise ||
+              fact.securityAlert) {
             toRemove.add(item.id);
             continue;
           }

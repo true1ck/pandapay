@@ -1,0 +1,14 @@
+flowchart TD
+  A[SMS arrives: sender + body + original time] --> B[Safety, relevance and source identity]
+  B -->|rejected| X[Stop or retain the appropriate minimal decision]
+  B -->|eligible| C[Local parsing and durable evidence]
+  C --> T[Transaction path: server parsing, category/card resolution, ledger dedupe]
+  C --> F[Facts path: structured bill, balance, mandate or attempt facts]
+  C -->|eligible unresolved input| AI[AI fallback: redacted input, validated proposal, device recheck]
+  T --> O[Supported records or review; persistence ownership differs by path]
+  F --> O
+  AI --> O
+  AI --> N[Supported explicit negative decision can dismiss]
+  O --> L[User correction: private rules immediately; shared evidence through consent and review]
+  N --> L
+  L -. approved future rules .-> C

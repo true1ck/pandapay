@@ -62,7 +62,7 @@ class TransactionDetailScreen extends ConsumerWidget {
     final txn = ref.watch(transactionDetailProvider(transactionId));
     // Activity and Spending already hold the complete row that was tapped.
     // Use it immediately while a live refresh is pending or unavailable.
-    final entry = txn.valueOrNull ?? initialEntry;
+    final entry = _withLocalSmsEvidence(txn.valueOrNull ?? initialEntry, initialEntry);
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -108,6 +108,17 @@ class TransactionDetailScreen extends ConsumerWidget {
                             entry.amount.format(),
                             style: BambooFonts.heading(28),
                           ),
+                          if (entry.cardDisplayName != null || entry.cardLast4 != null) ...[
+                            const SizedBox(height: AppSpace.md),
+                            Text(
+                              entry.cardDisplayName ?? 'Card ending ${entry.cardLast4}',
+                              style: BambooFonts.ui(14, color: BambooInk.ink700),
+                            ),
+                          ],
+                          if (entry.paymentMethod == 'upi') ...[
+                            const SizedBox(height: AppSpace.sm),
+                            Text('UPI', style: BambooFonts.ui(14, color: BambooInk.ink700)),
+                          ],
                           const SizedBox(height: AppSpace.md),
                           const Text(
                             'Saved on this device. Details and editing will be available after this entry syncs.',
@@ -134,6 +145,20 @@ class TransactionDetailScreen extends ConsumerWidget {
   }
 }
 
+// The live API currently has QR-specific rail values, but no generic UPI
+// field. Retain local method evidence only for the exact same SMS identity.
+TransactionEntry? _withLocalSmsEvidence(
+  TransactionEntry? entry,
+  TransactionEntry? local,
+) {
+  if (entry == null || entry.paymentMethod != null ||
+      local?.paymentMethod != 'upi' || entry.sourceKey == null ||
+      entry.sourceKey != local?.sourceKey) {
+    return entry;
+  }
+  return TransactionEntry.fromJson({...entry.toJson(), 'payment_method': 'upi'});
+}
+
 /// Shared so screens that change a transaction's lifecycle outside this one
 /// (Deleted transactions' restore) can drop the cached detail instead of
 /// showing the pre-restore status until the app restarts.
@@ -151,7 +176,7 @@ final transactionDetailProvider =
   final fallback = fromLoaded ?? cached;
   if (repo == null || id.startsWith('local-')) return fallback;
   try {
-    return await repo.fetchTransaction(id);
+    return _withLocalSmsEvidence(await repo.fetchTransaction(id), fallback);
   } catch (error) {
     if (isAuthenticationFailure(error) || fallback != null) return fallback;
     rethrow;
@@ -1192,7 +1217,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         .split('.')
                         .first,
                   ),
-                  _DetailRow(label: 'Rail', value: _railLabel(entry.rail)),
+                  _DetailRow(label: 'Rail', value: _paymentRouteLabel(entry)),
                   _DetailRow(
                     label: 'Source',
                     value: _sourceLabel(entry.source),
@@ -1464,6 +1489,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     _ => 'application/octet-stream',
   };
 
+  static String _paymentRouteLabel(TransactionEntry entry) =>
+      entry.rail == TxnRail.unknown && entry.paymentMethod == 'upi'
+      ? 'UPI'
+      : _railLabel(entry.rail);
+
   static String _railLabel(TxnRail rail) => switch (rail) {
     TxnRail.upiQr => 'UPI QR',
     TxnRail.swipe => 'Swipe',
@@ -1710,7 +1740,7 @@ class _SmsEvidenceSection extends ConsumerWidget {
             ),
             _EvidenceLine(
               label: 'Payment rail',
-              value: _DetailBodyState._railLabel(entry.rail),
+              value: _DetailBodyState._paymentRouteLabel(entry),
             ),
             if (entry.cardLast4?.isNotEmpty == true)
               _EvidenceLine(

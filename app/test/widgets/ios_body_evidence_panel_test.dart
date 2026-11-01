@@ -1,0 +1,174 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/ios_body_evidence_session.dart';
+import 'package:pandapay/main_ios_history_device_probe.dart';
+import 'package:pandapay/widgets/ios_body_evidence_panel.dart';
+import '../data/ios_body_evidence_session_test.dart' show input;
+import '../data/ios_main_sender_card_intake_test.dart' as fixture;
+
+void main() {
+  testWidgets(
+    'narrow screen distinguishes extracted facts from captured sender',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final session = IosBodyEvidenceSession()
+        ..process([
+          input('paid', fixture.posted),
+          input('request', fixture.request),
+        ]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: IosBodyEvidencePanel(snapshot: session.snapshot),
+            ),
+          ),
+        ),
+      );
+      expect(
+        find.text('Transaction extracted; sender unavailable'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Payment requested · completion unconfirmed'),
+        findsOneWidget,
+      );
+      expect(find.text('Captured sender: Unavailable'), findsNWidgets(2));
+      expect(find.text('Card ending 4242'), findsOneWidget);
+      expect(find.text('Spending added: ₹0'), findsOneWidget);
+      expect(find.text('Issuer named in SMS: SBI'), findsOneWidget);
+      expect(
+        find.textContaining('previews, not posted spending'),
+        findsOneWidget,
+      );
+      final jsonTile = find.text('Extraction input and output (JSON)').last;
+      await tester.ensureVisible(jsonTile);
+      await tester.tap(jsonTile);
+      await tester.pumpAndSettle();
+      expect(find.byType(SelectableText), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final startup in ['ready', 'not_staged', 'locked']) {
+    testWidgets(
+      'diagnostic replay recovers from $startup without running a shortcut',
+      (tester) async {
+        const channel = MethodChannel('pandapay/ios_history_device_probe');
+        final calls = <String>[];
+        Map? acknowledged;
+        var retrying = false;
+        final report = jsonEncode({
+          'format': 'pandapay.sender_probe_diagnostics',
+          'schema_version': 1,
+          'native_app': {'build': '7'},
+          'capture_journal': {
+            'records': [
+              for (final receiver in [
+                'existing_single_message',
+                'main_app_contract',
+              ])
+                {
+                  'input': {
+                    'receiver': receiver,
+                    'message_body': fixture.posted,
+                    'native_sender_value': '',
+                    'original_receive_date': '2026-11-01T08:00:00Z',
+                  },
+                },
+            ],
+          },
+        });
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          (call) async {
+            calls.add(call.method);
+            if (call.method == 'readDiagnosticReplay') {
+              if (!retrying && startup == 'not_staged') return null;
+              if (!retrying && startup == 'locked') {
+                throw PlatformException(code: 'replay_failed');
+              }
+              return {'json': report, 'fingerprint': 'synthetic-fingerprint'};
+            }
+            if (call.method == 'completeDiagnosticReplay') {
+              acknowledged = call.arguments as Map;
+            }
+            if (call.method == 'readPending') {
+              return {
+                'records': [],
+                'runs': [],
+                'live': {'records': [], 'events': [], 'counts': {}},
+              };
+            }
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            channel,
+            null,
+          ),
+        );
+        await tester.pumpWidget(
+          const MaterialApp(home: DeviceHistoryProbeScreen()),
+        );
+        await tester.pumpAndSettle();
+        if (startup != 'ready') {
+          expect(acknowledged, isNull);
+          retrying = true;
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.paused,
+          );
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+          await tester.pumpAndSettle();
+        }
+        expect(find.text('PandaPay Sender Probe · 12'), findsOneWidget);
+        expect(
+          find.text(
+            'Replayed your exported session. No new Shortcut run was needed.',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.text(
+            '1 messages · 1 transaction candidates · 0 payment requests',
+          ),
+          findsOneWidget,
+        );
+        expect(acknowledged?['fingerprint'], 'synthetic-fingerprint');
+        expect(acknowledged?['counts'], {
+          'input_records': 2,
+          'unique_message_inputs': 1,
+          'transaction_candidates': 1,
+          'payment_requests': 0,
+          'omitted_inputs': 0,
+        });
+        expect(calls, [
+          if (startup != 'ready') ...['readDiagnosticReplay', 'readPending'],
+          'readDiagnosticReplay',
+          'completeDiagnosticReplay',
+          'readPending',
+        ]);
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pumpAndSettle();
+        expect(
+          calls.where((method) => method == 'completeDiagnosticReplay'),
+          hasLength(1),
+        );
+        expect(calls.contains('runShortcut'), false);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+}

@@ -1,7 +1,10 @@
 import 'dart:async';
+
+import 'package:intl/intl.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../data/portable_backup/account_recovery_operation_gate.dart';
@@ -45,6 +48,11 @@ class IosSmsIntakeState {
   List<Map<String, Object?>> get latestWindows => windows
       .where((row) => row['job_id'] == (activeJob ?? jobs.firstOrNull)?['id'])
       .toList(growable: false);
+  Map<String, Object?>? get lastCompletedJob =>
+      jobs.where((job) => job['state'] == 'complete').firstOrNull;
+  List<Map<String, Object?>> get lastCompletedWindows => windows
+      .where((row) => row['job_id'] == lastCompletedJob?['id'])
+      .toList(growable: false);
 
   String countsFor(Iterable<Map<String, Object?>> rows) {
     int sum(String key) =>
@@ -69,6 +77,53 @@ class IosSmsIntakeState {
   }
 
   bool get partial => currentWindows.any((w) => w['state'] == 'partial');
+
+  /// The active job's windows in date order. A window that hit the 500
+  /// message cap is followed by its continuation.
+  List<Map<String, Object?>> get orderedWindows =>
+      [...currentWindows]..sort(
+        (a, b) => (a['ordinal'] as int? ?? 0).compareTo(b['ordinal'] as int? ?? 0),
+      );
+
+  /// End of the unbroken run of finished date ranges from the job's start.
+  DateTime? get importedThrough {
+    DateTime? through;
+    for (final window in orderedWindows) {
+      if (window['state'] != 'complete') break;
+      through = DateTime.tryParse(window['end'] as String? ?? '');
+    }
+    return through;
+  }
+
+  /// The date range being imported now, or the next one to import.
+  Map<String, Object?>? get currentWindow =>
+      orderedWindows.where((w) => w['state'] != 'complete').firstOrNull;
+
+  /// Share of the selected period already imported, by time.
+  double? get coverage {
+    final start = DateTime.tryParse(activeJob?['start'] as String? ?? '');
+    final end = DateTime.tryParse(activeJob?['end'] as String? ?? '');
+    if (start == null || end == null || !end.isAfter(start)) return null;
+    final through = importedThrough ?? start;
+    return (through.difference(start).inSeconds / end.difference(start).inSeconds)
+        .clamp(0.0, 1.0);
+  }
+
+  /// Why the current range stopped, in words the user can act on.
+  String? get stopReason {
+    final window = currentWindow;
+    if (window == null || window['state'] != 'partial') return null;
+    if (window['limit_off'] != 1) {
+      return 'In the Shortcut, turn on “Find Messages limit is off” in Finish PandaPay History Import, then resume.';
+    }
+    if ((window['missing_sender'] as int? ?? 0) > 0) {
+      return 'Some messages arrived without a sender. Check the Shortcut’s Sender field, then resume.';
+    }
+    if ((window['found'] as int? ?? 0) != (window['enumerated'] as int? ?? 0)) {
+      return 'Shortcuts found ${window['found']} messages but PandaPay received ${window['enumerated']}. Resume to try this range again.';
+    }
+    return 'This range needs another try. Resume to import it again.';
+  }
   int get missingSenders => currentWindows.fold(
     0,
     (total, window) => total + (window['missing_sender'] as int? ?? 0),
@@ -80,6 +135,18 @@ class IosSmsIntakeState {
   bool get visible =>
       enabled &&
       (processing || activeJob != null || error != null || pending > 0);
+  /// "through 18 Aug" once a range is done, else the first range's start.
+  String get historyPosition {
+    final through = importedThrough;
+    if (through != null) {
+      return 'through ${DateFormat('d MMM').format(through.toLocal())}';
+    }
+    final start = DateTime.tryParse(currentWindow?['start'] as String? ?? '');
+    return start == null
+        ? 'starting'
+        : 'starting ${DateFormat('d MMM').format(start.toLocal())}';
+  }
+
   String get label {
     if (error != null) return 'Message update needs attention';
     if (paused) return 'Message update paused';
@@ -88,16 +155,9 @@ class IosSmsIntakeState {
           ? 'Messages need sender details'
           : 'Some dates need another check';
     }
-    if (waiting) {
-      return activeJob?['kind'] == 'history'
-          ? 'Importing history · $completedMonths of $monthCount months checked'
-          : 'Waiting for message import…';
-    }
-    if (activeJob != null) {
-      return activeJob?['kind'] == 'history'
-          ? 'Importing history · $completedMonths of $monthCount months checked'
-          : 'Recent-message check pending';
-    }
+    if (activeJob?['kind'] == 'history') return 'Importing history · $historyPosition';
+    if (waiting) return 'Waiting for message import…';
+    if (activeJob != null) return 'Recent-message check pending';
     if (processing) return 'Updating recent activity…';
     return 'Recent messages checked';
   }
@@ -356,6 +416,7 @@ class IosSmsIntakeController extends ChangeNotifier {
               _publish(IosSmsIntakeState(snapshot: snapshot));
               if (!state.enabled) return;
               final generation = state.generation!;
+              var drained = false;
               do {
                 _refreshAgain = false;
                 while (true) {
@@ -367,12 +428,16 @@ class IosSmsIntakeController extends ChangeNotifier {
                       .map((row) => Map<Object?, Object?>.from(row as Map))
                       .toList();
                   if (rows.isEmpty) break;
-                  _publish(
-                    IosSmsIntakeState(
-                      snapshot: state.snapshot,
-                      processing: true,
-                    ),
-                  );
+                  // Publish "processing" once; repeating it per batch rebuilds
+                  // every listening screen for no visible change.
+                  if (!state.processing) {
+                    _publish(
+                      IosSmsIntakeState(
+                        snapshot: state.snapshot,
+                        processing: true,
+                      ),
+                    );
+                  }
                   final outcomes = await capture(expected, generation, rows);
                   _check(expected, revision);
                   if (outcomes.length != rows.length) {
@@ -383,10 +448,13 @@ class IosSmsIntakeController extends ChangeNotifier {
                     'outcomes': outcomes,
                   });
                   _check(expected, revision);
-                  requestUpload();
-                  await Future<void>.delayed(Duration.zero);
+                  drained = true;
+                  // Let frames render between batches.
+                  await Future<void>.delayed(const Duration(milliseconds: 16));
                 }
               } while (_refreshAgain);
+              // One upload pass for the whole drain, not one per batch.
+              if (drained) requestUpload();
               await _load();
               _check(expected, revision);
               // Queue catch-up without launching another app. An active historical

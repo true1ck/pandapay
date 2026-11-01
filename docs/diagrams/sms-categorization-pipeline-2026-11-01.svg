@@ -1,0 +1,255 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1830" height="3040" viewBox="0 0 1830 3040" role="img" aria-labelledby="diagram-title diagram-desc">
+<title id="diagram-title">PandaPay SMS categorization: actual input, rule, AI, review and learning paths</title>
+<desc id="diagram-desc">Top: acquisition, safety and identity, local parsing. Three lanes: raw transaction import, typed financial facts, and eligible unresolved AI review. Bottom: user correction, reviewed shared category and parser learning, approved downloads. Explicit negative AI decisions bypass the positive-fact confidence threshold.</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#627589"/></marker></defs><style>text{font-family:Arial,Helvetica,sans-serif;fill:#183044}.title{font-size:36px;font-weight:700}.subtitle{font-size:21px;fill:#52677a}.box-title{font-size:22px;font-weight:700}.body{font-size:19px;fill:#29475b}.small{font-size:19px;fill:#52677a}.lane{font-size:22px;font-weight:700;letter-spacing:1px}.edge{fill:none;stroke:#627589;stroke-width:2.5;marker-end:url(#arrow)}.dash{stroke-dasharray:8 7}.box{stroke:#c8d4de;stroke-width:1.5}a:focus rect,a:hover rect{stroke:#087b70;stroke-width:3}</style>
+<rect width="1830" height="3040" rx="20" fill="#f5f8fa"/>
+<text x="55" y="65" class="title">SMS categorization · complete decision pipeline</text>
+<text x="55" y="105" class="subtitle">Source audit: 1 Nov 2026 · solid arrows = processing · dashed arrows = fallback / learning · click a block for its section</text>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-3" aria-label="Read section 3: 1  Acquire the original message">
+<rect class="box" x="55" y="145" width="1720" height="132" rx="14" fill="#edf4ff"/>
+<text x="79" y="182" class="box-title">1  Acquire the original message</text>
+<text x="79" y="210" class="body">Android inbox / live / background · iOS Shortcuts + native spool / history · SMS backup XML</text>
+<text x="79" y="234" class="body">Core input: sender + original body + receivedAt; namespace is separate. Provider/spool IDs track transport progress.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-4" aria-label="Read section 4: 2  Filter, identify and deduplicate">
+<rect class="box" x="55" y="325" width="1720" height="162" rx="14" fill="#edf4ff"/>
+<text x="79" y="362" class="box-title">2  Filter, identify and deduplicate</text>
+<text x="79" y="390" class="body">20,000-character bound → OTP / credential veto → sender / P2P / demat / promotion / financial triage</text>
+<text x="79" y="414" class="body">Sensitive: stop before persistence. Clear noise: adapter drop, or minimal decision if capture store is reached.</text>
+<text x="79" y="438" class="body">SHA256(profile + normalized sender + normalized body); receipt/parser-version checks; private ignore-layout rule.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-5" aria-label="Read section 5: 3  Resolve sender and source evidence">
+<rect class="box" x="55" y="535" width="1720" height="162" rx="14" fill="#edf4ff"/>
+<text x="79" y="572" class="box-title">3  Resolve sender and source evidence</text>
+<text x="79" y="600" class="body">Missing sender + plausible financial text → local sender_unavailable review; no automatic upload or financial effects.</text>
+<text x="79" y="624" class="body">Saved cards / suffix / instrument type + profile name support attribution; an account suffix is not a card suffix.</text>
+<text x="79" y="648" class="body">Receipt time is excluded from source identity: identical alerts across separate occurrences can collapse.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-6" aria-label="Read section 6: 4  Parse and save on device">
+<rect class="box" x="55" y="745" width="1720" height="192" rx="14" fill="#edf4ff"/>
+<text x="79" y="782" class="box-title">4  Parse and save on device</text>
+<text x="79" y="810" class="body">Built-in safety + special families → approved downloaded rules → built-in grammar; parser version 26.</text>
+<text x="79" y="834" class="body">Category: private correction → semantic override (built-in path) → scoped shared rule → merchant trie.</text>
+<text x="79" y="858" class="body">Atomic save: decision / reason / parser+bundle version / observation; optional provisional transaction, bill or commitment.</text>
+<text x="79" y="882" class="body">Candidate rules: independent baseline comparison; shadow records deltas, eligible apply candidates may replace output.</text>
+</a>
+<path class="edge" d="M915,277 V320"/>
+<path class="edge" d="M915,487 V530"/>
+<path class="edge" d="M915,697 V740"/>
+<path class="edge" d="M915,937 V982 H322 V1074"/>
+<path class="edge" d="M915,982 V1074"/>
+<path class="edge" d="M915,982 H1502 V1074"/>
+<text x="65" y="1048" class="lane">A · RAW TRANSACTION IMPORT</text>
+<text x="655" y="1048" class="lane">B · TYPED FINANCIAL FACTS</text>
+<text x="1245" y="1048" class="lane">C · ELIGIBLE UNRESOLVED AI</text>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-8" aria-label="Read section 8: Raw upload outbox">
+<rect class="box" x="55" y="1090" width="535" height="172" rx="14" fill="#ffffff"/>
+<text x="79" y="1127" class="box-title">Raw upload outbox</text>
+<text x="79" y="1155" class="body">sender + body + original receipt time</text>
+<text x="79" y="1179" class="body">POST /transactions/from-sms/batch</text>
+<text x="79" y="1203" class="body">≤200 messages; explicit backfill flag</text>
+<text x="79" y="1227" class="body">Local inferred category is not sent as</text>
+<text x="79" y="1251" class="body">an automatic server category override.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-8" aria-label="Read section 8: Typed facts outbox">
+<rect class="box" x="645" y="1090" width="535" height="172" rx="14" fill="#ffffff"/>
+<text x="669" y="1127" class="box-title">Typed facts outbox</text>
+<text x="669" y="1155" class="body">sourceKey + sender + time + bodyHash</text>
+<text x="669" y="1179" class="body">indexed type / payload / provenance</text>
+<text x="669" y="1203" class="body">POST /sms/facts; no raw body</text>
+<text x="669" y="1227" class="body">Bills / balance / mandates / attempts</text>
+<text x="669" y="1251" class="body">Money roles stay distinct.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-9" aria-label="Read section 9: Needs Review → AI job">
+<rect class="box" x="1235" y="1090" width="535" height="172" rx="14" fill="#f0edff"/>
+<text x="1259" y="1127" class="box-title">Needs Review → AI job</text>
+<text x="1259" y="1155" class="body">Unparsed eligible financial candidates</text>
+<text x="1259" y="1179" class="body">POST /ai/jobs; one profile/source job</text>
+<text x="1259" y="1203" class="body">Rollout flags + worker credentials</text>
+<text x="1259" y="1227" class="body">Sensitive refusal; redact URLs,</text>
+<text x="1259" y="1251" class="body">addresses, references and long IDs.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-8" aria-label="Read section 8: Server parse again">
+<rect class="box" x="55" y="1320" width="535" height="212" rx="14" fill="#ffffff"/>
+<text x="79" y="1357" class="box-title">Server parse again</text>
+<text x="79" y="1385" class="body">Safety + specialized financial parsers</text>
+<text x="79" y="1409" class="body">Active parser_patterns + field maps</text>
+<text x="79" y="1433" class="body">Score sender specificity / fields / version</text>
+<text x="79" y="1457" class="body">UPI / conservative / card fallbacks</text>
+<text x="79" y="1481" class="body">Unparsed result → device review</text>
+<text x="79" y="1505" class="body">and eligible AI handoff in lane C.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-8" aria-label="Read section 8: Validate and resolve facts">
+<rect class="box" x="645" y="1320" width="535" height="212" rx="14" fill="#ffffff"/>
+<text x="669" y="1357" class="box-title">Validate and resolve facts</text>
+<text x="669" y="1385" class="body">Validate types, enums, roles, dates</text>
+<text x="669" y="1409" class="body">Source/fact idempotent upsert</text>
+<text x="669" y="1433" class="body">Apply fact_overrides on read</text>
+<text x="669" y="1457" class="body">User correction outranks base replay</text>
+<text x="669" y="1481" class="body">Central projections + bill-date and</text>
+<text x="669" y="1505" class="body">mandate specialists.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-9" aria-label="Read section 9: Gemini classification">
+<rect class="box" x="1235" y="1320" width="535" height="212" rx="14" fill="#f0edff"/>
+<text x="1259" y="1357" class="box-title">Gemini classification</text>
+<text x="1259" y="1385" class="body">Lease: 10 min; ≤6 attempts</text>
+<text x="1259" y="1409" class="body">Shared provider request/token pacing</text>
+<text x="1259" y="1433" class="body">Microbatch ≤4; timeout default 45 s</text>
+<text x="1259" y="1457" class="body">System instructions + few-shot examples</text>
+<text x="1259" y="1481" class="body">decision + typed facts; request at</text>
+<text x="1259" y="1505" class="body">most one primary actionable fact.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-7" aria-label="Read section 7: Final server category">
+<rect class="box" x="55" y="1570" width="535" height="222" rx="14" fill="#ffffff"/>
+<text x="79" y="1607" class="box-title">Final server category</text>
+<text x="79" y="1635" class="body">Explicit choice → personal merchant rule</text>
+<text x="79" y="1659" class="body">Private custom-category matching</text>
+<text x="79" y="1683" class="body">Published VPA → MCC → own history</text>
+<text x="79" y="1707" class="body">DB merchant rules → built-in map</text>
+<text x="79" y="1731" class="body">Body fallback → investment → Other</text>
+<text x="79" y="1755" class="body">Card match must be unambiguous.</text>
+<text x="79" y="1779" class="body">Successful parsing does not trigger AI.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-8" aria-label="Read section 8: Financial domain outputs">
+<rect class="box" x="645" y="1570" width="535" height="222" rx="14" fill="#ffffff"/>
+<text x="669" y="1607" class="box-title">Financial domain outputs</text>
+<text x="669" y="1635" class="body">Movement / account / bill / mandate /</text>
+<text x="669" y="1659" class="body">subscription projections where supported</text>
+<text x="669" y="1683" class="body">Card statement/due-day evidence</text>
+<text x="669" y="1707" class="body">Mandate lifecycle persistence</text>
+<text x="669" y="1731" class="body">No invented spend from a ceiling/balance</text>
+<text x="669" y="1755" class="body">Unconfirmed AI facts do not become</text>
+<text x="669" y="1779" class="body">authoritative specialist projections.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-10" aria-label="Read section 10: Validation and one repair pass">
+<rect class="box" x="1235" y="1570" width="535" height="222" rx="14" fill="#f0edff"/>
+<text x="1259" y="1607" class="box-title">Validation and one repair pass</text>
+<text x="1259" y="1635" class="body">Normalize only evidenced missing fields</text>
+<text x="1259" y="1659" class="body">Schema + merchant / money / time checks</text>
+<text x="1259" y="1683" class="body">Amount-role and receipt-only guards</text>
+<text x="1259" y="1707" class="body">One AI repair on validation errors</text>
+<text x="1259" y="1731" class="body">API repeats evidence + lease validation</text>
+<text x="1259" y="1755" class="body">Passing but wrong categories/limit</text>
+<text x="1259" y="1779" class="body">amounts can evade this repair trigger.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-8" aria-label="Read section 8: Canonical transaction">
+<rect class="box" x="55" y="1850" width="535" height="212" rx="14" fill="#ffffff"/>
+<text x="79" y="1887" class="box-title">Canonical transaction</text>
+<text x="79" y="1915" class="body">Source + cross-source duplicate handling</text>
+<text x="79" y="1939" class="body">transaction_observations provenance</text>
+<text x="79" y="1963" class="body">Eligible credit-card spend state effects</text>
+<text x="79" y="1987" class="body">Historical backfill protects current caps</text>
+<text x="79" y="2011" class="body">Fetch server record → discard provisional</text>
+<text x="79" y="2035" class="body">Acknowledge raw intake.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-6" aria-label="Read section 6: Local UI / source ownership">
+<rect class="box" x="645" y="1850" width="535" height="212" rx="14" fill="#ffffff"/>
+<text x="669" y="1887" class="box-title">Local UI / source ownership</text>
+<text x="669" y="1915" class="body">Bills / commitments / snapshots</text>
+<text x="669" y="1939" class="body">Past bills can be archived</text>
+<text x="669" y="1963" class="body">localIgnore can still produce facts</text>
+<text x="669" y="1987" class="body">Final decision ≠ server transaction</text>
+<text x="669" y="2011" class="body">Typed projection ≠ ledger insertion</text>
+<text x="669" y="2035" class="body">Different paths need reconciliation.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-10" aria-label="Read section 10: Server score + device recheck">
+<rect class="box" x="1235" y="1850" width="535" height="212" rx="14" fill="#f0edff"/>
+<text x="1259" y="1887" class="box-title">Server score + device recheck</text>
+<text x="1259" y="1915" class="body">S=.25 model+.35 evidence</text>
+<text x="1259" y="1939" class="body">  +.25 completeness+.15 disambiguation</text>
+<text x="1259" y="1963" class="body">≥.85 + exactly one complete eligible fact</text>
+<text x="1259" y="1987" class="body">+ server reviewRequired is not true</text>
+<text x="1259" y="2011" class="body">Device independently checks original text</text>
+<text x="1259" y="2035" class="body">and applies latest private category rule.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-14" aria-label="Read section 14: What can still go wrong?">
+<rect class="box" x="55" y="2100" width="535" height="212" rx="14" fill="#fff4df"/>
+<text x="79" y="2137" class="box-title">What can still go wrong?</text>
+<text x="79" y="2165" class="body">Private/local/server rule disagreement</text>
+<text x="79" y="2189" class="body">Prior bad history reinforces a label</text>
+<text x="79" y="2213" class="body">Body/footer brand changes category</text>
+<text x="79" y="2237" class="body">Repeated identical source collapses</text>
+<text x="79" y="2261" class="body">Category is not a calibrated parse score</text>
+<text x="79" y="2285" class="body">Trace the actual winning evidence.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-12" aria-label="Read section 12: User correction / review">
+<rect class="box" x="645" y="2100" width="535" height="212" rx="14" fill="#e8f5ef"/>
+<text x="669" y="2137" class="box-title">User correction / review</text>
+<text x="669" y="2165" class="body">Confirm, edit, change category, dismiss</text>
+<text x="669" y="2189" class="body">Private contextual rule applies locally</text>
+<text x="669" y="2213" class="body">Explicit false-transaction layout rule</text>
+<text x="669" y="2237" class="body">Structured fact overrides survive replay</text>
+<text x="669" y="2261" class="body">Undo AI filing; keep source editable</text>
+<text x="669" y="2285" class="body">Preference ≠ shared factual correction.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-10" aria-label="Read section 10: Three AI outcomes">
+<rect class="box" x="1235" y="2100" width="535" height="212" rx="14" fill="#f0edff"/>
+<text x="1259" y="2137" class="box-title">Three AI outcomes</text>
+<text x="1259" y="2165" class="body">Valid negative decision → dismiss receipt</text>
+<text x="1259" y="2189" class="body">(positive .85 threshold is bypassed)</text>
+<text x="1259" y="2213" class="body">Strong eligible fact → local-ai filing</text>
+<text x="1259" y="2237" class="body">Weak / empty / multiple / failed → review</text>
+<text x="1259" y="2261" class="body">AI server facts ≠ server transactions</text>
+<text x="1259" y="2285" class="body">Retain Auto-Resolved audit and undo.</text>
+</a>
+<path class="edge" d="M322,1262 V1314"/>
+<path class="edge" d="M322,1532 V1564"/>
+<path class="edge" d="M322,1792 V1844"/>
+<path class="edge" d="M912,1262 V1314"/>
+<path class="edge" d="M912,1532 V1564"/>
+<path class="edge" d="M912,1792 V1844"/>
+<path class="edge" d="M1502,1262 V1314"/>
+<path class="edge" d="M1502,1532 V1564"/>
+<path class="edge" d="M1502,1792 V1844"/>
+<path class="edge" d="M322,2062 V2070 H912 V2094"/>
+<path class="edge" d="M912,2062 V2094"/>
+<path class="edge" d="M1502,2062 V2094"/>
+<path class="edge" d="M1235,2196 H1186"/>
+<text x="55" y="2360" class="lane">LEARNING LOOP · personal corrections are immediate; cross-user improvements need consent and review</text>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-12" aria-label="Read section 12: Private correction">
+<rect class="box" x="55" y="2400" width="535" height="202" rx="14" fill="#e8f5ef"/>
+<text x="79" y="2437" class="box-title">Private correction</text>
+<text x="79" y="2465" class="body">Account-scoped category / ignore layout</text>
+<text x="79" y="2489" class="body">CTX = merchant + sender + template</text>
+<text x="79" y="2513" class="body">User correction wins over local AI</text>
+<text x="79" y="2537" class="body">Server future-merchant rule is separate</text>
+<text x="79" y="2561" class="body">A local AI ID is not a server txn ID.</text>
+<text x="79" y="2585" class="body">Corrected records keep user authority.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-12" aria-label="Read section 12: Shared category v2">
+<rect class="box" x="645" y="2400" width="535" height="202" rx="14" fill="#e8f5ef"/>
+<text x="669" y="2437" class="box-title">Shared category v2</text>
+<text x="669" y="2465" class="body">Admin-reviewed correction / AI proposal</text>
+<text x="669" y="2489" class="body">Merchant + sender + context + family</text>
+<text x="669" y="2513" class="body">≥10 supporting users; ≥90% agreement</text>
+<text x="669" y="2537" class="body">Separate tuple/category approval</text>
+<text x="669" y="2561" class="body">Latest scoped user votes; consent lineage</text>
+<text x="669" y="2585" class="body">No merchant-only blanket assignment.</text>
+</a>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-12" aria-label="Read section 12: Shared parser rules">
+<rect class="box" x="1235" y="2400" width="535" height="202" rx="14" fill="#e8f5ef"/>
+<text x="1259" y="2437" class="box-title">Shared parser rules</text>
+<text x="1259" y="2465" class="body">Anonymized templates → compile regex</text>
+<text x="1259" y="2489" class="body">Independent holdout + hard negatives</text>
+<text x="1259" y="2513" class="body">Shadow → 5% → 20% → active cohorts</text>
+<text x="1259" y="2537" class="body">Observation/error gates + pause/rollback</text>
+<text x="1259" y="2561" class="body">Candidate approval matches rule hash</text>
+<text x="1259" y="2585" class="body">Global bundle publication is admin-only.</text>
+</a>
+<path class="edge dash" d="M912,2312 V2340 H322 V2394"/>
+<path class="edge dash" d="M912,2312 V2340 H912 V2394"/>
+<path class="edge dash" d="M912,2312 V2340 H1502 V2394"/>
+<a href="../sms-categorization-pipeline-2026-11-01.html#section-11" aria-label="Read section 11: Approved rule refresh feeds future eligible captures">
+<rect class="box" x="55" y="2685" width="1720" height="162" rx="14" fill="#e8f5ef"/>
+<text x="79" y="2722" class="box-title">Approved rule refresh feeds future eligible captures</text>
+<text x="79" y="2750" class="body">GET /sms/rules/active → validate version / minimum client / checksum → keep last valid cached rules offline</text>
+<text x="79" y="2774" class="body">Personal corrections retain precedence. Experiments require consent. Rule refresh is not a blanket historical replay.</text>
+<text x="79" y="2798" class="body">No automatic second model on every import; polling reads the existing job; failed jobs need bounded retry or explicit action.</text>
+</a>
+<path class="edge dash" d="M322,2602 V2640 H912 V2679"/>
+<path class="edge dash" d="M912,2602 V2640 H912 V2679"/>
+<path class="edge dash" d="M1502,2602 V2640 H912 V2679"/>
+<rect x="55" y="2890" width="1720" height="103" rx="14" fill="#fff0d8" stroke="#e2c893"/>
+<text x="80" y="2927" class="box-title">REPRODUCED GAP: an available-limit amount can pass as the posted charge.</text>
+<text x="80" y="2965" class="body">₹499 spend + ₹45,000 available limit → a wrong ₹45,000 fact passes JS evidence and scores .995. Synthetic probe; sections 13–16.</text>
+</svg>

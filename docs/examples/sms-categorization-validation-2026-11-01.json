@@ -1,0 +1,165 @@
+{
+  "auditDate": "2026-11-01",
+  "scope": "Synthetic local code probe; no live AI response or production transaction.",
+  "message": {
+    "sender": "VM-HDFCBK-S",
+    "body": "INR 499.00 spent on HDFC Bank Credit Card XX1234 at SWIGGY on 01-11-2026. Available limit INR 45000.00.",
+    "occurredAt": "2026-11-01T07:00:00.000Z"
+  },
+  "parserWithoutConfiguredPatterns": {
+    "ok": true,
+    "fields": {
+      "amountInr": 499,
+      "instrument": "credit_card",
+      "entryKind": "spend",
+      "last4": "1234",
+      "merchant": "SWIGGY",
+      "date": "01-11-2026"
+    },
+    "parserKind": "conservative_fallback",
+    "patternId": null
+  },
+  "variants": [
+    {
+      "variant": "correct_charge",
+      "fact": {
+        "factType": "posted_movement",
+        "payload": {
+          "amountRole": "posted",
+          "entryKind": "spend",
+          "amountInr": 499,
+          "occurredAt": "2026-11-01T07:00:00.000Z",
+          "instrument": "credit_card",
+          "last4": "1234",
+          "merchant": "SWIGGY",
+          "category": "dining",
+          "isComplete": true,
+          "confidence": 0.98
+        }
+      },
+      "schema": {
+        "valid": true,
+        "errors": []
+      },
+      "evidence": {
+        "valid": true,
+        "errors": []
+      },
+      "assessment": {
+        "perFact": [
+          {
+            "score": 0.995,
+            "model": 0.98,
+            "evidence": 1,
+            "completeness": 1,
+            "disambiguation": 1,
+            "isComplete": true,
+            "factType": "posted_movement",
+            "merchantEvidenced": true,
+            "completionEvidence": true,
+            "receiptOnly": false,
+            "receiptCompletion": false,
+            "autoResolveEligible": true
+          }
+        ],
+        "composite": 0.995,
+        "reviewRequired": false,
+        "actionableCount": 1
+      }
+    },
+    {
+      "variant": "limit_as_charge",
+      "fact": {
+        "factType": "posted_movement",
+        "payload": {
+          "amountRole": "posted",
+          "entryKind": "spend",
+          "amountInr": 45000,
+          "occurredAt": "2026-11-01T07:00:00.000Z",
+          "instrument": "credit_card",
+          "last4": "1234",
+          "merchant": "SWIGGY",
+          "category": "dining",
+          "isComplete": true,
+          "confidence": 0.98
+        }
+      },
+      "schema": {
+        "valid": true,
+        "errors": []
+      },
+      "evidence": {
+        "valid": true,
+        "errors": []
+      },
+      "assessment": {
+        "perFact": [
+          {
+            "score": 0.995,
+            "model": 0.98,
+            "evidence": 1,
+            "completeness": 1,
+            "disambiguation": 1,
+            "isComplete": true,
+            "factType": "posted_movement",
+            "merchantEvidenced": true,
+            "completionEvidence": true,
+            "receiptOnly": false,
+            "receiptCompletion": false,
+            "autoResolveEligible": true
+          }
+        ],
+        "composite": 0.995,
+        "reviewRequired": false,
+        "actionableCount": 1
+      }
+    },
+    {
+      "variant": "different_category",
+      "fact": {
+        "factType": "posted_movement",
+        "payload": {
+          "amountRole": "posted",
+          "entryKind": "spend",
+          "amountInr": 499,
+          "occurredAt": "2026-11-01T07:00:00.000Z",
+          "instrument": "credit_card",
+          "last4": "1234",
+          "merchant": "SWIGGY",
+          "category": "groceries",
+          "isComplete": true,
+          "confidence": 0.98
+        }
+      },
+      "schema": {
+        "valid": true,
+        "errors": []
+      },
+      "evidence": {
+        "valid": true,
+        "errors": []
+      },
+      "assessment": {
+        "perFact": [
+          {
+            "score": 0.995,
+            "model": 0.98,
+            "evidence": 1,
+            "completeness": 1,
+            "disambiguation": 1,
+            "isComplete": true,
+            "factType": "posted_movement",
+            "merchantEvidenced": true,
+            "completionEvidence": true,
+            "receiptOnly": false,
+            "receiptCompletion": false,
+            "autoResolveEligible": true
+          }
+        ],
+        "composite": 0.995,
+        "reviewRequired": false,
+        "actionableCount": 1
+      }
+    }
+  ]
+}

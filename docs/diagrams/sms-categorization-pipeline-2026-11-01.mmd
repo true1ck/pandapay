@@ -1,0 +1,32 @@
+flowchart TD
+  I["INPUT ADAPTERS<br/>Android inbox / foreground / background<br/>iOS Shortcuts / native spool / imported history<br/>SMS backup XML"] --> Q["COMMON MESSAGE<br/>sender + original body + receivedAt<br/>account namespace; transport checkpoint stays separate"]
+  Q --> G["PRE-CAPTURE GATES<br/>20,000-character bound; OTP/security veto<br/>sender/P2P checks; demat/noise/promotion checks<br/>financial evidence and special-case triage"]
+  G -->|"security"| X["Stop before SMS persistence / upload / AI"]
+  G -->|"clear noise"| N["Often stopped by adapter filter<br/>If capture store is reached: minimal negative decision<br/>forget raw capture; no AI"]
+  G -->|"financial candidate"| K["ACCOUNT-SCOPED SOURCE KEY<br/>SHA256 JSON of profile, normalized sender, normalized body<br/>receipt / parser-version check; private ignore-layout rule"]
+  K -->|"already processed"| R["Reuse outcome; preserve capture/checkpoint bookkeeping"]
+  K -->|"sender missing"| SR["Needs Review: sender_unavailable<br/>no automatic financial effect or AI upload"]
+  K --> L["LOCAL PARSE<br/>built-in safety and special families<br/>approved downloaded rules + built-in grammar<br/>saved cards + profile name + personal/shared category rules"]
+  L --> O["ATOMIC LOCAL SAVE<br/>decision + observation + reason codes + parser/bundle version<br/>optional provisional transaction / bill / commitment<br/>candidate-vs-baseline exposure telemetry"]
+  O --> F["TYPED-FACT PATH<br/>bills, balances, mandates, attempts, supported service facts<br/>sourceKey + sender + received time + bodyHash + indexed facts<br/>NO raw body in facts envelope"]
+  O --> U["LEGACY TRANSACTION / UNRESOLVED PATH<br/>durable sms_intake; sender + body + original receipt time<br/>POST /transactions/from-sms/batch; historical backfill flag"]
+  F --> FS["POST /sms/facts<br/>validate contract; source/fact dedupe; merge overrides<br/>central projections + card-date / mandate specialists"]
+  U --> P["SERVER PARSER<br/>financial safety + specialized built-ins<br/>active parser_patterns; UPI / conservative / card fallbacks"]
+  P -->|"parsed"| C["SERVER CATEGORY + CARD RESOLUTION<br/>explicit choice; personal merchant rule; private categories<br/>verified VPA; MCC; user history; DB rules; built-in map; Other"]
+  C --> T["CANONICAL TRANSACTION<br/>source-key / cross-source duplicate handling<br/>transaction_observations; accounting / rewards where applicable<br/>device fetch replaces provisional entry"]
+  P -->|"unparsed / needs review"| V["DEVICE RECONCILIATION<br/>suppress known negatives and handled bill observations<br/>retain eligible unresolved SMS in Needs Review"]
+  V --> A["POST /ai/jobs<br/>one job per profile + sourceKey; flags and worker auth required<br/>sensitive-content refusal; redact URLs / addresses / references / IDs"]
+  A --> W["GEMINI WORKER<br/>lease + provider capacity; up to 4 SMS per request<br/>system instructions + few-shot examples + original receipt time<br/>decision + typed facts; at most one actionable fact requested"]
+  W --> H["VALIDATE AND RECHECK<br/>normalize evidenced fields; schema + amount-role + merchant/time evidence<br/>one repair request for invalid actionable facts / decision<br/>API repeats validation; server computes composite score"]
+  H --> D{"Device routing"}
+  D -->|"explicit valid shouldConsider=false"| AD["Auto-Resolved dismissal receipt<br/>remove Needs Review; positive-fact score not required"]
+  D -->|"one complete eligible actionable fact; score >= 0.85"| AT["Auto-file local-ai transaction / bill / mandate<br/>personal category correction wins over AI category<br/>Auto-Resolved history + source context"]
+  D -->|"empty / weak / incomplete / multiple facts / failure"| MR["Keep editable Needs Review<br/>suggestions or unavailable state; manual correction / retry"]
+  MR --> E["USER CONFIRMS / CORRECTS / DISMISSES<br/>update own record / fact override / private layout rule<br/>explicit false-transaction correction can teach private ignore rule"]
+  AT --> E
+  AD --> E
+  T --> E
+  E --> LE["CONSENTED LEARNING<br/>redacted structured feedback; origin and correction kind<br/>AI-only outcomes are proposals; admin review before shared use"]
+  LE --> LR["TWO SHARED LEARNING ROUTES<br/>Category: merchant + sender + context + family; >=10 users, >=90% agreement, approval<br/>Parser: compile template; holdout + hard negatives; shadow / 5% / 20% / active"]
+  LR --> B["ADMIN-APPROVED DOWNLOADS<br/>version / minimum client / checksum validation<br/>cached offline; private user corrections still take precedence"]
+  B -.-> L

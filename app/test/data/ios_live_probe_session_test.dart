@@ -165,8 +165,9 @@ void main() {
     final row = liveRow('chat')..['body'] = 'Hi there';
     final outcome = live.process([row]).single;
     expect(outcome['outcome'], 'ignored');
-    expect(outcome['effectiveSender'], 'VM-BANK');
-    expect(outcome['senderInferred'], true);
+    // No issuer is named, so no sender is filled in.
+    expect(outcome['effectiveSender'], '');
+    expect(outcome['senderInferred'], false);
     expect(outcome['triageKind'], 'unrelated');
     expect(outcome['triageReason'], 'no_financial_signal');
     expect(outcome['intakeDecision'], 'ignored_unrelated');

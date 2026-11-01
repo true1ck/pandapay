@@ -636,7 +636,8 @@ void main() {
     expect(state.currentWindows, hasLength(3));
     expect(state.monthCount, 2);
     expect(state.completedMonths, 1);
-    expect(state.label, 'Importing history · 1 of 2 months checked');
+    // These windows have no dates, so the strip names no date yet.
+    expect(state.label, 'Importing history · starting');
   });
   test(
     'drain is bounded, acknowledges shared receipts, never auto-opens Shortcuts',
@@ -657,7 +658,8 @@ void main() {
       addTearDown(controller.dispose);
       await controller.refresh();
       expect(batches, [50, 50, 3]);
-      expect(uploads, 3);
+      // One upload pass per drain keeps the phone responsive.
+      expect(uploads, 1);
       expect(service.rows, isEmpty);
       expect(service.calls, isNot(contains('runShortcut')));
       expect(controller.state.error, isNull);

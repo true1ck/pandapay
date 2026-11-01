@@ -507,9 +507,42 @@ class FinancialStore {
       }
     }
     if (entity == 'transactions') {
+      _enrichSmsPaymentMethod(ns, rows);
       _enrichDisplayedRecipients(ns, rows, edits);
     }
     return rows;
+  }
+
+  // Keep explicit source evidence after a provisional row is reconciled to a
+  // server row whose narrower rail contract cannot represent generic UPI.
+  // Match the account and exact SMS source identity, never merchant/amount.
+  void _enrichSmsPaymentMethod(String ns, List<Map<String, dynamic>> rows) {
+    final keys = rows.where((row) => row['payment_method'] == null)
+        .map((row) => row['source_key']).whereType<String>().toSet().toList();
+    if (keys.isEmpty) {
+      return;
+    }
+    final evidence = <String>{};
+    // Bound SQLite parameters and look up only the displayed source IDs,
+    // rather than scanning years of observations for each Activity refresh.
+    for (var start = 0; start < keys.length; start += 400) {
+      final end = start + 400 < keys.length ? start + 400 : keys.length;
+      final chunk = keys.sublist(start, end);
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      for (final row in database.db.select(
+        "SELECT id FROM financial_entities WHERE namespace=? AND entity='sms_observations' "
+        "AND id IN ($placeholders) AND json_extract(payload, '\$.payment_method')='upi'",
+        [ns, ...chunk],
+      )) {
+        evidence.add(row['id'] as String);
+      }
+    }
+    for (final row in rows) {
+      if (row['payment_method'] == null &&
+          evidence.contains(row['source_key'])) {
+        row['payment_method'] = 'upi';
+      }
+    }
   }
 
   /// Show a recipient from the original device SMS while a confirmed server
@@ -558,19 +591,28 @@ class FinancialStore {
             ? DateTime.fromMillisecondsSinceEpoch(receivedMs)
             : DateTime.tryParse(receivedMs?.toString() ?? '');
         if (receivedAt == null) continue;
-        final parsed = LocalSmsParser.parse(
-          namespace: ns,
-          sender: capture['sender'] as String,
-          body: capture['body'] as String,
-          receivedAt: receivedAt,
-        );
-        final proposed = parsed?.transaction;
-        final name = MerchantIdentity.cleanName(proposed?.merchantName);
+        final proposed = _smsNameProposal(ns, sourceKey, () {
+          final parsed = LocalSmsParser.parse(
+            namespace: ns,
+            sender: capture['sender'] as String,
+            body: capture['body'] as String,
+            receivedAt: receivedAt,
+          );
+          final transaction = parsed?.transaction;
+          if (transaction == null || transaction.sourceKey != sourceKey) {
+            return null;
+          }
+          return (
+            name: MerchantIdentity.cleanName(transaction.merchantName),
+            entryKind: transaction.entryKind.wireValue,
+            paise: transaction.amount.paise,
+          );
+        });
+        final name = proposed?.name;
         if (proposed == null ||
-            proposed.sourceKey != sourceKey ||
             name == null ||
-            proposed.entryKind.wireValue != row['entry_kind'] ||
-            proposed.amount.paise !=
+            proposed.entryKind != row['entry_kind'] ||
+            proposed.paise !=
                 Money.fromRupees(row['amount_inr'] as num).paise) {
           continue;
         }
@@ -579,6 +621,72 @@ class FinancialStore {
         // A malformed historical row must not interrupt transaction reads.
       }
     }
+  }
+
+  /// The merchant name the parser proposes for a captured SMS. A captured
+  /// SMS never changes, so this is parsed once per parser version and saved,
+  /// instead of on every transaction read. Saving is best effort: a
+  /// read-only connection still gets the right answer, just uncached.
+  final _smsNameProposals =
+      <String, ({String? name, String entryKind, int paise})?>{};
+  bool _smsNameTableReady = false;
+
+  ({String? name, String entryKind, int paise})? _smsNameProposal(
+    String ns,
+    String sourceKey,
+    ({String? name, String entryKind, int paise})? Function() parse,
+  ) {
+    final key = '$ns\u0000$sourceKey';
+    if (_smsNameProposals.containsKey(key)) return _smsNameProposals[key];
+    const none = '\u0000none';
+    try {
+      if (!_smsNameTableReady) {
+        database.db.execute(
+          'CREATE TABLE IF NOT EXISTS sms_name_proposals('
+          'namespace TEXT NOT NULL, source_key TEXT NOT NULL, '
+          'parser_version INTEGER NOT NULL, merchant_name TEXT, '
+          'entry_kind TEXT NOT NULL, amount_paise INTEGER NOT NULL, '
+          'PRIMARY KEY(namespace, source_key))',
+        );
+        _smsNameTableReady = true;
+      }
+      final saved = database.db.select(
+        'SELECT merchant_name, entry_kind, amount_paise FROM sms_name_proposals '
+        'WHERE namespace=? AND source_key=? AND parser_version=?',
+        [ns, sourceKey, LocalSmsParser.version],
+      );
+      if (saved.isNotEmpty) {
+        final row = saved.single;
+        final value = row['entry_kind'] == none
+            ? null
+            : (
+                name: row['merchant_name'] as String?,
+                entryKind: row['entry_kind'] as String,
+                paise: row['amount_paise'] as int,
+              );
+        return _smsNameProposals[key] = value;
+      }
+    } catch (_) {
+      // Fall through to parsing; caching must never fail a read.
+    }
+    final value = parse();
+    _smsNameProposals[key] = value;
+    try {
+      database.db.execute(
+        'INSERT OR REPLACE INTO sms_name_proposals VALUES (?,?,?,?,?,?)',
+        [
+          ns,
+          sourceKey,
+          LocalSmsParser.version,
+          value?.name,
+          value?.entryKind ?? none,
+          value?.paise ?? 0,
+        ],
+      );
+    } catch (_) {
+      // Read-only connection: keep the in-memory answer only.
+    }
+    return value;
   }
 
   static const _provisionalSmsIdPrefix = 'local-sms:';

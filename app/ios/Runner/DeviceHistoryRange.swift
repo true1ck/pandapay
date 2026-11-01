@@ -51,13 +51,26 @@ final class DeviceHistoryRangeInbox {
     var counts: [String: Int] = [:]
     var identities = Set<String>()
     var report: [String: Any] {
-      ["run_id": request.id, "status": status, "counts": counts]
+      let stamp = ISO8601DateFormatter()
+      stamp.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+      return ["run_id": request.id, "status": status, "counts": counts,
+        "start_inclusive": stamp.string(from: request.start),
+        "end_exclusive": stamp.string(from: request.end)]
     }
   }
   private var runs: [Run] = []
   private var pending: [[String: Any]] = []
   private let limit: Int
   init(limit: Int = 2000) { self.limit = limit }
+
+  /// The original recipe and its sender-test copy use the same V2 protocol.
+  /// Register before opening Shortcuts for either name, not only the baseline.
+  func registerForShortcut(_ name: String, request: String) throws {
+    guard ["PANDAPAY SELECTED RANGE V2", "PANDAPAY SENDER CHECK"].contains(name) else {
+      throw HistoryRangeError.invalidRequest
+    }
+    try register(request)
+  }
 
   private func index(_ text: String) throws -> Int {
     let request = try HistoryRangeRequest.parse(text)
@@ -87,7 +100,8 @@ final class DeviceHistoryRangeInbox {
     return end ? runs[i].request.end : runs[i].request.start.addingTimeInterval(-1)
   }
 
-  func capture(_ text: String, body: String, sender: String, date: Date?, evidence: String) throws -> String {
+  func capture(_ text: String, body: String, sender: String, date: Date?, evidence: String,
+               senderDiagnostics: [String: Any]? = nil) throws -> String {
     lock.lock(); defer { lock.unlock() }
     let i = try index(text)
     guard runs[i].status == "running" else { throw HistoryRangeError.finishedRun }
@@ -99,6 +113,7 @@ final class DeviceHistoryRangeInbox {
     guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, body.utf16.count <= 20_000 else { return reject("invalid") }
     if SmsSecurityPolicy.sensitive(body) { return reject("sensitive") }
     if sender.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { runs[i].counts["missing_sender", default: 0] += 1 }
+    if ["handle", "name", "text"].contains(evidence) { runs[i].counts["sender_\(evidence)", default: 0] += 1 }
     guard let date else { return reject("missing_date") }
     guard date >= runs[i].request.start, date < runs[i].request.end else { return reject("out_of_range") }
     let stamp = ISO8601DateFormatter(); stamp.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -107,11 +122,13 @@ final class DeviceHistoryRangeInbox {
     guard !runs[i].identities.contains(identity) else { return reject("duplicates") }
     guard runs[i].identities.count < limit, pending.count < 2500 else { return reject("limit_reached") }
     runs[i].identities.insert(identity)
-    pending.append([
+    var record: [String: Any] = [
       "id": "\(runs[i].request.id):\(identity)", "runId": runs[i].request.id,
       "body": body, "sender": sender, "senderEvidence": evidence,
       "receivedAt": original, "capturedAt": stamp.string(from: Date()), "bodyCharacters": body.utf16.count,
-    ])
+    ]
+    if let senderDiagnostics { record["senderDiagnostics"] = senderDiagnostics }
+    pending.append(record)
     runs[i].counts["accepted", default: 0] += 1
     return "accepted"
   }

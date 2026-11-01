@@ -26,7 +26,7 @@ final class DeviceLiveMessageInbox {
   /// recorded even when an optional input is absent. Conversion failures before
   /// perform() remain unobservable. Recent events are process-local diagnostics.
   func capture(body: String?, sender: String, receivedAt: Date?, evidence: String,
-               handler: String, allowedBundle: Bool) -> String {
+               handler: String, allowedBundle: Bool, senderDiagnostics: [String: Any]? = nil) -> String {
     lock.lock(); defer { lock.unlock() }
     let id = "live:\(UUID().uuidString)"
     let invoked = stamp(now())
@@ -45,6 +45,7 @@ final class DeviceLiveMessageInbox {
     if allowedBundle {
       if let body { event["inputBody"] = body }
       event["inputSender"] = sender
+      if let senderDiagnostics { event["senderDiagnostics"] = senderDiagnostics }
       if let receivedAt { event["inputDate"] = stamp(receivedAt) }
     }
     func finish(_ state: String) -> String {
@@ -68,11 +69,14 @@ final class DeviceLiveMessageInbox {
     guard identities.count < limit, pending.count < limit else { return finish("capacity_rejected") }
     identities.insert(identity)
     event["receivedAt"] = original
-    pending.append([
+    var row: [String: Any] = [
       "id": id, "origin": "live", "runId": "live", "body": body,
+      "handler": handler,
       "sender": sender, "senderEvidence": evidence, "receivedAt": original,
       "capturedAt": invoked, "bodyCharacters": body.utf16.count,
-    ])
+    ]
+    if let senderDiagnostics { row["senderDiagnostics"] = senderDiagnostics }
+    pending.append(row)
     return finish("pending")
   }
 
@@ -80,7 +84,7 @@ final class DeviceLiveMessageInbox {
   /// pending and can retry; repeated confirmations cannot double-count success.
   func complete(_ outcomes: [[String: Any]]) {
     lock.lock(); defer { lock.unlock() }
-    let terminal = Set(["retained_new", "retained_existing", "ignored", "rejected_sensitive", "rejected_invalid", "rejected_missing_date"])
+    let terminal = Set(["retained_new", "retained_existing", "needs_review", "ignored", "rejected_sensitive", "rejected_invalid", "rejected_missing_date"])
     for outcome in outcomes {
       guard let id = outcome["id"] as? String,
             pending.contains(where: { $0["id"] as? String == id }),

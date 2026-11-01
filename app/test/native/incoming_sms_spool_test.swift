@@ -176,12 +176,12 @@ do {
 print("PASS: atomic history-period replacement, retained input, rollback, stale callbacks and duplicate protection")
 
 do {
-  let store = IncomingSmsSpool(directory: root.appendingPathComponent("unknown-sender"), now: { time })
+  let store = IncomingSmsSpool(directory: root.appendingPathComponent("unknown-sender"), now: { time }, receiverBuild: "79")
   let g = try store.configure(namespace: "user:unknown-sender", enabled: true)["generation"] as! String
   try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(start), "end": iso(time)]])
   let request = try store.issue(generation: g)!
-  require(try store.capture(body: body, sender: nil, receivedAt: receive, provenance: "original", request: request, useMessageReceipt: true) == "saved_without_sender", "missing sender retains input for shared classification")
-  require(try store.capture(body: body, sender: "  ", receivedAt: receive, provenance: "original", request: request, useMessageReceipt: true) == "saved_without_sender", "same-attempt replay cannot duplicate unknown input")
+  require(try store.capture(body: body, sender: nil, receivedAt: receive, provenance: "original", request: request, useMessageReceipt: true, senderInput: "person_without_handle") == "saved_without_sender", "missing sender retains input for shared classification")
+  require(try store.capture(body: body, sender: "  ", receivedAt: receive, provenance: "original", request: request, useMessageReceipt: true, senderInput: "person_without_handle") == "saved_without_sender", "same-attempt replay cannot duplicate unknown input")
   let pending = try store.pending(generation: g)
   require(pending.count == 1 && pending[0]["body"] as? String == body, "full unknown-sender input survives until shared receipt")
   require(pending[0]["sender"] as? String == "" && pending[0]["senderEvidence"] as? String == "missing", "never invent a bank sender")
@@ -190,8 +190,20 @@ do {
   require(try store.finish(request: request, found: 1, limitOff: true, warning: false) == "complete", "committed review counts as successful acquisition")
   let resultWindow = (try store.snapshot()["windows"] as! [[String: Any]])[0]
   require(resultWindow["enumerated"] as? Int == 1 && resultWindow["processed"] as? Int == 1 && resultWindow["needs_review"] as? Int == 1, "UI counters distinguish arrival, processing and review")
+  require(resultWindow["sender_received"] as? Int == 0 && resultWindow["sender_unavailable"] as? Int == 1, "missing sender diagnostics survive acknowledgement without raw content")
+  require(resultWindow["receiver_build"] as? String == "79", "actual Capture records the receiving build after acknowledgement")
+  require(resultWindow["sender_input"] as? String == "person_without_handle", "person without handle is distinguished from absent input after acknowledgement")
   require(try store.pending(generation: g).isEmpty, "raw input clears only after durable shared review")
   require(try store.capture(body: secret, sender: nil, receivedAt: receive, provenance: "original") == "excluded_security", "security input never enters missing-sender review")
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(start), "end": iso(time)]])
+  let nextRequest = try store.issue(generation: g)!
+  _ = try store.boundary(request: nextRequest, end: false, observingIntent: true)
+  let nextAttempt = (try JSONSerialization.jsonObject(with: Data(nextRequest.utf8)) as! [String: Any])["attempt"] as! String
+  let nextWindow = (try store.snapshot()["windows"] as! [[String: Any]]).first { $0["attempt"] as? String == nextAttempt }!
+  require(nextWindow["receiver_build"] == nil, "a waiting window cannot inherit another attempt's receiver build")
+  require(nextWindow["sender_input"] == nil, "a waiting window cannot inherit another attempt's sender evidence")
+  require(try store.snapshot()["last_receiver_attempt"] == nil, "internal receiver attempt is not exposed")
+  require(try store.snapshot()["last_sender_attempt"] == nil, "internal sender attempt is not exposed")
 }
 print("PASS: unknown sender input retained without inference, committed review completion and security exclusion")
 
@@ -213,13 +225,18 @@ do {
   }
   fails { _ = try store.capture(body: body, sender: sender, receivedAt: receive, provenance: "original", useMessageReceipt: true) }
   let r = try request(), secondBody = body + " OTHER REFERENCE"
+  fails { _ = try store.capture(body: body, sender: sender, receivedAt: receive, provenance: "original", request: r, useMessageReceipt: true, senderInput: "not-an-evidence-kind") }
+  require(try window(r)["sender_input"] == nil && window(r)["enumerated"] as? Int == 0, "unsupported diagnostic strings cannot persist or acknowledge input")
   fails { _ = try store.capture(body: body, sender: sender, receivedAt: receive, provenance: "original", request: r, itemID: "1", useMessageReceipt: true) }
-  _ = try store.capture(body: body, sender: sender, receivedAt: receive, provenance: "original", request: r, useMessageReceipt: true)
+  _ = try store.capture(body: body, sender: sender, receivedAt: receive, provenance: "original", request: r, useMessageReceipt: true, senderInput: "person_handle")
+  require(try window(r)["sender_input"] as? String == "person_handle", "direct person handle evidence reaches native acquisition")
   _ = try store.capture(body: secondBody, sender: sender, receivedAt: receive, provenance: "original", request: r, useMessageReceipt: true)
   // Reordered retries resolve the original receipts, not new enumerations.
   _ = try store.capture(body: secondBody, sender: sender, receivedAt: receive, provenance: "original", request: r, useMessageReceipt: true)
   _ = try store.capture(body: body, sender: sender, receivedAt: receive, provenance: "original", request: r, useMessageReceipt: true)
   require(try window(r)["enumerated"] as? Int == 2, "content receipt replay cannot inflate source counts")
+  require(try window(r)["sender_received"] as? Int == 2 && window(r)["sender_unavailable"] as? Int == 0, "sender counters distinguish actual input from replay")
+  require(try window(r)["sender_input"] as? String == "text", "legacy text captures retain their own diagnostic evidence")
   require(try store.pending(generation: g).count == 2, "content receipts retain each distinct body once")
   require(try store.finish(request: r, found: 2, limitOff: true, warning: false) == "finished", "content receipts still wait for committed processing")
   let pending = try store.pending(generation: g)
@@ -230,6 +247,7 @@ do {
   _ = try store.capture(body: body, sender: sender, receivedAt: receive, provenance: "original", request: duplicateRange, useMessageReceipt: true)
   _ = try store.capture(body: body, sender: sender, receivedAt: receive, provenance: "original", request: duplicateRange, useMessageReceipt: true)
   require(try store.pending(generation: g).isEmpty, "reacquisition cannot duplicate a committed occurrence")
+  require(try window(duplicateRange)["sender_received"] as? Int == 1, "already-saved source still proves sender arrived once")
   require(try store.finish(request: duplicateRange, found: 2, limitOff: true, warning: false) == "partial", "indistinguishable Find rows cannot claim complete coverage")
 
   let distinct = try request()
@@ -240,6 +258,7 @@ do {
   let rejected = try request()
   let countBefore = try store.pending(generation: g).count
   require(try store.capture(body: secret, sender: sender, receivedAt: receive, provenance: "original", request: rejected, useMessageReceipt: true) == "excluded_security", "sensitive message uses a redacted receipt")
+  require(try window(rejected)["sender_received"] as? Int == 0 && window(rejected)["sender_unavailable"] as? Int == 0, "sender detail counts cover valid nonsensitive inputs only")
   require(try store.pending(generation: g).count == countBefore, "sensitive message cannot enter pending input")
   do {
     var database: OpaquePointer?, statement: OpaquePointer?
@@ -272,3 +291,41 @@ require(launch.result(URL(string: "pandapay://sms-import/success?token=wrong")!)
 let extra = URL(string: success.absoluteString + "&errorMessage=private&result=private")!
 require(launch.result(extra)?.count == 2, "callback input is never forwarded to diagnostics")
 print("PASS: callback escaping, scoped nonce and no raw result forwarding")
+
+do {
+  // Find Messages stops at 500, oldest first. A capped window covers up to
+  // its newest message and queues the remainder from that instant.
+  let store = IncomingSmsSpool(directory: root.appendingPathComponent("find-cap"), maxPending: 2000, now: { time })
+  let g = try store.configure(namespace: "user:find-cap", enabled: true)["generation"] as! String
+  let windowStart = time.addingTimeInterval(-86_400)
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(windowStart), "end": iso(time)]])
+  let request = try store.issue(generation: g)!
+  var lastReceive = windowStart
+  for index in 0..<500 {
+    lastReceive = windowStart.addingTimeInterval(Double(index + 1) * 60)
+    require(try store.capture(body: "INR \(index + 1) spent on ICICI Card XX1234 at SHOP \(index).", sender: "ICICIT-S",
+      receivedAt: lastReceive, provenance: "original", request: request, useMessageReceipt: true) == "saved_for_processing", "capped capture \(index)")
+  }
+  require(try store.finish(request: request, found: 500, limitOff: true, warning: false) == "finished", "capped window waits for processing, not partial")
+  var windows = (try store.snapshot()["windows"] as! [[String: Any]]).sorted { ($0["ordinal"] as! Int) < ($1["ordinal"] as! Int) }
+  require(windows.count == 2, "capped window queues a continuation")
+  func at(_ value: Any?) -> Date? { IncomingSmsSpool.date(value as? String ?? "") }
+  require(at(windows[0]["end"]) == lastReceive && at(windows[1]["start"]) == lastReceive, "continuation starts at the newest captured message")
+  require(at(windows[1]["end"]) == time && windows[1]["state"] as? String == "queued", "continuation keeps the original end")
+  require(windows[0]["month_label"] as? String == windows[1]["month_label"] as? String && windows[0]["logical_id"] as? String == windows[1]["logical_id"] as? String, "continuation stays in the same month")
+  while true {
+    let rows = try store.pending(generation: g, limit: 50)
+    if rows.isEmpty { break }
+    try store.acknowledge(generation: g, outcomes: rows.map { ["id": $0["id"]!, "sourceKey": String(repeating: "a", count: 64), "parserVersion": 26, "outcome": "captured"] })
+  }
+  require(try store.finish(request: request, found: 500, limitOff: true, warning: false) == "complete", "capped window completes after processing")
+  let next = try store.issue(generation: g)!
+  require(at((try JSONSerialization.jsonObject(with: Data(next.utf8)) as! [String: Any])["start_inclusive"]) == lastReceive, "next request resumes from the boundary")
+  require(try store.capture(body: "INR 500 spent on ICICI Card XX1234 at SHOP 499.", sender: "ICICIT-S", receivedAt: lastReceive, provenance: "original",
+    request: next, useMessageReceipt: true) == "already_saved", "boundary message is not saved twice")
+  require(try store.capture(body: "INR 501 spent on ICICI Card XX1234 at SHOP 500.", sender: "ICICIT-S", receivedAt: lastReceive.addingTimeInterval(60),
+    provenance: "original", request: next, useMessageReceipt: true) == "saved_for_processing", "newer message is captured")
+  windows = (try store.snapshot()["windows"] as! [[String: Any]])
+  require(windows.count == 2, "under-cap continuation does not split again")
+  print("PASS: Find Messages 500 cap continues from the newest captured message")
+}

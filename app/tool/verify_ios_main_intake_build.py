@@ -20,6 +20,9 @@ for marker in [b'SMS on iPhone', b'Your spending, up to date.', b'Live bank aler
                b'Capture PandaPay History SMS', b'End reached PandaPay',
                b'Start new import', b'Replaces the current check. Saved messages stay.',
                b'Sender unavailable', b'Sender wasn\xe2\x80\x99t provided. Check this message before adding it.',
+               b'sender received', b'sender missing', b'No messages received yet',
+               b'Last completed import', b'Capture received by build',
+               b'Last sender input:', b'Message sender supplied without an address',
                b'Handoff: Returning to the existing Shortcuts run',
                b'Handoff: Returning to PandaPay during import']:
     assert has_compiled_text(marker.decode()), f'Production SMS setup UI missing from compiled app: {marker.decode()}'
@@ -35,7 +38,7 @@ expected = {
     'CapturePandaPayWindowMessageIntent', 'FinishPandaPaySmsWindowIntent',
     'PreparePandaPaySmsCatchupIntent',
     'FinishPandaPayHistoryImportIntent',
-    'CapturePandaPayHistoryMessageIntent',
+    'CapturePandaPayHistoryMessageIntent', 'CapturePandaPayHistoryTextMessageIntent',
 }
 assert expected <= actions.keys(), 'Production actions missing'
 assert not any('Prototype' in name or 'DeviceFinancial' in name for name in actions), 'Probe actions leaked into main app'
@@ -50,7 +53,7 @@ for name in expected:
         assert parameter['inputConnectionBehavior'] == expected_connection, (
             f"{name}.{parameter['name']} has the wrong input-connection mode"
         )
-for name in ['CapturePandaPayMessageIntent', 'CapturePandaPayWindowMessageIntent', 'CapturePandaPayHistoryMessageIntent']:
+for name in ['CapturePandaPayMessageIntent', 'CapturePandaPayWindowMessageIntent', 'CapturePandaPayHistoryMessageIntent', 'CapturePandaPayHistoryTextMessageIntent']:
     parameters = {p['name']: p for p in actions[name]['parameters']}
     sender = parameters['sender']
     assert sender['isOptional'] and parameters['body']['isOptional']
@@ -71,13 +74,28 @@ interactive_capture = actions['CapturePandaPayHistoryMessageIntent']
 # The iOS 26 extractor encodes background + dynamic foreground as 9. The
 # action must start in background; only the admitted app session can opt in.
 assert interactive_capture.get('supportedModes') == 9, 'History Capture must support conditional foreground continuation'
+text_capture = actions['CapturePandaPayHistoryTextMessageIntent']
+assert text_capture.get('supportedModes') == 9, 'Text history must preserve admitted foreground return'
+text_parameters = {p['name']: p for p in text_capture['parameters']}
+assert set(text_parameters) == {'request', 'body', 'sender', 'receivedAt'}, 'Text-only Capture must have no Person/contact input'
+assert text_capture['title']['key'] == 'Capture PandaPay History SMS as Text'
+assert text_capture['outputType'] == interactive_capture['outputType']
+assert has_compiled_text('payment_method'), 'Explicit UPI source evidence is missing'
 quiet_capture = actions['CapturePandaPayWindowMessageIntent']
 history_parameters = {p['name']: p for p in interactive_capture['parameters']}
-assert set(history_parameters) == {'request', 'body', 'sender', 'receivedAt'}, 'History Capture must use only the probe-style individual-message fields'
+assert set(history_parameters) == {'request', 'body', 'sender', 'senderPerson', 'receivedAt'}, 'History Capture must retain the four saved fields plus the optional direct Person input'
 assert history_parameters['body']['isOptional'], 'History body must preserve optional text input compatibility'
 assert history_parameters['sender']['isOptional'] and history_parameters['receivedAt']['isOptional']
 assert history_parameters['sender']['valueType'] == history_parameters['body']['valueType'], 'Saved history sender text must not change to a Person'
 assert not history_parameters['sender']['typeSpecificMetadata'], 'History sender must not trigger contact/phone/email conversion'
+# The old String parameter stays compatible; the new Person is additive.
+# Inspect the compiled Person contract after extraction as well as source.
+person = history_parameters['senderPerson']
+assert person['isOptional'], 'New Person input must remain optional for saved recipes'
+assert person['valueType'] == {'intents': {'wrapper': {'typeIdentifier': 3}}}, 'Direct Sender must remain an IntentPerson, not a text coercion'
+assert person['typeSpecificMetadata'] == ['LNValueTypeMetadataKeyPersonParameterMode', {'string': {'wrapper': 'emailOrPhone'}}], 'Direct Sender must use the probe-compatible person mode'
+assert person['title']['key'] == 'Sender from Message'
+assert b'SmsSenderInput' in (bundle / 'Runner').read_bytes(), 'Direct sender extraction missing from native app'
 assert history_parameters['body']['valueType'] == history_parameters['request']['valueType']
 assert interactive_capture['outputType'] == quiet_capture['outputType'], 'Capture result types diverged'
 for key in ['NSCameraUsageDescription', 'NSMicrophoneUsageDescription', 'NSLocationWhenInUseUsageDescription', 'NSFaceIDUsageDescription']:
@@ -86,5 +104,5 @@ native_symbols = subprocess.check_output(['xcrun', 'nm', '-gU', str(bundle / 'Ru
 for strategy in ['AudioVideoPermissionStrategy', 'NotificationPermissionStrategy', 'LocationPermissionStrategy']:
     assert strategy in native_symbols, f'Native permission handler was compiled out: {strategy}'
 print(f"PASS: main PandaPay {info['CFBundleShortVersionString']} ({info['CFBundleVersion']}), "
-      'production UI, conditional foreground History Capture plus interactive history finish, four-field text-compatible history capture, native message receipts, estimated-date default, '
+      'production UI, conditional foreground History Capture plus interactive history finish, separate text-only history sender plus compatible legacy Person, native message receipts, estimated-date default, '
       'native permission handlers, probe/demo absent')

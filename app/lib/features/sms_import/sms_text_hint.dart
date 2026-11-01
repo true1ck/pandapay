@@ -21,6 +21,7 @@ library;
 import '../../data/local_sms_parser.dart';
 import '../../data/sms_gate_filter.dart';
 import '../../data/sms_security_policy.dart';
+import 'ios_shortcut_sms.dart';
 
 /// Returns a bare 4-digit string if [smsBody] contains a "ending NNNN" /
 /// "XXNNNN" / "card NNNN" style last-4 mention, else null. Deliberately
@@ -210,6 +211,13 @@ class SmsTriageResult {
 
 SmsTriageResult classifySmsTriage(String sender, String smsBody) {
   final verdict = SmsGateFilter.evaluate(sender, smsBody);
+  // iPhone delivers a saved contact's name instead of its number. It is the
+  // same personal sender Android sees as a mobile number; Android never
+  // delivers names, so its results are unchanged.
+  if (verdict.dropReason != SmsGateDropReason.otpOrSecurity &&
+      IosShortcutSmsBatch.looksLikeContactName(sender)) {
+    return const SmsTriageResult(SmsTriageKind.unrelated, 'p2p_contact_name');
+  }
   if (!verdict.passed) {
     switch (verdict.dropReason!) {
       case SmsGateDropReason.emptyOrMalformed:

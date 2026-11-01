@@ -13,6 +13,10 @@ class IosShortcutSmsBatch {
   final int missingSender;
   final int missingDate;
 
+  /// Messages from a saved contact (sender arrives as a name). Counted only;
+  /// the shared triage ignores them like texts from a phone number.
+  final int personal;
+
   const IosShortcutSmsBatch._({
     required this.messages,
     required this.sourceRows,
@@ -22,34 +26,110 @@ class IosShortcutSmsBatch {
     required this.incomplete,
     required this.missingSender,
     required this.missingDate,
+    this.personal = 0,
   });
 
-  static String _inferSender(String body) {
-    final lower = body.toLowerCase();
-    if (lower.contains('hdfc')) return 'VM-HDFCBK';
-    if (lower.contains('icici')) return 'VM-ICICIB';
-    if (lower.contains('sbi') || lower.contains('state bank')) {
-      return 'VM-SBIINB';
+  /// Shortcuts formats numbers for display ("+91 74111 47986"). Remove the
+  /// spacing so the shared phone-number rules recognise them.
+  static String normalizeSender(String sender) {
+    final trimmed = sender.trim();
+    if (RegExp(r'^\+?[\d\s\-().]+$').hasMatch(trimmed) &&
+        RegExp(r'\d').allMatches(trimmed).length >= 7) {
+      return trimmed.replaceAll(RegExp(r'[\s\-().]'), '');
     }
-    if (lower.contains('axis')) return 'VM-AXISBK';
-    if (lower.contains('kotak')) return 'VM-KOTAKB';
-    if (lower.contains('bob') || lower.contains('bank of baroda')) {
-      return 'VM-BOBTXN';
+    return trimmed;
+  }
+
+  /// True for a contact name ("Sujay", "Mom Work"). Bank and company headers
+  /// look like "SBICRD-S", "JioBal-S", "VM-HDFCBK" or "HDFCBK"; numbers and
+  /// emails are addresses, not names. iOS cannot save an alphanumeric bank
+  /// header as a contact, so a name always stands for a phone or email.
+  static bool looksLikeContactName(String sender) {
+    final s = sender.trim();
+    if (s.isEmpty || !RegExp(r'[A-Za-z]').hasMatch(s) || s.contains('@')) {
+      return false;
     }
-    if (lower.contains('pnb') || lower.contains('punjab national')) {
-      return 'VM-PNBSMS';
+    final header = RegExp(
+      r'^(?:[A-Za-z]{2}-)?[A-Za-z0-9]{2,11}(?:-[A-Za-z])?$',
+    );
+    if (!header.hasMatch(s)) return true;
+    // A bare word with lowercase and no route suffix is a name, not a header.
+    return RegExp(r'[a-z]').hasMatch(s) &&
+        !RegExp(r'-[A-Za-z]$').hasMatch(s) &&
+        !RegExp(r'^[A-Za-z]{2}-').hasMatch(s);
+  }
+
+  /// Banks and card issuers, checked first. More specific entries (SBI Card)
+  /// come before the broader issuer (SBI) and claim their words, so one
+  /// message naming "SBI Card" is not read as two issuers.
+  static final List<(RegExp, String)> _issuers = [
+    (RegExp(r'\bsbi\s*(?:credit\s*|cr\.?\s*)?card'), 'VM-SBICRD'),
+    (RegExp(r'\b(?:sbi|state bank of india)\b'), 'VM-SBIINB'),
+    (RegExp(r'\bhdfc\b'), 'VM-HDFCBK'),
+    (RegExp(r'\bicici\b'), 'VM-ICICIB'),
+    (RegExp(r'\baxis\b'), 'VM-AXISBK'),
+    (RegExp(r'\bkotak\b'), 'VM-KOTAKB'),
+    (RegExp(r'\b(?:bob|bank of baroda)\b'), 'VM-BOBTXN'),
+    (RegExp(r'\b(?:pnb|punjab national)\b'), 'VM-PNBSMS'),
+    (RegExp(r'\bindusind\b'), 'VM-INDBNK'),
+    (RegExp(r'\bidfc\b'), 'VM-IDFCFB'),
+    (RegExp(r'\byes\s*bank\b'), 'VM-YESBNK'),
+    (RegExp(r'\bcanara\b'), 'VM-CANBNK'),
+    (RegExp(r'\bunion bank\b'), 'VM-UBINBK'),
+    (RegExp(r'\bfederal bank\b'), 'VM-FEDBNK'),
+    (RegExp(r'\brbl\b'), 'VM-RBLBNK'),
+    (RegExp(r'\bau (?:small finance )?bank\b'), 'VM-AUBANK'),
+    (RegExp(r'\bone\s*card\b'), 'VM-ONECRD'),
+  ];
+
+  /// Payment apps are used only when no bank or card issuer is named: a bank
+  /// alert often mentions the app ("via PhonePe") but the bank sent it.
+  static final List<(RegExp, String)> _paymentApps = [
+    (RegExp(r'\bphone\s*pe\b'), 'VM-PHONPE'),
+    (RegExp(r'\bpaytm\b'), 'VM-PAYTMB'),
+  ];
+
+  /// Every sender [inferSenderFromBody] can return.
+  static final Set<String> fillableSenders = {
+    for (final (_, sender) in [..._issuers, ..._paymentApps]) sender,
+  };
+
+  static Set<String> _named(String text, List<(RegExp, String)> table) {
+    var remaining = text;
+    final found = <String>{};
+    for (final (pattern, sender) in table) {
+      if (pattern.hasMatch(remaining)) {
+        found.add(sender);
+        remaining = remaining.replaceAll(pattern, ' ');
+      }
     }
-    if (lower.contains('indusind')) return 'VM-INDBNK';
-    if (lower.contains('idfc')) return 'VM-IDFCFB';
-    if (lower.contains('yes bank') || lower.contains('yesbank')) {
-      return 'VM-YESBNK';
-    }
-    if (lower.contains('canara')) return 'VM-CANBNK';
-    if (lower.contains('union bank')) return 'VM-UBINBK';
-    if (lower.contains('federal bank')) return 'VM-FEDBNK';
-    if (lower.contains('rbl')) return 'VM-RBLBNK';
-    if (lower.contains('onecard')) return 'VM-ONECRD';
-    return 'VM-BANK';
+    return found;
+  }
+
+  /// Fills a missing sender only when the body names exactly one issuer.
+  /// Returns null when no issuer, or more than one, is named; the message
+  /// then stays in review instead of getting a guessed bank.
+  static String? inferSenderFromBody(String body) =>
+      senderFillDetails(body)['filled_sender'] as String?;
+
+  /// What the fill saw in the body and why it chose (or refused) a sender.
+  static Map<String, Object?> senderFillDetails(String body) {
+    final text = body.toLowerCase();
+    final issuers = _named(text, _issuers);
+    final apps = _named(text, _paymentApps);
+    final (String? filled, String result) = switch ((issuers.length, apps.length)) {
+      (1, _) => (issuers.single, 'filled_from_issuer'),
+      (> 1, _) => (null, 'several_issuers_named'),
+      (0, 1) => (apps.single, 'filled_from_payment_app'),
+      (0, > 1) => (null, 'several_payment_apps_named'),
+      _ => (null, 'no_issuer_named'),
+    };
+    return {
+      'issuers_named': issuers.toList(),
+      'payment_apps_named': apps.toList(),
+      'filled_sender': filled,
+      'fill_result': result,
+    };
   }
 
   factory IosShortcutSmsBatch.fromRows(
@@ -62,7 +142,7 @@ class IosShortcutSmsBatch {
     final accepted = <QueuedSms>[];
     final sourceRows = <Map<Object?, Object?>>[];
     var sensitive = 0, invalid = 0, incomplete = 0;
-    var missingSender = 0, missingDate = 0;
+    var missingSender = 0, missingDate = 0, personal = 0;
     for (final row in rows) {
       final body = row['body'];
       if (body is! String || body.trim().isEmpty || body.length > 20000) {
@@ -95,11 +175,19 @@ class IosShortcutSmsBatch {
           RegExp(r'(?:Z|[+-]\d{2}:?\d{2})$').hasMatch(rawDate);
 
       String effectiveSender;
+      var inferred = false;
       if (senderValid) {
-        effectiveSender = sender.trim();
+        // Every row must reach the shared intake: native acknowledgement
+        // expects one result per message. Contact names are classified as
+        // personal by the shared triage, the same outcome Android gives a
+        // phone-number sender.
+        effectiveSender = normalizeSender(sender);
+        if (looksLikeContactName(effectiveSender)) personal++;
       } else {
         missingSender++;
-        effectiveSender = allowSenderInference ? _inferSender(body) : '';
+        final guess = allowSenderInference ? inferSenderFromBody(body) : null;
+        inferred = guess != null;
+        effectiveSender = guess ?? '';
       }
 
       // QueuedSms requires a receive date. Quarantine incomplete input rather
@@ -113,7 +201,8 @@ class IosShortcutSmsBatch {
       sourceRows.add(
         Map.unmodifiable({
           ...row,
-          'senderInferred': !senderValid && allowSenderInference,
+          'senderInferred': inferred,
+          if (inferred) 'inferredSender': effectiveSender,
         }),
       );
       accepted.add(
@@ -129,6 +218,7 @@ class IosShortcutSmsBatch {
       incomplete: incomplete,
       missingSender: missingSender,
       missingDate: missingDate,
+      personal: personal,
     );
   }
 }

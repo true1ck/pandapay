@@ -362,19 +362,30 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                     style: BambooFonts.ui(13, color: BambooInk.ink700),
                   ),
                   children: [
-                    for (final window in state.latestWindows)
-                      ListTile(
-                        dense: true,
+                    for (final window in [...state.latestWindows]..sort(
+                      (a, b) => (a['ordinal'] as int? ?? 0)
+                          .compareTo(b['ordinal'] as int? ?? 0),
+                    ))
+                      _windowDetails(state, window),
+                    if (state.lastCompletedJob != null &&
+                        state.lastCompletedJob?['id'] !=
+                            (state.activeJob ?? state.jobs.firstOrNull)?['id'])
+                      ExpansionTile(
+                        key: PageStorageKey(
+                          'ios-sms-completed-${state.lastCompletedJob?['id']}',
+                        ),
                         title: Text(
-                          DateFormat.yMMMd().format(
-                            DateTime.parse(window['start'] as String).toLocal(),
-                          ),
+                          'Last completed import',
                           style: BambooFonts.ui(13, color: BambooInk.ink900),
                         ),
                         subtitle: Text(
-                          '${window['state']} · ${state.countsFor([window])}\n${window['duplicates'] ?? 0} already saved · ${window['security_excluded'] ?? 0} security excluded · ${window['ignored'] ?? 0} ignored\nShortcut: ${_historyStageLabel(window['last_stage'])}${_handoffLabel(window['handoff_stage'])}',
+                          state.countsFor(state.lastCompletedWindows),
                           style: BambooFonts.ui(12, color: BambooInk.ink700),
                         ),
+                        children: [
+                          for (final window in state.lastCompletedWindows)
+                            _windowDetails(state, window),
+                        ],
                       ),
                     if (state.snapshot['reconciledThrough'] is String)
                       Text(
@@ -385,8 +396,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                 ),
               ],
             ),
-            if (state.activeJob == null &&
-                state.jobs.any((job) => job['state'] == 'complete'))
+            if (state.activeJob == null && state.lastCompletedJob != null)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpace.sm),
                 child: Row(
@@ -399,7 +409,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                     const SizedBox(width: AppSpace.sm),
                     Expanded(
                       child: Text(
-                        'Latest import complete\n${state.countsFor(state.latestWindows)}',
+                        'Last completed import\n${state.countsFor(state.lastCompletedWindows)}',
                         style: BambooFonts.ui(13, color: BambooInk.jade),
                       ),
                     ),
@@ -412,6 +422,67 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
       ),
     );
   }
+
+  Widget _windowDetails(IosSmsIntakeState state, Map<String, Object?> window) {
+    final senderDetails = (window['enumerated'] as int? ?? 0) == 0
+        ? 'No messages received yet'
+        : 'Valid inputs: ${window['sender_received'] ?? 0} sender received · ${window['sender_unavailable'] ?? 0} sender missing';
+    final receiverBuild = window['receiver_build'];
+    final buildDetails = receiverBuild is String
+        ? '\nCapture received by build $receiverBuild'
+        : '';
+    final senderInput = switch (window['sender_input']) {
+      'person_handle' => 'Message sender handle',
+      'person_without_handle' => 'Message sender supplied without an address',
+      'text' => 'Sender text',
+      'missing' => 'No sender value arrived',
+      _ => null,
+    };
+    final inputDetails = senderInput == null
+        ? ''
+        : '\nLast sender input: $senderInput';
+    return ListTile(
+      dense: true,
+      title: Text(
+        '${_range(window)} · ${_statusLabel(window['state'])}',
+        style: BambooFonts.ui(13, color: BambooInk.ink900),
+      ),
+      subtitle: Text(
+        '${window['found'] == null ? '' : '${window['found']} found${(window['found'] as int) >= 500 ? ' (Shortcuts limit, continued below)' : ''} · '}${state.countsFor([window])}\n${window['duplicates'] ?? 0} already saved · ${window['security_excluded'] ?? 0} security excluded · ${window['ignored'] ?? 0} ignored\n$senderDetails$buildDetails$inputDetails\nShortcut: ${_historyStageLabel(window['last_stage'])}${_handoffLabel(window['handoff_stage'])}',
+        style: BambooFonts.ui(12, color: BambooInk.ink700),
+      ),
+    );
+  }
+
+  static String _day(DateTime value, {bool year = false}) =>
+      (year ? DateFormat('d MMM yyyy') : DateFormat('d MMM')).format(value.toLocal());
+
+  /// "1 Aug – 18 Aug 2026". The end is exclusive, so show the last instant
+  /// inside the range.
+  static String _range(Map<String, Object?> window) {
+    final start = DateTime.tryParse(window['start'] as String? ?? '');
+    final end = DateTime.tryParse(window['end'] as String? ?? '')
+        ?.subtract(const Duration(milliseconds: 1));
+    if (start == null) return 'Date range';
+    if (end == null || end.isBefore(start)) return _day(start, year: true);
+    return '${_day(start)} – ${_day(end, year: true)}';
+  }
+
+  static String _rangeVerb(Map<String, Object?> window) => switch (window['state']) {
+    'waiting' || 'running' => 'Now importing',
+    'finished' => 'Saving messages from',
+    'partial' => 'Stopped at',
+    _ => 'Next:',
+  };
+
+  static String _statusLabel(Object? state) => switch (state) {
+    'complete' => 'Done',
+    'partial' => 'Needs a check',
+    'waiting' || 'running' => 'Importing',
+    'finished' => 'Saving',
+    'queued' => 'Waiting',
+    _ => '$state',
+  };
 
   String _historyStageLabel(Object? value) => switch (value) {
     'window_start' => 'Start reached PandaPay',
@@ -460,9 +531,27 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
           Text(title, style: BambooFonts.heading(19, color: BambooInk.onSlate)),
           const SizedBox(height: AppSpace.sm),
           Text(
-            '$done of $total ${state.activeJob?['kind'] == 'history' ? 'months' : 'date windows'} checked',
-            style: BambooFonts.ui(13, color: BambooInk.onSlateSubtle),
+            state.importedThrough == null
+                ? 'Nothing imported yet'
+                : 'Imported through ${_day(state.importedThrough!, year: true)}',
+            style: BambooFonts.ui(14, color: BambooInk.onSlate),
           ),
+          if (state.currentWindow case final window?) ...[
+            const SizedBox(height: AppSpace.xs),
+            Text(
+              '${_rangeVerb(window)} ${_range(window)}',
+              style: BambooFonts.ui(13, color: BambooInk.onSlateSubtle),
+            ),
+          ],
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            '$done of $total ${state.activeJob?['kind'] == 'history' ? 'months' : 'date windows'} done',
+            style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
+          ),
+          if (state.stopReason case final reason?) ...[
+            const SizedBox(height: AppSpace.sm),
+            Text(reason, style: BambooFonts.ui(13, color: BambooInk.lime)),
+          ],
           const SizedBox(height: AppSpace.sm),
           Text(
             state.countsFor(state.currentWindows),
@@ -477,7 +566,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
           ],
           const SizedBox(height: AppSpace.lg),
           LinearProgressIndicator(
-            value: total == 0 ? null : done / total,
+            value: state.coverage ?? (total == 0 ? null : done / total),
             color: BambooInk.lime,
             backgroundColor: BambooInk.slateHairline,
             borderRadius: BorderRadius.circular(6),
@@ -571,7 +660,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                   style: BambooFonts.heading(16, color: BambooInk.ink900),
                 ),
                 Text(
-                  'Name it PANDAPAY SMS HISTORY. Save Shortcut Input as Import request. Begin → Window Start / End → Find Messages (Limit off) → Count → Repeat each message with Capture PandaPay History SMS → Finish PandaPay History Import with the count. Pass the same request throughout, plus each message’s body, sender text and original date. History Capture does not need Repeat Index. Keep Stop and Output set to the Finish result. PandaPay returns automatically between months.',
+                  'Name it PANDAPAY SMS HISTORY. Save Shortcut Input as Import request. Begin → Window Start / End → Find Messages (Limit off) → Count → Repeat each message with Capture PandaPay History SMS as Text → Finish PandaPay History Import with the count. Pass the same request throughout, plus each message’s body and original date. Map Repeat Item → Message → Sender to Sender (text). Use the text-only action; it has no Person field. History Capture does not need Repeat Index. Keep Stop and Output set to the Finish result. PandaPay returns automatically between months.',
                   style: BambooFonts.ui(13, color: BambooInk.ink700),
                 ),
                 const SizedBox(height: AppSpace.lg),
@@ -580,7 +669,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                   style: BambooFonts.heading(16, color: BambooInk.ink900),
                 ),
                 Text(
-                  'Time of Day → Prepare PandaPay SMS Catch-up → run a background copy of your history shortcut with its output when nonempty. Use Capture PandaPay History SMS and Finish PandaPay SMS Window in that copy to keep PandaPay in the background. The older Window Capture remains compatible with its existing Repeat Index mapping.',
+                  'Time of Day → Prepare PandaPay SMS Catch-up → run a background copy of your history shortcut with its output when nonempty. Use Capture PandaPay History SMS as Text and Finish PandaPay SMS Window in that copy to keep PandaPay in the background. The older Window Capture remains compatible with its existing Repeat Index mapping.',
                   style: BambooFonts.ui(13, color: BambooInk.ink700),
                 ),
                 const SizedBox(height: AppSpace.lg),

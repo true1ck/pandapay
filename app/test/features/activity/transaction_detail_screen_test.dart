@@ -120,9 +120,10 @@ Future<void> _pump(
   required _FakeUserCardsRepository repo,
   TransactionEntry? initialEntry,
   TransactionTagsRepository? tagsRepository,
+  String transactionId = 't1',
 }) async {
   final router = GoRouter(
-    initialLocation: '/activity/t1',
+    initialLocation: '/activity/$transactionId',
     routes: [
       GoRoute(
         path: '/activity/:id',
@@ -151,6 +152,60 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('local SMS detail shows the saved card and UPI before server sync', (tester) async {
+    final entry = TransactionEntry(id: 'local-sms:fixture',
+      amount: Money.fromRupees(42.5), occurredAt: DateTime(2026, 11, 1),
+      merchantName: 'TESTTECHNOLOGIES', cardDisplayName: 'My SBI PhonePe RuPay card',
+      cardLast4: '4242', userCardId: 'saved-rupay', paymentMethod: 'upi',
+      source: 'sms', status: 'active');
+    await _pump(tester, repo: _FakeUserCardsRepository(entry),
+      initialEntry: entry, transactionId: entry.id);
+    expect(find.text('My SBI PhonePe RuPay card'), findsOneWidget);
+    expect(find.text('UPI'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'UPI credit-card spend shows the matched card without guessing QR',
+    (tester) async {
+      final database = openInMemoryForTesting();
+      final client = MockClient((_) async => http.Response('{}', 200));
+      addTearDown(() {
+        client.close();
+        database.close();
+      });
+      final tags = TransactionTagsRepository(
+        database: database,
+        namespace: 'test-user',
+        apiBaseUrl: 'http://localhost',
+        accessToken: 'test-token',
+        client: client,
+      );
+      final repo = _FakeUserCardsRepository(
+        TransactionEntry(
+          id: 't1',
+          amount: Money.fromRupees(42.5),
+          occurredAt: DateTime(2026, 11, 1),
+          merchantName: 'TESTTECHNOLOGIES',
+          cardDisplayName: 'My SBI PhonePe RuPay card',
+          cardLast4: '4242',
+          userCardId: 'saved-rupay',
+        sourceKey: 'exact-sms-fixture',
+          instrument: TxnInstrument.creditCard,
+          source: 'sms',
+          status: 'active',
+        ),
+      );
+    final local = TransactionEntry.fromJson({...repo.entry.toJson(), 'payment_method': 'upi'});
+    await _pump(tester, repo: repo, initialEntry: local, tagsRepository: tags);
+      expect(find.text('My SBI PhonePe RuPay card'), findsOneWidget);
+      expect(find.text('UPI'), findsOneWidget);
+      expect(find.text('UPI QR'), findsNothing);
+      expect(find.text('UPI / bank account'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'keeps the tapped spending row visible when the detail fetch is offline',
     (tester) async {

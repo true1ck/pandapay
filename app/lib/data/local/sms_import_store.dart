@@ -139,6 +139,16 @@ class SmsImportStore {
         return;
       }
 
+      if (message.sender.trim().isNotEmpty) {
+        // An earlier import of this SMS without a sender left it in review.
+        // It is processed below now, so that copy must not linger.
+        removeSenderUnavailableReviewSync(
+          store.database,
+          namespace,
+          smsSourceKey(namespace, '', message.body),
+        );
+      }
+
       // An explicit private "not a financial transaction" correction is
       // scoped to this sender/message layout and applies before any parser or
       // AI request on later matching messages. Preference-only dismissals do
@@ -340,6 +350,8 @@ class SmsImportStore {
                   message.sender,
                 ),
           'card_last4': observation.cardLast4,
+          if (observation.transaction?.paymentMethod != null)
+            'payment_method': observation.transaction!.paymentMethod,
           'biller_name': observation.billerName,
           'cadence_hint': observation.cadenceHint,
           'balance_paise': observation.availableBalance?.paise,

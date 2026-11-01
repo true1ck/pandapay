@@ -15,7 +15,14 @@ class IosLiveProbeSession {
   IosLiveProbeSession(
     AppDatabase database, {
     void Function(List<Map<Object?, Object?>>)? capture,
-  }) : this.withIntake(IosDeviceProbeSession(database), capture: capture);
+    bool allowSenderInference = true,
+  }) : this.withIntake(
+         IosDeviceProbeSession(
+           database,
+           allowSenderInference: allowSenderInference,
+         ),
+         capture: capture,
+       );
   IosLiveProbeSession.withIntake(
     this.intake, {
     void Function(List<Map<Object?, Object?>>)? capture,
@@ -34,19 +41,23 @@ class IosLiveProbeSession {
       final beforeInvalid = intake.invalid;
       final beforeSensitive = intake.sensitive;
       final beforeDate = intake.missingDate;
-      final beforeSender = intake.missingSender;
+      final beforeReview = intake.reviewCount;
       final beforeExisting = intake.runs['live']?.existing ?? 0;
       final beforeTransactions = intake.transactions;
-      final batch = IosShortcutSmsBatch.fromRows([row]);
+      final batch = IosShortcutSmsBatch.fromRows([
+        row,
+      ], allowSenderInference: intake.allowSenderInference);
       _capture([
         {...row, 'runId': 'live'},
       ]);
-      final outcome = intake.invalid > beforeInvalid
+      var outcome = intake.invalid > beforeInvalid
           ? 'rejected_invalid'
           : intake.sensitive > beforeSensitive
           ? 'rejected_sensitive'
           : intake.missingDate > beforeDate
           ? 'rejected_missing_date'
+          : intake.reviewCount > beforeReview
+          ? 'needs_review'
           : intake.counts.captured > beforeRetained
           ? 'retained_new'
           : (intake.runs['live']?.existing ?? 0) > beforeExisting
@@ -64,7 +75,9 @@ class IosLiveProbeSession {
         final decision = SmsIntakeRepository(
           intake.database,
         ).decision(IosDeviceProbeSession.namespace, key);
+        if (decision?.decision == 'financial_review') outcome = 'needs_review';
         diagnostic.addAll({
+          'sourceKey': key,
           'effectiveSender': message.sender,
           'triageKind': triage.kind.name,
           'triageReason': triage.reasonCode,
@@ -93,12 +106,19 @@ class IosLiveProbeSession {
         'id': id,
         'outcome': outcome,
         ...diagnostic,
-        'senderInferred':
-            intake.missingSender > beforeSender && batch.messages.isNotEmpty,
+        'senderInferred': batch.sourceRows.any(
+          (row) => row['senderInferred'] == true,
+        ),
       };
-    } catch (_) {
+    } catch (error, stack) {
       // Do not acknowledge or cache failure. No exception/raw payload is logged.
-      return {'id': id, 'outcome': 'processing_error'};
+      final trace = stack.toString();
+      return {
+        'id': id,
+        'outcome': 'processing_error',
+        'error_type': error.runtimeType.toString(),
+        'error_stack': trace.substring(0, trace.length.clamp(0, 8192)),
+      };
     }
   }
 

@@ -1201,9 +1201,17 @@ final needsReviewRepositoryProvider = Provider<NeedsReviewRepository>((ref) {
 final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((
   ref,
 ) async {
+  // Review edits refresh at once. Transaction and observation changes arrive
+  // in bursts during sync and import; one reload per burst is enough.
   final markReady = _financialChanges(ref, 'needs_review');
-  final markTransactionsReady = _financialChanges(ref, 'transactions');
-  final markObservationsReady = _financialChanges(ref, 'observations');
+  final markTransactionsReady = _financialChangesCoalesced(
+    ref,
+    'transactions',
+  );
+  final markObservationsReady = _financialChangesCoalesced(
+    ref,
+    'observations',
+  );
   final items = await ref.watch(needsReviewRepositoryProvider).fetchAll();
   markReady();
   markTransactionsReady();
@@ -4620,6 +4628,26 @@ final financialStoreRevisionProvider = StreamProvider.family<int, String>((
   return controller.stream;
 });
 
+/// Like [_financialChanges], but a burst of changes causes one rebuild after
+/// [delay] instead of one per change.
+void Function() _financialChangesCoalesced(
+  Ref ref,
+  String entity, {
+  Duration delay = const Duration(milliseconds: 750),
+}) {
+  var ready = false;
+  Timer? timer;
+  ref.onDispose(() => timer?.cancel());
+  ref.listen(financialStoreRevisionProvider(entity), (_, next) {
+    if (!ready) return;
+    timer ??= Timer(delay, () {
+      timer = null;
+      ref.invalidateSelf();
+    });
+  });
+  return () => ready = true;
+}
+
 void Function() _financialChanges(Ref ref, String entity) {
   var ready = false;
   ref.listen(financialStoreRevisionProvider(entity), (_, next) {
@@ -7307,6 +7335,7 @@ class SmsAutoImportController {
       _retryTimer?.cancel();
       _inboxContinuation = null;
       _inboxContinuationNamespace = null;
+      _deferredNotifyTimer?.cancel();
       _captureWorker?.dispose();
       inboxScanProgress.dispose();
     });
@@ -7363,6 +7392,7 @@ class SmsAutoImportController {
       cache,
       batch.messages,
       allowSynchronousFallback: false,
+      coalesceNotify: true,
     );
     checkAccount();
     return batch;
@@ -7515,6 +7545,7 @@ class SmsAutoImportController {
     ResponseCache cache,
     List<QueuedSms> messages, {
     bool allowSynchronousFallback = true,
+    bool coalesceNotify = false,
   }) async {
     if (messages.isEmpty) return;
     if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
@@ -7556,12 +7587,51 @@ class SmsAutoImportController {
         if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
           throw StateError('Account changed during SMS capture');
         }
+        if (coalesceNotify) {
+          _deferNotify(namespace, store, changed);
+          return;
+        }
         store.notifyExternalChanges(namespace, changed);
       } catch (e) {
         if (!allowSynchronousFallback || messages.length > 50) rethrow;
         debugPrint('Worker capture unavailable; retrying local capture');
         captureDirect();
       }
+    }
+    _ref.invalidate(commitmentsProvider);
+    _ref.invalidate(pendingRecoveryStatusProvider);
+  }
+
+  /// iPhone imports arrive in many 50-message batches. Refreshing Spending,
+  /// Review and Payments after each one makes the whole app stutter, so
+  /// changes are grouped and published at most once per interval.
+  static const _notifyInterval = Duration(milliseconds: 1500);
+  Timer? _deferredNotifyTimer;
+  final _deferredChanges = <String, (FinancialStore, Set<String>)>{};
+
+  void _deferNotify(
+    String namespace,
+    FinancialStore store,
+    Iterable<String> changed,
+  ) {
+    final pending = _deferredChanges.putIfAbsent(
+      namespace,
+      () => (store, <String>{}),
+    );
+    pending.$2.addAll(changed);
+    _deferredNotifyTimer ??= Timer(_notifyInterval, _flushDeferredNotify);
+  }
+
+  void _flushDeferredNotify() {
+    _deferredNotifyTimer = null;
+    if (_disposed) return;
+    final current = _ref.read(cacheNamespaceProvider);
+    final pending = Map.of(_deferredChanges);
+    _deferredChanges.clear();
+    for (final entry in pending.entries) {
+      // Another account's changes are not shown to the current account.
+      if (entry.key != current) continue;
+      entry.value.$1.notifyExternalChanges(entry.key, entry.value.$2);
     }
     _ref.invalidate(commitmentsProvider);
     _ref.invalidate(pendingRecoveryStatusProvider);

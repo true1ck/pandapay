@@ -34,13 +34,18 @@ final class IncomingSmsSpool {
   private let maxPending: Int
   private let lock = NSLock()
   private let now: () -> Date
+  private let receiverBuild: String?
   private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-  init(directory: URL? = nil, maxPending: Int = 10_000, now: @escaping () -> Date = Date.init) {
+  init(directory: URL? = nil, maxPending: Int = 10_000, now: @escaping () -> Date = Date.init,
+       receiverBuild: String? = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) {
     self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
       .appendingPathComponent("PandaPaySmsIntake", isDirectory: true)
     self.maxPending = maxPending
     self.now = now
+    self.receiverBuild = receiverBuild.flatMap {
+      !$0.isEmpty && $0.utf8.count <= 32 && $0.unicodeScalars.allSatisfy { "0123456789.".unicodeScalars.contains($0) } ? $0 : nil
+    }
   }
 
   private func execute(_ db: OpaquePointer, _ sql: String, _ values: [Any?] = []) throws {
@@ -122,6 +127,11 @@ final class IncomingSmsSpool {
         try execute(db, "ALTER TABLE windows ADD COLUMN month_label TEXT")
         try execute(db, "UPDATE windows SET logical_id=id,month_label=substr(start,1,7)")
       }
+      if !windowColumns.contains(where: { $0["name"] as? String == "issued_end" }) {
+        // A capped window's coverage can shrink after its request was issued;
+        // keep the issued end so that request still validates.
+        try execute(db, "ALTER TABLE windows ADD COLUMN issued_end TEXT")
+      }
       try execute(db, "PRAGMA user_version=2")
       let value = try operation(db)
       try execute(db, "COMMIT")
@@ -196,7 +206,8 @@ final class IncomingSmsSpool {
           let row = try query(db, "SELECT w.*,j.generation,j.kind,j.state AS job_state FROM windows w JOIN jobs j ON j.id=w.job_id WHERE w.attempt=?", [token]).first,
           row["generation"] as? String == generation,
           row["start"] as? String == value["start_inclusive"] as? String,
-          row["end"] as? String == value["end_exclusive"] as? String,
+          (row["end"] as? String == value["end_exclusive"] as? String ||
+           (row["issued_end"] as? String != nil && row["issued_end"] as? String == value["end_exclusive"] as? String)),
           (row["job_state"] as? String == "active" ||
            (row["job_state"] as? String == "complete" && row["state"] as? String == "complete")),
           ["waiting", "running", "finished", "complete", "partial"].contains(row["state"] as? String ?? "") else { throw IncomingSmsError.stale }
@@ -206,6 +217,12 @@ final class IncomingSmsSpool {
 
   private func recordStage(_ db: OpaquePointer, window: [String: Any], stage: SmsHistoryStage) throws {
     guard let attempt = window["attempt"] as? String else { return }
+    if stage == .capture, let receiverBuild {
+      // Build evidence is safe metadata, scoped to the handler's actual
+      // attempt. A launch/queued window must not inherit an old build stamp.
+      try execute(db, "INSERT INTO settings VALUES('last_receiver_attempt',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [attempt])
+      try execute(db, "INSERT INTO settings VALUES('last_receiver_build',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [receiverBuild])
+    }
     let previous = try query(db, "SELECT key,value FROM settings WHERE key IN ('last_intent_attempt','last_intent_stage')")
     if previous.contains(where: { $0["key"] as? String == "last_intent_attempt" && $0["value"] as? String == attempt }),
        previous.contains(where: { $0["key"] as? String == "last_intent_stage" && $0["value"] as? String == stage.rawValue }) { return }
@@ -249,7 +266,8 @@ final class IncomingSmsSpool {
   }
 
   func capture(body: String?, sender: String?, receivedAt: Date?, provenance: String,
-               request: String? = nil, itemID: String? = nil, useMessageReceipt: Bool = false) throws -> String {
+               request: String? = nil, itemID: String? = nil, useMessageReceipt: Bool = false,
+               senderInput: String? = nil) throws -> String {
     try transaction { db in
       let account = try owner(db)
       let generation = account["generation"] as! String
@@ -265,11 +283,17 @@ final class IncomingSmsSpool {
       } else if useMessageReceipt {
         throw IncomingSmsError.invalid
       }
-      if let issued { try recordStage(db, window: issued, stage: .capture) }
       // Missing metadata is not a reason to discard a valid message body.
       // Keep an unknown sender explicit; shared intake routes financial
       // candidates to review instead of manufacturing a trusted bank header.
       let senderText = (sender?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ? "" : sender!
+      if let issued {
+        try recordStage(db, window: issued, stage: .capture)
+        let input = senderInput ?? (senderText.isEmpty ? "missing" : "text")
+        guard ["missing", "text", "person_handle", "person_without_handle"].contains(input) else { throw IncomingSmsError.invalid }
+        try execute(db, "INSERT INTO settings VALUES('last_sender_attempt',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [issued["attempt"]])
+        try execute(db, "INSERT INTO settings VALUES('last_sender_input',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [input])
+      }
       let rejection: String? = {
         guard let body, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, body.utf16.count <= 20_000 else { return "invalid_body" }
         if SmsSecurityPolicy.sensitive(body) { return "excluded_security" }
@@ -381,6 +405,8 @@ final class IncomingSmsSpool {
         (SELECT COUNT(*) FROM receipts r WHERE r.attempt=w.attempt AND r.outcome='already_saved') AS duplicates,
         (SELECT COUNT(*) FROM receipts r WHERE r.attempt=w.attempt AND r.outcome IN ('invalid_body','missing_sender','missing_date')) AS incomplete,
         (SELECT COUNT(*) FROM receipts r WHERE r.attempt=w.attempt AND r.outcome='missing_sender') AS missing_sender,
+        (SELECT COUNT(*) FROM receipts r WHERE r.attempt=w.attempt AND r.outcome IN ('saved_for_processing','already_saved')) AS sender_received,
+        (SELECT COUNT(*) FROM receipts r WHERE r.attempt=w.attempt AND r.outcome='saved_without_sender') AS sender_unavailable,
         (SELECT COUNT(*) FROM receipts r WHERE r.attempt=w.attempt AND r.outcome='excluded_security') AS security_excluded,
         (SELECT COUNT(*) FROM receipts r WHERE r.attempt=w.attempt AND r.outcome='outside_window') AS outside_window,
         (SELECT COUNT(*) FROM receipts r JOIN captures c ON c.id=r.capture_id WHERE r.attempt=w.attempt AND c.state='committed') AS processed,
@@ -389,10 +415,14 @@ final class IncomingSmsSpool {
         CASE WHEN w.attempt=(SELECT value FROM settings WHERE key='last_intent_attempt') THEN
           (SELECT value FROM settings WHERE key='last_intent_stage') END AS last_stage,
         CASE WHEN w.attempt=(SELECT value FROM settings WHERE key='last_handoff_attempt') THEN
-          (SELECT value FROM settings WHERE key='last_handoff_stage') END AS handoff_stage
+          (SELECT value FROM settings WHERE key='last_handoff_stage') END AS handoff_stage,
+        CASE WHEN w.attempt=(SELECT value FROM settings WHERE key='last_receiver_attempt') THEN
+          (SELECT value FROM settings WHERE key='last_receiver_build') END AS receiver_build,
+        CASE WHEN w.attempt=(SELECT value FROM settings WHERE key='last_sender_attempt') THEN
+          (SELECT value FROM settings WHERE key='last_sender_input') END AS sender_input
       FROM windows w WHERE w.job_id IN (SELECT id FROM jobs ORDER BY rowid DESC LIMIT 20) ORDER BY w.ordinal
       """)
-    for row in try query(db, "SELECT * FROM settings WHERE key NOT IN ('last_intent_attempt','last_handoff_attempt')") { result[row["key"] as! String] = row["value"] }
+    for row in try query(db, "SELECT * FROM settings WHERE key NOT IN ('last_intent_attempt','last_handoff_attempt','last_receiver_attempt','last_sender_attempt')") { result[row["key"] as! String] = row["value"] }
     return result
   }
 
@@ -428,6 +458,9 @@ final class IncomingSmsSpool {
     }
   }
 
+  /// Find Messages stops at this many results even with Limit off.
+  static let findMessagesCap = 500
+
   func issue(generation: String) throws -> String? {
     try transaction { db in
       _ = try owner(db, generation: generation)
@@ -460,7 +493,26 @@ final class IncomingSmsSpool {
     for row in try query(db, "SELECT * FROM windows WHERE state='finished'") {
       let receipts = try query(db, "SELECT r.outcome,c.state AS capture_state FROM receipts r LEFT JOIN captures c ON c.id=r.capture_id WHERE r.attempt=?", [row["attempt"]])
       let invalid = receipts.contains { ["missing_sender", "missing_date", "invalid_body"].contains($0["outcome"] as? String ?? "") }
-      let partial = row["found"] as? Int != receipts.count || (row["found"] as? Int ?? 0) >= 2000 || row["limit_off"] as? Int != 1 || row["warning"] as? Int != 0 || invalid
+      let found = row["found"] as? Int ?? 0
+      let consistent = found == receipts.count && row["limit_off"] as? Int == 1 && row["warning"] as? Int == 0 && !invalid
+      // A window that already queued its continuation has issued_end set.
+      var capped = found >= Self.findMessagesCap && row["issued_end"] as? String == nil
+      // Find Messages returns at most 500, oldest first. When a window hits
+      // that cap, cover only up to the newest message it returned and queue
+      // the rest of the window from that instant. Messages at the boundary
+      // are found again and recorded as already saved.
+      if capped, consistent,
+         let last = try query(db, "SELECT MAX(c.received_at) AS last FROM receipts r JOIN captures c ON c.id=r.capture_id WHERE r.attempt=?", [row["attempt"]]).first?["last"] as? String,
+         let lastDate = Self.date(last), let start = Self.date(row["start"] as! String), let end = Self.date(row["end"] as! String),
+         lastDate > start, lastDate < end {
+        let boundary = stamp(lastDate)
+        let ordinal = row["ordinal"] as! Int
+        try execute(db, "UPDATE windows SET ordinal=ordinal+1 WHERE job_id=? AND ordinal>?", [row["job_id"], ordinal])
+        try execute(db, "INSERT INTO windows(id,job_id,ordinal,start,end,state,logical_id,month_label) VALUES(?,?,?,?,?,'queued',?,?)", [UUID().uuidString, row["job_id"], ordinal + 1, boundary, row["end"], row["logical_id"], row["month_label"]])
+        try execute(db, "UPDATE windows SET issued_end=COALESCE(issued_end,end),end=? WHERE id=?", [boundary, row["id"]])
+        capped = false
+      }
+      let partial = !consistent || capped
       let pending = receipts.contains { $0["capture_state"] as? String == "pending" }
       if partial { try execute(db, "UPDATE windows SET state='partial' WHERE id=?", [row["id"]]) }
       else if !pending { try execute(db, "UPDATE windows SET state='complete' WHERE id=?", [row["id"]]) }

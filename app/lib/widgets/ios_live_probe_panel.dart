@@ -28,6 +28,7 @@ class IosLiveProbePanel extends StatelessWidget {
     'processing_error' => 'Shared intake failed → pending retry',
     'retained_new' => 'Processed → newly retained',
     'retained_existing' => 'Processed → already retained',
+    'needs_review' => 'Processed → needs review',
     'ignored' => 'Processed → not retained',
     'native_duplicate' => 'Rejected duplicate handoff',
     'sensitive' ||
@@ -75,7 +76,7 @@ class IosLiveProbePanel extends StatelessWidget {
                 'Newly retained: ${count('retained_new')} · Already retained: ${count('retained_existing')} · Native duplicates: ${count('native_duplicate')}',
               ),
               Text(
-                'Not retained: ${count('ignored')} · Sensitive rejected: ${count('sensitive') + count('rejected_sensitive')}',
+                'Needs review: ${count('needs_review')} · Not retained: ${count('ignored')} · Sensitive rejected: ${count('sensitive') + count('rejected_sensitive')}',
               ),
               Text(
                 'Invalid/empty/oversized: ${count('invalid') + count('rejected_invalid')} · Capacity rejected: ${count('capacity_rejected')}',

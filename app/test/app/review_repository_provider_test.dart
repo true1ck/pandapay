@@ -152,7 +152,8 @@ void main() {
       occurredAt: item.receivedAt, merchantName: 'Wellness Forever',
       source: 'sms', status: 'active',
     ));
-    await Future<void>.delayed(Duration.zero);
+    // Transaction changes are grouped: the list reloads once per burst.
+    await Future<void>.delayed(const Duration(milliseconds: 800));
     expect(await container.read(needsReviewItemsProvider.future), isEmpty);
     expect(await container.read(needsReviewCountProvider.future), 0);
     expect(PastBillReceiptRepository(db, namespace: ns).fetchAll().single

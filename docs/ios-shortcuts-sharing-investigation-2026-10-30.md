@@ -2,6 +2,10 @@
 
 Status on 30 October 2026: **Finish retains permission by user confirmation; Capture permission remains unresolved, and the user reports an import regression after build 70**. The in-place person-type change is being reverted to the saved text contract. Unattended history import remains unqualified. Do not describe the large-data tutorial or a successful app installation as proof of permission retention or successful import.
 
+**31 October sender follow-up:** data acquisition has subsequently been confirmed, but the latest completed catch-up still includes 20 accepted messages with empty sender. This is a separate input-evidence issue, not proof of the permission-reset cause. The main app now adds a person-handle resolver to the existing String field and receipt-based sender-present/missing counts in Import details; no in-place type change or privacy reset is required. See the [implementation status](ios-main-app-implementation-status-2026-10-30.md#31-october-sender-boundary-diagnosis) for evidence and physical qualification. A successful build does not prove the installed Sender text token invokes that resolver.
+
+**Later build-79 result:** the screenshot explicitly shows build 79 receiving **413 valid inputs, all without sender**, so the String-resolver approach failed on this device. Build 80 replaces that attempted adapter with an **additional optional Person field**, keeping the published String field compatible. Move the Message's Sender mapping to **Sender from Message**, as described in the [sender guide](ios-shortcuts-sender-capture-2026-10-31.md). The new attempt-scoped input-kind trace distinguishes a missing value from a supplied Person without a primary handle. This is a sender-handoff test, not a claim of retained Shortcuts privacy permission; no privacy reset is prescribed.
+
 ## Evidence
 
 - The user's screenshots show **Allow Sharing Large Amounts of Data** already enabled.

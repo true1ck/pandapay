@@ -409,11 +409,12 @@ struct InspectDeviceFinancialMessageIntent: AppIntent {
   static var openAppWhenRun = false
 
   @Parameter(title: "Message body") var body: String?
-  @Parameter(title: "Sender", default: "") var sender: String
+  @Parameter(title: "Sender", default: "", resolvers: { ProbeSenderTextResolver() }) var sender: String
   @Parameter(title: "Original receive date") var receivedAt: Date?
 
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
-    let result = DeviceLiveMessageInbox.shared.capture(body: body, sender: sender, receivedAt: receivedAt, evidence: "text", handler: "text_sender", allowedBundle: Bundle.main.bundleIdentifier == "app.pandapay.iosimportprobe")
+    let input = ProbeSenderValue.decode(sender)
+    let result = DeviceLiveMessageInbox.shared.capture(body: body, sender: input.sender, receivedAt: receivedAt, evidence: input.evidence, handler: "text_sender", allowedBundle: Bundle.main.bundleIdentifier == "app.pandapay.iosimportprobe", senderDiagnostics: input.diagnostics(action: "existing_text_message", parameter: "sender"))
     DeviceHistoryProbeBridge.notifyReady()
     return .result(value: result)
   }
@@ -429,18 +430,18 @@ struct InspectDeviceFinancialMessagePersonIntent: AppIntent {
   static var openAppWhenRun = false
 
   @Parameter(title: "Message body") var body: String?
-  @Parameter(title: "Sender (text)") var senderPerson: String?
+  @Parameter(title: "Sender (text)", resolvers: { ProbeSenderTextResolver() }) var senderPerson: String?
   @Parameter(title: "Original receive date") var receivedAt: Date?
 
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
-    let sender = senderPerson ?? ""
-    let senderKind = sender.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "missing_text" : "text"
-    let result = DeviceLiveMessageInbox.shared.capture(body: body, sender: sender, receivedAt: receivedAt, evidence: senderKind, handler: "person_sender", allowedBundle: Bundle.main.bundleIdentifier == "app.pandapay.iosimportprobe")
+    let input = ProbeSenderValue.decode(senderPerson)
+    let result = DeviceLiveMessageInbox.shared.capture(body: body, sender: input.sender, receivedAt: receivedAt, evidence: input.evidence, handler: "person_sender", allowedBundle: Bundle.main.bundleIdentifier == "app.pandapay.iosimportprobe", senderDiagnostics: input.diagnostics(action: "existing_single_message", parameter: "senderPerson"))
     DeviceHistoryProbeBridge.notifyReady()
     let counts: [String: Any] = [
       "outcome": result,
-      "sender_present": !sender.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-      "sender_kind": senderKind,
+      "sender_present": !input.sender.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+      "sender_kind": input.evidence,
+      "sender_conversion": input.conversion,
       "date_present": receivedAt != nil,
       "body_present": !(body ?? "").isEmpty,
     ]
@@ -516,6 +517,8 @@ struct CaptureDeviceHistoryRangeMessageIntent: AppIntent {
   @Parameter(title: "Range request") var request: String
   @Parameter(title: "Message body") var body: String
   @Parameter(title: "Sender as person", mode: .emailOrPhone) var senderPerson: IntentPerson?
+  @Parameter(title: "Sender as text (diagnostic)", inputConnectionBehavior: .never) var senderText: String?
+  @Parameter(title: "Sender type (diagnostic)", inputConnectionBehavior: .never) var senderType: String?
   @Parameter(title: "Original receive date") var receivedAt: Date?
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
     let sender: String
@@ -525,6 +528,8 @@ struct CaptureDeviceHistoryRangeMessageIntent: AppIntent {
       case .phoneNumber(let value), .emailAddress(let value), .applicationDefined(let value): sender = value
       }
       evidence = "handle"
+    } else if let text = senderText, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      sender = text; evidence = "text"
     } else if let person = senderPerson {
       switch person.name {
       case .displayName(let value): sender = value
@@ -533,7 +538,93 @@ struct CaptureDeviceHistoryRangeMessageIntent: AppIntent {
       }
       evidence = sender.isEmpty ? "missing_person" : "name"
     } else { sender = ""; evidence = "missing_person" }
-    let result = try DeviceHistoryRangeInbox.shared.capture(request, body: body, sender: sender, date: receivedAt, evidence: evidence)
+    var person: [String: Any] = ["present": senderPerson != nil, "alias_count": senderPerson?.aliases.count ?? 0,
+      "handle": NSNull(), "handle_type": NSNull(), "name": NSNull(), "name_type": NSNull()]
+    if let value = senderPerson {
+      switch value.name {
+      case .displayName(let name): person["name"] = name; person["name_type"] = "display_name"
+      case .components(let name): person["name"] = PersonNameComponentsFormatter.localizedString(from: name, style: .default); person["name_type"] = "components"
+      case .unknown: person["name_type"] = "unknown"
+      @unknown default: person["name_type"] = "unsupported"
+      }
+      if let handle = value.handle {
+        switch handle.value {
+        case .phoneNumber(let text): person["handle"] = text; person["handle_type"] = "phone_number"
+        case .emailAddress(let text): person["handle"] = text; person["handle_type"] = "email_address"
+        case .applicationDefined(let text): person["handle"] = text; person["handle_type"] = "application_defined"
+        @unknown default: person["handle_type"] = "unsupported"
+        }
+      }
+    }
+    let diagnostics: [String: Any] = ["action": "person_and_text", "text": senderText.map { $0 as Any } ?? NSNull(), "person": person,
+      "shortcuts_type": senderType.map { $0 as Any } ?? NSNull()]
+    let result = try DeviceHistoryRangeInbox.shared.capture(request, body: body, sender: sender, date: receivedAt, evidence: evidence, senderDiagnostics: diagnostics)
+    DeviceHistoryProbeBridge.notifyReady()
+    return .result(value: result)
+  }
+}
+
+/// Separate identity avoids the old optional Person's pre-perform conversion.
+/// Do not change that published field's type on already-saved shortcuts.
+@available(iOS 16.0, *)
+struct CaptureDeviceHistoryRangeTextMessageIntent: AppIntent {
+  static var title: LocalizedStringResource = "Import PandaPay Range Message as Text"
+  static var description = IntentDescription("Inspect the Message Sender as text without any Contact, Phone Number or Email Address input. Uses the same selected range and local comparison screen.")
+  static var openAppWhenRun = false
+  @Parameter(title: "Range request", inputConnectionBehavior: .never) var request: String
+  @Parameter(title: "Message body", inputConnectionBehavior: .never) var body: String
+  @Parameter(title: "Sender as text", inputConnectionBehavior: .never, resolvers: { ProbeSenderTextResolver() }) var senderText: String?
+  @Parameter(title: "Sender type (diagnostic)", inputConnectionBehavior: .never) var senderType: String?
+  @Parameter(title: "Original receive date", inputConnectionBehavior: .never) var receivedAt: Date?
+
+  func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    let input = ProbeSenderValue.decode(senderText)
+    var diagnostics = input.diagnostics(action: "text_only", parameter: "senderText")
+    diagnostics["shortcuts_type"] = senderType.map { $0 as Any } ?? NSNull()
+    let result = try DeviceHistoryRangeInbox.shared.capture(request, body: body, sender: input.sender,
+        date: receivedAt, evidence: input.evidence, senderDiagnostics: diagnostics)
+    DeviceHistoryProbeBridge.notifyReady()
+    return .result(value: result)
+  }
+}
+
+@available(iOS 16.0, *)
+struct ProbeMainAppHistoryInputIntent: AppIntent {
+  static var title: LocalizedStringResource = "Probe Main-App History Input"
+  static var description = IntentDescription("Sender lab only: the same four parameter IDs, types and explicit connections as main PandaPay history capture. Compare against Inspect Financial Message With Sender using the same Message properties. Does not call or change the main app.")
+  static var openAppWhenRun = false
+  @Parameter(title: "Import request", inputConnectionBehavior: .never) var request: String
+  @Parameter(title: "Message body", inputConnectionBehavior: .never) var body: String?
+  @Parameter(title: "Sender (text)", inputConnectionBehavior: .never, resolvers: { ProbeSenderTextResolver() }) var sender: String?
+  @Parameter(title: "Original Message Date", inputConnectionBehavior: .never) var receivedAt: Date?
+  func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    let input = ProbeSenderValue.decode(sender)
+    let diagnostics = input.diagnostics(action: "main_app_contract", parameter: "sender")
+    let result = try DeviceHistoryRangeInbox.shared.capture(request, body: body ?? "", sender: input.sender,
+        date: receivedAt, evidence: input.evidence, senderDiagnostics: diagnostics)
+    DeviceHistoryProbeBridge.notifyReady()
+    return .result(value: result)
+  }
+}
+
+/// Historical Message.Sender is a MessagePerson wrapper. A separate property
+/// extraction provides its Person value to this typed input without String
+/// coercion or an email/phone-only selection mode. Existing actions stay intact.
+@available(iOS 16.0, *)
+struct ProbeDirectMessagePersonIntent: AppIntent {
+  static var title: LocalizedStringResource = "Probe Message Sender Person"
+  static var description = IntentDescription("Isolated sender lab: receive the Person property extracted from a historical Message's Sender entity. Records the actual supplied Person and primary handle without inventing an address. Does not change the main PandaPay app.")
+  static var openAppWhenRun = false
+  @Parameter(title: "Import request", inputConnectionBehavior: .never) var request: String
+  @Parameter(title: "Message body", inputConnectionBehavior: .never) var body: String?
+  @Parameter(title: "Sender Person", inputConnectionBehavior: .never) var sender: IntentPerson?
+  @Parameter(title: "Original Message Date", inputConnectionBehavior: .never) var receivedAt: Date?
+
+  func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    let input = try ProbeSenderValue.direct(person: sender)
+    let diagnostics = input.diagnostics(action: "direct_message_person", parameter: "sender")
+    let result = try DeviceHistoryRangeInbox.shared.capture(request, body: body ?? "", sender: input.sender,
+        date: receivedAt, evidence: input.evidence, senderDiagnostics: diagnostics)
     DeviceHistoryProbeBridge.notifyReady()
     return .result(value: result)
   }
@@ -588,7 +679,34 @@ enum DeviceHistoryProbeBridge {
         DeviceLiveMessageInbox.shared.clear()
         DeviceHistoryProbeInbox.clear()
         DeviceHistoryRangeInbox.shared.clear()
+        ProbeDiagnosticsExport.clearReplay()
         result(true)
+      } else if call.method == "readDiagnosticReplay" || call.method == "completeDiagnosticReplay" {
+        guard Bundle.main.bundleIdentifier == "app.pandapay.iosimportprobe" else {
+          result(FlutterError(code: "wrong_probe_bundle", message: "Replay is probe-only.", details: nil)); return
+        }
+        DispatchQueue.global(qos: .utility).async {
+          do {
+            let value: Any?
+            if call.method == "readDiagnosticReplay" {
+              value = try ProbeDiagnosticsExport.readReplay()
+            } else {
+              guard let args = call.arguments as? [String: Any], let fingerprint = args["fingerprint"] as? String,
+                    let counts = args["counts"] as? [String: Int] else { throw ProbeExportError.invalidReport }
+              try ProbeDiagnosticsExport.completeReplay(fingerprint, counts: counts)
+              value = true
+            }
+            DispatchQueue.main.async { result(value) }
+          } catch {
+            DispatchQueue.main.async { result(FlutterError(code: "replay_failed", message: "The probe replay file could not be read.", details: nil)) }
+          }
+        }
+      } else if call.method == "shareDiagnostics" {
+        guard let json = call.arguments as? String else {
+          result(FlutterError(code: "invalid_export", message: "Diagnostic report is missing.", details: nil))
+          return
+        }
+        shareDiagnostics(json, result: result)
       } else if call.method == "runShortcut" {
         let name: String
         let input: String?
@@ -603,9 +721,9 @@ enum DeviceHistoryProbeBridge {
           return
         }
         do {
-          if let input, name == "PANDAPAY SELECTED RANGE V2" {
+          if let input {
             guard Bundle.main.bundleIdentifier == "app.pandapay.iosimportprobe" else { throw HistoryRangeError.invalidRequest }
-            try DeviceHistoryRangeInbox.shared.register(input)
+            try DeviceHistoryRangeInbox.shared.registerForShortcut(name, request: input)
           }
         } catch {
           result(FlutterError(code: "invalid_range", message: error.localizedDescription, details: nil))
@@ -638,6 +756,57 @@ enum DeviceHistoryProbeBridge {
 
   static func notifyReady() {
     DispatchQueue.main.async { channel?.invokeMethod("ready", arguments: nil) }
+  }
+
+  private static var sharingDiagnostics = false
+  private static func shareDiagnostics(_ json: String, result: @escaping FlutterResult) {
+    guard Bundle.main.bundleIdentifier == "app.pandapay.iosimportprobe", !sharingDiagnostics else {
+      result(FlutterError(code: "export_unavailable", message: "Diagnostic sharing is unavailable.", details: nil))
+      return
+    }
+    sharingDiagnostics = true
+    let metadata: [String: Any] = [
+      "bundle_id": Bundle.main.bundleIdentifier ?? "",
+      "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
+      "build": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "",
+      "system": UIDevice.current.systemName, "system_version": UIDevice.current.systemVersion,
+      "device_family": UIDevice.current.model, "time_zone": TimeZone.current.identifier,
+    ]
+    DispatchQueue.global(qos: .utility).async {
+      do {
+        let file = try ProbeDiagnosticsExport.write(json, metadata: metadata)
+        DispatchQueue.main.async {
+          guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+            var presenter = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+            ProbeDiagnosticsExport.remove(file); sharingDiagnostics = false
+            result(FlutterError(code: "export_inactive", message: "Open the probe and try exporting again.", details: nil))
+            return
+          }
+          while let next = presenter.presentedViewController { presenter = next }
+          let sheet = UIActivityViewController(activityItems: [file], applicationActivities: nil)
+          if let popover = sheet.popoverPresentationController {
+            popover.sourceView = presenter.view
+            popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1, height: 1)
+            popover.permittedArrowDirections = []
+          }
+          sheet.completionWithItemsHandler = { _, completed, _, error in
+            ProbeDiagnosticsExport.remove(file); sharingDiagnostics = false
+            if error != nil {
+              result(FlutterError(code: "share_failed", message: "The diagnostic file could not be shared. Try again.", details: nil))
+            } else { result(completed ? "shared" : "cancelled") }
+          }
+          presenter.present(sheet, animated: true)
+        }
+      } catch {
+        DispatchQueue.main.async {
+          sharingDiagnostics = false
+          let oversized = (error as? ProbeExportError) == .oversized
+          result(FlutterError(code: oversized ? "export_too_large" : "export_failed",
+            message: "The diagnostic file could not be created. Try a smaller test range.", details: nil))
+        }
+      }
+    }
   }
 }
 #endif

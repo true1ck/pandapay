@@ -3251,6 +3251,10 @@ class TransactionEntry {
   final TxnRail rail;
   final TxnInstrument instrument;
 
+  /// Explicit SMS payment-method evidence. UPI does not establish QR, so it
+  /// stays separate from the narrower, server-compatible [TxnRail.upiQr].
+  final String? paymentMethod;
+
   /// Older production API images did not include `instrument` in the detail
   /// response. Keep that distinction so the UI never guesses "Credit card"
   /// for a cardless UPI transaction while the API rolls out.
@@ -3312,6 +3316,7 @@ class TransactionEntry {
     this.accountLast4,
     this.userCardId,
     this.rail = TxnRail.unknown,
+    this.paymentMethod,
     this.instrument = TxnInstrument.creditCard,
     this.instrumentKnown = true,
     this.entryKind = TxnEntryKind.spend,
@@ -3357,6 +3362,7 @@ class TransactionEntry {
       'account_last4': accountLast4,
       'user_card_id': userCardId,
       'rail': instrumentKnown ? _railToJson(rail) : null,
+      if (paymentMethod != null) 'payment_method': paymentMethod,
       'instrument': instrumentKnown ? instrument.wireValue : null,
       'entry_kind': entryKind.wireValue,
       'self_transfer_rule': selfTransferRule,
@@ -3399,6 +3405,7 @@ class TransactionEntry {
       accountLast4: accountLast4,
       userCardId: userCardId,
       rail: rail,
+      paymentMethod: paymentMethod,
       instrument: instrument,
       instrumentKnown: instrumentKnown,
       entryKind: entryKind ?? this.entryKind,
@@ -3455,6 +3462,7 @@ class TransactionEntry {
       accountLast4: json['account_last4'] as String?,
       userCardId: json['user_card_id'] as String?,
       rail: _parseRail(json['rail'] as String?),
+      paymentMethod: json['payment_method'] == 'upi' ? 'upi' : null,
       instrument: TxnInstrument.fromJson(json['instrument'] as String?),
       instrumentKnown: json['instrument'] != null,
       entryKind: TxnEntryKind.fromJson(json['entry_kind'] as String?),

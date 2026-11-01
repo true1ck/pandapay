@@ -60,7 +60,7 @@ void main() {
       final row = <Object?, Object?>{
         'id': 'credit',
         'origin': 'live',
-        'sender': '',
+        'sender': 'VM-FABLEBK',
         'body': body,
         'receivedAt': '2026-10-29T08:11:23Z',
         'capturedAt': '2026-10-29T08:12:00Z',

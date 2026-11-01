@@ -81,6 +81,163 @@ Future<void> _scrollTo(
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  testWidgets('import details distinguish received and missing sender input', (
+    tester,
+  ) async {
+    final service = MemoryBridge();
+    service.snapshot['jobs'] = [
+      {'id': 'history', 'kind': 'history', 'state': 'complete'},
+    ];
+    service.snapshot['windows'] = [
+      {
+        'id': 'w',
+        'job_id': 'history',
+        'state': 'complete',
+        'start': '2026-10-01T00:00:00Z',
+        'enumerated': 24,
+        'processed': 21,
+        'needs_review': 11,
+        'security_excluded': 3,
+        'sender_received': 1,
+        'sender_unavailable': 20,
+        'sender_input': 'person_handle',
+      },
+    ];
+    await _pumpImport(tester, service);
+    await _scrollTo(tester, find.text('Import options'));
+    await tester.tap(find.text('Import options'));
+    await tester.pumpAndSettle();
+    await _scrollTo(tester, find.text('Import details'));
+    await tester.tap(find.text('Import details'));
+    await tester.pumpAndSettle();
+    final evidence = find.textContaining(
+      'Valid inputs: 1 sender received · 20 sender missing',
+    );
+    await _scrollTo(tester, evidence);
+    expect(evidence, findsOneWidget);
+    expect(
+      find.textContaining('Last sender input: Message sender handle'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('3 security excluded'), findsOneWidget);
+    expect(service.calls, isNot(contains('runShortcut')));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sender diagnostics distinguish a Person lacking an address', (
+    tester,
+  ) async {
+    final service = MemoryBridge();
+    service.snapshot['jobs'] = [
+      {'id': 'history', 'kind': 'history', 'state': 'complete'},
+    ];
+    service.snapshot['windows'] = [
+      {
+        'id': 'w',
+        'job_id': 'history',
+        'state': 'complete',
+        'start': '2026-10-01T00:00:00Z',
+        'enumerated': 3,
+        'sender_received': 0,
+        'sender_unavailable': 3,
+        'sender_input': 'person_without_handle',
+        'receiver_build': '80',
+      },
+    ];
+    await _pumpImport(tester, service);
+    await _scrollTo(tester, find.text('Import options'));
+    await tester.tap(find.text('Import options'));
+    await tester.pumpAndSettle();
+    await _scrollTo(tester, find.text('Import details'));
+    await tester.tap(find.text('Import details'));
+    await tester.pumpAndSettle();
+    final evidence = find.textContaining(
+      'Last sender input: Message sender supplied without an address',
+    );
+    await _scrollTo(tester, evidence);
+    expect(evidence, findsOneWidget);
+    expect(
+      find.textContaining('0 sender received · 3 sender missing'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Capture received by build 80'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final currentState in ['active', 'stopped']) {
+    testWidgets(
+      'a $currentState empty check keeps the last completed sender result accessible',
+      (tester) async {
+        final service = MemoryBridge();
+        service.snapshot['jobs'] = [
+          {'id': 'current', 'kind': 'catchup', 'state': currentState},
+          {'id': 'completed', 'kind': 'history', 'state': 'complete'},
+        ];
+        service.snapshot['windows'] = [
+          {
+            'id': 'waiting',
+            'job_id': 'current',
+            'state': 'waiting',
+            'start': '2026-10-30T00:00:00Z',
+            'enumerated': 0,
+          },
+          {
+            'id': 'done',
+            'job_id': 'completed',
+            'state': 'complete',
+            'start': '2026-09-01T00:00:00Z',
+            'enumerated': 24,
+            'processed': 21,
+            'needs_review': 11,
+            'sender_received': 1,
+            'sender_unavailable': 20,
+            'receiver_build': '79',
+          },
+        ];
+        await _pumpImport(tester, service);
+        await _scrollTo(tester, find.text('Import options'));
+        await tester.tap(find.text('Import options'));
+        await tester.pumpAndSettle();
+        await _scrollTo(tester, find.text('Import details'));
+        await tester.tap(find.text('Import details'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('No messages received yet'), findsOneWidget);
+        expect(
+          find.textContaining('0 sender received · 0 sender missing'),
+          findsNothing,
+        );
+        // The completed result is available without rerunning a real search.
+        await _scrollTo(tester, find.text('Last completed import'));
+        expect(
+          find.textContaining(
+            'Valid inputs: 1 sender received · 20 sender missing',
+          ),
+          findsNothing,
+        );
+        await tester.tap(find.text('Last completed import'));
+        await tester.pumpAndSettle();
+        final evidence = find.textContaining(
+          'Valid inputs: 1 sender received · 20 sender missing',
+        );
+        await _scrollTo(tester, evidence);
+        expect(evidence, findsOneWidget);
+        expect(
+          find.textContaining('Capture received by build 79'),
+          findsOneWidget,
+        );
+        if (currentState == 'stopped') {
+          final completedSummary = find.text(
+            'Last completed import\n24 received · 21 processed · 11 need review',
+          );
+          await _scrollTo(tester, completedSummary);
+          expect(completedSummary, findsOneWidget);
+        }
+        expect(service.calls, isNot(contains('runShortcut')));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final status in ['active', 'paused']) {
     testWidgets(
       'history periods remain usable during a $status incomplete catch-up',

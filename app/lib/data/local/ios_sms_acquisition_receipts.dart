@@ -1,3 +1,4 @@
+import '../../features/sms_import/ios_shortcut_sms.dart';
 import '../../features/sms_import/sms_background_queue.dart';
 import '../local_sms_parser.dart';
 import 'financial_store.dart';
@@ -26,7 +27,10 @@ class IosSmsAcquisitionReceipts {
           throw StateError('Shortcut receipt ownership mismatch');
         }
         final message = QueuedSms(
-          sender: (row['sender'] as String?)?.trim() ?? '',
+          // Same normalisation as capture, so the lookup finds its decision.
+          sender: IosShortcutSmsBatch.normalizeSender(
+            row['sender'] as String? ?? '',
+          ),
           body: row['body'] as String,
           receivedAt: DateTime.parse(row['receivedAt'] as String),
         );

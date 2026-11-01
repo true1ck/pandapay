@@ -7,6 +7,23 @@ func request(_ id: String = UUID().uuidString) -> String {
   "{\"version\":2,\"run_id\":\"\(id)\",\"start_inclusive\":\"2026-08-31T18:30:00.000Z\",\"end_exclusive\":\"2026-09-30T18:30:00.000Z\"}"
 }
 let inbox = DeviceHistoryRangeInbox()
+// Reproduce the app launch -> first Prepare action for each dropdown choice.
+// The test copy used to launch successfully with no registered range at all.
+for shortcut in ["PANDAPAY SELECTED RANGE V2", "PANDAPAY SENDER CHECK"] {
+  let launched = DeviceHistoryRangeInbox(), launchRequest = request()
+  try launched.registerForShortcut(shortcut, request: launchRequest)
+  let lower = try launched.boundary(launchRequest, end: false).addingTimeInterval(1)
+  _ = try launched.boundary(launchRequest, end: true)
+  expect(try! launched.capture(launchRequest, body: "synthetic sender test", sender: "TESTBK-S",
+    date: lower, evidence: "text") == "accepted", "selected recipe has an active range and accepts sender input")
+  expect((try! launched.finish(launchRequest, found: 1))["status"] as? String == "completed", "selected recipe finishes its registered range")
+}
+let unsupported = DeviceHistoryRangeInbox()
+do {
+  try unsupported.registerForShortcut("UNRECOGNIZED RECIPE", request: request())
+  fatalError("unsupported shortcut opened without a registered range")
+} catch HistoryRangeError.invalidRequest {}
+expect((unsupported.snapshot()["runs"] as! [[String: Any]]).isEmpty, "unsupported launch leaves no active range")
 let text = request()
 try inbox.register(text)
 let start = try inbox.boundary(text, end: false).addingTimeInterval(1)
@@ -49,4 +66,13 @@ let bounded = DeviceHistoryRangeInbox(limit: 1); let small = request(); try boun
 _ = try bounded.capture(small, body: "one", sender: "TEST", date: start, evidence: "text")
 expect(try! bounded.capture(small, body: "two", sender: "TEST", date: start, evidence: "text") == "limit_reached", "explicit capacity rejection")
 expect(HistoryRangeRequest.isoDate("2026-09-30T10:00:00") == nil, "unzoned timestamp not verified")
+let diagnostic = DeviceHistoryRangeInbox(), diagnosticRequest = request()
+try diagnostic.register(diagnosticRequest); _ = try diagnostic.boundary(diagnosticRequest, end: false)
+let fields: [String: Any] = ["text": "VM-TEST", "person": ["present": true, "handle_type": "application_defined", "handle": "VM-TEST", "alias_count": 0]]
+_ = try diagnostic.capture(diagnosticRequest, body: "synthetic body", sender: "VM-TEST", date: start, evidence: "handle", senderDiagnostics: fields)
+let diagnosticRow = (diagnostic.snapshot()["records"] as! [[String: Any]]).first!
+expect((diagnosticRow["senderDiagnostics"] as? [String: Any])?["text"] as? String == "VM-TEST", "raw sender text accompanies the same message")
+expect(((diagnosticRow["senderDiagnostics"] as? [String: Any])?["person"] as? [String: Any])?["handle"] as? String == "VM-TEST", "typed person shape remains distinct")
+_ = try diagnostic.capture(diagnosticRequest, body: "OTP 123456 do not share", sender: "VM-TEST", date: start, evidence: "handle", senderDiagnostics: fields)
+expect((diagnostic.snapshot()["records"] as! [[String: Any]]).count == 1, "diagnostics cannot bypass security exclusions")
 print("PASS: native range boundaries, record association, metadata, repeats, completion, interruption, capacity, acknowledgement")

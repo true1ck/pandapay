@@ -94,17 +94,19 @@ struct CapturePandaPayWindowMessageIntent: AppIntent {
 @available(iOS 16.0, *)
 struct CapturePandaPayHistoryMessageIntent: AppIntent {
   static var title: LocalizedStringResource = "Capture PandaPay History SMS"
-  static var description = IntentDescription("Import one message with its original receive date. Existing body, sender text and date mappings remain compatible; completion and duplicate checks stay in PandaPay.")
+  static var description = IntentDescription("Legacy history sender inputs. For new shortcuts use Capture PandaPay History SMS as Text, which avoids Person/contact conversion. Existing mappings remain supported.")
   static var openAppWhenRun = false
   @available(iOS 26.0, *)
   static var supportedModes: IntentModes { [.background, .foreground(.dynamic)] }
   @Parameter(title: "Import request", inputConnectionBehavior: .never) var request: String
   @Parameter(title: "Message body", inputConnectionBehavior: .never) var body: String?
-  @Parameter(title: "Sender (text)", inputConnectionBehavior: .never) var sender: String?
+  @Parameter(title: "Sender (text)", description: "Use this only when you already have a sender address as text.", inputConnectionBehavior: .never) var sender: String?
+  @Parameter(title: "Sender from Message", description: "Choose the Sender property of the message being repeated.", mode: .emailOrPhone, inputConnectionBehavior: .never) var senderPerson: IntentPerson?
   @Parameter(title: "Original Message Date", inputConnectionBehavior: .never) var receivedAt: Date?
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
-    let value = try IncomingSmsSpool.shared.capture(body: body, sender: sender, receivedAt: receivedAt,
-        provenance: "original", request: request, useMessageReceipt: true)
+    let input = SmsSenderInput.resolve(text: sender, person: senderPerson)
+    let value = try IncomingSmsSpool.shared.capture(body: body, sender: input.text, receivedAt: receivedAt,
+        provenance: "original", request: request, useMessageReceipt: true, senderInput: input.source.rawValue)
     IncomingSmsBridge.notifyReady()
     // The input is durable before any UI transition. Only the current
     // app-started launch admits this; the same action stays quiet for a daily
@@ -117,6 +119,39 @@ struct CapturePandaPayHistoryMessageIntent: AppIntent {
         catch {
           // A declined/unavailable presentation cannot roll back saved input
           // or change classification. Normal Finish/return still works.
+          _ = try? IncomingSmsSpool.shared.observeHandoff(request: request, stage: .appReturnUnavailable)
+        }
+      }
+      IncomingSmsBridge.notifyReady()
+    }
+    return .result(value: value)
+  }
+}
+
+@available(iOS 16.0, *)
+struct CapturePandaPayHistoryTextMessageIntent: AppIntent {
+  static var title: LocalizedStringResource = "Capture PandaPay History SMS as Text"
+  static var description = IntentDescription("Import one message with sender text and its original date. No Person or contact conversion. Select Repeat Item, Message, Sender for Sender (text).")
+  static var openAppWhenRun = false
+  @available(iOS 26.0, *)
+  static var supportedModes: IntentModes { [.background, .foreground(.dynamic)] }
+  @Parameter(title: "Import request", inputConnectionBehavior: .never) var request: String
+  @Parameter(title: "Message body", inputConnectionBehavior: .never) var body: String?
+  @Parameter(title: "Sender (text)", inputConnectionBehavior: .never) var sender: String?
+  @Parameter(title: "Original Message Date", inputConnectionBehavior: .never) var receivedAt: Date?
+  func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    let input = SmsSenderInput.resolve(text: sender, person: nil)
+    let value = try IncomingSmsSpool.shared.capture(body: body, sender: input.text, receivedAt: receivedAt,
+        provenance: "original", request: request, useMessageReceipt: true, senderInput: input.source.rawValue)
+    IncomingSmsBridge.notifyReady()
+    // Preserve the existing admitted app-started return, after durable save.
+    // A daily/background run has no foreground-return claim and stays quiet.
+    if #available(iOS 26.0, *), systemContext.currentMode == .background,
+       systemContext.currentMode.canContinueInForeground,
+       await IncomingSmsBridge.claimForegroundReturn(request: request) {
+      if (try? IncomingSmsSpool.shared.observeHandoff(request: request, stage: .appReturnRequested)) == true {
+        do { try await continueInForeground(alwaysConfirm: false) }
+        catch {
           _ = try? IncomingSmsSpool.shared.observeHandoff(request: request, stage: .appReturnUnavailable)
         }
       }

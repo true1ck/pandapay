@@ -6,6 +6,7 @@ An India-focused credit/debit card advisor app: scan any UPI QR code, get an ins
 
 ## Current implementation and operations
 
+- [SMS categorization pipeline](docs/sms-categorization-pipeline-2026-11-01.md) ([HTML guide](docs/sms-categorization-pipeline-2026-11-01.html), [recorded narration](docs/audio/sms-categorization-narration-2026-11-01.mp3), [narration script](docs/sms-categorization-narration-2026-11-01.md)) — overview and detailed diagrams, spoken walkthrough, inputs, category precedence, AI validation/rechecks, correction learning, reproduced validation gap, and improvement suggestions.
 - [Current source architecture and recovery boundaries](docs/security-current-architecture-2026-10-25.md) — authoritative service/data/flag overview; separates source from deployed behavior.
 - [Current security implementation progress](docs/security-implementation-progress-2026-10-22.md) — local checks and remaining release acceptance.
 - [Recovery flow and examples](docs/security-recovery-flow-2026-10-25.md) — existing OTP, explicit automatic-backup consent and no extra password.

@@ -21,6 +21,7 @@ class IosProbeSource {
 
 class IosProbeRunResults {
   int handedOff = 0, retainedAdded = 0, existing = 0, ignored = 0;
+  int reviewed = 0;
   int transactionsAdded = 0, missingDate = 0, invalid = 0, sensitive = 0;
   final sourceKeys = <String>{};
 }
@@ -30,6 +31,7 @@ class IosProbeRunResults {
 class IosDeviceProbeSession {
   static const namespace = 'user:isolated-ios-device-probe';
   final AppDatabase database;
+  final bool allowSenderInference;
   late final FinancialStore store = FinancialStore(database);
   final _seenTransportIds = <String>{};
   final _sources = <String, IosProbeSource>{};
@@ -42,7 +44,7 @@ class IosDeviceProbeSession {
       missingDate = 0;
   int sensitive = 0, invalid = 0;
 
-  IosDeviceProbeSession(this.database);
+  IosDeviceProbeSession(this.database, {this.allowSenderInference = true});
 
   void accept(List<Map<Object?, Object?>> rows) {
     final ids = {..._seenTransportIds};
@@ -53,7 +55,10 @@ class IosDeviceProbeSession {
       (groups[row['runId'] as String? ?? 'legacy'] ??= []).add(row);
     }
     for (final group in groups.entries) {
-      final batch = IosShortcutSmsBatch.fromRows(group.value);
+      final batch = IosShortcutSmsBatch.fromRows(
+        group.value,
+        allowSenderInference: allowSenderInference,
+      );
       final result = runs.putIfAbsent(group.key, IosProbeRunResults.new);
       final before = counts.captured;
       final txBefore = transactions;
@@ -66,7 +71,14 @@ class IosDeviceProbeSession {
         final row = batch.sourceRows[i];
         final key = smsSourceKey(namespace, message.sender, message.body);
         if (!retainedAfter.contains(key)) {
-          result.ignored++;
+          final decision = SmsIntakeRepository(
+            database,
+          ).decision(namespace, key);
+          if (decision?.decision == 'financial_review') {
+            result.reviewed++;
+          } else {
+            result.ignored++;
+          }
           continue;
         }
         result.sourceKeys.add(key);

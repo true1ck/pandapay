@@ -180,7 +180,8 @@ void main() {
       reason: 'Receipt updates cannot rebuild the page',
     );
     expect(
-      find.text('Importing history · 0 of 1 months checked'),
+      // The range starts 1 Sep; the exact day depends on the time zone.
+      find.textContaining('Importing history · starting '),
       findsOneWidget,
     );
     controller.emit(_status());

@@ -9,7 +9,13 @@ import 'ios_sms_import_screen.dart';
 import 'ios_sms_intake_controller.dart';
 import 'ios_sms_intake_providers.dart';
 
-typedef _StatusView = ({bool enabled, bool visible, String label, bool busy});
+typedef _StatusView = ({
+  bool enabled,
+  bool visible,
+  String label,
+  bool busy,
+  double? progress,
+});
 
 _StatusView _statusView(IosSmsIntakeController controller) {
   final state = controller.state;
@@ -18,6 +24,10 @@ _StatusView _statusView(IosSmsIntakeController controller) {
     visible: state.visible,
     label: state.label,
     busy: state.processing || state.launching,
+    // Rounded so receipt-level changes don't rebuild the strip.
+    progress: state.activeJob?['kind'] == 'history' && state.coverage != null
+        ? (state.coverage! * 100).roundToDouble() / 100
+        : null,
   );
 }
 
@@ -43,6 +53,7 @@ class _SmsSyncStatusLayoutState extends ConsumerState<SmsSyncStatusLayout> {
     visible: false,
     label: '',
     busy: false,
+    progress: null,
   );
   late _StatusView _displayed = _latest;
 
@@ -113,7 +124,11 @@ class _SmsSyncStatusLayoutState extends ConsumerState<SmsSyncStatusLayout> {
     children: [
       // This slot always exists, so the page below is never reparented.
       _shown
-          ? SmsSyncStatusBar(label: _displayed.label, busy: _displayed.busy)
+          ? SmsSyncStatusBar(
+              label: _displayed.label,
+              busy: _displayed.busy,
+              progress: _displayed.progress,
+            )
           : const SizedBox.shrink(),
       Expanded(
         child: MediaQuery.removePadding(
@@ -131,7 +146,16 @@ class _SmsSyncStatusLayoutState extends ConsumerState<SmsSyncStatusLayout> {
 class SmsSyncStatusBar extends StatelessWidget {
   final String label;
   final bool busy;
-  const SmsSyncStatusBar({super.key, required this.label, required this.busy});
+
+  /// Share of the selected history imported. When known, the bar fills
+  /// steadily instead of animating continuously.
+  final double? progress;
+  const SmsSyncStatusBar({
+    super.key,
+    required this.label,
+    required this.busy,
+    this.progress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -183,8 +207,10 @@ class SmsSyncStatusBar extends StatelessWidget {
               SizedBox(
                 height: 4,
                 child: LinearProgressIndicator(
-                  value: busy && !reduceMotion ? null : 1,
-                  color: busy ? BambooInk.lime : BambooInk.slateHairline,
+                  value: progress ?? (busy && !reduceMotion ? null : 1),
+                  color: busy || progress != null
+                      ? BambooInk.lime
+                      : BambooInk.slateHairline,
                   backgroundColor: BambooInk.slateHairline,
                 ),
               ),

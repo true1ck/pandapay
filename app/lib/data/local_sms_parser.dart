@@ -154,7 +154,8 @@ class LocalSmsParser {
   // classified as spends and decline reasons are not used as payees.
   // 25: Reprocess rows classified by either divergent parser history using
   // the combined rules.
-  static const version = 25;
+  // 26: Preserve UPI method evidence separately from QR and use saved card nicknames.
+  static const version = 26;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -1044,6 +1045,19 @@ class LocalSmsParser {
         : TxnInstrument.creditCard;
   }
 
+  static String? _paymentMethod(String body) =>
+      _re(
+        r'\b(?:via|through|using|by)\s+UPI\b|\bUPI\s*(?:Ref(?:erence)?(?:\s*No\.?)?|txn|transaction|payment)\b',
+      ).hasMatch(body)
+      ? 'upi'
+      : null;
+
+  static String? _cardDisplayName(UserCard? card) {
+    if (card == null) return null;
+    final nickname = card.nickname?.trim();
+    return nickname?.isNotEmpty == true ? nickname : card.cardName;
+  }
+
   static TxnInstrument? _explicitCardInstrument(String body) {
     if (_re(r'\bcredit\s+card\b').hasMatch(body)) {
       return TxnInstrument.creditCard;
@@ -1069,8 +1083,17 @@ class LocalSmsParser {
 
   static bool sensitive(String body) => SmsSecurityPolicy.sensitive(body);
 
+  /// Compiled once per pattern. Dart keeps only a small cache of compiled
+  /// regexes, and this parser alone uses more patterns than fit, so creating
+  /// a new RegExp per call recompiled them constantly on the UI thread. Every
+  /// pattern passed here is a constant or built from constants, so the cache
+  /// is bounded.
+  static final _reCache = <String, RegExp>{};
   static RegExp _re(String s, {bool caseSensitive = false}) =>
-      RegExp(s, caseSensitive: caseSensitive);
+      _reCache.putIfAbsent(
+        caseSensitive ? 'c:$s' : 'i:$s',
+        () => RegExp(s, caseSensitive: caseSensitive),
+      );
 
   /// Extracts a display-safe biller name without retaining the raw SMS.
   /// Bank sender IDs are transport identifiers (for example, TNBPAY), not
@@ -2381,6 +2404,7 @@ class LocalSmsParser {
       List<String> reasons = const [],
     ]) => LocalSmsObservation(
       transaction: row,
+      paymentMethod: row?.paymentMethod,
       cardLast4: cardLast4,
       accountLast4: isInsuranceReminder
           ? policyLast4?.substring(policyLast4.length - 4)
@@ -3005,9 +3029,9 @@ class LocalSmsParser {
               cardLast4 != null &&
               c.last4 == cardLast4 &&
               ((instrument == TxnInstrument.debitCard &&
-                      c.cardType == 'debit') ||
+                      c.cardType?.toLowerCase() == 'debit') ||
                   (instrument == TxnInstrument.creditCard &&
-                      c.cardType != 'debit')),
+                      c.cardType?.toLowerCase() != 'debit')),
         )
         .toList();
     final card = matching.length == 1 ? matching.single : null;
@@ -3061,10 +3085,11 @@ class LocalSmsParser {
         categoryId: resolvedCategorySlug,
         categoryName: categoryName,
         userCardId: card?.id,
-        cardDisplayName: card?.cardName,
+        cardDisplayName: _cardDisplayName(card),
         cardLast4: cardLast4,
         accountLast4: accountLast4,
         instrument: instrument,
+        paymentMethod: _paymentMethod(body),
         instrumentKnown: instrumentKnown,
         entryKind: kind,
         source: 'sms',
@@ -3204,14 +3229,16 @@ class LocalSmsParser {
                 cardLast4 != null &&
                 card.last4 == cardLast4 &&
                 ((instrument == TxnInstrument.debitCard &&
-                        card.cardType == 'debit') ||
+                        card.cardType?.toLowerCase() == 'debit') ||
                     (instrument == TxnInstrument.creditCard &&
-                        card.cardType != 'debit')),
+                        card.cardType?.toLowerCase() != 'debit')),
           )
           .toList();
       final matchedCardId = matchingCards.length == 1
           ? matchingCards.single.id
           : null;
+
+      final matchedCard = matchingCards.length == 1 ? matchingCards.single : null;
 
       // Instrument safety: if card is claimed but last4 is missing/invalid, default away from card
       if ((instrument == TxnInstrument.creditCard ||
@@ -3246,6 +3273,7 @@ class LocalSmsParser {
         id: 'local-sms:$key',
         sourceKey: key,
         userCardId: matchedCardId,
+        cardDisplayName: _cardDisplayName(matchedCard),
         amount: amount,
         merchantName: merchant ?? ftMatch?.canonicalName,
         categoryId: categorySlug,
@@ -3253,6 +3281,7 @@ class LocalSmsParser {
         occurredAt: receivedAt,
         smsReceivedAt: receivedAt,
         instrument: instrument,
+        paymentMethod: _paymentMethod(body),
         instrumentKnown: instrumentKnown,
         entryKind: entryKind,
         cardLast4: cardLast4,
@@ -3265,6 +3294,7 @@ class LocalSmsParser {
       return LocalSmsObservation(
         eventType: LocalSmsEventType.transaction,
         transaction: txn,
+        paymentMethod: txn.paymentMethod,
         cardLast4: cardLast4,
         accountLast4: accountLast4,
         confidence: calibratedConfidence,
