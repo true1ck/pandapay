@@ -50,6 +50,20 @@ jobs:
                   if not path.is_absolute():
                       path = root / path
                   print(f'  referenced path exists={path.exists()}, file={path.is_file()}, directory={path.is_dir()}')
+          import json, shutil, subprocess
+          for folder in (root / 'backups', Path('/var/backups/pandapay'), Path('/etc/pandapay')):
+              print(f'Documented backup location {folder}: exists={folder.is_dir()}')
+              if folder.is_dir():
+                  matches = sum(1 for pattern in ('*recipients*.txt', '*/*recipients*.txt', 'backup.env', '*/backup.env') for _ in folder.glob(pattern))
+                  print(f'  recovery configuration candidates={matches}')
+          mounts = subprocess.run(['findmnt', '--json', '-o', 'FSTYPE'], capture_output=True, text=True, check=True)
+          def remote_count(nodes):
+              return sum(int(n.get('fstype', '').startswith(('nfs', 'cifs', 'fuse.rclone', 'fuse.sshfs'))) + remote_count(n.get('children', [])) for n in nodes)
+          print('Remote filesystem mounts=' + str(remote_count(json.loads(mounts.stdout).get('filesystems', []))))
+          for tool in ('age', 'pg_dump', 'rclone'):
+              print(f'{tool}: installed={shutil.which(tool) is not None}')
+          result = subprocess.run(['docker', 'ps', '-aq', '--filter', 'label=com.docker.compose.project=pandapay-prod', '--filter', 'label=com.docker.compose.service=backup'], capture_output=True, text=True)
+          print(f'Backup containers: query_ok={result.returncode == 0}, count={len(result.stdout.splitlines())}')
           PY
 
   verify:
