@@ -26,6 +26,21 @@ void main() {
     expect(result?.transaction?.amount.rupees, 1);
     expect(result?.transaction?.entryKind, TxnEntryKind.income);
   });
+
+  test('received UPI credit with a colon after VPA counts as income', () {
+    const sender = 'AX-HDFCBK-S';
+    const body =
+        'Credit Alert! Rs.500.00 credited to HDFC Bank A/c XX5552 from VPA: alice@oksbi on 30-10-26';
+
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: sender,
+      body: body,
+      receivedAt: DateTime(2026, 10, 30, 13, 37),
+    );
+
+    expect(result?.transaction?.entryKind, TxnEntryKind.income);
+  });
   test('explicit service renewal keeps stated amount and next date', () {
     final result = LocalSmsParser.parse(
       namespace: 'test',
@@ -214,7 +229,7 @@ void main() {
     expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
   });
 
-  test('generic bank-origin credit is a transfer candidate', () {
+  test('generic bank-origin credit counts as money in', () {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'HDFCBK',
@@ -222,12 +237,12 @@ void main() {
           'Your HDFC Bank A/c XX9080 is credited with Rs.80,000 from CANARA BANK. UTR 123456789012. Avl Bal Rs.1,20,000.',
       receivedAt: DateTime(2026, 10, 18),
     );
-    expect(result?.transaction?.entryKind, TxnEntryKind.transfer);
+    expect(result?.transaction?.entryKind, TxnEntryKind.income);
     expect(result?.transaction?.merchantName, 'Bank transfer');
   });
 
   test(
-    'unlabelled credit, refund, reward, loan and fee classifications stay out of income',
+    'unlabelled bank credit counts as income while refunds, rewards, loans and fees stay out',
     () {
       final credit = LocalSmsParser.parse(
         namespace: 'user:test',
@@ -261,7 +276,7 @@ void main() {
         body: 'Service charge of Rs.250 debited from your bank account.',
         receivedAt: DateTime(2026, 10, 18),
       );
-      expect(credit?.transaction?.entryKind, TxnEntryKind.transfer);
+      expect(credit?.transaction?.entryKind, TxnEntryKind.income);
       expect(refund?.transaction?.entryKind, TxnEntryKind.transfer);
       expect(reward?.transaction?.entryKind, TxnEntryKind.transfer);
       expect(loan?.transaction?.entryKind, TxnEntryKind.transfer);

@@ -967,7 +967,11 @@ class LocalSmsParser {
 
   static bool _incomingBankTransferCandidate(String body) =>
       !_re(r'\b(?:salary|cashback|refund(?:ed)?)\b').hasMatch(body) &&
-      _re(r'\bfrom\b[\s\S]{0,80}\b(?:bank|a\/?c\.?|account)\b').hasMatch(body);
+      (_re(r'\bfrom\b[\s\S]{0,80}\b(?:bank|a\/?c\.?|account)\b').hasMatch(
+            body,
+          ) ||
+          (_re(r'\b(?:credited|received|deposited)\b').hasMatch(body) &&
+              _re(r'\b(?:bank|a\/?c\.?|account|savings)\b').hasMatch(body)));
 
   static bool _earnedIncomeCredit(String body) =>
       !_re(
@@ -1578,7 +1582,9 @@ class LocalSmsParser {
               ).hasMatch(body)
         ? TxnEntryKind.transfer
         : _re(r'\b(?:credited|received|deposited)\b').hasMatch(body) &&
-              _earnedIncomeCredit(body)
+              (_earnedIncomeCredit(body) ||
+                  (_incomingBankTransferCandidate(body) &&
+                      !_accountToAccountTransfer(body)))
         ? TxnEntryKind.income
         : TxnEntryKind.spend;
 
@@ -3034,7 +3040,10 @@ class LocalSmsParser {
         !cashDeposit &&
         !giftCredit &&
         !reimbursementCredit &&
-        _re(r'\bfrom\s+VPA\s+\S+@\S+', caseSensitive: false).hasMatch(body);
+        _re(
+          r'\bfrom\s+(?:VPA|UPI(?:\s+ID)?)\s*[:#-]?\s*\S+@\S+',
+          caseSensitive: false,
+        ).hasMatch(body);
     if (externalVpaCredit) kind = TxnEntryKind.income;
     if (ownNameCredit) merchant = 'Transfer between own accounts';
     if (ownNameTransfer || ownNameCredit) {

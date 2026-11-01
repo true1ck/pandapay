@@ -559,6 +559,16 @@ test('bank-account credits become incoming income entries', () => {
   assert.equal(result.fields.reference, '123456789012');
 });
 
+test('received UPI credit with a colon after VPA becomes income', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'AX-HDFCBK-S',
+    body: 'Credit Alert! Rs.500.00 credited to HDFC Bank A/c XX5552 from VPA: alice@oksbi on 30-10-26',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'income');
+});
+
 test('completed external VPA credit is money in', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'AX-HDFCBK-S',
@@ -570,14 +580,14 @@ test('completed external VPA credit is money in', () => {
   assert.equal(result.fields.amountInr, 1);
 });
 
-test('generic bank-origin credits are transfer candidates until paired', () => {
+test('generic bank-origin credits count as money in', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'HDFCBK',
     body: 'Your HDFC Bank A/c XX9080 is credited with Rs.80,000 from CANARA BANK. UTR 123456789012. Avl Bal Rs.1,20,000.',
   });
   assert.equal(result.ok, true);
   assert.equal(result.parserKind, 'builtin_account_credit');
-  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.entryKind, 'income');
   assert.equal(result.fields.transferKind, 'incoming_bank_transfer_candidate');
   assert.equal(result.fields.merchant, 'Bank transfer');
 });
@@ -722,13 +732,13 @@ test('salary advances are loan disbursements, not earned salary', () => {
   assert.equal(result.fields.transferKind, 'loan_disbursement');
 });
 
-test('unlabelled credits stay out of earned income until classified', () => {
+test('unlabelled bank credits count as money in', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'HDFCBK',
     body: 'Your HDFC Bank A/c XX9080 is credited with Rs.80,000. UTR 123456789012. Avl Bal Rs.1,20,000.',
   });
   assert.equal(result.ok, true);
-  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.entryKind, 'income');
   assert.equal(result.fields.transferKind, 'unclassified_credit');
 });
 

@@ -538,7 +538,7 @@ function parseBuiltInAccountCredit(sms) {
     && !/\bsalary\s+advance\b/i.test(body)
     && /\b(?:salary|wages?|payroll|pension|interest|dividend|rent|commission|consulting|business\s+(?:receipt|income)|invoice\s+paid)\b/i.test(body);
   const externalVpaCredit = !ownTransfer && !nonIncomeCredit
-    && /\bfrom\s+VPA\s+\S+@\S+/i.test(body);
+    && /\bfrom\s+(?:VPA|UPI(?:\s+ID)?)\s*[:#-]?\s*\S+@\S+/i.test(body);
   const cashbackCredit = /\bcashback\b/i.test(body);
   const rewardCredit = /\b(?:reward|rewards|points?|miles?)\b/i.test(body);
   const refundCredit = /\b(?:refund(?:ed)?|chargeback)\b/i.test(body);
@@ -557,6 +557,22 @@ function parseBuiltInAccountCredit(sms) {
   const reimbursementCredit = /\b(?:reimburse(?:ment|d)?|expense\s+claim)\b/i.test(body);
   const brokerSettlement = isBrokerSettlementMessage(body);
   const walletLoad = !brokerSettlement && isWalletLoadMessage(body);
+  const accountToAccountTransfer = accountReferences.length >= 2;
+  // A completed bank-account credit without an earned-income keyword is still
+  // money received unless the message explicitly identifies a non-income
+  // movement or a second account. Keep it unclassified for review metadata,
+  // but expose it as income in the Activity totals.
+  const plainExternalBankCredit = !ownTransfer
+    && !accountToAccountTransfer
+    && !nonIncomeCredit
+    && !walletLoad
+    && !brokerSettlement
+    && !loanRepaymentCredit
+    && !loanDisbursement
+    && !investmentProceeds
+    && !cashDeposit
+    && !giftCredit
+    && !reimbursementCredit;
   const incomingBankTransferCandidate = !ownTransfer
     && !walletLoad
     && !brokerSettlement
@@ -575,7 +591,7 @@ function parseBuiltInAccountCredit(sms) {
       // Two masked account references identify a movement between accounts,
       // even when the credit alert does not say "own" or "self". Keep it as
       // a transfer candidate until the opposite debit is paired.
-      || accountReferences.length >= 2);
+      || accountToAccountTransfer);
   const transferKind = ownTransfer
     ? 'account_to_account'
     : externalVpaCredit
@@ -651,7 +667,12 @@ function parseBuiltInAccountCredit(sms) {
       ...(!earnedIncomeCredit || ownTransfer || incomingBankTransferCandidate || walletLoad || brokerSettlement
         ? { transferKind }
         : {}),
-      entryKind: (earnedIncomeCredit && !ownTransfer) || externalVpaCredit ? 'income' : 'transfer',
+      entryKind: (earnedIncomeCredit && !ownTransfer)
+        || externalVpaCredit
+        || (incomingBankTransferCandidate && !accountToAccountTransfer)
+        || plainExternalBankCredit
+        ? 'income'
+        : 'transfer',
     }, body),
   };
 }

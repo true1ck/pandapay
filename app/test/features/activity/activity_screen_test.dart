@@ -574,6 +574,45 @@ void main() {
     expect(repo.lastFetchArgs!.first['to'], isNotNull);
   });
 
+  testWidgets(
+    'includes same-day transactions in the This week filter preview',
+    (tester) async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final repo = _FakeUserCardsRepository([
+        _txn(
+          id: 'week-income',
+          amount: Money.fromRupees(900),
+          occurredAt: DateTime(today.year, today.month, today.day, 10),
+          merchantName: 'Received today',
+          entryKind: TxnEntryKind.income,
+        ),
+        _txn(
+          id: 'previous-week',
+          amount: Money.fromRupees(300),
+          occurredAt: today.subtract(Duration(days: today.weekday)),
+          merchantName: 'Previous week',
+        ),
+      ]);
+      await _pump(tester, repo: repo, cards: const []);
+
+      await tester.tap(find.text('Filters'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('This month').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('This week'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('1 matching transaction'), findsOneWidget);
+
+      await tester.tap(find.text('Show results'));
+      await tester.pumpAndSettle();
+      expect(find.text('Received today'), findsOneWidget);
+      expect(find.text('Previous week'), findsNothing);
+      expect(find.text('+₹900'), findsOneWidget);
+    },
+  );
+
   testWidgets('tapping a transaction navigates to its detail route', (
     tester,
   ) async {

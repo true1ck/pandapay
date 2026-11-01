@@ -1515,7 +1515,12 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
         return false;
       }
       if (_from != null && entry.occurredAt.isBefore(_from!)) return false;
-      if (_to != null && entry.occurredAt.isAfter(_to!)) return false;
+      if (_to != null &&
+          !entry.occurredAt.isBefore(
+            DateTime(_to!.year, _to!.month, _to!.day + 1),
+          )) {
+        return false;
+      }
       return true;
     }).toList();
   }
