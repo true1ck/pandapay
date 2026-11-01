@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/features/sms_import/ios_sms_import_screen.dart';
+import 'package:pandapay/features/sms_import/ios_history_coverage.dart';
 import 'package:pandapay/features/sms_import/ios_sms_intake_controller.dart';
 import 'package:pandapay/features/sms_import/ios_sms_intake_providers.dart';
+import 'package:pandapay/features/sms_import/ios_sms_intake_service.dart';
 import 'package:pandapay/features/sms_import/ios_sms_sharing_setup.dart';
 import 'package:pandapay/features/sms_import/sms_sync_status_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -307,7 +309,22 @@ void main() {
       await tester.pumpAndSettle();
       await _scrollTo(tester, find.text('Custom dates'));
       // Nothing is imported in this test, so it offers all 24 months.
-      expect(find.text('Import 24 missing months'), findsOneWidget);
+      // The current month is intentionally treated as imported while its
+      // newest-message gap is within the one-day tolerance. Derive the
+      // expected count from that policy so this test remains stable across
+      // the first day of a month instead of asserting a calendar accident.
+      final now = DateTime.now();
+      final start = iosSmsMonthsAgo(now, 24);
+      final missing = buildHistoryMonths(
+        now: now,
+        coverage: const [],
+      ).where(
+        (month) =>
+            month.canImport &&
+            month.end.isAfter(start) &&
+            month.start.isBefore(now),
+      ).length;
+      expect(find.text('Import $missing missing months'), findsOneWidget);
       expect(service.calls, isNot(contains('control')));
       expect(service.calls, isNot(contains('runShortcut')));
       expect(tester.takeException(), isNull);
