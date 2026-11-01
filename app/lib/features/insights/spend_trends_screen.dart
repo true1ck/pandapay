@@ -17,6 +17,7 @@ import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../cards/card_summary.dart';
 import '../import/data_transfer_screen.dart';
+import 'spending_tag_projection.dart';
 import 'spending_visuals.dart';
 
 /// A merchant/payee label plus an optional readable UPI address.
@@ -37,11 +38,10 @@ class _PayeeGroup {
   final String label;
   final String? vpa;
   final List<TransactionEntry> entries;
+  final int totalPaise;
 
-  const _PayeeGroup({required this.label, required this.entries, this.vpa});
-
-  int get totalPaise =>
-      entries.fold(0, (sum, entry) => sum + entry.amount.paise);
+  _PayeeGroup({required this.label, required this.entries, this.vpa})
+    : totalPaise = entries.fold(0, (sum, entry) => sum + entry.amount.paise);
 }
 
 /// A readable VPA has exactly one `@`, a real local part and a domain. Hash
@@ -1149,74 +1149,6 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
           ?.tagsForTransaction(entry.id, fallback: entry.tags) ??
       entry.tags;
 
-  List<TransactionTag> get _visibleTags {
-    final tags = <String, TransactionTag>{
-      for (final entry in _visibleEntries)
-        for (final tag in _tagsFor(entry)) tag.id: tag,
-    }.values.toList();
-    tags.sort((a, b) {
-      final aTotal = _sum(_entriesForTag(a.id));
-      final bTotal = _sum(_entriesForTag(b.id));
-      return bTotal.paise.compareTo(aTotal.paise);
-    });
-    return tags;
-  }
-
-  List<TransactionEntry> _entriesForTag(String tagId) => _visibleEntries
-      .where((entry) => _tagsFor(entry).any((tag) => tag.id == tagId))
-      .toList();
-
-  static String _tagCategoryKey(String? categoryId, String label) =>
-      '${categoryId ?? 'label'}:${SpendingSelection.normalize(label)}';
-
-  List<TransactionEntry> _entriesForTagCategory(
-    String tagId,
-    SpendBreakdownRow category,
-  ) {
-    final target = _tagCategoryKey(category.categoryId, category.label);
-    return _entriesForTag(tagId).where((entry) {
-      final categoryId =
-          entry.categoryId ??
-          (entry.userCategoryId == null
-              ? null
-              : 'custom:${entry.userCategoryId}');
-      return _tagCategoryKey(categoryId, entry.categoryLabel) == target;
-    }).toList();
-  }
-
-  List<SpendBreakdownRow> _categoryRowsForTag(String tagId) {
-    final groups = <String, List<TransactionEntry>>{};
-    for (final entry in _entriesForTag(tagId)) {
-      final categoryId =
-          entry.categoryId ??
-          (entry.userCategoryId == null
-              ? null
-              : 'custom:${entry.userCategoryId}');
-      groups
-          .putIfAbsent(
-            _tagCategoryKey(categoryId, entry.categoryLabel),
-            () => [],
-          )
-          .add(entry);
-    }
-    final rows = groups.entries.map((group) {
-      final entries = group.value;
-      final first = entries.first;
-      return SpendBreakdownRow(
-        label: first.categoryLabel,
-        categoryId:
-            first.categoryId ??
-            (first.userCategoryId == null
-                ? null
-                : 'custom:${first.userCategoryId}'),
-        total: _sum(entries),
-        txnCount: entries.length,
-      );
-    }).toList();
-    rows.sort((a, b) => b.total.paise.compareTo(a.total.paise));
-    return rows;
-  }
-
   void _openTagCategoryTransactions(
     TransactionTag tag,
     SpendBreakdownRow category,
@@ -1673,6 +1605,9 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         _filtersActive &&
         widget.transactionDetailsLoading &&
         _spendEntries.isEmpty;
+    final tagGroups = _tab == _SpendingTab.tags && !showFilteredLoading
+        ? projectSpendingTags(_visibleEntries, tagsFor: _tagsFor)
+        : const <SpendingTagGroup>[];
 
     return RefreshIndicator(
       onRefresh: () async => widget.onRefresh(),
@@ -1762,19 +1697,18 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
                   style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                 ),
               ),
-              for (final tag in _visibleTags)
+              for (final group in tagGroups)
                 _ExpandableTagRow(
-                  tag: tag,
-                  total: _sum(_entriesForTag(tag.id)),
-                  txnCount: _entriesForTag(tag.id).length,
-                  categories: _categoryRowsForTag(tag.id),
-                  entriesForCategory: (category) =>
-                      _entriesForTagCategory(tag.id, category),
+                  tag: group.tag,
+                  total: group.total,
+                  txnCount: group.entries.length,
+                  categories: group.categories,
+                  entriesForCategory: group.entriesForCategory,
                   detailsLoading: widget.transactionDetailsLoading,
                   onCategoryTap: (category) =>
-                      _openTagCategoryTransactions(tag, category),
+                      _openTagCategoryTransactions(group.tag, category),
                 ),
-              if (_visibleEntries.every((entry) => _tagsFor(entry).isEmpty))
+              if (tagGroups.isEmpty)
                 const _EmptyTabState(
                   message: 'No tags on these transactions yet.',
                 ),
