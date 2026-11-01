@@ -17,10 +17,14 @@ const LOCKS = [
   ['app/ios/Podfile.lock', 'pod'],
   ['app/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'swift']
 ];
+const OPTIONAL_LOCKS = new Set([
+  'packages/pandapay_domain/pubspec.lock',
+]);
 const hash = b => crypto.createHash('sha256').update(b).digest('hex');
 function read(root, rel) {
   const base = path.resolve(root), full = path.resolve(base, rel);
   if (!full.startsWith(base + path.sep)) throw Error('unsafe path');
+  if (fs.lstatSync(full).isSymbolicLink()) throw Error('symbolic link not allowed');
   const fd = fs.openSync(full, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
   try {
     const st = fs.fstatSync(fd);
@@ -31,6 +35,7 @@ function read(root, rel) {
   } finally { fs.closeSync(fd); }
 }
 function dartEntries(text) {
+  text = text.replace(/\r\n?/g, '\n');
   const entries = [];
   const re = /^  ([^ #][^:]*):\n([\s\S]*?)(?=^  [^ #][^:]*:\n|^sdks:)/gm;
   for (const m of text.matchAll(re)) {
@@ -45,17 +50,27 @@ function dartEntries(text) {
   return entries;
 }
 function podEntries(text) {
+  text = text.replace(/\r\n?/g, '\n');
   const section = text.match(/^PODS:\n([\s\S]*?)(?=^DEPENDENCIES:)/m)?.[1] || '';
   return [...section.matchAll(/^  - (?:"(.+?) \(([^)]+)\)"|([^\s(]+) \(([^)]+)\)):?$/gm)]
     .map(m => ({name: m[1] || m[3], version: m[2] || m[4]}));
 }
 function summarize(root = ROOT, pubCache = PUB_CACHE) {
   const reports = [];
+  const missingLockFiles = [];
   const vendorLicenseText = read(root, 'app/third_party/telephony/LICENSE').toString('utf8');
   const vendorLicenseRecognized = /MIT License/.test(vendorLicenseText) && /Copyright \(c\) 2020 Shounak Mulay/.test(vendorLicenseText);
   let total = 0;
   for (const [rel, ecosystem] of LOCKS) {
-    const bytes = read(root, rel); total += bytes.length;
+    let bytes;
+    try { bytes = read(root, rel); }
+    catch (error) {
+      if (error?.code !== 'ENOENT' || !OPTIONAL_LOCKS.has(rel)) throw error;
+      missingLockFiles.push(rel);
+      reports.push({path:rel, ecosystem, package_count:0, license_evidence:{known:0, unknown:0, basis:'lock file missing; dependency resolution was not run in this job'}, source_evidence:{}, packages:[]});
+      continue;
+    }
+    total += bytes.length;
     let packages = [], sourceEvidence = null, licenseEvidence = null;
     const text = bytes.toString('utf8');
     if (ecosystem === 'npm') {
@@ -99,7 +114,7 @@ function summarize(root = ROOT, pubCache = PUB_CACHE) {
   const vendor = vendorLicenseText;
   if (!/MIT License/.test(vendor) || !/Copyright \(c\) 2020 Shounak Mulay/.test(vendor)) throw Error('telephony license text not recognized');
   const unknown = reports.reduce((n,r)=>n+r.license_evidence.unknown,0);
-  return {format:'pandapay-dependency-license-review-v1', generated_from:'working-tree', network:'none', status:unknown ? 'incomplete' : 'evidence-collected-needs-legal-review', unknown_license_entries:unknown, lock_count:reports.length, packages:reports.reduce((n,r)=>n+r.package_count,0), licenses:'package evidence summarized; legal/application approval not asserted', locks:reports, vendored:{path:'app/third_party/telephony',version:'0.2.0',license:'MIT',license_path:vendorRel,license_sha256:hash(Buffer.from(vendor)),upstream:'https://github.com/shounakmulay/Telephony',local_patch:'app/third_party/telephony/PANDAPAY_PATCH.md',provenance:'README and pubspec identify upstream; source is locally patched; no immutable upstream commit/archive hash established by this review'}};
+  return {format:'pandapay-dependency-license-review-v1', generated_from:'working-tree', network:'none', status:unknown || missingLockFiles.length ? 'incomplete' : 'evidence-collected-needs-legal-review', unknown_license_entries:unknown, missing_lock_files:missingLockFiles, lock_count:reports.length, packages:reports.reduce((n,r)=>n+r.package_count,0), licenses:'package evidence summarized; legal/application approval not asserted', locks:reports, vendored:{path:'app/third_party/telephony',version:'0.2.0',license:'MIT',license_path:vendorRel,license_sha256:hash(Buffer.from(vendor)),upstream:'https://github.com/shounakmulay/Telephony',local_patch:'app/third_party/telephony/PANDAPAY_PATCH.md',provenance:'README and pubspec identify upstream; source is locally patched; no immutable upstream commit/archive hash established by this review'}};
 }
 if (require.main === module) {
   try { const report=summarize();process.stdout.write(JSON.stringify(report,null,2)+'\n');if(report.status==='incomplete')process.exitCode=2; }

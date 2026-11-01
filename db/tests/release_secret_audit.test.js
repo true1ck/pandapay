@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {execFileSync,spawnSync}=require('node:child_process');
 const {audit,scanArchive,scanText}=require('../scripts/release_secret_audit');
-function repo(){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'pandapay-secret-audit-'));execFileSync('git',['init','-q'],{cwd:dir});return dir;}
+function repo(){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'pandapay-secret-audit-'));execFileSync('git',['init','-q'],{cwd:dir});execFileSync('git',['config','user.name','Fixture'],{cwd:dir});execFileSync('git',['config','user.email','fixture@example.test'],{cwd:dir});return dir;}
 function commit(dir,msg){execFileSync('git',['add','-A'],{cwd:dir});execFileSync('git',['-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','-qm',msg],{cwd:dir});}
 function zip(dir,name,entries){const archive=path.join(dir,name);const py=`import sys,zipfile,stat\np=sys.argv[1]\nwith zipfile.ZipFile(p,'w') as z:\n${entries.map(e=>` z.writestr(${JSON.stringify(e.name)},${e.bodyExpr||JSON.stringify(e.body)},compress_type=${e.compress||'zipfile.ZIP_DEFLATED'})`).join('\n')}\n`;const r=spawnSync('python3',['-c',py,archive],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);return archive;}
 

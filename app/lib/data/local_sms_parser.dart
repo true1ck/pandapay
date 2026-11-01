@@ -868,6 +868,10 @@ class LocalSmsParser {
   /// the merchant name. Require the account-shaped source and UPI rail so this
   /// remains narrow and does not change unrelated card or NEFT narratives.
   static String? _upiAccountRecipient(String body) {
+    final vpaMatch = _re(
+      r'\bto\s+vpa\s*/\s*([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+ref(?:erence)?\b|\s+via\b|\s+on\b|[.,;]|$)',
+    ).firstMatch(body);
+    if (vpaMatch != null) return vpaMatch.group(1)?.trim();
     final match = _re(
       r'\bfrom\s+(?:your\s+)?(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX.\s-]*\d{4}[\s\S]{0,50}?\bto\s+([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+(?:by\s+upi|via\s+upi|via|on|ref(?:erence)?|refno|avl|available|bal(?:ance)?)\b|[.,;]|$)',
     ).firstMatch(body);

@@ -23,6 +23,17 @@ class StartupWorkScheduler {
     _timer ??= Timer(delay ?? initialDelay, _drain);
   }
 
+  /// Removes a provider-owned job when that provider is disposed. This keeps
+  /// a queued startup timer from surviving a test/widget lifecycle that ends
+  /// before the deferred work is due.
+  void cancel(String key) {
+    _pending.remove(key);
+    if (_pending.isEmpty && !_draining) {
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
   Future<void> _drain() async {
     _timer = null;
     if (_disposed || _draining) return;

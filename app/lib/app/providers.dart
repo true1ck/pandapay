@@ -2951,6 +2951,7 @@ final outboxFlushProvider = Provider<void>((ref) {
   final lifecycle = AppLifecycleListener(onResume: () => unawaited(flush()));
   ref.onDispose(() {
     disposed = true;
+    startup.cancel('outbox-flush');
     lifecycle.dispose();
   });
   startup.enqueue('outbox-flush', () {
