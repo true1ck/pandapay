@@ -18,6 +18,7 @@ import '../../data/spending_selection.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
+import 'activity_projection.dart';
 import 'deleted_transactions_screen.dart';
 import 'sms_learning_capture.dart';
 
@@ -57,6 +58,7 @@ class ActivityScreen extends ConsumerStatefulWidget {
 }
 
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
+  final _projectionCache = ActivityProjectionCache();
 
   Future<void> _openPeriodSheet(
     BuildContext context,
@@ -739,44 +741,14 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     ),
                   );
                 }
-                final grouped = _groupByDay(entries);
-                final visibleSelected = entries
-                    .where((e) => _selectedIds.contains(e.id))
-                    .length;
-                final incomingEntries = entries.where(_isMoneyInEntry).toList();
-                final outgoingEntries = entries
-                    .where(_isMoneyOutEntry)
-                    .toList();
-                final totalIncoming = incomingEntries.fold<Money>(
-                  const Money.zero(),
-                  (a, e) => a + e.amount,
+                final projection = _projectionCache.resolve(
+                  entries,
+                  scope: (ref.read(cacheNamespaceProvider), token, filter),
                 );
-                final totalOutgoing = outgoingEntries.fold<Money>(
-                  const Money.zero(),
-                  (a, e) => a + e.amount,
+                final visibleSelected = projection.visibleSelectedCount(
+                  _selectedIds,
                 );
-                // Keep the scrollable lazy. The previous `ListView(children:)`
-                // eagerly built every transaction tile on first entry, which
-                // made large histories pay the full build/layout cost before
-                // the first scroll frame. Flatten only lightweight row
-                // metadata here; tile widgets are created on demand.
-                final rows = <_ActivityRow>[
-                  if (_selecting) const _ActivityRow.selection(),
-                  _ActivityRow.summary(
-                    totalIncoming: totalIncoming,
-                    totalOutgoing: totalOutgoing,
-                    activeCount: entries
-                        .where((e) => e.status == 'active')
-                        .length,
-                  ),
-                ];
-                for (final group in grouped) {
-                  rows.add(_ActivityRow.dayHeader(group.day));
-                  for (final entry in group.entries) {
-                    rows.add(_ActivityRow.transaction(entry));
-                  }
-                  rows.add(const _ActivityRow.spacer());
-                }
+                final selectionOffset = _selecting ? 1 : 0;
 
                 return Column(
                   children: [
@@ -796,11 +768,13 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                             AppSpace.lg,
                             0,
                           ),
-                          itemCount: rows.length,
+                          itemCount: projection.rows.length + selectionOffset,
                           itemBuilder: (context, index) {
-                            final row = rows[index];
+                            final row = _selecting && index == 0
+                                ? const ActivityListRow.selection()
+                                : projection.rows[index - selectionOffset];
                             switch (row.kind) {
-                              case _ActivityRowKind.selection:
+                              case ActivityRowKind.selection:
                                 return Padding(
                                   padding: const EdgeInsets.only(
                                     bottom: AppSpace.sm,
@@ -839,7 +813,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                     ],
                                   ),
                                 );
-                              case _ActivityRowKind.summary:
+                              case ActivityRowKind.summary:
                                 return Padding(
                                   padding: const EdgeInsets.only(
                                     bottom: AppSpace.lg,
@@ -850,7 +824,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                     count: row.activeCount!,
                                   ),
                                 );
-                              case _ActivityRowKind.dayHeader:
+                              case ActivityRowKind.dayHeader:
                                 return Padding(
                                   padding: const EdgeInsets.only(
                                     bottom: AppSpace.sm,
@@ -863,7 +837,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                     ),
                                   ),
                                 );
-                              case _ActivityRowKind.transaction:
+                              case ActivityRowKind.transaction:
                                 final entry = row.entry!;
                                 return Padding(
                                   padding: const EdgeInsets.only(
@@ -905,7 +879,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                             }),
                                   ),
                                 );
-                              case _ActivityRowKind.spacer:
+                              case ActivityRowKind.spacer:
                                 return const SizedBox(height: AppSpace.sm);
                             }
                           },
@@ -927,20 +901,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         ],
       ),
     );
-  }
-
-  static List<_DayGroup> _groupByDay(List<TransactionEntry> entries) {
-    final byDay = <DateTime, List<TransactionEntry>>{};
-    for (final e in entries) {
-      final day = DateTime(
-        e.occurredAt.year,
-        e.occurredAt.month,
-        e.occurredAt.day,
-      );
-      byDay.putIfAbsent(day, () => []).add(e);
-    }
-    final days = byDay.keys.toList()..sort((a, b) => b.compareTo(a));
-    return [for (final d in days) _DayGroup(d, byDay[d]!)];
   }
 
   static String _dayLabel(DateTime day) {
@@ -973,67 +933,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     );
   }
 
-  static bool _isMoneyInEntry(TransactionEntry entry) =>
-      entry.status == 'active' &&
-      entry.entryKind == TxnEntryKind.income &&
-      entry.amount.paise > 0;
-
-  static bool _isMoneyOutEntry(TransactionEntry entry) =>
-      entry.status == 'active' &&
-      (entry.entryKind == TxnEntryKind.spend ||
-          entry.entryKind == TxnEntryKind.investment) &&
-      entry.amount.paise > 0;
-}
-
-class _DayGroup {
-  final DateTime day;
-  final List<TransactionEntry> entries;
-  const _DayGroup(this.day, this.entries);
-}
-
-enum _ActivityRowKind { selection, summary, dayHeader, transaction, spacer }
-
-/// Lightweight metadata for the activity list. Keeping this separate from
-/// widget construction lets [ListView.builder] create transaction tiles only
-/// when they enter the viewport instead of eagerly building the entire
-/// history during first entry.
-class _ActivityRow {
-  final _ActivityRowKind kind;
-  final DateTime? day;
-  final TransactionEntry? entry;
-  final Money? totalIncoming;
-  final Money? totalOutgoing;
-  final int? activeCount;
-
-  const _ActivityRow._({
-    required this.kind,
-    this.day,
-    this.entry,
-    this.totalIncoming,
-    this.totalOutgoing,
-    this.activeCount,
-  });
-
-  const _ActivityRow.selection() : this._(kind: _ActivityRowKind.selection);
-
-  const _ActivityRow.summary({
-    required Money totalIncoming,
-    required Money totalOutgoing,
-    required int activeCount,
-  }) : this._(
-         kind: _ActivityRowKind.summary,
-         totalIncoming: totalIncoming,
-         totalOutgoing: totalOutgoing,
-         activeCount: activeCount,
-       );
-
-  const _ActivityRow.dayHeader(DateTime day)
-    : this._(kind: _ActivityRowKind.dayHeader, day: day);
-
-  const _ActivityRow.transaction(TransactionEntry entry)
-    : this._(kind: _ActivityRowKind.transaction, entry: entry);
-
-  const _ActivityRow.spacer() : this._(kind: _ActivityRowKind.spacer);
 }
 
 /// D1's filter state — card + category + date preset/range. A plain immutable

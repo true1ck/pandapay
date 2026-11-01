@@ -9,9 +9,17 @@ import 'dart:async';
 /// isolate, while live SMS, reconnect, explicit refresh, and user mutations
 /// can continue to bypass this queue.
 class StartupWorkScheduler {
-  StartupWorkScheduler({this.initialDelay = const Duration(seconds: 3)});
+  StartupWorkScheduler({
+    this.initialDelay = const Duration(seconds: 3),
+    this.maxJobsPerDrain = 1,
+  }) : assert(maxJobsPerDrain > 0);
 
   final Duration initialDelay;
+  /// Limits how many callbacks can run in one event-loop turn. A callback may
+  /// still be asynchronous; network and database policies must bound it too.
+  /// The next queued callback is scheduled as a separate zero-delay task so a
+  /// long maintenance backlog cannot monopolize the first interaction turn.
+  final int maxJobsPerDrain;
   final _pending = <String, FutureOr<void> Function()>{};
   Timer? _timer;
   bool _draining = false;
@@ -38,10 +46,14 @@ class StartupWorkScheduler {
     _timer = null;
     if (_disposed || _draining) return;
     _draining = true;
+    var jobsRun = 0;
     try {
-      while (!_disposed && _pending.isNotEmpty) {
+      while (!_disposed &&
+          _pending.isNotEmpty &&
+          jobsRun < maxJobsPerDrain) {
         final entry = _pending.entries.first;
         _pending.remove(entry.key);
+        jobsRun++;
         try {
           await entry.value();
         } catch (_) {
@@ -52,6 +64,8 @@ class StartupWorkScheduler {
     } finally {
       _draining = false;
       if (!_disposed && _pending.isNotEmpty) {
+        // Always yield between bounded drains, including when the previous
+        // callback completed synchronously.
         _timer = Timer(Duration.zero, _drain);
       }
     }

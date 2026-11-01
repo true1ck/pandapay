@@ -171,4 +171,128 @@ void main() {
       expect(progress.lastId('user:a'), 0);
     },
   );
+
+  test(
+    'replays from zero after the provider resets its ID range',
+    () async {
+      var rows = [for (var id = 1; id <= 3; id++) message(id)];
+      final queries = <int>[];
+      final captured = <int>[];
+      Future<int> head() async => rows.isEmpty ? 0 : rows.last.id!;
+      Future<SmsInboxPage> read(int after, int through) async {
+        queries.add(after);
+        final page = rows
+            .where((row) => row.id! > after && row.id! <= through)
+            .take(2)
+            .toList();
+        return SmsInboxPage(
+          page,
+          page.isEmpty ? after : page.last.id!,
+          page.length,
+        );
+      }
+
+      SmsInboxScanner owner() => SmsInboxScanner(
+        progress: progress,
+        head: head,
+        read: read,
+        capture: (messages) async => captured.addAll(
+          messages.map((message) => message.id!),
+        ),
+        checkAccount: () {},
+      );
+
+      expect(await owner().scan('user:a'), 3);
+      expect(progress.lastId('user:a'), 3);
+      queries.clear();
+      captured.clear();
+
+      // Android provider IDs are not a durable identity. A provider restore
+      // can make the current head lower than our old checkpoint.
+      rows = [message(1), message(2)];
+      expect(await owner().scan('user:a'), 2);
+      expect(queries, [0]);
+      expect(captured, [1, 2]);
+      expect(progress.lastId('user:a'), 2);
+    },
+  );
+
+  test('bounded slices resume at a fixed high-water boundary', () async {
+    final rows = [for (var id = 1; id <= 7; id++) message(id)];
+    var headReads = 0;
+    final queries = <int>[];
+    final owner = SmsInboxScanner(
+      progress: progress,
+      head: () async {
+        headReads++;
+        return rows.last.id!;
+      },
+      read: (after, through) async {
+        queries.add(after);
+        final page = rows
+            .where((row) => row.id! > after && row.id! <= through)
+            .take(2)
+            .toList();
+        return SmsInboxPage(
+          page,
+          page.isEmpty ? after : page.last.id!,
+          page.length,
+        );
+      },
+      capture: (_) async {},
+      checkAccount: () {},
+    );
+
+    final first = await owner.scanSlice(
+      'user:a',
+      maxPages: 1,
+      maxDuration: const Duration(seconds: 1),
+    );
+    expect(first.boundary, 7);
+    expect(first.lastProviderId, 2);
+    expect(first.hasMore, isTrue);
+    expect(headReads, 1);
+
+    // A new row does not move the in-progress snapshot boundary.
+    rows.add(message(8));
+    final second = await owner.scanSlice(
+      'user:a',
+      throughId: first.boundary,
+      maxPages: 2,
+      maxDuration: const Duration(seconds: 1),
+    );
+    expect(second.boundary, 7);
+    expect(second.hasMore, isTrue);
+    expect(headReads, 1);
+    expect(queries, [0, 2, 4]);
+
+    final third = await owner.scanSlice(
+      'user:a',
+      throughId: first.boundary,
+      maxPages: 2,
+      maxDuration: const Duration(seconds: 1),
+    );
+    expect(third.hasMore, isFalse);
+    expect(progress.lastId('user:a'), 7);
+    expect(progress.initialComplete('user:a'), isTrue);
+  });
+
+  test('slice rejects non-positive bounds before touching the provider', () async {
+    var headReads = 0;
+    final owner = SmsInboxScanner(
+      progress: progress,
+      head: () async {
+        headReads++;
+        return 1;
+      },
+      read: (_, _) async => const SmsInboxPage([], 0, 0),
+      capture: (_) async {},
+      checkAccount: () {},
+    );
+    await expectLater(
+      owner.scanSlice('user:a', maxPages: 0),
+      throwsArgumentError,
+    );
+    expect(headReads, 0);
+  });
 }

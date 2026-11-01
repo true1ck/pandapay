@@ -15,6 +15,30 @@ class SmsInboxScanProgress {
   });
 }
 
+/// Result of one bounded inbox slice. [boundary] is the provider high-water
+/// mark selected at the start of the catch-up run. Callers must pass it back
+/// to the next slice so messages arriving during a catch-up do not move the
+/// boundary or cause an unbounded scan.
+class SmsInboxScanSliceResult {
+  final int captured;
+  final int checked;
+  final int boundary;
+  final int lastProviderId;
+  final int pages;
+  final bool hasMore;
+
+  const SmsInboxScanSliceResult({
+    required this.captured,
+    required this.checked,
+    required this.boundary,
+    required this.lastProviderId,
+    required this.pages,
+    required this.hasMore,
+  });
+
+  bool get complete => !hasMore;
+}
+
 /// Device progress is independent of API availability, account tokens and
 /// server row counts. A checkpoint means the page is durably captured locally.
 class SmsInboxProgress {
@@ -61,6 +85,23 @@ class SmsInboxProgress {
        WHERE namespace = ?
       ''',
       [count, namespace],
+    );
+  }
+
+  /// Android provider IDs are local row IDs, not durable message identity.
+  /// A provider restore/rebuild can make its head lower than our checkpoint.
+  /// Reset only the provider cursor; replay is safe because capture uses the
+  /// sender/body source key and is idempotent across receiver clock skew.
+  void resetForProviderReset(String namespace) {
+    database.db.execute(
+      '''
+      UPDATE sms_inbox_progress
+         SET last_provider_id = 0,
+             last_scanned_at = 0,
+             initial_complete = 0
+       WHERE namespace = ?
+      ''',
+      [namespace],
     );
   }
 
@@ -112,24 +153,92 @@ class SmsInboxScanner {
     onProgress?.call(const SmsInboxScanProgress());
     final throughId = await head();
     checkAccount();
+    var captured = 0;
+    var lastId = progress.lastId(namespace);
+    if (throughId < lastId) {
+      // Detect provider restoration before deciding whether a slice is due.
+      // The old checkpoint belongs to a different local ID range.
+      progress.resetForProviderReset(namespace);
+      lastId = 0;
+    }
+    var hasMore = throughId > lastId;
+    while (hasMore) {
+      final result = await _scanSlice(
+        namespace,
+        throughId: throughId,
+        maxPages: 2,
+        maxDuration: const Duration(milliseconds: 50),
+        emitInitialProgress: false,
+      );
+      captured += result.captured;
+      hasMore = result.hasMore;
+    }
+    if (throughId == progress.lastId(namespace)) {
+      progress.commit(namespace, throughId, complete: true);
+      onProgress?.call(
+        SmsInboxScanProgress(checked: 0, matched: captured, complete: true),
+      );
+    }
+    return captured;
+  }
+
+  /// Processes one bounded catch-up slice. The returned [boundary] must be
+  /// supplied to the next call for a stable snapshot. The old [scan] method
+  /// remains available for compatibility and drains these slices sequentially.
+  Future<SmsInboxScanSliceResult> scanSlice(
+    String namespace, {
+    int? throughId,
+    int maxPages = 2,
+    Duration maxDuration = const Duration(milliseconds: 50),
+  }) => AccountRecoveryOperationGate.process.run(
+    () => _scanSlice(
+      namespace,
+      throughId: throughId,
+      maxPages: maxPages,
+      maxDuration: maxDuration,
+    ),
+  );
+
+  Future<SmsInboxScanSliceResult> _scanSlice(
+    String namespace, {
+    int? throughId,
+    required int maxPages,
+    required Duration maxDuration,
+    bool emitInitialProgress = true,
+  }) async {
+    if (maxPages <= 0) throw ArgumentError.value(maxPages, 'maxPages');
+    if (maxDuration <= Duration.zero) {
+      throw ArgumentError.value(maxDuration, 'maxDuration');
+    }
+    checkAccount();
+    if (emitInitialProgress) onProgress?.call(const SmsInboxScanProgress());
+    final boundary = throughId ?? await head();
+    checkAccount();
     var afterId = progress.lastId(namespace);
+    if (boundary < afterId) {
+      // The provider's ID range moved backwards (for example after an SMS
+      // database restore). Replay from zero; capture remains idempotent.
+      progress.resetForProviderReset(namespace);
+      afterId = 0;
+    }
     var captured = 0;
     var checked = 0;
-    while (afterId < throughId) {
-      final page = await read(afterId, throughId);
+    var pages = 0;
+    final started = DateTime.now();
+    while (afterId < boundary && pages < maxPages) {
+      final page = await read(afterId, boundary);
       checkAccount();
       if (page.rowCount == 0) {
         // Deleted rows are gaps, not a reason to revisit older messages.
-        afterId = throughId;
+        afterId = boundary;
         break;
       }
-      if (page.lastId <= afterId || page.lastId > throughId) {
+      if (page.lastId <= afterId || page.lastId > boundary) {
         throw StateError('SMS scan did not advance');
       }
       await capture(page.messages);
       checkAccount();
       // A crash before this commit may replay this one page, idempotently.
-      // A network failure can never move this checkpoint backwards.
       final maxTimestamp = page.messages.isEmpty
           ? 0
           : page.messages
@@ -139,18 +248,35 @@ class SmsInboxScanner {
       afterId = page.lastId;
       captured += page.messages.length;
       checked += page.rowCount;
+      pages++;
       onProgress?.call(
         SmsInboxScanProgress(checked: checked, matched: captured),
       );
-      // Yield 35ms between micro-batches so the Flutter rendering pipeline
-      // and Android touch event queue have uninterrupted 60/120 FPS frame time.
+      if (afterId < boundary &&
+          DateTime.now().difference(started) >= maxDuration) {
+        break;
+      }
+      // Yield between micro-batches so rendering and touch events can run.
       await Future<void>.delayed(const Duration(milliseconds: 35));
     }
-    // Never rewind automatically if the provider was reset/restored.
-    progress.commit(namespace, afterId, complete: true);
+    final hasMore = afterId < boundary;
+    if (!hasMore) {
+      progress.commit(namespace, boundary, complete: true);
+    }
     onProgress?.call(
-      SmsInboxScanProgress(checked: checked, matched: captured, complete: true),
+      SmsInboxScanProgress(
+        checked: checked,
+        matched: captured,
+        complete: !hasMore,
+      ),
     );
-    return captured;
+    return SmsInboxScanSliceResult(
+      captured: captured,
+      checked: checked,
+      boundary: boundary,
+      lastProviderId: afterId,
+      pages: pages,
+      hasMore: hasMore,
+    );
   }
 }

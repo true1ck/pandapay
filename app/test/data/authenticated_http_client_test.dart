@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -5,6 +6,37 @@ import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/authenticated_http_client.dart';
 import 'package:pandapay/data/api_exception.dart';
+import 'package:pandapay/data/portable_backup/account_recovery_operation_gate.dart';
+
+class _BodyStallClient extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(
+      Stream<List<int>>.fromFuture(
+        Future<List<int>>.delayed(
+          const Duration(milliseconds: 100),
+          () => <int>[1, 2, 3],
+        ),
+      ),
+      200,
+      request: request,
+    );
+  }
+}
+
+class _PendingHeaderClient extends http.BaseClient {
+  final pending = Completer<http.StreamedResponse>();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      pending.future;
+
+  void settle(http.BaseRequest request) {
+    pending.complete(
+      http.StreamedResponse(Stream<List<int>>.empty(), 200, request: request),
+    );
+  }
+}
 
 void main() {
   test(
@@ -151,6 +183,112 @@ void main() {
       );
       expect(refreshes, 1);
       expect(requests, 4);
+      client.close();
+    },
+  );
+
+  test('bounds a stalled response header with the request policy', () async {
+    final client = AuthenticatedHttpClient(
+      refreshAccessToken: () async => null,
+      timeoutFor: (_) => const AuthenticatedHttpTimeoutPolicy(
+        header: Duration(milliseconds: 10),
+        body: Duration(milliseconds: 10),
+        overall: Duration(milliseconds: 40),
+        refresh: Duration(milliseconds: 10),
+      ),
+      inner: MockClient(
+        (_) => Future<http.Response>.delayed(
+          const Duration(milliseconds: 100),
+          () => http.Response('late', 200),
+        ),
+      ),
+    );
+    addTearDown(client.close);
+
+    await expectLater(
+      client.get(Uri.parse('https://api.example.test/slow')),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
+
+  test('bounds a response body that stops making progress', () async {
+    final client = AuthenticatedHttpClient(
+      refreshAccessToken: () async => null,
+      timeoutFor: (_) => const AuthenticatedHttpTimeoutPolicy(
+        header: Duration(milliseconds: 40),
+        body: Duration(milliseconds: 10),
+        overall: Duration(milliseconds: 100),
+        refresh: Duration(milliseconds: 10),
+      ),
+      inner: _BodyStallClient(),
+    );
+    addTearDown(client.close);
+
+    await expectLater(
+      client.get(Uri.parse('https://api.example.test/body-stall')),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
+
+  test('allows an explicitly longer policy for a long operation', () async {
+    final client = AuthenticatedHttpClient(
+      refreshAccessToken: () async => null,
+      timeoutFor: (request) => request.url.path == '/long'
+          ? const AuthenticatedHttpTimeoutPolicy(
+              header: Duration(milliseconds: 100),
+              body: Duration(milliseconds: 40),
+              overall: Duration(milliseconds: 200),
+              refresh: Duration(milliseconds: 20),
+            )
+          : const AuthenticatedHttpTimeoutPolicy(
+              header: Duration(milliseconds: 10),
+              body: Duration(milliseconds: 10),
+              overall: Duration(milliseconds: 30),
+              refresh: Duration(milliseconds: 10),
+            ),
+      inner: MockClient(
+        (_) => Future<http.Response>.delayed(
+          const Duration(milliseconds: 60),
+          () => http.Response('complete', 200),
+        ),
+      ),
+    );
+    addTearDown(client.close);
+
+    final response = await client.get(
+      Uri.parse('https://api.example.test/long'),
+    );
+    expect(response.body, 'complete');
+  });
+
+  test(
+    'keeps recovery admission until a timed-out transport settles',
+    () async {
+      final gate = AccountRecoveryOperationGate();
+      final inner = _PendingHeaderClient();
+      final client = AuthenticatedHttpClient(
+        recoveryGate: gate,
+        refreshAccessToken: () async => null,
+        timeoutFor: (_) => const AuthenticatedHttpTimeoutPolicy(
+          header: Duration(milliseconds: 10),
+          body: Duration(milliseconds: 10),
+          overall: Duration(milliseconds: 30),
+          refresh: Duration(milliseconds: 10),
+        ),
+        inner: inner,
+      );
+      final request = http.Request(
+        'POST',
+        Uri.parse('https://api.example.test/unknown-write'),
+      );
+
+      await expectLater(client.send(request), throwsA(isA<TimeoutException>()));
+      expect(gate.activeOperations, 1);
+
+      inner.settle(request);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(gate.activeOperations, 0);
       client.close();
     },
   );

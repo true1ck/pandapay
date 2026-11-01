@@ -7148,6 +7148,8 @@ class SmsAutoImportController {
     _ref.onDispose(() {
       _disposed = true;
       _retryTimer?.cancel();
+      _inboxContinuation = null;
+      _inboxContinuationNamespace = null;
       _captureWorker?.dispose();
       inboxScanProgress.dispose();
     });
@@ -7164,6 +7166,8 @@ class SmsAutoImportController {
   String? _activeUploadNamespace;
   Future<int>? _activeInboxCapture;
   String? _activeCaptureNamespace;
+  Future<void>? _inboxContinuation;
+  String? _inboxContinuationNamespace;
   Timer? _retryTimer;
   bool _disposed = false;
   bool _uploadAgainRequested = false;
@@ -7304,7 +7308,49 @@ class SmsAutoImportController {
         await _captureMessages(namespace, cache, queued);
       },
     );
-    return scanner.scan(namespace);
+    final slice = await scanner.scanSlice(namespace);
+    if (slice.hasMore) {
+      _scheduleInboxContinuation(
+        namespace,
+        scanner,
+        throughId: slice.boundary,
+      );
+    }
+    return slice.captured;
+  }
+
+  void _scheduleInboxContinuation(
+    String namespace,
+    SmsInboxScanner scanner, {
+    required int throughId,
+  }) {
+    if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) return;
+    if (_inboxContinuation != null && _inboxContinuationNamespace == namespace) {
+      return;
+    }
+    _inboxContinuationNamespace = namespace;
+    final work = Future<void>.delayed(Duration.zero, () async {
+      if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) return;
+      final slice = await scanner.scanSlice(namespace, throughId: throughId);
+      if (slice.captured > 0 && !_disposed) {
+        unawaited(syncPendingMessages(scanned: slice.captured));
+      }
+      if (slice.hasMore) {
+        _inboxContinuation = null;
+        _scheduleInboxContinuation(
+          namespace,
+          scanner,
+          throughId: slice.boundary,
+        );
+      }
+    });
+    _inboxContinuation = work;
+    work.whenComplete(() {
+      if (identical(_inboxContinuation, work)) {
+        _inboxContinuation = null;
+        _inboxContinuationNamespace = null;
+      }
+    }).ignore();
   }
 
   Future<void> _captureMessages(

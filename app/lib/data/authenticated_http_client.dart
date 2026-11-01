@@ -5,6 +5,39 @@ import 'portable_backup/account_recovery_operation_gate.dart';
 
 import 'package:http/http.dart' as http;
 
+/// Deadlines applied by [AuthenticatedHttpClient] to one request.
+///
+/// [header] bounds waiting for response headers. [body] is an inactivity
+/// timeout: each received body chunk starts a new window. [overall] is the
+/// caller-facing wall-clock deadline, including refresh and retry.
+class AuthenticatedHttpTimeoutPolicy {
+  final Duration header;
+  final Duration body;
+  final Duration overall;
+  final Duration refresh;
+
+  const AuthenticatedHttpTimeoutPolicy({
+    required this.header,
+    required this.body,
+    required this.overall,
+    required this.refresh,
+  });
+
+  static const standard = AuthenticatedHttpTimeoutPolicy(
+    header: Duration(seconds: 15),
+    body: Duration(seconds: 15),
+    overall: Duration(seconds: 30),
+    refresh: Duration(seconds: 8),
+  );
+
+  static const longOperation = AuthenticatedHttpTimeoutPolicy(
+    header: Duration(seconds: 20),
+    body: Duration(seconds: 30),
+    overall: Duration(seconds: 90),
+    refresh: Duration(seconds: 8),
+  );
+}
+
 /// An HTTP client for authenticated API repositories.
 ///
 /// Repository instances still keep the token they were created with for
@@ -19,6 +52,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
   final String? Function()? currentAccessToken;
   final void Function(http.BaseRequest)? onSuccessfulMutation;
   final AccountRecoveryOperationGate recoveryGate;
+  final AuthenticatedHttpTimeoutPolicy Function(http.BaseRequest) timeoutFor;
 
   /// Optional token-aware refresh hook.  A keep-alive refresh can finish
   /// between the original 401 and this callback; in that case the caller
@@ -28,6 +62,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
   refreshAccessTokenForToken;
   Future<String?>? _refreshInProgress;
   final Set<AccountRecoveryOperationAdmission> _admissions = {};
+  final Set<AccountRecoveryOperationAdmission> _pendingTransportAdmissions = {};
 
   AuthenticatedHttpClient({
     required this.refreshAccessToken,
@@ -35,20 +70,24 @@ class AuthenticatedHttpClient extends http.BaseClient {
     this.onSuccessfulMutation,
     this.refreshAccessTokenForToken,
     AccountRecoveryOperationGate? recoveryGate,
+    AuthenticatedHttpTimeoutPolicy Function(http.BaseRequest)? timeoutFor,
     http.Client? inner,
   }) : _inner = inner ?? http.Client(),
-       recoveryGate = recoveryGate ?? AccountRecoveryOperationGate.process;
+       recoveryGate = recoveryGate ?? AccountRecoveryOperationGate.process,
+       timeoutFor = timeoutFor ?? _defaultTimeoutFor;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final admission = recoveryGate.admit();
     _admissions.add(admission);
+    final policy = timeoutFor(request);
+    final stopwatch = Stopwatch()..start();
     try {
-      final response = await _send(request);
+      final response = await _send(request, policy, stopwatch, admission);
       // Header arrival does not mean an outbox operation finished. Retain
       // admission through response consumption, cancellation or stream error.
       return http.StreamedResponse(
-        _trackedBody(response.stream, admission),
+        _trackedBody(response.stream, admission, policy, stopwatch),
         response.statusCode,
         contentLength: response.contentLength,
         request: response.request,
@@ -58,7 +97,9 @@ class AuthenticatedHttpClient extends http.BaseClient {
         reasonPhrase: response.reasonPhrase,
       );
     } catch (_) {
-      _finishAdmission(admission);
+      if (!_pendingTransportAdmissions.remove(admission)) {
+        _finishAdmission(admission);
+      }
       rethrow;
     }
   }
@@ -66,9 +107,11 @@ class AuthenticatedHttpClient extends http.BaseClient {
   Stream<List<int>> _trackedBody(
     Stream<List<int>> source,
     AccountRecoveryOperationAdmission admission,
+    AuthenticatedHttpTimeoutPolicy policy,
+    Stopwatch stopwatch,
   ) async* {
     try {
-      yield* source;
+      yield* _timedBody(source, policy, stopwatch);
     } finally {
       _finishAdmission(admission);
     }
@@ -79,7 +122,12 @@ class AuthenticatedHttpClient extends http.BaseClient {
     admission.finish();
   }
 
-  Future<http.StreamedResponse> _send(http.BaseRequest request) async {
+  Future<http.StreamedResponse> _send(
+    http.BaseRequest request,
+    AuthenticatedHttpTimeoutPolicy policy,
+    Stopwatch stopwatch,
+    AccountRecoveryOperationAdmission admission,
+  ) async {
     final liveToken = currentAccessToken?.call();
     final originalHeader =
         request.headers['authorization'] ?? request.headers['Authorization'];
@@ -109,7 +157,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
         request.headers.remove('Authorization');
       }
     }
-    final response = await _inner.send(request);
+    final response = await _sendHeaders(request, policy, stopwatch, admission);
     _didRespond(request, response);
     if (response.statusCode != 401 || request is! http.Request) {
       return response;
@@ -117,14 +165,19 @@ class AuthenticatedHttpClient extends http.BaseClient {
 
     // Buffer the first response before refreshing so the original failure is
     // still returned intact if the refresh cannot recover the session.
-    final body = await response.stream.toBytes();
+    final body = await _readBody(response.stream, policy, stopwatch);
     final authorization =
         request.headers['authorization'] ?? request.headers['Authorization'];
     final rejectedAccessToken =
         authorization != null && authorization.startsWith('Bearer ')
         ? authorization.substring('Bearer '.length)
         : '';
-    final newToken = await _refreshOnce(rejectedAccessToken);
+    // Do not start a refresh after the caller's overall budget is exhausted;
+    // otherwise a timed-out request could leave an untracked refresh running.
+    final refreshTimeout = _remaining(policy.refresh, policy, stopwatch);
+    final newToken = await _refreshOnce(
+      rejectedAccessToken,
+    ).timeout(refreshTimeout);
     if (newToken == null || newToken.isEmpty) {
       return _replayResponse(response, body);
     }
@@ -143,9 +196,109 @@ class AuthenticatedHttpClient extends http.BaseClient {
       ..maxRedirects = request.maxRedirects
       ..persistentConnection = request.persistentConnection
       ..headers['Authorization'] = 'Bearer $newToken';
-    final retried = await _inner.send(retry);
+    final retried = await _sendHeaders(retry, policy, stopwatch, admission);
     _didRespond(retry, retried);
     return retried;
+  }
+
+  Future<http.StreamedResponse> _sendHeaders(
+    http.BaseRequest request,
+    AuthenticatedHttpTimeoutPolicy policy,
+    Stopwatch stopwatch,
+    AccountRecoveryOperationAdmission admission,
+  ) async {
+    // Compute the deadline before starting the transport. If the overall
+    // request budget is already exhausted, do not start an operation that
+    // cannot be tracked or drained by the timeout handoff below.
+    final headerTimeout = _remaining(policy.header, policy, stopwatch);
+    final pending = _inner.send(request);
+    try {
+      return await pending.timeout(headerTimeout);
+    } on TimeoutException {
+      // Future.timeout only bounds this caller; it does not cancel the
+      // underlying http operation. Keep the recovery gate held while the
+      // transport settles so an unknown mutation cannot overlap recovery.
+      _pendingTransportAdmissions.add(admission);
+      unawaited(_settlePendingTransport(pending, admission));
+      rethrow;
+    }
+  }
+
+  Future<void> _settlePendingTransport(
+    Future<http.StreamedResponse> pending,
+    AccountRecoveryOperationAdmission admission,
+  ) async {
+    try {
+      final response = await pending;
+      // The timed-out caller has no consumer, so drain the response to settle
+      // the stream. This is deliberately not bounded: releasing the recovery
+      // fence before an unknown write settles is less safe than waiting.
+      await response.stream.drain<void>();
+    } catch (_) {
+      // A failed or cancelled transport is settled for the purpose of the
+      // local recovery fence; the original caller already received timeout.
+    } finally {
+      _pendingTransportAdmissions.remove(admission);
+      admission.finish();
+    }
+  }
+
+  Future<List<int>> _readBody(
+    Stream<List<int>> source,
+    AuthenticatedHttpTimeoutPolicy policy,
+    Stopwatch stopwatch,
+  ) async {
+    final bytes = <int>[];
+    await for (final chunk in _timedBody(source, policy, stopwatch)) {
+      bytes.addAll(chunk);
+    }
+    return bytes;
+  }
+
+  Stream<List<int>> _timedBody(
+    Stream<List<int>> source,
+    AuthenticatedHttpTimeoutPolicy policy,
+    Stopwatch stopwatch,
+  ) async* {
+    final inactivity = _remaining(policy.body, policy, stopwatch);
+    await for (final chunk in source.timeout(
+      inactivity,
+      onTimeout: (sink) => sink.addError(
+        TimeoutException('Authenticated response body timed out'),
+      ),
+    )) {
+      if (stopwatch.elapsed >= policy.overall) {
+        throw TimeoutException('Authenticated request timed out');
+      }
+      yield chunk;
+    }
+  }
+
+  Duration _remaining(
+    Duration requested,
+    AuthenticatedHttpTimeoutPolicy policy,
+    Stopwatch stopwatch,
+  ) {
+    final remainingOverall = policy.overall - stopwatch.elapsed;
+    if (remainingOverall <= Duration.zero) {
+      throw TimeoutException('Authenticated request timed out');
+    }
+    return requested < remainingOverall ? requested : remainingOverall;
+  }
+
+  static AuthenticatedHttpTimeoutPolicy _defaultTimeoutFor(
+    http.BaseRequest request,
+  ) {
+    final path = request.url.path.toLowerCase();
+    final longOperation =
+        path.contains('/import') ||
+        path.contains('/backup') ||
+        path.contains('/recovery') ||
+        path.contains('/from-sms') ||
+        path.contains('/export');
+    return longOperation
+        ? AuthenticatedHttpTimeoutPolicy.longOperation
+        : AuthenticatedHttpTimeoutPolicy.standard;
   }
 
   void _didRespond(http.BaseRequest request, http.StreamedResponse response) {
@@ -209,7 +362,9 @@ class AuthenticatedHttpClient extends http.BaseClient {
   void close() {
     _inner.close();
     for (final admission in _admissions.toList()) {
-      _finishAdmission(admission);
+      if (!_pendingTransportAdmissions.contains(admission)) {
+        _finishAdmission(admission);
+      }
     }
   }
 }

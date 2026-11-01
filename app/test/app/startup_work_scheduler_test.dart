@@ -53,4 +53,23 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 40));
     expect(events, isEmpty);
   });
+
+  test('bounds a backlog to one callback per event-loop drain', () async {
+    final scheduler = StartupWorkScheduler(
+      initialDelay: Duration.zero,
+      maxJobsPerDrain: 1,
+    );
+    addTearDown(scheduler.dispose);
+    final events = <String>[];
+    scheduler.enqueue('one', () => events.add('one'));
+    scheduler.enqueue('two', () => events.add('two'));
+    scheduler.enqueue('three', () => events.add('three'));
+
+    await Future<void>.delayed(Duration.zero);
+    expect(events, ['one']);
+    await Future<void>.delayed(Duration.zero);
+    expect(events, ['one', 'two']);
+    await Future<void>.delayed(Duration.zero);
+    expect(events, ['one', 'two', 'three']);
+  });
 }
