@@ -91,6 +91,16 @@ class _BlockingTransactionRepository implements UserCardsRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+DateTime _currentActivityFixture([int dayOffset = 0]) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day).add(Duration(days: dayOffset));
+}
+
+DateTime _currentMonthFixture(int day) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, day > now.day ? now.day : day);
+}
+
 void main() {
   test(
     'transactions provider adopts bounded pages for a cold history refresh',
@@ -239,7 +249,7 @@ void main() {
       final transaction = TransactionEntry(
         id: 'cached-1',
         amount: Money.fromRupees(500),
-        occurredAt: DateTime(2026, 10, 16),
+        occurredAt: _currentActivityFixture(),
         merchantName: 'Cached merchant',
         source: 'sms',
         status: 'active',
@@ -301,7 +311,7 @@ void main() {
             TransactionEntry(
               id: 'old-activity-1',
               amount: Money.fromRupees(250),
-              occurredAt: DateTime(2026, 10, 16),
+              occurredAt: _currentActivityFixture(),
               merchantName: 'Previous activity',
               source: 'sms',
               status: 'active',
@@ -425,7 +435,7 @@ void main() {
           TransactionEntry(
             id: 'spending-row-1',
             amount: Money.fromRupees(499),
-            occurredAt: DateTime(2026, 10, 17),
+            occurredAt: _currentActivityFixture(),
             merchantName: 'Visible in Spending',
             source: 'sms',
             status: 'active',
@@ -460,7 +470,7 @@ void main() {
       TransactionEntry row(String id, int day) => TransactionEntry(
         id: id,
         amount: Money.fromRupees(100),
-        occurredAt: DateTime(2026, 10, day),
+        occurredAt: _currentMonthFixture(day),
         source: 'sms',
         status: 'active',
       );

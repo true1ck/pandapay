@@ -190,6 +190,28 @@ enum CommitmentCategory {
   }
 }
 
+/// Identifies repeated payment descriptors that belong to a bill/commitment or
+/// ordinary retail spending rather than a subscription service.
+bool isNonSubscriptionRecurringPayment(String? name) {
+  if (name == null || name.trim().isEmpty) return false;
+  final lower = name.trim().toLowerCase();
+  if (RegExp(
+    r'\b(?:bill|electricity|power|water|utility|gas|broadband|mobile|telephone|telecom|postpaid|prepaid|recharge|insurance|policy|emi|loan|rent|municipal|property\s+tax|credit\s+card|bescom|tneb|msedcl|mahadiscom|bses|tata\s+power|adani\s+electricity|torrent\s+power|bwssb|jvvnl|cesc|mahanagar\s+gas|mgl|igl)\b',
+    caseSensitive: false,
+  ).hasMatch(lower)) {
+    return true;
+  }
+  final retail = RegExp(
+    r'\b(?:flipkart|myntra|ajio|meesho|nykaa|jiomart|dmart|bigbasket|blinkit|zepto)\b',
+    caseSensitive: false,
+  );
+  final serviceMarker = RegExp(
+    r'\b(?:plus|premium|membership|subscription|pass|prime)\b',
+    caseSensitive: false,
+  );
+  return retail.hasMatch(lower) && !serviceMarker.hasMatch(lower);
+}
+
 /// Identifies whether an AutoPay mandate/authorization belongs to a digital
 /// service subscription (e.g. OpenAI, Google Play, Netflix, Spotify) rather
 /// than a utility bill, telecom/broadband bill, insurance policy, loan/EMI,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/app/startup_work_scheduler.dart';
 import 'package:pandapay/data/auth_api.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/auth/login_screen.dart';
@@ -55,6 +57,15 @@ class _FakeCategoryRepository implements CategoryRepository {
     SpendCategory(id: 'cat-fuel-uuid', slug: 'fuel', name: 'Fuel'),
   ];
 }
+
+class _NoopStartupWorkScheduler extends StartupWorkScheduler {
+  _NoopStartupWorkScheduler() : super(initialDelay: Duration.zero);
+
+  @override
+  void enqueue(String key, FutureOr<void> Function() work, {Duration? delay}) {}
+}
+
+final _testStartupWorkScheduler = _NoopStartupWorkScheduler();
 
 CardProduct _rupayCard() => CardProduct(
   id: 'test-rupay',
@@ -146,6 +157,9 @@ void main() {
           _noSessionInit,
           sessionKeepAliveProvider.overrideWith((ref) {}),
           smsBackgroundFlushProvider.overrideWith((ref) {}),
+          startupWorkSchedulerProvider.overrideWithValue(
+            _testStartupWorkScheduler,
+          ),
         ],
       );
       addTearDown(container.dispose);

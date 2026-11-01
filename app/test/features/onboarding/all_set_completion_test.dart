@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
+import 'package:pandapay/app/startup_work_scheduler.dart';
 import 'package:pandapay/data/consents_api.dart';
 import 'package:pandapay/data/product_access_api.dart';
 import 'package:pandapay/features/home/home_screen.dart';
@@ -29,6 +30,15 @@ class _FakeProductAccess implements ProductAccessRepository {
   @override
   noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+class _NoopStartupWorkScheduler extends StartupWorkScheduler {
+  _NoopStartupWorkScheduler() : super(initialDelay: Duration.zero);
+
+  @override
+  void enqueue(String key, FutureOr<void> Function() work, {Duration? delay}) {}
+}
+
+final _testStartupWorkScheduler = _NoopStartupWorkScheduler();
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -322,6 +332,9 @@ Future<ProviderContainer> _pumpFlow(
       ),
       sessionInitProvider.overrideWith((ref) async {}),
       sessionKeepAliveProvider.overrideWith((ref) {}),
+      startupWorkSchedulerProvider.overrideWithValue(
+        _testStartupWorkScheduler,
+      ),
       smsBackgroundFlushProvider.overrideWith((ref) {}),
       accessTokenProvider.overrideWith((ref) => 'test-token'),
       activationVerifiedNamespaceProvider.overrideWith(

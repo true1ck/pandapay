@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
+import 'package:pandapay/app/startup_work_scheduler.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/home/home_screen.dart';
 import 'package:pandapay/features/insights/payments_due_screen.dart'
@@ -28,6 +31,15 @@ class _EmptyCategoryRepository implements CategoryRepository {
   @override
   Future<List<SpendCategory>> fetchCategories() async => const [];
 }
+
+class _NoopStartupWorkScheduler extends StartupWorkScheduler {
+  _NoopStartupWorkScheduler() : super(initialDelay: Duration.zero);
+
+  @override
+  void enqueue(String key, FutureOr<void> Function() work, {Duration? delay}) {}
+}
+
+final _testStartupWorkScheduler = _NoopStartupWorkScheduler();
 
 /// [settleAfter] is deliberately `pump()` a bounded number of times rather
 /// than `pumpAndSettle()` when the test expects to land ON
@@ -75,6 +87,9 @@ Future<void> _pumpApp(
         sessionKeepAliveProvider.overrideWith((ref) {}),
         smsBackgroundFlushProvider.overrideWith((ref) {}),
         accessTokenProvider.overrideWith((ref) => 'test-token'),
+        startupWorkSchedulerProvider.overrideWithValue(
+          _testStartupWorkScheduler,
+        ),
         ...extraOverrides,
       ],
       child: Consumer(
@@ -186,6 +201,9 @@ void main() {
           sessionKeepAliveProvider.overrideWith((ref) {}),
           smsBackgroundFlushProvider.overrideWith((ref) {}),
           accessTokenProvider.overrideWith((ref) => 'test-token'),
+          startupWorkSchedulerProvider.overrideWithValue(
+            _testStartupWorkScheduler,
+          ),
         ],
       );
       addTearDown(container.dispose);

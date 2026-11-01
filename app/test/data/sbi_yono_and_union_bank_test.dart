@@ -79,6 +79,51 @@ void main() {
       expect(parsed.transaction!.entryKind, equals(TxnEntryKind.spend));
     });
 
+    test('SBI YONO UPI debit does not retain a raw VPA as merchant', () {
+      const msg =
+          'Dear UPI/YONO user, Rs.500.00 debited from A/c No. XX1234 on 26-Oct-26 to VPA/foo@bank Ref 1234567890 Available Bal: Rs.1000.00 -SBI';
+
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'JK-SBIUPI-S',
+        body: msg,
+        receivedAt: DateTime(2026, 10, 26, 12, 0),
+      );
+
+      expect(parsed?.transaction, isNotNull);
+      expect(parsed!.transaction!.merchantName, equals('Bank debit'));
+    });
+
+    test('SBI YONO UPI debit does not retain a URL as merchant', () {
+      const msg =
+          'Dear UPI/YONO user, Rs.500.00 debited from A/c No. XX1234 on 26-Oct-26 to VPA/www.hdfc.com Ref 1234567890 Available Bal: Rs.1000.00 -SBI';
+
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'JK-SBIUPI-S',
+        body: msg,
+        receivedAt: DateTime(2026, 10, 26, 12, 0),
+      );
+
+      expect(parsed?.transaction, isNotNull);
+      expect(parsed!.transaction!.merchantName, equals('Bank debit'));
+    });
+
+    test('SBI YONO UPI debit does not retain an opaque identifier as merchant', () {
+      const msg =
+          'Dear UPI/YONO user, Rs.500.00 debited from A/c No. XX1234 on 26-Oct-26 to VPA/MERCHANT12345678 Ref 1234567890 Available Bal: Rs.1000.00 -SBI';
+
+      final parsed = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'JK-SBIUPI-S',
+        body: msg,
+        receivedAt: DateTime(2026, 10, 26, 12, 0),
+      );
+
+      expect(parsed?.transaction, isNotNull);
+      expect(parsed!.transaction!.merchantName, equals('Bank debit'));
+    });
+
     test('SBI YONO transfer debit extracts recipient, NOT source account', () {
       const msg =
           'Dear Customer, Rs 2,500.00 debited from A/C XX4321 on 24-10-26 transfer to Ramesh via YONO SBI ref 987654321. Avl Bal Rs 8,000.00';

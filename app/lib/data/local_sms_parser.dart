@@ -10,6 +10,7 @@ import 'local/sms_rule_bundle.dart';
 import 'indian_narration_sanitizer.dart';
 import 'merchant_identity.dart';
 import 'flashtext_merchant_extractor.dart';
+import 'self_transfer.dart';
 
 enum LocalSmsEventType {
   transaction,
@@ -915,7 +916,7 @@ class LocalSmsParser {
   /// remains narrow and does not change unrelated card or NEFT narratives.
   static String? _upiAccountRecipient(String body) {
     final vpaMatch = _re(
-      r'\bto\s+vpa\s*/\s*([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+ref(?:erence)?\b|\s+via\b|\s+on\b|[.,;]|$)',
+      r'\bto\s+vpa\s*/\s*([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+ref(?:erence)?\b|\s+via\b|\s+on\b|[,;]|$)',
     ).firstMatch(body);
     if (vpaMatch != null) return vpaMatch.group(1)?.trim();
     final match = _re(
@@ -1377,6 +1378,7 @@ class LocalSmsParser {
     String? ownUserName,
     Map<String, String>? userCategoryRules,
     Map<String, String>? sharedCategoryRules,
+    Map<String, SelfTransferDestination>? selfTransferRules,
   }) {
     final parsed = parse(
       namespace: namespace,
@@ -1387,6 +1389,7 @@ class LocalSmsParser {
       ownUserName: ownUserName,
       userCategoryRules: userCategoryRules,
       sharedCategoryRules: sharedCategoryRules,
+      selfTransferRules: selfTransferRules,
     );
     final transaction = parsed?.transaction;
     if (transaction != null) {
@@ -1812,6 +1815,7 @@ class LocalSmsParser {
     // existing behaviour byte-for-byte.
     Map<String, String>? userCategoryRules,
     Map<String, String>? sharedCategoryRules,
+    Map<String, SelfTransferDestination>? selfTransferRules,
   }) {
     if (body.length > 20000 || sensitive(body)) return null;
 
@@ -1980,6 +1984,7 @@ class LocalSmsParser {
           cards: cards,
           userCategoryRules: userCategoryRules,
           sharedCategoryRules: sharedCategoryRules,
+          selfTransferRules: selfTransferRules,
         );
         if (obs != null) return obs;
       }
@@ -2803,9 +2808,10 @@ class LocalSmsParser {
       r'\b(?:towards?|in\s+fav(?:ou?r)?\s+of)\s+(?!(?:₹|rs\.?|inr|re\.?)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:for|by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body);
 
+    final explicitUpiMerchant = _upiAccountRecipient(body);
     var merchant =
         receiptMerchant ??
-        _upiAccountRecipient(body) ??
+        explicitUpiMerchant ??
         fvgMatch?.group(1)?.trim() ??
         _upiNarrationParty(body) ??
         towardsMatchParse?.group(1)?.trim();
@@ -2877,7 +2883,11 @@ class LocalSmsParser {
         merchant = sanitized;
       }
     }
-    merchant = MerchantIdentity.cleanName(merchant);
+    final cleanedMerchant = MerchantIdentity.cleanName(merchant);
+    final preserveSbiGenericMerchant =
+        explicitUpiMerchant == 'Merchant' && merchant == 'Merchant';
+    merchant = cleanedMerchant ??
+        (preserveSbiGenericMerchant ? 'Merchant' : null);
     // "declined due to insufficient balance" makes the merchant regex capture
     // the reason as the payee. A decline reason is not a merchant name.
     if (merchant != null &&
@@ -2980,6 +2990,14 @@ class LocalSmsParser {
       transfer = true;
       kind = TxnEntryKind.transfer;
     }
+    final selfTransferDestination = selfTransferRules == null
+        ? null
+        : selfTransferRules[selfTransferKey(sender, body)];
+    if (selfTransferDestination != null) {
+      transfer = true;
+      kind = TxnEntryKind.transfer;
+      merchant = selfTransferDestination.label;
+    }
     final matching = cards
         .where(
           (c) =>
@@ -3066,6 +3084,7 @@ class LocalSmsParser {
     required List<UserCard> cards,
     Map<String, String>? userCategoryRules,
     Map<String, String>? sharedCategoryRules,
+    Map<String, SelfTransferDestination>? selfTransferRules,
   }) {
     if (rule.family == SmsRuleFamily.ignoreNoise) {
       // Safety safeguard: an ignore rule cannot silence an SMS containing real
@@ -3113,7 +3132,7 @@ class LocalSmsParser {
 
       final amount = parseMoney(getGroup('amount') ?? getGroup('amountInr'));
       if (amount == null) return null;
-      final merchant = getGroup('merchant');
+      var merchant = getGroup('merchant');
       var instrument = TxnInstrument.upiBank;
       final rawInst =
           (rule.defaultFields['instrument'] ?? getGroup('instrument'))
@@ -3124,10 +3143,10 @@ class LocalSmsParser {
           (rawInst == null &&
               !_re(r'\bcard\b').hasMatch(body) &&
               _re(r'\b(?:a\/?c\.?|account)\b').hasMatch(body));
-      final accountLast4 =
+      var accountLast4 =
           getGroup('accountLast4') ??
           (genericIsAccount ? getGroup('last4') : null);
-      final cardLast4 =
+      var cardLast4 =
           getGroup('cardLast4') ??
           (!genericIsAccount && accountLast4 == null
               ? getGroup('last4')
@@ -3168,6 +3187,14 @@ class LocalSmsParser {
         entryKind = TxnEntryKind.transfer;
       } else if (rawKind == 'investment') {
         entryKind = TxnEntryKind.investment;
+      }
+
+      final selfTransferDestination = selfTransferRules == null
+          ? null
+          : selfTransferRules[selfTransferKey(sender, body)];
+      if (selfTransferDestination != null) {
+        entryKind = TxnEntryKind.transfer;
+        merchant = selfTransferDestination.label;
       }
 
       final matchingCards = cards
@@ -3242,7 +3269,11 @@ class LocalSmsParser {
         accountLast4: accountLast4,
         confidence: calibratedConfidence,
         disposition: LocalSmsDisposition.sync,
-        reasonCodes: ['downloaded_rule_match', rule.id],
+        reasonCodes: [
+          'downloaded_rule_match',
+          rule.id,
+          if (selfTransferDestination != null) 'self_transfer_confirmed',
+        ],
       );
     }
 

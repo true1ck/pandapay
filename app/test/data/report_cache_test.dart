@@ -152,15 +152,103 @@ void main() {
     expect(report.series.singleWhere((item) => item.setupConfirmed).displayName, 'OpenAI');
     final setup = report.series.singleWhere((item) => item.setupConfirmed);
     expect(setup.amountKnown, isFalse);
+    expect(setup.typicalAmount, Money.zero());
+    expect(setup.occurrenceCount, 0);
     expect(setup.cadenceDays, 0);
+    expect(setup.cadenceConfirmed, isFalse);
     expect(setup.nextExpectedOn, isNull);
     expect(setup.annualCost, Money.zero());
+    expect(report.totalAnnual, saved.totalAnnual);
+    final established = report.series.singleWhere((item) => item.id == 'established');
+    expect(established.typicalAmount, saved.series.first.typicalAmount);
+    expect(established.cadenceDays, saved.series.first.cadenceDays);
+    expect(established.cadenceConfirmed, saved.series.first.cadenceConfirmed);
+    expect(established.occurrenceCount, saved.series.first.occurrenceCount);
+    expect(established.nextExpectedOn, saved.series.first.nextExpectedOn);
+    expect(established.annualCost, saved.series.first.annualCost);
     cache.financialStore.discardProvisional(namespace, 'unrelated');
     await Future<void>.delayed(Duration.zero);
     final afterSync = await container.read(recurringReportProvider.future);
     expect(afterSync!.series.map((item) => item.id), contains('established'));
     expect(afterSync.series.where((item) => item.setupConfirmed), hasLength(1));
+    final syncedSetup = afterSync.series.singleWhere((item) => item.setupConfirmed);
+    expect(syncedSetup.amountKnown, isFalse);
+    expect(syncedSetup.typicalAmount, Money.zero());
+    expect(syncedSetup.cadenceDays, 0);
+    expect(syncedSetup.cadenceConfirmed, isFalse);
+    expect(syncedSetup.nextExpectedOn, isNull);
+    expect(syncedSetup.annualCost, Money.zero());
+    expect(afterSync.totalAnnual, saved.totalAnnual);
   });
+
+  for (final (label, source, occurrences, userEdited, cadence, confirmed,
+      expectedConfirmed) in [
+    ('setup without local observation', 'mandate', 1, false, 30, true, false),
+    ('unknown zero-day cadence', 'mandate', 1, false, 0, false, false),
+    ('explicit on-demand cadence', 'mandate', 1, false, 0, true, true),
+    ('established charge history', 'mandate', 3, false, 30, true, true),
+    ('first actual observed charge', 'observed', 1, false, 30, true, true),
+    ('reviewed billing terms', 'mandate', 1, true, 30, true, true),
+    ('reviewed on-demand terms', 'mandate', 1, true, 0, true, true),
+    ('explicit renewal evidence', 'local_explicit', 1, false, 30, true, true),
+  ]) {
+    test('cached service mandate respects $label', () async {
+      final db = openInMemoryForTesting();
+      final cache = ResponseCache(db);
+      final client = MockClient((_) async => throw http.ClientException('offline'));
+      const namespace = 'user:legacy-mandate';
+      final container = ProviderContainer(overrides: [
+        cacheNamespaceProvider.overrideWithValue(namespace),
+        responseCacheProvider.overrideWith((ref) async => cache),
+        transactionsProvider.overrideWith((ref) async => []),
+        spendReportsRepositoryProvider.overrideWithValue(SpendReportsRepository(
+          apiBaseUrl: 'http://api.test', accessToken: 'test', client: client,
+        )),
+      ]);
+      addTearDown(() {
+        container.dispose();
+        client.close();
+        cache.financialStore.dispose();
+        db.close();
+      });
+      final nextDate = DateTime(2030, 11, 19);
+      final saved = RecurringSeries(
+        id: 'legacy-openai',
+        displayName: 'OPENAILLC',
+        typicalAmount: Money.fromRupees(1999),
+        cadenceDays: cadence,
+        cadenceConfirmed: confirmed,
+        occurrenceCount: occurrences,
+        annualCost: Money.fromRupees(23988),
+        nextExpectedOn: nextDate,
+        isMandate: true,
+        isUserEdited: userEdited,
+        detectionSource: source,
+        autopayLimit: Money.fromRupees(5000),
+        mandateReference: 'mandate-reference',
+        autopayStatus: 'active',
+      );
+      await cache.put('$namespace:recurring_report', jsonEncode(
+        RecurringReport(series: [saved], totalAnnual: Money.zero()).toJson(),
+      ));
+
+      final report = await container.read(recurringReportProvider.future);
+      final item = report!.series.single;
+      final setupOnly = source == 'mandate' && occurrences <= 1 && !userEdited;
+      expect(item.displayName, 'OpenAI');
+      expect(item.amountKnown, !setupOnly);
+      expect(item.typicalAmount, setupOnly ? Money.zero() : saved.typicalAmount);
+      expect(item.cadenceDays, setupOnly ? 0 : saved.cadenceDays);
+      expect(item.cadenceConfirmed, expectedConfirmed);
+      expect(item.occurrenceCount, setupOnly ? 0 : occurrences);
+      expect(item.nextExpectedOn, setupOnly ? null : nextDate);
+      expect(item.annualCost, setupOnly ? Money.zero() : saved.annualCost);
+      expect(item.autopayLimit, saved.autopayLimit);
+      expect(item.mandateReference, saved.mandateReference);
+      expect(item.hasActiveAutoPay, isTrue);
+      expect(item.isUserEdited, userEdited);
+    });
+  }
 
   test('explicit local renewal retains its stated price and next date', () async {
     final db = openInMemoryForTesting();

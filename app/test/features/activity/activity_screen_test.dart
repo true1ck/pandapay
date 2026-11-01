@@ -112,6 +112,11 @@ TransactionEntry _txn({
   );
 }
 
+DateTime _currentMonthTime(int hour, int minute) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day, hour, minute);
+}
+
 Future<void> _pump(
   WidgetTester tester, {
   required _FakeUserCardsRepository repo,
@@ -284,7 +289,15 @@ void main() {
         merchantName: 'Yesterday Shop',
       ),
     ]);
-    await _pump(tester, repo: repo, cards: const []);
+    await _pump(
+      tester,
+      repo: repo,
+      cards: const [],
+      activityScreen: ActivityScreen(
+        initialFrom: now.subtract(const Duration(days: 1)),
+        initialTo: now,
+      ),
+    );
 
     expect(find.text('Today'), findsOneWidget);
     expect(find.text('Yesterday'), findsOneWidget);
@@ -374,7 +387,7 @@ void main() {
       _txn(
         id: 'sms-time',
         amount: Money.fromRupees(1200),
-        occurredAt: DateTime(2026, 10, 20, 15, 20),
+        occurredAt: _currentMonthTime(15, 20),
         source: 'sms',
         merchantName: 'Timestamped Shop',
       ),
@@ -391,18 +404,20 @@ void main() {
       _txn(
         id: 'transfer-a',
         amount: Money.fromRupees(150),
-        occurredAt: DateTime(2026, 10, 20, 18, 10),
+        occurredAt: _currentMonthTime(18, 10),
         source: 'sms',
         merchantName: 'Transfer to Zephr',
         categoryName: 'Other',
+        entryKind: TxnEntryKind.transfer,
       ),
       _txn(
         id: 'transfer-b',
         amount: Money.fromRupees(147),
-        occurredAt: DateTime(2026, 10, 20, 18, 5),
+        occurredAt: _currentMonthTime(18, 5),
         source: 'sms',
         merchantName: 'Transfer to Akriti',
         categoryName: 'Food',
+        entryKind: TxnEntryKind.transfer,
       ),
     ]);
     await _pump(tester, repo: repo, cards: const []);
@@ -431,19 +446,21 @@ void main() {
       _txn(
         id: 'transfer-c',
         amount: Money.fromRupees(90),
-        occurredAt: DateTime(2026, 10, 20, 18, 10),
+        occurredAt: _currentMonthTime(18, 10),
         source: 'sms',
         merchantName: 'Transfer to  Meera',
         categoryName: 'Rent',
+        entryKind: TxnEntryKind.transfer,
       ),
       _txn(
         id: 'transfer-d',
         amount: Money.fromRupees(60),
-        occurredAt: DateTime(2026, 10, 20, 18, 5),
+        occurredAt: _currentMonthTime(18, 5),
         source: 'sms',
         merchantName: 'Transfer to Rahul',
         categoryName: 'Other',
         subcategoryName: 'UPI',
+        entryKind: TxnEntryKind.transfer,
       ),
     ]);
     await _pump(tester, repo: repo, cards: const []);
@@ -465,7 +482,7 @@ void main() {
       _txn(
         id: 'spend-e',
         amount: Money.fromRupees(430),
-        occurredAt: DateTime(2026, 10, 20, 18, 10),
+        occurredAt: _currentMonthTime(18, 10),
         source: 'sms',
         merchantName: 'BOMBAY BAZAAR',
         categoryName: 'Other',
@@ -473,7 +490,7 @@ void main() {
       _txn(
         id: 'transfer-a',
         amount: Money.fromRupees(150),
-        occurredAt: DateTime(2026, 10, 20, 18, 5),
+        occurredAt: _currentMonthTime(18, 5),
         source: 'sms',
         merchantName: 'Transfer to Zephr',
         categoryName: 'Other',
@@ -498,7 +515,7 @@ void main() {
       _txn(
         id: 'refund-transfer',
         amount: Money.fromRupees(150),
-        occurredAt: DateTime(2026, 10, 20, 18, 10),
+        occurredAt: _currentMonthTime(18, 10),
         source: 'sms',
         merchantName: 'Transfer to Zephr',
         categoryName: 'Other',
@@ -507,7 +524,7 @@ void main() {
       _txn(
         id: 'reversal-transfer',
         amount: Money.fromRupees(147),
-        occurredAt: DateTime(2026, 10, 20, 18, 5),
+        occurredAt: _currentMonthTime(18, 5),
         source: 'sms',
         merchantName: 'Transfer to Akriti',
         note: 'Excluded from spend [ignored: reversal]',
@@ -549,6 +566,7 @@ void main() {
     expect(find.text('Last month'), findsOneWidget);
     expect(find.text('Last 90 days'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Last month'));
     await tester.tap(find.text('Last month'));
     await tester.pumpAndSettle();
     expect(find.text('Last month'), findsOneWidget);

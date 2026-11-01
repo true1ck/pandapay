@@ -808,7 +808,6 @@ void main() {
                     cadenceDays: 0,
                     occurrenceCount: 0,
                     annualCost: Money.zero(),
-                    hasActiveAutoPay: true,
                     autopayStatus: 'active',
                   ),
                 ],
@@ -823,6 +822,8 @@ void main() {
 
       expect(find.text('Google Play'), findsOneWidget);
       expect(find.text('Up to ₹4,000'), findsOneWidget);
+      expect(find.text('AutoPay Active'), findsOneWidget);
+      expect(find.text('Free'), findsNothing);
       expect(
         find.text('AutoPay limit up to ₹4,000 • Awaiting first charge'),
         findsOneWidget,

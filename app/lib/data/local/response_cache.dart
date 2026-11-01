@@ -52,9 +52,9 @@ class ResponseCache {
     if (changedEntities.isNotEmpty) {
       financialStore.notifyExternalChanges(namespace, changedEntities);
     }
-    final fetchedAt = last?.fetchedAt;
+    final fetchedAt = last.fetchedAt;
     if (fetchedAt == null) return null;
-    return LocalTransactionSnapshot(rows, fetchedAt, last!.hasStoredCoverage);
+    return LocalTransactionSnapshot(rows, fetchedAt, last.hasStoredCoverage);
   }
   void markAccountStale(String namespace) {
     _db.db.execute(

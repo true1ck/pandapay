@@ -5029,16 +5029,22 @@ RecurringSeries _normalizeLegacyServiceMandate(RecurringSeries item) {
   final service = _namedServiceAutoPayName(item.displayName);
   if (service == null) return item;
   final lifecycle = item.lifecycleStatus.trim().toLowerCase();
+  // Older mandate rows guessed a plan price and monthly schedule from an
+  // authorization alone. Neither one setup occurrence nor a known service
+  // proves billing terms. Keep reviewed terms and actual charge history.
+  final setupOnly = !item.isUserEdited &&
+      item.occurrenceCount <= 1 &&
+      item.detectionSource == 'mandate';
 
   return RecurringSeries(
     id: item.id,
     displayName: service,
-    typicalAmount: item.typicalAmount,
-    amountKnown: item.amountKnown,
+    typicalAmount: setupOnly ? Money.zero() : item.typicalAmount,
+    amountKnown: !setupOnly && item.amountKnown,
     autopayLimit: item.autopayLimit,
-    cadenceDays: item.cadenceDays,
-    occurrenceCount: item.occurrenceCount,
-    annualCost: item.annualCost,
+    cadenceDays: setupOnly ? 0 : item.cadenceDays,
+    occurrenceCount: setupOnly ? 0 : item.occurrenceCount,
+    annualCost: setupOnly ? Money.zero() : item.annualCost,
     categoryName: item.categoryName,
     subcategoryName: item.subcategoryName,
     cardName: item.cardName,
@@ -5053,8 +5059,11 @@ RecurringSeries _normalizeLegacyServiceMandate(RecurringSeries item) {
     startDate: item.startDate,
     endDate: item.endDate,
     lastSeenOn: item.lastSeenOn ?? item.startDate,
-    nextExpectedOn: item.nextExpectedOn,
-    cadenceConfirmed: item.cadenceConfirmed || item.cadenceDays == 0,
+    nextExpectedOn: setupOnly ? null : item.nextExpectedOn,
+    // Zero days alone does not prove on-demand billing. Preserve an explicit
+    // as-presented confirmation, but discard confirmation of a guessed cycle.
+    cadenceConfirmed: item.cadenceConfirmed &&
+        (!setupOnly || item.cadenceDays == 0),
     setupConfirmed: true,
     engineStatus: lifecycle.isEmpty || lifecycle == 'active'
         ? 'candidate'
@@ -5726,7 +5735,7 @@ Future<RecurringReport> _mergeLocalSetupSeries(
       paymentMethod: item.paymentMethod ?? localMatch?.paymentMethod,
       sourceKey: item.sourceKey ?? localMatch?.sourceKey,
       mandateReference: item.mandateReference ?? localMatch?.mandateReference,
-      cadenceConfirmed: item.cadenceConfirmed || (localMatch?.cadenceConfirmed ?? false) || item.cadenceDays == 0,
+      cadenceConfirmed: item.cadenceConfirmed || (localMatch?.cadenceConfirmed ?? false),
       setupConfirmed: item.setupConfirmed || (localMatch?.setupConfirmed ?? false),
       autopayStatus: (item.autopayStatus.isNotEmpty && item.autopayStatus != 'unknown')
           ? item.autopayStatus
@@ -6037,104 +6046,6 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     }
     rethrow;
   }
-}
-
-/// Reads response-cache snapshots written before transactions were
-/// materialized into [FinancialStore]. This remains a read-only compatibility
-/// path: a valid empty snapshot is meaningful, while a missing/corrupt
-/// snapshot still allows the authoritative fetch to run.
-Future<List<TransactionEntry>?> _readLegacyTransactionSnapshots(
-  Ref ref,
-  ResponseCache? cache, {
-  required String cacheKey,
-  required TransactionQuery filter,
-  required bool useReportSnapshots,
-}) async {
-  if (cache == null) return null;
-  final namespace = ref.read(cacheNamespaceProvider);
-  final suffixes = <String>{cacheKey, 'transactions:all'};
-  if (useReportSnapshots) {
-    suffixes.add('insights_transactions:thisMonth:cached-range');
-    suffixes.add('insights_transactions:thisYear:cached-range');
-    final from = filter.from;
-    final to = filter.to ?? DateTime.now();
-    if (from != null) {
-      var month = DateTime(from.year, from.month);
-      final lastMonth = DateTime(to.year, to.month);
-      while (!month.isAfter(lastMonth)) {
-        suffixes.add(
-          'spend_detail:month:${month.year}-${month.month.toString().padLeft(2, '0')}',
-        );
-        month = DateTime(month.year, month.month + 1);
-      }
-    }
-  }
-
-  final rowsById = <String, TransactionEntry>{};
-  var foundSnapshot = false;
-  for (final suffix in suffixes) {
-    final snapshot = await _readCacheOrNull(
-      ref,
-      cache,
-      '$namespace:$suffix',
-    );
-    if (snapshot == null) continue;
-    try {
-      final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
-      final rawRows = body['transactions'];
-      if (rawRows is! List) continue;
-      foundSnapshot = true;
-      for (final raw in rawRows.whereType<Map<String, dynamic>>()) {
-        final row = TransactionEntry.fromJson(raw);
-        if (_matchesTransactionQuery(row, filter)) {
-          rowsById.putIfAbsent(row.id, () => row);
-        }
-      }
-    } catch (_) {
-      // A corrupt compatibility snapshot is ignored; another snapshot or the
-      // authoritative fetch may still provide a usable result.
-    }
-  }
-  return foundSnapshot ? rowsById.values.toList(growable: false) : null;
-}
-
-bool _matchesTransactionQuery(TransactionEntry row, TransactionQuery filter) {
-  if (filter.from != null && row.occurredAt.isBefore(filter.from!)) {
-    return false;
-  }
-  if (filter.to != null) {
-    final endExclusive = DateTime(
-      filter.to!.year,
-      filter.to!.month,
-      filter.to!.day + 1,
-    );
-    if (!row.occurredAt.isBefore(endExclusive)) return false;
-  }
-  if (filter.cardId != null && row.userCardId != filter.cardId) return false;
-  if (filter.categoryId != null &&
-      row.categoryId != filter.categoryId &&
-      row.parentCategoryId != filter.categoryId) {
-    return false;
-  }
-  if (filter.userCategoryId != null &&
-      row.userCategoryId != filter.userCategoryId &&
-      row.parentUserCategoryId != filter.userCategoryId) {
-    return false;
-  }
-  if (filter.source != null && row.source != filter.source) return false;
-  final query = filter.query?.trim().toLowerCase();
-  if (query != null && query.isNotEmpty) {
-    final haystack = [
-      row.merchantName,
-      row.merchantVpa,
-      row.categoryName,
-      row.subcategoryName,
-      row.note,
-      row.sourceKey,
-    ].whereType<String>().join(' ').toLowerCase();
-    if (!haystack.contains(query)) return false;
-  }
-  return true;
 }
 
 /// Returns one transaction from the last successful Activity snapshot without
