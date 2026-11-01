@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import 'ios_sms_intake_controller.dart';
 import 'ios_sms_intake_providers.dart';
 import 'ios_sms_intake_service.dart';
+import 'ios_shortcut_links.dart';
 import 'ios_sms_sharing_setup.dart';
 
 const iosSmsHistoryShortcutName = 'PANDAPAY SMS HISTORY';
@@ -208,6 +210,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                 if (mounted) setState(() => _sharingConfirmed = value);
               },
             ),
+            const IosShortcutInstallPanel(),
             const SizedBox(height: AppSpace.lg),
             if (active) ...[
               _progress(state, controller),
@@ -848,4 +851,100 @@ class _HistoryMonth {
     required this.status,
     required this.messages,
   });
+}
+
+/// One-tap install of PandaPay's Shortcuts. Hidden until a link is set, so
+/// nobody sees a button that goes nowhere.
+class IosShortcutInstallPanel extends StatelessWidget {
+  final String historyLink;
+  final String liveLink;
+  final Future<bool> Function(Uri uri)? open;
+  const IosShortcutInstallPanel({
+    super.key,
+    this.historyLink = IosShortcutLinks.history,
+    this.liveLink = IosShortcutLinks.live,
+    this.open,
+  });
+
+  Future<void> _open(BuildContext context, Uri uri) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final opened = await (open ??
+        (u) => launchUrl(u, mode: LaunchMode.externalApplication))(uri);
+    if (!opened) {
+      messenger?.showSnackBar(
+        const SnackBar(content: Text('Couldn’t open Shortcuts. Try again.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final history = IosShortcutLinks.parse(historyLink);
+    final live = IosShortcutLinks.parse(liveLink);
+    if (history == null && live == null) return const SizedBox.shrink();
+    ButtonStyle style(bool primary) => FilledButton.styleFrom(
+      backgroundColor: primary ? BambooInk.slate : BambooInk.paper,
+      foregroundColor: primary ? BambooInk.lime : BambooInk.ink900,
+      side: primary ? null : const BorderSide(color: BambooInk.hairlineOnPaper),
+      minimumSize: const Size.fromHeight(46),
+      textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.md),
+      child: SmsSetupPanel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.bolt_rounded, color: BambooInk.jade),
+                const SizedBox(width: AppSpace.md),
+                Expanded(
+                  child: Text(
+                    'PandaPay shortcuts',
+                    style: BambooFonts.heading(16, color: BambooInk.ink900),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.xs),
+            Text(
+              'Add them in one tap. Shortcuts opens and asks you to confirm.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+            ),
+            if (history != null) ...[
+              const SizedBox(height: AppSpace.md),
+              FilledButton.icon(
+                key: const ValueKey('add-history-shortcut'),
+                style: style(true),
+                onPressed: () => _open(context, history),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add history shortcut'),
+              ),
+            ],
+            if (live != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              FilledButton.icon(
+                key: const ValueKey('add-live-shortcut'),
+                style: style(false),
+                onPressed: () => _open(context, live),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add live alerts shortcut'),
+              ),
+              const SizedBox(height: AppSpace.md),
+              Text(
+                'Then turn on live alerts: Shortcuts → Automation → + → Message '
+                '→ Message Contains: a space → Run Immediately → Run the live '
+                'alerts shortcut.',
+                style: BambooFonts.ui(12, color: BambooInk.ink700),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
