@@ -225,6 +225,7 @@ jobs:
           GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
           GEMINI_FALLBACK_MODEL: ${{ secrets.GEMINI_FALLBACK_MODEL }}
           AI_WORKER_TOKEN: ${{ secrets.AI_WORKER_TOKEN }}
+          BASELINE_ADOPTION_APPROVED: ${{ contains(github.event.head_commit.message, '[baseline-approved]') }}
         run: |
           test -n "$NOTIFICATION_SERVICE_URL"
           test -n "$NOTIFICATION_SERVICE_API_KEY"
@@ -237,6 +238,10 @@ jobs:
             if [ -n "$GEMINI_MODEL" ]; then printf 'export GEMINI_MODEL=%q\n' "$GEMINI_MODEL"; fi
             if [ -n "$GEMINI_FALLBACK_MODEL" ]; then printf 'export GEMINI_FALLBACK_MODEL=%q\n' "$GEMINI_FALLBACK_MODEL"; fi
             if [ -n "$AI_WORKER_TOKEN" ]; then printf 'export AI_WORKER_TOKEN=%q\n' "$AI_WORKER_TOKEN"; fi
+            if [ "$BASELINE_ADOPTION_APPROVED" = true ]; then
+              printf 'export MIGRATION_LEGACY_BASELINE_FILE=%q\n' '/run/migration-baselines/product.json'
+              printf '%s\n' 'export MIGRATION_ADOPT_LEGACY_CHECKSUMS=true'
+            fi
             cat deploy/deploy.sh
           } | ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
             "bash -s -- $SHA $SOURCE_REF"
