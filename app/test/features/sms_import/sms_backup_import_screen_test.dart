@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/import_repository.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
+import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_import/sms_backup_import_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -298,5 +299,13 @@ void main() {
     final items = await reviewRepo.fetchAll();
     expect(items, hasLength(1));
     expect(items.single.body, contains('x1234 at AMAZON'));
+    expect(
+      items.single.id,
+      smsSourceKey(
+        'signed-out',
+        'VM-HDFCBK',
+        'Rs.499.00 spent on HDFC Bank Card x1234 at AMAZON on 01-01-24',
+      ),
+    );
   });
 }

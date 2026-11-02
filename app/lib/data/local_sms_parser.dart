@@ -104,6 +104,31 @@ class LocalSmsObservation {
     this.confidence = 0,
     bool isAutopay = false,
   }) : _isAutopay = isAutopay;
+
+  LocalSmsObservation copyWith({TransactionEntry? transaction}) =>
+      LocalSmsObservation(
+        transaction: transaction ?? this.transaction,
+        cardLast4: cardLast4,
+        accountLast4: accountLast4,
+        billerName: billerName,
+        cadenceHint: cadenceHint,
+        dueDate: dueDate,
+        statementDate: statementDate,
+        statementDateExplicit: statementDateExplicit,
+        availableBalance: availableBalance,
+        amountDue: amountDue,
+        minimumDue: minimumDue,
+        autopayLimit: autopayLimit,
+        amount: amount,
+        startDate: startDate,
+        endDate: endDate,
+        paymentMethod: paymentMethod,
+        eventType: eventType,
+        disposition: disposition,
+        reasonCodes: reasonCodes,
+        confidence: confidence,
+        isAutopay: isAutopay,
+      );
 }
 
 /// Best-effort values for the manual review sheet. These are suggestions only:
@@ -154,8 +179,7 @@ class LocalSmsParser {
   // classified as spends and decline reasons are not used as payees.
   // 25: Reprocess rows classified by either divergent parser history using
   // the combined rules.
-  // 26: Preserve UPI method evidence separately from QR and use saved card nicknames.
-  static const version = 26;
+  static const version = 25;
 
   /// User-learned merchant rules run before FlashText/grammar category
   /// inference. Deterministic and longest-pattern-first so two overlapping
@@ -499,39 +523,9 @@ class LocalSmsParser {
   /// Messages with a quoted price or a card name are not necessarily a
   /// payment. Apply this before either upload or manual review, including to
   /// rows captured by an older app version.
-  /// "Your refund of Rs 349 has been initiated / will reflect in 3-5 days"
-  /// is a status update. The money is the bank's credit alert, so counting
-  /// this too would be a duplicate (or, as before, a stuck review item).
-  static bool isRefundProgressNotice(String body) {
-    if (!_re(r'\brefund').hasMatch(body)) return false;
-    if (_re(
-      r'\b(?:has\s+been|have\s+been|was|is)\s+(?:successfully\s+)?credited\b|\bcredited\s+(?:to|in|into)\s+(?:your\s+)?(?:a\/?c|account|card|wallet)\b|\bcredited\s+with\b|\b(?:debited|withdrawn)\b',
-    ).hasMatch(body)) {
-      return false;
-    }
-    return _re(
-      r'\b(?:initiated|processed|approved|in\s+progress|will\s+(?:be\s+)?(?:credited|reflect|refunded|processed)|(?:within|in)\s+\d+(?:\s*[-–to]+\s*\d+)?\s+(?:business\s+|working\s+)?days?|original\s+payment\s+(?:method|source|mode))\b',
-    ).hasMatch(body);
-  }
-
-  /// EPFO / provident-fund passbook updates. Contributions sit in the PF
-  /// account, not the bank, and a settled claim arrives as its own bank
-  /// credit alert. Keyed on the sender or a UAN, which bank alerts never carry.
-  static bool isProvidentFundNotice(String sender, String body) {
-    final fromEpfo = _re(r'epfo|epfindia|uanmem|epf').hasMatch(sender);
-    final hasUan = _re(r'\buan\b').hasMatch(body);
-    if (!fromEpfo && !hasUan) return false;
-    return _re(
-      r'\b(?:passbook|contribution|claim|kyc|member|uan|pf\s+(?:balance|account|a\/c)|provident\s+fund|epf)\b',
-    ).hasMatch(body);
-  }
-
   static bool isNonTransactionNoise(String sender, String body) {
     if (isMerchantReceiptOrEbill(body) || isInvestmentFolioAllotment(body)) {
       return false;
-    }
-    if (isRefundProgressNotice(body) || isProvidentFundNotice(sender, body)) {
-      return true;
     }
     final cleanSender = sender.trim();
     if (cleanSender.isNotEmpty) {
@@ -947,7 +941,7 @@ class LocalSmsParser {
   /// remains narrow and does not change unrelated card or NEFT narratives.
   static String? _upiAccountRecipient(String body) {
     final vpaMatch = _re(
-      r'\bto\s+vpa\s*/\s*([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+ref(?:erence)?\b|\s+via\b|\s+on\b|[,;]|$)',
+      r'\bto\s+vpa\s*/\s*([A-Za-z][A-Za-z0-9 .&@_\x27/-]{1,80}?)(?=\s+ref(?:erence)?\b|\s+via\b|\s+on\b|[.,;]|$)',
     ).firstMatch(body);
     if (vpaMatch != null) return vpaMatch.group(1)?.trim();
     final match = _re(
@@ -996,46 +990,22 @@ class LocalSmsParser {
   }
 
   static bool _incomingBankTransferCandidate(String body) =>
-      !_re(r'\b(?:salary|cashback|refund(?:ed)?)\b').hasMatch(body) &&
+      !_re(r'\b(?:salary|cashback|reward|rewards|refund(?:ed)?|chargeback|reversal|reversed)\b').hasMatch(body) &&
       (_re(r'\bfrom\b[\s\S]{0,80}\b(?:bank|a\/?c\.?|account)\b').hasMatch(
             body,
           ) ||
           (_re(r'\b(?:credited|received|deposited)\b').hasMatch(body) &&
-              _re(r'\b(?:bank|a\/?c\.?|account|savings)\b').hasMatch(body)));
-
-  static bool _plainExternalBankCredit(String body) =>
-      _incomingBankTransferCandidate(body) &&
-      !_accountToAccountTransfer(body) &&
-      !_nonEarnedInstitutionalCredit(body) &&
-      !_re(
-        r'\b(?:refund(?:ed)?|reversal|reversed|chargeback|cashback|reward|rewards|points?|miles?|loan|investment|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
-      ).hasMatch(body) &&
-      _re(r'\b(?:utr|imps|neft|rtgs)\b').hasMatch(body);
-
-  /// Salary and payouts often name only the payer, with no "salary" word:
-  /// "credited ... by NEFT-ACMETECH SOLUTIONS PVT LTD-XXXX". A company payer
-  /// on a bank rail counts as earned income; lenders, AMCs, insurers, brokers
-  /// and payment gateways do not (loans, redemptions, claims and settlements).
-  static bool _nonEarnedInstitutionalCredit(String body) =>
-      _re(
-        r'\b(?:finance|finserv|capital|insurance|assurance|securities|broking|broker|amc|mutual\s+fund|nbfc|credit\s+(?:line|card|facility)|loan|personal\s+loan|emi|redemption|settlement|claim|gateway|razorpay|cashfree|paytm|phonepe|zomato|swiggy|amazon|flipkart|myntra)\b',
-      ).hasMatch(body);
-
-  static bool _employerStylePayer(String body) =>
-      _re(
-        r'\b(?:neft|rtgs|imps|ach)\b[\s\S]{0,12}?[-/:\s]\s*[A-Za-z0-9][A-Za-z0-9 .&\x27]{2,60}?\b(?:pvt\.?\s*ltd|private\s+limited|limited|ltd|llp|inc|corp(?:oration)?|technolog(?:y|ies)|solutions|services|systems|infotech|software|consulting|labs|enterprises)\b',
-      ).hasMatch(body) &&
-      !_nonEarnedInstitutionalCredit(body);
+              _re(r'\b(?:bank|a\/?c\.?|account|savings)\b').hasMatch(body) &&
+              !_re(r'\bfrom\s+[A-Za-z]+(?:\s+via\s+upi|\s*[.,;]?$)').hasMatch(body)));
 
   static bool _earnedIncomeCredit(String body) =>
       !_re(
         r'\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|emi|equated\s+monthly\s+installment|instalment|investment|mutual\s+fund|shares|equity\s+shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
       ).hasMatch(body) &&
       !_re(r'\bsalary\s+advance\b').hasMatch(body) &&
-      (_re(
-            r'\b(?:salary|wages?|payroll|pension|interest|dividend|rent|commission|consulting|stipend|bonus|incentive|business\s+(?:receipt|income)|invoice\s+paid)\b|\bsal\b',
-          ).hasMatch(body) ||
-          _employerStylePayer(body));
+      _re(
+        r'\b(?:salary|wages?|payroll|pension|interest|dividend|rent|commission|consulting|business\s+(?:receipt|income)|invoice\s+paid)\b',
+      ).hasMatch(body);
 
   static bool _loanRepayment(String body) =>
       !_feeCharge(body) &&
@@ -1104,19 +1074,6 @@ class LocalSmsParser {
         : TxnInstrument.creditCard;
   }
 
-  static String? _paymentMethod(String body) =>
-      _re(
-        r'\b(?:via|through|using|by)\s+UPI\b|\bUPI\s*(?:Ref(?:erence)?(?:\s*No\.?)?|txn|transaction|payment)\b',
-      ).hasMatch(body)
-      ? 'upi'
-      : null;
-
-  static String? _cardDisplayName(UserCard? card) {
-    if (card == null) return null;
-    final nickname = card.nickname?.trim();
-    return nickname?.isNotEmpty == true ? nickname : card.cardName;
-  }
-
   static TxnInstrument? _explicitCardInstrument(String body) {
     if (_re(r'\bcredit\s+card\b').hasMatch(body)) {
       return TxnInstrument.creditCard;
@@ -1142,17 +1099,8 @@ class LocalSmsParser {
 
   static bool sensitive(String body) => SmsSecurityPolicy.sensitive(body);
 
-  /// Compiled once per pattern. Dart keeps only a small cache of compiled
-  /// regexes, and this parser alone uses more patterns than fit, so creating
-  /// a new RegExp per call recompiled them constantly on the UI thread. Every
-  /// pattern passed here is a constant or built from constants, so the cache
-  /// is bounded.
-  static final _reCache = <String, RegExp>{};
   static RegExp _re(String s, {bool caseSensitive = false}) =>
-      _reCache.putIfAbsent(
-        caseSensitive ? 'c:$s' : 'i:$s',
-        () => RegExp(s, caseSensitive: caseSensitive),
-      );
+      RegExp(s, caseSensitive: caseSensitive);
 
   /// Extracts a display-safe biller name without retaining the raw SMS.
   /// Bank sender IDs are transport identifiers (for example, TNBPAY), not
@@ -1170,7 +1118,10 @@ class LocalSmsParser {
         .replaceFirst(RegExp(r'\s+MANDATE$', caseSensitive: false), '')
         .trim();
     cleaned = cleaned
-        .replaceFirst(RegExp(r'\s+ending\s+(?:in\s+)?\d+.*$', caseSensitive: false), '')
+        .replaceFirst(
+          RegExp(r'\s+ending\s+(?:in\s+)?\d+.*$', caseSensitive: false),
+          '',
+        )
         .trim();
     if (RegExp(r'^\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}$').hasMatch(cleaned)) {
       return null;
@@ -1216,7 +1167,9 @@ class LocalSmsParser {
       final name = _cleanMandateBiller(mandateTowardsMatch.group(1));
       if (name != null &&
           name.length >= 2 &&
-          !_re(r'^(?:credit card|card|account|bank)$').hasMatch(name.toLowerCase())) {
+          !_re(
+            r'^(?:credit card|card|account|bank)$',
+          ).hasMatch(name.toLowerCase())) {
         return name;
       }
     }
@@ -1460,7 +1413,6 @@ class LocalSmsParser {
     String? ownUserName,
     Map<String, String>? userCategoryRules,
     Map<String, String>? sharedCategoryRules,
-    Map<String, SelfTransferDestination>? selfTransferRules,
   }) {
     final parsed = parse(
       namespace: namespace,
@@ -1471,7 +1423,6 @@ class LocalSmsParser {
       ownUserName: ownUserName,
       userCategoryRules: userCategoryRules,
       sharedCategoryRules: sharedCategoryRules,
-      selfTransferRules: selfTransferRules,
     );
     final transaction = parsed?.transaction;
     if (transaction != null) {
@@ -1580,9 +1531,10 @@ class LocalSmsParser {
       merchant = ipoCompanyMatch?.group(1)?.trim();
     }
     if (!localOnly && (merchant == null || merchant.isEmpty)) {
-      final merchantMatch = _re(
-        r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
-      ).firstMatch(body) ??
+      final merchantMatch =
+          _re(
+            r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+          ).firstMatch(body) ??
           _re(
             r'\b(?:at|to|for|from|by|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([^\d\s][^\r\n]{1,80}?)(?=\s+(?:by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
           ).firstMatch(body);
@@ -1719,7 +1671,11 @@ class LocalSmsParser {
     DateTime? endDate;
 
     final fromToMatch = _re(
-      r'\b(?:valid\s+)?from\s+(' + dateToken + r')\s+(?:to|till|until|-)\s+(' + dateToken + r')\b',
+      r'\b(?:valid\s+)?from\s+(' +
+          dateToken +
+          r')\s+(?:to|till|until|-)\s+(' +
+          dateToken +
+          r')\b',
     ).firstMatch(body);
     if (fromToMatch != null) {
       startDate = parseDate(fromToMatch.group(1)!);
@@ -1728,7 +1684,9 @@ class LocalSmsParser {
 
     if (startDate == null) {
       final startMatch = _re(
-        r'\b(?:start\s+date|starting\s+(?:from|on)?|created\s+on|registered\s+on)\s*[:\-]?\s*(' + dateToken + r')\b',
+        r'\b(?:start\s+date|starting\s+(?:from|on)?|created\s+on|registered\s+on)\s*[:\-]?\s*(' +
+            dateToken +
+            r')\b',
       ).firstMatch(body);
       if (startMatch != null) {
         startDate = parseDate(startMatch.group(1)!);
@@ -1737,7 +1695,9 @@ class LocalSmsParser {
 
     if (endDate == null) {
       final endMatch = _re(
-        r'\b(?:valid\s+(?:till|to|thru|through|upto|until)|end\s+date|expiry\s+date|expires\s+on)\s*[:\-]?\s*(' + dateToken + r')\b',
+        r'\b(?:valid\s+(?:till|to|thru|through|upto|until)|end\s+date|expiry\s+date|expires\s+on)\s*[:\-]?\s*(' +
+            dateToken +
+            r')\b',
       ).firstMatch(body);
       if (endMatch != null) {
         endDate = parseDate(endMatch.group(1)!);
@@ -1763,24 +1723,29 @@ class LocalSmsParser {
       // a payment date. Keep the due date unknown until the SMS states one.
     }
 
-    final bankName = _re(r'\baxis\b').hasMatch(body) || sender.toUpperCase().contains('AXIS')
+    final bankName =
+        _re(r'\baxis\b').hasMatch(body) || sender.toUpperCase().contains('AXIS')
         ? 'Axis Bank'
-        : _re(r'\bhdfc\b').hasMatch(body) || sender.toUpperCase().contains('HDFC')
+        : _re(r'\bhdfc\b').hasMatch(body) ||
+              sender.toUpperCase().contains('HDFC')
         ? 'HDFC Bank'
-        : _re(r'\bicici\b').hasMatch(body) || sender.toUpperCase().contains('ICICI')
+        : _re(r'\bicici\b').hasMatch(body) ||
+              sender.toUpperCase().contains('ICICI')
         ? 'ICICI Bank'
         : _re(r'\bsbi\b').hasMatch(body) || sender.toUpperCase().contains('SBI')
         ? 'SBI'
-        : _re(r'\bkotak\b').hasMatch(body) || sender.toUpperCase().contains('KOTAK')
+        : _re(r'\bkotak\b').hasMatch(body) ||
+              sender.toUpperCase().contains('KOTAK')
         ? 'Kotak Bank'
         : null;
 
-    final isUpi = _re(r'\bupi\b').hasMatch(body) || sender.toUpperCase().contains('UPI');
+    final isUpi =
+        _re(r'\bupi\b').hasMatch(body) || sender.toUpperCase().contains('UPI');
     final detectedPaymentMethod = isUpi
         ? (bankName != null ? 'UPI AutoPay ($bankName)' : 'UPI AutoPay')
         : (effectiveCardLast4 != null
-            ? 'Card ending $effectiveCardLast4'
-            : (bankName != null ? 'AutoPay ($bankName)' : 'AutoPay Mandate'));
+              ? 'Card ending $effectiveCardLast4'
+              : (bankName != null ? 'AutoPay ($bankName)' : 'AutoPay Mandate'));
 
     // AutoPay alone does not establish a billing cadence. The central
     // projection may learn one from explicit plan evidence or posted history.
@@ -1817,7 +1782,10 @@ class LocalSmsParser {
               ).hasMatch(body));
 
       Money? effectiveAutopayLimit = autopayLimit;
-      if (effectiveAutopayLimit == null && isSetup && effectiveAmountDue != null && effectiveAmountDue.paise > 0) {
+      if (effectiveAutopayLimit == null &&
+          isSetup &&
+          effectiveAmountDue != null &&
+          effectiveAmountDue.paise > 0) {
         effectiveAutopayLimit = effectiveAmountDue;
       }
 
@@ -1838,8 +1806,8 @@ class LocalSmsParser {
         amountDue: isSetup
             ? null
             : (effectiveAmountDue != null && effectiveAmountDue.paise > 0
-                ? effectiveAmountDue
-                : null),
+                  ? effectiveAmountDue
+                  : null),
         autopayLimit: effectiveAutopayLimit,
         startDate: startDate,
         endDate: endDate,
@@ -1847,8 +1815,8 @@ class LocalSmsParser {
         eventType: isSetup
             ? LocalSmsEventType.autopay
             : (isInvestment
-                ? LocalSmsEventType.investment
-                : LocalSmsEventType.bill),
+                  ? LocalSmsEventType.investment
+                  : LocalSmsEventType.bill),
         disposition: isSetup
             ? LocalSmsDisposition.localIgnore
             : LocalSmsDisposition.localCommitment,
@@ -1885,20 +1853,6 @@ class LocalSmsParser {
         r'\b(?:was|were|is|has\s+been|have\s+been|got)\s+(?:declined|rejected|marked\s+(?:failed|unsuccessful)|not\s+processed)\b',
       ).hasMatch(body);
 
-  static String? _telecomBillerName(String body) {
-    final m = _re(
-      r'\b(jio\s?home|jio\s?fiber|airtel\s+xstream|airtel\s+airfiber)\b',
-    ).firstMatch(body);
-    if (m == null) return null;
-    final t = m.group(1)!.toLowerCase().replaceAll(RegExp(r'\s+'), '');
-    return switch (t) {
-      'jiohome' => 'JioHome',
-      'jiofiber' => 'JioFiber',
-      'airtelxstream' => 'Airtel Xstream',
-      _ => 'Airtel AirFiber',
-    };
-  }
-
   static LocalSmsObservation? parse({
     required String namespace,
     required String sender,
@@ -1913,7 +1867,7 @@ class LocalSmsParser {
     // existing behaviour byte-for-byte.
     Map<String, String>? userCategoryRules,
     Map<String, String>? sharedCategoryRules,
-    Map<String, SelfTransferDestination>? selfTransferRules,
+    Map<String, SelfTransferDestination> selfTransferRules = const {},
   }) {
     if (body.length > 20000 || sensitive(body)) return null;
 
@@ -2082,9 +2036,11 @@ class LocalSmsParser {
           cards: cards,
           userCategoryRules: userCategoryRules,
           sharedCategoryRules: sharedCategoryRules,
-          selfTransferRules: selfTransferRules,
         );
-        if (obs != null) return obs;
+        if (obs != null) {
+          final destination = selfTransferRules[selfTransferKey(sender, body)];
+          return _applyConfirmedSelfTransfer(obs, destination);
+        }
       }
     }
     final cardLast4 =
@@ -2122,8 +2078,6 @@ class LocalSmsParser {
       // broader `due` matcher so the earlier amount cannot shadow the date.
       r'\bdue\s+date\s*(?:is|on|by)?\s*[:\-]?\s*',
       r'\bdue\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
-      // "is due for payment on 02-10-2026" (Jio, broadband and telecom bills).
-      r'\bdue\s+for\s+payment\s*(?:on|by)?\s*[:\-]?\s*',
       r'\bpay\s+by\s*[:\-]?\s*',
       r'\b(?:payment|bill|amount)\s+due\s+date\b[\s\S]{0,120}?\b(?:is|on|by)\s*[:\-]?\s*',
       r'\b(?:renew(?:s|al|ing)?|expires?)\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
@@ -2163,13 +2117,6 @@ class LocalSmsParser {
         final candidate = DateTime(receivedAt.year, receivedAt.month, day);
         if (candidate.month == receivedAt.month) due = candidate;
       }
-    }
-    // "due for payment today" carries no calendar date; the SMS day is the day.
-    if (due == null &&
-        _re(
-          r'\bdue\s+for\s+payment\s+(?:today|now|immediately)\b|\bpayment\s+(?:is\s+)?due\s+today\b',
-        ).hasMatch(body)) {
-      due = DateTime(receivedAt.year, receivedAt.month, receivedAt.day);
     }
     if (due == null && isActionableInsuranceRenewal(body)) {
       final relative = _re(
@@ -2339,13 +2286,14 @@ class LocalSmsParser {
               ? 'Axio Pay Later'
               : 'Pay Later')
         : extractBillerName(body) ??
-              _telecomBillerName(body) ??
               (isInsuranceReminder ? 'Insurance policy' : null);
     final cadenceHint =
-        _re(r'\b(?:as\s*presented|aspresented|as\s+and\s+when\s+presented|on\s+demand)\b').hasMatch(body)
+        _re(
+          r'\b(?:as\s*presented|aspresented|as\s+and\s+when\s+presented|on\s+demand)\b',
+        ).hasMatch(body)
         ? 'asPresented'
         : _re(r'\b(?:monthly|month)\b').hasMatch(body) ||
-            _re(r'\b(?:for\s+the\s+month|month\s+of)\b').hasMatch(body)
+              _re(r'\b(?:for\s+the\s+month|month\s+of)\b').hasMatch(body)
         ? 'monthly'
         : _re(r'\b(?:weekly|week)\b').hasMatch(body)
         ? 'weekly'
@@ -2360,9 +2308,6 @@ class LocalSmsParser {
         : null;
     final amountDue = money(
       _re(
-            r'\b(?:total\s+)?amount\s+payable\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
-          ).firstMatch(body)?.group(1) ??
-          _re(
             r'\b(?:total|full|statement|amount|premium)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*(?:dr\.?|cr\.?)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
           ).firstMatch(body)?.group(1) ??
           _re(
@@ -2408,17 +2353,17 @@ class LocalSmsParser {
     );
     final autopayLimit = money(
       _re(
-        r'\b(?:max(?:imum)?|mandate|si|standing\s+instruction)\s*(?:limit|amount)?\s*(?:[:\-]|\s+(?:of|is|for))?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
-      ).firstMatch(body)?.group(1) ??
-      _re(
-        r'\b(?:max(?:imum)?|mandate|si|standing\s+instruction|autopay)\b[\s\S]{0,140}?\b(?:for|of|limit|amount|upto|up\s+to|is)\s*[:\-]?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
-      ).firstMatch(body)?.group(1) ??
-      _re(
-        r'\b(?:upto|up\s+to)\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
-      ).firstMatch(body)?.group(1) ??
-      _re(
-        r'\bfor\s+(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)\s+(?:Axis|HDFC|ICICI|SBI|Kotak|Bank|VPA|UMRN)',
-      ).firstMatch(body)?.group(1),
+            r'\b(?:max(?:imum)?|mandate|si|standing\s+instruction)\s*(?:limit|amount)?\s*(?:[:\-]|\s+(?:of|is|for))?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1) ??
+          _re(
+            r'\b(?:max(?:imum)?|mandate|si|standing\s+instruction|autopay)\b[\s\S]{0,140}?\b(?:for|of|limit|amount|upto|up\s+to|is)\s*[:\-]?\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1) ??
+          _re(
+            r'\b(?:upto|up\s+to)\s*(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)',
+          ).firstMatch(body)?.group(1) ??
+          _re(
+            r'\bfor\s+(?:₹|rs\.?|inr)\s*[:.]?\s*[*xX]*\s*([\d,]+(?:\.\d{1,2})?)\s+(?:Axis|HDFC|ICICI|SBI|Kotak|Bank|VPA|UMRN)',
+          ).firstMatch(body)?.group(1),
     );
     final hasAutopay = _re(
       r'\b(?:auto[- ]?pay|autopay|mandate|e[- ]?mandate|e[- ]?nach|enach|standing\s+instruction|si\s+debit)\b',
@@ -2444,7 +2389,7 @@ class LocalSmsParser {
     final hasBillMarker =
         due != null ||
         _re(
-          r'\bdue\s+for\s+payment\b|\b(?:total\s+)?amount\s+payable\b|\bto\s+pay\s+(?:your\s+|now\b)[\s\S]{0,20}?\bbill\b|\b(?:payment|amount|minimum|total|premium)\s+due\b|\b(?:statement|bill|invoice)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b|\b(?:subscription|membership)\b[\s\S]{0,50}\b(?:renew|renewal|due|expires?)\b|\bautopay\s+(?:alert|reminder)\b|\b(?:auto[- ]?debited|auto[- ]?deducted)\b[\s\S]{0,60}?\b(?:dues?|bill)\b',
+          r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\b(?:statement|bill|invoice)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b|\b(?:subscription|membership)\b[\s\S]{0,50}\b(?:renew|renewal|due|expires?)\b|\bautopay\s+(?:alert|reminder)\b|\b(?:auto[- ]?debited|auto[- ]?deducted)\b[\s\S]{0,60}?\b(?:dues?|bill)\b',
         ).hasMatch(body);
     // "No money was debited" makes the debit word a negation, not evidence
     // of movement — failure notices from banks print exactly this sentence.
@@ -2480,7 +2425,7 @@ class LocalSmsParser {
                 ).hasMatch(movementBody)));
     final isDueReminder =
         _re(
-          r'\b(?:is\s+due\s+on|is\s+due\s+for\s+payment|payment\s+is\s+due|bill\s+is\s+due|due\s+date\s+is|payment\s+due\s+date)\b|\b(?:payment|bill|amount)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[*xX]*[\d,.]+\b[\s\S]{0,80}\bis\s+due\b|\b(?:minimum|total)\s+amount\s+due\b',
+          r'\b(?:is\s+due\s+on|payment\s+is\s+due|bill\s+is\s+due|due\s+date\s+is|payment\s+due\s+date)\b|\b(?:payment|bill|amount)\s+(?:of\s+)?(?:₹|rs\.?|inr)?\s*[*xX]*[\d,.]+\b[\s\S]{0,80}\bis\s+due\b|\b(?:minimum|total)\s+amount\s+due\b',
         ).hasMatch(body) &&
         !_re(
           r'\b(?:debited|withdrawn|charged|deducted)\b',
@@ -2492,7 +2437,6 @@ class LocalSmsParser {
       List<String> reasons = const [],
     ]) => LocalSmsObservation(
       transaction: row,
-      paymentMethod: row?.paymentMethod,
       cardLast4: cardLast4,
       accountLast4: isInsuranceReminder
           ? policyLast4?.substring(policyLast4.length - 4)
@@ -2633,7 +2577,7 @@ class LocalSmsParser {
       final isInsuranceOrUtility =
           isInsuranceReminder ||
           _re(
-            r'\b(?:broadband|fiber|fibre|telecom|yojana|pension|subscription|utility|electricity|power|water|gas|dth|cable|jiohome|jiofiber|jiofixedvoice|airfiber|landline|postpaid)\b',
+            r'\b(?:broadband|fiber|telecom|yojana|pension|subscription|utility|electricity|power|water|gas|dth|cable)\b',
           ).hasMatch(body);
       final isCardStatement = cardLast4 != null;
       // A due date alone does not prove recurrence. Generic invoices and
@@ -2908,8 +2852,10 @@ class LocalSmsParser {
         ? TxnEntryKind.spend
         : investmentDebit
         ? TxnEntryKind.investment
-        : credit && !_earnedIncomeCredit(body) &&
-              !_plainExternalBankCredit(body)
+        : credit &&
+                !_earnedIncomeCredit(body) &&
+                !(_incomingBankTransferCandidate(body) &&
+                    !_accountToAccountTransfer(body))
         ? TxnEntryKind.transfer
         : credit
         ? TxnEntryKind.income
@@ -2921,10 +2867,9 @@ class LocalSmsParser {
       r'\b(?:towards?|in\s+fav(?:ou?r)?\s+of)\s+(?!(?:₹|rs\.?|inr|re\.?)(?:\b|\s|\d)|\d+[\s.,])([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:for|by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body);
 
-    final explicitUpiMerchant = _upiAccountRecipient(body);
     var merchant =
         receiptMerchant ??
-        explicitUpiMerchant ??
+        _upiAccountRecipient(body) ??
         fvgMatch?.group(1)?.trim() ??
         _upiNarrationParty(body) ??
         towardsMatchParse?.group(1)?.trim();
@@ -2950,9 +2895,10 @@ class LocalSmsParser {
     }
 
     if (merchant == null || merchant.isEmpty) {
-      final merchantMatch = _re(
-        r'\b(?:at|to|for|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:a\/?c\.?|account)\b|using\s+yono\b|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:for|by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
-      ).firstMatch(body) ??
+      final merchantMatch =
+          _re(
+            r'\b(?:at|to|for|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:a\/?c\.?|account)\b|using\s+yono\b|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:for|by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
+          ).firstMatch(body) ??
           _re(
             r'\b(?:at|to|for|towards?)\s+(?!(?:₹|rs\.?|inr)(?:\b|\s|\d)|\d+[\s.,]|(?:a\/?c\.?|account)\b|using\s+yono\b|(?:the\s+)?(?:upcoming|scheduled)\s+mandate\b)([^\d\s][^\r\n]{1,80}?)(?=\s+(?:for|by\s+upi|from|on|via|upi|ref(?:erence)?|refno|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block|umrn|nach|mandate)\b|\s*\(|[.,;]|$)',
           ).firstMatch(body);
@@ -2996,11 +2942,7 @@ class LocalSmsParser {
         merchant = sanitized;
       }
     }
-    final cleanedMerchant = MerchantIdentity.cleanName(merchant);
-    final preserveSbiGenericMerchant =
-        explicitUpiMerchant == 'Merchant' && merchant == 'Merchant';
-    merchant = cleanedMerchant ??
-        (preserveSbiGenericMerchant ? 'Merchant' : null);
+    merchant = MerchantIdentity.cleanName(merchant);
     // "declined due to insufficient balance" makes the merchant regex capture
     // the reason as the payee. A decline reason is not a merchant name.
     if (merchant != null &&
@@ -3013,7 +2955,8 @@ class LocalSmsParser {
         merchant != null &&
         ownUserName != null &&
         _isOwnPersonName(merchant, ownUserName);
-    final isInvestmentPayee = merchant != null &&
+    final isInvestmentPayee =
+        merchant != null &&
         CommitmentCategory.fromText(merchant) == CommitmentCategory.investment;
     if (isInvestmentPayee && !transfer && !brokerSettlement) {
       kind = TxnEntryKind.investment;
@@ -3085,7 +3028,8 @@ class LocalSmsParser {
     // An explicit VPA-to-bank credit is money received from another party.
     // Keep confirmed own-name credits as transfers, and leave ambiguous bank
     // credits in the conservative transfer bucket.
-    final externalVpaCredit = credit &&
+    final externalVpaCredit =
+        credit &&
         !ownNameCredit &&
         !_ownAccountTransfer(body) &&
         !refundCredit &&
@@ -3106,13 +3050,14 @@ class LocalSmsParser {
       transfer = true;
       kind = TxnEntryKind.transfer;
     }
-    final selfTransferDestination = selfTransferRules == null
-        ? null
-        : selfTransferRules[selfTransferKey(sender, body)];
-    if (selfTransferDestination != null) {
-      transfer = true;
+    final confirmedDestination =
+        selfTransferRules[selfTransferKey(sender, body)];
+    if (confirmedDestination != null &&
+        kind == TxnEntryKind.spend &&
+        instrument == TxnInstrument.upiBank &&
+        !credit) {
       kind = TxnEntryKind.transfer;
-      merchant = selfTransferDestination.label;
+      merchant = confirmedDestination.label;
     }
     final matching = cards
         .where(
@@ -3121,9 +3066,9 @@ class LocalSmsParser {
               cardLast4 != null &&
               c.last4 == cardLast4 &&
               ((instrument == TxnInstrument.debitCard &&
-                      c.cardType?.toLowerCase() == 'debit') ||
+                      c.cardType == 'debit') ||
                   (instrument == TxnInstrument.creditCard &&
-                      c.cardType?.toLowerCase() != 'debit')),
+                      c.cardType != 'debit')),
         )
         .toList();
     final card = matching.length == 1 ? matching.single : null;
@@ -3150,10 +3095,18 @@ class LocalSmsParser {
       sender,
       body,
     );
-    final sharedCategorySlug =
-        _sharedCategoryRuleSlug(sharedCategoryRules, merchant, sender, body);
-    final categorySlug = userRuleSlug ??
-        (brokerSettlement || investmentProceeds || investmentDebit || isInvestmentPayee
+    final sharedCategorySlug = _sharedCategoryRuleSlug(
+      sharedCategoryRules,
+      merchant,
+      sender,
+      body,
+    );
+    final categorySlug =
+        userRuleSlug ??
+        (brokerSettlement ||
+                investmentProceeds ||
+                investmentDebit ||
+                isInvestmentPayee
             ? 'investments'
             : billPayment
             ? 'bills'
@@ -3177,16 +3130,37 @@ class LocalSmsParser {
         categoryId: resolvedCategorySlug,
         categoryName: categoryName,
         userCardId: card?.id,
-        cardDisplayName: _cardDisplayName(card),
+        cardDisplayName: card?.cardName,
         cardLast4: cardLast4,
         accountLast4: accountLast4,
         instrument: instrument,
-        paymentMethod: _paymentMethod(body),
         instrumentKnown: instrumentKnown,
         entryKind: kind,
         source: 'sms',
         status: 'active',
         rewardState: 'estimated',
+      ),
+    );
+  }
+
+  /// Applies a user-confirmed relationship after every parser path, including
+  /// downloaded rules. Downloaded rules are allowed to supply the transaction
+  /// shape, but they must not override an explicit personal classification.
+  static LocalSmsObservation _applyConfirmedSelfTransfer(
+    LocalSmsObservation observation,
+    SelfTransferDestination? destination,
+  ) {
+    final entry = observation.transaction;
+    if (entry == null || destination == null) return observation;
+    if (entry.entryKind != TxnEntryKind.spend ||
+        entry.instrument != TxnInstrument.upiBank ||
+        entry.accountLast4 == null) {
+      return observation;
+    }
+    return observation.copyWith(
+      transaction: entry.copyWith(
+        entryKind: TxnEntryKind.transfer,
+        merchantName: destination.label,
       ),
     );
   }
@@ -3201,7 +3175,6 @@ class LocalSmsParser {
     required List<UserCard> cards,
     Map<String, String>? userCategoryRules,
     Map<String, String>? sharedCategoryRules,
-    Map<String, SelfTransferDestination>? selfTransferRules,
   }) {
     if (rule.family == SmsRuleFamily.ignoreNoise) {
       // Safety safeguard: an ignore rule cannot silence an SMS containing real
@@ -3249,7 +3222,7 @@ class LocalSmsParser {
 
       final amount = parseMoney(getGroup('amount') ?? getGroup('amountInr'));
       if (amount == null) return null;
-      var merchant = getGroup('merchant');
+      final merchant = getGroup('merchant');
       var instrument = TxnInstrument.upiBank;
       final rawInst =
           (rule.defaultFields['instrument'] ?? getGroup('instrument'))
@@ -3260,10 +3233,10 @@ class LocalSmsParser {
           (rawInst == null &&
               !_re(r'\bcard\b').hasMatch(body) &&
               _re(r'\b(?:a\/?c\.?|account)\b').hasMatch(body));
-      var accountLast4 =
+      final accountLast4 =
           getGroup('accountLast4') ??
           (genericIsAccount ? getGroup('last4') : null);
-      var cardLast4 =
+      final cardLast4 =
           getGroup('cardLast4') ??
           (!genericIsAccount && accountLast4 == null
               ? getGroup('last4')
@@ -3306,14 +3279,6 @@ class LocalSmsParser {
         entryKind = TxnEntryKind.investment;
       }
 
-      final selfTransferDestination = selfTransferRules == null
-          ? null
-          : selfTransferRules[selfTransferKey(sender, body)];
-      if (selfTransferDestination != null) {
-        entryKind = TxnEntryKind.transfer;
-        merchant = selfTransferDestination.label;
-      }
-
       final matchingCards = cards
           .where(
             (card) =>
@@ -3321,16 +3286,14 @@ class LocalSmsParser {
                 cardLast4 != null &&
                 card.last4 == cardLast4 &&
                 ((instrument == TxnInstrument.debitCard &&
-                        card.cardType?.toLowerCase() == 'debit') ||
+                        card.cardType == 'debit') ||
                     (instrument == TxnInstrument.creditCard &&
-                        card.cardType?.toLowerCase() != 'debit')),
+                        card.cardType != 'debit')),
           )
           .toList();
       final matchedCardId = matchingCards.length == 1
           ? matchingCards.single.id
           : null;
-
-      final matchedCard = matchingCards.length == 1 ? matchingCards.single : null;
 
       // Instrument safety: if card is claimed but last4 is missing/invalid, default away from card
       if ((instrument == TxnInstrument.creditCard ||
@@ -3365,7 +3328,6 @@ class LocalSmsParser {
         id: 'local-sms:$key',
         sourceKey: key,
         userCardId: matchedCardId,
-        cardDisplayName: _cardDisplayName(matchedCard),
         amount: amount,
         merchantName: merchant ?? ftMatch?.canonicalName,
         categoryId: categorySlug,
@@ -3373,7 +3335,6 @@ class LocalSmsParser {
         occurredAt: receivedAt,
         smsReceivedAt: receivedAt,
         instrument: instrument,
-        paymentMethod: _paymentMethod(body),
         instrumentKnown: instrumentKnown,
         entryKind: entryKind,
         cardLast4: cardLast4,
@@ -3386,16 +3347,11 @@ class LocalSmsParser {
       return LocalSmsObservation(
         eventType: LocalSmsEventType.transaction,
         transaction: txn,
-        paymentMethod: txn.paymentMethod,
         cardLast4: cardLast4,
         accountLast4: accountLast4,
         confidence: calibratedConfidence,
         disposition: LocalSmsDisposition.sync,
-        reasonCodes: [
-          'downloaded_rule_match',
-          rule.id,
-          if (selfTransferDestination != null) 'self_transfer_confirmed',
-        ],
+        reasonCodes: ['downloaded_rule_match', rule.id],
       );
     }
 

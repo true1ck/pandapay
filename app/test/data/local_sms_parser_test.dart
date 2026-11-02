@@ -13,7 +13,8 @@ import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 void main() {
   test('HDFC UPI credit alert is captured as an incoming transaction', () {
     const sender = 'AX-HDFCBK-S';
-    const body = 'Credit Alert! Rs.1.00 credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA *r123@oksbi (UPI 630371662093)';
+    const body =
+        'Credit Alert! Rs.1.00 credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA *r123@oksbi (UPI 630371662093)';
     expect(capturesFinancialSms(body, sender: sender), isTrue);
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
@@ -284,34 +285,31 @@ void main() {
     },
   );
 
-  test(
-    'credited EMI repayment alerts are loan repayments, not income',
-    () {
-      for (final body in [
-        'Dear Customer, your account no. XX3510 has been credited with Rs.6300 towards the payment of EMI on 04-10-2026. UCO Bank',
-        'Dear Customer, your account no. XX2315 has been credited with Rs.9700 towards the payment of EMI on 04-10-2026. UCO Bank',
-        'Loan EMI payment of Rs.5000 credited to your account ending 2626.',
-        'Your a/c XX4455 has been credited with Rs.8500. Equated Monthly Installment received towards home loan. SBI',
-      ]) {
-        final result = LocalSmsParser.parse(
-          namespace: 'user:test',
-          sender: 'VM-UCOBNK-S',
-          body: body,
-          receivedAt: DateTime(2026, 10, 4),
-        );
-        expect(
-          result?.transaction?.entryKind,
-          TxnEntryKind.transfer,
-          reason: body,
-        );
-        expect(
-          result?.transaction?.merchantName,
-          'Loan or EMI repayment',
-          reason: body,
-        );
-      }
-    },
-  );
+  test('credited EMI repayment alerts are loan repayments, not income', () {
+    for (final body in [
+      'Dear Customer, your account no. XX3510 has been credited with Rs.6300 towards the payment of EMI on 04-10-2026. UCO Bank',
+      'Dear Customer, your account no. XX2315 has been credited with Rs.9700 towards the payment of EMI on 04-10-2026. UCO Bank',
+      'Loan EMI payment of Rs.5000 credited to your account ending 2626.',
+      'Your a/c XX4455 has been credited with Rs.8500. Equated Monthly Installment received towards home loan. SBI',
+    ]) {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VM-UCOBNK-S',
+        body: body,
+        receivedAt: DateTime(2026, 10, 4),
+      );
+      expect(
+        result?.transaction?.entryKind,
+        TxnEntryKind.transfer,
+        reason: body,
+      );
+      expect(
+        result?.transaction?.merchantName,
+        'Loan or EMI repayment',
+        reason: body,
+      );
+    }
+  });
 
   test('card refunds, reversals and statement rewards remain transfers', () {
     LocalSmsObservation? parse(String body) => LocalSmsParser.parse(
@@ -385,23 +383,20 @@ void main() {
     },
   );
 
-  test(
-    'broker settlement payout to the bank is an investment return income',
-    () {
-      final result = LocalSmsParser.parse(
-        namespace: 'user:test',
-        sender: 'VM-DHANHQ-S',
-        body:
-            'Dear Sujay We have transferred Rs 93.82 to your bank account ending with XXXXXXX2626 as a part of running account settlement vide Ref No PO26101713812965. To continue trading and investing, add funds back to your Dhan account.',
-        receivedAt: DateTime(2026, 10, 18),
-      );
-      expect(result?.transaction?.entryKind, TxnEntryKind.income);
-      expect(result?.transaction?.merchantName, 'Investment return · Dhan');
-      expect(result?.transaction?.categoryId, 'investments');
-      expect(result?.transaction?.categoryName, 'Investments');
-      expect(result?.transaction?.accountLast4, '2626');
-    },
-  );
+  test('broker settlement payout to the bank is an investment return income', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-DHANHQ-S',
+      body:
+          'Dear Sujay We have transferred Rs 93.82 to your bank account ending with XXXXXXX2626 as a part of running account settlement vide Ref No PO26101713812965. To continue trading and investing, add funds back to your Dhan account.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result?.transaction?.entryKind, TxnEntryKind.income);
+    expect(result?.transaction?.merchantName, 'Investment return · Dhan');
+    expect(result?.transaction?.categoryId, 'investments');
+    expect(result?.transaction?.categoryName, 'Investments');
+    expect(result?.transaction?.accountLast4, '2626');
+  });
 
   test('named wallet top-up still parses as a wallet load transfer', () {
     final result = LocalSmsParser.parse(
@@ -415,19 +410,22 @@ void main() {
     expect(result?.transaction?.merchantName, 'Wallet load');
   });
 
-  test('broker refill instruction is an investment return and not a wallet load', () {
-    final result = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'VM-ZERODHA',
-      body:
-          'Rs 2500 payout credited to your bank a/c XX9123. To continue investing, add funds back to your Zerodha account.',
-      receivedAt: DateTime(2026, 10, 18),
-    );
-    expect(result?.transaction?.entryKind, TxnEntryKind.income);
-    expect(result?.transaction?.merchantName, 'Investment return · Zerodha');
-    expect(result?.transaction?.categoryId, 'investments');
-    expect(result?.transaction?.categoryName, 'Investments');
-  });
+  test(
+    'broker refill instruction is an investment return and not a wallet load',
+    () {
+      final result = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'VM-ZERODHA',
+        body:
+            'Rs 2500 payout credited to your bank a/c XX9123. To continue investing, add funds back to your Zerodha account.',
+        receivedAt: DateTime(2026, 10, 18),
+      );
+      expect(result?.transaction?.entryKind, TxnEntryKind.income);
+      expect(result?.transaction?.merchantName, 'Investment return · Zerodha');
+      expect(result?.transaction?.categoryId, 'investments');
+      expect(result?.transaction?.categoryName, 'Investments');
+    },
+  );
 
   test(
     'a debit addressed to the profile name is a self-transfer, not spending',
@@ -1616,32 +1614,40 @@ void main() {
     }
   });
 
-  test('mutual fund SIP allotment with under scheme pattern extracts cleanly', () {
-    const body = 'Units allotted under HDFC Gold ETF Fund of Fund-DP Growth for Rs. 100.00 in Folio 1235/67. NAV: 24.50 on 24-Oct-2026.';
-    expect(LocalSmsParser.isInvestmentFolioAllotment(body), isTrue);
-    expect(LocalSmsParser.isNonTransactionNoise('HDFCMF', body), isFalse);
+  test(
+    'mutual fund SIP allotment with under scheme pattern extracts cleanly',
+    () {
+      const body =
+          'Units allotted under HDFC Gold ETF Fund of Fund-DP Growth for Rs. 100.00 in Folio 1235/67. NAV: 24.50 on 24-Oct-2026.';
+      expect(LocalSmsParser.isInvestmentFolioAllotment(body), isTrue);
+      expect(LocalSmsParser.isNonTransactionNoise('HDFCMF', body), isFalse);
 
-    final obs = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'HDFCMF',
-      body: body,
-      receivedAt: DateTime(2026, 10, 24, 11, 0),
-    );
+      final obs = LocalSmsParser.parse(
+        namespace: 'user:test',
+        sender: 'HDFCMF',
+        body: body,
+        receivedAt: DateTime(2026, 10, 24, 11, 0),
+      );
 
-    expect(obs, isNotNull);
-    expect(obs!.transaction?.entryKind, TxnEntryKind.investment);
-    expect(obs.transaction?.entryKind == TxnEntryKind.spend, isFalse);
-    expect(obs.transaction?.amount.rupees, 100.0);
-    expect(obs.transaction?.merchantName, 'HDFC Gold ETF Fund of Fund-DP Growth');
-    expect(obs.eventType, LocalSmsEventType.investment);
-    expect(obs.disposition, LocalSmsDisposition.sync);
-    expect(obs.merchantName, contains('HDFC Gold ETF Fund of Fund'));
-    expect(obs.amount, Money.fromRupees(100.00));
-    expect(obs.accountLast4, '5/67');
-  });
+      expect(obs, isNotNull);
+      expect(obs!.transaction?.entryKind, TxnEntryKind.investment);
+      expect(obs.transaction?.entryKind == TxnEntryKind.spend, isFalse);
+      expect(obs.transaction?.amount.rupees, 100.0);
+      expect(
+        obs.transaction?.merchantName,
+        'HDFC Gold ETF Fund of Fund-DP Growth',
+      );
+      expect(obs.eventType, LocalSmsEventType.investment);
+      expect(obs.disposition, LocalSmsDisposition.sync);
+      expect(obs.merchantName, contains('HDFC Gold ETF Fund of Fund'));
+      expect(obs.amount, Money.fromRupees(100.00));
+      expect(obs.accountLast4, '5/67');
+    },
+  );
 
   test('SEBI quarterly settlement with amount transferred is not noise', () {
-    const body = 'As per SEBI regulations, unused funds of Rs. 15,400.00 have been transferred to your bank account A/C **1234 towards quarterly settlement.';
+    const body =
+        'As per SEBI regulations, unused funds of Rs. 15,400.00 have been transferred to your bank account A/C **1234 towards quarterly settlement.';
     expect(LocalSmsParser.isNonTransactionNoise('VK-ZERODHA', body), isFalse);
 
     final obs = LocalSmsParser.parse(
@@ -1656,11 +1662,19 @@ void main() {
   });
 
   test('SEBI settlement advisory without amount or future tense is noise', () {
-    const advisory1 = 'As per SEBI guidelines, quarterly settlement of accounts will be processed today. Unused funds will be transferred to your bank account.';
-    expect(LocalSmsParser.isNonTransactionNoise('VK-ZERODHA', advisory1), isTrue);
+    const advisory1 =
+        'As per SEBI guidelines, quarterly settlement of accounts will be processed today. Unused funds will be transferred to your bank account.';
+    expect(
+      LocalSmsParser.isNonTransactionNoise('VK-ZERODHA', advisory1),
+      isTrue,
+    );
 
-    const advisory2 = 'As per SEBI regulations, quarterly settlement is scheduled for Friday. Please ensure your bank details are updated.';
-    expect(LocalSmsParser.isNonTransactionNoise('VK-ZERODHA', advisory2), isTrue);
+    const advisory2 =
+        'As per SEBI regulations, quarterly settlement is scheduled for Friday. Please ensure your bank details are updated.';
+    expect(
+      LocalSmsParser.isNonTransactionNoise('VK-ZERODHA', advisory2),
+      isTrue,
+    );
   });
   test('bank account balance and account discovery extracts balance and accounts', () {
     // 1. Canara Bank interest credit 1
@@ -1819,7 +1833,8 @@ void main() {
     final swiggy = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'HDFCBK',
-      body: 'Rs 349.00 spent on HDFC Bank Card ending 1234 at BUNDL TECHNOLOGIES on 20-Oct-26.',
+      body:
+          'Rs 349.00 spent on HDFC Bank Card ending 1234 at BUNDL TECHNOLOGIES on 20-Oct-26.',
       receivedAt: DateTime(2026, 10, 20),
     );
     expect(swiggy?.transaction?.categoryName, 'Dining');
@@ -1829,7 +1844,8 @@ void main() {
     final zomato = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'ICICIB',
-      body: 'Dear Customer, your Ac XX5678 is debited for INR 450.00 on 21-Oct-26 by UPI: ETERNAL LIMITED. UPI Ref 123456.',
+      body:
+          'Dear Customer, your Ac XX5678 is debited for INR 450.00 on 21-Oct-26 by UPI: ETERNAL LIMITED. UPI Ref 123456.',
       receivedAt: DateTime(2026, 10, 21),
     );
     expect(zomato?.transaction?.categoryName, 'Dining');
@@ -1839,7 +1855,8 @@ void main() {
     final blinkit = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'AXISBK',
-      body: 'INR 620.00 spent on your Axis Bank Card 4321 at BLINK COMMERCE on 22-Oct-26.',
+      body:
+          'INR 620.00 spent on your Axis Bank Card 4321 at BLINK COMMERCE on 22-Oct-26.',
       receivedAt: DateTime(2026, 10, 22),
     );
     expect(blinkit?.transaction?.categoryName, 'Groceries');
@@ -1849,7 +1866,8 @@ void main() {
     final zepto = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'SBINB',
-      body: 'Your A/c 9988 debited by Rs 280.00 on 23-Oct-26 at KIRANAKART. Bal: Rs 15000.',
+      body:
+          'Your A/c 9988 debited by Rs 280.00 on 23-Oct-26 at KIRANAKART. Bal: Rs 15000.',
       receivedAt: DateTime(2026, 10, 23),
     );
     expect(zepto?.transaction?.categoryName, 'Groceries');
@@ -1859,7 +1877,8 @@ void main() {
     final dmart = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'KOTAKB',
-      body: 'Sent Rs.1450.00 from Kotak Bank AC 1122 to AVENUE SUPERMARTS on 24-Oct-26.',
+      body:
+          'Sent Rs.1450.00 from Kotak Bank AC 1122 to AVENUE SUPERMARTS on 24-Oct-26.',
       receivedAt: DateTime(2026, 10, 24),
     );
     expect(dmart?.transaction?.categoryName, 'Groceries');
@@ -1869,69 +1888,127 @@ void main() {
     final ola = LocalSmsParser.parse(
       namespace: 'user:test',
       sender: 'HDFCBK',
-      body: 'Rs 199.00 debited from A/c XX1234 on 25-Oct-26 to ANI TECHNOLOGIES.',
+      body:
+          'Rs 199.00 debited from A/c XX1234 on 25-Oct-26 to ANI TECHNOLOGIES.',
       receivedAt: DateTime(2026, 10, 25),
     );
     expect(ola?.transaction?.categoryName, 'Travel');
     expect(ola?.transaction?.categoryId, 'travel');
   });
 
-  test('pre-filters order delivery updates and talktime notices as non-transaction noise', () {
-    const swiggyDelivery = 'Your Swiggy order of Rs 450 is out for delivery with our delivery partner. Enjoy your meal!';
-    expect(LocalSmsParser.isNonTransactionNoise('SWIGGY', swiggyDelivery), isTrue);
-    expect(LocalSmsParser.isCompletedTransactionOrBill(swiggyDelivery), isFalse);
+  test(
+    'pre-filters order delivery updates and talktime notices as non-transaction noise',
+    () {
+      const swiggyDelivery =
+          'Your Swiggy order of Rs 450 is out for delivery with our delivery partner. Enjoy your meal!';
+      expect(
+        LocalSmsParser.isNonTransactionNoise('SWIGGY', swiggyDelivery),
+        isTrue,
+      );
+      expect(
+        LocalSmsParser.isCompletedTransactionOrBill(swiggyDelivery),
+        isFalse,
+      );
 
-    const zeptoDelivery = 'Your Zepto order of Rs 299 is arriving in 7 mins! Track here: https://zepto.app/t/123';
-    expect(LocalSmsParser.isNonTransactionNoise('ZEPTO', zeptoDelivery), isTrue);
+      const zeptoDelivery =
+          'Your Zepto order of Rs 299 is arriving in 7 mins! Track here: https://zepto.app/t/123';
+      expect(
+        LocalSmsParser.isNonTransactionNoise('ZEPTO', zeptoDelivery),
+        isTrue,
+      );
 
-    const talktimeAlert = 'Your talktime balance is Rs 5.50. Recharge now to stay connected: https://airtel.in/r';
-    expect(LocalSmsParser.isNonTransactionNoise('AIRTEL', talktimeAlert), isTrue);
-  });
+      const talktimeAlert =
+          'Your talktime balance is Rs 5.50. Recharge now to stay connected: https://airtel.in/r';
+      expect(
+        LocalSmsParser.isNonTransactionNoise('AIRTEL', talktimeAlert),
+        isTrue,
+      );
+    },
+  );
 
   group('telecom carrier noise detection (4 agreed scenarios)', () {
-    test('Scenario 1: SIM retention charge & top-up balance deduction with unmasked 10-digit number is noise', () {
-      const s1Jio = 'Number retention charges of Rs. 9.88 has been deducted from Top-up balance on Jio Number 8010377706 as there was no usage observed for last 90 days. Kindly recharge your Jio Number with a valid plan to avoid these charges in future.';
-      expect(LocalSmsParser.isNonTransactionNoise('JZ-JIOPAY-S', s1Jio), isTrue);
+    test(
+      'Scenario 1: SIM retention charge & top-up balance deduction with unmasked 10-digit number is noise',
+      () {
+        const s1Jio =
+            'Number retention charges of Rs. 9.88 has been deducted from Top-up balance on Jio Number 8010377706 as there was no usage observed for last 90 days. Kindly recharge your Jio Number with a valid plan to avoid these charges in future.';
+        expect(
+          LocalSmsParser.isNonTransactionNoise('JZ-JIOPAY-S', s1Jio),
+          isTrue,
+        );
 
-      const s1Airtel = 'Rs 20 deducted from top-up balance for number retention charges on 9876543210. Recharge your airtel number to avoid these charges.';
-      expect(LocalSmsParser.isNonTransactionNoise('AIRTEL', s1Airtel), isTrue);
+        const s1Airtel =
+            'Rs 20 deducted from top-up balance for number retention charges on 9876543210. Recharge your airtel number to avoid these charges.';
+        expect(
+          LocalSmsParser.isNonTransactionNoise('AIRTEL', s1Airtel),
+          isTrue,
+        );
 
-      const s1Vi = 'Rs 10 debited from main bal on Vi number 9876543210 as no usage observed for 60 days. Recharge with validity pack now.';
-      expect(LocalSmsParser.isNonTransactionNoise('VI-CARE', s1Vi), isTrue);
-    });
+        const s1Vi =
+            'Rs 10 debited from main bal on Vi number 9876543210 as no usage observed for 60 days. Recharge with validity pack now.';
+        expect(LocalSmsParser.isNonTransactionNoise('VI-CARE', s1Vi), isTrue);
+      },
+    );
 
-    test('Scenario 2: telecom recharge upsell / reminder with unmasked 10-digit number without bank debit is noise', () {
-      const s2Jio = 'Recharge your Jio number 9876543210 with Rs 299 pack to enjoy unlimited calls and 1.5GB/day data. Recharge now!';
-      expect(LocalSmsParser.isNonTransactionNoise('AD-JIO', s2Jio), isTrue);
+    test(
+      'Scenario 2: telecom recharge upsell / reminder with unmasked 10-digit number without bank debit is noise',
+      () {
+        const s2Jio =
+            'Recharge your Jio number 9876543210 with Rs 299 pack to enjoy unlimited calls and 1.5GB/day data. Recharge now!';
+        expect(LocalSmsParser.isNonTransactionNoise('AD-JIO', s2Jio), isTrue);
 
-      const s2Airtel = 'Validity for your Airtel prepaid number 9876543210 is expiring soon. Recharge now with top-up or unlimited pack.';
-      expect(LocalSmsParser.isNonTransactionNoise('AIRTEL', s2Airtel), isTrue);
+        const s2Airtel =
+            'Validity for your Airtel prepaid number 9876543210 is expiring soon. Recharge now with top-up or unlimited pack.';
+        expect(
+          LocalSmsParser.isNonTransactionNoise('AIRTEL', s2Airtel),
+          isTrue,
+        );
 
-      const s2Vi = 'Recharge now! Get extra talktime on Rs 100 top-up on your Vi mobile 9876543210.';
-      expect(LocalSmsParser.isNonTransactionNoise('VI', s2Vi), isTrue);
-    });
+        const s2Vi =
+            'Recharge now! Get extra talktime on Rs 100 top-up on your Vi mobile 9876543210.';
+        expect(LocalSmsParser.isNonTransactionNoise('VI', s2Vi), isTrue);
+      },
+    );
 
-    test('Scenario 3: bank debit for telecom recharge with masked bank/card account MUST NOT be noise', () {
-      const s3Hdfc = 'A/c XX1234 debited Rs 299 for Jio recharge on 8010377706';
-      expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', s3Hdfc), isFalse);
+    test(
+      'Scenario 3: bank debit for telecom recharge with masked bank/card account MUST NOT be noise',
+      () {
+        const s3Hdfc =
+            'A/c XX1234 debited Rs 299 for Jio recharge on 8010377706';
+        expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', s3Hdfc), isFalse);
 
-      const s3Axis = 'Your A/c ending 5678 is debited for INR 199.00 on 25-Oct-26 towards Airtel recharge of 9876543210.';
-      expect(LocalSmsParser.isNonTransactionNoise('AXISBK', s3Axis), isFalse);
+        const s3Axis =
+            'Your A/c ending 5678 is debited for INR 199.00 on 25-Oct-26 towards Airtel recharge of 9876543210.';
+        expect(LocalSmsParser.isNonTransactionNoise('AXISBK', s3Axis), isFalse);
 
-      const s3Icici = 'Card XX9012 debited by Rs 499 for Vi prepaid recharge of 9123456780.';
-      expect(LocalSmsParser.isNonTransactionNoise('ICICIB', s3Icici), isFalse);
-    });
+        const s3Icici =
+            'Card XX9012 debited by Rs 499 for Vi prepaid recharge of 9123456780.';
+        expect(
+          LocalSmsParser.isNonTransactionNoise('ICICIB', s3Icici),
+          isFalse,
+        );
+      },
+    );
 
-    test('Scenario 4: postpaid telecom bill with amount due / due date / bill generated MUST NOT be noise', () {
-      const s4Airtel = 'Your Airtel postpaid bill for 9876543210 has been generated. Amount due: Rs 499, Due date: 15-Nov-2026.';
-      expect(LocalSmsParser.isNonTransactionNoise('AIRTEL', s4Airtel), isFalse);
+    test(
+      'Scenario 4: postpaid telecom bill with amount due / due date / bill generated MUST NOT be noise',
+      () {
+        const s4Airtel =
+            'Your Airtel postpaid bill for 9876543210 has been generated. Amount due: Rs 499, Due date: 15-Nov-2026.';
+        expect(
+          LocalSmsParser.isNonTransactionNoise('AIRTEL', s4Airtel),
+          isFalse,
+        );
 
-      const s4Jio = 'Bill for your Jio number 9876543210 is ready. Total amount due is Rs 799 payable by 20-Nov-2026.';
-      expect(LocalSmsParser.isNonTransactionNoise('JIO', s4Jio), isFalse);
+        const s4Jio =
+            'Bill for your Jio number 9876543210 is ready. Total amount due is Rs 799 payable by 20-Nov-2026.';
+        expect(LocalSmsParser.isNonTransactionNoise('JIO', s4Jio), isFalse);
 
-      const s4Vi = 'Dear Customer, Vi postpaid bill generated for 9876543210. Bill amount: Rs 399. Payment due date: 10-Nov-2026.';
-      expect(LocalSmsParser.isNonTransactionNoise('VI-CARE', s4Vi), isFalse);
-    });
+        const s4Vi =
+            'Dear Customer, Vi postpaid bill generated for 9876543210. Bill amount: Rs 399. Payment due date: 10-Nov-2026.';
+        expect(LocalSmsParser.isNonTransactionNoise('VI-CARE', s4Vi), isFalse);
+      },
+    );
   });
 
   group('betting/gambling spam and no-amount loan limit marketing', () {
@@ -1940,42 +2017,52 @@ void main() {
     const bettingSpam =
         'FRPendingDTIL IPL trusted betting site GullyBET, Instant withdrawal. Fancy bet All games, casino, slots, aviator, cockfight. Huge bonus gbets.win/1w1';
 
-    test('VK-BFDLPS-S loan limit alert is noise and not captured as financial', () {
-      expect(
-        LocalSmsParser.isNonTransactionNoise('VK-BFDLPS-S', loanLimitSpam),
-        isTrue,
-      );
-      expect(
-        capturesFinancialSms(loanLimitSpam, sender: 'VK-BFDLPS-S'),
-        isFalse,
-      );
-    });
+    test(
+      'VK-BFDLPS-S loan limit alert is noise and not captured as financial',
+      () {
+        expect(
+          LocalSmsParser.isNonTransactionNoise('VK-BFDLPS-S', loanLimitSpam),
+          isTrue,
+        );
+        expect(
+          capturesFinancialSms(loanLimitSpam, sender: 'VK-BFDLPS-S'),
+          isFalse,
+        );
+      },
+    );
 
     test('CP-DISHTV-S betting spam is noise and not captured as financial', () {
       expect(
         LocalSmsParser.isNonTransactionNoise('CP-DISHTV-S', bettingSpam),
         isTrue,
       );
-      expect(
-        capturesFinancialSms(bettingSpam, sender: 'CP-DISHTV-S'),
-        isFalse,
-      );
+      expect(capturesFinancialSms(bettingSpam, sender: 'CP-DISHTV-S'), isFalse);
     });
 
-    test('Counter-tests: Real ATM withdrawal and credit are captured and not noise', () {
-      const realAtm = 'Cash withdrawal of Rs. 2,000 from A/c XX1234';
-      const realCredit = 'Rs. 5,000 credited to A/c XX1234';
+    test(
+      'Counter-tests: Real ATM withdrawal and credit are captured and not noise',
+      () {
+        const realAtm = 'Cash withdrawal of Rs. 2,000 from A/c XX1234';
+        const realCredit = 'Rs. 5,000 credited to A/c XX1234';
 
-      expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', realAtm), isFalse);
-      expect(capturesFinancialSms(realAtm, sender: 'HDFCBK'), isTrue);
+        expect(
+          LocalSmsParser.isNonTransactionNoise('HDFCBK', realAtm),
+          isFalse,
+        );
+        expect(capturesFinancialSms(realAtm, sender: 'HDFCBK'), isTrue);
 
-      expect(LocalSmsParser.isNonTransactionNoise('HDFCBK', realCredit), isFalse);
-      expect(capturesFinancialSms(realCredit, sender: 'HDFCBK'), isTrue);
-    });
+        expect(
+          LocalSmsParser.isNonTransactionNoise('HDFCBK', realCredit),
+          isFalse,
+        );
+        expect(capturesFinancialSms(realCredit, sender: 'HDFCBK'), isTrue);
+      },
+    );
   });
 
   group('UPI narration payees', () {
-    const axisP2m = 'INR 12.00 debited\n'
+    const axisP2m =
+        'INR 12.00 debited\n'
         'A/c no. XX2583\n'
         '21-10-26, 22:41:20\n'
         'UPI/P2M/**** 6977/MANYAM VISWANADA RE\n'
@@ -2006,7 +2093,8 @@ void main() {
       final parsed = LocalSmsParser.parse(
         namespace: 'user:test',
         sender: 'AD-AXISBK-S',
-        body: 'INR 500.00 debited\nA/c no. XX2583\n20-10-26, 10:00:00\n'
+        body:
+            'INR 500.00 debited\nA/c no. XX2583\n20-10-26, 10:00:00\n'
             'UPI/P2A/123456789012/SUNALI MUNDRA/YESB\n'
             'Not you? SMS BLOCKUPI Cust ID to **** 0002',
         receivedAt: DateTime(2026, 10, 20, 10),
@@ -2020,7 +2108,8 @@ void main() {
       final parsed = LocalSmsParser.parse(
         namespace: 'user:test',
         sender: 'AX-AXISBK-S',
-        body: 'INR 9000.00 debited\nA/c no. XX2583\n'
+        body:
+            'INR 9000.00 debited\nA/c no. XX2583\n'
             '04-10-26, 21:49:33\nUPI/P2A/•••• 2120/AANCHAL YADU\n'
             'Not you? SMS BLOCKUPI Cust ID to •••• 0002\nAxis Bank',
         receivedAt: DateTime(2026, 10, 4, 21, 49, 36),
@@ -2033,7 +2122,8 @@ void main() {
       final parsed = LocalSmsParser.parse(
         namespace: 'user:test',
         sender: 'VM-SBYONO-S',
-        body: 'ICICI Credit card bill - of Rs.94567.00 has been '
+        body:
+            'ICICI Credit card bill - of Rs.94567.00 has been '
             'successfully processed from SBI A/C-0208. Your B-connect '
             'Txn id is xxxxKvEe -YONO SBI',
         receivedAt: DateTime(2026, 10, 22, 22, 7, 7),
@@ -2046,7 +2136,8 @@ void main() {
       final parsed = LocalSmsParser.parse(
         namespace: 'user:test',
         sender: 'AD-AXISBK-S',
-        body: 'INR 12.00 debited\nA/c no. XX2583\n21-10-26, 22:41:20\n'
+        body:
+            'INR 12.00 debited\nA/c no. XX2583\n21-10-26, 22:41:20\n'
             'UPI/P2M/**** 6977\nNot you? SMS BLOCKUPI Cust ID to **** 0002',
         receivedAt: DateTime(2026, 10, 21, 22, 41, 20),
       );
@@ -2059,30 +2150,35 @@ void main() {
       );
     });
 
-    test('"debited towards X for INR" names X, not the opaqueness behind it', () {
-      final parsed = LocalSmsParser.parse(
-        namespace: 'user:test',
-        sender: 'AD-AXISBK-S',
-        body: 'Your A/c has been debited towards Google Play for INR 4999.00 '
-            'on 10-10-26. '
-            '9901e1edad8e46cd937da209ef0baf55@axl - Axis Bank',
-        receivedAt: DateTime(2026, 10, 10, 5, 30),
-      );
+    test(
+      '"debited towards X for INR" names X, not the opaqueness behind it',
+      () {
+        final parsed = LocalSmsParser.parse(
+          namespace: 'user:test',
+          sender: 'AD-AXISBK-S',
+          body:
+              'Your A/c has been debited towards Google Play for INR 4999.00 '
+              'on 10-10-26. '
+              '9901e1edad8e46cd937da209ef0baf55@axl - Axis Bank',
+          receivedAt: DateTime(2026, 10, 10, 5, 30),
+        );
 
-      final txn = parsed?.transaction;
-      expect(txn, isNotNull);
-      expect(txn!.amount.paise, 499900);
-      expect(txn.merchantName, 'Google Play');
-      expect(txn.occurredAt.year, 2026);
-      expect(txn.occurredAt.month, 10);
-      expect(txn.occurredAt.day, 10);
-    });
+        final txn = parsed?.transaction;
+        expect(txn, isNotNull);
+        expect(txn!.amount.paise, 499900);
+        expect(txn.merchantName, 'Google Play');
+        expect(txn.occurredAt.year, 2026);
+        expect(txn.occurredAt.month, 10);
+        expect(txn.occurredAt.day, 10);
+      },
+    );
 
     test('an opaque VPA hash never becomes the merchant', () {
       final parsed = LocalSmsParser.parse(
         namespace: 'user:test',
         sender: 'AD-AXISBK-S',
-        body: 'Your A/c has been debited towards INR 4999.00 on 10-10-26. '
+        body:
+            'Your A/c has been debited towards INR 4999.00 on 10-10-26. '
             '9901e1edad8e46cd937da209ef0baf55@axl - Axis Bank',
         receivedAt: DateTime(2026, 10, 10, 5, 30),
       );
@@ -2091,30 +2187,35 @@ void main() {
       expect(
         MerchantIdentity.isWeakName(name),
         isTrue,
-        reason: 'without a readable payee the row must stay unlabelled, '
+        reason:
+            'without a readable payee the row must stay unlabelled, '
             'never carry a hash VPA (got "$name")',
       );
     });
 
-    test('parses Axis Bank UPI ASPRESENTED mandate SMS with date range and amount limit', () {
-      final parsed = LocalSmsParser.parse(
-        namespace: 'user:test',
-        sender: 'VM-AXISBK-S',
-        body: 'Your UPI ASPRESENTED mandate has been successfully created towards Google Asia Pacific Pte.Ltd '
-            'from 10-07-26 to 31-12-36 for INR 4000.00 Axis Bank. UMRN is axisf00000000000001',
-        receivedAt: DateTime(2026, 7, 10, 11, 30),
-      );
+    test(
+      'parses Axis Bank UPI ASPRESENTED mandate SMS with date range and amount limit',
+      () {
+        final parsed = LocalSmsParser.parse(
+          namespace: 'user:test',
+          sender: 'VM-AXISBK-S',
+          body:
+              'Your UPI ASPRESENTED mandate has been successfully created towards Google Asia Pacific Pte.Ltd '
+              'from 10-07-26 to 31-12-36 for INR 4000.00 Axis Bank. UMRN is axisf00000000000001',
+          receivedAt: DateTime(2026, 7, 10, 11, 30),
+        );
 
-      expect(parsed, isNotNull);
-      expect(parsed!.isAutopay, isTrue);
-      expect(parsed.billerName, contains('Google Asia Pacific'));
-      expect(parsed.autopayLimit?.paise, 400000);
-      expect(parsed.amountDue, isNull);
-      expect(parsed.cadenceHint, 'asPresented');
-      expect(parsed.startDate, DateTime(2026, 7, 10));
-      expect(parsed.endDate, DateTime(2036, 12, 31));
-      expect(parsed.paymentMethod, 'UPI AutoPay (Axis Bank)');
-    });
+        expect(parsed, isNotNull);
+        expect(parsed!.isAutopay, isTrue);
+        expect(parsed.billerName, contains('Google Asia Pacific'));
+        expect(parsed.autopayLimit?.paise, 400000);
+        expect(parsed.amountDue, isNull);
+        expect(parsed.cadenceHint, 'asPresented');
+        expect(parsed.startDate, DateTime(2026, 7, 10));
+        expect(parsed.endDate, DateTime(2036, 12, 31));
+        expect(parsed.paymentMethod, 'UPI AutoPay (Axis Bank)');
+      },
+    );
 
     test('parses Axis Bank Groww AutoPay mandate SMS', () {
       final parsed = LocalSmsParser.parse(

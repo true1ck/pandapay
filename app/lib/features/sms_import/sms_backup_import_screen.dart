@@ -10,6 +10,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/local_sms_parser.dart';
 import '../../data/needs_review_repository.dart';
+import '../../data/local/sms_intake_repository.dart';
 import '../../data/sms_backup_xml_parser.dart';
 import '../../data/user_cards_repository.dart';
 import '../cards/find_cards_screen.dart';
@@ -243,6 +244,7 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
     // cancel land within a second or so.
     const chunkSize = 200;
     try {
+      final namespace = ref.read(cacheNamespaceProvider);
       for (var start = 0; start < queue.length; start += chunkSize) {
         if (_cancelRequested) break;
         final end = (start + chunkSize).clamp(0, queue.length);
@@ -263,7 +265,12 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
                 .read(needsReviewRepositoryProvider)
                 .add(
                   NeedsReviewItem(
-                    id: '${original.sender}_${original.sentAt!.microsecondsSinceEpoch}',
+                    // The server's import identity deliberately excludes the
+                    // delivery timestamp. Use the same key here so an
+                    // unparsed backup message cannot create a second review
+                    // item merely because a later export has a different
+                    // timestamp or timezone representation.
+                    id: smsSourceKey(namespace, original.sender, original.body),
                     sender: original.sender,
                     body: original.body,
                     reason: result.reasonByIndex[localIndex],
