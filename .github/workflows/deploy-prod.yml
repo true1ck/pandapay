@@ -178,8 +178,7 @@ jobs:
               printf 'export AI_WORKER_TOKEN=%q\n' "$AI_WORKER_TOKEN"
             fi
             cat deploy/deploy.sh
-          } | ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
-            "bash -s -- $SHA"
+          } | bash deploy/ssh_script.sh "$DEPLOY_USER@$HOST" "$SHA"
 
       - name: Verify production is healthy
         env:
@@ -194,7 +193,7 @@ jobs:
           HOST: ${{ secrets.PROD_HOST }}
           DEPLOY_USER: ${{ secrets.PROD_USER }}
         run: |
-          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
+          bash deploy/ssh_script.sh "$DEPLOY_USER@$HOST" <<'REMOTE'
           set -euo pipefail
           cd /home/ubuntu/apps/pandapay
           DBURL="$(sed -n 's/^ADMIN_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"

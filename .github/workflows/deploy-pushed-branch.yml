@@ -113,6 +113,9 @@ jobs:
     environment: production
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
       - name: Set up SSH
         env:
           SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
@@ -134,10 +137,7 @@ jobs:
           SOURCE_REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
-            -o ConnectTimeout=15 "$DEPLOY_USER@$HOST" \
-            "bash -s -- '$TARGET_SHA' '$SOURCE_REF'" <<'REMOTE'
+          bash deploy/ssh_script.sh "$DEPLOY_USER@$HOST" "$TARGET_SHA" "$SOURCE_REF" <<'REMOTE'
           set -euo pipefail
           TARGET_SHA="$1"
           SOURCE_REF="$2"
@@ -161,16 +161,19 @@ jobs:
           ca=""
           trap 'rm -rf "$stage" "$ca"' EXIT
           git -C "$APP_DIR" archive "$TARGET_SHA" | tar -x -C "$stage"
+          ca="$(mktemp)"
+          curl --fail --silent --show-error --location --max-time 20 \
+            https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt > "$ca"
+          expected='807025AD50D4ED219D2C9C7D299C004F824EB00CF7F65AFEF607D07B72E6CAFA'
+          actual="$(openssl x509 -in "$ca" -outform DER 2>/dev/null | sha256sum | awk '{print toupper($1)}')"
+          test "$actual" = "$expected"
+          export DB_SSL=true DB_SSL_CA="$(cat "$ca")" MIGRATION_BASELINES_DIR="$BASELINE_DIR"
+          docker compose --profile sms-ai --profile sms-learning \
+            -f "$stage/docker-compose.prod.yml" --env-file "$APP_DIR/.env" \
+            build db-migrate >/dev/null
           if test -e "$baseline"; then
             printf '%s\n' 'baseline_file=existing_not_overwritten'
           else
-            ca="$(mktemp)"
-            curl --fail --silent --show-error --location --max-time 20 \
-              https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt > "$ca"
-            expected='807025AD50D4ED219D2C9C7D299C004F824EB00CF7F65AFEF607D07B72E6CAFA'
-            actual="$(openssl x509 -in "$ca" -outform DER 2>/dev/null | sha256sum | awk '{print toupper($1)}')"
-            test "$actual" = "$expected"
-            export DB_SSL=true DB_SSL_CA="$(cat "$ca")" MIGRATION_BASELINES_DIR="$BASELINE_DIR"
             docker compose --profile sms-ai --profile sms-learning \
               -f "$stage/docker-compose.prod.yml" --env-file "$APP_DIR/.env" \
               run --rm --no-deps -v "$BASELINE_DIR:/reviewed" \
@@ -178,14 +181,21 @@ jobs:
               --write-baseline /reviewed/product.json
           fi
 
-          docker compose --profile sms-ai --profile sms-learning \
-            -f "$stage/docker-compose.prod.yml" --env-file "$APP_DIR/.env" \
-            build db-migrate >/dev/null
-          meta='const fs=require("node:fs"),crypto=require("node:crypto");const p="/reviewed/product.json",v=JSON.parse(fs.readFileSync(p,"utf8"));if(v.format!=="pandapay-reviewed-product-baseline-v2"||!Array.isArray(v.ledger)||!v.ledger.length)process.exit(2);console.log("baseline_format="+v.format);console.log("baseline_ledger_entries="+v.ledger.length);console.log("baseline_bytes="+fs.statSync(p).size);console.log("baseline_sha256="+crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex"));console.log("adoption=not_configured");'
+          meta='const fs=require("node:fs"),crypto=require("node:crypto");const p="/reviewed/product.json",v=JSON.parse(fs.readFileSync(p,"utf8"));if(v.format!=="pandapay-reviewed-product-baseline-v2"||!Array.isArray(v.ledger)||!v.ledger.length||!(/^[a-f0-9]{64}$/.test(v.schemaSha256)))process.exit(2);console.log("baseline_format="+v.format);console.log("baseline_ledger_entries="+v.ledger.length);console.log("baseline_bytes="+fs.statSync(p).size);console.log("baseline_sha256="+crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex"));console.log("baseline_schema_sha256="+v.schemaSha256);console.log("baseline_ledger="+JSON.stringify(v.ledger));console.log("adoption=not_configured");'
           docker compose --profile sms-ai --profile sms-learning \
             -f "$stage/docker-compose.prod.yml" --env-file "$APP_DIR/.env" \
             run --rm --no-deps -v "$BASELINE_DIR:/reviewed:ro" \
             --entrypoint node db-migrate -e "$meta"
+          # This explicit baseline flag is confined to --check, whose database
+          # transaction is READ ONLY. It verifies the existing protected file;
+          # it does not adopt checksums or authorize a future migration run.
+          docker compose --profile sms-ai --profile sms-learning \
+            -f "$stage/docker-compose.prod.yml" --env-file "$APP_DIR/.env" \
+            run --rm --no-deps -v "$BASELINE_DIR:/reviewed:ro" \
+            -e MIGRATION_LEGACY_BASELINE_FILE=/reviewed/product.json \
+            -e MIGRATION_ADOPT_LEGACY_CHECKSUMS=true \
+            --entrypoint node db-migrate /db/scripts/product_migrate.js --check
+          printf '%s\n' 'baseline_current_database_match=true' 'adoption=not_performed'
           REMOTE
 
   verify:
@@ -243,8 +253,7 @@ jobs:
               printf '%s\n' 'export MIGRATION_ADOPT_LEGACY_CHECKSUMS=true'
             fi
             cat deploy/deploy.sh
-          } | ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
-            "bash -s -- $SHA $SOURCE_REF"
+          } | bash deploy/ssh_script.sh "$DEPLOY_USER@$HOST" "$SHA" "$SOURCE_REF"
 
       - name: Verify production health
         env:
