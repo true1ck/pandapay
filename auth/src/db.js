@@ -195,6 +195,7 @@ module.exports = {
     return pool;
   },
   createContextFromRequest,
+  getPool, // The hosted auth abuse store resolves its pool through this
   initializeDb, // Export for explicit initialization if needed
   closeDb,
 };

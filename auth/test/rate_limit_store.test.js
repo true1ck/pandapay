@@ -71,6 +71,35 @@ test('hosted environments always choose PostgreSQL and reject memory configurati
   }), /Hosted auth abuse storage must use PostgreSQL/);
 });
 
+test('hosted store without an injected pool reaches the shared auth db pool', async () => {
+  // Production builds the store with no poolProvider, so it must resolve the
+  // pool through the real db module. A missing export turned every OTP request
+  // into "Authentication is temporarily unavailable".
+  process.env.NODE_ENV = 'test'; // db.js opens no real connection under test
+  process.env.DATABASE_URL ??= 'postgres://unused:unused@localhost:5432/unused';
+  process.env.JWT_ACCESS_SECRET ??= 'synthetic-access-secret';
+  process.env.JWT_REFRESH_SECRET ??= 'synthetic-refresh-secret';
+  const db = require('../src/db');
+  assert.equal(typeof db.getPool, 'function');
+
+  const statements = [];
+  const client = {
+    query: async sql => { statements.push(sql); return { rows: [], rowCount: 0 }; },
+    release() {},
+  };
+  const originalGetPool = db.getPool;
+  db.getPool = async () => ({ connect: async () => client });
+  try {
+    const store = createRateLimitStore({
+      env: { NODE_ENV: 'production', PHONE_LOOKUP_HMAC_KEY: 'synthetic-hmac-key-0123456789abcdef' },
+    });
+    assert.equal(await store.exists('otp_active:email:synthetic@example.com:signin'), false);
+    assert.ok(statements.some(sql => /FROM auth_abuse_buckets/.test(sql)));
+  } finally {
+    db.getPool = originalGetPool;
+  }
+});
+
 test('memory storage remains available to explicit local test fixtures', () => {
   assert.equal(createRateLimitStore({ env: { NODE_ENV: 'test', AUTH_ABUSE_STORE: 'memory' } }).mode, 'memory');
   assert.equal(new RateLimitCapacityError().code, 'capacity_exhausted');
