@@ -157,13 +157,14 @@ jobs:
           mkdir -m 700 -p "$BASELINE_DIR"
           test ! -L "$BASELINE_DIR"
           baseline="$BASELINE_DIR/product.json"
+          stage="$(mktemp -d)"
+          ca=""
+          trap 'rm -rf "$stage" "$ca"' EXIT
+          git -C "$APP_DIR" archive "$TARGET_SHA" | tar -x -C "$stage"
           if test -e "$baseline"; then
             printf '%s\n' 'baseline_file=existing_not_overwritten'
           else
-            stage="$(mktemp -d)"
             ca="$(mktemp)"
-            trap 'rm -rf "$stage" "$ca"' EXIT
-            git -C "$APP_DIR" archive "$TARGET_SHA" | tar -x -C "$stage"
             curl --fail --silent --show-error --location --max-time 20 \
               https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt > "$ca"
             expected='807025AD50D4ED219D2C9C7D299C004F824EB00CF7F65AFEF607D07B72E6CAFA'
@@ -177,16 +178,14 @@ jobs:
               --write-baseline /reviewed/product.json
           fi
 
-          test -s "$baseline"
-          baseline_format="$(grep -o '"format":"[^"]*"' "$baseline" | head -1 | cut -d'"' -f4)"
-          test "$baseline_format" = 'pandapay-reviewed-product-baseline-v2'
-          baseline_ledger_entries="$(grep -o '\["[^"]*","[0-9a-f]\{64\}"\]' "$baseline" | wc -l | tr -d ' ')"
-          test "$baseline_ledger_entries" -gt 0
-          printf 'baseline_format=%s\n' "$baseline_format"
-          printf 'baseline_ledger_entries=%s\n' "$baseline_ledger_entries"
-          printf 'baseline_bytes=%s\n' "$(wc -c < "$baseline" | tr -d ' ')"
-          printf 'baseline_sha256=%s\n' "$(sha256sum "$baseline" | awk '{print $1}')"
-          printf '%s\n' 'adoption=not_configured'
+          docker compose --profile sms-ai --profile sms-learning \
+            -f "$stage/docker-compose.prod.yml" --env-file "$APP_DIR/.env" \
+            build db-migrate >/dev/null
+          meta='const fs=require("node:fs"),crypto=require("node:crypto");const p="/reviewed/product.json",v=JSON.parse(fs.readFileSync(p,"utf8"));if(v.format!=="pandapay-reviewed-product-baseline-v2"||!Array.isArray(v.ledger)||!v.ledger.length)process.exit(2);console.log("baseline_format="+v.format);console.log("baseline_ledger_entries="+v.ledger.length);console.log("baseline_bytes="+fs.statSync(p).size);console.log("baseline_sha256="+crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex"));console.log("adoption=not_configured");'
+          docker compose --profile sms-ai --profile sms-learning \
+            -f "$stage/docker-compose.prod.yml" --env-file "$APP_DIR/.env" \
+            run --rm --no-deps -v "$BASELINE_DIR:/reviewed:ro" \
+            --entrypoint node db-migrate -e "$meta"
           REMOTE
 
   verify:
